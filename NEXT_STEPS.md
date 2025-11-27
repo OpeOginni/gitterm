@@ -15,7 +15,7 @@ Three major features to implement for production readiness:
 Secure terminal access via subdomains with cookie-based authentication using Cloudflare + wildcard DNS + reverse proxy.
 
 ### Architecture Overview
-- **Cloudflare:** Manages wildcard DNS (`*.gitpad.com`) and SSL/TLS
+- **Cloudflare:** Manages wildcard DNS (`*.gitterm.dev`) and SSL/TLS
 - **Reverse Proxy:** Routes subdomain requests to correct workspace backend
 - **Database Mapping:** Stores workspace ↔ subdomain ↔ backend mapping
 - **ttyd Terminal:** Runs in Railway container on port 7681
@@ -23,7 +23,7 @@ Secure terminal access via subdomains with cookie-based authentication using Clo
 
 **Flow:**
 ```
-User visits: alice-workspace.gitpad.com
+User visits: alice-workspace.gitterm.dev
     ↓
 Cloudflare wildcard DNS routes to proxy
     ↓
@@ -49,7 +49,7 @@ Terminal opens with authenticated session
   ```
 - [ ] Enable Cloudflare proxy (orange cloud icon)
 - [ ] Ensure SSL/TLS is set to "Full (strict)"
-- [ ] This allows `*.gitpad.com` to resolve to your proxy
+- [ ] This allows `*.gitterm.dev` to resolve to your proxy
 
 #### Step 2: Set Up Reverse Proxy Service
 - [ ] Choose proxy: Traefik, NGINX, or custom Node.js proxy
@@ -82,7 +82,7 @@ async function getWorkspaceBackend(subdomain: string) {
 }
 
 http.createServer(async (req, res) => {
-  const host = req.headers.host; // e.g., "alice-workspace.gitpad.com"
+  const host = req.headers.host; // e.g., "alice-workspace.gitterm.dev"
   const subdomain = host.split('.')[0]; // "alice-workspace"
   
   // Validate session cookie
@@ -114,7 +114,7 @@ http.createServer(async (req, res) => {
   ADD COLUMN backend_url TEXT,
   ADD COLUMN proxy_verified_at TIMESTAMP;
   ```
-- [ ] Subdomain format: `{workspace-id}.gitpad.com`
+- [ ] Subdomain format: `{workspace-id}.gitterm.dev`
 - [ ] Backend URL: Railway container service URL
 
 #### Step 4: Workspace Creation with Subdomain Assignment
@@ -136,7 +136,7 @@ createService: protectedProcedure
       .set({
         subdomain,
         backendUrl,
-        domain: `${subdomain}.gitpad.com`
+        domain: `${subdomain}.gitterm.dev`
       })
       .where(eq(workspace.id, newWorkspace.id));
     
@@ -166,8 +166,8 @@ export async function validateProxyAccess(
 ```
 
 #### Step 6: Frontend Updates
-- [ ] Instance card shows: `alice-workspace.gitpad.com`
-- [ ] "Open Terminal" button links to: `https://alice-workspace.gitpad.com`
+- [ ] Instance card shows: `alice-workspace.gitterm.dev`
+- [ ] "Open Terminal" button links to: `https://alice-workspace.gitterm.dev`
 - [ ] Opens in new tab/window
 - [ ] Cookie already authenticated from main domain
 

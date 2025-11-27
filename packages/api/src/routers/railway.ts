@@ -99,7 +99,7 @@ export const railwayRouter = router({
           repositoryUrl: input.repo,
           subdomain: subdomain,
           backendUrl: backendUrl,
-          domain: `${subdomain}.gitpad.com`, // This domain will be handled by the wildcard proxy
+          domain: `${subdomain}.gitterm.dev`, // This domain will be handled by the wildcard proxy
           status: "pending",
           startAt: new Date(serviceCreate.createdAt),
         }).returning();

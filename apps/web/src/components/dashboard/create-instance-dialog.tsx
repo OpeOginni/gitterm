@@ -107,7 +107,7 @@ export function CreateInstanceDialog() {
       name: repoUrl.split("/").pop() || "new-workspace",
     });
 
-    window.location.href = `https://${result.serviceDomain}`;
+    window.location.href = `https://${result.workspace.subdomain}.gitterm.dev`;
   };
 
   return (

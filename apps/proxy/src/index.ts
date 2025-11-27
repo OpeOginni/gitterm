@@ -29,7 +29,7 @@ async function validateSession(headers: any): Promise<string | null> {
 function extractSubdomain(host: string): string {
   const parts = host.split(".");
 
-  // Production: ws-123.gitpad.com -> ws-123
+  // Production: ws-123.gitterm.dev -> ws-123
   if (parts.length >= 3) {
     return parts[0] ?? "";
   }
@@ -62,6 +62,8 @@ app.use("*", async (c: Context, next: any) => {
   if (!userId) {
     return c.text("Unauthorized", 401);
   }
+
+  console.log("VERFIED SESSION", userId);
 
   // Lookup workspace
   const [ws] = await db
