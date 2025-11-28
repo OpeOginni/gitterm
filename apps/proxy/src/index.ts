@@ -120,7 +120,9 @@ app.use("*", async (c: Context, next: any) => {
   }
 
   // Store in context for use in handlers
-  c.set("backendUrl", `https://${ws.backendUrl}`);
+  // Convert http to https for internal railway connections
+  const backendUrl = ws.backendUrl.replace(/^http:\/\//, "https://");
+  c.set("backendUrl", backendUrl);
   c.set("workspaceId", ws.id);
   c.set("subdomain", subdomain);
 
