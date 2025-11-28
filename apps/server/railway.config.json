@@ -2,7 +2,7 @@
     "$schema": "https://railway.com/railway.schema.json",
     "build": {
       "builder": "NIXPACKS",
-      "buildCommand": "bun run build --filter=server",
+      "buildCommand": "turbo build --filter=server",
       "watchPatterns": [
         "apps/server/**/*",
         "packages/api/**/*",
