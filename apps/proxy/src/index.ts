@@ -120,7 +120,7 @@ app.use("*", async (c: Context, next: any) => {
   }
 
   // Store in context for use in handlers
-  c.set("backendUrl", ws.backendUrl);
+  c.set("backendUrl", `https://${ws.backendUrl}`);
   c.set("workspaceId", ws.id);
   c.set("subdomain", subdomain);
 
@@ -143,6 +143,8 @@ app.all("*", async (c: Context) => {
     if (c.req.method !== "GET" && c.req.method !== "HEAD") {
       body = c.req.raw.body;
     }
+
+
 
     // Forward request
     const response = await fetch(targetUrl, {
