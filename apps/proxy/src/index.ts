@@ -124,6 +124,7 @@ app.use("*", async (c: Context, next: any) => {
   c.set("backendUrl", ws.backendUrl);
   c.set("workspaceId", ws.id);
   c.set("subdomain", subdomain);
+  c.set("userId", userId);
 
   await next();
 });
@@ -133,6 +134,7 @@ app.all("*", async (c: Context) => {
   const backendUrl = c.get("backendUrl") as string;
   const workspaceId = c.get("workspaceId") as string;
   const subdomain = c.get("subdomain") as string;
+  const userId = c.get("userId") as string;
   const path = c.req.path;
   const query = c.req.url.split("?")[1] ?? "";
 
@@ -209,9 +211,17 @@ app.all("*", async (c: Context) => {
           body = c.req.raw.body;
         }
 
+        // Prepare headers for ttyd - pass user ID via auth header
+        const proxyHeaders = new Headers(c.req.raw.headers as any);
+        // Remove hop-by-hop headers that shouldn't be forwarded
+        proxyHeaders.delete("host");
+        proxyHeaders.delete("connection");
+        // Add auth header for ttyd's --auth-header option
+        proxyHeaders.set("X-Auth-User", userId);
+
         const response = await fetch(variation.url, {
           method: c.req.method,
-          headers: c.req.raw.headers as any,
+          headers: proxyHeaders,
           body,
           signal: AbortSignal.timeout(5000),
         });
