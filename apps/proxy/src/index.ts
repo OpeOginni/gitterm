@@ -231,13 +231,10 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
           "X-Forwarded-Proto": "https",
           "X-Forwarded-Host": host,
         },
-      },
-      (res: any) => {
-        console.log(`[${ws.id}] Backend response status: ${res.statusCode}`);
       }
     );
 
-    backendReq.on("upgrade", (res: any, backendSocket: any) => {
+    const handleUpgrade = (res: any, backendSocket: any) => {
       console.log(`[${ws.id}] WebSocket upgrade successful!`);
       
       // Send upgrade response to client
@@ -263,6 +260,25 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
         console.log(`[${ws.id}] Client closed`);
         backendSocket.end();
       });
+    };
+
+    backendReq.on("upgrade", (res: any, backendSocket: any) => {
+      handleUpgrade(res, backendSocket);
+    });
+
+    backendReq.on("response", (res: any) => {
+      console.log(`[${ws.id}] Backend response status: ${res.statusCode}`);
+      
+      // Fallback: If we get 101 in response event instead of upgrade
+      if (res.statusCode === 101) {
+        console.log(`[${ws.id}] Handling 101 via response event`);
+        handleUpgrade(res, res.socket);
+        return;
+      }
+
+      // If not 101, it's likely an error
+      console.log(`[${ws.id}] Backend rejected upgrade. Headers:`, res.headers);
+      socket.end(`HTTP/1.1 ${res.statusCode} ${res.statusMessage}\r\n\r\n`);
     });
 
     backendReq.on("error", (error: any) => {
