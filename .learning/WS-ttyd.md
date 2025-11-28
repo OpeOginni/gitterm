@@ -183,6 +183,22 @@ const backendWs = new WebSocket(targetWsUrl, ["tty"], {
 
 ---
 
+## 6. IPv6 and Internal Networking
+
+To enable secure, private communication between services within Railway (Proxy ↔ Workspace), we moved to IPv6 and internal DNS.
+
+### The Change
+- **Bind Address**: Changed from `0.0.0.0` (IPv4) to `::` (IPv6 + IPv4 dual-stack).
+- **Internal DNS**: Using `*.railway.internal` domains instead of public `*.up.railway.app` or custom domains.
+
+### Why This Matters
+1.  **Private Networking**: Railway's private network allows services to communicate securely without exposing ports to the public internet.
+2.  **IPv6 Support**: Railway's internal network infrastructure relies heavily on IPv6. Binding to `::` ensures the application listens on the correct interfaces for internal traffic.
+3.  **Performance & Security**: Internal traffic doesn't leave the datacenter and isn't subject to public internet latency or security risks.
+4.  **DNS Resolution**: `ws-uuid.railway.internal` resolves to the private IP of the service, bypassing public DNS propagation.
+
+---
+
 ## How WebSocket Compression Works
 
 Understanding why `serverMaxWindowBits` was critical:
@@ -240,6 +256,7 @@ Understanding why `serverMaxWindowBits` was critical:
 4. **Clean up all connection states** - not just OPEN, but CONNECTING too
 5. **Forward proper headers** - backend servers may require specific headers
 6. **Enable compression on both sides** - client↔proxy and proxy↔backend
+7. **Support IPv6** - Modern cloud internal networks (like Railway) prioritize IPv6
 
 ---
 
@@ -268,5 +285,4 @@ ttyd has specific WebSocket requirements that this proxy now satisfies:
 3. **Compression**: Large terminal outputs require compression
 4. **Quick initialization**: Client must send terminal size immediately
 5. **Keepalive**: Long-running terminal sessions need connection maintenance
-
-All of these are now properly handled by the fixed proxy!
+6. **IPv6 Support**: Must bind to `::` to work within private networks
