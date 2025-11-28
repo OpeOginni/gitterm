@@ -12,6 +12,27 @@ const app = new Hono();
 // Middleware: logger
 app.use(logger());
 
+// CORS middleware for subdomain support
+app.use("*", async (c: Context, next: any) => {
+  const origin = c.req.header("origin") || "";
+  const BASE_DOMAIN = process.env.BASE_DOMAIN || "gitterm.dev";
+  
+  // Allow subdomains of gitterm.dev
+  if (origin.endsWith(`.${BASE_DOMAIN}`) || origin.includes(BASE_DOMAIN)) {
+    c.header("Access-Control-Allow-Origin", origin);
+    c.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    c.header("Access-Control-Allow-Headers", "Authorization,Content-Type,Cookie");
+    c.header("Access-Control-Allow-Credentials", "true");
+  }
+  
+  // Handle preflight requests
+  if (c.req.method === "OPTIONS") {
+    return new Response(null, { status: 204 });
+  }
+  
+  await next();
+});
+
 // Health check endpoint
 app.get("/health", (c) => {
   return c.json({
