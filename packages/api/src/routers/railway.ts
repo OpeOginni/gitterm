@@ -85,9 +85,17 @@ export const railwayRouter = router({
           throw new Error(`Railway API Error: ${error.message}`);
         });
 
+        const { serviceDomainCreate } = await railway.ServiceDomainCreate({
+          input: {
+            serviceId: serviceCreate.id,
+            environmentId: "b6ee182e-209c-46f9-a7da-8ee587e5b518", // Production environment
+            targetPort: 7681,
+          }
+        })
+
         // Construct internal backend URL (assuming Railway Private Networking)
         // Service name is used as the hostname. Port 7681 is ttyd default.
-        const backendUrl = `http://${subdomain}.railway.internal:7681`;
+        const backendUrl = `https://${serviceDomainCreate.domain}`;
 
         const [newWorkspace] = await db.insert(workspace).values({
           id: workspaceId,
