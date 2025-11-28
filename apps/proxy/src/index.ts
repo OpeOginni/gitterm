@@ -151,6 +151,25 @@ const server = http.createServer(async (req: any, res: any) => {
 // Create WebSocket server for handling upgrades
 const wss = new WebSocketServer({ 
   noServer: true,
+  perMessageDeflate: {
+    zlibDeflateOptions: {
+      // See zlib defaults.
+      chunkSize: 1024,
+      memLevel: 7,
+      level: 3
+    },
+    zlibInflateOptions: {
+      chunkSize: 10 * 1024
+    },
+    // Other options settable:
+    clientNoContextTakeover: true, // Defaults to negotiated value.
+    serverNoContextTakeover: true, // Defaults to negotiated value.
+    serverMaxWindowBits: 1024, // Defaults to negotiated value.
+    // Below options specified as default values.
+    concurrencyLimit: 10, // Limits zlib concurrency for perf.
+    threshold: 1024 // Size (in bytes) below which messages
+    // should not be compressed if context takeover is disabled.
+  },
   // Explicitly handle and accept the 'tty' protocol
   handleProtocols: (protocols) => {
     if (protocols.has("tty")) {
