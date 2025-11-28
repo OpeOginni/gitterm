@@ -14,7 +14,8 @@
     "@gitpad/auth": "workspace:*",
     "@gitpad/db": "workspace:*",
     "dotenv": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "http-proxy": "^1.18.1"
   },
   "devDependencies": {
     "typescript": "catalog:",

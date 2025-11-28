@@ -1,46 +1,11 @@
-import { Hono } from "hono";
-import type { Context } from "hono";
-import { logger } from "hono/logger";
 import { db, eq } from "@gitpad/db";
 import { workspace } from "@gitpad/db/schema/workspace";
 import { auth } from "@gitpad/auth";
 import "dotenv/config";
+import * as http from "http";
+import httpProxy from "http-proxy";
 
 const PORT = parseInt(process.env.PORT || "3000");
-const app = new Hono();
-
-// Middleware: logger
-app.use(logger());
-
-// CORS middleware for subdomain support
-app.use("*", async (c: Context, next: any) => {
-  const origin = c.req.header("origin") || "";
-  const BASE_DOMAIN = process.env.BASE_DOMAIN || "gitterm.dev";
-  
-  // Allow subdomains of gitterm.dev
-  if (origin.endsWith(`.${BASE_DOMAIN}`) || origin.includes(BASE_DOMAIN)) {
-    c.header("Access-Control-Allow-Origin", origin);
-    c.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    c.header("Access-Control-Allow-Headers", "Authorization,Content-Type,Cookie");
-    c.header("Access-Control-Allow-Credentials", "true");
-  }
-  
-  // Handle preflight requests
-  if (c.req.method === "OPTIONS") {
-    return new Response(null, { status: 204 });
-  }
-  
-  await next();
-});
-
-// Health check endpoint
-app.get("/health", (c) => {
-  return c.json({
-    status: "healthy",
-    timestamp: new Date().toISOString(),
-    service: "proxy"
-  });
-});
 
 // Helper to validate session from request headers
 async function validateSession(headers: any): Promise<string | null> {
@@ -72,176 +37,192 @@ function extractSubdomain(host: string): string {
   return "";
 }
 
-// Middleware: Auth and workspace resolution
-app.use("*", async (c: Context, next: any) => {
-  const host = c.req.header("host");
-
-  if (!host) {
-    return c.text("Missing Host header", 400);
-  }
-
-  const subdomain = extractSubdomain(host);
-
-  if (!subdomain) {
-    return c.text("Invalid subdomain", 400);
-  }
-
-  console.log("SUBDOMAIN", subdomain);
-  console.log("HEADERS", c.req.raw.headers);
-  // Validate session
-  const userId = await validateSession(c.req.raw.headers);
-
-  console.log("VERFIED SESSION", userId);
-  if (!userId) {
-    return c.text("Unauthorized", 401);
-  }
-
-  console.log("VERFIED SESSION", userId);
-
-  // Lookup workspace
-  const [ws] = await db
-    .select()
-    .from(workspace)
-    .where(eq(workspace.subdomain, subdomain))
-    .limit(1);
-
-  if (!ws) {
-    return c.text("Workspace not found", 404);
-  }
-
-  // Check ownership
-  if (ws.userId !== userId) {
-    return c.text("Forbidden", 403);
-  }
-
-  // Check backend URL is ready
-  if (!ws.backendUrl) {
-    return c.text("Workspace backend not ready", 503);
-  }
-
-  // Store in context for use in handlers
-  // Convert http to https for internal railway connections
-  c.set("backendUrl", ws.backendUrl);
-  c.set("workspaceId", ws.id);
-  c.set("subdomain", subdomain);
-  c.set("userId", userId);
-
-  await next();
-});
-
-// Main handler: proxy all requests to backend
-app.all("*", async (c: Context) => {
-  const upgrade = c.req.header("upgrade");
-  
-  // Check if this is a WebSocket upgrade request
-  if (upgrade?.toLowerCase() === "websocket") {
-    const backendUrl = c.get("backendUrl") as string;
-    const workspaceId = c.get("workspaceId") as string;
-    const userId = c.get("userId") as string;
-    const path = c.req.path;
-    const query = c.req.url.split("?")[1] ?? "";
-
-    try {
-      // Convert HTTP/HTTPS URL to WebSocket URL
-      const wsUrl = backendUrl
-        .replace(/^https?:\/\//, "wss://")
-        .replace(/\/$/, "");
-      
-      const targetUrl = `${wsUrl}${path}${query ? "?" + query : ""}`;
-      console.log(`[${workspaceId}] WebSocket upgrade: ${targetUrl}`);
-
-      // Prepare headers for WebSocket
-      const wsHeaders = new Headers(c.req.raw.headers as any);
-      wsHeaders.delete("host");
-      wsHeaders.delete("connection");
-      wsHeaders.set("X-Auth-User", userId);
-
-      // Forward WebSocket upgrade
-      const response = await fetch(targetUrl, {
-        method: "GET",
-        headers: wsHeaders,
-      });
-
-      console.log(`[${workspaceId}] WebSocket response: ${response.status}`);
-
-      return response;
-    } catch (error) {
-      console.error(`[${workspaceId}] WebSocket proxy error:`, error);
-      return c.text("WebSocket Gateway Error", 502);
-    }
-  }
-  // Regular HTTP/HTTPS request (not WebSocket)
-  const backendUrl = c.get("backendUrl") as string;
-  const workspaceId = c.get("workspaceId") as string;
-  const userId = c.get("userId") as string;
-  const path = c.req.path;
-  const query = c.req.url.split("?")[1] ?? "";
-
+// Create HTTP server with proper WebSocket support
+const server = http.createServer(async (req: any, res: any) => {
   try {
-    const targetUrl = `${backendUrl}${path}${query ? "?" + query : ""}`;
-    console.log(`[${workspaceId}] ${c.req.method} ${targetUrl}`);
-
-    // Get request body if applicable
-    let body: any;
-    if (c.req.method !== "GET" && c.req.method !== "HEAD") {
-      body = c.req.raw.body;
+    // Health check endpoint
+    if (req.url === "/health" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        service: "proxy"
+      }));
+      return;
     }
 
-    // Prepare headers for ttyd - pass user ID via auth header
-    const proxyHeaders = new Headers(c.req.raw.headers as any);
-    // Remove hop-by-hop headers that shouldn't be forwarded
-    proxyHeaders.delete("host");
-    proxyHeaders.delete("connection");
-    // Add auth header for ttyd's --auth-header option
-    proxyHeaders.set("X-Auth-User", userId);
+    // Parse request
+    const host = req.headers.host;
+    if (!host) {
+      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.end("Missing Host header");
+      return;
+    }
 
-    // Forward request
-    const response = await fetch(targetUrl, {
-      method: c.req.method,
-      headers: proxyHeaders,
-      body,
+    const subdomain = extractSubdomain(host);
+    if (!subdomain) {
+      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.end("Invalid subdomain");
+      return;
+    }
+
+    console.log("SUBDOMAIN", subdomain);
+    console.log("HEADERS", req.headers);
+
+    // Validate session
+    const userId = await validateSession(req.headers);
+    console.log("VERIFIED SESSION", userId);
+
+    if (!userId) {
+      res.writeHead(401, { "Content-Type": "text/plain" });
+      res.end("Unauthorized");
+      return;
+    }
+
+    // Lookup workspace
+    const [ws] = await db
+      .select()
+      .from(workspace)
+      .where(eq(workspace.subdomain, subdomain))
+      .limit(1);
+
+    if (!ws) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Workspace not found");
+      return;
+    }
+
+    if (ws.userId !== userId) {
+      res.writeHead(403, { "Content-Type": "text/plain" });
+      res.end("Forbidden");
+      return;
+    }
+
+    if (!ws.backendUrl) {
+      res.writeHead(503, { "Content-Type": "text/plain" });
+      res.end("Workspace backend not ready");
+      return;
+    }
+
+    console.log(`[${ws.id}] ${req.method} ${req.url}`);
+
+    // Create proxy server with WebSocket support
+    const proxy = httpProxy.createProxyServer({
+      target: ws.backendUrl,
+      ws: true,
+      changeOrigin: true,
+      secure: false, // Allow self-signed certificates
     });
 
-    // Add response header to identify proxied request
-    const headers = new Headers(response.headers);
-    headers.set("X-Proxied-For", workspaceId);
-
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
+    // Add auth header to proxied requests
+    proxy.on("proxyReq", (proxyReq: any) => {
+      proxyReq.setHeader("X-Auth-User", userId);
     });
+
+    // Handle proxy errors
+    proxy.on("error", (error: any) => {
+      console.error(`[${ws.id}] Proxy error:`, error);
+      if (!res.headersSent) {
+        res.writeHead(502, { "Content-Type": "text/plain" });
+        res.end("Bad Gateway");
+      }
+    });
+
+    // Forward HTTP request
+    proxy.web(req, res);
   } catch (error) {
-    console.error(`[${workspaceId}] Proxy error:`, error);
-    return c.text("Bad Gateway", 502);
+    console.error("Request handler error:", error);
+    if (!res.headersSent) {
+      res.writeHead(500, { "Content-Type": "text/plain" });
+      res.end("Internal Server Error");
+    }
   }
 });
 
-// Start server using Bun/Node's built-in fetch server
-const server = Bun?.serve ? 
-  Bun.serve({ 
-    port: PORT, 
-    fetch: app.fetch,
-    hostname: "0.0.0.0"
-  }) :
-  undefined;
+// Handle WebSocket upgrades
+server.on("upgrade", async (req: any, socket: any, head: any) => {
+  try {
+    const host = req.headers.host;
+    if (!host) {
+      socket.destroy();
+      return;
+    }
 
-if (server) {
+    const subdomain = extractSubdomain(host);
+    if (!subdomain) {
+      socket.destroy();
+      return;
+    }
+
+    console.log(`[${subdomain}] WebSocket upgrade requested`);
+
+    // Validate session
+    const userId = await validateSession(req.headers);
+    if (!userId) {
+      socket.destroy();
+      return;
+    }
+
+    // Lookup workspace
+    const [ws] = await db
+      .select()
+      .from(workspace)
+      .where(eq(workspace.subdomain, subdomain))
+      .limit(1);
+
+    if (!ws) {
+      socket.destroy();
+      return;
+    }
+
+    if (ws.userId !== userId) {
+      socket.destroy();
+      return;
+    }
+
+    if (!ws.backendUrl) {
+      socket.destroy();
+      return;
+    }
+
+    console.log(`[${ws.id}] WebSocket upgrade: ${req.url}`);
+
+    // Create proxy for WebSocket
+    const proxy = httpProxy.createProxyServer({
+      target: ws.backendUrl,
+      ws: true,
+      changeOrigin: true,
+      secure: false,
+    });
+
+    // Add auth header
+    proxy.on("proxyReq", (proxyReq: any) => {
+      proxyReq.setHeader("X-Auth-User", userId);
+    });
+
+    // Handle errors
+    proxy.on("error", (error: any) => {
+      console.error(`[${ws.id}] WebSocket proxy error:`, error);
+      socket.destroy();
+    });
+
+    // Forward WebSocket upgrade
+    proxy.ws(req, socket, head);
+  } catch (error) {
+    console.error("WebSocket upgrade error:", error);
+    socket.destroy();
+  }
+});
+
+// Start server
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`🔄 Proxy server listening on http://0.0.0.0:${PORT}`);
-} else {
-  // Fallback for Node.js using http.createServer
-  import("http").then((http) => {
-    const srv = http.createServer(app.fetch as any);
-    srv.listen(PORT, "0.0.0.0", () => {
-      console.log(`🔄 Proxy server listening on http://0.0.0.0:${PORT}`);
-      console.log("Wildcard subdomains routed via Cloudflare DNS");
-    });
+  console.log("Wildcard subdomains routed via Cloudflare DNS");
+});
 
-    process.on("SIGTERM", () => {
-      console.log("SIGTERM received, shutting down gracefully");
-      srv.close(() => {
-        process.exit(0);
-      });
-    });
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, shutting down gracefully");
+  server.close(() => {
+    process.exit(0);
   });
-}
+});
