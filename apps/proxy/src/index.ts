@@ -129,6 +129,52 @@ app.use("*", async (c: Context, next: any) => {
   await next();
 });
 
+// WebSocket handler for ttyd
+app.get("*", async (c: Context) => {
+  const upgrade = c.req.header("upgrade");
+  
+  // Check if this is a WebSocket upgrade request
+  if (upgrade?.toLowerCase() === "websocket") {
+    const backendUrl = c.get("backendUrl") as string;
+    const workspaceId = c.get("workspaceId") as string;
+    const userId = c.get("userId") as string;
+    const path = c.req.path;
+    const query = c.req.url.split("?")[1] ?? "";
+
+    try {
+      // Convert HTTP/HTTPS URL to WebSocket URL
+      const wsUrl = backendUrl
+        .replace(/^https?:\/\//, "wss://")
+        .replace(/\/$/, "");
+      
+      const targetUrl = `${wsUrl}${path}${query ? "?" + query : ""}`;
+      console.log(`[${workspaceId}] WebSocket upgrade: ${targetUrl}`);
+
+      // Prepare headers for WebSocket
+      const wsHeaders = new Headers(c.req.raw.headers as any);
+      wsHeaders.delete("host");
+      wsHeaders.delete("connection");
+      wsHeaders.set("X-Auth-User", userId);
+
+      // Forward WebSocket upgrade
+      const response = await fetch(targetUrl, {
+        method: "GET",
+        headers: wsHeaders,
+      });
+
+      console.log(`[${workspaceId}] WebSocket response: ${response.status}`);
+
+      return response;
+    } catch (error) {
+      console.error(`[${workspaceId}] WebSocket proxy error:`, error);
+      return c.text("WebSocket Gateway Error", 502);
+    }
+  }
+  
+  // Not a WebSocket request, pass to next handler
+  return undefined;
+});
+
 // Main handler: proxy all requests to backend
 app.all("*", async (c: Context) => {
   const backendUrl = c.get("backendUrl") as string;
