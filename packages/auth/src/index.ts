@@ -1,7 +1,9 @@
-import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { APIError, betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@gitpad/db";
 import * as schema from "@gitpad/db/schema/auth";
+import { nextCookies } from "better-auth/next-js";
+import { createAuthMiddleware } from "better-auth/api";
 
 const BASE_DOMAIN = process.env.BASE_DOMAIN || "gitterm.dev";
 const SUBDOMAIN_DOMAIN = `.${BASE_DOMAIN}`;
@@ -37,4 +39,22 @@ export const auth = betterAuth({
 					httpOnly: true,
 				},
 	},
+	hooks: {
+		before: createAuthMiddleware(async (ctx) => {
+			if (ctx.path !== "/sign-up/email") return;
+
+			const email = ctx.body?.email as string | undefined;
+
+			if (!email) {
+			  throw new APIError("BAD_REQUEST", { message: "Email is required." });
+			}
+	  
+			if (email !== "brightoginni123@gmail.com") {
+			  throw new APIError("BAD_REQUEST", {
+				message: "Unauthorized email.",
+			  });
+		}
+	})
+},
+	plugins: [nextCookies()]
 } as BetterAuthOptions);
