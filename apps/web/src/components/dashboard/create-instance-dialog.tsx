@@ -51,7 +51,6 @@ export function CreateInstanceDialog() {
   // Fetch dynamic data
   const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
-  
 
   // Derive available regions from selected cloud provider
   const availableRegions = useMemo(() => {
@@ -90,10 +89,10 @@ export function CreateInstanceDialog() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableRegions]); // Only react to availableRegions changes (cloud provider changes) 
 
-  const subscribeToWorkspaceStatus = async (workspaceId: string) => {
+  const subscribeToWorkspaceStatus = async (workspaceId: string, userId: string) => {
     return new Promise<void>((resolve, reject) => {
       const subscription = listenerTrpc.workspace.status.subscribe(
-        { workspaceId },
+        { workspaceId, userId },
         {
           onData: (payload) => {
             if (payload.status === "running") {
@@ -123,7 +122,7 @@ export function CreateInstanceDialog() {
       queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
 
       console.log("Subscribing to workspace status", data.workspace.id);
-      await subscribeToWorkspaceStatus(data.workspace.id);
+      await subscribeToWorkspaceStatus(data.workspace.id, data.workspace.userId);
 
     },
     onError: (error) => {
@@ -277,3 +276,7 @@ export function CreateInstanceDialog() {
     </Dialog>
   );
 }
+function useSession(): { data: any; } {
+  throw new Error("Function not implemented.");
+}
+

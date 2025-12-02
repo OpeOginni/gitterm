@@ -51,12 +51,12 @@ export const trpcClient = createTRPCClient<AppRouter>({
 });
 
 export const listenerTrpc = createTRPCProxyClient<ListenerRouter>({
-			links: [
-				httpSubscriptionLink({
-					url: `${listenerUrl}/trpc`,
-					eventSourceOptions: {
-						withCredentials: true,
-					},
+	links: [
+		httpSubscriptionLink({
+			url: `${listenerUrl}/trpc`,
+			eventSourceOptions: {
+				withCredentials: true,
+			},
 		}),
 	],
 });
