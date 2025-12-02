@@ -1,5 +1,5 @@
 import z from "zod";
-import { protectedProcedure, router } from "../../index";
+import { listenerProcedure, listenerRouter } from "../../index";
 import { db, eq } from "@gitpad/db";
 import { workspace } from "@gitpad/db/schema/workspace";
 import { TRPCError } from "@trpc/server";
@@ -10,8 +10,8 @@ import {
 } from "../../events/workspace";
 import { on } from "node:events";
 
-export const workspaceEventsRouter = router({
-	status: protectedProcedure
+export const workspaceEventsRouter = listenerRouter({
+	status: listenerProcedure
 		.input(
 			z.object({
 				workspaceId: z.string(),

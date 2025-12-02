@@ -47,7 +47,7 @@ app.use(
 		onError: (error) => {
 			console.error(error);
 			return new Response("Sub Error", { status: 500 });
-		},
+		}
 	}),
 );
 
