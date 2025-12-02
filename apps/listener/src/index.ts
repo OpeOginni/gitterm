@@ -13,8 +13,8 @@ app.use(logger());
 console.log("CORS_ORIGIN", process.env.CORS_ORIGIN);
 
 app.use("/*", cors({
-    origin: process.env.CORS_ORIGIN ?? "*",
-	// origin: "http://localhost:3001",
+    // origin: process.env.CORS_ORIGIN ?? "*",
+	origin: ["https://gitterm.dev", "http://localhost:3001"],
 	allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 	allowHeaders: ["Content-Type", "Authorization", "Cookie"],
 	credentials: true,
