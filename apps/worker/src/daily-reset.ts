@@ -10,8 +10,10 @@ import { internalClient } from "@gitpad/api/client/internal";
  * 
  * Note: Daily usage records are created on-demand when users start workspaces,
  * so we don't need to pre-create them. This job is mainly for observability.
+ * 
+ * Runs as a Railway cron job once per day at midnight UTC.
  */
-export async function runDailyReset(): Promise<void> {
+async function main() {
   console.log("[daily-reset] Starting daily reset...");
   
   try {
@@ -33,22 +35,13 @@ export async function runDailyReset(): Promise<void> {
     console.log(`  - Quota stops: ${stats.sessions.quotaStops}`);
 
     console.log("[daily-reset] Daily reset completed successfully");
+    process.exit(0);
   } catch (error) {
     console.error("[daily-reset] Error running daily reset:", error);
-    throw error;
+    process.exit(1);
   }
 }
 
-// Run if called directly
-if (import.meta.main) {
-  runDailyReset()
-    .then(() => {
-      console.log("[daily-reset] Done.");
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error("[daily-reset] Fatal error:", error);
-      process.exit(1);
-    });
-}
+// Run the job
+main();
 

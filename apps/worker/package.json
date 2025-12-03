@@ -11,7 +11,6 @@
     "daily-reset": "bun run src/daily-reset.ts"
   },
   "dependencies": {
-    "hono": "catalog:",
     "dotenv": "catalog:",
     "@gitpad/api": "workspace:*",
     "@trpc/client": "catalog:"
