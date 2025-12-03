@@ -15,7 +15,7 @@ if (!INTERNAL_API_KEY) {
 export const internalClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: `${SERVER_URL}/trpc`,
+      url: `https://${SERVER_URL}/trpc`,
       headers: () => ({
         "x-internal-key": INTERNAL_API_KEY || "",
       }),
