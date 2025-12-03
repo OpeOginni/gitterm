@@ -1,4 +1,3 @@
-import { auth } from "@gitpad/auth";
 import { internalClient } from "@gitpad/api/client/internal";
 import "dotenv/config";
 import * as http from "http";
@@ -34,13 +33,22 @@ async function updateWorkspaceHeartbeat(workspaceId: string): Promise<void> {
 
 const PORT = parseInt(process.env.PORT || "3000");
 
-// Helper to validate session from request headers
+// Helper to validate session from request headers via internal API
 async function validateSession(headers: any): Promise<string | null> {
   try {
-    const session = await auth.api.getSession({
-      headers,
+    // Extract cookie header for session validation
+    const cookie = headers.cookie || headers.Cookie;
+    
+    if (!cookie) {
+      return null;
+    }
+    
+    // Call internal API to validate session (avoids direct DB access)
+    const result = await internalClient.internal.validateSession.query({ 
+      cookie 
     });
-    return session?.user?.id ?? null;
+    
+    return result.userId;
   } catch (error) {
     console.error("Session validation error:", error);
     return null;

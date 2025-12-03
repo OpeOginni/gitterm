@@ -7,12 +7,32 @@ import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../providers";
 import { WORKSPACE_EVENTS } from "../events/workspace";
 import { IDLE_TIMEOUT_MINUTES, closeUsageSession } from "../utils/metering";
+import { auth } from "@gitpad/auth";
 
 /**
  * Internal router for service-to-service communication
  * All procedures require X-Internal-Key header with valid INTERNAL_API_KEY
  */
 export const internalRouter = router({
+  // Validate session from cookie (for proxy)
+  validateSession: internalProcedure
+    .input(z.object({ 
+      cookie: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const headers = new Headers();
+      if (input.cookie) {
+        headers.set("cookie", input.cookie);
+      }
+      
+      const session = await auth.api.getSession({ headers });
+      
+      return {
+        userId: session?.user?.id ?? null,
+        valid: !!session?.user?.id,
+      };
+    }),
+
   // Get workspace by subdomain (for proxy)
   getWorkspaceBySubdomain: internalProcedure
     .input(z.object({ subdomain: z.string() }))

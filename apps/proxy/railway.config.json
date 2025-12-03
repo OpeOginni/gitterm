@@ -6,7 +6,6 @@
     "watchPatterns": [
       "apps/proxy/**/*",
       "packages/api/**/*",
-      "packages/auth/**/*",
       "packages/config/**/*",
       "apps/proxy/.env*",
       "turbo.json",
