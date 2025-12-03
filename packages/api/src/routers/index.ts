@@ -3,6 +3,7 @@ import { railwayRouter } from "./railway/railway";
 import { railwayWebhookRouter } from "./railway/webhook";
 import { workspaceRouter } from "./workspace";
 import { workspaceEventsRouter } from "./workspace/events";
+import { internalRouter } from "./internal";
 
 export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {
@@ -16,6 +17,7 @@ export const appRouter = router({
 	}),
 	railway: railwayRouter,
 	workspace: workspaceRouter,
+	internal: internalRouter,
 });
 export type AppRouter = typeof appRouter;
 

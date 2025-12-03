@@ -1,5 +1,5 @@
 import z from "zod";
-import { protectedProcedure, router } from "../index";
+import { protectedProcedure, publicProcedure, router } from "../index";
 import { db, eq, and, asc } from "@gitpad/db";
 import {
   agentWorkspaceConfig,
@@ -9,6 +9,15 @@ import {
 import { agentType, image, cloudProvider, region } from "@gitpad/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
 import { validateAgentConfig } from "@gitpad/schema";
+import {
+  getOrCreateDailyUsage,
+  hasRemainingQuota,
+  updateLastActive,
+  closeUsageSession,
+  FREE_TIER_DAILY_MINUTES,
+} from "../utils/metering";
+import { getProviderByCloudProviderId } from "../providers";
+import { WORKSPACE_EVENTS } from "../events/workspace";
 
 export const workspaceRouter = router({
   // List all agent types
@@ -602,6 +611,343 @@ export const workspaceRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to update environment variable",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
+  // ============================================================================
+  // Metering & Quota Endpoints
+  // ============================================================================
+
+  // Get daily usage for the authenticated user
+  getDailyUsage: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    if (!userId) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
+    }
+
+    try {
+      const usage = await getOrCreateDailyUsage(userId);
+      return {
+        success: true,
+        minutesUsed: usage.minutesUsed,
+        minutesRemaining: usage.minutesRemaining,
+        dailyLimit: FREE_TIER_DAILY_MINUTES,
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch daily usage",
+        cause: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }),
+
+  // Check if user can start a new workspace (has remaining quota)
+  checkQuota: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    if (!userId) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
+    }
+
+    try {
+      const canStart = await hasRemainingQuota(userId);
+      const usage = await getOrCreateDailyUsage(userId);
+      
+      return {
+        success: true,
+        canStartWorkspace: canStart,
+        minutesRemaining: usage.minutesRemaining,
+        dailyLimit: FREE_TIER_DAILY_MINUTES,
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to check quota",
+        cause: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }),
+
+  // Heartbeat endpoint for workspace agents (public - uses workspaceId for auth)
+  heartbeat: publicProcedure
+    .input(
+      z.object({
+        workspaceId: z.string().uuid(),
+        timestamp: z.number().optional(),
+        cpu: z.number().optional(),
+        active: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Verify workspace exists
+        const [existingWorkspace] = await db
+          .select()
+          .from(workspace)
+          .where(eq(workspace.id, input.workspaceId));
+
+        if (!existingWorkspace) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workspace not found",
+          });
+        }
+
+        // Check if workspace is still allowed to run (quota check)
+        const hasQuota = await hasRemainingQuota(existingWorkspace.userId);
+        
+        if (!hasQuota) {
+          // User exceeded quota - signal shutdown
+          return {
+            success: true,
+            action: "shutdown" as const,
+            reason: "quota_exhausted",
+          };
+        }
+
+        // Update last active timestamp
+        await updateLastActive(input.workspaceId);
+
+        return {
+          success: true,
+          action: "continue" as const,
+          reason: null,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to process heartbeat",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
+  // Stop a running workspace
+  stopWorkspace: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string().uuid(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      try {
+        // Verify workspace belongs to user
+        const [existingWorkspace] = await db
+          .select()
+          .from(workspace)
+          .where(
+            and(
+              eq(workspace.id, input.workspaceId),
+              eq(workspace.userId, userId)
+            )
+          );
+
+        if (!existingWorkspace) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workspace not found",
+          });
+        }
+
+        if (existingWorkspace.status !== "running") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Workspace is not running",
+          });
+        }
+
+        // Get the cloud provider name
+        const [provider] = await db
+          .select()
+          .from(cloudProvider)
+          .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
+
+        if (!provider) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Cloud provider not found",
+          });
+        }
+
+        // Get the region identifier
+        const [workspaceRegion] = await db
+          .select()
+          .from(region)
+          .where(eq(region.id, existingWorkspace.regionId));
+
+        if (!workspaceRegion) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Region not found",
+          });
+        }
+
+        // Get compute provider and stop the workspace
+        const computeProvider = await getProviderByCloudProviderId(provider.name);
+        await computeProvider.stopWorkspace(
+          existingWorkspace.externalInstanceId,
+          workspaceRegion.externalRegionIdentifier
+        );
+
+        // Close the usage session
+        const { durationMinutes } = await closeUsageSession(input.workspaceId, "manual");
+
+        // Update workspace status
+        const now = new Date();
+        await db
+          .update(workspace)
+          .set({
+            status: "stopped",
+            stoppedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(workspace.id, input.workspaceId));
+
+        // Emit status event
+        WORKSPACE_EVENTS.emitStatus({
+          workspaceId: input.workspaceId,
+          status: "stopped",
+          updatedAt: now,
+          userId,
+          workspaceDomain: existingWorkspace.domain,
+        });
+
+        return {
+          success: true,
+          message: "Workspace stopped successfully",
+          durationMinutes,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to stop workspace",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
+  // Restart a stopped workspace
+  restartWorkspace: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string().uuid(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      try {
+        // Check quota first
+        const hasQuota = await hasRemainingQuota(userId);
+        if (!hasQuota) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Daily free tier limit reached. Please try again tomorrow.",
+          });
+        }
+
+        // Verify workspace belongs to user
+        const [existingWorkspace] = await db
+          .select()
+          .from(workspace)
+          .where(
+            and(
+              eq(workspace.id, input.workspaceId),
+              eq(workspace.userId, userId)
+            )
+          );
+
+        if (!existingWorkspace) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workspace not found",
+          });
+        }
+
+        if (existingWorkspace.status !== "stopped") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Workspace is not stopped",
+          });
+        }
+
+        // Get the cloud provider name
+        const [provider] = await db
+          .select()
+          .from(cloudProvider)
+          .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
+
+        if (!provider) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Cloud provider not found",
+          });
+        }
+
+        // Get the region identifier
+        const [workspaceRegion] = await db
+          .select()
+          .from(region)
+          .where(eq(region.id, existingWorkspace.regionId));
+
+        if (!workspaceRegion) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Region not found",
+          });
+        }
+
+        // Get compute provider and restart the workspace
+        const computeProvider = await getProviderByCloudProviderId(provider.name);
+        await computeProvider.restartWorkspace(
+          existingWorkspace.externalInstanceId,
+          workspaceRegion.externalRegionIdentifier
+        );
+
+        // Update workspace status
+        const now = new Date();
+        await db
+          .update(workspace)
+          .set({
+            status: "pending",
+            stoppedAt: null,
+            lastActiveAt: now,
+            updatedAt: now,
+          })
+          .where(eq(workspace.id, input.workspaceId));
+
+        // Emit status event
+        WORKSPACE_EVENTS.emitStatus({
+          workspaceId: input.workspaceId,
+          status: "pending",
+          updatedAt: now,
+          userId,
+          workspaceDomain: existingWorkspace.domain,
+        });
+
+        return {
+          success: true,
+          message: "Workspace restarting",
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to restart workspace",
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }

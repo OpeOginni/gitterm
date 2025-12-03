@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { listenerTrpc, trpc } from "@/utils/trpc";
+import { trpc, queryClient } from "@/utils/trpc";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ExternalLink, Trash2, PlayCircle, GitBranch, Clock, Globe, Box } from "lucide-react";
+import { Loader2, ExternalLink, Trash2, PlayCircle, GitBranch, Clock, Globe, Box, MapPin, StopCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries } from "@tanstack/react-query";
 
 export function InstanceList() {
-  const { data, isLoading, refetch } = useQuery(trpc.workspace.listWorkspaces.queryOptions());
+  // Fetch workspaces and cloud providers in parallel
+  const [workspacesQuery, providersQuery] = useQueries({
+    queries: [
+      trpc.workspace.listWorkspaces.queryOptions(),
+      trpc.workspace.listCloudProviders.queryOptions(),
+    ],
+  });
+
+  const isLoading = workspacesQuery.isLoading || providersQuery.isLoading;
 
   if (isLoading) {
     return (
@@ -21,15 +28,22 @@ export function InstanceList() {
     );
   }
 
-  if (!data?.workspaces || data.workspaces.length === 0) {
+  // Filter out terminated workspaces
+  const activeWorkspaces = (workspacesQuery.data?.workspaces || []).filter(
+    (ws) => ws.status !== "terminated"
+  );
+
+  const providers = providersQuery.data?.cloudProviders || [];
+
+  if (activeWorkspaces.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center animate-in fade-in-50">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
           <PlayCircle className="h-6 w-6 text-primary" />
         </div>
-        <h3 className="mt-4 text-lg font-semibold">No instances running</h3>
+        <h3 className="mt-4 text-lg font-semibold">No active workspaces</h3>
         <p className="mb-4 mt-2 text-sm text-muted-foreground max-w-sm">
-          You haven't launched any workspaces yet. Create one to get started.
+          Create a new workspace to get started with your development environment.
         </p>
       </div>
     );
@@ -37,22 +51,45 @@ export function InstanceList() {
 
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {data.workspaces.map((workspace) => (
-        <InstanceCard key={workspace.id} workspace={workspace} refetch={refetch} />
+      {activeWorkspaces.map((workspace) => (
+        <InstanceCard 
+          key={workspace.id} 
+          workspace={workspace}
+          providers={providers}
+        />
       ))}
     </div>
   );
 }
 
-function InstanceCard({ workspace, refetch }: { workspace: any; refetch: () => void }) {
-
+function InstanceCard({ workspace, providers }: { workspace: any; providers: any[] }) {
   const deleteServiceMutation = useMutation(trpc.railway.deleteService.mutationOptions({
     onSuccess: () => {
       toast.success("Workspace terminated successfully");
-      refetch();
+      queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
     },
     onError: (error) => {
       toast.error(`Failed to terminate workspace: ${error.message}`);
+    },
+  }));
+
+  const stopWorkspaceMutation = useMutation(trpc.workspace.stopWorkspace.mutationOptions({
+    onSuccess: () => {
+      toast.success("Workspace stopped successfully");
+      queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
+    },
+    onError: (error) => {
+      toast.error(`Failed to stop workspace: ${error.message}`);
+    },
+  }));
+
+  const restartWorkspaceMutation = useMutation(trpc.workspace.restartWorkspace.mutationOptions({
+    onSuccess: () => {
+      toast.success("Workspace restarting...");
+      queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
+    },
+    onError: (error) => {
+      toast.error(`Failed to restart workspace: ${error.message}`);
     },
   }));
 
@@ -92,6 +129,24 @@ function InstanceCard({ workspace, refetch }: { workspace: any; refetch: () => v
       .replace(".git", "");
   };
 
+  // Get region details from providers
+  const getRegionInfo = () => {
+    const provider = providers.find((p) => p.id === workspace.cloudProviderId);
+    if (!provider) return { name: "Unknown", location: "Unknown", providerName: "Unknown" };
+    
+    const region = provider.regions?.find((r: any) => r.id === workspace.regionId);
+    return {
+      name: region?.name || "Unknown",
+      location: region?.location || "Unknown",
+      providerName: provider.name,
+    };
+  };
+
+  const regionInfo = getRegionInfo();
+  const isRunning = workspace.status === "running";
+  const isStopped = workspace.status === "stopped";
+  const isPending = workspace.status === "pending";
+
   return (
     <Card className="overflow-hidden transition-all hover:shadow-lg border-border/50 flex flex-col">
       <CardHeader className="pb-3 px-4 pt-4">
@@ -102,7 +157,7 @@ function InstanceCard({ workspace, refetch }: { workspace: any; refetch: () => v
                 <Box className="h-3.5 w-3.5 text-primary shrink-0" />
               </div>
               <CardTitle className="text-sm font-semibold truncate">
-                {getWorkspaceName()}
+                {workspace.subdomain}
               </CardTitle>
             </div>
             {getStatusBadge(workspace.status)}
@@ -118,50 +173,81 @@ function InstanceCard({ workspace, refetch }: { workspace: any; refetch: () => v
         </div>
       </CardHeader>
       <CardContent className="pb-3 px-4 flex-1">
-        <div className="grid gap-2 text-xs md:text-sm text-muted-foreground">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <Globe className="h-3 w-3 shrink-0" />
-              <span className="truncate">{workspace.region}</span>
-            </div>
-            <span className="text-xs text-muted-foreground/50">•</span>
-            <span className="truncate">{workspace.cloudProviderId}</span>
-          </div>
+        <div className="grid gap-2.5 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
-            <Clock className="h-3 w-3 shrink-0" />
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">
-              {formatDistanceToNow(new Date(workspace.startAt), { addSuffix: true })}
+              {regionInfo.name} ({regionInfo.location})
             </span>
           </div>
-          {workspace.domain && (
+          <div className="flex items-center gap-1.5">
+            <Globe className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{regionInfo.providerName}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">
+              Started {formatDistanceToNow(new Date(workspace.startedAt), { addSuffix: true })}
+            </span>
+          </div>
+          {workspace.lastActiveAt && isRunning && (
             <div className="flex items-center gap-1.5">
-              <ExternalLink className="h-3 w-3 shrink-0" />
-              <a 
-                href={`https://${workspace.domain}`} 
-                target="_blank" 
-                rel="noreferrer"
-                className="truncate hover:underline text-primary"
-              >
-                {workspace.domain}
-              </a>
+              <Clock className="h-3.5 w-3.5 shrink-0 text-green-500" />
+              <span className="truncate text-green-600">
+                Active {formatDistanceToNow(new Date(workspace.lastActiveAt), { addSuffix: true })}
+              </span>
             </div>
           )}
         </div>
       </CardContent>
       <CardFooter className="flex gap-2 bg-muted/30 p-3 border-t">
-        <Button variant="outline" size="sm" className="h-9 flex-1 text-xs gap-1.5" asChild>
-          <a href={`https://railway.app/project/${workspace.externalInstanceId}`} target="_blank" rel="noreferrer">
-            <ExternalLink className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Open Project</span>
-            <span className="sm:hidden">Open</span>
-          </a>
-        </Button>
+        {isRunning && workspace.domain && (
+          <Button variant="default" size="sm" className="h-9 flex-1 text-xs gap-1.5" asChild>
+            <a href={`https://${workspace.domain}`} target="_blank" rel="noreferrer">
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open Workspace
+            </a>
+          </Button>
+        )}
+
+        {isStopped && (
+          <Button
+            variant="default"
+            size="sm"
+            className="h-9 flex-1 text-xs gap-1.5"
+            disabled={restartWorkspaceMutation.isPending}
+            onClick={() => restartWorkspaceMutation.mutate({ workspaceId: workspace.id })}
+          >
+            {restartWorkspaceMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <PlayCircle className="h-3.5 w-3.5" />
+            )}
+            Restart
+          </Button>
+        )}
+
+        {(isPending || isRunning) && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-3 text-xs"
+            disabled={stopWorkspaceMutation.isPending}
+            onClick={() => stopWorkspaceMutation.mutate({ workspaceId: workspace.id })}
+          >
+            {stopWorkspaceMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <StopCircle className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        )}
         
         <Button 
           variant="outline" 
           size="sm" 
           className="h-9 px-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
-          disabled={deleteServiceMutation.isPending || workspace.status === "terminated"}
+          disabled={deleteServiceMutation.isPending}
           onClick={() => deleteServiceMutation.mutate({ workspaceId: workspace.id })}
         >
           {deleteServiceMutation.isPending ? (
@@ -169,9 +255,9 @@ function InstanceCard({ workspace, refetch }: { workspace: any; refetch: () => v
           ) : (
             <Trash2 className="h-4 w-4" />
           )}
-          <span className="sr-only">Destroy</span>
         </Button>
       </CardFooter>
     </Card>
   );
 }
+

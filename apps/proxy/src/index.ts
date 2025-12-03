@@ -1,6 +1,5 @@
-import { db, eq } from "@gitpad/db";
-import { workspace } from "@gitpad/db/schema/workspace";
 import { auth } from "@gitpad/auth";
+import { internalClient } from "@gitpad/api/client/internal";
 import "dotenv/config";
 import * as http from "http";
 import { WebSocket, WebSocketServer } from "ws";
@@ -9,6 +8,29 @@ import * as dns from "dns";
 
 // Force IPv6 resolution for Railway internal network
 dns.setDefaultResultOrder('ipv6first');
+
+// Heartbeat tracking - debounce updates to avoid API spam
+const lastHeartbeatTime = new Map<string, number>();
+const HEARTBEAT_DEBOUNCE_MS = 30_000; // Only update every 30 seconds per workspace
+
+async function updateWorkspaceHeartbeat(workspaceId: string): Promise<void> {
+  const now = Date.now();
+  const lastTime = lastHeartbeatTime.get(workspaceId) || 0;
+  
+  // Debounce: only update if 30+ seconds since last update
+  if (now - lastTime < HEARTBEAT_DEBOUNCE_MS) {
+    return;
+  }
+  
+  lastHeartbeatTime.set(workspaceId, now);
+  
+  try {
+    await internalClient.internal.updateHeartbeat.mutate({ workspaceId });
+    console.log(`[${workspaceId}] Heartbeat updated via API`);
+  } catch (error) {
+    console.error(`[${workspaceId}] Failed to update heartbeat:`, error);
+  }
+}
 
 const PORT = parseInt(process.env.PORT || "3000");
 
@@ -83,17 +105,17 @@ const server = http.createServer(async (req: any, res: any) => {
       return;
     }
 
-    // Lookup workspace
-    const [ws] = await db
-      .select()
-      .from(workspace)
-      .where(eq(workspace.subdomain, subdomain))
-      .limit(1);
-
-    if (!ws) {
-      res.writeHead(404, { "Content-Type": "text/plain" });
-      res.end("Workspace not found");
-      return;
+    // Lookup workspace via internal API
+    let ws;
+    try {
+      ws = await internalClient.internal.getWorkspaceBySubdomain.query({ subdomain });
+    } catch (error: any) {
+      if (error?.data?.code === "NOT_FOUND") {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Workspace not found");
+        return;
+      }
+      throw error;
     }
 
     if (ws.userId !== userId) {
@@ -206,11 +228,14 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
       return;
     }
 
-    const [ws] = await db
-      .select()
-      .from(workspace)
-      .where(eq(workspace.subdomain, subdomain))
-      .limit(1);
+    let ws;
+    try {
+      ws = await internalClient.internal.getWorkspaceBySubdomain.query({ subdomain });
+    } catch (error) {
+      console.error(`[${subdomain}] Failed to fetch workspace:`, error);
+      socket.destroy();
+      return;
+    }
 
     if (!ws || ws.userId !== userId || !ws.backendUrl) {
       console.error(`[${subdomain}] Invalid workspace or no backend URL`);
@@ -260,6 +285,9 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
         console.log(`[${ws.id}] Backend connection established!`);
         backendConnected = true;
         
+        // Update heartbeat immediately when user connects
+        updateWorkspaceHeartbeat(ws.id);
+        
         // Send any buffered messages
         if (messageBuffer.length > 0) {
           console.log(`[${ws.id}] Sending ${messageBuffer.length} buffered messages`);
@@ -279,6 +307,9 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
 
       // Forward messages from client to backend
       clientWs.on("message", (data, isBinary) => {
+        // Update heartbeat on user activity (client -> backend means user is typing/interacting)
+        updateWorkspaceHeartbeat(ws.id);
+        
         if (backendConnected && backendWs.readyState === WebSocket.OPEN) {
           backendWs.send(data, { binary: isBinary });
         } else if (!backendConnected) {
@@ -292,6 +323,9 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
 
       // Forward messages from backend to client
       backendWs.on("message", (data, isBinary) => {
+        // Update heartbeat on backend activity (shows user is receiving output)
+        updateWorkspaceHeartbeat(ws.id);
+        
         if (clientWs.readyState === WebSocket.OPEN) {
           clientWs.send(data, { binary: isBinary });
         }

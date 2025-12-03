@@ -11,8 +11,9 @@
     "start": "bun run dist/index.mjs"
   },
   "dependencies": {
+    "@gitpad/api": "workspace:*",
     "@gitpad/auth": "workspace:*",
-    "@gitpad/db": "workspace:*",
+    "@trpc/client": "catalog:",
     "dotenv": "catalog:",
     "hono": "catalog:",
     "http-proxy": "^1.18.1",

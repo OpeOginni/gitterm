@@ -4,8 +4,32 @@
     ".": {
       "default": "./src/index.ts"
     },
-    "./*": {
-      "default": "./src/*.ts"
+    "./context": {
+      "default": "./src/context.ts"
+    },
+    "./routers/*": {
+      "default": "./src/routers/*.ts"
+    },
+    "./providers": {
+      "default": "./src/providers/index.ts"
+    },
+    "./providers/*": {
+      "default": "./src/providers/*.ts"
+    },
+    "./utils/*": {
+      "default": "./src/utils/*.ts"
+    },
+    "./events/*": {
+      "default": "./src/events/*.ts"
+    },
+    "./service/*": {
+      "default": "./src/service/*.ts"
+    },
+    "./client": {
+      "default": "./src/client/index.ts"
+    },
+    "./client/internal": {
+      "default": "./src/client/internal.ts"
     }
   },
   "type": "module",

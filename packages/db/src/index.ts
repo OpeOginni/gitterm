@@ -20,5 +20,11 @@ export {
 	desc,
 	sql,
 	like,
-	not
+	not,
+	lt,
+	lte,
+	gt,
+	gte,
+	isNull,
+	isNotNull,
   } from "drizzle-orm";

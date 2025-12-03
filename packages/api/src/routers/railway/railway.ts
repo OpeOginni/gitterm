@@ -6,6 +6,7 @@ import { workspace, agentWorkspaceConfig, workspaceEnvironmentVariables } from "
 import { image, region } from "@gitpad/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
 import { randomUUID } from "crypto";
+import { hasRemainingQuota, createUsageSession, closeUsageSession } from "../../utils/metering";
 
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID;
 const ENVIRONMENT_ID = process.env.RAILWAY_ENVIRONMENT_ID;
@@ -36,6 +37,15 @@ export const railwayRouter = router({
       const subdomain = `ws-${workspaceId}`;
 
       try {
+        // Check if user has remaining quota
+        const hasQuota = await hasRemainingQuota(userId);
+        if (!hasQuota) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Daily free tier limit reached. Please try again tomorrow.",
+          });
+        }
+
         // Fetch image details
         const [imageRecord] = await db
           .select()
@@ -123,9 +133,13 @@ export const railwayRouter = router({
           backendUrl: backendUrl,
           domain: `${subdomain}.gitterm.dev`, // This domain will be handled by the wildcard proxy
           status: "pending",
-          startAt: new Date(serviceCreate.createdAt),
+          startedAt: new Date(serviceCreate.createdAt),
+          lastActiveAt: new Date(serviceCreate.createdAt),
           updatedAt: new Date(serviceCreate.createdAt),
         }).returning();
+
+        // Create usage session for billing
+        await createUsageSession(workspaceId, userId);
 
         return {
           workspace: newWorkspace
@@ -154,10 +168,15 @@ export const railwayRouter = router({
       if (!fetchedWorkspace) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
       }
+
+      // Close usage session if workspace was running
+      if (fetchedWorkspace.status === "running" || fetchedWorkspace.status === "pending") {
+        await closeUsageSession(input.workspaceId, "manual");
+      }
       
       const { serviceDelete } = await railway.ServiceDelete({ id: fetchedWorkspace.externalInstanceId });
 
-      await db.update(workspace).set({ status: "terminated", endAt: new Date() }).where(eq(workspace.id, input.workspaceId));
+      await db.update(workspace).set({ status: "terminated", stoppedAt: new Date(), updatedAt: new Date() }).where(eq(workspace.id, input.workspaceId));
       return {
         workspace: fetchedWorkspace,
         serviceDelete

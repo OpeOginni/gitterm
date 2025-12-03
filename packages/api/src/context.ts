@@ -9,8 +9,13 @@ export async function createContext({ context }: CreateContextOptions) {
 	const session = await auth.api.getSession({
 		headers: context.req.raw.headers,
 	});
+	
+	// Extract internal API key for service-to-service auth
+	const internalApiKey = context.req.raw.headers.get("x-internal-key");
+	
 	return {
 		session,
+		internalApiKey,
 	};
 }
 

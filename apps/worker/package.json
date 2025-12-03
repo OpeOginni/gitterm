@@ -1,0 +1,26 @@
+{
+  "name": "worker",
+  "main": "src/idle-reaper.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsdown",
+    "check-types": "tsc -b",
+    "dev": "bun run --hot src/idle-reaper.ts",
+    "start": "bun run dist/idle-reaper.mjs",
+    "idle-reaper": "bun run src/idle-reaper.ts",
+    "daily-reset": "bun run src/daily-reset.ts"
+  },
+  "dependencies": {
+    "hono": "catalog:",
+    "dotenv": "catalog:",
+    "@gitpad/api": "workspace:*",
+    "@trpc/client": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "@types/bun": "^1.2.6",
+    "tsdown": "^0.16.5",
+    "@gitpad/config": "workspace:*"
+  }
+}
+

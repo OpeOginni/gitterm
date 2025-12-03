@@ -11,6 +11,7 @@ import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import type { Route } from "next";
 
 export default function UserMenu() {
 	const router = useRouter();
@@ -31,16 +32,33 @@ export default function UserMenu() {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant="outline">{session.user.name}</Button>
+				<Button variant="outline" className="gap-2">
+					<div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
+						<span className="text-xs font-semibold text-primary">
+							{session.user.name?.charAt(0).toUpperCase()}
+						</span>
+					</div>
+					<span className="hidden sm:inline">{session.user.name}</span>
+				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent className="bg-card">
-				<DropdownMenuLabel>My Account</DropdownMenuLabel>
+			<DropdownMenuContent className="bg-card w-56" align="end">
+				<DropdownMenuLabel>
+					<div className="flex flex-col space-y-1">
+						<p className="text-sm font-medium">{session.user.name}</p>
+						<p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
+					</div>
+				</DropdownMenuLabel>
 				<DropdownMenuSeparator />
-				<DropdownMenuItem>{session.user.email}</DropdownMenuItem>
+				<DropdownMenuItem asChild>
+					<Link href={"/dashboard/profile" as Route} className="cursor-pointer">
+						Usage & Billing
+					</Link>
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
 				<DropdownMenuItem asChild>
 					<Button
-						variant="destructive"
-						className="w-full"
+						variant="ghost"
+						className="w-full justify-start text-destructive hover:text-destructive"
 						onClick={() => {
 							authClient.signOut({
 								fetchOptions: {
