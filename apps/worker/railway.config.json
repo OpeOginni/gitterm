@@ -6,10 +6,11 @@
     "watchPatterns": [
       "apps/worker/**/*",
       "packages/api/**/*",
-      "packages/db/**/*",
-      ".env*",
+      "packages/config/**/*",
+      "apps/worker/.env*",
       "turbo.json",
-      "package.json"
+      "package.json",
+      "bun.lock"
     ]
   },
   "deploy": {

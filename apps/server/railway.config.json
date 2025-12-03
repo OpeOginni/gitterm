@@ -1,23 +1,25 @@
 {
-    "$schema": "https://railway.com/railway.schema.json",
-    "build": {
-      "builder": "RAILPACK",
-      "buildCommand": "turbo build --filter=server",
-      "watchPatterns": [
-        "apps/server/**/*",
-        "packages/api/**/*",
-        "packages/auth/**/*", 
-        "packages/db/**/*",
-        "packages/schema/**/*",
-        ".env*",
-        "turbo.json",
-        "package.json"
-      ]
-      },
-    "deploy": {
-      "startCommand": "cd apps/server && ls -la && bun run dist/index.mjs",
-      "healthcheckPath": "/",
-      "healthcheckTimeout": 100,
-      "restartPolicyType": "never"
-      }
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "turbo build --filter=server",
+    "watchPatterns": [
+      "apps/server/**/*",
+      "packages/api/**/*",
+      "packages/auth/**/*",
+      "packages/config/**/*",
+      "packages/db/**/*",
+      "packages/schema/**/*",
+      "apps/server/.env*",
+      "turbo.json",
+      "package.json",
+      "bun.lock"
+    ]
+  },
+  "deploy": {
+    "startCommand": "cd apps/server && bun run dist/index.mjs",
+    "healthcheckPath": "/",
+    "healthcheckTimeout": 100,
+    "restartPolicyType": "never"
   }
+}
