@@ -180,8 +180,8 @@ mutation serviceInstanceUpdateAndDeployV2($environmentId: String!, $serviceId: S
   serviceInstanceDeployV2(environmentId: $environmentId, serviceId: $serviceId)
 }
 
-mutation serviceInstanceUpdateAndDeployV1($environmentId: String!, $serviceId: String!, $image: String!, $region: String!) {
-  serviceInstanceUpdate(input: {source: {image: $image}, region: $region}, serviceId: $serviceId)
+mutation serviceInstanceUpdateAndDeployV1($environmentId: String!, $serviceId: String!, $image: String!) {
+  serviceInstanceUpdate(input: {source: {image: $image}}, serviceId: $serviceId)
   serviceInstanceDeploy(environmentId: $environmentId, serviceId: $serviceId)
 }
 
@@ -197,6 +197,16 @@ mutation UpdateRegions($environmentId: String!, $serviceId: String!, $multiRegio
 mutation VolumeCreate($projectId: String!, $environmentId: String!, $serviceId: String!, $mountPath: String!, $region: String!) {
   volumeCreate(
     input: {projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId, mountPath: $mountPath, region: $region}
+  ) {
+    id
+    name
+    createdAt
+  }
+}
+
+mutation VolumeCreateNoRegion($projectId: String!, $environmentId: String!, $serviceId: String!, $mountPath: String!) {
+  volumeCreate(
+    input: {projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId, mountPath: $mountPath}
   ) {
     id
     name

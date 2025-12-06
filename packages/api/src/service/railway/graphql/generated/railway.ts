@@ -5886,7 +5886,6 @@ export type ServiceInstanceUpdateAndDeployV1MutationVariables = Exact<{
   environmentId: Scalars['String']['input'];
   serviceId: Scalars['String']['input'];
   image: Scalars['String']['input'];
-  region: Scalars['String']['input'];
 }>;
 
 
@@ -5911,6 +5910,16 @@ export type VolumeCreateMutationVariables = Exact<{
 
 
 export type VolumeCreateMutation = { __typename?: 'Mutation', volumeCreate: { __typename?: 'Volume', id: string, name: string, createdAt: any } };
+
+export type VolumeCreateNoRegionMutationVariables = Exact<{
+  projectId: Scalars['String']['input'];
+  environmentId: Scalars['String']['input'];
+  serviceId: Scalars['String']['input'];
+  mountPath: Scalars['String']['input'];
+}>;
+
+
+export type VolumeCreateNoRegionMutation = { __typename?: 'Mutation', volumeCreate: { __typename?: 'Volume', id: string, name: string, createdAt: any } };
 
 export type VolumeAttachMutationVariables = Exact<{
   environmentId: Scalars['String']['input'];
@@ -6130,11 +6139,8 @@ export const ServiceInstanceUpdateAndDeployV2Document = `
 }
     `;
 export const ServiceInstanceUpdateAndDeployV1Document = `
-    mutation serviceInstanceUpdateAndDeployV1($environmentId: String!, $serviceId: String!, $image: String!, $region: String!) {
-  serviceInstanceUpdate(
-    input: {source: {image: $image}, region: $region}
-    serviceId: $serviceId
-  )
+    mutation serviceInstanceUpdateAndDeployV1($environmentId: String!, $serviceId: String!, $image: String!) {
+  serviceInstanceUpdate(input: {source: {image: $image}}, serviceId: $serviceId)
   serviceInstanceDeploy(environmentId: $environmentId, serviceId: $serviceId)
 }
     `;
@@ -6151,6 +6157,17 @@ export const VolumeCreateDocument = `
     mutation VolumeCreate($projectId: String!, $environmentId: String!, $serviceId: String!, $mountPath: String!, $region: String!) {
   volumeCreate(
     input: {projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId, mountPath: $mountPath, region: $region}
+  ) {
+    id
+    name
+    createdAt
+  }
+}
+    `;
+export const VolumeCreateNoRegionDocument = `
+    mutation VolumeCreateNoRegion($projectId: String!, $environmentId: String!, $serviceId: String!, $mountPath: String!) {
+  volumeCreate(
+    input: {projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId, mountPath: $mountPath}
   ) {
     id
     name
@@ -6237,6 +6254,9 @@ export function getSdk<C>(requester: Requester<C>) {
     },
     VolumeCreate(variables: VolumeCreateMutationVariables, options?: C): Promise<VolumeCreateMutation> {
       return requester<VolumeCreateMutation, VolumeCreateMutationVariables>(VolumeCreateDocument, variables, options) as Promise<VolumeCreateMutation>;
+    },
+    VolumeCreateNoRegion(variables: VolumeCreateNoRegionMutationVariables, options?: C): Promise<VolumeCreateNoRegionMutation> {
+      return requester<VolumeCreateNoRegionMutation, VolumeCreateNoRegionMutationVariables>(VolumeCreateNoRegionDocument, variables, options) as Promise<VolumeCreateNoRegionMutation>;
     },
     VolumeAttach(variables: VolumeAttachMutationVariables, options?: C): Promise<VolumeAttachMutation> {
       return requester<VolumeAttachMutation, VolumeAttachMutationVariables>(VolumeAttachDocument, variables, options) as Promise<VolumeAttachMutation>;

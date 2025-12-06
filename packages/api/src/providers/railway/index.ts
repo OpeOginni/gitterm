@@ -53,19 +53,19 @@ export class RailwayProvider implements ComputeProvider {
 
     console.log("UpdateRegions to region:", config.regionIdentifier);
 
-    const { volumeCreate } = await railway.VolumeCreate({
+    const { volumeCreate } = await railway.VolumeCreateNoRegion({
       projectId: PROJECT_ID,
       environmentId: ENVIRONMENT_ID,
       serviceId: serviceCreate.id,
       mountPath: "/workspace",
-      region: config.regionIdentifier,
+      // region: config.regionIdentifier,
     }).catch(async (error) => {
       await railway.ServiceDelete({ id: serviceCreate.id })
       console.error("Railway API Error (VolumeCreate):", error);
       throw new Error(`Railway API Error (VolumeCreate): ${error.message}`);
     });
 
-    console.log("VolumeCreate to region:", config.regionIdentifier);
+    console.log("VolumeCreateNoRegion to region:", config.regionIdentifier);
 
     const deploymentId = serviceCreate.project.environments.edges[0]?.node.deployments.edges[0]?.node.id;
 
@@ -90,7 +90,7 @@ export class RailwayProvider implements ComputeProvider {
       environmentId: ENVIRONMENT_ID,
       serviceId: serviceCreate.id,
       image: config.imageId,
-      region: config.regionIdentifier,
+      // region: config.regionIdentifier,
     }).catch(async (error) => {
       console.error("Railway API Error (serviceInstanceUpdate):", error);
       throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
