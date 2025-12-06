@@ -1120,7 +1120,7 @@ export const workspaceRouter = router({
   restartWorkspace: protectedProcedure
     .input(
       z.object({
-        workspaceId: z.string().uuid(),
+        workspaceId: z.string(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -1168,6 +1168,7 @@ export const workspaceRouter = router({
           .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
 
         if (!provider) {
+          console.error("Cloud provider not found for workspace:", existingWorkspace.id);
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Cloud provider not found",
@@ -1181,10 +1182,8 @@ export const workspaceRouter = router({
           .where(eq(region.id, existingWorkspace.regionId));
 
         if (!workspaceRegion) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Region not found",
-          });
+          console.error("Region not found for workspace:", existingWorkspace.id);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Region not found" });
         }
 
         // Get compute provider and restart the workspace
@@ -1221,6 +1220,7 @@ export const workspaceRouter = router({
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
+        console.error("Failed to restart workspace:", error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to restart workspace",
