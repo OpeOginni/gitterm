@@ -779,6 +779,11 @@ export const workspaceRouter = router({
         });
       }
 
+      const [fetchedUser] = await db.select().from(user).where(eq(user.id, userId));
+
+      if (fetchedUser && !fetchedUser.allowTrial) 
+        throw new TRPCError({ code: "FORBIDDEN", message: "Reachout for Access" });
+
       try {
         // Check quota first
         const hasQuota = await hasRemainingQuota(userId);

@@ -5774,44 +5774,12 @@ export type CustomerTogglePayoutsToCreditsInput = {
   isWithdrawingToCredits: Scalars['Boolean']['input'];
 };
 
-export type MeQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type MeQuery = { __typename?: 'Query', me: { __typename?: 'User', id: string, email: string, name?: string | null, avatar?: string | null } };
-
-export type ProjectQueryVariables = Exact<{
-  id: Scalars['String']['input'];
-}>;
-
-
-export type ProjectQuery = { __typename?: 'Query', project: { __typename?: 'Project', id: string, name: string, description?: string | null, createdAt: any, updatedAt: any, services: { __typename?: 'ProjectServicesConnection', edges: Array<{ __typename?: 'ProjectServicesConnectionEdge', node: { __typename?: 'Service', id: string, name: string, icon?: string | null, createdAt: any, updatedAt: any } }> }, environments: { __typename?: 'ProjectEnvironmentsConnection', edges: Array<{ __typename?: 'ProjectEnvironmentsConnectionEdge', node: { __typename?: 'Environment', id: string, name: string } }> } } };
-
-export type ProjectsQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type ProjectsQuery = { __typename?: 'Query', projects: { __typename?: 'QueryProjectsConnection', edges: Array<{ __typename?: 'QueryProjectsConnectionEdge', node: { __typename?: 'Project', id: string, name: string, description?: string | null, createdAt: any, updatedAt: any } }> } };
-
 export type ServiceQueryVariables = Exact<{
   id: Scalars['String']['input'];
 }>;
 
 
 export type ServiceQuery = { __typename?: 'Query', service: { __typename?: 'Service', id: string, name: string, icon?: string | null, createdAt: any, updatedAt: any } };
-
-export type EnvironmentsQueryVariables = Exact<{
-  projectId: Scalars['String']['input'];
-}>;
-
-
-export type EnvironmentsQuery = { __typename?: 'Query', environments: { __typename?: 'QueryEnvironmentsConnection', edges: Array<{ __typename?: 'QueryEnvironmentsConnectionEdge', node: { __typename?: 'Environment', id: string, name: string } }> } };
-
-export type DeploymentsQueryVariables = Exact<{
-  input: DeploymentListInput;
-  first?: InputMaybe<Scalars['Int']['input']>;
-}>;
-
-
-export type DeploymentsQuery = { __typename?: 'Query', deployments: { __typename?: 'QueryDeploymentsConnection', edges: Array<{ __typename?: 'QueryDeploymentsConnectionEdge', node: { __typename?: 'Deployment', id: string, status: DeploymentStatus, createdAt: any, environmentId: string } }> } };
 
 export type ServiceCreateMutationVariables = Exact<{
   input: ServiceCreateInput;
@@ -5827,14 +5795,6 @@ export type ServiceDeleteMutationVariables = Exact<{
 
 export type ServiceDeleteMutation = { __typename?: 'Mutation', serviceDelete: boolean };
 
-export type ServiceUpdateMutationVariables = Exact<{
-  id: Scalars['String']['input'];
-  input: ServiceUpdateInput;
-}>;
-
-
-export type ServiceUpdateMutation = { __typename?: 'Mutation', serviceUpdate: { __typename?: 'Service', id: string, name: string, icon?: string | null, updatedAt: any } };
-
 export type DeploymentRedeployMutationVariables = Exact<{
   id: Scalars['String']['input'];
 }>;
@@ -5848,29 +5808,6 @@ export type DeploymentRemoveMutationVariables = Exact<{
 
 
 export type DeploymentRemoveMutation = { __typename?: 'Mutation', deploymentRemove: boolean };
-
-export type TcpProxyCreateMutationVariables = Exact<{
-  input: TcpProxyCreateInput;
-}>;
-
-
-export type TcpProxyCreateMutation = { __typename?: 'Mutation', tcpProxyCreate: { __typename?: 'TCPProxy', id: string, applicationPort: number, environmentId: string, domain: string, proxyPort: number, serviceId: string, createdAt?: any | null, updatedAt?: any | null } };
-
-export type ServiceDomainCreateMutationVariables = Exact<{
-  input: ServiceDomainCreateInput;
-}>;
-
-
-export type ServiceDomainCreateMutation = { __typename?: 'Mutation', serviceDomainCreate: { __typename?: 'ServiceDomain', id: string, domain: string, serviceId: string, createdAt?: any | null, updatedAt?: any | null } };
-
-export type ServiceInstanceRegionUpdateMutationVariables = Exact<{
-  environmentId: Scalars['String']['input'];
-  serviceId: Scalars['String']['input'];
-  region: Scalars['String']['input'];
-}>;
-
-
-export type ServiceInstanceRegionUpdateMutation = { __typename?: 'Mutation', serviceInstanceUpdate: boolean };
 
 export type ServiceInstanceUpdateMutationVariables = Exact<{
   environmentId: Scalars['String']['input'];
@@ -5891,15 +5828,6 @@ export type ServiceInstanceDeployMutationVariables = Exact<{
 
 export type ServiceInstanceDeployMutation = { __typename?: 'Mutation', serviceInstanceDeploy: boolean };
 
-export type UpdateRegionsMutationVariables = Exact<{
-  environmentId: Scalars['String']['input'];
-  serviceId: Scalars['String']['input'];
-  multiRegionConfig: Scalars['JSON']['input'];
-}>;
-
-
-export type UpdateRegionsMutation = { __typename?: 'Mutation', serviceInstanceUpdate: boolean };
-
 export type VolumeCreateMutationVariables = Exact<{
   projectId: Scalars['String']['input'];
   environmentId: Scalars['String']['input'];
@@ -5911,33 +5839,6 @@ export type VolumeCreateMutationVariables = Exact<{
 
 export type VolumeCreateMutation = { __typename?: 'Mutation', volumeCreate: { __typename?: 'Volume', id: string, name: string, createdAt: any } };
 
-export type VolumeCreateNoRegionMutationVariables = Exact<{
-  projectId: Scalars['String']['input'];
-  environmentId: Scalars['String']['input'];
-  serviceId: Scalars['String']['input'];
-  mountPath: Scalars['String']['input'];
-}>;
-
-
-export type VolumeCreateNoRegionMutation = { __typename?: 'Mutation', volumeCreate: { __typename?: 'Volume', id: string, name: string, createdAt: any } };
-
-export type VolumeAttachMutationVariables = Exact<{
-  environmentId: Scalars['String']['input'];
-  volumeId: Scalars['String']['input'];
-  serviceId: Scalars['String']['input'];
-}>;
-
-
-export type VolumeAttachMutation = { __typename?: 'Mutation', volumeInstanceUpdate: boolean };
-
-export type VolumeDetachMutationVariables = Exact<{
-  environmentId: Scalars['String']['input'];
-  volumeId: Scalars['String']['input'];
-}>;
-
-
-export type VolumeDetachMutation = { __typename?: 'Mutation', volumeInstanceUpdate: boolean };
-
 export type VolumeDeleteMutationVariables = Exact<{
   id: Scalars['String']['input'];
 }>;
@@ -5946,61 +5847,6 @@ export type VolumeDeleteMutationVariables = Exact<{
 export type VolumeDeleteMutation = { __typename?: 'Mutation', volumeDelete: boolean };
 
 
-export const MeDocument = `
-    query Me {
-  me {
-    id
-    email
-    name
-    avatar
-  }
-}
-    `;
-export const ProjectDocument = `
-    query Project($id: String!) {
-  project(id: $id) {
-    id
-    name
-    description
-    createdAt
-    updatedAt
-    services {
-      edges {
-        node {
-          id
-          name
-          icon
-          createdAt
-          updatedAt
-        }
-      }
-    }
-    environments {
-      edges {
-        node {
-          id
-          name
-        }
-      }
-    }
-  }
-}
-    `;
-export const ProjectsDocument = `
-    query Projects {
-  projects {
-    edges {
-      node {
-        id
-        name
-        description
-        createdAt
-        updatedAt
-      }
-    }
-  }
-}
-    `;
 export const ServiceDocument = `
     query Service($id: String!) {
   service(id: $id) {
@@ -6009,32 +5855,6 @@ export const ServiceDocument = `
     icon
     createdAt
     updatedAt
-  }
-}
-    `;
-export const EnvironmentsDocument = `
-    query Environments($projectId: String!) {
-  environments(projectId: $projectId) {
-    edges {
-      node {
-        id
-        name
-      }
-    }
-  }
-}
-    `;
-export const DeploymentsDocument = `
-    query Deployments($input: DeploymentListInput!, $first: Int) {
-  deployments(input: $input, first: $first) {
-    edges {
-      node {
-        id
-        status
-        createdAt
-        environmentId
-      }
-    }
   }
 }
     `;
@@ -6071,16 +5891,6 @@ export const ServiceDeleteDocument = `
   serviceDelete(id: $id)
 }
     `;
-export const ServiceUpdateDocument = `
-    mutation ServiceUpdate($id: String!, $input: ServiceUpdateInput!) {
-  serviceUpdate(id: $id, input: $input) {
-    id
-    name
-    icon
-    updatedAt
-  }
-}
-    `;
 export const DeploymentRedeployDocument = `
     mutation DeploymentRedeploy($id: String!) {
   deploymentRedeploy(id: $id) {
@@ -6093,40 +5903,6 @@ export const DeploymentRedeployDocument = `
 export const DeploymentRemoveDocument = `
     mutation DeploymentRemove($id: String!) {
   deploymentRemove(id: $id)
-}
-    `;
-export const TcpProxyCreateDocument = `
-    mutation TcpProxyCreate($input: TCPProxyCreateInput!) {
-  tcpProxyCreate(input: $input) {
-    id
-    applicationPort
-    environmentId
-    domain
-    proxyPort
-    serviceId
-    createdAt
-    updatedAt
-  }
-}
-    `;
-export const ServiceDomainCreateDocument = `
-    mutation ServiceDomainCreate($input: ServiceDomainCreateInput!) {
-  serviceDomainCreate(input: $input) {
-    id
-    domain
-    serviceId
-    createdAt
-    updatedAt
-  }
-}
-    `;
-export const ServiceInstanceRegionUpdateDocument = `
-    mutation serviceInstanceRegionUpdate($environmentId: String!, $serviceId: String!, $region: String!) {
-  serviceInstanceUpdate(
-    environmentId: $environmentId
-    serviceId: $serviceId
-    input: {region: $region}
-  )
 }
     `;
 export const ServiceInstanceUpdateDocument = `
@@ -6147,15 +5923,6 @@ export const ServiceInstanceDeployDocument = `
   )
 }
     `;
-export const UpdateRegionsDocument = `
-    mutation UpdateRegions($environmentId: String!, $serviceId: String!, $multiRegionConfig: JSON!) {
-  serviceInstanceUpdate(
-    environmentId: $environmentId
-    serviceId: $serviceId
-    input: {multiRegionConfig: $multiRegionConfig}
-  )
-}
-    `;
 export const VolumeCreateDocument = `
     mutation VolumeCreate($projectId: String!, $environmentId: String!, $serviceId: String!, $mountPath: String!, $region: String!) {
   volumeCreate(
@@ -6167,35 +5934,6 @@ export const VolumeCreateDocument = `
   }
 }
     `;
-export const VolumeCreateNoRegionDocument = `
-    mutation VolumeCreateNoRegion($projectId: String!, $environmentId: String!, $serviceId: String!, $mountPath: String!) {
-  volumeCreate(
-    input: {projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId, mountPath: $mountPath}
-  ) {
-    id
-    name
-    createdAt
-  }
-}
-    `;
-export const VolumeAttachDocument = `
-    mutation VolumeAttach($environmentId: String!, $volumeId: String!, $serviceId: String!) {
-  volumeInstanceUpdate(
-    input: {serviceId: $serviceId}
-    environmentId: $environmentId
-    volumeId: $volumeId
-  )
-}
-    `;
-export const VolumeDetachDocument = `
-    mutation VolumeDetach($environmentId: String!, $volumeId: String!) {
-  volumeInstanceUpdate(
-    input: {serviceId: null}
-    environmentId: $environmentId
-    volumeId: $volumeId
-  )
-}
-    `;
 export const VolumeDeleteDocument = `
     mutation VolumeDelete($id: String!) {
   volumeDelete(volumeId: $id)
@@ -6204,23 +5942,8 @@ export const VolumeDeleteDocument = `
 export type Requester<C = {}> = <R, V>(doc: string, vars?: V, options?: C) => Promise<R> | AsyncIterable<R>
 export function getSdk<C>(requester: Requester<C>) {
   return {
-    Me(variables?: MeQueryVariables, options?: C): Promise<MeQuery> {
-      return requester<MeQuery, MeQueryVariables>(MeDocument, variables, options) as Promise<MeQuery>;
-    },
-    Project(variables: ProjectQueryVariables, options?: C): Promise<ProjectQuery> {
-      return requester<ProjectQuery, ProjectQueryVariables>(ProjectDocument, variables, options) as Promise<ProjectQuery>;
-    },
-    Projects(variables?: ProjectsQueryVariables, options?: C): Promise<ProjectsQuery> {
-      return requester<ProjectsQuery, ProjectsQueryVariables>(ProjectsDocument, variables, options) as Promise<ProjectsQuery>;
-    },
     Service(variables: ServiceQueryVariables, options?: C): Promise<ServiceQuery> {
       return requester<ServiceQuery, ServiceQueryVariables>(ServiceDocument, variables, options) as Promise<ServiceQuery>;
-    },
-    Environments(variables: EnvironmentsQueryVariables, options?: C): Promise<EnvironmentsQuery> {
-      return requester<EnvironmentsQuery, EnvironmentsQueryVariables>(EnvironmentsDocument, variables, options) as Promise<EnvironmentsQuery>;
-    },
-    Deployments(variables: DeploymentsQueryVariables, options?: C): Promise<DeploymentsQuery> {
-      return requester<DeploymentsQuery, DeploymentsQueryVariables>(DeploymentsDocument, variables, options) as Promise<DeploymentsQuery>;
     },
     ServiceCreate(variables: ServiceCreateMutationVariables, options?: C): Promise<ServiceCreateMutation> {
       return requester<ServiceCreateMutation, ServiceCreateMutationVariables>(ServiceCreateDocument, variables, options) as Promise<ServiceCreateMutation>;
@@ -6228,23 +5951,11 @@ export function getSdk<C>(requester: Requester<C>) {
     ServiceDelete(variables: ServiceDeleteMutationVariables, options?: C): Promise<ServiceDeleteMutation> {
       return requester<ServiceDeleteMutation, ServiceDeleteMutationVariables>(ServiceDeleteDocument, variables, options) as Promise<ServiceDeleteMutation>;
     },
-    ServiceUpdate(variables: ServiceUpdateMutationVariables, options?: C): Promise<ServiceUpdateMutation> {
-      return requester<ServiceUpdateMutation, ServiceUpdateMutationVariables>(ServiceUpdateDocument, variables, options) as Promise<ServiceUpdateMutation>;
-    },
     DeploymentRedeploy(variables: DeploymentRedeployMutationVariables, options?: C): Promise<DeploymentRedeployMutation> {
       return requester<DeploymentRedeployMutation, DeploymentRedeployMutationVariables>(DeploymentRedeployDocument, variables, options) as Promise<DeploymentRedeployMutation>;
     },
     DeploymentRemove(variables: DeploymentRemoveMutationVariables, options?: C): Promise<DeploymentRemoveMutation> {
       return requester<DeploymentRemoveMutation, DeploymentRemoveMutationVariables>(DeploymentRemoveDocument, variables, options) as Promise<DeploymentRemoveMutation>;
-    },
-    TcpProxyCreate(variables: TcpProxyCreateMutationVariables, options?: C): Promise<TcpProxyCreateMutation> {
-      return requester<TcpProxyCreateMutation, TcpProxyCreateMutationVariables>(TcpProxyCreateDocument, variables, options) as Promise<TcpProxyCreateMutation>;
-    },
-    ServiceDomainCreate(variables: ServiceDomainCreateMutationVariables, options?: C): Promise<ServiceDomainCreateMutation> {
-      return requester<ServiceDomainCreateMutation, ServiceDomainCreateMutationVariables>(ServiceDomainCreateDocument, variables, options) as Promise<ServiceDomainCreateMutation>;
-    },
-    serviceInstanceRegionUpdate(variables: ServiceInstanceRegionUpdateMutationVariables, options?: C): Promise<ServiceInstanceRegionUpdateMutation> {
-      return requester<ServiceInstanceRegionUpdateMutation, ServiceInstanceRegionUpdateMutationVariables>(ServiceInstanceRegionUpdateDocument, variables, options) as Promise<ServiceInstanceRegionUpdateMutation>;
     },
     serviceInstanceUpdate(variables: ServiceInstanceUpdateMutationVariables, options?: C): Promise<ServiceInstanceUpdateMutation> {
       return requester<ServiceInstanceUpdateMutation, ServiceInstanceUpdateMutationVariables>(ServiceInstanceUpdateDocument, variables, options) as Promise<ServiceInstanceUpdateMutation>;
@@ -6252,20 +5963,8 @@ export function getSdk<C>(requester: Requester<C>) {
     serviceInstanceDeploy(variables: ServiceInstanceDeployMutationVariables, options?: C): Promise<ServiceInstanceDeployMutation> {
       return requester<ServiceInstanceDeployMutation, ServiceInstanceDeployMutationVariables>(ServiceInstanceDeployDocument, variables, options) as Promise<ServiceInstanceDeployMutation>;
     },
-    UpdateRegions(variables: UpdateRegionsMutationVariables, options?: C): Promise<UpdateRegionsMutation> {
-      return requester<UpdateRegionsMutation, UpdateRegionsMutationVariables>(UpdateRegionsDocument, variables, options) as Promise<UpdateRegionsMutation>;
-    },
     VolumeCreate(variables: VolumeCreateMutationVariables, options?: C): Promise<VolumeCreateMutation> {
       return requester<VolumeCreateMutation, VolumeCreateMutationVariables>(VolumeCreateDocument, variables, options) as Promise<VolumeCreateMutation>;
-    },
-    VolumeCreateNoRegion(variables: VolumeCreateNoRegionMutationVariables, options?: C): Promise<VolumeCreateNoRegionMutation> {
-      return requester<VolumeCreateNoRegionMutation, VolumeCreateNoRegionMutationVariables>(VolumeCreateNoRegionDocument, variables, options) as Promise<VolumeCreateNoRegionMutation>;
-    },
-    VolumeAttach(variables: VolumeAttachMutationVariables, options?: C): Promise<VolumeAttachMutation> {
-      return requester<VolumeAttachMutation, VolumeAttachMutationVariables>(VolumeAttachDocument, variables, options) as Promise<VolumeAttachMutation>;
-    },
-    VolumeDetach(variables: VolumeDetachMutationVariables, options?: C): Promise<VolumeDetachMutation> {
-      return requester<VolumeDetachMutation, VolumeDetachMutationVariables>(VolumeDetachDocument, variables, options) as Promise<VolumeDetachMutation>;
     },
     VolumeDelete(variables: VolumeDeleteMutationVariables, options?: C): Promise<VolumeDeleteMutation> {
       return requester<VolumeDeleteMutation, VolumeDeleteMutationVariables>(VolumeDeleteDocument, variables, options) as Promise<VolumeDeleteMutation>;

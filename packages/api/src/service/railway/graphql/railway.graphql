@@ -2,58 +2,6 @@
 # Queries
 # ============================================================================
 
-query Me {
-  me {
-    id
-    email
-    name
-    avatar
-  }
-}
-
-query Project($id: String!) {
-  project(id: $id) {
-    id
-    name
-    description
-    createdAt
-    updatedAt
-    services {
-      edges {
-        node {
-          id
-          name
-          icon
-          createdAt
-          updatedAt
-        }
-      }
-    }
-    environments {
-      edges {
-        node {
-          id
-          name
-        }
-      }
-    }
-  }
-}
-
-query Projects {
-  projects {
-    edges {
-      node {
-        id
-        name
-        description
-        createdAt
-        updatedAt
-      }
-    }
-  }
-}
-
 query Service($id: String!) {
   service(id: $id) {
     id
@@ -61,30 +9,6 @@ query Service($id: String!) {
     icon
     createdAt
     updatedAt
-  }
-}
-
-query Environments($projectId: String!) {
-  environments(projectId: $projectId) {
-    edges {
-      node {
-        id
-        name
-      }
-    }
-  }
-}
-
-query Deployments($input: DeploymentListInput!, $first: Int) {
-  deployments(input: $input, first: $first) {
-    edges {
-      node {
-        id
-        status
-        createdAt
-        environmentId
-      }
-    }
   }
 }
 
@@ -123,15 +47,6 @@ mutation ServiceDelete($id: String!) {
   serviceDelete(id: $id)
 }
 
-mutation ServiceUpdate($id: String!, $input: ServiceUpdateInput!) {
-  serviceUpdate(id: $id, input: $input) {
-    id
-    name
-    icon
-    updatedAt
-  }
-}
-
 mutation DeploymentRedeploy($id: String!) {
   deploymentRedeploy(id: $id) {
     id
@@ -144,51 +59,12 @@ mutation DeploymentRemove($id: String!) {
 	deploymentRemove(id: $id)
 }
 
-mutation TcpProxyCreate($input: TCPProxyCreateInput!) {
-  tcpProxyCreate(input: $input) {
-    id
-    applicationPort
-    environmentId
-    domain
-    proxyPort
-    serviceId
-    createdAt
-    updatedAt
-  }
-}
-
-mutation ServiceDomainCreate($input: ServiceDomainCreateInput!) {
-  serviceDomainCreate(input: $input) {
-    id
-    domain
-    serviceId
-    createdAt
-    updatedAt
-  }
-}
-
-mutation serviceInstanceRegionUpdate($environmentId: String!, $serviceId: String!, $region: String!) {
-  serviceInstanceUpdate(
-    environmentId: $environmentId
-    serviceId: $serviceId
-    input: {region: $region}
-  )
-}
-
 mutation serviceInstanceUpdate($environmentId: String!, $serviceId: String!, $image: String!, $multiRegionConfig: JSON!) {
   serviceInstanceUpdate(environmentId: $environmentId, serviceId: $serviceId, input: {source: {image: $image}, multiRegionConfig: $multiRegionConfig})
 }
 
 mutation serviceInstanceDeploy($environmentId: String!, $serviceId: String!, $latestCommit: Boolean!) {
   serviceInstanceDeploy(environmentId: $environmentId, serviceId: $serviceId, latestCommit: $latestCommit)
-}
-
-mutation UpdateRegions($environmentId: String!, $serviceId: String!, $multiRegionConfig: JSON!) {
-  serviceInstanceUpdate(
-    environmentId: $environmentId
-    serviceId: $serviceId
-    input: {multiRegionConfig: $multiRegionConfig}
-  )
 }
 
 mutation VolumeCreate($projectId: String!, $environmentId: String!, $serviceId: String!, $mountPath: String!, $region: String!) {
@@ -199,32 +75,6 @@ mutation VolumeCreate($projectId: String!, $environmentId: String!, $serviceId: 
     name
     createdAt
   }
-}
-
-mutation VolumeCreateNoRegion($projectId: String!, $environmentId: String!, $serviceId: String!, $mountPath: String!) {
-  volumeCreate(
-    input: {projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId, mountPath: $mountPath}
-  ) {
-    id
-    name
-    createdAt
-  }
-}
-
-mutation VolumeAttach($environmentId: String!, $volumeId: String!, $serviceId: String!) {
-  volumeInstanceUpdate(
-    input: { serviceId: $serviceId }
-    environmentId: $environmentId
-    volumeId: $volumeId
-  )
-}
-
-mutation VolumeDetach($environmentId: String!, $volumeId: String!) {
-  volumeInstanceUpdate(
-    input: { serviceId: null }
-    environmentId: $environmentId
-    volumeId: $volumeId
-  )
 }
 
 mutation VolumeDelete($id: String!) {

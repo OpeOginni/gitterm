@@ -72,25 +72,6 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error(`Railway API Error (serviceInstanceDeploy): ${error.message}`);
     });
 
-
-    // const deploymentId = serviceCreate.project.environments.edges[0]?.node.deployments.edges[0]?.node.id;
-
-    // if (!deploymentId) {
-    //   throw new Error("No deployment found");
-    // }
-
-    // // Redeploy the deplyoment after volume creation to ensure the volume is attached to the service
-    // await railway.DeploymentRemove({ id: deploymentId }).catch(async (error) => {
-    //   console.error("Railway API Error (DeploymentRemove):", error);
-    //   throw new Error(`Railway API Error (DeploymentRemove): ${error.message}`);
-    // });
-
-
-    // await railway.DeploymentRedeploy({ id: deploymentId }).catch(async (error) => {
-    //   console.error("Railway API Error (DeploymentRedeploy):", error);
-    //   throw new Error(`Railway API Error (DeploymentRedeploy): ${error.message}`);
-    // });
-
     const backendUrl = `http://${config.subdomain}.railway.internal:7681`;
     const domain = `${config.subdomain}.${BASE_DOMAIN}`;
 
