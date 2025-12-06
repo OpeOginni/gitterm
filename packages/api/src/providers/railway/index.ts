@@ -36,6 +36,21 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error(`Railway API Error (ServiceCreate): ${error.message}`);
     });
 
+    await railway.UpdateRegions({
+      environmentId: ENVIRONMENT_ID,
+      serviceId: serviceCreate.id,
+      multiRegionConfig: {
+        [config.regionIdentifier]: {
+          numReplicas: 1,
+        },
+      },
+    }).catch(async (error) => {
+      console.error("Railway API Error (UpdateRegions):", error);
+      await railway.ServiceDelete({ id: serviceCreate.id })
+      await railway.VolumeDelete({ id: volumeCreate.id })
+      throw new Error(`Railway API Error (UpdateRegions): ${error.message}`);
+    });
+
     const { volumeCreate } = await railway.VolumeCreate({
       projectId: PROJECT_ID,
       environmentId: ENVIRONMENT_ID,
@@ -66,20 +81,6 @@ export class RailwayProvider implements ComputeProvider {
     //   throw new Error(`Railway API Error (DeploymentRedeploy): ${error.message}`);
     // });
 
-    // await railway.UpdateRegions({
-    //   environmentId: ENVIRONMENT_ID,
-    //   serviceId: serviceCreate.id,
-    //   multiRegionConfig: {
-    //     [config.regionIdentifier]: {
-    //       numReplicas: 1,
-    //     },
-    //   },
-    // }).catch(async (error) => {
-    //   console.error("Railway API Error (UpdateRegions):", error);
-    //   await railway.ServiceDelete({ id: serviceCreate.id })
-    //   await railway.VolumeDelete({ id: volumeCreate.id })
-    //   throw new Error(`Railway API Error (UpdateRegions): ${error.message}`);
-    // });
 
     await railway.serviceInstanceUpdateAndDeploy({
       environmentId: ENVIRONMENT_ID,
