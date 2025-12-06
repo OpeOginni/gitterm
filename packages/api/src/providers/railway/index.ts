@@ -36,20 +36,31 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error(`Railway API Error (ServiceCreate): ${error.message}`);
     });
 
-    await railway.UpdateRegions({
+    // await railway.UpdateRegions({
+    //   environmentId: ENVIRONMENT_ID,
+    //   serviceId: serviceCreate.id,
+    //   multiRegionConfig: {
+    //     [config.regionIdentifier]: {
+    //       numReplicas: 1,
+    //     },
+    //   },
+    // }).catch(async (error) => {
+    //   console.error("Railway API Error (UpdateRegions):", error);
+    //   await railway.ServiceDelete({ id: serviceCreate.id })
+    //   await railway.VolumeDelete({ id: volumeCreate.id })
+    //   throw new Error(`Railway API Error (UpdateRegions): ${error.message}`);
+    // });
+
+    await railway.serviceInstanceRegionUpdate({
       environmentId: ENVIRONMENT_ID,
       serviceId: serviceCreate.id,
-      multiRegionConfig: {
-        [config.regionIdentifier]: {
-          numReplicas: 1,
-        },
-      },
+      region: config.regionIdentifier,
     }).catch(async (error) => {
-      console.error("Railway API Error (UpdateRegions):", error);
-      await railway.ServiceDelete({ id: serviceCreate.id })
-      await railway.VolumeDelete({ id: volumeCreate.id })
-      throw new Error(`Railway API Error (UpdateRegions): ${error.message}`);
+      console.error("Railway API Error (serviceInstanceRegionUpdate):", error);
+      throw new Error(`Railway API Error (serviceInstanceRegionUpdate): ${error.message}`);
     });
+
+    console.log("serviceInstanceRegionUpdate to region:", config.regionIdentifier);
 
     const { volumeCreate } = await railway.VolumeCreate({
       projectId: PROJECT_ID,
@@ -62,6 +73,8 @@ export class RailwayProvider implements ComputeProvider {
       console.error("Railway API Error (VolumeCreate):", error);
       throw new Error(`Railway API Error (VolumeCreate): ${error.message}`);
     });
+
+    console.log("VolumeCreate to region:", config.regionIdentifier);
 
     const deploymentId = serviceCreate.project.environments.edges[0]?.node.deployments.edges[0]?.node.id;
 
@@ -91,6 +104,8 @@ export class RailwayProvider implements ComputeProvider {
       console.error("Railway API Error (serviceInstanceUpdate):", error);
       throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
     });
+
+    console.log("serviceInstanceUpdateAndDeploy to region:", config.regionIdentifier);
 
     const backendUrl = `http://${config.subdomain}.railway.internal:7681`;
     const domain = `${config.subdomain}.${BASE_DOMAIN}`;
