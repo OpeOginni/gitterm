@@ -13,13 +13,9 @@
     "hono": "catalog:",
     "@trpc/server": "catalog:",
     "@hono/trpc-server": "^0.4.0",
-    "better-auth": "catalog:",
     "dotenv": "catalog:",
     "zod": "catalog:",
-    "@gitpad/api": "workspace:*",
-    "@gitpad/auth": "workspace:*",
-    "@gitpad/db": "workspace:*",
-    "@gitpad/schema": "workspace:*"
+    "@gitpad/api": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",
