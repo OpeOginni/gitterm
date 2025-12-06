@@ -55,6 +55,12 @@ export class RailwayProvider implements ComputeProvider {
     }
 
     // Redeploy the deplyoment after volume creation to ensure the volume is attached to the service
+    await railway.DeploymentRemove({ id: deploymentId }).catch(async (error) => {
+      console.error("Railway API Error (DeploymentRemove):", error);
+      throw new Error(`Railway API Error (DeploymentRemove): ${error.message}`);
+    });
+
+
     await railway.DeploymentRedeploy({ id: deploymentId }).catch(async (error) => {
       console.error("Railway API Error (DeploymentRedeploy):", error);
       throw new Error(`Railway API Error (DeploymentRedeploy): ${error.message}`);
