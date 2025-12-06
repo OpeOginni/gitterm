@@ -175,16 +175,13 @@ mutation serviceInstanceRegionUpdate($environmentId: String!, $serviceId: String
   )
 }
 
-mutation serviceInstanceUpdateAndDeployV2($environmentId: String!, $serviceId: String!, $image: String!, $region: String!) {
-  serviceInstanceUpdate(input: {source: {image: $image}, region: $region}, serviceId: $serviceId)
-  serviceInstanceDeployV2(environmentId: $environmentId, serviceId: $serviceId)
+mutation serviceInstanceUpdate($environmentId: String!, $serviceId: String!, $image: String!, $multiRegionConfig: JSON!) {
+  serviceInstanceUpdate(environmentId: $environmentId, serviceId: $serviceId, input: {source: {image: $image}, multiRegionConfig: $multiRegionConfig})
 }
 
-mutation serviceInstanceUpdateAndDeployV1($environmentId: String!, $serviceId: String!, $image: String!) {
-  serviceInstanceUpdate(input: {source: {image: $image}}, serviceId: $serviceId)
-  serviceInstanceDeploy(environmentId: $environmentId, serviceId: $serviceId)
+mutation serviceInstanceDeploy($environmentId: String!, $serviceId: String!, $latestCommit: Boolean!) {
+  serviceInstanceDeploy(environmentId: $environmentId, serviceId: $serviceId, latestCommit: $latestCommit)
 }
-
 
 mutation UpdateRegions($environmentId: String!, $serviceId: String!, $multiRegionConfig: JSON!) {
   serviceInstanceUpdate(

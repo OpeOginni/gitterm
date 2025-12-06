@@ -5872,24 +5872,24 @@ export type ServiceInstanceRegionUpdateMutationVariables = Exact<{
 
 export type ServiceInstanceRegionUpdateMutation = { __typename?: 'Mutation', serviceInstanceUpdate: boolean };
 
-export type ServiceInstanceUpdateAndDeployV2MutationVariables = Exact<{
+export type ServiceInstanceUpdateMutationVariables = Exact<{
   environmentId: Scalars['String']['input'];
   serviceId: Scalars['String']['input'];
   image: Scalars['String']['input'];
-  region: Scalars['String']['input'];
+  multiRegionConfig: Scalars['JSON']['input'];
 }>;
 
 
-export type ServiceInstanceUpdateAndDeployV2Mutation = { __typename?: 'Mutation', serviceInstanceUpdate: boolean, serviceInstanceDeployV2: string };
+export type ServiceInstanceUpdateMutation = { __typename?: 'Mutation', serviceInstanceUpdate: boolean };
 
-export type ServiceInstanceUpdateAndDeployV1MutationVariables = Exact<{
+export type ServiceInstanceDeployMutationVariables = Exact<{
   environmentId: Scalars['String']['input'];
   serviceId: Scalars['String']['input'];
-  image: Scalars['String']['input'];
+  latestCommit: Scalars['Boolean']['input'];
 }>;
 
 
-export type ServiceInstanceUpdateAndDeployV1Mutation = { __typename?: 'Mutation', serviceInstanceUpdate: boolean, serviceInstanceDeploy: boolean };
+export type ServiceInstanceDeployMutation = { __typename?: 'Mutation', serviceInstanceDeploy: boolean };
 
 export type UpdateRegionsMutationVariables = Exact<{
   environmentId: Scalars['String']['input'];
@@ -6129,19 +6129,22 @@ export const ServiceInstanceRegionUpdateDocument = `
   )
 }
     `;
-export const ServiceInstanceUpdateAndDeployV2Document = `
-    mutation serviceInstanceUpdateAndDeployV2($environmentId: String!, $serviceId: String!, $image: String!, $region: String!) {
+export const ServiceInstanceUpdateDocument = `
+    mutation serviceInstanceUpdate($environmentId: String!, $serviceId: String!, $image: String!, $multiRegionConfig: JSON!) {
   serviceInstanceUpdate(
-    input: {source: {image: $image}, region: $region}
+    environmentId: $environmentId
     serviceId: $serviceId
+    input: {source: {image: $image}, multiRegionConfig: $multiRegionConfig}
   )
-  serviceInstanceDeployV2(environmentId: $environmentId, serviceId: $serviceId)
 }
     `;
-export const ServiceInstanceUpdateAndDeployV1Document = `
-    mutation serviceInstanceUpdateAndDeployV1($environmentId: String!, $serviceId: String!, $image: String!) {
-  serviceInstanceUpdate(input: {source: {image: $image}}, serviceId: $serviceId)
-  serviceInstanceDeploy(environmentId: $environmentId, serviceId: $serviceId)
+export const ServiceInstanceDeployDocument = `
+    mutation serviceInstanceDeploy($environmentId: String!, $serviceId: String!, $latestCommit: Boolean!) {
+  serviceInstanceDeploy(
+    environmentId: $environmentId
+    serviceId: $serviceId
+    latestCommit: $latestCommit
+  )
 }
     `;
 export const UpdateRegionsDocument = `
@@ -6243,11 +6246,11 @@ export function getSdk<C>(requester: Requester<C>) {
     serviceInstanceRegionUpdate(variables: ServiceInstanceRegionUpdateMutationVariables, options?: C): Promise<ServiceInstanceRegionUpdateMutation> {
       return requester<ServiceInstanceRegionUpdateMutation, ServiceInstanceRegionUpdateMutationVariables>(ServiceInstanceRegionUpdateDocument, variables, options) as Promise<ServiceInstanceRegionUpdateMutation>;
     },
-    serviceInstanceUpdateAndDeployV2(variables: ServiceInstanceUpdateAndDeployV2MutationVariables, options?: C): Promise<ServiceInstanceUpdateAndDeployV2Mutation> {
-      return requester<ServiceInstanceUpdateAndDeployV2Mutation, ServiceInstanceUpdateAndDeployV2MutationVariables>(ServiceInstanceUpdateAndDeployV2Document, variables, options) as Promise<ServiceInstanceUpdateAndDeployV2Mutation>;
+    serviceInstanceUpdate(variables: ServiceInstanceUpdateMutationVariables, options?: C): Promise<ServiceInstanceUpdateMutation> {
+      return requester<ServiceInstanceUpdateMutation, ServiceInstanceUpdateMutationVariables>(ServiceInstanceUpdateDocument, variables, options) as Promise<ServiceInstanceUpdateMutation>;
     },
-    serviceInstanceUpdateAndDeployV1(variables: ServiceInstanceUpdateAndDeployV1MutationVariables, options?: C): Promise<ServiceInstanceUpdateAndDeployV1Mutation> {
-      return requester<ServiceInstanceUpdateAndDeployV1Mutation, ServiceInstanceUpdateAndDeployV1MutationVariables>(ServiceInstanceUpdateAndDeployV1Document, variables, options) as Promise<ServiceInstanceUpdateAndDeployV1Mutation>;
+    serviceInstanceDeploy(variables: ServiceInstanceDeployMutationVariables, options?: C): Promise<ServiceInstanceDeployMutation> {
+      return requester<ServiceInstanceDeployMutation, ServiceInstanceDeployMutationVariables>(ServiceInstanceDeployDocument, variables, options) as Promise<ServiceInstanceDeployMutation>;
     },
     UpdateRegions(variables: UpdateRegionsMutationVariables, options?: C): Promise<UpdateRegionsMutation> {
       return requester<UpdateRegionsMutation, UpdateRegionsMutationVariables>(UpdateRegionsDocument, variables, options) as Promise<UpdateRegionsMutation>;

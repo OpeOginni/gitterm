@@ -9,6 +9,7 @@ import type {
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID;
 const ENVIRONMENT_ID = process.env.RAILWAY_ENVIRONMENT_ID;
 const BASE_DOMAIN = process.env.BASE_DOMAIN || "gitterm.dev";
+const RAILWAY_DEFAULT_REGION = process.env.RAILWAY_DEFAULT_REGION || "us-east4-eqdc4a";
 
 export class RailwayProvider implements ComputeProvider {
   readonly name = "railway";
@@ -26,9 +27,6 @@ export class RailwayProvider implements ComputeProvider {
       input: {
         projectId: PROJECT_ID,
         name: config.subdomain,
-        // source: {
-        //   image: config.imageId,
-        // },
         variables: config.environmentVariables,
       },
     }).catch(async (error) => {
@@ -36,42 +34,50 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error(`Railway API Error (ServiceCreate): ${error.message}`);
     });
 
-    await railway.UpdateRegions({
+    const multiRegionConfig = RAILWAY_DEFAULT_REGION === config.regionIdentifier ? { [RAILWAY_DEFAULT_REGION]: { numReplicas: 1 } } : {
+      [RAILWAY_DEFAULT_REGION]: null,
+      [config.regionIdentifier]: { numReplicas: 1 },
+    };
+
+    await railway.serviceInstanceUpdate({
       environmentId: ENVIRONMENT_ID,
       serviceId: serviceCreate.id,
-      multiRegionConfig: {
-        [config.regionIdentifier]: {
-          numReplicas: 1,
-        },
-      },
+      image: config.imageId,
+      multiRegionConfig: multiRegionConfig,
     }).catch(async (error) => {
-      console.error("Railway API Error (UpdateRegions):", error);
+      console.error("Railway API Error (serviceInstanceUpdate):", error);
       await railway.ServiceDelete({ id: serviceCreate.id })
-      await railway.VolumeDelete({ id: volumeCreate.id })
-      throw new Error(`Railway API Error (UpdateRegions): ${error.message}`);
+      throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
     });
 
-    console.log("UpdateRegions to region:", config.regionIdentifier);
-
-    const { volumeCreate } = await railway.VolumeCreateNoRegion({
+    const { volumeCreate } = await railway.VolumeCreate({
       projectId: PROJECT_ID,
       environmentId: ENVIRONMENT_ID,
       serviceId: serviceCreate.id,
       mountPath: "/workspace",
-      // region: config.regionIdentifier,
+      region: config.regionIdentifier,
     }).catch(async (error) => {
       await railway.ServiceDelete({ id: serviceCreate.id })
       console.error("Railway API Error (VolumeCreate):", error);
       throw new Error(`Railway API Error (VolumeCreate): ${error.message}`);
     });
 
-    console.log("VolumeCreateNoRegion to region:", config.regionIdentifier);
+    await railway.serviceInstanceDeploy({
+      environmentId: ENVIRONMENT_ID,
+      serviceId: serviceCreate.id,
+      latestCommit: true,
+    }).catch(async (error) => {
+      console.error("Railway API Error (serviceInstanceDeploy):", error);
+      await railway.ServiceDelete({ id: serviceCreate.id })
+      throw new Error(`Railway API Error (serviceInstanceDeploy): ${error.message}`);
+    });
 
-    const deploymentId = serviceCreate.project.environments.edges[0]?.node.deployments.edges[0]?.node.id;
 
-    if (!deploymentId) {
-      throw new Error("No deployment found");
-    }
+    // const deploymentId = serviceCreate.project.environments.edges[0]?.node.deployments.edges[0]?.node.id;
+
+    // if (!deploymentId) {
+    //   throw new Error("No deployment found");
+    // }
 
     // // Redeploy the deplyoment after volume creation to ensure the volume is attached to the service
     // await railway.DeploymentRemove({ id: deploymentId }).catch(async (error) => {
@@ -84,19 +90,6 @@ export class RailwayProvider implements ComputeProvider {
     //   console.error("Railway API Error (DeploymentRedeploy):", error);
     //   throw new Error(`Railway API Error (DeploymentRedeploy): ${error.message}`);
     // });
-
-
-    await railway.serviceInstanceUpdateAndDeployV1({
-      environmentId: ENVIRONMENT_ID,
-      serviceId: serviceCreate.id,
-      image: config.imageId,
-      // region: config.regionIdentifier,
-    }).catch(async (error) => {
-      console.error("Railway API Error (serviceInstanceUpdate):", error);
-      throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
-    });
-
-    console.log("serviceInstanceUpdateAndDeployV1 to region:", config.regionIdentifier);
 
     const backendUrl = `http://${config.subdomain}.railway.internal:7681`;
     const domain = `${config.subdomain}.${BASE_DOMAIN}`;
