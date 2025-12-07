@@ -254,8 +254,15 @@ export const internalRouter = router({
 
         const userId = workspaceRecord.userId;
 
+        if (!workspaceRecord.gitIntegrationId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "GitHub App not connected. Please connect your GitHub account.",
+          });
+        }
+
         // Get GitHub App installation
-        const installation = await githubAppService.getUserInstallation(userId);
+        const installation = await githubAppService.getUserInstallation(userId, workspaceRecord.gitIntegrationId);
 
         if (!installation) {
           throw new TRPCError({
