@@ -30,11 +30,7 @@ export function Hero() {
               Get Started <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>
-          <Link href="https://github.com/opeoginni/gitpad" target="_blank">
-            <Button variant="outline" size="lg" className="h-12 px-8 text-base">
-              View on GitHub
-            </Button>
-          </Link>
+
         </div>
       </div>
 
