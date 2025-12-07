@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, ArrowUpRight, InfoIcon, Loader2, Plus } from "lucide-react";
+import { AlertCircle, ArrowUpRight, InfoIcon, Loader2, Plus, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -52,7 +52,7 @@ export function CreateInstanceDialog() {
   const [selectedAgentTypeId, setSelectedAgentTypeId] = useState<string>("");
   const [selectedCloudProviderId, setSelectedCloudProviderId] = useState<string>("");
   const [selectedRegion, setSelectedRegion] = useState<string | undefined>(undefined);
-  const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>(undefined);
+  const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>("none");
   const [selectedPersistent, setSelectedPersistent] = useState<boolean>(true);
 
   // Fetch dynamic data
@@ -152,7 +152,7 @@ export function CreateInstanceDialog() {
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: selectedCloudProviderId,
       regionId: selectedRegion,
-      gitInstallationId: selectedGitInstallationId,
+      gitInstallationId: selectedGitInstallationId === "none" ? undefined : selectedGitInstallationId,
       persistent: selectedPersistent,
     });
   };
@@ -285,6 +285,11 @@ export function CreateInstanceDialog() {
                 <SelectValue placeholder={installationsData?.installations && installationsData.installations.length > 0 ? "Select git installation" : "No git installations found"} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none" key="none">
+                  <div className="flex items-center">
+                    None
+                  </div>
+                </SelectItem>
                 {installationsData?.installations && installationsData.installations.length > 0 && (
                   installationsData?.installations?.map((installation) => (
                     <SelectItem key={installation.git_integration.id} value={installation.git_integration.id}>
@@ -298,8 +303,8 @@ export function CreateInstanceDialog() {
                           />
                           {installation.git_integration.providerAccountLogin}
                         </div>
-                  </SelectItem>
-                ))
+                    </SelectItem>
+                  ))
                 )}
             </SelectContent>
             </Select>
@@ -343,7 +348,3 @@ export function CreateInstanceDialog() {
     </Dialog>
   );
 }
-function useSession(): { data: any; } {
-  throw new Error("Function not implemented.");
-}
-
