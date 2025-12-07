@@ -38,7 +38,14 @@ export const workspaceRouter = router({
       });
     }
 
-    const installations = await db.select().from(gitIntegration).where(eq(gitIntegration.userId, userId)).innerJoin(githubAppInstallation, eq(gitIntegration.providerInstallationId, githubAppInstallation.id));
+    const installations = await db
+      .select()
+      .from(gitIntegration)
+      .innerJoin(
+        githubAppInstallation,
+        eq(gitIntegration.providerInstallationId, githubAppInstallation.installationId)
+      )
+      .where(eq(gitIntegration.userId, userId));
 
     return {
       success: true,
