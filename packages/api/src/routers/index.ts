@@ -1,5 +1,4 @@
 import { protectedProcedure, publicProcedure, router } from "../index";
-import { railwayRouter } from "./railway/railway";
 import { railwayWebhookRouter } from "./railway/webhook";
 import { workspaceRouter } from "./workspace";
 import { workspaceEventsRouter } from "./workspace/events";
@@ -18,7 +17,6 @@ export const appRouter = router({
 			user: ctx.session.user,
 		};
 	}),
-	railway: railwayRouter,
 	workspace: workspaceRouter,
 	internal: internalRouter,
 	github: githubRouter,

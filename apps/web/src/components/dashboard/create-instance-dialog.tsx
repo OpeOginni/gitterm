@@ -21,10 +21,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertCircle, Loader2, Plus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertCircle, ArrowUpRight, InfoIcon, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
+import Link from "next/link";
 
 const ICON_MAP: Record<string, string> = {
   "opencode": "/opencode.svg",
@@ -42,15 +45,21 @@ const getIcon = (name: string) => {
 };
 
 export function CreateInstanceDialog() {
+  const { data: session } = authClient.useSession();
+
   const [open, setOpen] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
   const [selectedAgentTypeId, setSelectedAgentTypeId] = useState<string>("");
   const [selectedCloudProviderId, setSelectedCloudProviderId] = useState<string>("");
   const [selectedRegion, setSelectedRegion] = useState<string | undefined>(undefined);
+  const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>(undefined);
+  const [selectedPersistent, setSelectedPersistent] = useState<boolean>(false);
 
   // Fetch dynamic data
   const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
+  const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
+
 
   // Derive available regions from selected cloud provider
   const availableRegions = useMemo(() => {
@@ -143,6 +152,7 @@ export function CreateInstanceDialog() {
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: selectedCloudProviderId,
       regionId: selectedRegion,
+      persistent: selectedPersistent,
     });
   };
 
@@ -228,6 +238,7 @@ export function CreateInstanceDialog() {
             </div>
           </div>
           
+          <div className="grid grid-cols-2 gap-4">
 
           <div className="grid gap-2">
             <Label>Region</Label>
@@ -258,6 +269,61 @@ export function CreateInstanceDialog() {
                 )}
               </SelectContent>
             </Select>
+
+            
+          </div>
+
+          <div className="grid gap-2">
+            <Label >Git Setup <Link href="/dashboard/integrations" className="text-blue-500"><ArrowUpRight className="h-4 w-4" /></Link></Label>
+            <Select 
+            value={selectedGitInstallationId} 
+            onValueChange={setSelectedGitInstallationId}
+            disabled={installationsData?.installations && installationsData.installations.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={installationsData?.installations && installationsData.installations.length > 0 ? "Select git installation" : "No git installations found"} />
+              </SelectTrigger>
+              <SelectContent>
+                {installationsData?.installations && installationsData.installations.length > 0 && (
+                  installationsData?.installations?.map((installation) => (
+                    <SelectItem key={installation.id} value={installation.id}>
+                      <div className="flex items-center">
+                        <Image 
+                            src={"/github.svg"} 
+                            alt="GitHub" 
+                            width={16} 
+                            height={16} 
+                            className="mr-2 h-4 w-4" 
+                          />
+                          {installation.accountLogin}
+                        </div>
+                  </SelectItem>
+                ))
+                )}
+            </SelectContent>
+            </Select>
+
+          </div>
+
+          <div className="flex items-start gap-3 col-span-2">
+            <Checkbox
+              id="persistent"
+              checked={selectedPersistent}
+              defaultChecked
+              onCheckedChange={(checked) => setSelectedPersistent(checked.valueOf() as boolean)}
+            />
+            <div className="grid gap-1.5 leading-none">
+              <Label
+                htmlFor="persistent"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Persistent Workspace
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Keep workspace files when paused (uses more storage)
+              </p>
+            </div>
+          </div>
           </div>
         </div>
 

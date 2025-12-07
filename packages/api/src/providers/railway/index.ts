@@ -1,6 +1,8 @@
-import { DeploymentStatus, railway } from "../../service/railway/railway";
+import { railway } from "../../service/railway/railway";
 import type {
   ComputeProvider,
+  PersistentWorkspaceConfig,
+  PersistentWorkspaceInfo,
   WorkspaceConfig,
   WorkspaceInfo,
   WorkspaceStatusResult,
@@ -50,17 +52,74 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
     });
 
-    const { volumeCreate } = await railway.VolumeCreate({
-      projectId: PROJECT_ID,
+    await railway.serviceInstanceDeploy({
       environmentId: ENVIRONMENT_ID,
       serviceId: serviceCreate.id,
-      mountPath: "/workspace",
-      region: config.regionIdentifier,
+      latestCommit: true,
     }).catch(async (error) => {
+      console.error("Railway API Error (serviceInstanceDeploy):", error);
       await railway.ServiceDelete({ id: serviceCreate.id })
-      console.error("Railway API Error (VolumeCreate):", error);
-      throw new Error(`Railway API Error (VolumeCreate): ${error.message}`);
+      throw new Error(`Railway API Error (serviceInstanceDeploy): ${error.message}`);
     });
+
+    const backendUrl = `http://${config.subdomain}.railway.internal:7681`;
+    const domain = `${config.subdomain}.${BASE_DOMAIN}`;
+
+    return {
+      externalServiceId: serviceCreate.id,
+      backendUrl,
+      domain,
+      serviceCreatedAt: new Date(serviceCreate.createdAt),
+    };
+  }
+
+  async createPersistentWorkspace(config: PersistentWorkspaceConfig): Promise<PersistentWorkspaceInfo> {
+    if (!PROJECT_ID) {
+      throw new Error("RAILWAY_PROJECT_ID is not set");
+    }
+
+    if (!ENVIRONMENT_ID) {
+      throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
+    }
+
+    const { serviceCreate } = await railway.ServiceCreate({
+      input: {
+        projectId: PROJECT_ID,
+        name: config.subdomain,
+        variables: config.environmentVariables,
+      },
+    }).catch(async (error) => {
+      console.error("Railway API Error (ServiceCreate):", error);
+      throw new Error(`Railway API Error (ServiceCreate): ${error.message}`);
+    });
+
+    const multiRegionConfig = RAILWAY_DEFAULT_REGION === config.regionIdentifier ? { [RAILWAY_DEFAULT_REGION]: { numReplicas: 1 } } : {
+      [RAILWAY_DEFAULT_REGION]: null,
+      [config.regionIdentifier]: { numReplicas: 1 },
+    };
+
+    await railway.serviceInstanceUpdate({
+      environmentId: ENVIRONMENT_ID,
+      serviceId: serviceCreate.id,
+      image: config.imageId,
+      multiRegionConfig: multiRegionConfig,
+    }).catch(async (error) => {
+      console.error("Railway API Error (serviceInstanceUpdate):", error);
+      await railway.ServiceDelete({ id: serviceCreate.id })
+      throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
+    });
+
+      const { volumeCreate } = await railway.VolumeCreate({
+        projectId: PROJECT_ID,
+        environmentId: ENVIRONMENT_ID,
+        serviceId: serviceCreate.id,
+        mountPath: "/workspace",
+        region: config.regionIdentifier,
+      }).catch(async (error) => {
+        await railway.ServiceDelete({ id: serviceCreate.id })
+        console.error("Railway API Error (VolumeCreate):", error);
+        throw new Error(`Railway API Error (VolumeCreate): ${error.message}`);
+      });
 
     await railway.serviceInstanceDeploy({
       environmentId: ENVIRONMENT_ID,
@@ -115,16 +174,18 @@ export class RailwayProvider implements ComputeProvider {
     });
   }
 
-  async terminateWorkspace(externalServiceId: string, externalVolumeId: string): Promise<void> {
+  async terminateWorkspace(externalServiceId: string, externalVolumeId?: string): Promise<void> {
     await railway.ServiceDelete({ id: externalServiceId }).catch((error) => {
       console.error("Railway API Error (ServiceDelete):", error);
       throw new Error(`Railway API Error (ServiceDelete): ${error.message}`);
     });
 
-    await railway.VolumeDelete({ id: externalVolumeId }).catch((error) => {
-      console.error("Railway API Error (VolumeDelete):", error);
-      throw new Error(`Railway API Error (VolumeDelete): ${error.message}`);
-    });
+    if (externalVolumeId) {
+      await railway.VolumeDelete({ id: externalVolumeId }).catch((error) => {
+        console.error("Railway API Error (VolumeDelete):", error);
+        throw new Error(`Railway API Error (VolumeDelete): ${error.message}`);
+      });
+    }
   }
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {

@@ -20,12 +20,31 @@ import {
   createUsageSession,
   FREE_TIER_DAILY_MINUTES,
 } from "../utils/metering";
-import { getProviderByCloudProviderId } from "../providers";
+import { getProviderByCloudProviderId, type PersistentWorkspaceInfo, type WorkspaceInfo } from "../providers";
 import { WORKSPACE_EVENTS } from "../events/workspace";
 import { githubAppService } from "../service/github";
 import { workspaceJWT } from "../service/workspace-jwt";
+import { githubAppInstallation } from "@gitpad/db/schema/integrations";
 
 export const workspaceRouter = router({
+
+  listUserInstallations: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    if (!userId) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
+    }
+
+    const installations = await db.select().from(githubAppInstallation).where(eq(githubAppInstallation.userId, userId));
+
+    return {
+      success: true,
+      installations,
+    };
+  }),
   // List all agent types
   listAgentTypes: protectedProcedure.query(async () => {
     try {
@@ -766,6 +785,8 @@ export const workspaceRouter = router({
         agentTypeId: z.string(),
         cloudProviderId: z.string(),
         regionId: z.string(),
+        gitInstallationId: z.string().optional(),
+        persistent: z.boolean(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -872,15 +893,17 @@ export const workspaceRouter = router({
         let githubAppToken: string | undefined;
         let githubAppTokenExpiry: string | undefined;
 
-        const installation = await githubAppService.getUserInstallation(userId);
+        if (input.gitInstallationId) {
+        const installation = await githubAppService.getUserInstallation(userId, input.gitInstallationId);
         if (installation && !installation.suspended) {
           try {
-            const tokenData = await githubAppService.getUserToServerToken(installation.installationId);
-            githubAppToken = tokenData.token;
-            githubAppTokenExpiry = tokenData.expiresAt;
-          } catch (error) {
-            console.error("Failed to generate GitHub App token:", error);
-            // Continue without token - user can still use workspace without git operations
+              const tokenData = await githubAppService.getUserToServerToken(installation.installationId);
+              githubAppToken = tokenData.token;
+              githubAppTokenExpiry = tokenData.expiresAt;
+            } catch (error) {
+              console.error("Failed to generate GitHub App token:", error);
+              // Continue without token - user can still use workspace without git operations
+            }
           }
         }
 
@@ -940,15 +963,26 @@ export const workspaceRouter = router({
         const computeProvider = await getProviderByCloudProviderId(cloudProviderRecord.name);
 
         // Create workspace via compute provider
-        const workspaceInfo = await computeProvider.createWorkspace({
-          workspaceId,
-          userId,
-          imageId: imageRecord.imageId,
-          subdomain,
-          repositoryUrl: input.repo,
-          regionIdentifier: regionRecord.externalRegionIdentifier,
-          environmentVariables: DEFAULT_DOCKER_ENV_VARS,
-        });
+        const workspaceInfo = input.persistent
+          ? await computeProvider.createPersistentWorkspace({
+              workspaceId,
+              userId,
+              imageId: imageRecord.id,
+              subdomain,
+              repositoryUrl: input.repo,
+              regionIdentifier: regionRecord.externalRegionIdentifier,
+              environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+              persistent: input.persistent,
+            })
+          : await computeProvider.createWorkspace({
+              workspaceId,
+              userId,
+              imageId: imageRecord.imageId,
+              subdomain,
+              repositoryUrl: input.repo,
+              regionIdentifier: regionRecord.externalRegionIdentifier,
+              environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+            });
 
         // Save workspace to database
         const [newWorkspace] = await db
@@ -959,6 +993,8 @@ export const workspaceRouter = router({
             userId,
             imageId: imageRecord.id,
             cloudProviderId: input.cloudProviderId,
+            gitIntegrationId: input.gitInstallationId || null,
+            persistent: input.persistent,
             regionId: input.regionId,
             repositoryUrl: input.repo,
             domain,
@@ -971,17 +1007,23 @@ export const workspaceRouter = router({
           })
           .returning();
 
-        // Create volume record
-        const [newVolume] = await db.insert(volume).values({
-          workspaceId: workspaceId,
-          userId: userId,
-          cloudProviderId: input.cloudProviderId,
-          regionId: input.regionId,
-          externalVolumeId: workspaceInfo.externalVolumeId,
-          mountPath: "/workspace",
-          createdAt: new Date(workspaceInfo.volumeCreatedAt || new Date()),
-          updatedAt: new Date(workspaceInfo.volumeCreatedAt || new Date()),
-        }).returning();
+        // Create volume record (only for persistent workspaces)
+        let newVolume = null;
+        if (input.persistent) {
+          const persistentInfo = workspaceInfo as PersistentWorkspaceInfo;
+          const [volumeRecord] = await db.insert(volume).values({
+            workspaceId: workspaceId,
+            userId: userId,
+            cloudProviderId: input.cloudProviderId,
+            regionId: input.regionId,
+            externalVolumeId: persistentInfo.externalVolumeId,
+            mountPath: "/workspace",
+            createdAt: new Date(persistentInfo.volumeCreatedAt),
+            updatedAt: new Date(persistentInfo.volumeCreatedAt),
+          }).returning();
+          newVolume = volumeRecord;
+        }
+
 
         // Create usage session for billing
         await createUsageSession(workspaceId, userId);
@@ -1273,7 +1315,7 @@ export const workspaceRouter = router({
 
       // Get compute provider and terminate the workspace
       const computeProvider = await getProviderByCloudProviderId(provider.name);
-      await computeProvider.terminateWorkspace(fetchedWorkspace.externalInstanceId, fetchedWorkspace.volume.externalVolumeId);
+      await computeProvider.terminateWorkspace(fetchedWorkspace.externalInstanceId, fetchedWorkspace.persistent ? fetchedWorkspace.volume.externalVolumeId : undefined);
 
       // Update workspace status
       const [updatedWorkspace] = await db.update(workspace).set({
@@ -1284,7 +1326,9 @@ export const workspaceRouter = router({
       }).where(eq(workspace.id, input.workspaceId)).returning();
 
       // Delete volume record
-      await db.delete(volume).where(eq(volume.id, fetchedWorkspace.volume.id));
+      if (fetchedWorkspace.persistent) {
+        await db.delete(volume).where(eq(volume.id, fetchedWorkspace.volume.id));
+      }
 
       // Emit status event
       WORKSPACE_EVENTS.emitStatus({

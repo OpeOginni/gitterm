@@ -1,7 +1,8 @@
-import { jsonb, pgTable, text, timestamp, uuid, pgEnum, integer, date } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, text, timestamp, uuid, pgEnum, integer, date, boolean } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { agentType, cloudProvider, image, region } from "./cloud";
 import { relations } from "drizzle-orm";
+import { gitIntegration } from "./integrations";
 
 export const instanceStatusEnum = pgEnum('instance_status', ['pending', 'running', 'stopped', 'terminated'] as const);
 export const workspaceStatusEnum = pgEnum('workspace_status', ['pending', 'running', 'stopped', 'terminated'] as const);
@@ -11,6 +12,7 @@ export const workspace = pgTable("workspace", {
 	id: uuid("id").primaryKey().defaultRandom(),
 	externalInstanceId: text("external_instance_id").notNull(),
 	externalRunningDeploymentId: text("external_running_deployment_id"),
+    gitIntegrationId: uuid("git_integration_id").references(() => gitIntegration.id, { onDelete: "set null" }),
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
 	imageId: uuid("image_id").notNull().references(() => image.id, { onDelete: "cascade" }),
 	cloudProviderId: uuid("cloud_provider_id").notNull().references(() => cloudProvider.id, { onDelete: "cascade" }),
@@ -20,6 +22,7 @@ export const workspace = pgTable("workspace", {
     subdomain: text("subdomain").unique(), // ws-123
     backendUrl: text("backend_url"), // Internal URL
     status: workspaceStatusEnum("status").notNull(),
+	persistent: boolean("persistent").notNull().default(false),
 	startedAt: timestamp("started_at").notNull(),
 	stoppedAt: timestamp("stopped_at"),
 	terminatedAt: timestamp("terminated_at"),
@@ -89,6 +92,10 @@ export const workspaceRelations = relations(workspace, ({ one, many }) => ({
 		references: [volume.workspaceId],
 	}),
 	usageSessions: many(usageSession),
+	gitIntegration: one(gitIntegration, {
+		fields: [workspace.gitIntegrationId],
+		references: [gitIntegration.id],
+	}),
 }));
 
 export const usageSessionRelations = relations(usageSession, ({ one }) => ({
