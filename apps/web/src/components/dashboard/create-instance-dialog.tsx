@@ -52,7 +52,7 @@ export function CreateInstanceDialog() {
   const [selectedAgentTypeId, setSelectedAgentTypeId] = useState<string>("");
   const [selectedCloudProviderId, setSelectedCloudProviderId] = useState<string>("");
   const [selectedRegion, setSelectedRegion] = useState<string | undefined>(undefined);
-  const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>(undefined);
+  const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>("none");
   const [selectedPersistent, setSelectedPersistent] = useState<boolean>(true);
 
   // Fetch dynamic data
@@ -152,7 +152,7 @@ export function CreateInstanceDialog() {
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: selectedCloudProviderId,
       regionId: selectedRegion,
-      gitInstallationId: selectedGitInstallationId === "" ? undefined : selectedGitInstallationId,
+      gitInstallationId: selectedGitInstallationId === "none" ? undefined : selectedGitInstallationId,
       persistent: selectedPersistent,
     });
   };
@@ -285,7 +285,7 @@ export function CreateInstanceDialog() {
                 <SelectValue placeholder={installationsData?.installations && installationsData.installations.length > 0 ? "Select git installation" : "No git installations found"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={""} key="none">
+                <SelectItem value="none" key="none">
                   <div className="flex items-center">
                     None
                   </div>
@@ -303,8 +303,8 @@ export function CreateInstanceDialog() {
                           />
                           {installation.git_integration.providerAccountLogin}
                         </div>
-                  </SelectItem>
-                ))
+                    </SelectItem>
+                  ))
                 )}
             </SelectContent>
             </Select>
