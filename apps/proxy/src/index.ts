@@ -202,8 +202,66 @@ const server = http.createServer(async (req: any, res: any) => {
     const staticAssetExtensions = ['.js', '.css', '.webmanifest', '.ico', '.svg', '.woff2', '.woff', '.ttf', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
     const isStaticAsset = staticAssetExtensions.some(ext => req.url.toLowerCase().endsWith(ext));
     
+    // Handle SSE manually - http-proxy doesn't work well with streaming
+    if (isStreamingEndpoint) {
+      console.log(`[${ws.id}] Using manual SSE proxy for: ${req.url}`);
+      
+      const backendUrl = new URL(ws.backendUrl);
+      
+      const options: http.RequestOptions = {
+        hostname: backendUrl.hostname,
+        port: backendUrl.port || 80,
+        path: req.url,
+        method: req.method,
+        headers: {
+          ...req.headers,
+          host: backendUrl.host,
+          'x-forwarded-for': req.socket.remoteAddress || '',
+          'x-forwarded-proto': 'https',
+          'x-forwarded-host': host,
+        },
+        family: 6, // IPv6 for Railway
+      };
+      
+      if (!ws.serverOnly && userId) {
+        (options.headers as any)['x-auth-user'] = userId;
+      }
+      
+      const proxyReq = http.request(options, (proxyRes) => {
+        console.log(`[${ws.id}] SSE response: ${proxyRes.statusCode} for ${req.url}`);
+        
+        // Set SSE-friendly headers
+        res.writeHead(proxyRes.statusCode || 200, {
+          ...proxyRes.headers,
+          'cache-control': 'no-cache',
+          'x-accel-buffering': 'no', // Disable buffering
+        });
+        
+        // CRITICAL: Pipe without buffering for SSE
+        proxyRes.pipe(res, { end: true });
+        
+        proxyRes.on('error', (err) => {
+          console.error(`[${ws.id}] SSE stream error:`, err.message);
+          res.end();
+        });
+      });
+      
+      proxyReq.on('error', (err) => {
+        console.error(`[${ws.id}] SSE request error:`, err.message);
+        if (!res.headersSent) {
+          res.writeHead(502);
+          res.end('Bad Gateway');
+        }
+      });
+      
+      // Forward request body if any
+      req.pipe(proxyReq);
+      
+      return; // Skip http-proxy for SSE
+    }
+    
     // Only use manual buffering for static assets, NOT for streaming endpoints
-    if (isStaticAsset && !isStreamingEndpoint) {
+    if (isStaticAsset) {
       console.log(`[${ws.id}] Using manual proxy for static asset: ${req.url}`);
       
       // Manual proxy for large assets to avoid http-proxy chunked encoding issues
@@ -392,6 +450,15 @@ const server = http.createServer(async (req: any, res: any) => {
       const isChunked = transferEncoding === 'chunked';
       
       console.log(`[${ws.id}] ✓ ${proxyRes.statusCode} ${req.method} ${req.url} (${contentLength || 'chunked'})`);
+      
+      // Special handling for SSE/streaming endpoints
+      if (isStreamingEndpoint) {
+        // Tell Cloudflare not to buffer this response
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        
+        console.log(`[${ws.id}] SSE streaming mode for ${req.url}`);
+      }
       
       // For chunked responses, ensure we don't timeout
       if (isChunked || !contentLength) {
