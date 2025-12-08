@@ -193,11 +193,12 @@ const server = http.createServer(async (req: any, res: any) => {
 
     console.log(`[${ws.id}] ${req.method} ${req.url} -> ${ws.backendUrl}${req.url} (public: ${isPublicRequest})`);
 
-    // Check if this is a large static asset that might have chunked encoding issues
-    const isLargeAsset = req.url.includes('/assets/') && (req.url.endsWith('.js') || req.url.endsWith('.css'));
+    // Check if this is a static asset that might have chunked encoding issues with Cloudflare
+    const staticAssetExtensions = ['.js', '.css', '.webmanifest', '.ico', '.svg', '.woff2', '.woff', '.ttf', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
+    const isStaticAsset = staticAssetExtensions.some(ext => req.url.toLowerCase().endsWith(ext));
     
-    if (isLargeAsset) {
-      console.log(`[${ws.id}] Using manual proxy for large asset: ${req.url}`);
+    if (isStaticAsset) {
+      console.log(`[${ws.id}] Using manual proxy for static asset: ${req.url}`);
       
       // Manual proxy for large assets to avoid http-proxy chunked encoding issues
       const backendUrl = new URL(ws.backendUrl);
@@ -230,6 +231,16 @@ const server = http.createServer(async (req: any, res: any) => {
         proxyRes.on('data', (chunk: Buffer) => {
           chunks.push(chunk);
           totalLength += chunk.length;
+          
+          // Safety: If file is unexpectedly huge (>10MB), something is wrong
+          if (totalLength > 10 * 1024 * 1024) {
+            console.error(`[${ws.id}] Asset too large (${totalLength} bytes), aborting buffer: ${req.url}`);
+            proxyRes.destroy();
+            if (!res.headersSent) {
+              res.writeHead(502);
+              res.end('Asset too large');
+            }
+          }
         });
         
         proxyRes.on('end', () => {
@@ -238,12 +249,28 @@ const server = http.createServer(async (req: any, res: any) => {
           // Combine all chunks
           const fullResponse = Buffer.concat(chunks, totalLength);
           
+          // Get MIME type based on extension
+          const ext = req.url.toLowerCase().split('.').pop() || '';
+          const mimeTypes: Record<string, string> = {
+            js: 'application/javascript; charset=utf-8',
+            css: 'text/css; charset=utf-8',
+            webmanifest: 'application/manifest+json; charset=utf-8',
+            ico: 'image/x-icon',
+            svg: 'image/svg+xml',
+            woff2: 'font/woff2',
+            woff: 'font/woff',
+            ttf: 'font/ttf',
+            png: 'image/png',
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            gif: 'image/gif',
+            webp: 'image/webp',
+          };
+          
           // Prepare clean headers
           const headers: any = {
-            'content-type': proxyRes.headers['content-type'] || 
-              (req.url.endsWith('.js') ? 'application/javascript; charset=utf-8' : 
-               req.url.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/octet-stream'),
-            'content-length': totalLength.toString(), // CRITICAL: Set proper Content-Length
+            'content-type': proxyRes.headers['content-type'] || mimeTypes[ext] || 'application/octet-stream',
+            'content-length': totalLength.toString(),
             'cache-control': 'public, max-age=31536000',
             'access-control-allow-origin': '*',
           };
