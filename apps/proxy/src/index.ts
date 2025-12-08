@@ -272,7 +272,7 @@ const server = http.createServer(async (req: any, res: any) => {
       console.log(`[${ws.id}] ✓ ${proxyRes.statusCode} ${req.method} ${req.url} (${contentLength || 'chunked'})`);
       
       // For chunked responses, ensure we don't timeout
-      if (isChunked) {
+      if (isChunked || !contentLength) {
         // Increase socket timeout for chunked transfers
         if (req.socket) {
           req.socket.setTimeout(120000); // 2 minutes
@@ -280,17 +280,16 @@ const server = http.createServer(async (req: any, res: any) => {
         if (res.socket) {
           res.socket.setTimeout(120000);
         }
+        
+        console.log(`[${ws.id}] Chunked transfer for ${req.url}, extended timeouts`);
       }
       
-      // Track bytes transferred for debugging
-      let bytesReceived = 0;
-      proxyRes.on('data', (chunk: Buffer) => {
-        bytesReceived += chunk.length;
-      });
+      // DON'T add data listeners - let http-proxy handle the stream!
+      // Just track completion events
       
       // Handle response errors (connection drops during transfer)
       proxyRes.on('error', (err: any) => {
-        console.error(`[${ws.id}] Response stream error for ${req.url}:`, err.message, `(${bytesReceived} bytes received)`);
+        console.error(`[${ws.id}] Response stream error for ${req.url}:`, err.message);
         if (!res.headersSent) {
           res.writeHead(502, { "Content-Type": "text/plain" });
           res.end("Bad Gateway - Response stream interrupted");
@@ -301,14 +300,12 @@ const server = http.createServer(async (req: any, res: any) => {
       
       // Log when response completes
       proxyRes.on('end', () => {
-        console.log(`[${ws.id}] ✓ Complete: ${req.url} (${bytesReceived} bytes)`);
+        console.log(`[${ws.id}] ✓ Complete: ${req.url}`);
       });
       
       // Handle premature close
       proxyRes.on('close', () => {
-        if (bytesReceived === 0 || (contentLength && bytesReceived < parseInt(contentLength))) {
-          console.warn(`[${ws.id}] ⚠ Premature close: ${req.url} (${bytesReceived}/${contentLength || '?'} bytes)`);
-        }
+        console.log(`[${ws.id}] Stream closed: ${req.url}`);
       });
     });
 
@@ -319,9 +316,14 @@ const server = http.createServer(async (req: any, res: any) => {
     
     // Handle client closing connection early
     res.on('close', () => {
-      if (!res.finished) {
+      if (!res.writableEnded) {
         console.warn(`[${ws.id}] Client closed connection early for ${req.url}`);
       }
+    });
+    
+    // Monitor response finishing
+    res.on('finish', () => {
+      console.log(`[${ws.id}] Response finished for ${req.url}`);
     });
     
     // Increase request socket timeout
