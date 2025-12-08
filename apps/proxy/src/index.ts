@@ -220,19 +220,53 @@ const server = http.createServer(async (req: any, res: any) => {
       
       const proxyReq = http.request(options, (proxyRes) => {
         console.log(`[${ws.id}] Manual proxy response: ${proxyRes.statusCode} for ${req.url}`);
+        console.log(`[${ws.id}] Response headers:`, JSON.stringify(proxyRes.headers));
         
-        // Forward status and headers
-        res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
+        // CRITICAL FIX for Cloudflare: Buffer the entire response to calculate Content-Length
+        // Cloudflare has issues with chunked encoding, especially for large assets
+        const chunks: Buffer[] = [];
+        let totalLength = 0;
         
-        // Pipe the response
-        proxyRes.pipe(res);
+        proxyRes.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+          totalLength += chunk.length;
+        });
         
         proxyRes.on('end', () => {
+          console.log(`[${ws.id}] Buffered ${totalLength} bytes for ${req.url}`);
+          
+          // Combine all chunks
+          const fullResponse = Buffer.concat(chunks, totalLength);
+          
+          // Prepare clean headers
+          const headers: any = {
+            'content-type': proxyRes.headers['content-type'] || 
+              (req.url.endsWith('.js') ? 'application/javascript; charset=utf-8' : 
+               req.url.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/octet-stream'),
+            'content-length': totalLength.toString(), // CRITICAL: Set proper Content-Length
+            'cache-control': 'public, max-age=31536000',
+            'access-control-allow-origin': '*',
+          };
+          
+          // Copy safe headers from backend
+          const safeHeaders = ['etag', 'last-modified', 'content-encoding', 'vary'];
+          safeHeaders.forEach(h => {
+            if (proxyRes.headers[h]) {
+              headers[h] = proxyRes.headers[h];
+            }
+          });
+          
+          console.log(`[${ws.id}] Sending ${totalLength} bytes with Content-Length header`);
+          
+          // Send the response with proper Content-Length (no chunked encoding!)
+          res.writeHead(proxyRes.statusCode || 200, headers);
+          res.end(fullResponse);
+          
           console.log(`[${ws.id}] Manual proxy complete: ${req.url}`);
         });
         
         proxyRes.on('error', (err) => {
-          console.error(`[${ws.id}] Manual proxy error:`, err.message);
+          console.error(`[${ws.id}] Manual proxy stream error:`, err.message);
           if (!res.headersSent) {
             res.writeHead(502);
             res.end('Bad Gateway');
