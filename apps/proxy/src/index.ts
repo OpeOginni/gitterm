@@ -210,6 +210,10 @@ const server = http.createServer(async (req: any, res: any) => {
         proxyReq.setHeader("Cookie", req.headers.cookie);
       }
       
+      // CRITICAL: Force HTTP/1.0 to prevent chunked encoding issues
+      // This makes the backend send Content-Length instead of chunked
+      proxyReq.setHeader("Connection", "close");
+      
       // Forward all important headers
       proxyReq.setHeader("X-Forwarded-For", req.socket.remoteAddress || req.connection.remoteAddress || "");
       proxyReq.setHeader("X-Forwarded-Proto", req.headers["x-forwarded-proto"] || "https");
