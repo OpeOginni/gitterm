@@ -72,6 +72,59 @@ function extractSubdomain(host: string): string {
   return "";
 }
 
+// Check if request is for a static asset that doesn't need auth
+function isPublicAsset(url: string): boolean {
+  const publicExtensions = [
+    '.js', '.css', '.map', '.ico', '.png', '.jpg', '.jpeg', 
+    '.gif', '.svg', '.woff', '.woff2', '.ttf', '.eot',
+    '.webmanifest', '.json'
+  ];
+  
+  const publicPaths = [
+    '/assets/',
+    '/favicon',
+    '/site.webmanifest',
+    '/@vite/',
+    '/@fs/',
+    '/node_modules/'
+  ];
+  
+  // Check if URL matches public extensions
+  const hasPublicExtension = publicExtensions.some(ext => url.toLowerCase().endsWith(ext));
+  
+  // Check if URL starts with public paths
+  const hasPublicPath = publicPaths.some(path => url.toLowerCase().startsWith(path));
+  
+  return hasPublicExtension || hasPublicPath;
+}
+
+// Create a reusable proxy instance per workspace to avoid creating new ones each time
+const proxyCache = new Map<string, httpProxy>();
+
+function getOrCreateProxy(workspaceId: string): httpProxy {
+  if (!proxyCache.has(workspaceId)) {
+    const proxy = httpProxy.createProxyServer({
+      changeOrigin: true,
+      secure: false,
+      xfwd: true,
+      ws: false,
+      timeout: 60000, // 60 second timeout for large assets
+      proxyTimeout: 60000,
+      // Force IPv6 for Railway internal network
+      agent: new http.Agent({
+        family: 6,
+        keepAlive: true,
+        keepAliveMsecs: 1000,
+        maxSockets: 50,
+      }),
+    });
+    
+    proxyCache.set(workspaceId, proxy);
+  }
+  
+  return proxyCache.get(workspaceId)!;
+}
+
 // Create HTTP server with IPv6 support
 const server = http.createServer(async (req: any, res: any) => {
   try {
@@ -101,8 +154,6 @@ const server = http.createServer(async (req: any, res: any) => {
       return;
     }
 
-    console.log("SUBDOMAIN", subdomain);
-
     // Lookup workspace via internal API
     let ws;
     try {
@@ -117,18 +168,22 @@ const server = http.createServer(async (req: any, res: any) => {
     }
 
     let userId: string | null = null;
-    if (!ws.serverOnly) {
-      // Validate session
+    const isPublicRequest = isPublicAsset(req.url);
+    
+    // Skip auth for public assets OR serverOnly workspaces
+    if (!ws.serverOnly && !isPublicRequest) {
+      // Validate session for non-public assets
       userId = await validateSession(req.headers);
-      console.log("VERIFIED SESSION", userId);
 
       if (!userId) {
+        console.log(`[${subdomain}] Unauthorized: ${req.url}`);
         res.writeHead(401, { "Content-Type": "text/plain" });
         res.end("Unauthorized");
         return;
       }
 
       if (ws.userId !== userId) {
+        console.log(`[${subdomain}] Forbidden: ${req.url}`);
         res.writeHead(403, { "Content-Type": "text/plain" });
         res.end("Forbidden");
         return;
@@ -141,51 +196,83 @@ const server = http.createServer(async (req: any, res: any) => {
       return;
     }
 
-    console.log(`[${ws.id}] ${req.method} ${req.url} -> ${ws.backendUrl}`);
+    console.log(`[${ws.id}] ${req.method} ${req.url} -> ${ws.backendUrl}${req.url}`);
 
-    // Create proxy server with IPv6 support
-    const proxy = httpProxy.createProxyServer({
-      target: ws.backendUrl,
-      changeOrigin: true,
-      secure: false,
-      xfwd: true,
-      ws: false,
-      // Enable IPv6
-      agent: new http.Agent({
-        family: 6, // Force IPv6
-        keepAlive: true,
-        keepAliveMsecs: 1000,
-      }),
-    });
+    // Get or create proxy for this workspace
+    const proxy = getOrCreateProxy(ws.id);
 
     // Add auth and forwarding headers to proxied requests
-    proxy.on("proxyReq", (proxyReq: any) => {
-      if (!ws.serverOnly) {
+    proxy.off("proxyReq"); // Remove old listeners
+    proxy.on("proxyReq", (proxyReq: any, req: any) => {
+      if (!ws.serverOnly && userId) {
         proxyReq.setHeader("X-Auth-User", userId);
       }
       if (req.headers.cookie) {
         proxyReq.setHeader("Cookie", req.headers.cookie);
       }
-      proxyReq.setHeader("X-Forwarded-For", req.socket.remoteAddress);
-      proxyReq.setHeader("X-Forwarded-Proto", "https");
+      
+      // Forward all important headers
+      proxyReq.setHeader("X-Forwarded-For", req.socket.remoteAddress || req.connection.remoteAddress || "");
+      proxyReq.setHeader("X-Forwarded-Proto", req.headers["x-forwarded-proto"] || "https");
       proxyReq.setHeader("X-Forwarded-Host", host);
-      proxyReq.setHeader("User-Agent", req.headers["user-agent"]);
-      proxyReq.setHeader("Accept", req.headers["accept"]);
-      proxyReq.setHeader("Accept-Language", req.headers["accept-language"]);
-
+      proxyReq.setHeader("X-Real-IP", req.socket.remoteAddress || "");
+      
+      // Preserve all original headers that matter
+      const preserveHeaders = [
+        "user-agent", "accept", "accept-language", "accept-encoding",
+        "referer", "origin", "cache-control", "pragma", "if-none-match",
+        "if-modified-since", "range", "content-type", "content-length"
+      ];
+      
+      preserveHeaders.forEach(header => {
+        if (req.headers[header]) {
+          proxyReq.setHeader(header, req.headers[header]);
+        }
+      });
     });
 
-    // Handle proxy errors
-    proxy.on("error", (error: any) => {
-      console.error(`[${ws.id}] Proxy error:`, error.message, error.code);
+    // Handle proxy errors with detailed logging
+    proxy.off("error"); // Remove old listeners
+    proxy.on("error", (error: any, req: any, res: any) => {
+      console.error(`[${ws.id}] Proxy error for ${req.url}:`, {
+        message: error.message,
+        code: error.code,
+        errno: error.errno,
+        syscall: error.syscall,
+      });
+      
       if (!res.headersSent) {
-        res.writeHead(502, { "Content-Type": "text/plain" });
-        res.end("Bad Gateway");
+        let statusCode = 502;
+        let message = "Bad Gateway - Backend connection failed";
+        
+        if (error.code === "ECONNREFUSED") {
+          statusCode = 503;
+          message = "Service Unavailable - Backend refused connection";
+        } else if (error.code === "ETIMEDOUT" || error.code === "ESOCKETTIMEDOUT") {
+          statusCode = 504;
+          message = "Gateway Timeout - Backend took too long to respond";
+        } else if (error.code === "ENOTFOUND") {
+          statusCode = 502;
+          message = "Bad Gateway - Backend hostname not found";
+        } else if (error.code === "ECONNRESET") {
+          statusCode = 502;
+          message = "Bad Gateway - Backend connection reset";
+        }
+        
+        res.writeHead(statusCode, { "Content-Type": "text/plain" });
+        res.end(message);
       }
     });
 
-    // Forward HTTP request
-    proxy.web(req, res);
+    // Log successful proxy responses
+    proxy.off("proxyRes"); // Remove old listeners
+    proxy.on("proxyRes", (proxyRes: any, req: any) => {
+      console.log(`[${ws.id}] ← ${proxyRes.statusCode} ${req.url}`);
+    });
+
+    // Forward HTTP request to backend
+    proxy.web(req, res, { target: ws.backendUrl });
+    
   } catch (error) {
     console.error("Request handler error:", error);
     if (!res.headersSent) {
@@ -281,7 +368,7 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
       const messageBuffer: Array<{ data: any; isBinary: boolean }> = [];
       let backendConnected = false;
 
-      // Connect to backend WebSocket with IPv6 support
+      // Connect to backend WebSocket with IPv6 (Railway internal)
       const backendWs = new WebSocket(targetWsUrl, ["tty"], {
         headers: {
           "Host": backendUrl.host,
@@ -291,11 +378,10 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
           "User-Agent": req.headers["user-agent"] || "GitPad-Proxy/1.0",
           ...(req.headers.cookie ? { "Cookie": req.headers.cookie } : {}),
         },
-        // IPv6 support for Railway internal network
-        family: 6, // Force IPv6
+        family: 6, // Force IPv6 for Railway
         rejectUnauthorized: false,
         perMessageDeflate: true,
-        handshakeTimeout: 10000, // 10 second timeout
+        handshakeTimeout: 10000,
       });
 
       // Set up ping/pong for keepalive
@@ -322,18 +408,16 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
           if (backendWs.readyState === WebSocket.OPEN) {
             backendWs.ping();
           }
-        }, 30000); // Ping every 30 seconds
+        }, 30000);
       });
 
       // Forward messages from client to backend
       clientWs.on("message", (data, isBinary) => {
-        // Update heartbeat on user activity (client -> backend means user is typing/interacting)
         updateWorkspaceHeartbeat(ws.id);
         
         if (backendConnected && backendWs.readyState === WebSocket.OPEN) {
           backendWs.send(data, { binary: isBinary });
         } else if (!backendConnected) {
-          // Buffer messages until backend connects
           messageBuffer.push({ data, isBinary });
           if (messageBuffer.length <= 5) {
             console.log(`[${ws.id}] Buffered message (${messageBuffer.length} total)`);
@@ -343,7 +427,6 @@ server.on("upgrade", async (req: any, socket: any, head: any) => {
 
       // Forward messages from backend to client
       backendWs.on("message", (data, isBinary) => {
-        // Update heartbeat on backend activity (shows user is receiving output)
         updateWorkspaceHeartbeat(ws.id);
         
         if (clientWs.readyState === WebSocket.OPEN) {
