@@ -208,7 +208,7 @@ function InstanceCard({ workspace, providers }: { workspace: any; providers: any
               size="sm" 
               className="h-9 flex-1 text-xs gap-1.5"
               onClick={() => {
-                const command = `opencode --attach ${workspace.domain}`;
+                const command = `opencode attach https://${workspace.domain}`;
                 navigator.clipboard.writeText(command);
                 toast.success("Command copied to clipboard!");
               }}
