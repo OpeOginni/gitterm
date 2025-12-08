@@ -163,9 +163,16 @@ const server = http.createServer(async (req: any, res: any) => {
       if (!ws.serverOnly) {
         proxyReq.setHeader("X-Auth-User", userId);
       }
+      if (req.headers.cookie) {
+        proxyReq.setHeader("Cookie", req.headers.cookie);
+      }
       proxyReq.setHeader("X-Forwarded-For", req.socket.remoteAddress);
       proxyReq.setHeader("X-Forwarded-Proto", "https");
       proxyReq.setHeader("X-Forwarded-Host", host);
+      proxyReq.setHeader("User-Agent", req.headers["user-agent"]);
+      proxyReq.setHeader("Accept", req.headers["accept"]);
+      proxyReq.setHeader("Accept-Language", req.headers["accept-language"]);
+
     });
 
     // Handle proxy errors
