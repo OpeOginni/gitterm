@@ -1,4 +1,4 @@
-import { PgColumn, pgTable, text, timestamp, uuid, type PgTableWithColumns } from "drizzle-orm/pg-core";
+import { boolean, PgColumn, pgTable, text, timestamp, uuid, type PgTableWithColumns } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { relations } from "drizzle-orm";
 import { volume, workspace } from "./workspace";
@@ -43,6 +43,7 @@ export const image = pgTable("image", {
 export const agentType = pgTable("agent_type", {
 	id: uuid("id").primaryKey().defaultRandom(),
 	name: text("name").notNull(),
+	serverOnly: boolean("server_only").notNull().default(false),
 	createdAt: timestamp("created_at").notNull().defaultNow(),
 	updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

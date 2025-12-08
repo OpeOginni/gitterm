@@ -4,7 +4,7 @@ import { trpc, queryClient } from "@/utils/trpc";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ExternalLink, Trash2, PlayCircle, GitBranch, Clock, Globe, Box, MapPin, StopCircle } from "lucide-react";
+import { Loader2, ExternalLink, Trash2, PlayCircle, GitBranch, Clock, Globe, Box, MapPin, StopCircle, Copy } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useMutation, useQueries } from "@tanstack/react-query";
@@ -201,15 +201,30 @@ function InstanceCard({ workspace, providers }: { workspace: any; providers: any
         </div>
       </CardContent>
       <CardFooter className="flex gap-2 bg-muted/30 p-3 border-t">
-        {isRunning && workspace.domain && (
-          <Button variant="default" size="sm" className="h-9 flex-1 text-xs gap-1.5" asChild>
-            <a href={`https://${workspace.domain}`} target="_blank" rel="noreferrer">
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open Workspace
-            </a>
-          </Button>
+      {isRunning && workspace.domain && (
+          workspace.serverOnly ? (
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="h-9 flex-1 text-xs gap-1.5"
+              onClick={() => {
+                const command = `opencode --attach ${workspace.domain}`;
+                navigator.clipboard.writeText(command);
+                toast.success("Command copied to clipboard!");
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy Attach Command
+            </Button>
+          ) : (
+            <Button variant="default" size="sm" className="h-9 flex-1 text-xs gap-1.5" asChild>
+              <a href={`https://${workspace.domain}`} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+                Open Workspace
+              </a>
+            </Button>
+          )
         )}
-
         {isStopped && (
           <Button
             variant="default"

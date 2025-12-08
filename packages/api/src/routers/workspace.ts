@@ -859,6 +859,18 @@ export const workspaceRouter = router({
           .from(image)
           .where(eq(image.agentTypeId, input.agentTypeId));
 
+        const [agentTypeRecord] = await db
+          .select()
+          .from(agentType)
+          .where(eq(agentType.id, input.agentTypeId));
+
+        if (!agentTypeRecord) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "No agent type found for this agent type",
+          });
+        }
+
         if (!imageRecord) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
@@ -1023,6 +1035,7 @@ export const workspaceRouter = router({
             repositoryUrl: input.repo,
             domain,
             subdomain,
+            serverOnly: agentTypeRecord.serverOnly,
             backendUrl: workspaceInfo.backendUrl,
             status: "pending",
             startedAt: new Date(workspaceInfo.serviceCreatedAt),

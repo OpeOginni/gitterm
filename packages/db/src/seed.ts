@@ -16,11 +16,12 @@ const newAgentTypes: NewAgentType[] = [
         name: "OpenCode",
     },
     {
-        name: "Codex"
+        name: "OpenCode Server",
+        serverOnly: true,
     },
     {
-        name: "ClaudeCode",
-    },
+        name: "OpenCode Web",
+    }
 ]
 
 const railwayRegions = [
@@ -54,10 +55,20 @@ async function seedDB() {
 
     await db.insert(image).values([
         {
-            name: "gitpad-opencode",
-            imageId: "opeoginni/gitpad-opencode",
+            name: "gitterm-opencode",
+            imageId: "opeoginni/gitterm-opencode",
             agentTypeId: agents[0]?.id ?? "",
-        }
+        },
+        {
+            name: "gitterm-opencode-server",
+            imageId: "opeoginni/gitterm-opencode-server",
+            agentTypeId: agents[1]?.id ?? "",
+        },
+        {
+            name: "gitterm-opencode-web",
+            imageId: "opeoginni/gitterm-opencode-web",
+            agentTypeId: agents[2]?.id ?? "",
+        },
     ])
     await db.insert(region).values(
         railwayRegions.map((region) => ({

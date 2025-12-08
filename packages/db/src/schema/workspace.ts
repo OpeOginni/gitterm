@@ -23,6 +23,7 @@ export const workspace = pgTable("workspace", {
     backendUrl: text("backend_url"), // Internal URL
     status: workspaceStatusEnum("status").notNull(),
 	persistent: boolean("persistent").notNull().default(false),
+	serverOnly: boolean("server_only").notNull().default(false),
 	startedAt: timestamp("started_at").notNull(),
 	stoppedAt: timestamp("stopped_at"),
 	terminatedAt: timestamp("terminated_at"),

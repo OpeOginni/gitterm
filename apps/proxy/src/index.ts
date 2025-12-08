@@ -103,16 +103,6 @@ const server = http.createServer(async (req: any, res: any) => {
 
     console.log("SUBDOMAIN", subdomain);
 
-    // Validate session
-    const userId = await validateSession(req.headers);
-    console.log("VERIFIED SESSION", userId);
-
-    if (!userId) {
-      res.writeHead(401, { "Content-Type": "text/plain" });
-      res.end("Unauthorized");
-      return;
-    }
-
     // Lookup workspace via internal API
     let ws;
     try {
@@ -126,10 +116,23 @@ const server = http.createServer(async (req: any, res: any) => {
       throw error;
     }
 
-    if (ws.userId !== userId) {
-      res.writeHead(403, { "Content-Type": "text/plain" });
-      res.end("Forbidden");
-      return;
+    let userId: string | null = null;
+    if (!ws.serverOnly) {
+      // Validate session
+      userId = await validateSession(req.headers);
+      console.log("VERIFIED SESSION", userId);
+
+      if (!userId) {
+        res.writeHead(401, { "Content-Type": "text/plain" });
+        res.end("Unauthorized");
+        return;
+      }
+
+      if (ws.userId !== userId) {
+        res.writeHead(403, { "Content-Type": "text/plain" });
+        res.end("Forbidden");
+        return;
+      }
     }
 
     if (!ws.backendUrl) {
@@ -157,7 +160,9 @@ const server = http.createServer(async (req: any, res: any) => {
 
     // Add auth and forwarding headers to proxied requests
     proxy.on("proxyReq", (proxyReq: any) => {
-      proxyReq.setHeader("X-Auth-User", userId);
+      if (!ws.serverOnly) {
+        proxyReq.setHeader("X-Auth-User", userId);
+      }
       proxyReq.setHeader("X-Forwarded-For", req.socket.remoteAddress);
       proxyReq.setHeader("X-Forwarded-Proto", "https");
       proxyReq.setHeader("X-Forwarded-Host", host);
