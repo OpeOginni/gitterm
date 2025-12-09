@@ -4,16 +4,24 @@ import { githubAppService } from "../../service/github";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and } from "@gitpad/db";
 import { workspaceGitConfig, gitIntegration } from "@gitpad/db/schema/integrations";
+import { logger } from "../../utils/logger";
 
 export const githubRouter = router({
   /**
    * Get GitHub App installation status for the current user
+   * Now uses automatic verification and cleanup via getUserInstallation
    */
   getInstallationStatus: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
 
     try {
-      const [gitIntegrationRecord] = await db.select().from(gitIntegration).where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
+      const [gitIntegrationRecord] = await db
+        .select()
+        .from(gitIntegration)
+        .where(and(
+          eq(gitIntegration.userId, userId), 
+          eq(gitIntegration.provider, "github")
+        ));
       
       if (!gitIntegrationRecord) {
         return {
@@ -22,9 +30,15 @@ export const githubRouter = router({
         };
       }
 
-      const installation = await githubAppService.getUserInstallation(userId, gitIntegrationRecord.providerInstallationId);
+      // getUserInstallation now automatically verifies and cleans up if needed
+      const installation = await githubAppService.getUserInstallation(
+        userId, 
+        gitIntegrationRecord.providerInstallationId,
+        true // verify against GitHub API
+      );
 
       if (!installation) {
+        // Installation was either not found or deleted on GitHub's side
         return {
           connected: false,
           installation: null,
@@ -43,6 +57,7 @@ export const githubRouter = router({
         },
       };
     } catch (error) {
+      logger.error("Failed to get installation status", { userId, action: "get_installation_status" }, error as Error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to get installation status",
@@ -66,22 +81,17 @@ export const githubRouter = router({
       const userId = ctx.session.user.id;
 
       try {
-        console.log("[handleInstallation] Starting for user:", userId, "installation:", input.installationId);
+        logger.info("Handling GitHub App installation", { 
+          userId, 
+          action: "handle_installation" 
+        });
         
         // Get installation details from GitHub using SDK
-        console.log("[handleInstallation] Fetching installation details from GitHub...");
         const installationData = await githubAppService.getInstallationDetails(
           input.installationId
         );
-        console.log("[handleInstallation] Installation details:", {
-          id: installationData.id,
-          accountLogin: installationData.account.login,
-          accountType: installationData.account.type,
-          repositorySelection: installationData.repositorySelection,
-        });
 
         // Store installation in database
-        console.log("[handleInstallation] Storing installation in database...");
         const installation = await githubAppService.storeInstallation({
           userId,
           installationId: input.installationId,
@@ -90,7 +100,11 @@ export const githubRouter = router({
           accountType: installationData.account.type,
           repositorySelection: installationData.repositorySelection,
         });
-        console.log("[handleInstallation] Installation stored successfully:", installation.id);
+
+        logger.info("GitHub App installation handled successfully", { 
+          userId, 
+          action: "installation_success" 
+        });
 
         return {
           success: true,
@@ -101,11 +115,11 @@ export const githubRouter = router({
           },
         };
       } catch (error) {
-        console.error("[handleInstallation] ERROR:", error);
-        if (error instanceof Error) {
-          console.error("[handleInstallation] Error message:", error.message);
-          console.error("[handleInstallation] Error stack:", error.stack);
-        }
+        logger.error("Failed to handle GitHub App installation", { 
+          userId, 
+          action: "handle_installation" 
+        }, error as Error);
+        
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to connect GitHub App",
@@ -121,7 +135,13 @@ export const githubRouter = router({
     const userId = ctx.session.user.id;
 
     try {
-      const [gitIntegrationRecord] = await db.select().from(gitIntegration).where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
+      const [gitIntegrationRecord] = await db
+        .select()
+        .from(gitIntegration)
+        .where(and(
+          eq(gitIntegration.userId, userId), 
+          eq(gitIntegration.provider, "github")
+        ));
       
       if (!gitIntegrationRecord) {
         throw new TRPCError({
@@ -130,7 +150,13 @@ export const githubRouter = router({
         });
       }
 
-      const installation = await githubAppService.getUserInstallation(userId, gitIntegrationRecord.providerInstallationId);
+      // Don't verify here - if user wants to disconnect, let them disconnect
+      // even if GitHub already deleted it
+      const installation = await githubAppService.getUserInstallation(
+        userId, 
+        gitIntegrationRecord.providerInstallationId,
+        false // skip verification
+      );
 
       if (!installation) {
         throw new TRPCError({
@@ -144,12 +170,23 @@ export const githubRouter = router({
         installation.installationId
       );
 
+      logger.info("GitHub App disconnected successfully", { 
+        userId, 
+        action: "disconnect_app" 
+      });
+
       return {
         success: true,
         message: "GitHub App disconnected successfully",
       };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
+      
+      logger.error("Failed to disconnect GitHub App", { 
+        userId, 
+        action: "disconnect_app" 
+      }, error as Error);
+      
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to disconnect GitHub App",
@@ -193,6 +230,12 @@ export const githubRouter = router({
           },
         };
       } catch (error) {
+        logger.error("Failed to get workspace git configuration", { 
+          userId, 
+          workspaceId: input.workspaceId,
+          action: "get_workspace_config" 
+        }, error as Error);
+        
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to get workspace git configuration",

@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import z from "zod";
-import { protectedProcedure, publicProcedure, workspaceAuthProcedure, router } from "../index";
-import { db, eq, and, asc } from "@gitpad/db";
+import { protectedProcedure, publicProcedure, workspaceAuthProcedure, router } from "../../index";
+import { db, eq, and, asc, or } from "@gitpad/db";
 import {
   agentWorkspaceConfig,
   workspaceEnvironmentVariables,
@@ -19,11 +19,11 @@ import {
   closeUsageSession,
   createUsageSession,
   FREE_TIER_DAILY_MINUTES,
-} from "../utils/metering";
-import { getProviderByCloudProviderId, type PersistentWorkspaceInfo, type WorkspaceInfo } from "../providers";
-import { WORKSPACE_EVENTS } from "../events/workspace";
-import { githubAppService } from "../service/github";
-import { workspaceJWT } from "../service/workspace-jwt";
+} from "../../utils/metering";
+import { getProviderByCloudProviderId, type PersistentWorkspaceInfo, type WorkspaceInfo } from "../../providers";
+import { WORKSPACE_EVENTS } from "../../events/workspace";
+import { githubAppService } from "../../service/github";
+import { workspaceJWT } from "../../service/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitpad/db/schema/integrations";
 
 export const workspaceRouter = router({
@@ -816,6 +816,13 @@ export const workspaceRouter = router({
 
       const [fetchedUser] = await db.select().from(user).where(eq(user.id, userId));
 
+      if (!fetchedUser) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+
       if (fetchedUser && !fetchedUser.allowTrial) 
         throw new TRPCError({ code: "FORBIDDEN", message: "Reachout for Access" });
 
@@ -826,6 +833,15 @@ export const workspaceRouter = router({
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Daily free tier limit reached. Please try again tomorrow.",
+          });
+        }
+
+        const runningWorkspaces = await db.select().from(workspace).where(and(eq(workspace.userId, userId), or(eq(workspace.status, "running"), eq(workspace.status, "pending"), eq(workspace.status, "stopped"))));
+
+        if (fetchedUser.email !== "brightoginni123@gmail.com" && runningWorkspaces.length >= 1) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You have reached the maximum number of workspaces. Please upgrade to a paid plan or delete some workspaces.",
           });
         }
 

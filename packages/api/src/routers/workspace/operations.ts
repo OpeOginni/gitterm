@@ -4,8 +4,9 @@ import { db, eq, and, gt } from "@gitpad/db";
 import { workspace } from "@gitpad/db/schema/workspace";
 import { gitIntegration, workspaceGitConfig } from "@gitpad/db/schema/integrations";
 import { TRPCError } from "@trpc/server";
-import { githubAppService } from "../../service/github";
+import { githubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";
+import { logger } from "../../utils/logger";
 
 /**
  * Workspace operations router
@@ -83,7 +84,13 @@ export const workspaceOperationsRouter = router({
         const userId = ws.userId;
 
         // Get GitHub App installation using the specific installation ID
-        const [gitIntegrationRecord] = await db.select().from(gitIntegration).where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
+        const [gitIntegrationRecord] = await db
+          .select()
+          .from(gitIntegration)
+          .where(and(
+            eq(gitIntegration.userId, userId), 
+            eq(gitIntegration.provider, "github")
+          ));
 
         if (!gitIntegrationRecord) {
           throw new TRPCError({
@@ -92,12 +99,17 @@ export const workspaceOperationsRouter = router({
           });
         }
 
-        const installation = await githubAppService.getUserInstallation(userId, gitIntegrationRecord.providerInstallationId);
+        // Verify installation and auto-cleanup if deleted on GitHub
+        const installation = await githubAppService.getUserInstallation(
+          userId, 
+          gitIntegrationRecord.providerInstallationId,
+          true // verify
+        );
 
         if (!installation) {
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: "GitHub App not connected",
+            message: "GitHub App not connected or has been removed",
           });
         }
 
@@ -174,12 +186,10 @@ export const workspaceOperationsRouter = router({
         const { token } = await githubAppService.getUserToServerToken(installation.installationId);
         const authenticatedUrl = githubAppService.getAuthenticatedGitUrl(token, fork.owner, fork.repo);
 
-        // Audit log
-        console.log('[WORKSPACE-AUTH] Fork operation:', {
+        logger.info("Fork operation completed", {
           workspaceId: input.workspaceId,
           userId,
-          repo: `${input.owner}/${input.repo}`,
-          fork: `${fork.owner}/${fork.repo}`,
+          action: "fork_repository",
         });
 
         return {
@@ -195,7 +205,24 @@ export const workspaceOperationsRouter = router({
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error("Failed to fork repository:", error);
+        
+        // Handle installation not found specifically
+        if (error instanceof GitHubInstallationNotFoundError) {
+          logger.warn("GitHub installation not found during fork", {
+            workspaceId: input.workspaceId,
+            action: "fork_repository",
+          });
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "GitHub App installation has been removed. Please reconnect.",
+          });
+        }
+        
+        logger.error("Failed to fork repository", {
+          workspaceId: input.workspaceId,
+          action: "fork_repository",
+        }, error as Error);
+        
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fork repository",
@@ -264,7 +291,13 @@ export const workspaceOperationsRouter = router({
       try {
         const userId = ws.userId;
 
-        const [gitIntegrationRecord] = await db.select().from(gitIntegration).where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
+        const [gitIntegrationRecord] = await db
+          .select()
+          .from(gitIntegration)
+          .where(and(
+            eq(gitIntegration.userId, userId), 
+            eq(gitIntegration.provider, "github")
+          ));
 
         // we only support GitHub for now
         if (!gitIntegrationRecord) {
@@ -274,13 +307,17 @@ export const workspaceOperationsRouter = router({
           });
         }
 
-        // Get GitHub App installation
-        const installation = await githubAppService.getUserInstallation(userId, gitIntegrationRecord.providerInstallationId);
+        // Get GitHub App installation with verification
+        const installation = await githubAppService.getUserInstallation(
+          userId, 
+          gitIntegrationRecord.providerInstallationId,
+          true // verify
+        );
 
         if (!installation) {
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: "GitHub App not connected",
+            message: "GitHub App not connected or has been removed",
           });
         }
 
@@ -294,11 +331,10 @@ export const workspaceOperationsRouter = router({
         // Generate new token
         const tokenData = await githubAppService.getUserToServerToken(installation.installationId);
 
-        // Audit log
-        console.log('[WORKSPACE-AUTH] Token refresh:', {
+        logger.info("Git token refresh completed", {
           workspaceId: input.workspaceId,
           userId,
-          expiresAt: tokenData.expiresAt,
+          action: "refresh_git_token",
         });
 
         return {
@@ -308,7 +344,24 @@ export const workspaceOperationsRouter = router({
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error("Failed to refresh token:", error);
+        
+        // Handle installation not found specifically
+        if (error instanceof GitHubInstallationNotFoundError) {
+          logger.warn("GitHub installation not found during token refresh", {
+            workspaceId: input.workspaceId,
+            action: "refresh_git_token",
+          });
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "GitHub App installation has been removed. Please reconnect.",
+          });
+        }
+        
+        logger.error("Failed to refresh token", {
+          workspaceId: input.workspaceId,
+          action: "refresh_git_token",
+        }, error as Error);
+        
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to refresh GitHub token",

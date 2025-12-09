@@ -63,6 +63,10 @@ export const logger = {
     logger.warn("User quota exhausted", { userId, action: "quota_check" });
   },
 
+  quotaWorkspaceFound: (workspaceId: string, userId: string) => {
+    logger.info("Workspace found with exceeded quota", { workspaceId, userId, action: "quota_enforcement" });
+  },
+
   idleWorkspaceFound: (workspaceId: string, userId: string) => {
     logger.info("Idle workspace detected", { workspaceId, userId, action: "idle_check" });
   },
