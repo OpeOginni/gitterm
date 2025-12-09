@@ -1,0 +1,17 @@
+{
+  "name": "new-proxy",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Add dev script here'",
+    "build": "echo 'Add build script here'",
+    "test": "echo 'Add test script here'",
+    "lint": "echo 'Add lint script here'"
+  },
+  "dependencies": {
+    "@gitpad/config": "*"
+  },
+  "devDependencies": {
+    "@gitpad/config": "*"
+  }
+}
