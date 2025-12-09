@@ -7,6 +7,11 @@
 	servers {
 		protocols h1 h2
 	}
+	
+	# Enable debug logging to see what's happening
+	log {
+		level DEBUG
+	}
 }
 
 # Listen on port 80 for all requests
@@ -32,17 +37,16 @@
 			header_up X-Original-Method {method}
 			header_up X-Forwarded-For {remote_ip}
 			
-			# Extract container info from auth response
+			# Copy the upstream URL from auth response
 			copy_headers {
-				X-Container-Host>container_host
-				X-Container-Port>container_port
+				X-Upstream-URL>upstream_url
 			}
 		}
 
-		# Reverse proxy to the resolved container
-		reverse_proxy {vars.container_host}:{vars.container_port} {
-			# WebSocket support - Caddy handles this automatically
-			# But we ensure headers are passed through correctly
+		# Reverse proxy to the dynamically resolved upstream
+		# Use the upstream_url placeholder set by forward_auth
+		reverse_proxy {http.reverse_proxy.header.upstream_url} {
+			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
 			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
@@ -54,34 +58,17 @@
 			header_up Host {host}
 			header_up X-Real-IP {remote_ip}
 			header_up X-Forwarded-For {remote_ip}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
-			
-			# Pass through User-Agent for ttyd logging
 			header_up User-Agent {header.User-Agent}
-			
-			# Pass through cookies if any (for session management)
 			header_up Cookie {header.Cookie}
 			
 			# Transport settings optimized for WebSocket/ttyd
 			transport http {
-				# Keep compression OFF to avoid interfering with WebSocket frames
-				# ttyd handles its own compression via permessage-deflate
 				compression off
-				
-				# Dial timeout - how long to wait for connection to workspace
 				dial_timeout 10s
-				
-				# No timeouts for long-lived WebSocket connections
-				# ttyd connections can be idle for long periods
 				response_header_timeout 0
 				expect_continue_timeout 0
-				
-				# Keep connections alive
 				keepalive 2m
 				keepalive_idle_conns 10
-				
-				# Read buffer for WebSocket frames (ttyd can send large terminal outputs)
 				read_buffer 32768
 				write_buffer 32768
 			}

@@ -1,0 +1,49 @@
+{
+	# Global options
+	auto_https off
+	admin off
+	
+	# Server options
+	servers {
+		protocols h1 h2
+	}
+}
+
+# Listen on port 80 for all requests
+:80 {
+	# Enable logging
+	log {
+		output stderr
+		format console
+		level INFO
+	}
+
+	# Health check endpoint
+	handle /health {
+		header Content-Type application/json
+		respond `{"status":"UP"}` 200
+	}
+
+	# Main proxy handler
+	handle {
+		# Make auth request to get container details
+		reverse_proxy /auth-check server.railway.internal:8080 {
+			rewrite /auth-check /internal/proxy-resolve
+			
+			header_up Host {host}
+			header_up X-Internal-Key "EdBY7UDhP-bVJbAns_E9yiFbx_B!tg_"
+			header_up Cookie {header.Cookie}
+			header_up Authorization {header.Authorization}
+			header_up X-Original-URI {uri}
+			header_up X-Original-Method {method}
+			header_up X-Forwarded-For {remote_ip}
+			
+			# Capture response headers
+			@success status 2xx
+			handle_response @success {
+				# Get the container details from response headers
+				# Problem: Can't dynamically proxy based on response headers in Caddy
+			}
+		}
+	}
+}

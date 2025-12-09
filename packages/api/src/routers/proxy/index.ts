@@ -59,6 +59,7 @@ export const proxyResolverRouter = async (c: Context) => {
           const backendUrl = new URL(ws.backendUrl);
 
 		  return c.text('OK', 200, {
+            'X-Upstream-URL': ws.backendUrl,
 			'X-Container-Host': backendUrl.hostname,
             'X-Container-Port': backendUrl.port,
 		  });
@@ -79,6 +80,7 @@ export const proxyResolverRouter = async (c: Context) => {
 	
         const backendUrl = new URL(ws.backendUrl);
 		return c.text('OK', 200, {
+          'X-Upstream-URL': ws.backendUrl,
 		  'X-Container-Host': backendUrl.hostname,
           'X-Container-Port': backendUrl.port,
 		  'X-User-ID': session.user.id,
