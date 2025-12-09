@@ -4,7 +4,7 @@ FROM nginx:alpine
 RUN apk add --no-cache curl
 
 # Copy custom nginx configuration
-COPY ./apps/new-proxy/nginx.conf /etc/nginx/nginx.conf
+COPY ./apps/new-proxy/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Create log directory with proper permissions
 RUN mkdir -p /var/log/nginx && \
@@ -20,4 +20,5 @@ USER nginx
 EXPOSE 80
 
 # Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/bin/sh", "-c", "envsubst '$INTERNAL_API_KEY' < /etc/nginx/templates/default.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"]
+
