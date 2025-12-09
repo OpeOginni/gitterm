@@ -36,8 +36,6 @@ app.use(
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
-app.get("/internal/proxy-resolve", async (c) => await proxyResolverRouter(c));
-
 app.use(
 	"/trpc/*",
 	trpcServer({
@@ -47,6 +45,10 @@ app.use(
 		},
 	}),
 );
+
+
+app.get("/internal/proxy-resolve", async (c) => await proxyResolverRouter(c));
+
 
 app.get("/", (c) => {
 	return c.text("OK");
