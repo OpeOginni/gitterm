@@ -13,6 +13,6 @@ COPY ./apps/new-proxy/nginx.conf /etc/nginx/nginx.conf
 # COPY ./nginx.conf /etc/nginx/nginx.conf
 
 # Expose port
-EXPOSE 80 443
+EXPOSE 443
 
 CMD ["nginx", "-g", "daemon off;"]
