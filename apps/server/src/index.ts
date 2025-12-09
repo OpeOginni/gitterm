@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { trpcServer } from "@hono/trpc-server";
 import { createContext } from "@gitpad/api/context";
-import { appRouter } from "@gitpad/api/routers/index";
+import { appRouter, proxyResolverRouter } from "@gitpad/api/routers/index";
 import { auth } from "@gitpad/auth";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -35,6 +35,8 @@ app.use(
 );
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+
+app.get("/internal/proxy-resolve", async (c) => await proxyResolverRouter(c));
 
 app.use(
 	"/trpc/*",

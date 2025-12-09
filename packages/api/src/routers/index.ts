@@ -6,6 +6,7 @@ import { workspaceOperationsRouter } from "./workspace/operations";
 import { internalRouter } from "./internal";
 import { githubRouter } from "./github/github";
 import { githubWebhookRouter } from "./github/webhook";
+import { proxyResolverRouter } from "./proxy";
 
 export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {
@@ -30,3 +31,5 @@ export const listenerRouter = router({
 	github: githubWebhookRouter,
 });
 export type ListenerRouter = typeof listenerRouter;
+
+export { proxyResolverRouter };

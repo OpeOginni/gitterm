@@ -9,6 +9,10 @@ export async function createContext({ context }: CreateContextOptions) {
 	const session = await auth.api.getSession({
 		headers: context.req.raw.headers,
 	});
+
+	const setHeader = (name: string, value: string) => {
+		context.req.raw.headers.set(name, value);
+	}
 	
 	// Extract internal API key for service-to-service auth
 	const internalApiKey = context.req.raw.headers.get("x-internal-key");
@@ -18,11 +22,15 @@ export async function createContext({ context }: CreateContextOptions) {
 	const workspaceToken = authHeader?.startsWith("Bearer ") 
 		? authHeader.substring(7) 
 		: undefined;
-	
+
+
+	const subdomain = context.req.raw.headers.get("x-subdomain");
 	return {
 		session,
 		internalApiKey,
 		workspaceToken,
+		subdomain,
+		setHeader
 	};
 }
 
