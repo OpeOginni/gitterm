@@ -239,8 +239,8 @@ const server = http.createServer(async (req: any, res: any) => {
         (options.headers as any)['x-auth-user'] = userId;
       }
       
-      const requestModule = backendUrl.protocol === 'https:' ? https : http;
-      const proxyReq = requestModule.request(options, (proxyRes) => {
+      // const requestModule = backendUrl.protocol === 'https:' ? https : http;
+      const proxyReq = https.request(options, (proxyRes) => {
         console.log(`[${ws.id}] SSE response: ${proxyRes.statusCode} for ${req.url}`);
         
         // 2. Force SSE Headers on the response to the client
