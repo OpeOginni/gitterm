@@ -1,15 +1,16 @@
 import z from "zod";
-import { internalProcedure, router } from "../index";
+import { internalProcedure, router } from "../../index";
 import { db, eq, and, sql, gt } from "@gitpad/db";
 import { workspace, usageSession, dailyUsage, type SessionStopSource } from "@gitpad/db/schema/workspace";
 import { workspaceGitConfig } from "@gitpad/db/schema/integrations";
 import { cloudProvider, region } from "@gitpad/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
-import { getProviderByCloudProviderId } from "../providers";
-import { WORKSPACE_EVENTS } from "../events/workspace";
-import { IDLE_TIMEOUT_MINUTES, closeUsageSession } from "../utils/metering";
+import { getProviderByCloudProviderId } from "../../providers";
+import { WORKSPACE_EVENTS } from "../../events/workspace";
+import { IDLE_TIMEOUT_MINUTES, closeUsageSession } from "../../utils/metering";
 import { auth } from "@gitpad/auth";
-import { githubAppService } from "../service/github";
+import { githubAppService, GitHubInstallationNotFoundError } from "../../service/github";
+import { logger } from "../../utils/logger";
 
 /**
  * Internal router for service-to-service communication
@@ -88,12 +89,68 @@ export const internalRouter = router({
       .where(
         and(
           eq(workspace.status, "running"),
-          gt(workspace.lastActiveAt, idleThreshold),
+          sql`${workspace.lastActiveAt} < ${idleThreshold}`
         )
       );
 
     return idleWorkspaces;
   }),
+
+  // ============================================================================
+  // TRIAL/FREE TIER ENFORCEMENT - Comment out this procedure for paid plans
+  // ============================================================================
+  /**
+   * Get workspaces that belong to users who have exceeded their daily quota
+   * Used by idle-reaper worker to enforce free tier limits
+   * 
+   * NOTE: Comment out this entire procedure when moving to paid plans
+   */
+  getQuotaExceededWorkspaces: internalProcedure.query(async () => {
+    const today = new Date().toISOString().split("T")[0]!;
+
+    // Get all running workspaces with their users' daily usage
+    const workspacesWithUsage = await db
+      .select({
+        id: workspace.id,
+        externalInstanceId: workspace.externalInstanceId,
+        userId: workspace.userId,
+        regionId: workspace.regionId,
+        cloudProviderId: workspace.cloudProviderId,
+        domain: workspace.domain,
+        minutesUsed: dailyUsage.minutesUsed,
+      })
+      .from(workspace)
+      .leftJoin(
+        dailyUsage,
+        and(
+          eq(workspace.userId, dailyUsage.userId),
+          eq(dailyUsage.date, today)
+        )
+      )
+      .where(eq(workspace.status, "running"));
+
+    // Filter workspaces where user has exceeded quota
+    // If no usage record exists (null), they haven't exceeded (0 minutes used)
+    const FREE_TIER_DAILY_MINUTES = 60; // Import from metering if needed
+    const quotaExceededWorkspaces = workspacesWithUsage.filter(
+      ws => (ws.minutesUsed ?? 0) >= FREE_TIER_DAILY_MINUTES
+    );
+
+    logger.info(`Found ${quotaExceededWorkspaces.length} workspaces with exceeded quota`, {
+      action: "quota_check",
+    });
+
+    return quotaExceededWorkspaces.map(ws => ({
+      id: ws.id,
+      externalInstanceId: ws.externalInstanceId,
+      userId: ws.userId,
+      regionId: ws.regionId,
+      cloudProviderId: ws.cloudProviderId,
+      domain: ws.domain,
+    }));
+  }),
+  // END OF TRIAL ENFORCEMENT PROCEDURE
+  // ============================================================================
 
   // Stop a workspace (for worker)
   stopWorkspaceInternal: internalProcedure
@@ -261,13 +318,17 @@ export const internalRouter = router({
           });
         }
 
-        // Get GitHub App installation
-        const installation = await githubAppService.getUserInstallation(userId, workspaceRecord.gitIntegrationId);
+        // Get GitHub App installation with verification
+        const installation = await githubAppService.getUserInstallation(
+          userId, 
+          workspaceRecord.gitIntegrationId,
+          true // verify
+        );
 
         if (!installation) {
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: "GitHub App not connected. Please connect your GitHub account.",
+            message: "GitHub App not connected or has been removed. Please reconnect your GitHub account.",
           });
         }
 
@@ -347,13 +408,10 @@ export const internalRouter = router({
         const { token } = await githubAppService.getUserToServerToken(installation.installationId);
         const authenticatedUrl = githubAppService.getAuthenticatedGitUrl(token, fork.owner, fork.repo);
 
-        // Security: Log the fork operation for audit trail
-        console.log('[SECURITY-AUDIT] Fork operation completed:', {
+        logger.info("Fork operation completed", {
           workspaceId: input.workspaceId,
           userId,
-          originalRepo: `${input.owner}/${input.repo}`,
-          fork: `${fork.owner}/${fork.repo}`,
-          timestamp: new Date().toISOString(),
+          action: "fork_repository_internal",
         });
 
         return {
@@ -370,7 +428,24 @@ export const internalRouter = router({
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error("Failed to fork repository:", error);
+        
+        // Handle installation not found specifically
+        if (error instanceof GitHubInstallationNotFoundError) {
+          logger.warn("GitHub installation not found during fork", {
+            workspaceId: input.workspaceId,
+            action: "fork_repository_internal",
+          });
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "GitHub App installation has been removed. Please reconnect.",
+          });
+        }
+        
+        logger.error("Failed to fork repository", {
+          workspaceId: input.workspaceId,
+          action: "fork_repository_internal",
+        }, error as Error);
+        
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fork repository",

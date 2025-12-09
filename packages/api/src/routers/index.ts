@@ -1,6 +1,6 @@
 import { protectedProcedure, publicProcedure, router } from "../index";
 import { railwayWebhookRouter } from "./railway/webhook";
-import { workspaceRouter } from "./workspace";
+import { workspaceRouter } from "./workspace/managment";
 import { workspaceEventsRouter } from "./workspace/events";
 import { workspaceOperationsRouter } from "./workspace/operations";
 import { internalRouter } from "./internal";

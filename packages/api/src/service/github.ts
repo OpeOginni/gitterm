@@ -1,7 +1,25 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import { db, eq, and } from "@gitpad/db";
-import { githubAppInstallation, gitIntegration } from "@gitpad/db/schema/integrations";
+import { githubAppInstallation, gitIntegration, workspaceGitConfig } from "@gitpad/db/schema/integrations";
+import { logger } from "../utils/logger";
+
+/**
+ * GitHub API error types
+ */
+export class GitHubInstallationNotFoundError extends Error {
+  constructor(installationId: string) {
+    super(`GitHub installation ${installationId} not found or has been deleted`);
+    this.name = "GitHubInstallationNotFoundError";
+  }
+}
+
+export class GitHubAPIError extends Error {
+  constructor(message: string, public readonly statusCode?: number) {
+    super(message);
+    this.name = "GitHubAPIError";
+  }
+}
 
 /**
  * Decode the private key if it's base64 encoded
@@ -12,16 +30,26 @@ function decodePrivateKey(key: string): string {
     try {
       // Decode base64 to get the actual PEM key
       const decoded = Buffer.from(key, 'base64').toString('utf-8');
-      console.log("[decodePrivateKey] Decoded base64 key");
+      logger.debug("Decoded base64 GitHub private key");
       return decoded;
     } catch (error) {
-      console.error("[decodePrivateKey] Failed to decode base64 key:", error);
+      logger.error("Failed to decode base64 GitHub private key", {}, error as Error);
       throw new Error("Invalid GitHub App private key format");
     }
   }
   
   // Key is already in PEM format, just handle escaped newlines
   return key.replace(/\\n/g, '\n');
+}
+
+/**
+ * Check if error is a 404 Not Found from GitHub API
+ */
+function isNotFoundError(error: unknown): boolean {
+  if (error && typeof error === 'object' && 'status' in error) {
+    return (error as { status: number }).status === 404;
+  }
+  return false;
 }
 
 /**
@@ -53,8 +81,7 @@ export class GitHubAppService {
     // Decode and prepare the private key
     const privateKey = decodePrivateKey(GITHUB_APP_PRIVATE_KEY!);
     
-    console.log("[GitHubAppService] Initializing with App ID:", GITHUB_APP_ID);
-    console.log("[GitHubAppService] Private key starts with:", privateKey.substring(0, 30));
+    logger.info("Initializing GitHub App Service", { action: "github_init" });
     
     // Initialize Octokit with App authentication
     this.appOctokit = new Octokit({
@@ -81,8 +108,111 @@ export class GitHubAppService {
         expiresAt: data.expires_at,
       };
     } catch (error) {
-      console.error("Failed to create installation access token:", error);
-      throw new Error("Failed to generate GitHub access token");
+      if (isNotFoundError(error)) {
+        throw new GitHubInstallationNotFoundError(installationId);
+      }
+      logger.error("Failed to create installation access token", { action: "create_token" }, error as Error);
+      throw new GitHubAPIError("Failed to generate GitHub access token");
+    }
+  }
+
+  /**
+   * Verify that a GitHub installation still exists and is valid
+   * If the installation is deleted on GitHub's side, clean up our local records
+   * 
+   * @param userId - The user ID who owns the installation
+   * @param installationId - The GitHub installation ID
+   * @returns true if installation is valid, false if it was deleted/cleaned up
+   */
+  async verifyAndCleanupInstallation(userId: string, installationId: string): Promise<boolean> {
+    try {
+      // Try to get installation details from GitHub
+      await this.getInstallationDetails(installationId);
+      // Installation exists and is valid
+      return true;
+    } catch (error) {
+      // Check if this is a 404 (installation deleted on GitHub's side)
+      if (error instanceof GitHubInstallationNotFoundError || isNotFoundError(error)) {
+        logger.warn("GitHub installation no longer exists, cleaning up local records", {
+          userId,
+          action: "installation_cleanup",
+        });
+        
+        // Clean up our local records
+        await this.cleanupStaleInstallation(userId, installationId);
+        return false;
+      }
+      
+      // Other errors (network, auth, etc.) - don't cleanup, just throw
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up stale GitHub installation and related records
+   * This is called when we detect an installation has been deleted on GitHub's side
+   * 
+   * @param userId - The user ID
+   * @param installationId - The GitHub installation ID
+   */
+  private async cleanupStaleInstallation(userId: string, installationId: string): Promise<void> {
+    try {
+      logger.info("Starting cleanup of stale GitHub installation", {
+        userId,
+        action: "cleanup_stale_installation",
+      });
+
+      // Get the git integration record first (we'll need its ID)
+      const [gitIntegrationRecord] = await db
+        .select()
+        .from(gitIntegration)
+        .where(
+          and(
+            eq(gitIntegration.userId, userId),
+            eq(gitIntegration.providerInstallationId, installationId)
+          )
+        )
+        .limit(1);
+
+      if (gitIntegrationRecord) {
+        // Find all workspace git configs using this integration
+        const workspaceConfigs = await db
+          .select()
+          .from(workspaceGitConfig)
+          .where(eq(workspaceGitConfig.gitIntegrationId, gitIntegrationRecord.id));
+
+        logger.info(`Found ${workspaceConfigs.length} workspace git config(s) using this integration`, {
+          userId,
+          action: "cleanup_workspace_configs",
+        });
+
+        // Nullify the gitIntegrationId in workspace configs (keep the configs for history)
+        if (workspaceConfigs.length > 0) {
+          await db
+            .update(workspaceGitConfig)
+            .set({
+              gitIntegrationId: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(workspaceGitConfig.gitIntegrationId, gitIntegrationRecord.id));
+          
+          logger.info("Nullified gitIntegrationId in workspace configs", {
+            userId,
+            action: "nullify_git_integration",
+          });
+        }
+      }
+
+      // Now remove the installation (this also handles git integration deletion)
+      await this.removeInstallation(userId, installationId);
+
+      logger.info("Successfully cleaned up stale GitHub installation", {
+        userId,
+        action: "cleanup_complete",
+      });
+    } catch (error) {
+      logger.error("Failed to cleanup stale installation", { userId }, error as Error);
+      throw new Error("Failed to cleanup stale GitHub installation");
     }
   }
 
@@ -105,8 +235,11 @@ export class GitHubAppService {
         expiresAt: data.expires_at,
       };
     } catch (error) {
-      console.error("Failed to create repository-scoped token:", error);
-      throw new Error("Failed to generate repository-scoped GitHub token");
+      if (isNotFoundError(error)) {
+        throw new GitHubInstallationNotFoundError(installationId);
+      }
+      logger.error("Failed to create repository-scoped token", { action: "create_repo_token" }, error as Error);
+      throw new GitHubAPIError("Failed to generate repository-scoped GitHub token");
     }
   }
 
@@ -138,6 +271,11 @@ export class GitHubAppService {
         repo,
       });
 
+      logger.info("Successfully forked repository", {
+        action: "fork_repository",
+        provider: "github",
+      });
+
       return {
         owner: fork.owner.login,
         repo: fork.name,
@@ -146,8 +284,11 @@ export class GitHubAppService {
         defaultBranch: fork.default_branch,
       };
     } catch (error) {
-      console.error("Failed to fork repository:", error);
-      throw new Error("Failed to fork repository");
+      if (error instanceof GitHubInstallationNotFoundError) {
+        throw error; // Re-throw for caller to handle cleanup
+      }
+      logger.error("Failed to fork repository", { action: "fork_repository" }, error as Error);
+      throw new GitHubAPIError("Failed to fork repository");
     }
   }
 
@@ -188,17 +329,28 @@ export class GitHubAppService {
           : undefined,
       };
     } catch (error) {
-      console.error("Failed to get repository:", error);
-      throw new Error("Failed to get repository information");
+      if (error instanceof GitHubInstallationNotFoundError) {
+        throw error; // Re-throw for caller to handle cleanup
+      }
+      logger.error("Failed to get repository", { action: "get_repository" }, error as Error);
+      throw new GitHubAPIError("Failed to get repository information");
     }
   }
 
   /**
    * Get GitHub App installation for a user
+   * Now includes automatic verification against GitHub API
+   * 
    * @param userId - The user ID
    * @param installationId - The GitHub installation ID (text), not the database UUID
+   * @param verify - Whether to verify installation still exists on GitHub (default: true)
+   * @returns Installation record or null if not found or deleted
    */
-  async getUserInstallation(userId: string, installationId: string): Promise<typeof githubAppInstallation.$inferSelect | null> {
+  async getUserInstallation(
+    userId: string, 
+    installationId: string,
+    verify: boolean = true
+  ): Promise<typeof githubAppInstallation.$inferSelect | null> {
     try {
       const [installation] = await db
         .select()
@@ -206,9 +358,22 @@ export class GitHubAppService {
         .where(and(eq(githubAppInstallation.userId, userId), eq(githubAppInstallation.installationId, installationId)))
         .limit(1);
 
-      return installation || null;
+      if (!installation) {
+        return null;
+      }
+
+      // Optionally verify the installation still exists on GitHub's side
+      if (verify) {
+        const isValid = await this.verifyAndCleanupInstallation(userId, installationId);
+        if (!isValid) {
+          // Installation was deleted on GitHub's side and has been cleaned up
+          return null;
+        }
+      }
+
+      return installation;
     } catch (error) {
-      console.error("Failed to get user installation:", error);
+      logger.error("Failed to get user installation", { userId, action: "get_installation" }, error as Error);
       return null;
     }
   }
@@ -216,6 +381,7 @@ export class GitHubAppService {
   /**
    * Get installation details from GitHub API
    * Returns full installation data including account info and permissions
+   * Throws GitHubInstallationNotFoundError if installation doesn't exist (404)
    */
   async getInstallationDetails(installationId: string): Promise<{
     id: number;
@@ -229,18 +395,12 @@ export class GitHubAppService {
     suspended: boolean;
   }> {
     try {
-      console.log("[getInstallationDetails] Fetching for installation:", installationId);
+      logger.debug("Fetching installation details from GitHub", { action: "get_installation_details" });
       
       // Use the app-level Octokit (authenticates as the app with JWT)
       // This is the correct way to get installation details
       const { data } = await this.appOctokit.apps.getInstallation({
         installation_id: parseInt(installationId),
-      });
-
-      console.log("[getInstallationDetails] Got installation data:", {
-        id: data.id,
-        account: data.account,
-        repositorySelection: data.repository_selection,
       });
 
       // Handle account data - it can be a User or Organization
@@ -261,11 +421,11 @@ export class GitHubAppService {
         suspended: data.suspended_at !== null && data.suspended_at !== undefined,
       };
     } catch (error) {
-      console.error("[getInstallationDetails] ERROR:", error);
-      if (error instanceof Error) {
-        console.error("[getInstallationDetails] Error message:", error.message);
+      if (isNotFoundError(error)) {
+        throw new GitHubInstallationNotFoundError(installationId);
       }
-      throw new Error("Failed to fetch installation details from GitHub");
+      logger.error("Failed to fetch installation details from GitHub", { action: "get_installation_details" }, error as Error);
+      throw new GitHubAPIError("Failed to fetch installation details from GitHub");
     }
   }
 
@@ -281,10 +441,9 @@ export class GitHubAppService {
     repositorySelection: string;
   }): Promise<typeof githubAppInstallation.$inferSelect> {
     try {
-      console.log("[storeInstallation] Storing installation:", {
+      logger.info("Storing GitHub installation", {
         userId: data.userId,
-        installationId: data.installationId,
-        accountLogin: data.accountLogin,
+        action: "store_installation",
       });
 
       // Check if installation already exists
@@ -299,7 +458,7 @@ export class GitHubAppService {
         );
 
       if (existing) {
-        console.log("[storeInstallation] Installation exists, updating...");
+        logger.info("Installation exists, updating", { userId: data.userId, action: "update_installation" });
         // Update existing installation
         const [updated] = await db
           .update(githubAppInstallation)
@@ -311,11 +470,10 @@ export class GitHubAppService {
           .where(eq(githubAppInstallation.id, existing.id))
           .returning();
 
-        console.log("[storeInstallation] Updated existing installation:", updated?.id);
         return updated!;
       }
 
-      console.log("[storeInstallation] Creating new installation...");
+      logger.info("Creating new GitHub installation", { userId: data.userId, action: "create_installation" });
       // Create new installation
       const [installation] = await db
         .insert(githubAppInstallation)
@@ -330,10 +488,7 @@ export class GitHubAppService {
         })
         .returning();
 
-      console.log("[storeInstallation] Created installation:", installation?.id);
-
       // Also create generic git integration record
-      console.log("[storeInstallation] Creating git integration record...");
       await db.insert(gitIntegration).values({
         userId: data.userId,
         provider: "github",
@@ -342,43 +497,82 @@ export class GitHubAppService {
         providerAccountId: data.accountId,
       });
 
-      console.log("[storeInstallation] Success!");
+      logger.info("Successfully stored GitHub installation", { userId: data.userId, action: "installation_stored" });
       return installation!;
     } catch (error) {
-      console.error("[storeInstallation] ERROR:", error);
-      if (error instanceof Error) {
-        console.error("[storeInstallation] Error message:", error.message);
-        console.error("[storeInstallation] Error stack:", error.stack);
-      }
+      logger.error("Failed to store GitHub installation", { userId: data.userId, action: "store_installation" }, error as Error);
       throw new Error("Failed to store GitHub App installation");
     }
   }
 
   /**
    * Remove GitHub App installation
+   * Also cleans up related workspace git configs by nullifying their gitIntegrationId
    */
   async removeInstallation(userId: string, installationId: string): Promise<void> {
     try {
-      await db
+      logger.info("Removing GitHub installation", { userId, action: "remove_installation" });
+      
+      // First, get the git integration record to mark it as inactive before deletion
+      const [gitIntegrationRecord] = await db
+        .select()
+        .from(gitIntegration)
+        .where(
+          and(
+            eq(gitIntegration.userId, userId),
+            eq(gitIntegration.providerInstallationId, installationId)
+          )
+        )
+        .limit(1);
+
+      if (gitIntegrationRecord) {
+        // Mark as inactive before deletion (for audit trail)
+        await db
+          .update(gitIntegration)
+          .set({ 
+            active: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(gitIntegration.id, gitIntegrationRecord.id));
+        
+        logger.info("Marked git integration as inactive", { userId, action: "deactivate_integration" });
+      }
+
+      // Delete GitHub App installation record
+      const deletedInstallation = await db
         .delete(githubAppInstallation)
         .where(
           and(
             eq(githubAppInstallation.userId, userId),
             eq(githubAppInstallation.installationId, installationId)
           )
-        );
+        )
+        .returning();
+      
+      logger.info(`Deleted ${deletedInstallation.length} GitHub installation record(s)`, { 
+        userId, 
+        action: "delete_installation" 
+      });
 
-      // Also remove generic git integration
-      await db
+      // Delete generic git integration record
+      const deletedIntegration = await db
         .delete(gitIntegration)
         .where(
           and(
             eq(gitIntegration.userId, userId),
             eq(gitIntegration.providerInstallationId, installationId)
           )
-        );
+        )
+        .returning();
+      
+      logger.info(`Deleted ${deletedIntegration.length} git integration record(s)`, { 
+        userId, 
+        action: "delete_integration" 
+      });
+      
+      logger.info("Successfully removed GitHub installation", { userId, action: "installation_removed" });
     } catch (error) {
-      console.error("Failed to remove installation:", error);
+      logger.error("Failed to remove GitHub installation", { userId, action: "remove_installation" }, error as Error);
       throw new Error("Failed to remove GitHub App installation");
     }
   }
