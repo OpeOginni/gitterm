@@ -77,8 +77,10 @@ export const proxyResolverRouter = async (c: Context) => {
 		  return c.text('Internal Server Error', 500);
 		}
 	
+        const backendUrl = new URL(ws.backendUrl);
 		return c.text('OK', 200, {
-		  'X-Container-Path': ws.backendUrl,
+		  'X-Container-Host': backendUrl.hostname,
+          'X-Container-Port': backendUrl.port,
 		  'X-User-ID': session.user.id,
 		});
 		
