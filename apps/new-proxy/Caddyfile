@@ -7,11 +7,6 @@
 	servers {
 		protocols h1 h2
 	}
-	
-	# Enable debug logging to see what's happening
-	log {
-		level DEBUG
-	}
 }
 
 # Listen on port 80 for all requests
@@ -24,7 +19,7 @@
 
 	# Main proxy handler  
 	handle {
-		# Forward auth to API server
+		# Forward auth to API server (validates workspace exists and user has access)
 		forward_auth server.railway.internal:8080 {
 			uri /internal/proxy-resolve
 			
@@ -36,16 +31,15 @@
 			header_up X-Original-URI {uri}
 			header_up X-Original-Method {method}
 			header_up X-Forwarded-For {remote_ip}
-			
-			# Copy the upstream URL from auth response
-			copy_headers {
-				X-Upstream-URL>upstream_url
-			}
 		}
 
-		# Reverse proxy to the dynamically resolved upstream
-		# Use the upstream_url placeholder set by forward_auth
-		reverse_proxy {http.reverse_proxy.header.upstream_url} {
+		# Extract subdomain using header_regexp
+		# Example: ws-9ac6fbd9.gitterm.dev -> capture "ws-9ac6fbd9"
+		@workspace header_regexp subdomain Host ^([^.]+)\.gitterm\.dev$
+
+		# Reverse proxy to the workspace container
+		# Construct upstream from captured subdomain: {http.regexp.subdomain.1}.railway.internal:7681
+		reverse_proxy @workspace http://{http.regexp.subdomain.1}.railway.internal:7681 {
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}

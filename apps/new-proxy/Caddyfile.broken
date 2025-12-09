@@ -1,0 +1,80 @@
+{
+	# Global options
+	auto_https off
+	admin off
+	
+	# Server options
+	servers {
+		protocols h1 h2
+	}
+}
+
+# Listen on port 80 for all requests
+:80 {
+	# Enable logging
+	log {
+		output stderr
+		format console
+		level INFO
+	}
+
+	# Health check endpoint
+	handle /health {
+		header Content-Type application/json
+		respond `{"status":"UP"}` 200
+	}
+
+	# Main proxy handler
+	handle {
+		# Step 1: Make subrequest to get container info
+		reverse_proxy @auth server.railway.internal:8080 {
+			# Only use this for auth check path
+			@auth path /auth-internal-check
+			
+			rewrite @auth /internal/proxy-resolve
+			
+			header_up Host {host}
+			header_up X-Internal-Key "EdBY7UDhP-bVJbAns_E9yiFbx_B!tg_"
+			header_up Cookie {header.Cookie}
+			header_up Authorization {header.Authorization}
+			header_up X-Original-URI {uri}
+			header_up X-Original-Method {method}
+			header_up X-Forwarded-For {remote_ip}
+			
+			# Handle the auth response
+			@success status 2xx
+			@unauthorized status 401
+			@forbidden status 403  
+			@notfound status 404
+			
+			handle_response @success {
+				# Problem: We can't extract headers and use them for dynamic proxy
+				# Caddy doesn't support this workflow natively
+				
+				# We need to use a different architecture
+				respond "Auth succeeded but dynamic routing not supported" 500
+			}
+			
+			handle_response @unauthorized {
+				header Content-Type application/json
+				respond `{"error": "Unauthorized"}` 401
+			}
+			
+			handle_response @forbidden {
+				header Content-Type application/json
+				respond `{"error": "Forbidden"}` 403
+			}
+			
+			handle_response @notfound {
+				header Content-Type application/json
+				respond `{"error": "Workspace not found"}` 404
+			}
+		}
+	}
+
+	# Error handling
+	handle_errors {
+		header Content-Type application/json
+		respond `{"error": "Internal Server Error"}` {err.status_code}
+	}
+}
