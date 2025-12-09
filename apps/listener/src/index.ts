@@ -13,6 +13,7 @@ app.use(logger());
 console.log("Environment check:");
 console.log("BASE_DOMAIN:", process.env.BASE_DOMAIN);
 console.log("CORS_ORIGIN:", process.env.CORS_ORIGIN);
+
 console.log("NODE_ENV:", process.env.NODE_ENV);
 
 app.use("/*", cors({
