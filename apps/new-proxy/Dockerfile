@@ -1,16 +1,12 @@
 FROM nginx:alpine
 
-COPY ./apps/new-proxy/nginx.conf.template /etc/nginx/conf.d/default.conf.template
-
-COPY ./apps/new-proxy/docker-entrypoint.sh /docker-entrypoint.sh
-ENTRYPOINT ["/docker-entrypoint.sh"]
-
-# Switch to non-root user
-USER nginx
+# Copy nginx template to the templates directory
+# The nginx entrypoint will automatically process templates with envsubst (nginx 1.19+)
+COPY ./apps/new-proxy/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Expose port
 EXPOSE 80
 
-# Start nginx with the pre-substituted config
-CMD ["nginx", "-g", "daemon off;"]
+# Use nginx's built-in entrypoint which automatically handles envsubst
+# No need for custom entrypoint - it processes /etc/nginx/templates/*.template files
 
