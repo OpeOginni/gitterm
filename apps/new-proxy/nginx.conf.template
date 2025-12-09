@@ -1,3 +1,7 @@
+user nginx;
+worker_processes auto;
+pid /var/run/nginx.pid;
+
 events {
     worker_connections 1024;
 }
@@ -83,3 +87,5 @@ http {
         }
     }
 }
+
+listen 80;
