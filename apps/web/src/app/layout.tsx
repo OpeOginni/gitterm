@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "gitpad",
-	description: "gitpad",
+	title: "Gitterm",
+	description: "Deploy remote development environments in seconds.",
 };
 
 export default function RootLayout({
