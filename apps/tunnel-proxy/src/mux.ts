@@ -5,6 +5,7 @@ export interface PendingStreamResponse {
 	controller?: ReadableStreamDefaultController<Uint8Array>;
 	stream: ReadableStream<Uint8Array>;
 	resolved: boolean;
+	bufferedChunks: Array<{ chunk: Uint8Array; final: boolean }>;
 }
 
 // Request/response correlator with streaming body support.
@@ -24,13 +25,26 @@ export class Multiplexer {
 				reject(new Error("tunnel response timeout"));
 			}, timeoutMs);
 
+			// Create stream - the start callback will update the entry's controller
 			const stream = new ReadableStream<Uint8Array>({
 				start: (controller) => {
-					// Update the entry with the controller after it's been added to the map
+					console.log("[MUX] ReadableStream.start - controller initialized:", { id });
 					const entry = this.pending.get(id);
 					if (entry) {
-						console.log("[MUX] ReadableStream.start - setting controller:", { id });
 						entry.controller = controller;
+						console.log("[MUX] ReadableStream.start - controller assigned, flushing buffer:", { 
+							id, 
+							bufferedCount: entry.bufferedChunks.length 
+						});
+						// Flush any buffered chunks
+						for (const { chunk, final } of entry.bufferedChunks) {
+							if (chunk.byteLength > 0) controller.enqueue(chunk);
+							if (final) {
+								controller.close();
+								this.pending.delete(id);
+							}
+						}
+						entry.bufferedChunks = [];
 					}
 				},
 				cancel: () => {
@@ -43,11 +57,13 @@ export class Multiplexer {
 				resolve,
 				reject,
 				timer,
-				controller: undefined,
+				controller: undefined, // Will be set by start() callback
 				stream,
 				resolved: false,
+				bufferedChunks: [],
 			};
 
+			console.log("[MUX] register - entry created:", { id });
 			this.pending.set(id, entry);
 		});
 	}
@@ -67,10 +83,15 @@ export class Multiplexer {
 			console.log("[MUX] pushData - entry not found or not resolved:", { id, hasEntry: !!entry, resolved: entry?.resolved });
 			return;
 		}
+		
+		// If controller not ready yet, buffer the chunk
 		if (!entry.controller) {
-			console.log("[MUX] pushData - controller not initialized yet:", { id });
+			console.log("[MUX] pushData - controller not ready, buffering chunk:", { id, chunkSize: chunk.byteLength, final });
+			entry.bufferedChunks.push({ chunk, final });
 			return;
 		}
+		
+		// Controller is ready, enqueue directly
 		console.log("[MUX] pushData - enqueueing chunk:", { id, chunkSize: chunk.byteLength, final });
 		if (chunk.byteLength > 0) entry.controller.enqueue(chunk);
 		if (final) {
