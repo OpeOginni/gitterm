@@ -1,6 +1,12 @@
-import "dotenv/config";
+#!/usr/bin/env bun
 import { z } from "zod";
 import { mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+
+// Default production URLs
+const DEFAULT_WS_URL = "wss://tunnel.gitterm.dev/tunnel/connect";
+const DEFAULT_SERVER_URL = "https://api.gitterm.dev";
 
 const usage = `@gitterm/agent
 
@@ -13,30 +19,32 @@ Commands:
   login           Sign in via device-code flow
   logout          Clear saved credentials
   connect         Connect a local port (and optional services)
-  opencode        Alias for connect; intended for OpenCode + ttyd/gotty workflows
-  opencode-web    Alias for connect; intended for OpenCode web
-  opencode-server Alias for connect; intended for OpenCode server
   help            Show this help
 
 Login options:
-  --server-url <url>      Server base URL (https)
+  --server-url <url>      Server base URL (default: ${DEFAULT_SERVER_URL})
 
 Connect options:
-  --ws-url <url>          Tunnel-proxy WS URL (ws/wss)
+  --workspace-id <id>     Workspace ID (required)
+  --port <number>         Primary local port to expose (required)
+  --ws-url <url>          Tunnel-proxy WS URL (default: ${DEFAULT_WS_URL})
+  --server-url <url>      Server base URL (default: ${DEFAULT_SERVER_URL})
   --token <jwt>           Tunnel JWT (overrides saved login)
-  --workspace-id <id>     Workspace id (prompts for port if first-time)
-  --server-url <url>      Server base URL (https)
-  --port <number>         Primary local port to expose (root)
   --expose <name=port>    Expose additional service port (repeatable)
 
 Examples:
-  npx @gitterm/agent login --server-url https://api.gitterm.dev
-  npx @gitterm/agent connect --workspace-id "$WORKSPACE_ID" --server-url https://api.gitterm.dev --ws-url wss://tunnel.gitterm.dev/tunnel/connect
-  npx @gitterm/agent connect --ws-url wss://tunnel.gitterm.dev/tunnel/connect --token "$TUNNEL_TOKEN" --port 7681 --expose api=3001 --expose web=5173
+  # First time: login to gitterm
+  npx @gitterm/agent login
+
+  # Connect a local server to your workspace
+  npx @gitterm/agent connect --workspace-id "ws_abc123" --port 3000
+
+  # Expose multiple ports
+  npx @gitterm/agent connect --workspace-id "ws_abc123" --port 3000 --expose api=3001
 
 Notes:
   - This tool does not start servers for you.
-  - If you want a terminal UI, run ttyd or gotty yourself and expose that port.
+  - Run your local server first, then connect it to gitterm.
 `;
 
 const frameSchema = z.object({
@@ -99,15 +107,12 @@ type AgentConfig = {
 };
 
 function getConfigPath(): string {
-	const home = process.env.HOME;
-	if (!home) throw new Error("HOME is not set");
-	return `${home}/.config/gitterm/agent.json`;
+	return join(homedir(), ".config", "gitterm", "agent.json");
 }
 
 async function ensureConfigDir() {
-	const path = getConfigPath();
-	const dir = path.split("/").slice(0, -1).join("/");
-	await mkdir(dir, { recursive: true });
+	const configPath = getConfigPath();
+	await mkdir(dirname(configPath), { recursive: true });
 }
 
 async function loadConfig(): Promise<AgentConfig | null> {
@@ -143,9 +148,10 @@ function sleep(ms: number) {
 }
 
 async function runLogin(rawArgs: string[]) {
-	const serverUrl = getFlag(rawArgs, "--server-url") ?? process.env.GITTERM_SERVER_URL ?? process.env.NEXT_PUBLIC_SERVER_URL;
-	if (!serverUrl) throw new Error("Missing --server-url (or GITTERM_SERVER_URL)");
+	const serverUrl = getFlag(rawArgs, "--server-url") ?? DEFAULT_SERVER_URL;
 
+	console.log(`Logging in to ${serverUrl}...`);
+	
 	const codeRes = await fetch(new URL("/api/device/code", serverUrl), {
 		method: "POST",
 		headers: { "content-type": "application/json" },
@@ -263,25 +269,22 @@ function prompt(question: string): Promise<string> {
 }
 
 async function runConnect(rawArgs: string[]) {
-	const wsUrl = getFlag(rawArgs, "--ws-url") ?? process.env.TUNNEL_PROXY_WS_URL;
-	const portStr = getFlag(rawArgs, "--port") ?? process.env.TUNNEL_PRIMARY_PORT;
-	const targetBase = process.env.TARGET_BASE_URL ?? "http://localhost";
+	const wsUrl = getFlag(rawArgs, "--ws-url") ?? DEFAULT_WS_URL;
+	const portStr = getFlag(rawArgs, "--port");
+	const targetBase = "http://localhost";
 
-	const tokenFromFlag = getFlag(rawArgs, "--token") ?? process.env.TUNNEL_TOKEN;
-	const workspaceId = getFlag(rawArgs, "--workspace-id") ?? process.env.GITTERM_WORKSPACE_ID;
-	const serverUrl = getFlag(rawArgs, "--server-url") ?? process.env.GITTERM_SERVER_URL ?? process.env.NEXT_PUBLIC_SERVER_URL;
-
-	if (!wsUrl) throw new Error("Missing --ws-url (or TUNNEL_PROXY_WS_URL)");
+	const tokenFromFlag = getFlag(rawArgs, "--token");
+	const workspaceId = getFlag(rawArgs, "--workspace-id");
+	const serverUrl = getFlag(rawArgs, "--server-url") ?? DEFAULT_SERVER_URL;
 
 	let token = tokenFromFlag;
 	let primaryPort: number;
 
 	if (!token) {
-		if (!workspaceId) throw new Error("Missing --workspace-id when --token not provided");
+		if (!workspaceId) throw new Error("Missing --workspace-id");
 		const config = await loadConfig();
 		if (!config?.agentToken) throw new Error("Not logged in. Run: npx @gitterm/agent login");
-		const effectiveServerUrl = serverUrl ?? config.serverUrl;
-		if (!effectiveServerUrl) throw new Error("Missing --server-url (or saved config)");
+		const effectiveServerUrl = serverUrl;
 
 		// Prompt for port if not provided
 		if (!portStr) {
@@ -293,7 +296,6 @@ async function runConnect(rawArgs: string[]) {
 			}
 			primaryPort = parsedPort;
 
-			// TODO: prompt for additional service ports if needed
 			const exposedPorts: Record<string, { port: number; description?: string }> = {};
 
 			await updateWorkspacePorts({
@@ -311,7 +313,7 @@ async function runConnect(rawArgs: string[]) {
 
 		token = await mintTunnelToken({ serverUrl: effectiveServerUrl, agentToken: config.agentToken, workspaceId });
 	} else {
-		if (!portStr) throw new Error("Missing --port (or TUNNEL_PRIMARY_PORT)");
+		if (!portStr) throw new Error("Missing --port");
 		primaryPort = Number.parseInt(portStr, 10);
 		if (!Number.isFinite(primaryPort) || primaryPort <= 0) throw new Error("Invalid --port");
 	}
@@ -588,7 +590,7 @@ async function main() {
 		return;
 	}
 
-	if (command === "connect" || command === "opencode" || command === "opencode-web" || command === "opencode-server") {
+	if (command === "connect") {
 		await runConnect(args.slice(1));
 		return;
 	}
