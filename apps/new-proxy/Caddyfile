@@ -57,42 +57,39 @@
 		@local_tunnel header X-Tunnel-Type local
 		@workspace header_regexp subdomain Host ^([^.]+)\.gitterm\.dev$
 
-		# Local tunnels: Handle FIRST (order matters!)
-		handle @local_tunnel {
-			reverse_proxy tunnel-proxy.railway.internal:9000 {
-				# WebSocket support
-				header_up Upgrade {header.Upgrade}
-				header_up Connection {header.Connection}
-				header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-				header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-				header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-				header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+		# Local tunnels: route to tunnel-proxy
+		reverse_proxy @local_tunnel tunnel-proxy.railway.internal:9000 {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 
-				# Standard proxy headers
-				header_up Host {host}
-				header_up X-Real-IP {remote_ip}
-				header_up X-Forwarded-For {remote_ip}
-				header_up X-User-Agent {header.User-Agent}
-				header_up Cookie {header.Cookie}
-				header_up X-Subdomain {header.X-Subdomain}
-				header_up X-Tunnel-Type {header.X-Tunnel-Type}
+			# Standard proxy headers
+			header_up Host {host}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up X-User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+			header_up X-Subdomain {header.X-Subdomain}
+			header_up X-Tunnel-Type {header.X-Tunnel-Type}
 
-				transport http {
-					compression off
-					dial_timeout 10s
-					response_header_timeout 0
-					expect_continue_timeout 0
-					keepalive 2m
-					keepalive_idle_conns 10
-					read_buffer 32768
-					write_buffer 32768
-				}
+			transport http {
+				compression off
+				dial_timeout 10s
+				response_header_timeout 0
+				expect_continue_timeout 0
+				keepalive 2m
+				keepalive_idle_conns 10
+				read_buffer 32768
+				write_buffer 32768
 			}
 		}
 
-		# Cloud workspaces: Handle SECOND
-		handle @workspace {
-			reverse_proxy {http.regexp.subdomain.1}.railway.internal:7681 {
+		# Cloud workspaces: route to containers
+		reverse_proxy @workspace {http.regexp.subdomain.1}.railway.internal:7681 {
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
