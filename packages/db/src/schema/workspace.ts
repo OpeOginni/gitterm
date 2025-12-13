@@ -20,7 +20,7 @@ export const workspace = pgTable("workspace", {
 	regionId: uuid("region_id").notNull().references(() => region.id, { onDelete: "cascade" }),
     repositoryUrl: text("repository_url"),
     domain: text("domain").notNull(), // Full domain: ws-123.gitterm.dev
-    subdomain: text("subdomain").unique(), // ws-123
+    subdomain: text("subdomain"), // ws-123
     backendUrl: text("backend_url"), // Internal URL
     status: workspaceStatusEnum("status").notNull(),
 	persistent: boolean("persistent").notNull().default(false),
