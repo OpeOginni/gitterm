@@ -64,8 +64,19 @@ export function CreateInstanceDialog() {
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
   const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
 
+  // Memoized values
+  const localProvider = useMemo(() => {
+    return cloudProvidersData?.cloudProviders?.find(
+      (cloud) => cloud.name.toLowerCase() === "local"
+    );
+  }, [cloudProvidersData]);
 
-  // Derive available regions from selected cloud provider
+  const cloudProviders = useMemo(() => {
+    return cloudProvidersData?.cloudProviders?.filter(
+      (cloud) => cloud.name.toLowerCase() !== "local"
+    ) ?? [];
+  }, [cloudProvidersData]);
+
   const availableRegions = useMemo(() => {
     if (!selectedCloudProviderId || !cloudProvidersData?.cloudProviders) {
       return [];
@@ -76,43 +87,56 @@ export function CreateInstanceDialog() {
     return selectedCloud?.regions ?? [];
   }, [selectedCloudProviderId, cloudProvidersData]);
 
-  // Set defaults when data loads
+  // Initialize agent type when data loads
   useEffect(() => {
-    if (agentTypesData?.agentTypes?.[0] && !selectedAgentTypeId) {
+    if (!selectedAgentTypeId && agentTypesData?.agentTypes?.[0]) {
       setSelectedAgentTypeId(agentTypesData.agentTypes[0].id);
     }
   }, [agentTypesData, selectedAgentTypeId]);
 
+  // Handle workspace type changes
   useEffect(() => {
-    if (cloudProvidersData?.cloudProviders?.[0] && !selectedCloudProviderId) {
-      setSelectedCloudProviderId(cloudProvidersData.cloudProviders[0].id);
-    }
-  }, [cloudProvidersData, selectedCloudProviderId]);
-
-  // Set default region when cloud provider changes
-  useEffect(() => {
-    if (availableRegions.length > 0) {
-      // Only set default if no region is selected or selected region is not in available regions
-      if (!selectedRegion || !availableRegions.some(reg => reg.id === selectedRegion)) {
-        setSelectedRegion(availableRegions[0].id);
-      }
-    } else {
-      setSelectedRegion(undefined);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableRegions]); // Only react to availableRegions changes (cloud provider changes)
-
-  // Auto-select Local provider when workspace type is local
-  useEffect(() => {
-    if (workspaceType === "local" && cloudProvidersData?.cloudProviders) {
-      const localProvider = cloudProvidersData.cloudProviders.find(
-        (cloud) => cloud.name.toLowerCase() === "local"
-      );
-      if (localProvider) {
+    if (workspaceType === "local" && localProvider) {
+      // For local: auto-select local provider and its first region
+      if (localProvider.id !== selectedCloudProviderId) {
         setSelectedCloudProviderId(localProvider.id);
+        setSelectedRegion(localProvider.regions?.[0]?.id);
+      }
+    } else if (workspaceType === "cloud" && localProvider) {
+      // Switching back to cloud: if currently on local provider, switch to first cloud provider
+      if (selectedCloudProviderId === localProvider.id && cloudProviders[0]) {
+        setSelectedCloudProviderId(cloudProviders[0].id);
       }
     }
-  }, [workspaceType, cloudProvidersData]); 
+  }, [workspaceType, localProvider, selectedCloudProviderId, cloudProviders]);
+
+  // Initialize cloud provider for cloud workspaces
+  useEffect(() => {
+    if (workspaceType === "cloud" && !selectedCloudProviderId && cloudProviders[0]) {
+      setSelectedCloudProviderId(cloudProviders[0].id);
+    }
+  }, [workspaceType, cloudProviders, selectedCloudProviderId]);
+
+  // Update region when available regions change
+  useEffect(() => {
+    if (workspaceType === "cloud") {
+      if (availableRegions.length > 0) {
+        if (!selectedRegion || !availableRegions.some(reg => reg.id === selectedRegion)) {
+          setSelectedRegion(availableRegions[0].id);
+        }
+      } else {
+        setSelectedRegion(undefined);
+      }
+    }
+  }, [workspaceType, availableRegions, selectedRegion]);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setCliCommand(null);
+      // Don't reset other fields to allow quick reopening with same values
+    }
+  }, [open]); 
 
   const subscribeToWorkspaceStatus = async (workspaceId: string, userId: string) => {
     return new Promise<void>((resolve, reject) => {
@@ -172,8 +196,7 @@ export function CreateInstanceDialog() {
         toast.error("Please select an agent type.");
         return;
       }
-      // selectedCloudProviderId and selectedRegion are auto-set by useEffect
-      if (!selectedCloudProviderId || !selectedRegion) {
+      if (!localProvider || !selectedRegion) {
         toast.error("Local provider not available. Please try again.");
         return;
       }
@@ -182,7 +205,7 @@ export function CreateInstanceDialog() {
         subdomain: localSubdomain,
         name: localName || undefined,
         agentTypeId: selectedAgentTypeId,
-        cloudProviderId: selectedCloudProviderId,
+        cloudProviderId: localProvider.id,
         regionId: selectedRegion,
         persistent: false,
       });
@@ -365,8 +388,8 @@ export function CreateInstanceDialog() {
                           <SelectValue placeholder="Select cloud" />
                         </SelectTrigger>
                         <SelectContent>
-                          {cloudProvidersData?.cloudProviders && cloudProvidersData.cloudProviders.length > 0 ? (
-                            cloudProvidersData?.cloudProviders?.map((cloud) => (
+                          {cloudProviders.length > 0 ? (
+                            cloudProviders.map((cloud) => (
                               <SelectItem key={cloud.id} value={cloud.id}>
                                 <div className="flex items-center">
                                   <Image 
