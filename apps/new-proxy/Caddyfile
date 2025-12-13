@@ -53,10 +53,16 @@
 			header_up X-Forwarded-For {remote_ip}
 		}
 
+		# Define matchers
+		@local_tunnel {
+			header X-Tunnel-Type local
+		}
+		@workspace {
+			header_regexp subdomain Host ^([^.]+)\.gitterm\.dev$
+		}
+
 		# Local tunnels: route to tunnel-proxy (MUST be first!)
 		reverse_proxy @local_tunnel tunnel-proxy.railway.internal:9000 {
-			@local_tunnel header X-Tunnel-Type local
-			
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
@@ -88,8 +94,6 @@
 
 		# Cloud workspaces: route to containers
 		reverse_proxy @workspace {http.regexp.subdomain.1}.railway.internal:7681 {
-			@workspace header_regexp subdomain Host ^([^.]+)\.gitterm\.dev$
-			
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
