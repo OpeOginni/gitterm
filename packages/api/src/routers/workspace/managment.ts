@@ -1243,7 +1243,7 @@ export const workspaceRouter = router({
         if (isLocal) {
           const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || process.env.WORKSPACE_API_URL || "https://api.gitterm.dev";
           const wsUrl = process.env.TUNNEL_PROXY_WS_URL || "wss://tunnel.gitterm.dev/tunnel/connect";
-          command = `npx @gitterm/agent connect --workspace-id ${workspaceId} --server-url ${serverUrl} --ws-url ${wsUrl}`;
+          command = `npx @opeoginni/gitterm-agent connect --workspace-id ${workspaceId}`;
         }
 
         return {

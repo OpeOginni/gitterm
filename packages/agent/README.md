@@ -1,4 +1,4 @@
-# @gitterm/agent
+# @opeoginni/gitterm-agent
 
 A lightweight tunnel agent that securely exposes **local development ports** through your **gitterm.dev** workspace URL.
 
@@ -6,10 +6,10 @@ A lightweight tunnel agent that securely exposes **local development ports** thr
 
 ```bash
 # Run directly with npx (recommended)
-npx @gitterm/agent
+npx @opeoginni/gitterm-agent
 
 # Or install globally
-npm install -g @gitterm/agent
+npm install -g @opeoginni/gitterm-agent
 ```
 
 ## Quick Start
@@ -17,7 +17,7 @@ npm install -g @gitterm/agent
 ### 1. Login to GitTerm
 
 ```bash
-npx @gitterm/agent login
+npx @opeoginni/gitterm-agent login
 ```
 
 This will open a browser for authentication. Once logged in, your credentials are saved locally.
@@ -29,7 +29,7 @@ This will open a browser for authentication. Once logged in, your credentials ar
 opencode serve --port 3000  # or whatever starts your server on port 3000
 
 # Then connect it to your gitterm workspace
-npx @gitterm/agent connect --workspace-id "your-workspace-id" --port 3000
+npx @opeoginni/gitterm-agent connect --workspace-id "your-workspace-id" --port 3000
 ```
 
 That's it! Your local server is now accessible at `https://your-subdomain.gitterm.dev`.
@@ -41,7 +41,7 @@ That's it! Your local server is now accessible at `https://your-subdomain.gitter
 Sign in via device-code flow.
 
 ```bash
-npx @gitterm/agent login
+npx @opeoginni/gitterm-agent login
 ```
 
 ### `logout`
@@ -49,7 +49,7 @@ npx @gitterm/agent login
 Clear saved credentials.
 
 ```bash
-npx @gitterm/agent logout
+npx @opeoginni/gitterm-agent logout
 ```
 
 ### `connect`
@@ -57,7 +57,7 @@ npx @gitterm/agent logout
 Connect a local port to your gitterm workspace.
 
 ```bash
-npx @gitterm/agent connect --workspace-id <id> --port <number>
+npx @opeoginni/gitterm-agent connect --workspace-id <id> --port <number>
 ```
 
 **Required options:**
@@ -76,7 +76,7 @@ npx @gitterm/agent connect --workspace-id <id> --port <number>
 
 ```bash
 # Expose a local dev server
-npx @gitterm/agent connect --workspace-id "ws_abc123" --port 3000
+npx @opeoginni/gitterm-agent connect --workspace-id "ws_abc123" --port 3000
 ```
 
 ### Multiple Ports
@@ -84,7 +84,7 @@ npx @gitterm/agent connect --workspace-id "ws_abc123" --port 3000
 Expose additional services as subdomains:
 
 ```bash
-npx @gitterm/agent connect \
+npx @opeoginni/gitterm-agent connect \
   --workspace-id "ws_abc123" \
   --port 3000 \
   --expose api=3001 \
