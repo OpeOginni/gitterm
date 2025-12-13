@@ -16,19 +16,24 @@ function extractSubdomain(host: string): string {
   }
 
 export const proxyResolverRouter = async (c: Context) => {
-	console.log('Proxy resolve request received');
+	console.log('[PROXY-RESOLVE] Request received');
 	try {
         const internalKey = c.req.header('X-Internal-Key') || '';
         if (!internalKey) {
+			console.log('[PROXY-RESOLVE] Missing internal key');
             return c.text('Unauthorized', 401);
         }
         if (internalKey !== process.env.INTERNAL_API_KEY) {
+			console.log('[PROXY-RESOLVE] Invalid internal key');
             return c.text('Unauthorized', 401);
         }
 		const host = c.req.header('Host') || '';
 		const subdomain = extractSubdomain(host);
 		
+		console.log('[PROXY-RESOLVE] Extracted subdomain:', { host, subdomain });
+		
 		if (!subdomain) {
+			console.log('[PROXY-RESOLVE] No subdomain found');
 		  return c.text('Bad Request', 400);
 		}
 	
@@ -46,20 +51,34 @@ export const proxyResolverRouter = async (c: Context) => {
 		  .limit(1);
 	
 		if (!ws) {
-            console.log('Looking for subdomain:', subdomain);
-            console.log('Workspace not found');
+            console.log('[PROXY-RESOLVE] Workspace not found for subdomain:', subdomain);
 		  return c.text('Not Found', 404);
 		}
+		
+		console.log('[PROXY-RESOLVE] Workspace found:', { 
+			id: ws.id, 
+			subdomain: ws.subdomain, 
+			tunnelType: ws.tunnelType,
+			status: ws.status,
+			userId: ws.userId
+		});
 	
 		// Local tunnels: route via tunnel-proxy (still requires auth)
 		if (ws.tunnelType === "local") {
 			if (!session) {
+				console.log('[PROXY-RESOLVE] Local tunnel requires auth - no session');
 				return c.text("Unauthorized", 401);
 			}
 			if (ws.userId !== session.user?.id) {
+				console.log('[PROXY-RESOLVE] Local tunnel - user mismatch');
 				return c.text("Forbidden", 403);
 			}
 
+			console.log('[PROXY-RESOLVE] Local tunnel authorized:', { 
+				subdomain: ws.subdomain,
+				workspaceId: ws.id,
+				userId: session.user.id
+			});
 			return c.text("OK", 200, {
 				"X-Tunnel-Type": "local",
 				"X-Workspace-ID": ws.id,

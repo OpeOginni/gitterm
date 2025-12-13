@@ -53,44 +53,46 @@
 			header_up X-Forwarded-For {remote_ip}
 		}
 
-		# Extract subdomain using header_regexp
-		# Example: ws-9ac6fbd9.gitterm.dev -> capture "ws-9ac6fbd9"
+		# Define matchers
+		@local_tunnel header X-Tunnel-Type local
 		@workspace header_regexp subdomain Host ^([^.]+)\.gitterm\.dev$
 
-		# Local tunnels route through tunnel-proxy
-		@local_tunnel header X-Tunnel-Type local
-		reverse_proxy @local_tunnel tunnel-proxy.railway.internal:9000 {
-			# WebSocket support
-			header_up Upgrade {header.Upgrade}
-			header_up Connection {header.Connection}
-			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+		# Local tunnels: Handle FIRST (order matters!)
+		handle @local_tunnel {
+			reverse_proxy tunnel-proxy.railway.internal:9000 {
+				# WebSocket support
+				header_up Upgrade {header.Upgrade}
+				header_up Connection {header.Connection}
+				header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+				header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+				header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+				header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 
-			# Standard proxy headers
-			header_up Host {host}
-			header_up X-Real-IP {remote_ip}
-			header_up X-Forwarded-For {remote_ip}
-			header_up User-Agent {header.User-Agent}
-			header_up Cookie {header.Cookie}
+				# Standard proxy headers
+				header_up Host {host}
+				header_up X-Real-IP {remote_ip}
+				header_up X-Forwarded-For {remote_ip}
+				header_up X-User-Agent {header.User-Agent}
+				header_up Cookie {header.Cookie}
+				header_up X-Subdomain {header.X-Subdomain}
+				header_up X-Tunnel-Type {header.X-Tunnel-Type}
 
-			transport http {
-				compression off
-				dial_timeout 10s
-				response_header_timeout 0
-				expect_continue_timeout 0
-				keepalive 2m
-				keepalive_idle_conns 10
-				read_buffer 32768
-				write_buffer 32768
+				transport http {
+					compression off
+					dial_timeout 10s
+					response_header_timeout 0
+					expect_continue_timeout 0
+					keepalive 2m
+					keepalive_idle_conns 10
+					read_buffer 32768
+					write_buffer 32768
+				}
 			}
 		}
 
-		# Reverse proxy to the workspace container
-		# Construct upstream from captured subdomain: {http.regexp.subdomain.1}.railway.internal:7681
-		# Note: Don't include http:// scheme when using placeholders
-		reverse_proxy @workspace {http.regexp.subdomain.1}.railway.internal:7681 {
+		# Cloud workspaces: Handle SECOND
+		handle @workspace {
+			reverse_proxy {http.regexp.subdomain.1}.railway.internal:7681 {
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
