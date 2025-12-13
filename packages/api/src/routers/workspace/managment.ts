@@ -1082,7 +1082,7 @@ export const workspaceRouter = router({
           const [existing] = await db
             .select()
             .from(workspace)
-            .where(eq(workspace.subdomain, input.subdomain))
+            .where(and(eq(workspace.subdomain, input.subdomain),or(eq(workspace.status, "running"), eq(workspace.status, "pending"))))
             .limit(1);
 
           if (existing) {
