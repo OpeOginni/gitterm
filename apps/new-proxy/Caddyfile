@@ -62,7 +62,7 @@
 		}
 
 		# Local tunnels: route to tunnel-proxy (MUST be first!)
-		reverse_proxy @local_tunnel tunnel-proxy.railway.internal:8080 {
+		reverse_proxy @local_tunnel tunnel.railway.internal:8080 {
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
