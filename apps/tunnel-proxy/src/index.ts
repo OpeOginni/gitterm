@@ -33,6 +33,7 @@ app.get(
 
 		return {
 			onOpen: (_evt, ws) => {
+				console.log("[TUNNEL-PROXY] WebSocket connection opened");
 				// Tell agent to authenticate.
 				sendJson(ws, { type: "open", id: crypto.randomUUID(), timestamp: Date.now() });
 			},
@@ -51,7 +52,9 @@ app.get(
 
 				// First message must be auth.
 				if (!authedSubdomain) {
+					console.log("[TUNNEL-PROXY] Received auth attempt");
 					if (frame.type !== "auth" || !frame.token) {
+						console.log("[TUNNEL-PROXY] Auth failed: invalid frame");
 						sendJson(ws, {
 							type: "error",
 							id: crypto.randomUUID(),
@@ -71,12 +74,14 @@ app.get(
 						}
 						claims = { workspaceId: payload.workspaceId, userId: payload.userId, subdomain: payload.subdomain };
 						tokenPayload = payload;
-					} catch {
+					} catch (error) {
+						console.log("[TUNNEL-PROXY] Token verification failed:", error);
 						claims = null;
 						tokenPayload = null;
 					}
 
 					if (!claims?.workspaceId || !claims.userId || !claims.subdomain) {
+						console.log("[TUNNEL-PROXY] Auth failed: invalid claims");
 						sendJson(ws, {
 							type: "error",
 							id: crypto.randomUUID(),
@@ -93,6 +98,7 @@ app.get(
 
 					const primaryPort = allowlist.root;
 					if (!primaryPort || !requestedPrimaryPort || requestedPrimaryPort !== primaryPort) {
+						console.log("[TUNNEL-PROXY] Auth failed: primary port mismatch", { allowlist, requestedPrimaryPort });
 						sendJson(ws, {
 							type: "error",
 							id: crypto.randomUUID(),
@@ -113,6 +119,7 @@ app.get(
 					const allowlistedKeys = new Set(Object.keys(tokenServicePorts));
 					for (const requestedServiceName of Object.keys(requestedExposedPorts)) {
 						if (!allowlistedKeys.has(requestedServiceName)) {
+							console.log("[TUNNEL-PROXY] Auth failed: service not allowed", requestedServiceName);
 							sendJson(ws, {
 								type: "error",
 								id: crypto.randomUUID(),
@@ -123,6 +130,7 @@ app.get(
 							return;
 						}
 						if (requestedExposedPorts[requestedServiceName] !== tokenServicePorts[requestedServiceName]) {
+							console.log("[TUNNEL-PROXY] Auth failed: port mismatch for service", requestedServiceName);
 							sendJson(ws, {
 								type: "error",
 								id: crypto.randomUUID(),
@@ -135,6 +143,11 @@ app.get(
 					}
 
 					authedSubdomain = claims.subdomain;
+					console.log("[TUNNEL-PROXY] Agent authenticated successfully:", { 
+						subdomain: claims.subdomain, 
+						workspaceId: claims.workspaceId,
+						primaryPort 
+					});
 					await connectionManager.register({
 						subdomain: claims.subdomain,
 						workspaceId: claims.workspaceId,
@@ -164,6 +177,11 @@ app.get(
 				if (!agent) return;
 
 				if (frame.type === "response") {
+					console.log("[TUNNEL-PROXY] Received response frame from agent:", { 
+						requestId: frame.id, 
+						statusCode: frame.statusCode,
+						subdomain: authedSubdomain 
+					});
 					agent.mux.resolveResponse(frame.id, {
 						status: frame.statusCode ?? 502,
 						headers: frame.headers,
@@ -172,6 +190,12 @@ app.get(
 				}
 
 				if (frame.type === "data") {
+					console.log("[TUNNEL-PROXY] Received data frame from agent:", { 
+						requestId: frame.id, 
+						dataLength: frame.data?.length ?? 0,
+						final: frame.final,
+						subdomain: authedSubdomain 
+					});
 					const bytes = frame.data ? base64ToBytes(frame.data) : new Uint8Array();
 					agent.mux.pushData(frame.id, bytes, frame.final ?? false);
 				}
@@ -195,25 +219,50 @@ app.all("/*", async (c) => {
 
 	const host = c.req.header("host") || "";
 	const fullSubdomain = host.split(":")[0]?.split(".")[0] || "";
-	if (!fullSubdomain) return c.text("Bad Request", 400);
+	console.log("[TUNNEL-PROXY] Incoming HTTP request:", { 
+		host, 
+		fullSubdomain, 
+		path: c.req.path,
+		method: c.req.method,
+		headers: {
+			"x-subdomain": c.req.header("x-subdomain"),
+			"x-tunnel-type": c.req.header("x-tunnel-type"),
+			"x-workspace-id": c.req.header("x-workspace-id"),
+		}
+	});
+	
+	if (!fullSubdomain) {
+		console.log("[TUNNEL-PROXY] Bad request: no subdomain");
+		return c.text("Bad Request", 400);
+	}
 
 	// Optional header from Caddy forward_auth; helps prevent Host spoofing.
 	const expectedBase = c.req.header("x-subdomain") || "";
 
 	// Resolve which port is being requested (primary or service mapping).
 	const targetPort = await tunnelRepo.getServicePort(fullSubdomain);
-	if (!targetPort) return c.text("Tunnel Offline", 503);
+	console.log("[TUNNEL-PROXY] Port lookup:", { fullSubdomain, targetPort });
+	if (!targetPort) {
+		console.log("[TUNNEL-PROXY] 503 - No port mapping found in Redis");
+		return c.text("Tunnel Offline", 503);
+	}
 
 	// Resolve agent by base subdomain (service subdomains may contain dashes).
 	const baseSubdomain = (await tunnelRepo.getServiceBase(fullSubdomain)) ?? fullSubdomain;
+	console.log("[TUNNEL-PROXY] Subdomain resolution:", { fullSubdomain, baseSubdomain, expectedBase });
 
 	// If auth layer already resolved a workspace subdomain, enforce it.
 	if (expectedBase && expectedBase !== baseSubdomain) {
+		console.log("[TUNNEL-PROXY] Bad request: subdomain mismatch");
 		return c.text("Bad Request", 400);
 	}
 
 	const agent = connectionManager.get(baseSubdomain);
-	if (!agent) return c.text("Tunnel Offline", 503);
+	console.log("[TUNNEL-PROXY] Agent lookup:", { baseSubdomain, agentFound: !!agent });
+	if (!agent) {
+		console.log("[TUNNEL-PROXY] 503 - Agent not connected");
+		return c.text("Tunnel Offline", 503);
+	}
 
 	const requestId = agent.mux.createRequestId();
 	const url = new URL(c.req.url);
@@ -228,6 +277,12 @@ app.all("/*", async (c) => {
 		timestamp: Date.now(),
 	};
 
+	console.log("[TUNNEL-PROXY] Forwarding request to agent:", { 
+		requestId, 
+		method: c.req.method, 
+		path: requestFrame.path,
+		subdomain: baseSubdomain 
+	});
 	agent.ws.send(JSON.stringify(requestFrame));
 
 	// Stream request body to agent.
@@ -249,10 +304,13 @@ app.all("/*", async (c) => {
 	}
 	agent.ws.send(JSON.stringify({ type: "data", id: requestId, final: true, timestamp: Date.now() } satisfies TunnelFrame));
 
+	console.log("[TUNNEL-PROXY] Waiting for response from agent...", { requestId });
 	try {
 		const res = await agent.mux.register(requestId, 30_000);
+		console.log("[TUNNEL-PROXY] Response received from agent:", { requestId, status: res.status });
 		return res;
 	} catch (error) {
+		console.error("[TUNNEL-PROXY] Request timeout or error:", { requestId, error });
 		return c.json(
 			{
 				error: "tunnel_timeout",

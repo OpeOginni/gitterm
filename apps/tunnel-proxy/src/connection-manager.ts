@@ -45,6 +45,7 @@ export class ConnectionManager {
 		// Enforce single active connection per subdomain.
 		const existing = this.connections.get(params.subdomain);
 		if (existing) {
+			console.log("[CONNECTION-MANAGER] Replacing existing connection:", params.subdomain);
 			try {
 				existing.ws.close(1012, "Replaced by new connection");
 			} catch {
@@ -85,6 +86,12 @@ export class ConnectionManager {
 		}, this.pingIntervalMs);
 
 		this.connections.set(params.subdomain, agent);
+		console.log("[CONNECTION-MANAGER] Agent registered successfully:", { 
+			subdomain: params.subdomain,
+			primaryPort: params.primaryPort,
+			exposedPorts: params.exposedPorts,
+			totalConnections: this.connections.size
+		});
 
 		await this.tunnelRepo.registerConnection({
 			subdomain: params.subdomain,
@@ -94,6 +101,7 @@ export class ConnectionManager {
 			exposedPorts: params.exposedPorts,
 			instanceId: process.env.INSTANCE_ID || "unknown",
 		});
+		console.log("[CONNECTION-MANAGER] Redis registration complete:", params.subdomain);
 	}
 
 	async unregister(subdomain: string) {
