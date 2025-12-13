@@ -24,7 +24,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
-// WS endpoint for agents.
+// WS endpoint for agents..
 // Auth via first `auth` frame with tunnel JWT.
 app.get(
 	"/tunnel/connect",
