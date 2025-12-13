@@ -307,7 +307,13 @@ app.all("/*", async (c) => {
 	console.log("[TUNNEL-PROXY] Waiting for response from agent...", { requestId });
 	try {
 		const res = await agent.mux.register(requestId, 30_000);
-		console.log("[TUNNEL-PROXY] Response received from agent:", { requestId, status: res.status });
+		console.log("[TUNNEL-PROXY] Response received from agent:", { 
+			requestId, 
+			status: res.status,
+			headers: Object.fromEntries(res.headers.entries()),
+			bodyExists: !!res.body,
+			bodyUsed: res.bodyUsed
+		});
 		return res;
 	} catch (error) {
 		console.error("[TUNNEL-PROXY] Request timeout or error:", { requestId, error });
