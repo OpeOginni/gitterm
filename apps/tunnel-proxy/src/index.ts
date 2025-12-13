@@ -238,11 +238,33 @@ app.all("/*", async (c) => {
 
 	const requestId = agent.mux.createRequestId();
 	const url = new URL(c.req.url);
+	const requestPath = c.req.path + (url.search || "");
+	
+	// SSE deduplication: cancel any existing SSE connection for this subdomain+path
+	let sseKey: string | undefined;
+	if (agent.mux.shouldDedupeSSE(c.req.path)) {
+		sseKey = `${baseSubdomain}:${c.req.path}`;
+		const cancelledId = agent.mux.cancelExistingSSE(sseKey);
+		if (cancelledId) {
+			console.log("[TUNNEL-PROXY] Cancelled existing SSE connection:", { sseKey, cancelledId, newRequestId: requestId });
+			// Send close frame to agent for the old request
+			try {
+				agent.ws.send(JSON.stringify({ 
+					type: "close", 
+					id: cancelledId, 
+					timestamp: Date.now() 
+				} satisfies TunnelFrame));
+			} catch {
+				// ignore if websocket is closed
+			}
+		}
+	}
+	
 	const requestFrame: TunnelFrame = {
 		type: "request",
 		id: requestId,
 		method: c.req.method,
-		path: c.req.path + (url.search || ""),
+		path: requestPath,
 		headers: Object.fromEntries(c.req.raw.headers.entries()),
 		port: targetPort,
 		serviceName: fullSubdomain === baseSubdomain ? undefined : fullSubdomain.slice(baseSubdomain.length + 1),
@@ -264,7 +286,12 @@ app.all("/*", async (c) => {
 		} catch {
 			// ignore if websocket is closed
 		}
-	});
+	}, sseKey);
+	
+	// If this is an SSE connection, register it for tracking
+	if (sseKey) {
+		agent.mux.registerSSE(sseKey, requestId);
+	}
 
 	agent.ws.send(JSON.stringify(requestFrame));
 	console.log("[TUNNEL-PROXY] Request sent to agent:", { requestId, method: requestFrame.method, path: requestFrame.path });

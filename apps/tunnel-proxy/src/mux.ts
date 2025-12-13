@@ -7,17 +7,70 @@ export interface PendingStreamResponse {
 	resolved: boolean;
 	bufferedChunks: Array<{ chunk: Uint8Array; final: boolean }>;
 	onCancel?: () => void;
+	sseKey?: string; // For SSE deduplication tracking
+}
+
+// SSE endpoints that should be deduplicated (only one connection allowed at a time)
+const SSE_DEDUPE_PATHS = ["/global/event"];
+
+function isSSEDedupePath(path: string): boolean {
+	// Check if path matches any SSE dedupe pattern (ignoring query string)
+	const pathWithoutQuery = path.split("?")[0];
+	return SSE_DEDUPE_PATHS.some(p => pathWithoutQuery === p);
 }
 
 // Request/response correlator with streaming body support.
 export class Multiplexer {
 	private pending = new Map<string, PendingStreamResponse>();
+	// Track active SSE connections by key (for deduplication)
+	private activeSSE = new Map<string, string>(); // sseKey -> requestId
 
 	createRequestId(): string {
 		return crypto.randomUUID();
 	}
 
-	register(id: string, timeoutMs: number, onCancel?: () => void): Promise<Response> {
+	/**
+	 * Cancel any existing SSE connection for the given key.
+	 * Returns the cancelled request ID if one was found.
+	 */
+	cancelExistingSSE(sseKey: string): string | undefined {
+		const existingId = this.activeSSE.get(sseKey);
+		if (existingId) {
+			console.log("[MUX] Cancelling existing SSE connection:", { sseKey, existingId });
+			const entry = this.pending.get(existingId);
+			if (entry) {
+				clearTimeout(entry.timer);
+				// Close the stream gracefully
+				try {
+					entry.controller?.close();
+				} catch {
+					// ignore if already closed
+				}
+				this.pending.delete(existingId);
+				// Trigger onCancel to notify agent
+				if (entry.onCancel) entry.onCancel();
+			}
+			this.activeSSE.delete(sseKey);
+			return existingId;
+		}
+		return undefined;
+	}
+
+	/**
+	 * Check if a path should be deduplicated as SSE
+	 */
+	shouldDedupeSSE(path: string): boolean {
+		return isSSEDedupePath(path);
+	}
+
+	/**
+	 * Register an SSE connection for deduplication tracking
+	 */
+	registerSSE(sseKey: string, requestId: string): void {
+		this.activeSSE.set(sseKey, requestId);
+	}
+
+	register(id: string, timeoutMs: number, onCancel?: () => void, sseKey?: string): Promise<Response> {
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				const entry = this.pending.get(id);
@@ -37,6 +90,10 @@ export class Multiplexer {
 					console.log("[MUX] stream cancelled:", { id });
 					const entry = this.pending.get(id);
 					if (entry?.onCancel) entry.onCancel();
+					// Clean up SSE tracking if this was an SSE connection
+					if (entry?.sseKey) {
+						this.activeSSE.delete(entry.sseKey);
+					}
 					this.pending.delete(id);
 				},
 			});
@@ -51,9 +108,10 @@ export class Multiplexer {
 				resolved: false,
 				bufferedChunks: [],
 				onCancel,
+				sseKey,
 			};
 
-			console.log("[MUX] register:", { id, hasController: !!capturedController });
+			console.log("[MUX] register:", { id, hasController: !!capturedController, sseKey });
 			this.pending.set(id, entry);
 		});
 	}
@@ -80,6 +138,10 @@ export class Multiplexer {
 		if (chunk.byteLength > 0) entry.controller.enqueue(chunk);
 		if (final) {
 			entry.controller.close();
+			// Clean up SSE tracking if this was an SSE connection
+			if (entry.sseKey) {
+				this.activeSSE.delete(entry.sseKey);
+			}
 			this.pending.delete(id);
 		}
 	}
@@ -89,6 +151,10 @@ export class Multiplexer {
 		if (!entry) return;
 		clearTimeout(entry.timer);
 		entry.controller?.error(error);
+		// Clean up SSE tracking if this was an SSE connection
+		if (entry.sseKey) {
+			this.activeSSE.delete(entry.sseKey);
+		}
 		this.pending.delete(id);
 		entry.reject(error);
 	}
@@ -97,6 +163,10 @@ export class Multiplexer {
 		for (const [id, entry] of this.pending.entries()) {
 			clearTimeout(entry.timer);
 			entry.controller?.error(error);
+			// Clean up SSE tracking
+			if (entry.sseKey) {
+				this.activeSSE.delete(entry.sseKey);
+			}
 			this.pending.delete(id);
 			entry.reject(error);
 		}
