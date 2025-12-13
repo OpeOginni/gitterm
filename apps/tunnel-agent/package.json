@@ -1,0 +1,22 @@
+{
+  "name": "tunnel-agent",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "build": "tsdown",
+    "start": "bun run dist/index.mjs",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@gitpad/config": "workspace:*",
+    "@types/bun": "^1.2.6",
+    "typescript": "catalog:",
+    "tsdown": "^0.16.5"
+  }
+}

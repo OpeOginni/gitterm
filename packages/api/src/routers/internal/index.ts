@@ -89,6 +89,7 @@ export const internalRouter = router({
       .where(
         and(
           eq(workspace.status, "running"),
+          eq(workspace.tunnelType, "cloud"), // Only check cloud workspaces for idle timeout
           sql`${workspace.lastActiveAt} < ${idleThreshold}`
         )
       );
@@ -108,7 +109,8 @@ export const internalRouter = router({
   getQuotaExceededWorkspaces: internalProcedure.query(async () => {
     const today = new Date().toISOString().split("T")[0]!;
 
-    // Get all running workspaces with their users' daily usage
+    // Get all running cloud workspaces with their users' daily usage
+    // Local workspaces don't count towards quota since they don't use our resources
     const workspacesWithUsage = await db
       .select({
         id: workspace.id,
@@ -127,7 +129,12 @@ export const internalRouter = router({
           eq(dailyUsage.date, today)
         )
       )
-      .where(eq(workspace.status, "running"));
+      .where(
+        and(
+          eq(workspace.status, "running"),
+          eq(workspace.tunnelType, "cloud") // Only check cloud workspaces
+        )
+      );
 
     // Filter workspaces where user has exceeded quota
     // If no usage record exists (null), they haven't exceeded (0 minutes used)
@@ -235,6 +242,70 @@ export const internalRouter = router({
       });
 
       return { success: true, durationMinutes };
+    }),
+
+  // Terminate a workspace (for tunnel-proxy on disconnect)
+  terminateWorkspaceInternal: internalProcedure
+    .input(z.object({ workspaceId: z.string() }))
+    .mutation(async ({ input }) => {
+      // Get workspace with related data
+      const [ws] = await db
+        .select()
+        .from(workspace)
+        .where(eq(workspace.id, input.workspaceId));
+
+      if (!ws) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      // Close usage session if workspace was running (only for cloud workspaces)
+      if (ws.tunnelType !== "local" && (ws.status === "running" || ws.status === "pending")) {
+        await closeUsageSession(input.workspaceId, "manual");
+      }
+
+      // Get cloud provider
+      const [provider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, ws.cloudProviderId));
+
+      if (!provider) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Cloud provider not found",
+        });
+      }
+
+      // Get compute provider and terminate the workspace
+      // For local workspaces, this is a no-op
+      const computeProvider = await getProviderByCloudProviderId(provider.name);
+      await computeProvider.terminateWorkspace(ws.externalInstanceId);
+
+      // Update workspace status
+      const now = new Date();
+      await db
+        .update(workspace)
+        .set({
+          status: "terminated",
+          stoppedAt: now,
+          terminatedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(workspace.id, input.workspaceId));
+
+      // Emit status event
+      WORKSPACE_EVENTS.emitStatus({
+        workspaceId: input.workspaceId,
+        status: "terminated",
+        updatedAt: now,
+        userId: ws.userId,
+        workspaceDomain: ws.domain,
+      });
+
+      return { success: true };
     }),
 
   // Get daily stats (for worker/analytics)

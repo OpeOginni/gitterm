@@ -1,0 +1,549 @@
+import "dotenv/config";
+import { z } from "zod";
+import { mkdir } from "node:fs/promises";
+
+const usage = `@gitterm/agent
+
+Securely exposes local development ports through your gitterm.dev workspace tunnel.
+
+Usage:
+  npx @gitterm/agent <command> [options]
+
+Commands:
+  login           Sign in via device-code flow
+  logout          Clear saved credentials
+  connect         Connect a local port (and optional services)
+  opencode        Alias for connect; intended for OpenCode + ttyd/gotty workflows
+  opencode-web    Alias for connect; intended for OpenCode web
+  opencode-server Alias for connect; intended for OpenCode server
+  help            Show this help
+
+Login options:
+  --server-url <url>      Server base URL (https)
+
+Connect options:
+  --ws-url <url>          Tunnel-proxy WS URL (ws/wss)
+  --token <jwt>           Tunnel JWT (overrides saved login)
+  --workspace-id <id>     Workspace id (prompts for port if first-time)
+  --server-url <url>      Server base URL (https)
+  --port <number>         Primary local port to expose (root)
+  --expose <name=port>    Expose additional service port (repeatable)
+
+Examples:
+  npx @gitterm/agent login --server-url https://api.gitterm.dev
+  npx @gitterm/agent connect --workspace-id "$WORKSPACE_ID" --server-url https://api.gitterm.dev --ws-url wss://tunnel.gitterm.dev/tunnel/connect
+  npx @gitterm/agent connect --ws-url wss://tunnel.gitterm.dev/tunnel/connect --token "$TUNNEL_TOKEN" --port 7681 --expose api=3001 --expose web=5173
+
+Notes:
+  - This tool does not start servers for you.
+  - If you want a terminal UI, run ttyd or gotty yourself and expose that port.
+`;
+
+const frameSchema = z.object({
+	type: z.enum(["auth", "open", "close", "ping", "pong", "request", "response", "data", "error"]),
+	id: z.string(),
+	method: z.string().optional(),
+	path: z.string().optional(),
+	token: z.string().optional(),
+	statusCode: z.number().optional(),
+	headers: z.record(z.string(), z.string()).optional(),
+	port: z.number().optional(),
+	serviceName: z.string().optional(),
+	exposedPorts: z.record(z.string(), z.number()).optional(),
+	data: z.string().optional(),
+	final: z.boolean().optional(),
+	timestamp: z.number().optional(),
+});
+
+type Frame = z.infer<typeof frameSchema>;
+
+function base64ToBytes(data: string): Uint8Array {
+	return new Uint8Array(Buffer.from(data, "base64"));
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+	return Buffer.from(bytes).toString("base64");
+}
+
+function parseExposeFlags(args: string[]): Record<string, number> {
+	const exposed: Record<string, number> = {};
+	for (let i = 0; i < args.length; i++) {
+		const arg = args[i];
+		if (arg !== "--expose") continue;
+		const value = args[i + 1];
+		if (!value) throw new Error("--expose requires a value like name=3001");
+		i++;
+		const [name, portStr] = value.split("=");
+		if (!name || !portStr) throw new Error("--expose requires a value like name=3001");
+		const port = Number.parseInt(portStr, 10);
+		if (!Number.isFinite(port) || port <= 0) throw new Error(`Invalid port for --expose ${value}`);
+		exposed[name] = port;
+	}
+	return exposed;
+}
+
+function getFlag(args: string[], flag: string): string | undefined {
+	const idx = args.indexOf(flag);
+	if (idx === -1) return undefined;
+	return args[idx + 1];
+}
+
+function hasFlag(args: string[], flag: string): boolean {
+	return args.includes(flag);
+}
+
+type AgentConfig = {
+	serverUrl: string;
+	agentToken: string;
+	createdAt: number;
+};
+
+function getConfigPath(): string {
+	const home = process.env.HOME;
+	if (!home) throw new Error("HOME is not set");
+	return `${home}/.config/gitterm/agent.json`;
+}
+
+async function ensureConfigDir() {
+	const path = getConfigPath();
+	const dir = path.split("/").slice(0, -1).join("/");
+	await mkdir(dir, { recursive: true });
+}
+
+async function loadConfig(): Promise<AgentConfig | null> {
+	const path = getConfigPath();
+	try {
+		const text = await Bun.file(path).text();
+		const parsed = JSON.parse(text) as AgentConfig;
+		if (!parsed.agentToken || !parsed.serverUrl) return null;
+		return parsed;
+	} catch {
+		return null;
+	}
+}
+
+async function saveConfig(config: AgentConfig) {
+	await ensureConfigDir();
+	await Bun.write(getConfigPath(), JSON.stringify(config, null, 2));
+}
+
+async function deleteConfig() {
+	const path = getConfigPath();
+	try {
+		await Bun.write(path, "");
+		const fs = await import("node:fs/promises");
+		await fs.unlink(path);
+	} catch {
+		// ignore if file doesn't exist
+	}
+}
+
+function sleep(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runLogin(rawArgs: string[]) {
+	const serverUrl = getFlag(rawArgs, "--server-url") ?? process.env.GITTERM_SERVER_URL ?? process.env.NEXT_PUBLIC_SERVER_URL;
+	if (!serverUrl) throw new Error("Missing --server-url (or GITTERM_SERVER_URL)");
+
+	const codeRes = await fetch(new URL("/api/device/code", serverUrl), {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ clientName: "@gitterm/agent" }),
+	});
+	if (!codeRes.ok) throw new Error(`Failed to start device login: ${codeRes.status}`);
+
+	const codeJson = (await codeRes.json()) as {
+		deviceCode: string;
+		userCode: string;
+		verificationUri: string;
+		intervalSeconds: number;
+		expiresInSeconds: number;
+	};
+
+	console.log("To sign in, visit:");
+	console.log(`  ${codeJson.verificationUri}`);
+	console.log("And enter code:");
+	console.log(`  ${codeJson.userCode}`);
+
+	const deadline = Date.now() + codeJson.expiresInSeconds * 1000;
+	while (Date.now() < deadline) {
+		const tokenRes = await fetch(new URL("/api/device/token", serverUrl), {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ deviceCode: codeJson.deviceCode }),
+		});
+
+		if (tokenRes.ok) {
+			const tokenJson = (await tokenRes.json()) as { accessToken: string };
+			await saveConfig({ serverUrl, agentToken: tokenJson.accessToken, createdAt: Date.now() });
+			console.log("Logged in and saved credentials.");
+			process.exit(0);
+		}
+
+		if (tokenRes.status !== 428) {
+			const errText = await tokenRes.text().catch(() => "");
+			throw new Error(`Login failed: ${tokenRes.status} ${errText}`);
+		}
+
+		await sleep(Math.max(1, codeJson.intervalSeconds) * 1000);
+	}
+
+	throw new Error("Device code expired; try again.");
+}
+
+async function runLogout() {
+	await deleteConfig();
+	console.log("Logged out successfully. Credentials cleared.");
+	process.exit(0);
+}
+
+async function mintTunnelToken(params: { serverUrl: string; agentToken: string; workspaceId: string }) {
+	const res = await fetch(new URL("/api/agent/tunnel-token", params.serverUrl), {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+			authorization: `Bearer ${params.agentToken}`,
+		},
+		body: JSON.stringify({ workspaceId: params.workspaceId }),
+	});
+	if (!res.ok) {
+		const text = await res.text().catch(() => "");
+		if (res.status === 401 || res.status === 403) {
+			throw new Error(
+				`Authentication failed (${res.status}). Your saved credentials may have expired.\nPlease run: npx @gitterm/agent logout && npx @gitterm/agent login`,
+			);
+		}
+		throw new Error(`Failed to mint tunnel token: ${res.status} ${text}`);
+	}
+	const json = (await res.json()) as { token: string; subdomain?: string };
+	if (!json.token) throw new Error("Server did not return a token");
+	return json.token;
+}
+
+async function updateWorkspacePorts(params: {
+	serverUrl: string;
+	agentToken: string;
+	workspaceId: string;
+	localPort: number;
+	exposedPorts: Record<string, { port: number; description?: string }>;
+}) {
+	const res = await fetch(new URL("/api/agent/workspace-ports", params.serverUrl), {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+			authorization: `Bearer ${params.agentToken}`,
+		},
+		body: JSON.stringify({
+			workspaceId: params.workspaceId,
+			localPort: params.localPort,
+			exposedPorts: params.exposedPorts,
+		}),
+	});
+	if (!res.ok) {
+		const text = await res.text().catch(() => "");
+		if (res.status === 401 || res.status === 403) {
+			throw new Error(
+				`Authentication failed (${res.status}). Your saved credentials may have expired.\nPlease run: npx @gitterm/agent logout && npx @gitterm/agent login`,
+			);
+		}
+		throw new Error(`Failed to update workspace ports: ${res.status} ${text}`);
+	}
+	const json = (await res.json()) as { success: boolean };
+	return json;
+}
+
+function prompt(question: string): Promise<string> {
+	return new Promise((resolve) => {
+		process.stdout.write(question);
+		process.stdin.once("data", (data) => {
+			resolve(data.toString().trim());
+		});
+	});
+}
+
+async function runConnect(rawArgs: string[]) {
+	const wsUrl = getFlag(rawArgs, "--ws-url") ?? process.env.TUNNEL_PROXY_WS_URL;
+	const portStr = getFlag(rawArgs, "--port") ?? process.env.TUNNEL_PRIMARY_PORT;
+	const targetBase = process.env.TARGET_BASE_URL ?? "http://localhost";
+
+	const tokenFromFlag = getFlag(rawArgs, "--token") ?? process.env.TUNNEL_TOKEN;
+	const workspaceId = getFlag(rawArgs, "--workspace-id") ?? process.env.GITTERM_WORKSPACE_ID;
+	const serverUrl = getFlag(rawArgs, "--server-url") ?? process.env.GITTERM_SERVER_URL ?? process.env.NEXT_PUBLIC_SERVER_URL;
+
+	if (!wsUrl) throw new Error("Missing --ws-url (or TUNNEL_PROXY_WS_URL)");
+
+	let token = tokenFromFlag;
+	let primaryPort: number;
+
+	if (!token) {
+		if (!workspaceId) throw new Error("Missing --workspace-id when --token not provided");
+		const config = await loadConfig();
+		if (!config?.agentToken) throw new Error("Not logged in. Run: npx @gitterm/agent login");
+		const effectiveServerUrl = serverUrl ?? config.serverUrl;
+		if (!effectiveServerUrl) throw new Error("Missing --server-url (or saved config)");
+
+		// Prompt for port if not provided
+		if (!portStr) {
+			console.log("First-time setup for this workspace.");
+			const portInput = await prompt("Enter the local port to expose (e.g. 3000): ");
+			const parsedPort = Number.parseInt(portInput, 10);
+			if (!Number.isFinite(parsedPort) || parsedPort <= 0) {
+				throw new Error("Invalid port number");
+			}
+			primaryPort = parsedPort;
+
+			// TODO: prompt for additional service ports if needed
+			const exposedPorts: Record<string, { port: number; description?: string }> = {};
+
+			await updateWorkspacePorts({
+				serverUrl: effectiveServerUrl,
+				agentToken: config.agentToken,
+				workspaceId,
+				localPort: primaryPort,
+				exposedPorts,
+			});
+			console.log(`Workspace configured with port ${primaryPort}`);
+		} else {
+			primaryPort = Number.parseInt(portStr, 10);
+			if (!Number.isFinite(primaryPort) || primaryPort <= 0) throw new Error("Invalid --port");
+		}
+
+		token = await mintTunnelToken({ serverUrl: effectiveServerUrl, agentToken: config.agentToken, workspaceId });
+	} else {
+		if (!portStr) throw new Error("Missing --port (or TUNNEL_PRIMARY_PORT)");
+		primaryPort = Number.parseInt(portStr, 10);
+		if (!Number.isFinite(primaryPort) || primaryPort <= 0) throw new Error("Invalid --port");
+	}
+
+	const exposedPorts = parseExposeFlags(rawArgs);
+
+	type PendingRequestMeta = {
+		method: string;
+		path: string;
+		headers: Record<string, string>;
+		port?: number;
+	};
+
+	const pendingRequestBodies = new Map<string, Uint8Array[]>();
+	const pendingRequestMeta = new Map<string, PendingRequestMeta>();
+
+	function mergeBody(id: string): Uint8Array {
+		const parts = pendingRequestBodies.get(id) ?? [];
+		pendingRequestBodies.delete(id);
+		if (parts.length === 0) return new Uint8Array();
+		const total = parts.reduce((sum, p) => sum + p.byteLength, 0);
+		const merged = new Uint8Array(total);
+		let off = 0;
+		for (const p of parts) {
+			merged.set(p, off);
+			off += p.byteLength;
+		}
+		return merged;
+	}
+
+	const ws = new WebSocket(wsUrl);
+
+	ws.addEventListener("open", () => {
+		ws.send(
+			JSON.stringify({
+				type: "auth",
+				id: crypto.randomUUID(),
+				token,
+				port: primaryPort,
+				exposedPorts,
+				timestamp: Date.now(),
+			} satisfies Frame),
+		);
+		console.log("gitterm-agent connected", { wsUrl, primaryPort, exposedPorts });
+	});
+
+	ws.addEventListener("message", async (event) => {
+		if (typeof event.data !== "string") return;
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(event.data);
+		} catch {
+			return;
+		}
+
+		const result = frameSchema.safeParse(parsed);
+		if (!result.success) return;
+		const frame = result.data;
+
+		if (frame.type === "ping") {
+			ws.send(JSON.stringify({ type: "pong", id: frame.id, timestamp: Date.now() } satisfies Frame));
+			return;
+		}
+
+		if (frame.type === "pong") return;
+		if (frame.type === "open") return;
+		if (frame.type === "auth") return;
+
+		if (frame.type === "request") {
+			pendingRequestBodies.set(frame.id, []);
+			pendingRequestMeta.set(frame.id, {
+				method: (frame.method ?? "GET").toUpperCase(),
+				path: frame.path ?? "/",
+				headers: frame.headers ?? {},
+				port: frame.port,
+			});
+			return;
+		}
+
+		if (frame.type === "data") {
+			const chunks = pendingRequestBodies.get(frame.id);
+			if (!chunks) return;
+			if (frame.data) chunks.push(base64ToBytes(frame.data));
+			if (!frame.final) return;
+
+			try {
+				const meta = pendingRequestMeta.get(frame.id);
+				if (!meta) return;
+				pendingRequestMeta.delete(frame.id);
+
+				const reqBody = mergeBody(frame.id);
+
+				const base = new URL(targetBase.replace(/\/$/, "") + "/");
+				base.hostname = "localhost";
+				base.port = String(meta.port ?? primaryPort);
+
+				const url = new URL(meta.path.replace(/^\//, ""), base);
+
+				const headers = new Headers(meta.headers);
+				headers.delete("host");
+				headers.delete("content-length");
+
+				const upstream = await fetch(url, {
+					method: meta.method,
+					headers,
+					body: reqBody.byteLength > 0 ? reqBody : undefined,
+					redirect: "manual",
+				});
+
+				ws.send(
+					JSON.stringify({
+						type: "response",
+						id: frame.id,
+						statusCode: upstream.status,
+						headers: Object.fromEntries(upstream.headers.entries()),
+						timestamp: Date.now(),
+					} satisfies Frame),
+				);
+
+				if (!upstream.body) {
+					ws.send(JSON.stringify({ type: "data", id: frame.id, final: true, timestamp: Date.now() } satisfies Frame));
+					return;
+				}
+
+				const reader = upstream.body.getReader();
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					if (!value) continue;
+					ws.send(
+						JSON.stringify({
+							type: "data",
+							id: frame.id,
+							data: bytesToBase64(value),
+							final: false,
+							timestamp: Date.now(),
+						} satisfies Frame),
+					);
+				}
+
+				ws.send(JSON.stringify({ type: "data", id: frame.id, final: true, timestamp: Date.now() } satisfies Frame));
+			} catch (error) {
+				pendingRequestMeta.delete(frame.id);
+				pendingRequestBodies.delete(frame.id);
+				ws.send(
+					JSON.stringify({
+						type: "response",
+						id: frame.id,
+						statusCode: 502,
+						headers: { "content-type": "application/json" },
+						timestamp: Date.now(),
+					} satisfies Frame),
+				);
+				ws.send(
+					JSON.stringify({
+						type: "data",
+						id: frame.id,
+						data: bytesToBase64(new TextEncoder().encode(JSON.stringify({ error: "upstream_error" }))),
+						final: true,
+						timestamp: Date.now(),
+					} satisfies Frame),
+				);
+			}
+		}
+	});
+
+	ws.addEventListener("close", () => {
+		console.log("gitterm-agent closed");
+	});
+
+	ws.addEventListener("error", (event) => {
+		console.error("gitterm-agent error", event);
+	});
+
+	await new Promise<void>((resolve) => {
+		process.on("SIGINT", () => resolve());
+		process.on("SIGTERM", () => resolve());
+	});
+
+	console.log("\nShutting down...");
+
+	// Clean up pending requests
+	pendingRequestBodies.clear();
+	pendingRequestMeta.clear();
+
+	try {
+		ws.close();
+	} catch {
+		// ignore
+	}
+
+	// Give WebSocket a moment to close gracefully
+	await new Promise((resolve) => setTimeout(resolve, 100));
+
+	// Explicitly exit the process
+	process.exit(0);
+}
+
+async function main() {
+	const args = process.argv.slice(2);
+	const command = args[0] ?? "help";
+
+	if (command === "--help" || command === "-h") {
+		console.log(usage);
+		return;
+	}
+
+	if (command === "help" || hasFlag(args, "-h") || hasFlag(args, "--help")) {
+		console.log(usage);
+		return;
+	}
+
+	if (command === "login") {
+		await runLogin(args.slice(1));
+		return;
+	}
+
+	if (command === "logout") {
+		await runLogout();
+		return;
+	}
+
+	if (command === "connect" || command === "opencode" || command === "opencode-web" || command === "opencode-server") {
+		await runConnect(args.slice(1));
+		return;
+	}
+
+	console.log(usage);
+	process.exitCode = 1;
+}
+
+main().catch((err) => {
+	console.error(err instanceof Error ? err.message : err);
+	process.exit(1);
+});

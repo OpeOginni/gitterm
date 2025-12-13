@@ -1,0 +1,24 @@
+{
+  "name": "@gitterm/agent",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "gitterm-agent": "./dist/index.js",
+    "gitterm": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@gitpad/config": "workspace:*",
+    "@types/bun": "^1.2.6",
+    "typescript": "catalog:"
+  },
+  "packageManager": "bun@1.3.2"
+}

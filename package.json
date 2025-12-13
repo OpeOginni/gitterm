@@ -25,6 +25,9 @@
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
     "dev:proxy": "turbo -F proxy dev:ngrok",
+    "dev:tunnel-agent": "turbo -F tunnel-agent dev",
+    "dev:tunnel-proxy": "turbo -F tunnel-proxy dev",
+    "dev:worker": "turbo -F worker dev",
     "dev:listener": "turbo -F listener dev",
     "db:push": "turbo -F @gitpad/db db:push",
     "db:studio": "turbo -F @gitpad/db db:studio",
@@ -34,7 +37,10 @@
     "db:watch": "turbo -F @gitpad/db db:watch",
     "db:stop": "turbo -F @gitpad/db db:stop",
     "db:down": "turbo -F @gitpad/db db:down",
-    "db:seed": "turbo -F @gitpad/db db:seed"
+    "db:seed": "turbo -F @gitpad/db db:seed",
+    "redis:start": "turbo -F @gitpad/redis redis:start",
+    "redis:stop": "turbo -F @gitpad/redis redis:stop",
+    "redis:down": "turbo -F @gitpad/redis redis:down"
   },
   "dependencies": {
     "date-fns": "^4.1.0",

@@ -46,7 +46,8 @@ export enum ActiveFeatureFlag {
   MagicConfig = 'MAGIC_CONFIG',
   MonorepoSupport = 'MONOREPO_SUPPORT',
   PriorityBoarding = 'PRIORITY_BOARDING',
-  RawSqlQueries = 'RAW_SQL_QUERIES'
+  RawSqlQueries = 'RAW_SQL_QUERIES',
+  YogaServer = 'YOGA_SERVER'
 }
 
 export enum ActivePlatformFlag {
@@ -59,14 +60,17 @@ export enum ActivePlatformFlag {
   DemoPercentageRollout = 'DEMO_PERCENTAGE_ROLLOUT',
   EnableRawSqlQueries = 'ENABLE_RAW_SQL_QUERIES',
   MonorepoSupport = 'MONOREPO_SUPPORT',
+  ScylladbRoutingEnabled = 'SCYLLADB_ROUTING_ENABLED',
   SplitUsageQueries = 'SPLIT_USAGE_QUERIES',
   UpdatedVmQueries = 'UPDATED_VM_QUERIES',
   UseGhWebhooksForChangeDetection = 'USE_GH_WEBHOOKS_FOR_CHANGE_DETECTION',
-  VmTimeRangeQuery = 'VM_TIME_RANGE_QUERY'
+  VmTimeRangeQuery = 'VM_TIME_RANGE_QUERY',
+  YogaServerRollout = 'YOGA_SERVER_ROLLOUT'
 }
 
 export enum ActiveServiceFeatureFlag {
   CopyVolumeToEnvironment = 'COPY_VOLUME_TO_ENVIRONMENT',
+  EnableDockerExtension = 'ENABLE_DOCKER_EXTENSION',
   Placeholder = 'PLACEHOLDER',
   UseBuilderV3ForCliDeploys = 'USE_BUILDER_V3_FOR_CLI_DEPLOYS',
   UseGhWebhooksForChangeDetection = 'USE_GH_WEBHOOKS_FOR_CHANGE_DETECTION',
@@ -127,6 +131,13 @@ export type ApiToken = Node & {
   workspaceId?: Maybe<Scalars['String']['output']>;
 };
 
+/** Information about the current API token and its accessible workspaces. */
+export type ApiTokenContext = {
+  __typename?: 'ApiTokenContext';
+  /** Workspaces this subject can operate on via this token or session. */
+  workspaces: Array<ApiTokenWorkspace>;
+};
+
 export type ApiTokenCreateInput = {
   name: Scalars['String']['input'];
   workspaceId?: InputMaybe<Scalars['String']['input']>;
@@ -136,6 +147,12 @@ export type ApiTokenRateLimit = {
   __typename?: 'ApiTokenRateLimit';
   remainingPoints: Scalars['Int']['output'];
   resetsAt: Scalars['String']['output'];
+};
+
+export type ApiTokenWorkspace = {
+  __typename?: 'ApiTokenWorkspace';
+  id: Scalars['String']['output'];
+  name: Scalars['String']['output'];
 };
 
 export type AppliedByMember = {
@@ -669,6 +686,7 @@ export type EgressGatewayServiceTargetInput = {
 export type Environment = Node & {
   __typename?: 'Environment';
   canAccess: Scalars['Boolean']['output'];
+  config: Scalars['EnvironmentConfig']['output'];
   createdAt: Scalars['DateTime']['output'];
   deletedAt?: Maybe<Scalars['DateTime']['output']>;
   deploymentTriggers: EnvironmentDeploymentTriggersConnection;
@@ -684,6 +702,11 @@ export type Environment = Node & {
   updatedAt: Scalars['DateTime']['output'];
   variables: EnvironmentVariablesConnection;
   volumeInstances: EnvironmentVolumeInstancesConnection;
+};
+
+
+export type EnvironmentConfigArgs = {
+  decryptVariables?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 
@@ -768,6 +791,7 @@ export type EnvironmentMeta = {
   __typename?: 'EnvironmentMeta';
   baseBranch?: Maybe<Scalars['String']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
+  latestSuccessfulGitHubDeploymentId?: Maybe<Scalars['Int']['output']>;
   prCommentId?: Maybe<Scalars['Int']['output']>;
   prNumber?: Maybe<Scalars['Int']['output']>;
   prRepo?: Maybe<Scalars['String']['output']>;
@@ -784,8 +808,14 @@ export type EnvironmentPatch = Node & {
   id: Scalars['ID']['output'];
   lastAppliedError?: Maybe<Scalars['String']['output']>;
   message?: Maybe<Scalars['String']['output']>;
+  patch: Scalars['EnvironmentConfig']['output'];
   status: EnvironmentPatchStatus;
   updatedAt: Scalars['DateTime']['output'];
+};
+
+
+export type EnvironmentPatchPatchArgs = {
+  decryptVariables?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 export enum EnvironmentPatchStatus {
@@ -1333,8 +1363,12 @@ export type Mutation = {
   environmentDelete: Scalars['Boolean']['output'];
   /** Commit the provided patch to the environment. */
   environmentPatchCommit: Scalars['String']['output'];
+  /** Commits the staged changes for a single environment. */
+  environmentPatchCommitStaged: Scalars['String']['output'];
   /** Renames an environment. */
   environmentRename: Environment;
+  /** Sets the staged patch for a single environment. */
+  environmentStageChanges: EnvironmentPatch;
   /** Deploys all connected triggers for an environment. */
   environmentTriggersDeploy: Scalars['Boolean']['output'];
   /** Agree to the fair use policy for the currently authenticated user */
@@ -1769,9 +1803,22 @@ export type MutationEnvironmentPatchCommitArgs = {
 };
 
 
+export type MutationEnvironmentPatchCommitStagedArgs = {
+  commitMessage?: InputMaybe<Scalars['String']['input']>;
+  environmentId: Scalars['String']['input'];
+  skipDeploys?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+
 export type MutationEnvironmentRenameArgs = {
   id: Scalars['String']['input'];
   input: EnvironmentRenameInput;
+};
+
+
+export type MutationEnvironmentStageChangesArgs = {
+  environmentId: Scalars['String']['input'];
+  input: Scalars['EnvironmentConfig']['input'];
 };
 
 
@@ -2656,10 +2703,12 @@ export enum PlatformFeatureFlag {
   DemoPercentageRollout = 'DEMO_PERCENTAGE_ROLLOUT',
   EnableRawSqlQueries = 'ENABLE_RAW_SQL_QUERIES',
   MonorepoSupport = 'MONOREPO_SUPPORT',
+  ScylladbRoutingEnabled = 'SCYLLADB_ROUTING_ENABLED',
   SplitUsageQueries = 'SPLIT_USAGE_QUERIES',
   UpdatedVmQueries = 'UPDATED_VM_QUERIES',
   UseGhWebhooksForChangeDetection = 'USE_GH_WEBHOOKS_FOR_CHANGE_DETECTION',
-  VmTimeRangeQuery = 'VM_TIME_RANGE_QUERY'
+  VmTimeRangeQuery = 'VM_TIME_RANGE_QUERY',
+  YogaServerRollout = 'YOGA_SERVER_ROLLOUT'
 }
 
 export type PlatformFeatureFlagStatus = {
@@ -3280,6 +3329,8 @@ export type Query = {
   adminVolumeInstancesForVolume: Array<VolumeInstance>;
   /** Returns the platform feature flags enabled for the current user */
   allPlatformFeatureFlags: Array<PlatformFeatureFlagStatus>;
+  /** Introspect the current API token and its accessible workspaces. */
+  apiToken: ApiTokenContext;
   /** Gets all API tokens for the authenticated user. */
   apiTokens: QueryApiTokensConnection;
   /** Fetch logs for a build */

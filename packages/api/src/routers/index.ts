@@ -7,6 +7,8 @@ import { internalRouter } from "./internal";
 import { githubRouter } from "./github/github";
 import { githubWebhookRouter } from "./github/webhook";
 import { proxyResolverRouter } from "./proxy";
+import { tunnelRouter } from "./tunnel";
+import { agentRouter } from "./agent";
 
 export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {
@@ -21,6 +23,8 @@ export const appRouter = router({
 	workspace: workspaceRouter,
 	internal: internalRouter,
 	github: githubRouter,
+	tunnel: tunnelRouter,
+	agent: agentRouter,
 	workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
 });
 export type AppRouter = typeof appRouter;

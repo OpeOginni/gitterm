@@ -1,11 +1,14 @@
 import type { ComputeProvider } from "./compute";
 import { railwayProvider } from "./railway";
+import { localProvider } from "./local";
 
 export * from "./compute";
 export { railwayProvider } from "./railway";
+export { localProvider } from "./local";
 
 const providers: Record<string, ComputeProvider> = {
   railway: railwayProvider,
+  local: localProvider,
 };
 
 /**
@@ -28,6 +31,7 @@ export async function getProviderByCloudProviderId(
   // Map cloud provider names to provider implementations
   const providerMap: Record<string, ComputeProvider> = {
     railway: railwayProvider,
+    local: localProvider,
     // Future: aws: awsProvider, azure: azureProvider
   };
 

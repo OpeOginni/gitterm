@@ -48,6 +48,22 @@
 		"db:down": {
 			"cache": false,
 			"persistent": true
+		},
+		"db:seed": {
+			"cache": false,
+			"persistent": true
+		},
+		"redis:start": {
+			"cache": false,
+			"persistent": true
+		},
+		"redis:stop": {
+			"cache": false,
+			"persistent": true
+		},
+		"redis:down": {
+			"cache": false,
+			"persistent": true
 		}
 	}
 }

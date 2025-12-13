@@ -1,7 +1,7 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "../routers/index";
 
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:3002";
+const SERVER_URL = process.env.SERVER_URL || "http://localhost:3000";
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
 
 if (!INTERNAL_API_KEY) {

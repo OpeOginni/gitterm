@@ -7,6 +7,7 @@ import { gitIntegration } from "./integrations";
 export const instanceStatusEnum = pgEnum('instance_status', ['pending', 'running', 'stopped', 'terminated'] as const);
 export const workspaceStatusEnum = pgEnum('workspace_status', ['pending', 'running', 'stopped', 'terminated'] as const);
 export const sessionStopSourceEnum = pgEnum('session_stop_source', ['manual', 'idle', 'quota_exhausted', 'error'] as const);
+export const workspaceTunnelTypeEnum = pgEnum('workspace_tunnel_type', ['cloud', 'local'] as const);
 
 export const workspace = pgTable("workspace", {
 	id: uuid("id").primaryKey().defaultRandom(),
@@ -24,6 +25,16 @@ export const workspace = pgTable("workspace", {
     status: workspaceStatusEnum("status").notNull(),
 	persistent: boolean("persistent").notNull().default(false),
 	serverOnly: boolean("server_only").notNull().default(false),
+
+	// Local tunnel support
+	tunnelType: workspaceTunnelTypeEnum("tunnel_type").notNull().default("cloud"),
+	tunnelName: text("tunnel_name"),
+	reservedSubdomain: text("reserved_subdomain"), // paid feature
+	localPort: integer("local_port"), // primary local port for tunnelType=local
+	exposedPorts: jsonb("exposed_ports").$type<Record<string, { port: number; description?: string }>>(),
+	tunnelConnectedAt: timestamp("tunnel_connected_at"),
+	tunnelLastPingAt: timestamp("tunnel_last_ping_at"),
+
 	startedAt: timestamp("started_at").notNull(),
 	stoppedAt: timestamp("stopped_at"),
 	terminatedAt: timestamp("terminated_at"),

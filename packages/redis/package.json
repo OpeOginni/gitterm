@@ -1,0 +1,23 @@
+{
+  "name": "@gitpad/redis",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc -p tsconfig.json --noEmit",
+    "redis:start": "docker compose up -d",
+    "redis:stop": "docker compose stop",
+    "redis:down": "docker compose down"
+  },
+  "dependencies": {
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": {
+    "@gitpad/config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.2"
+  }
+}

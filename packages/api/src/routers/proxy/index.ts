@@ -51,6 +51,23 @@ export const proxyResolverRouter = async (c: Context) => {
 		  return c.text('Not Found', 404);
 		}
 	
+		// Local tunnels: route via tunnel-proxy (still requires auth)
+		if (ws.tunnelType === "local") {
+			if (!session) {
+				return c.text("Unauthorized", 401);
+			}
+			if (ws.userId !== session.user?.id) {
+				return c.text("Forbidden", 403);
+			}
+
+			return c.text("OK", 200, {
+				"X-Tunnel-Type": "local",
+				"X-Workspace-ID": ws.id,
+				"X-User-ID": session.user.id,
+				"X-Subdomain": ws.subdomain ?? "",
+			});
+		}
+
 		// Server-only workspaces skip auth
 		if (ws.serverOnly) {
 		  if (!ws.backendUrl) {
@@ -84,6 +101,7 @@ export const proxyResolverRouter = async (c: Context) => {
 		  'X-Container-Host': backendUrl.hostname,
           'X-Container-Port': backendUrl.port,
 		  'X-User-ID': session.user.id,
+		  'X-Tunnel-Type': ws.tunnelType,
 		});
 		
 	  } catch (error) {

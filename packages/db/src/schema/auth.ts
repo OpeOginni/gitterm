@@ -1,4 +1,6 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, pgEnum } from "drizzle-orm/pg-core";
+
+export const userPlanEnum = pgEnum('user_plan', ['free', 'pro', 'enterprise'] as const);
 
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
@@ -7,6 +9,7 @@ export const user = pgTable("user", {
 	emailVerified: boolean("email_verified").notNull(),
 	image: text("image"),
 	allowTrial: boolean("allow_trial").notNull().default(false),
+	plan: userPlanEnum("plan").notNull().default("free"),
 	createdAt: timestamp("created_at").notNull(),
 	updatedAt: timestamp("updated_at").notNull(),
 });

@@ -22,6 +22,9 @@ export const router = t.router;
 
 export const publicProcedure = t.procedure;
 
+// Export AppRouter type for clients
+export type { AppRouter } from "./routers/index";
+
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 	if (!ctx.session) {
 		throw new TRPCError({

@@ -53,6 +53,7 @@
     "@gitpad/auth": "workspace:*",
     "@gitpad/db": "workspace:*",
     "@gitpad/schema": "workspace:*",
+    "@gitpad/redis": "workspace:*",
     "@octokit/auth-app": "^7.1.3",
     "@octokit/rest": "^21.0.2",
     "@trpc/client": "catalog:",

@@ -9,6 +9,15 @@
 	}
 }
 
+# Subdomain Format Support:
+# - ws-<uuid>.*           : Cloud workspaces (auto-generated)
+# - local-<name>.*        : Free tier local tunnels
+# - <custom-name>.*       : Paid tier custom subdomains
+# - Reserved (blocked):    api, tunnel, www, admin, etc.
+#
+# All formats work with the existing regex: ^([^.]+)\.gitterm\.dev$
+# Reserved subdomains are blocked at both workspace creation and Caddy level.
+
 # Listen on port 80 for all requests
 :80 {
 	# Health check endpoint
@@ -17,12 +26,23 @@
 		respond `{"status":"UP"}` 200
 	}
 
+	# Block reserved subdomains at the Caddy level (defense in depth)
+	# These should already be blocked at workspace creation, but this provides an extra layer
+	@reserved_subdomain header_regexp subdomain Host ^(api|tunnel)\.gitterm\.dev$
+	handle @reserved_subdomain {
+		header Content-Type application/json
+		respond `{"error":"This subdomain is reserved for system use"}` 403
+	}
+
 	# Main proxy handler  
 	handle {
 		# Forward auth to API server (validates workspace exists and user has access)
 		forward_auth server.railway.internal:8080 {
 			uri /internal/proxy-resolve
-			
+
+			# Copy select headers from auth response into request
+			copy_headers X-Tunnel-Type X-Workspace-ID X-User-ID X-Subdomain
+
 			# Copy original headers
 			header_up Host {host}
 			header_up X-Internal-Key "EdBY7UDhP-bVJbAns_E9yiFbx_B!tg_"
@@ -36,6 +56,36 @@
 		# Extract subdomain using header_regexp
 		# Example: ws-9ac6fbd9.gitterm.dev -> capture "ws-9ac6fbd9"
 		@workspace header_regexp subdomain Host ^([^.]+)\.gitterm\.dev$
+
+		# Local tunnels route through tunnel-proxy
+		@local_tunnel header X-Tunnel-Type local
+		reverse_proxy @local_tunnel tunnel-proxy.railway.internal:9000 {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+
+			# Standard proxy headers
+			header_up Host {host}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+
+			transport http {
+				compression off
+				dial_timeout 10s
+				response_header_timeout 0
+				expect_continue_timeout 0
+				keepalive 2m
+				keepalive_idle_conns 10
+				read_buffer 32768
+				write_buffer 32768
+			}
+		}
 
 		# Reverse proxy to the workspace container
 		# Construct upstream from captured subdomain: {http.regexp.subdomain.1}.railway.internal:7681

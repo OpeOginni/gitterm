@@ -9,6 +9,9 @@ const newCloudProviders: NewCloudProvider[] = [
     {
         name: "AWS",
     },
+    {
+        name: "Local",
+    },
 ]
 
 const newAgentTypes: NewAgentType[] = [
@@ -70,14 +73,24 @@ async function seedDB() {
             agentTypeId: agents[2]?.id ?? "",
         },
     ])
-    await db.insert(region).values(
-        railwayRegions.map((region) => ({
+
+    const railwayProvider = cloudProviders.find(p => p.name === "Railway");
+    const localProvider = cloudProviders.find(p => p.name === "Local");
+
+    await db.insert(region).values([
+        ...railwayRegions.map((region) => ({
             name: region.name,
             location: region.location,
             externalRegionIdentifier: region.externalRegionIdentifier,
-            cloudProviderId: cloudProviders[0]?.id ?? "",
+            cloudProviderId: railwayProvider?.id ?? "",
         })),
-    )
+        {
+            name: "Local",
+            location: "Local Machine",
+            externalRegionIdentifier: "local",
+            cloudProviderId: localProvider?.id ?? "",
+        }
+    ])
 }
 
 seedDB().then(() => {

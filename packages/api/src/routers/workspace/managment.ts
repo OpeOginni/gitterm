@@ -26,6 +26,69 @@ import { githubAppService } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitpad/db/schema/integrations";
 
+/**
+ * SUBDOMAIN FEATURE GATING SETUP
+ * 
+ * Currently, all users can use custom subdomains. To enable paid feature gating:
+ * 
+ * 1. Run database migration to add 'plan' field to users:
+ *    cd packages/db && bun run db:push
+ * 
+ * 2. Update canUseCustomSubdomain() function to check user plan:
+ *    return userPlan === 'pro' || userPlan === 'enterprise';
+ * 
+ * 3. Enable the commented-out validation blocks in createWorkspace mutation
+ * 
+ * 4. Update shouldUseLocalPrefix() to return true for free users:
+ *    return userPlan === 'free';
+ * 
+ * This will enforce:
+ * - Free users: Get local-<subdomain> format (e.g., local-myapp.gitterm.dev)
+ * - Pro/Enterprise: Can use custom subdomains (e.g., myapp.gitterm.dev)
+ * - Reserved subdomains (api, tunnel, etc.): Always blocked for everyone
+ */
+
+// Reserved subdomains that cannot be used by users
+const RESERVED_SUBDOMAINS = [
+  'api',
+  'tunnel',
+  'www',
+  'app',
+  'admin',
+  'dashboard',
+  'cdn',
+  'static',
+  'assets',
+  'mail',
+  'email',
+  'ftp',
+  'ssh',
+  'docs',
+  'blog',
+  'status',
+  'support',
+];
+
+function isSubdomainReserved(subdomain: string): boolean {
+  return RESERVED_SUBDOMAINS.includes(subdomain.toLowerCase());
+}
+
+function canUseCustomSubdomain(userPlan: 'free' | 'pro' | 'enterprise'): boolean {
+  // For now, allow all users to use custom subdomains
+  // When ready to gate this feature, change to:
+  // return userPlan === 'pro' || userPlan === 'enterprise';
+  return true;
+}
+
+function shouldUseLocalPrefix(userPlan: 'free' | 'pro' | 'enterprise', subdomain: string): boolean {
+  // Free users get local-<subdomain> format
+  // Pro/Enterprise users can use custom subdomain directly
+  // For now, everyone gets the format they request
+  // When ready to gate, uncomment:
+  // return userPlan === 'free';
+  return false;
+}
+
 export const workspaceRouter = router({
 
   listUserInstallations: protectedProcedure.query(async ({ ctx }) => {
@@ -795,7 +858,8 @@ export const workspaceRouter = router({
     .input(
       z.object({
         name: z.string().optional(),
-        repo: z.string(),
+        repo: z.string().optional(), // Optional for local workspaces
+        subdomain: z.string().min(1).max(63).regex(/^[a-z0-9-]+$/).optional(), // Required for local, auto-generated for cloud
         agentTypeId: z.string(),
         cloudProviderId: z.string(),
         regionId: z.string(),
@@ -827,13 +891,31 @@ export const workspaceRouter = router({
       //   throw new TRPCError({ code: "FORBIDDEN", message: "Reachout for Access" });
 
       try {
-        // Check quota first
-        const hasQuota = await hasRemainingQuota(userId);
-        if (!hasQuota) {
+        // Get cloud provider info first to determine if local
+        const [cloudProviderRecord] = await db
+          .select()
+          .from(cloudProvider)
+          .where(eq(cloudProvider.id, input.cloudProviderId));
+
+        if (!cloudProviderRecord) {
           throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Daily free tier limit reached. Please try again tomorrow.",
+            code: "BAD_REQUEST",
+            message: "Invalid cloud provider",
           });
+        }
+
+        // Determine if this is a local workspace
+        const isLocal = cloudProviderRecord.name.toLowerCase() === "local";
+
+        // Check quota only for cloud workspaces (local doesn't use our resources)
+        if (!isLocal) {
+          const hasQuota = await hasRemainingQuota(userId);
+          if (!hasQuota) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Daily free tier limit reached. Please try again tomorrow.",
+            });
+          }
         }
 
         const runningWorkspaces = await db.select().from(workspace).where(and(eq(workspace.userId, userId), or(eq(workspace.status, "running"), eq(workspace.status, "pending"), eq(workspace.status, "stopped"))));
@@ -845,16 +927,19 @@ export const workspaceRouter = router({
           });
         }
 
-        // Get cloud provider info
-        const [cloudProviderRecord] = await db
-          .select()
-          .from(cloudProvider)
-          .where(eq(cloudProvider.id, input.cloudProviderId));
-
-        if (!cloudProviderRecord) {
+        // For local workspaces, repo is optional and subdomain is required
+        if (isLocal && !input.subdomain) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Invalid cloud provider",
+            message: "Subdomain is required for local workspaces",
+          });
+        }
+
+        // For cloud workspaces, repo is required
+        if (!isLocal && !input.repo) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Repository URL is required for cloud workspaces",
           });
         }
 
@@ -966,29 +1051,82 @@ export const workspaceRouter = router({
           }
         }
 
-        // Parse repo URL to get owner/name
+        // Parse repo URL to get owner/name (only for cloud workspaces)
         const repoInfo = input.repo ? githubAppService.parseRepoUrl(input.repo) : null;
 
-        // Generate unique subdomain
+        // Generate or validate subdomain
         let subdomain: string;
-        let attempts = 0;
-        do {
-          if (attempts > 10) {
+        if (isLocal && input.subdomain) {
+          // For local workspaces, use provided subdomain and check uniqueness
+          
+          // Check if subdomain is reserved
+          if (isSubdomainReserved(input.subdomain)) {
             throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message: "Failed to generate unique subdomain",
+              code: "BAD_REQUEST",
+              message: `Subdomain '${input.subdomain}' is reserved and cannot be used`,
             });
           }
-          subdomain = `ws-${randomUUID().split('-')[0]}`;
-          attempts++;
-        } while (
-          await db
+          
+          // TODO: Enable custom subdomain as paid feature
+          // Uncomment the following block when ready to gate custom subdomains:
+          /*
+          const userPlan = fetchedUser.plan || 'free';
+          if (!canUseCustomSubdomain(userPlan)) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Custom subdomains are a Pro feature. Upgrade your plan to use custom subdomains.",
+            });
+          }
+          */
+          
+          const [existing] = await db
             .select()
             .from(workspace)
-            .where(eq(workspace.subdomain, subdomain))
-            .limit(1)
-            .then((rows) => rows.length > 0)
-        );
+            .where(eq(workspace.subdomain, input.subdomain))
+            .limit(1);
+
+          if (existing) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Subdomain already taken",
+            });
+          }
+          subdomain = input.subdomain;
+          
+          // TODO: Enable local- prefix for free tier
+          // When enabling paid features, apply local- prefix for free users:
+          /*
+          const userPlan = fetchedUser.plan || 'free';
+          if (shouldUseLocalPrefix(userPlan, subdomain)) {
+            subdomain = `local-${subdomain}`;
+          }
+          */
+        } else {
+          // For cloud workspaces, generate unique subdomain
+          let attempts = 0;
+          do {
+            if (attempts > 10) {
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Failed to generate unique subdomain",
+              });
+            }
+            subdomain = `ws-${randomUUID().split('-')[0]}`;
+            attempts++;
+            
+            // Check if generated subdomain is reserved (unlikely but possible)
+            if (isSubdomainReserved(subdomain)) {
+              continue;
+            }
+          } while (
+            await db
+              .select()
+              .from(workspace)
+              .where(eq(workspace.subdomain, subdomain))
+              .limit(1)
+              .then((rows) => rows.length > 0)
+          );
+        }
 
         // Generate workspace-scoped JWT token (replaces shared INTERNAL_API_KEY)
         const workspaceAuthToken = workspaceJWT.generateToken(
@@ -1005,7 +1143,7 @@ export const workspaceRouter = router({
         const domain = `${subdomain}.${baseDomain}`;
 
         const DEFAULT_DOCKER_ENV_VARS = {
-          "REPO_URL": input.repo,
+          "REPO_URL": input.repo || undefined,
           "OPENCODE_CONFIG_BASE64": agentConfig ? Buffer.from(JSON.stringify(agentConfig.config)).toString("base64") : undefined,
           "USER_GITHUB_USERNAME": githubUsername,
           "GITHUB_APP_TOKEN": githubAppToken,
@@ -1055,12 +1193,14 @@ export const workspaceRouter = router({
             gitIntegrationId: input.gitInstallationId || null,
             persistent: input.persistent,
             regionId: input.regionId,
-            repositoryUrl: input.repo,
+            repositoryUrl: input.repo || null,
             domain,
             subdomain,
             serverOnly: agentTypeRecord.serverOnly,
             backendUrl: workspaceInfo.backendUrl,
             status: "pending",
+            tunnelType: isLocal ? "local" : "cloud",
+            tunnelName: isLocal ? (input.name || `local-${subdomain}`) : undefined,
             startedAt: new Date(workspaceInfo.serviceCreatedAt),
             lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),
             updatedAt: new Date(workspaceInfo.serviceCreatedAt),
@@ -1084,9 +1224,10 @@ export const workspaceRouter = router({
           newVolume = volumeRecord;
         }
 
-
-        // Create usage session for billing
-        await createUsageSession(workspaceId, userId);
+        // Create usage session for billing (only for cloud workspaces)
+        if (!isLocal) {
+          await createUsageSession(workspaceId, userId);
+        }
 
         // Emit status event
         WORKSPACE_EVENTS.emitStatus({
@@ -1097,11 +1238,20 @@ export const workspaceRouter = router({
           workspaceDomain: domain,
         });
 
+        // For local workspaces, generate connection command
+        let command: string | undefined;
+        if (isLocal) {
+          const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || process.env.WORKSPACE_API_URL || "https://api.gitterm.dev";
+          const wsUrl = process.env.TUNNEL_PROXY_WS_URL || "wss://tunnel.gitterm.dev/tunnel/connect";
+          command = `npx @gitterm/agent connect --workspace-id ${workspaceId} --server-url ${serverUrl} --ws-url ${wsUrl}`;
+        }
+
         return {
           success: true,
           message: "Workspace created successfully",
           workspace: newWorkspace,
           volume: newVolume,
+          command, // Only set for local workspaces
         };
       } catch (error) {
         console.error("createWorkspace failed:", error);
