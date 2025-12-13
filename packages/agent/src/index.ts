@@ -394,6 +394,7 @@ async function runConnect(rawArgs: string[]) {
 		}
 
 		if (frame.type === "request") {
+			console.log("[AGENT] Received request:", { id: frame.id, method: frame.method, path: frame.path });
 			pendingRequestBodies.set(frame.id, []);
 			pendingRequestMeta.set(frame.id, {
 				method: (frame.method ?? "GET").toUpperCase(),
@@ -406,9 +407,14 @@ async function runConnect(rawArgs: string[]) {
 
 		if (frame.type === "data") {
 			const chunks = pendingRequestBodies.get(frame.id);
-			if (!chunks) return;
+			if (!chunks) {
+				console.log("[AGENT] No pending request for data frame:", { id: frame.id });
+				return;
+			}
 			if (frame.data) chunks.push(base64ToBytes(frame.data));
 			if (!frame.final) return;
+
+			console.log("[AGENT] Processing request:", { id: frame.id });
 
 			// Create abort controller for this request
 			const abortController = new AbortController();
@@ -448,6 +454,7 @@ async function runConnect(rawArgs: string[]) {
 						timestamp: Date.now(),
 					} satisfies Frame),
 				);
+				console.log("[AGENT] Sent response:", { id: frame.id, status: upstream.status });
 
 				if (!upstream.body) {
 					activeRequests.delete(frame.id);
@@ -478,6 +485,7 @@ async function runConnect(rawArgs: string[]) {
 				activeRequests.delete(frame.id);
 				ws.send(JSON.stringify({ type: "data", id: frame.id, final: true, timestamp: Date.now() } satisfies Frame));
 			} catch (error) {
+				console.error("[AGENT] Request error:", { id: frame.id, error: error instanceof Error ? error.message : error });
 				activeRequests.delete(frame.id);
 				pendingRequestMeta.delete(frame.id);
 				pendingRequestBodies.delete(frame.id);

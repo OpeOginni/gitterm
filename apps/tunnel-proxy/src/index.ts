@@ -165,6 +165,7 @@ app.get(
 				if (!agent) return;
 
 				if (frame.type === "response") {
+					console.log("[TUNNEL-PROXY] Response from agent:", { id: frame.id, status: frame.statusCode });
 					agent.mux.resolveResponse(frame.id, {
 						status: frame.statusCode ?? 502,
 						headers: frame.headers,
@@ -178,9 +179,11 @@ app.get(
 				}
 			},
 			onClose: async () => {
+				console.log("[TUNNEL-PROXY] Agent WebSocket closed:", { subdomain: authedSubdomain });
 				if (authedSubdomain) await connectionManager.unregister(authedSubdomain);
 			},
-			onError: async () => {
+			onError: async (error) => {
+				console.log("[TUNNEL-PROXY] Agent WebSocket error:", { subdomain: authedSubdomain, error });
 				if (authedSubdomain) await connectionManager.unregister(authedSubdomain);
 			},
 		};
@@ -220,8 +223,17 @@ app.all("/*", async (c) => {
 
 	const agent = connectionManager.get(baseSubdomain);
 	if (!agent) {
+		console.log("[TUNNEL-PROXY] No agent found:", { baseSubdomain });
 		return c.text("Tunnel Offline", 503);
 	}
+
+	// Check WebSocket state
+	const wsState = agent.ws.readyState;
+	console.log("[TUNNEL-PROXY] Agent found:", { 
+		baseSubdomain, 
+		wsState,
+		wsStateLabel: wsState === 0 ? "CONNECTING" : wsState === 1 ? "OPEN" : wsState === 2 ? "CLOSING" : "CLOSED"
+	});
 
 	const requestId = agent.mux.createRequestId();
 	const url = new URL(c.req.url);
@@ -252,6 +264,7 @@ app.all("/*", async (c) => {
 	});
 
 	agent.ws.send(JSON.stringify(requestFrame));
+	console.log("[TUNNEL-PROXY] Request sent to agent:", { requestId, path: requestFrame.path });
 
 	// Stream request body to agent.
 	if (c.req.raw.body) {

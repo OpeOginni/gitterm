@@ -33,22 +33,8 @@ export class Multiplexer {
 				start: (controller) => {
 					capturedController = controller;
 				},
-				pull: (controller) => {
-					// Called when consumer wants more data - flush any buffered chunks
-					const entry = this.pending.get(id);
-					if (entry && entry.bufferedChunks.length > 0) {
-						for (const { chunk, final } of entry.bufferedChunks) {
-							if (chunk.byteLength > 0) controller.enqueue(chunk);
-							if (final) {
-								controller.close();
-								this.pending.delete(id);
-								return;
-							}
-						}
-						entry.bufferedChunks = [];
-					}
-				},
 				cancel: () => {
+					console.log("[MUX] stream cancelled:", { id });
 					const entry = this.pending.get(id);
 					if (entry?.onCancel) entry.onCancel();
 					this.pending.delete(id);
