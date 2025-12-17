@@ -12,7 +12,7 @@ export function HeroSection() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="grid gap-12 lg:grid-cols-2 lg:gap-8 items-center">
           <div className="flex flex-col gap-6">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-secondary/10 px-4 py-1.5 text-sm text-muted-foreground">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-primary/10 px-4 py-1.5 text-sm text-muted-foreground">
               <span className="h-2 w-2 bg-emerald-300 rounded-full animate-pulse" />
               Now in Public Beta
             </div>
@@ -34,12 +34,6 @@ export function HeroSection() {
                 <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
                   Start Building
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="https://github.com/opeoginni/gitterm" target="_blank">
-                <Button variant="ghost" size="lg" className="text-muted-foreground hover:text-foreground">
-                  <Play className="mr-2 h-4 w-4" />
-                  View on GitHub
                 </Button>
               </Link>
             </div>
