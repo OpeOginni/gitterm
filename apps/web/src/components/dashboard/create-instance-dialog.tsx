@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, ArrowUpRight, InfoIcon, Loader2, Plus, XCircle } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Cloud, InfoIcon, Loader2, Plus, Terminal, XCircle } from 'lucide-react';
 import { toast } from "sonner";
 import Image from "next/image";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -41,7 +41,7 @@ const getIcon = (name: string) => {
   for (const [k, v] of Object.entries(ICON_MAP)) {
     if (key.includes(k)) return v;
   }
-  return "/opencode.svg"; // default
+  return "/opencode.svg";
 };
 
 export function CreateInstanceDialog() {
@@ -59,12 +59,10 @@ export function CreateInstanceDialog() {
   const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>("none");
   const [selectedPersistent, setSelectedPersistent] = useState<boolean>(true);
 
-  // Fetch dynamic data
   const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
   const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
 
-  // Memoized values
   const localProvider = useMemo(() => {
     return cloudProvidersData?.cloudProviders?.find(
       (cloud) => cloud.name.toLowerCase() === "local"
@@ -87,37 +85,31 @@ export function CreateInstanceDialog() {
     return selectedCloud?.regions ?? [];
   }, [selectedCloudProviderId, cloudProvidersData]);
 
-  // Initialize agent type when data loads
   useEffect(() => {
     if (!selectedAgentTypeId && agentTypesData?.agentTypes?.[0]) {
       setSelectedAgentTypeId(agentTypesData.agentTypes[0].id);
     }
   }, [agentTypesData, selectedAgentTypeId]);
 
-  // Handle workspace type changes
   useEffect(() => {
     if (workspaceType === "local" && localProvider) {
-      // For local: auto-select local provider and its first region
       if (localProvider.id !== selectedCloudProviderId) {
         setSelectedCloudProviderId(localProvider.id);
         setSelectedRegion(localProvider.regions?.[0]?.id);
       }
     } else if (workspaceType === "cloud" && localProvider) {
-      // Switching back to cloud: if currently on local provider, switch to first cloud provider
       if (selectedCloudProviderId === localProvider.id && cloudProviders[0]) {
         setSelectedCloudProviderId(cloudProviders[0].id);
       }
     }
   }, [workspaceType, localProvider, selectedCloudProviderId, cloudProviders]);
 
-  // Initialize cloud provider for cloud workspaces
   useEffect(() => {
     if (workspaceType === "cloud" && !selectedCloudProviderId && cloudProviders[0]) {
       setSelectedCloudProviderId(cloudProviders[0].id);
     }
   }, [workspaceType, cloudProviders, selectedCloudProviderId]);
 
-  // Update region when available regions change
   useEffect(() => {
     if (workspaceType === "cloud") {
       if (availableRegions.length > 0) {
@@ -130,11 +122,9 @@ export function CreateInstanceDialog() {
     }
   }, [workspaceType, availableRegions, selectedRegion]);
 
-  // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
       setCliCommand(null);
-      // Don't reset other fields to allow quick reopening with same values
     }
   }, [open]); 
 
@@ -147,7 +137,6 @@ export function CreateInstanceDialog() {
             if (payload.status === "running") {
               toast.success("Workspace is ready! Redirecting you now");
               queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
-
               console.log(payload.workspaceDomain);
               subscription.unsubscribe();
               console.log("Unsubscribed from workspace status");
@@ -167,11 +156,9 @@ export function CreateInstanceDialog() {
   const createServiceMutation = useMutation(trpc.workspace.createWorkspace.mutationOptions({
     onSuccess: async (data) => {
       if (data.command) {
-        // Local workspace - show connection command
         toast.success("Local tunnel created successfully");
         setCliCommand(data.command);
       } else {
-        // Cloud workspace - subscribe to status updates
         toast.success("Workspace is provisioning");
         setOpen(false);
         console.log("Subscribing to workspace status", data.workspace.id);
@@ -187,7 +174,6 @@ export function CreateInstanceDialog() {
 
   const handleSubmit = async () => {
     if (workspaceType === "local") {
-      // Validate local workspace fields
       if (!localSubdomain) {
         toast.error("Please enter a subdomain.");
         return;
@@ -212,7 +198,6 @@ export function CreateInstanceDialog() {
       return;
     }
 
-    // Validate cloud workspace fields
     if (!repoUrl) {
       toast.error("Please enter a repository URL.");
       return;
@@ -236,14 +221,14 @@ export function CreateInstanceDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" /> New Instance
+        <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+          <Plus className="h-4 w-4" /> New Instance
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px]">
+      <DialogContent className="sm:max-w-[525px] border-border/50 bg-card">
         <DialogHeader>
-          <DialogTitle>Create New Instance</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-xl">Create New Instance</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             {workspaceType === "cloud" 
               ? "Deploy a new development workspace from a GitHub repository."
               : "Create a local tunnel to expose your local development server."}
@@ -252,12 +237,13 @@ export function CreateInstanceDialog() {
 
         {cliCommand ? (
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Run this command to connect:</Label>
+            <div className="grid gap-3">
+              <Label className="text-sm font-medium">Run this command to connect:</Label>
               <div className="flex gap-2">
-                <Input value={cliCommand} readOnly className="font-mono text-sm" />
+                <Input value={cliCommand} readOnly className="font-mono text-sm bg-secondary/50 border-border/50" />
                 <Button
                   variant="outline"
+                  className="border-border/50 hover:bg-secondary/50"
                   onClick={() => {
                     navigator.clipboard.writeText(cliCommand);
                     toast.success("Copied to clipboard");
@@ -271,54 +257,82 @@ export function CreateInstanceDialog() {
               </p>
             </div>
             <DialogFooter>
-              <Button onClick={() => { setOpen(false); setCliCommand(null); }}>
+              <Button 
+                onClick={() => {setOpen(false); setCliCommand(null); }}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
                 Done
               </Button>
             </DialogFooter>
           </div>
         ) : (
           <>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-5 py-4">
               <div className="grid gap-2">
-                <Label>Workspace Type</Label>
-                <Select value={workspaceType} onValueChange={(val) => setWorkspaceType(val as "cloud" | "local")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cloud">Cloud Instance</SelectItem>
-                    <SelectItem value="local">Local Tunnel</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm font-medium">Workspace Type</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceType("cloud")}
+                    className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
+                      workspaceType === "cloud"
+                        ? "border-accent bg-secondary/80"
+                        : "border-border/50 hover:border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <Cloud className={`h-5 w-5 ${workspaceType === "cloud" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="text-left">
+                      <p className={`text-sm font-medium ${workspaceType === "cloud" ? "text-foreground" : ""}`}>Cloud Instance</p>
+                      <p className="text-xs text-muted-foreground">Remote workspace</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceType("local")}
+                    className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
+                      workspaceType === "local"
+                        ? "border-accent bg-secondary/80"
+                        : "border-border/50 hover:border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <Terminal className={`h-5 w-5 ${workspaceType === "local" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="text-left">
+                      <p className={`text-sm font-medium ${workspaceType === "local" ? "text-foreground" : ""}`}>Local Tunnel</p>
+                      <p className="text-xs text-muted-foreground">Expose local server</p>
+                    </div>
+                  </button>
+                </div>
               </div>
 
               {workspaceType === "local" ? (
                 <>
                   <div className="grid gap-2">
-                    <Label htmlFor="subdomain">Subdomain</Label>
+                    <Label htmlFor="subdomain" className="text-sm font-medium">Subdomain</Label>
                     <Input
                       id="subdomain"
                       placeholder="my-app"
                       value={localSubdomain}
                       onChange={(e) => setLocalSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                      className="bg-secondary/30 border-border/50 focus:border-accent"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Your tunnel will be available at: {localSubdomain || "my-app"}.gitterm.dev
+                      Your tunnel will be available at: <span className="font-mono text-primary">{localSubdomain || "my-app"}.gitterm.dev</span>
                     </p>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="local-name">Name (optional)</Label>
+                    <Label htmlFor="local-name" className="text-sm font-medium">Name (optional)</Label>
                     <Input
                       id="local-name"
                       placeholder="My Local App"
                       value={localName}
                       onChange={(e) => setLocalName(e.target.value)}
+                      className="bg-secondary/30 border-border/50 focus:border-accent"
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Agent Type</Label>
+                    <Label className="text-sm font-medium">Agent Type</Label>
                     <Select value={selectedAgentTypeId} onValueChange={setSelectedAgentTypeId}>
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-secondary/30 border-border/50">
                         <SelectValue placeholder="Select agent" />
                       </SelectTrigger>
                       <SelectContent>
@@ -326,7 +340,7 @@ export function CreateInstanceDialog() {
                           <SelectItem key={agent.id} value={agent.id}>
                             <div className="flex items-center">
                               <Image 
-                                src={getIcon(agent.name)} 
+                                src={getIcon(agent.name) || "/placeholder.svg"} 
                                 alt={agent.name} 
                                 width={16} 
                                 height={16} 
@@ -346,20 +360,21 @@ export function CreateInstanceDialog() {
               ) : (
                 <>
                   <div className="grid gap-2">
-                    <Label htmlFor="repo">GitHub Repository URL</Label>
+                    <Label htmlFor="repo" className="text-sm font-medium">GitHub Repository URL</Label>
                     <Input
                       id="repo"
                       placeholder="https://github.com/username/repo"
                       value={repoUrl}
                       onChange={(e) => setRepoUrl(e.target.value)}
+                      className="bg-secondary/30 border-border/50 focus:border-accent"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label>Agent Type</Label>
+                      <Label className="text-sm font-medium">Agent Type</Label>
                       <Select value={selectedAgentTypeId} onValueChange={setSelectedAgentTypeId}>
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-secondary/30 border-border/50">
                           <SelectValue placeholder="Select agent" />
                         </SelectTrigger>
                         <SelectContent>
@@ -367,7 +382,7 @@ export function CreateInstanceDialog() {
                             <SelectItem key={agent.id} value={agent.id}>
                               <div className="flex items-center">
                                 <Image 
-                                  src={getIcon(agent.name)} 
+                                  src={getIcon(agent.name) || "/placeholder.svg"} 
                                   alt={agent.name} 
                                   width={16} 
                                   height={16} 
@@ -382,9 +397,9 @@ export function CreateInstanceDialog() {
                     </div>
 
                     <div className="grid gap-2">
-                      <Label>Cloud Provider</Label>
+                      <Label className="text-sm font-medium">Cloud Provider</Label>
                       <Select value={selectedCloudProviderId} onValueChange={setSelectedCloudProviderId}>
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-secondary/30 border-border/50">
                           <SelectValue placeholder="Select cloud" />
                         </SelectTrigger>
                         <SelectContent>
@@ -393,7 +408,7 @@ export function CreateInstanceDialog() {
                               <SelectItem key={cloud.id} value={cloud.id}>
                                 <div className="flex items-center">
                                   <Image 
-                                    src={getIcon(cloud.name)} 
+                                    src={getIcon(cloud.name) || "/placeholder.svg"} 
                                     alt={cloud.name} 
                                     width={16} 
                                     height={16} 
@@ -412,15 +427,14 @@ export function CreateInstanceDialog() {
                   </div>
           
                   <div className="grid grid-cols-2 gap-4">
-
                     <div className="grid gap-2">
-                      <Label>Region</Label>
+                      <Label className="text-sm font-medium">Region</Label>
                       <Select
                         value={selectedRegion}
                         onValueChange={setSelectedRegion}
                         disabled={availableRegions.length === 0}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-secondary/30 border-border/50">
                           <SelectValue
                             placeholder={availableRegions.length > 0 ? "Select region" : "Coming soon"}
                           />
@@ -442,18 +456,21 @@ export function CreateInstanceDialog() {
                           )}
                         </SelectContent>
                       </Select>
-
-                      
                     </div>
 
                     <div className="grid gap-2">
-                      <Label >Git Setup <Link href="/dashboard/integrations" className="text-blue-500"><ArrowUpRight className="h-4 w-4" /></Link></Label>
+                      <Label className="text-sm font-medium flex items-center gap-1">
+                        Git Setup 
+                        <Link href="/dashboard/integrations" className="text-primary hover:text-primary/80">
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </Label>
                       <Select 
-                      value={selectedGitInstallationId} 
-                      onValueChange={setSelectedGitInstallationId}
-                      disabled={installationsData?.installations && installationsData.installations.length === 0}
+                        value={selectedGitInstallationId} 
+                        onValueChange={setSelectedGitInstallationId}
+                        disabled={installationsData?.installations && installationsData.installations.length === 0}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-secondary/30 border-border/50">
                           <SelectValue placeholder={installationsData?.installations && installationsData.installations.length > 0 ? "Select git installation" : "No git installations found"} />
                         </SelectTrigger>
                         <SelectContent>
@@ -467,38 +484,34 @@ export function CreateInstanceDialog() {
                               <SelectItem key={installation.git_integration.id} value={installation.git_integration.id}>
                                 <div className="flex items-center">
                                   <Image 
-                                      src={"/github.svg"} 
-                                      alt="GitHub" 
-                                      width={16} 
-                                      height={16} 
-                                      className="mr-2 h-4 w-4" 
-                                    />
-                                    {installation.git_integration.providerAccountLogin}
-                                  </div>
+                                    src={"/github.svg"} 
+                                    alt="GitHub" 
+                                    width={16} 
+                                    height={16} 
+                                    className="mr-2 h-4 w-4" 
+                                  />
+                                  {installation.git_integration.providerAccountLogin}
+                                </div>
                               </SelectItem>
                             ))
                           )}
-                      </SelectContent>
+                        </SelectContent>
                       </Select>
-
                     </div>
 
-                    <div className="flex items-start gap-3 col-span-2">
+                    <div className="flex items-start gap-3 col-span-2 p-4 rounded-lg bg-secondary/30 border border-border/50">
                       <Checkbox
                         id="persistent"
                         checked={selectedPersistent}
-                        defaultChecked
-                        onCheckedChange={(checked) => setSelectedPersistent(checked === true)}
+                        onCheckedChange={(checked) => setSelectedPersistent(checked as boolean)}
+                        className="mt-0.5 data-[state=checked]:bg-accent data-[state=checked]:border-accent"
                       />
-                      <div className="grid gap-1.5 leading-none">
-                        <Label
-                          htmlFor="persistent"
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          Persistent Workspace
+                      <div className="grid gap-1">
+                        <Label htmlFor="persistent" className="text-sm font-medium cursor-pointer">
+                          Persistent Storage
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          Keep workspace files when paused (uses more storage)
+                          Keep your files and data between sessions. Disable for ephemeral workspaces.
                         </p>
                       </div>
                     </div>
@@ -506,23 +519,30 @@ export function CreateInstanceDialog() {
                 </>
               )}
             </div>
-
             <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setOpen(false)}
+                className="border-border/50 hover:bg-secondary/50"
+              >
                 Cancel
               </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={
-                  (workspaceType === "cloud" && (!repoUrl || !selectedAgentTypeId)) ||
-                  (workspaceType === "local" && !localSubdomain) ||
-                  createServiceMutation.isPending
-                }
+              <Button 
+                onClick={handleSubmit} 
+                disabled={createServiceMutation.isPending}
+                className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                {createServiceMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {createServiceMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Create Instance
+                  </>
                 )}
-                {workspaceType === "local" ? "Create Tunnel" : "Create Instance"}
               </Button>
             </DialogFooter>
           </>

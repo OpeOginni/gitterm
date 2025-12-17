@@ -1,72 +1,83 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import Loader from "@/components/loader";
-import { trpc } from "@/utils/trpc";
-import { CheckCircle2, XCircle, GitBranch, AlertCircle, Github, GitFork, Lock, Zap, ExternalLink, Shield, RefreshCw } from "lucide-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import Loader from "@/components/loader"
+import { trpc } from "@/utils/trpc"
+import {
+  CheckCircle2,
+  XCircle,
+  GitBranch,
+  AlertCircle,
+  Github,
+  GitFork,
+  Lock,
+  Zap,
+  ExternalLink,
+  Shield,
+  RefreshCw,
+} from "lucide-react"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { toast } from "sonner"
 
-const GITHUB_APP_NAME = process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "gitterm-dev";
+const GITHUB_APP_NAME = process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "gitterm-dev"
 
 export function GitHubConnection() {
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  const { data: installationData, isLoading, refetch } = useQuery(trpc.github.getInstallationStatus.queryOptions());
-  const disconnectMutation = useMutation(trpc.github.disconnectApp.mutationOptions());
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Refetch installation status on mount (in case we just came back from GitHub)
+  const { data: installationData, isLoading, refetch } = useQuery(trpc.github.getInstallationStatus.queryOptions())
+  const disconnectMutation = useMutation(trpc.github.disconnectApp.mutationOptions())
+
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    refetch()
+  }, [refetch])
 
   const handleConnect = () => {
-    setIsConnecting(true);
-    const redirectUrl = `${process.env.NEXT_PUBLIC_WEB_URL}/api/github/callback`;
-    window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${redirectUrl}`;
-  };
+    setIsConnecting(true)
+    const redirectUrl = `${process.env.NEXT_PUBLIC_WEB_URL}/api/github/callback`
+    window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${redirectUrl}`
+  }
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
+    setIsRefreshing(true)
     try {
-      await refetch();
-      toast.success("Installation status refreshed");
+      await refetch()
+      toast.success("Installation status refreshed")
     } catch (error) {
-      toast.error("Failed to refresh status");
+      toast.error("Failed to refresh status")
     } finally {
-      setIsRefreshing(false);
+      setIsRefreshing(false)
     }
-  };
+  }
 
   const handleDisconnect = async () => {
-    if (confirm("Are you sure you want to disconnect your GitHub App? This will disable git operations in your workspaces.")) {
+    if (
+      confirm(
+        "Are you sure you want to disconnect your GitHub App? This will disable git operations in your workspaces.",
+      )
+    ) {
       try {
-        await disconnectMutation.mutateAsync();
-        await refetch();
-        toast.success("GitHub App disconnected successfully");
+        await disconnectMutation.mutateAsync()
+        await refetch()
+        toast.success("GitHub App disconnected successfully")
       } catch (error) {
-        toast.error("Failed to disconnect GitHub App");
+        toast.error("Failed to disconnect GitHub App")
       }
     }
-  };
+  }
 
   if (isLoading) {
     return (
-      <Card className="border-2">
+      <Card className="border-border/50 bg-card/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Github className="h-5 w-5" />
-            </div>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Github className="h-5 w-5" />
             GitHub Integration
           </CardTitle>
-          <CardDescription>
-            Connect your GitHub account to enable git operations in workspaces
-          </CardDescription>
+          <CardDescription>Connect your GitHub account to enable git operations in workspaces</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
@@ -74,24 +85,22 @@ export function GitHubConnection() {
           </div>
         </CardContent>
       </Card>
-    );
+    )
   }
 
-  const isConnected = installationData?.connected ?? false;
-  const installation = installationData?.installation;
-  const isSuspended = installation?.suspended ?? false;
+  const isConnected = installationData?.connected ?? false
+  const installation = installationData?.installation
+  const isSuspended = installation?.suspended ?? false
 
   return (
-    <Card className={`border-2 transition-all ${isConnected ? 'border-green-500/20 bg-green-50/5 dark:bg-green-950/5' : ''}`}>
+    <Card className="border-border/50 bg-card/50 overflow-hidden">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${isConnected ? 'bg-green-500/10' : 'bg-primary/10'}`}>
-              <Github className="h-5 w-5" />
-            </div>
+          <CardTitle className="flex items-center gap-3 text-lg">
+            <Github className="h-5 w-5" />
             GitHub Integration
             {isConnected && (
-              <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+              <Badge className="bg-accent/10 text-accent border-accent/20">
                 <CheckCircle2 className="h-3 w-3 mr-1" />
                 Connected
               </Badge>
@@ -103,9 +112,9 @@ export function GitHubConnection() {
               size="icon"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-secondary/50"
             >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
             </Button>
           )}
         </div>
@@ -116,44 +125,34 @@ export function GitHubConnection() {
       <CardContent className="space-y-6">
         {isConnected && installation ? (
           <>
-            {/* Connection Status Card */}
-            <div className={`p-4 border-2 rounded-xl transition-all ${
-              isSuspended 
-                ? 'border-red-200 bg-red-50/50 dark:border-red-900/50 dark:bg-red-950/20' 
-                : 'border-green-200 bg-green-50/50 dark:border-green-900/50 dark:bg-green-950/20'
-            }`}>
+            <div className="p-4 rounded-lg bg-secondary/30 border border-border/50">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4">
-                  <div className={`p-2 rounded-lg ${
-                    isSuspended ? 'bg-red-500/10' : 'bg-green-500/10'
-                  }`}>
-                    {isSuspended ? (
-                      <AlertCircle className="h-5 w-5 text-red-500" />
-                    ) : (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    )}
+                  <div className="p-2.5 rounded-lg bg-accent/10 ring-1 ring-accent/20">
+                    <CheckCircle2 className="h-5 w-5 text-accent" />
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-base">@{installation.accountLogin}</p>
-                      <Badge variant="outline" className="text-xs">
+                      <p className="font-semibold">@{installation.accountLogin}</p>
+                      <Badge variant="outline" className="text-xs border-border/50">
                         {installation.accountType}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Shield className="h-3.5 w-3.5" />
                       <span>
-                        {installation.repositorySelection === "all" 
-                          ? "Access to all repositories" 
+                        {installation.repositorySelection === "all"
+                          ? "Access to all repositories"
                           : "Access to selected repositories"}
                       </span>
                     </div>
                     {installation.installedAt && (
                       <p className="text-xs text-muted-foreground">
-                        Connected {new Date(installation.installedAt).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric', 
-                          year: 'numeric' 
+                        Connected{" "}
+                        {new Date(installation.installedAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
                         })}
                       </p>
                     )}
@@ -169,76 +168,54 @@ export function GitHubConnection() {
             </div>
 
             {isSuspended && (
-              <div className="p-4 border border-red-200 dark:border-red-900 rounded-lg bg-red-50/50 dark:bg-red-950/20">
+              <div className="p-4 border border-red-500/30 rounded-lg bg-red-500/5">
                 <div className="flex gap-3">
-                  <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="font-medium text-sm text-red-900 dark:text-red-100">
-                      Installation Suspended
-                    </p>
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      Your GitHub App installation has been suspended. Git operations will not work until you resolve this on GitHub.
+                    <p className="font-medium text-sm">Installation Suspended</p>
+                    <p className="text-sm text-muted-foreground">
+                      Your GitHub App installation has been suspended. Git operations will not work until you resolve
+                      this on GitHub.
                     </p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Features Grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 border rounded-lg bg-muted/30">
-                <div className="flex items-center gap-2 mb-1">
-                  <Lock className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Secure Access</span>
+              {[
+                { icon: Lock, label: "Secure Access", desc: "No personal tokens needed" },
+                { icon: GitFork, label: "Quick Fork", desc: "Fork repos instantly" },
+                { icon: Zap, label: "Auto Refresh", desc: "Tokens refresh automatically" },
+                { icon: GitBranch, label: "Full Git Ops", desc: "Clone, commit, push & pull" },
+              ].map((feature) => (
+                <div
+                  key={feature.label}
+                  className="p-3 rounded-lg border border-border/50 bg-secondary/20 hover:border-accent/30 transition-colors"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <feature.icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{feature.label}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{feature.desc}</p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  No personal tokens needed
-                </p>
-              </div>
-              <div className="p-3 border rounded-lg bg-muted/30">
-                <div className="flex items-center gap-2 mb-1">
-                  <GitFork className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Quick Fork</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Fork repos instantly
-                </p>
-              </div>
-              <div className="p-3 border rounded-lg bg-muted/30">
-                <div className="flex items-center gap-2 mb-1">
-                  <Zap className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Auto Refresh</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Tokens refresh automatically
-                </p>
-              </div>
-              <div className="p-3 border rounded-lg bg-muted/30">
-                <div className="flex items-center gap-2 mb-1">
-                  <GitBranch className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Full Git Ops</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Clone, commit, push & pull
-                </p>
-              </div>
+              ))}
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
                 onClick={() => window.open(`https://github.com/settings/installations`, "_blank")}
-                className="flex-1"
+                className="flex-1 border-border/50 hover:bg-secondary/50"
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Manage on GitHub
               </Button>
               <Button
-                variant="destructive"
+                variant="outline"
                 onClick={handleDisconnect}
                 disabled={disconnectMutation.isPending}
-                className="flex-1"
+                className="flex-1 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20 bg-transparent"
               >
                 {disconnectMutation.isPending ? (
                   <>
@@ -256,10 +233,9 @@ export function GitHubConnection() {
           </>
         ) : (
           <>
-            {/* Not Connected State */}
-            <div className="p-6 border-2 border-dashed rounded-xl bg-muted/30 text-center">
-              <div className="flex flex-col items-center gap-3">
-                <div className="p-3 bg-muted rounded-full">
+            <div className="p-8 border border-dashed border-border/60 rounded-lg text-center bg-secondary/20">
+              <div className="flex flex-col items-center gap-4">
+                <div className="p-4 rounded-full bg-secondary/50 ring-1 ring-border/50">
                   <Github className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <div>
@@ -271,32 +247,30 @@ export function GitHubConnection() {
               </div>
             </div>
 
-            {/* Features List */}
             <div className="space-y-3">
               <p className="text-sm font-medium">What you'll get:</p>
-              <div className="grid gap-2">
+              <div className="grid gap-1">
                 {[
                   { icon: Lock, text: "Clone private repositories securely" },
                   { icon: GitBranch, text: "Commit and push changes from workspaces" },
                   { icon: GitFork, text: "Fork repositories with one click" },
                   { icon: Zap, text: "Automatic token refresh (no manual setup)" },
                 ].map((feature, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="p-1.5 bg-primary/10 rounded-md">
-                      <feature.icon className="h-4 w-4 text-primary" />
-                    </div>
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/5 transition-colors group"
+                  >
+                    <feature.icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     <span className="text-sm">{feature.text}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Connect Button */}
             <Button
-              className="w-full h-11"
+              className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={handleConnect}
               disabled={isConnecting}
-              size="lg"
             >
               {isConnecting ? (
                 <>
@@ -311,12 +285,12 @@ export function GitHubConnection() {
               )}
             </Button>
 
-            <p className="text-xs text-center text-muted-foreground px-4">
+            <p className="text-xs text-center text-muted-foreground">
               You'll be redirected to GitHub to install the app. You can choose which repositories to grant access to.
             </p>
           </>
         )}
       </CardContent>
     </Card>
-  );
+  )
 }

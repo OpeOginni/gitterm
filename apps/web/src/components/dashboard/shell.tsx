@@ -1,33 +1,37 @@
+import { cn } from "@/lib/utils"
+import type React from "react"
+
 interface DashboardShellProps {
-  children: React.ReactNode;
-  className?: string;
+  children: React.ReactNode
+  className?: string
 }
 
 export function DashboardShell({ children, className }: DashboardShellProps) {
   return (
-    <div className={`flex-1 space-y-4 p-8 pt-6 ${className}`}>
-      {children}
+    <div className={`flex-1 space-y-8 p-6 md:p-8 lg:p-10 ${className}`}>
+      <div className="mx-auto max-w-7xl">{children}</div>
     </div>
-  );
+  )
 }
 
 export function DashboardHeader({
   heading,
   text,
   children,
+  className,
 }: {
-  heading: string;
-  text?: string;
-  children?: React.ReactNode;
+  heading: string
+  text?: string
+  children?: React.ReactNode
+  className?: string
 }) {
   return (
-    <div className="flex items-center justify-between px-2">
-      <div className="grid gap-1">
-        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">{heading}</h1>
-        {text && <p className="text-lg text-muted-foreground">{text}</p>}
+    <div className={cn("flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between", className)}>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl text-balance">{heading}</h1>
+        {text && <p className="text-muted-foreground text-sm md:text-base">{text}</p>}
       </div>
       {children}
     </div>
-  );
+  )
 }
-

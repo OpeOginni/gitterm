@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 
 dotenv.config({
 	path: "../../apps/server/.env",
+	// path: "../../apps/server/.env.development.local",
 });
 
 import { drizzle } from "drizzle-orm/node-postgres";

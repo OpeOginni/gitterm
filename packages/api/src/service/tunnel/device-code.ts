@@ -1,5 +1,5 @@
 import { DeviceCodeRepository } from "@gitpad/redis";
-import type { DeviceCodeState } from "../../../redis/src/repositories/device-code";
+import type { DeviceCodeState } from "@gitpad/redis";
 
 const DEFAULT_POLL_INTERVAL_SECONDS = 5;
 

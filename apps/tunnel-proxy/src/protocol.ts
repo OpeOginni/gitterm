@@ -15,6 +15,7 @@ export const tunnelFrameSchema = z.object({
 	port: z.number().optional(),
 	exposedPorts: z.record(z.string(), z.number()).optional(),
 	// For `data` frames, body is base64 encoded for now.
+	mainSubdomain: z.string().optional(),
 	data: z.string().optional(),
 	timestamp: z.number().optional(),
 });

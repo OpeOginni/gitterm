@@ -4,13 +4,12 @@ import { trpc, queryClient } from "@/utils/trpc";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ExternalLink, Trash2, PlayCircle, GitBranch, Clock, Globe, Box, MapPin, StopCircle, Copy } from "lucide-react";
+import { Loader2, ExternalLink, Trash2, PlayCircle, GitBranch, Clock, Globe, Box, MapPin, StopCircle, Copy, Terminal, HeartPlusIcon, PauseIcon } from 'lucide-react';
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useMutation, useQueries } from "@tanstack/react-query";
 
 export function InstanceList() {
-  // Fetch workspaces and cloud providers in parallel
   const [workspacesQuery, providersQuery] = useQueries({
     queries: [
       trpc.workspace.listWorkspaces.queryOptions(),
@@ -23,12 +22,14 @@ export function InstanceList() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-accent" />
+          <p className="text-sm text-muted-foreground">Loading workspaces...</p>
+        </div>
       </div>
     );
   }
 
-  // Filter out terminated workspaces
   const activeWorkspaces = (workspacesQuery.data?.workspaces || []).filter(
     (ws) => ws.status !== "terminated"
   );
@@ -37,20 +38,20 @@ export function InstanceList() {
 
   if (activeWorkspaces.length === 0) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center animate-in fade-in-50">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          <PlayCircle className="h-6 w-6 text-primary" />
+      <div className="flex h-72 flex-col items-center justify-center rounded-xl border-primary/50 border-dashed border bg-card/30 p-8 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 ring-1 ring-accent/20">
+          <Terminal className="h-7 w-7 text-primary" />
         </div>
-        <h3 className="mt-4 text-lg font-semibold">No active workspaces</h3>
-        <p className="mb-4 mt-2 text-sm text-muted-foreground max-w-sm">
-          Create a new workspace to get started with your development environment.
+        <h3 className="mt-5 text-lg font-medium">No active workspaces</h3>
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+          Create a new workspace to get started with your remote development environment.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       {activeWorkspaces.map((workspace) => (
         <InstanceCard 
           key={workspace.id} 
@@ -63,7 +64,6 @@ export function InstanceList() {
 }
 
 type Workspace = typeof trpc.workspace.listWorkspaces["~types"]["output"]["workspaces"][number];
-
 type CloudProvider = typeof trpc.workspace.listCloudProviders["~types"]["output"]["cloudProviders"][number];
 
 function InstanceCard({ workspace, providers }: { workspace: Workspace; providers: CloudProvider[] }) {
@@ -100,29 +100,26 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "running":
-        return <Badge className="bg-green-500/15 text-green-600 hover:bg-green-500/25 border-green-500/20 shrink-0">Running</Badge>;
+        return (
+          <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
+            <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-[oklch(0.7_0.15_160)] animate-pulse" />
+            Running
+          </Badge>
+        );
       case "pending":
-        return <Badge className="bg-yellow-500/15 text-yellow-600 hover:bg-yellow-500/25 border-yellow-500/20 shrink-0">Pending</Badge>;
+        return (
+          <Badge variant="secondary">
+            <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+            Pending
+          </Badge>
+        );
       case "stopped":
-        return <Badge variant="secondary" className="shrink-0">Stopped</Badge>;
+        return <Badge variant="secondary">Stopped</Badge>;
       case "terminated":
-        return <Badge variant="destructive" className="shrink-0">Terminated</Badge>;
+        return <Badge variant="destructive">Terminated</Badge>;
       default:
-        return <Badge variant="outline" className="shrink-0">{status}</Badge>;
+        return <Badge variant="outline">{status}</Badge>;
     }
-  };
-
-  // Extract a readable name from the image ID
-  const getWorkspaceName = () => {
-    if (!workspace.imageId) return "Workspace";
-    // If it's a UUID, use generic name
-    if (workspace.imageId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      return "Workspace";
-    }
-    // If it's a docker image, extract the image name
-    const parts = workspace.imageId.split("/");
-    const imageName = parts[parts.length - 1].split(":")[0];
-    return imageName.charAt(0).toUpperCase() + imageName.slice(1);
   };
 
   const getRepoName = () => {
@@ -133,7 +130,6 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
       .replace(".git", "");
   };
 
-  // Get region details from providers
   const getRegionInfo = () => {
     const provider = providers.find((p) => p.id === workspace.cloudProviderId);
     if (!provider) return { name: "Unknown", location: "Unknown", providerName: "Unknown" };
@@ -152,28 +148,28 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
   const isPending = workspace.status === "pending";
 
   return (
-    <Card className="overflow-hidden transition-all hover:shadow-lg border-border/50 flex flex-col">
-      <CardHeader className="pb-3 px-4 pt-4">
+    <Card className="group overflow-hidden border-primary/10 bg-card/50 backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 flex flex-col">
+      <CardHeader className="pb-3 px-5 pt-5">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="p-1.5 rounded-md bg-primary/10">
-                <Box className="h-3.5 w-3.5 text-primary shrink-0" />
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/50 transition-colors">
+                <Box className="h-4 w-4 transition-colors text-primary" />
               </div>
-              <div className="flex flex-row items-center gap-2 min-w-0 flex-1">
+              <div className="flex flex-col min-w-0">
                 <CardTitle className="text-sm font-semibold truncate">
                   {workspace.subdomain}
                 </CardTitle>
-                <span className="text-xs font-bold text-muted-foreground truncate">
-                  ({workspace.image.agentType.name})
+                <span className="text-xs text-muted-foreground truncate">
+                  {workspace.image.agentType.name}
                 </span>
               </div>
             </div>
             {getStatusBadge(workspace.status)}
           </div>
           {getRepoName() && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0 pl-8">
-              <GitBranch className="h-3 w-3 shrink-0" />
+            <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0 ml-12">
+              <GitBranch className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate font-mono" title={workspace.repositoryUrl || ""}>
                 {getRepoName()}
               </span>
@@ -181,41 +177,40 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
           )}
         </div>
       </CardHeader>
-      <CardContent className="pb-3 px-4 flex-1">
-        <div className="grid gap-2.5 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1.5">
+      <CardContent className="pb-4 px-5 flex-1">
+        <div className="grid gap-2.5 text-xs text-muted-foreground ml-12">
+          <div className="flex items-center gap-2">
             <MapPin className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">
-              {regionInfo.name} ({regionInfo.location})
+              {regionInfo.name} · {regionInfo.location}
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <Globe className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{regionInfo.providerName}</span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <Clock className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">
-              Started {formatDistanceToNow(new Date(workspace.startedAt), { addSuffix: true })}
+              {formatDistanceToNow(new Date(workspace.startedAt), { addSuffix: true })}
             </span>
           </div>
           {workspace.lastActiveAt && isRunning && (
-            <div className="flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 shrink-0 text-green-500" />
-              <span className="truncate text-green-600">
+            <div className="flex items-center gap-2">
+              <HeartPlusIcon className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+              <span className="truncate text-primary/70">
                 Active {formatDistanceToNow(new Date(workspace.lastActiveAt), { addSuffix: true })}
               </span>
             </div>
           )}
         </div>
       </CardContent>
-      <CardFooter className="flex gap-2 bg-muted/30 p-3 border-t">
-      {isRunning && workspace.domain && (
+      <CardFooter className="flex gap-2 bg-secondary/30 p-4 border-t border-border/50">
+        {isRunning && workspace.domain && (
           workspace.serverOnly ? (
             <Button 
-              variant="default" 
               size="sm" 
-              className="h-9 flex-1 text-xs gap-1.5"
+              className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
               onClick={() => {
                 const command = `opencode attach https://${workspace.domain}`;
                 navigator.clipboard.writeText(command);
@@ -226,7 +221,11 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
               Copy Attach Command
             </Button>
           ) : (
-            <Button variant="default" size="sm" className="h-9 flex-1 text-xs gap-1.5" asChild>
+            <Button 
+              size="sm" 
+              className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90" 
+              asChild
+            >
               <a href={`https://${workspace.domain}`} target="_blank" rel="noreferrer">
                 <ExternalLink className="h-3.5 w-3.5" />
                 Open Workspace
@@ -236,9 +235,8 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
         )}
         {isStopped && (
           <Button
-            variant="default"
             size="sm"
-            className="h-9 flex-1 text-xs gap-1.5"
+            className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
             disabled={restartWorkspaceMutation.isPending}
             onClick={() => restartWorkspaceMutation.mutate({ workspaceId: workspace.id })}
           >
@@ -255,14 +253,14 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
           <Button
             variant="outline"
             size="sm"
-            className="h-9 px-3 text-xs"
+            className="h-9 px-3 text-xs border-border/50 hover:bg-secondary/50"
             disabled={stopWorkspaceMutation.isPending}
             onClick={() => stopWorkspaceMutation.mutate({ workspaceId: workspace.id })}
           >
             {stopWorkspaceMutation.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <StopCircle className="h-3.5 w-3.5" />
+              <PauseIcon className="h-3.5 w-3.5" />
             )}
           </Button>
         )}
@@ -270,7 +268,7 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
         <Button 
           variant="outline" 
           size="sm" 
-          className="h-9 px-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
+          className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
           disabled={deleteServiceMutation.isPending}
           onClick={() => deleteServiceMutation.mutate({ workspaceId: workspace.id })}
         >
@@ -284,4 +282,3 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
     </Card>
   );
 }
-

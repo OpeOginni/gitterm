@@ -3,6 +3,7 @@ import { tunnelJWT } from "./tunnel-jwt";
 import { DeviceCodeRepository } from "@gitpad/redis";
 import { db, eq } from "@gitpad/db";
 import { workspace } from "@gitpad/db/schema/workspace";
+import { WORKSPACE_EVENTS } from "../../events/workspace";
 
 export class AgentAuthService {
 	private deviceRepo = new DeviceCodeRepository();
@@ -80,6 +81,14 @@ export class AgentAuthService {
 				updatedAt: new Date(),
 			})
 			.where(eq(workspace.id, params.workspaceId));
+
+		WORKSPACE_EVENTS.emitStatus({
+			workspaceId: params.workspaceId,
+			status: "running",
+			updatedAt: new Date(),
+			userId: userId,
+			workspaceDomain: ws.domain,
+		});
 
 		return { success: true };
 	}

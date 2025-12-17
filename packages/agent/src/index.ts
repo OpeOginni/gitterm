@@ -3,10 +3,14 @@ import { z } from "zod";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import chalk from "chalk";
 
 // Default production URLs
-const DEFAULT_WS_URL = "wss://tunnel.gitterm.dev/tunnel/connect";
-const DEFAULT_SERVER_URL = "https://api.gitterm.dev";
+// const DEFAULT_WS_URL = "wss://tunnel.gitterm.dev/tunnel/connect";
+// const DEFAULT_SERVER_URL = "https://api.gitterm.dev";
+
+const DEFAULT_WS_URL = "ws://localhost:9000/tunnel/connect";
+const DEFAULT_SERVER_URL = "http://localhost:3000";
 
 const usage = `@gitterm/agent
 
@@ -58,6 +62,7 @@ const frameSchema = z.object({
 	port: z.number().optional(),
 	serviceName: z.string().optional(),
 	exposedPorts: z.record(z.string(), z.number()).optional(),
+	mainSubdomain: z.string().optional(),
 	data: z.string().optional(),
 	final: z.boolean().optional(),
 	timestamp: z.number().optional(),
@@ -150,7 +155,7 @@ function sleep(ms: number) {
 async function runLogin(rawArgs: string[]) {
 	const serverUrl = getFlag(rawArgs, "--server-url") ?? DEFAULT_SERVER_URL;
 
-	console.log(`Logging in to ${serverUrl}...`);
+	console.log(`Logging in to gitterm...`);
 	
 	const codeRes = await fetch(new URL("/api/device/code", serverUrl), {
 		method: "POST",
@@ -183,7 +188,7 @@ async function runLogin(rawArgs: string[]) {
 		if (tokenRes.ok) {
 			const tokenJson = (await tokenRes.json()) as { accessToken: string };
 			await saveConfig({ serverUrl, agentToken: tokenJson.accessToken, createdAt: Date.now() });
-			console.log("Logged in and saved credentials.");
+			console.log("Logged in successfully!");
 			process.exit(0);
 		}
 
@@ -279,6 +284,7 @@ async function runConnect(rawArgs: string[]) {
 
 	let token = tokenFromFlag;
 	let primaryPort: number;
+	let mainSubdomain: string;
 
 	if (!token) {
 		if (!workspaceId) throw new Error("Missing --workspace-id");
@@ -286,9 +292,7 @@ async function runConnect(rawArgs: string[]) {
 		if (!config?.agentToken) throw new Error("Not logged in. Run: npx @gitterm/agent login");
 		const effectiveServerUrl = serverUrl;
 
-		// Prompt for port if not provided
 		if (!portStr) {
-			console.log("First-time setup for this workspace.");
 			const portInput = await prompt("Enter the local port to expose (e.g. 3000): ");
 			const parsedPort = Number.parseInt(portInput, 10);
 			if (!Number.isFinite(parsedPort) || parsedPort <= 0) {
@@ -305,7 +309,6 @@ async function runConnect(rawArgs: string[]) {
 				localPort: primaryPort,
 				exposedPorts,
 			});
-			console.log(`Workspace configured with port ${primaryPort}`);
 		} else {
 			primaryPort = Number.parseInt(portStr, 10);
 			if (!Number.isFinite(primaryPort) || primaryPort <= 0) throw new Error("Invalid --port");
@@ -348,6 +351,7 @@ async function runConnect(rawArgs: string[]) {
 	const ws = new WebSocket(wsUrl);
 
 	ws.addEventListener("open", () => {
+		console.log("Establishing secure tunnel for workspace...");
 		ws.send(
 			JSON.stringify({
 				type: "auth",
@@ -358,7 +362,6 @@ async function runConnect(rawArgs: string[]) {
 				timestamp: Date.now(),
 			} satisfies Frame),
 		);
-		console.log("gitterm-agent connected", { wsUrl, primaryPort, exposedPorts });
 	});
 
 	ws.addEventListener("message", async (event) => {
@@ -381,7 +384,17 @@ async function runConnect(rawArgs: string[]) {
 
 		if (frame.type === "pong") return;
 		if (frame.type === "open") return;
-		if (frame.type === "auth") return;
+		if (frame.type === "auth") {
+			mainSubdomain = frame.mainSubdomain ?? "";
+
+			console.log("Connected! Your local workspace is now live at: \n")
+			console.log(chalk.green(`https://${mainSubdomain}.gitterm.dev`), "\n")
+			if (exposedPorts) {
+				for (const [serviceSubdomain, port] of Object.entries(exposedPorts)) {
+					console.log(chalk.green(`${serviceSubdomain}:${port} -> https://${serviceSubdomain}-${serviceSubdomain}.gitterm.dev`))
+				}
+			}
+		};
 
 		// Handle close frame - abort the ongoing request
 		if (frame.type === "close") {

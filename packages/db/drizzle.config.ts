@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 
 dotenv.config({
 	path: "../../apps/server/.env",
+	// path: "../../apps/server/.env.development.local",
 });
 
 export default defineConfig({

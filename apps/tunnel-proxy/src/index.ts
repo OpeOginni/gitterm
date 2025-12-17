@@ -145,7 +145,8 @@ app.get(
 						ws: ws.raw,
 					});
 
-					sendJson(ws, { type: "auth", id: frame.id, timestamp: Date.now() });
+					sendJson(ws, { type: "auth", id: frame.id, timestamp: Date.now(), mainSubdomain: claims.subdomain });
+
 					return;
 				}
 

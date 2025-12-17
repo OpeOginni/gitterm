@@ -64,6 +64,10 @@
 		"redis:down": {
 			"cache": false,
 			"persistent": true
+		},
+		"ngrok": {
+			"cache": false,
+			"persistent": true
 		}
 	}
 }

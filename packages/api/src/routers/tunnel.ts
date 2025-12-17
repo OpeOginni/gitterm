@@ -3,8 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, router } from "../index";
 import { db, eq } from "@gitpad/db";
 import { workspace } from "@gitpad/db/schema/workspace";
-import { tunnelJWT } from "../service/tunnel-jwt";
-import { agentJWT } from "../service/agent-jwt";
+import { tunnelJWT } from "../service/tunnel/tunnel-jwt";
+import { agentJWT } from "../service/tunnel/agent-jwt";
 
 export const tunnelRouter = router({
 	mintToken: protectedProcedure

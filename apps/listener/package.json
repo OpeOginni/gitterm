@@ -6,7 +6,8 @@
     "build": "tsdown",
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
-    "dev": "bun run --hot src/index.ts && ngrok http --url=bluebird-thankful-previously.ngrok-free.app 3003",
+    "dev": "bun run --hot src/index.ts",
+    "ngrok": "ngrok http --url=bluebird-thankful-previously.ngrok-free.app 3003",
     "start": "bun run dist/index.mjs"
   },
   "dependencies": {
