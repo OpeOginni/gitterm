@@ -4,7 +4,6 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Terminal } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
-import { ModeToggle } from "@/components/mode-toggle"
 
 export function LandingHeader() {
   const { data: session } = authClient.useSession()

@@ -15,7 +15,6 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { authClient } from "@/lib/auth-client"
 import { Skeleton } from "../ui/skeleton"
-import { ModeToggle } from "../mode-toggle"
 
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
@@ -63,8 +62,6 @@ export function DashboardNav() {
           {/* Right side */}
           <div className="flex items-center gap-3">
             {/* User dropdown */}
-            <ModeToggle />
-
             {isPending ? (
               <Skeleton className="h-9 w-20" />
             ) : (

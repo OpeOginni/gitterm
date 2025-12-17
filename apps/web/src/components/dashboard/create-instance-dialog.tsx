@@ -276,7 +276,7 @@ export function CreateInstanceDialog() {
                     onClick={() => setWorkspaceType("cloud")}
                     className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
                       workspaceType === "cloud"
-                        ? "border-accent bg-secondary/80"
+                        ? "border-accent bg-primary/10"
                         : "border-border/50 hover:border-border hover:bg-secondary"
                     }`}
                   >
@@ -291,7 +291,7 @@ export function CreateInstanceDialog() {
                     onClick={() => setWorkspaceType("local")}
                     className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
                       workspaceType === "local"
-                        ? "border-accent bg-secondary/80"
+                        ? "border-accent bg-primary/10"
                         : "border-border/50 hover:border-border hover:bg-secondary"
                     }`}
                   >

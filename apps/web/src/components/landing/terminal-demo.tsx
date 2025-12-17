@@ -20,12 +20,12 @@ export function TerminalDemo() {
     <div className="flex flex-col gap-4">
       {/* Mode Switcher */}
       <div className="flex items-center justify-center">
-        <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-secondary/50 border border-border/50">
+        <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-secondary border border-border">
           <button
             onClick={() => setMode("cloud")}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
               mode === "cloud"
-                ? "bg-primary/70 text-primary-foreground shadow-sm"
+                ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -36,7 +36,7 @@ export function TerminalDemo() {
             onClick={() => setMode("local")}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
               mode === "local"
-                ? "bg-primary/70 text-primary-foreground shadow-sm"
+                ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -82,13 +82,13 @@ function LocalTerminalDemo() {
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
-      <div className="flex items-center gap-2 border-b border-border bg-primary/10 px-4 py-3">
-        <div className="h-3 w-3 rounded-full bg-red-500/70" />
-        <div className="h-3 w-3 rounded-full bg-yellow-500/70" />
-        <div className="h-3 w-3 rounded-full bg-green-500/70" />
+      <div className="flex items-center gap-2 border-b border-border bg-secondary px-4 py-3">
+        <div className="h-3 w-3 rounded-full bg-red-500/80" />
+        <div className="h-3 w-3 rounded-full bg-yellow-500/80" />
+        <div className="h-3 w-3 rounded-full bg-green-500/80" />
         <span className="ml-3 text-xs text-muted-foreground font-mono">gitterm-agent — zsh</span>
       </div>
-      <div className="p-4 font-mono text-sm min-h-[260px] bg-background/50">
+      <div className="p-4 font-mono text-sm min-h-[260px]">
         {lines.map((line, i) => (
           <div
             key={i}
@@ -129,14 +129,14 @@ function CloudProvisionDemo() {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border bg-primary/10 px-4 py-3">
-        <div className="h-3 w-3 rounded-full bg-red-500/70" />
-        <div className="h-3 w-3 rounded-full bg-yellow-500/70" />
-        <div className="h-3 w-3 rounded-full bg-green-500/70" />
+      <div className="flex items-center gap-2 border-b border-border bg-secondary px-4 py-3">
+        <div className="h-3 w-3 rounded-full bg-red-500/80" />
+        <div className="h-3 w-3 rounded-full bg-yellow-500/80" />
+        <div className="h-3 w-3 rounded-full bg-green-500/80" />
         <span className="ml-3 text-xs text-muted-foreground font-mono">gitterm — dashboard</span>
       </div>
 
-      <div className="p-5 min-h-[260px] bg-background/50 flex flex-col gap-5">
+      <div className="p-5 min-h-[260px] flex flex-col gap-5">
         {/* Progress Steps */}
         <div className="flex items-center justify-between gap-2">
           {steps.map((step, index) => {
@@ -150,18 +150,18 @@ function CloudProvisionDemo() {
                 <div
                   className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-lg border transition-all duration-300 ${
                     isActive
-                      ? "border-primary bg-primary/5"
+                      ? "border-primary bg-primary/10"
                       : isComplete
-                        ? "border-green-500/50 bg-green-500/5"
-                        : "border-border bg-secondary/20"
+                        ? "border-green-500/50 bg-green-500/10"
+                        : "border-border bg-secondary/50"
                   }`}
                 >
                   <div className={`flex items-center justify-center h-8 w-8 rounded-full transition-all duration-300 ${
                     isActive
-                      ? "bg-primary/10"
+                      ? "bg-primary/20"
                       : isComplete
-                        ? "bg-green-500/10"
-                        : "bg-secondary/50"
+                        ? "bg-green-500/20"
+                        : "bg-muted"
                   }`}>
                     {isActive && index === 1 ? (
                       <Loader2 className="h-4 w-4 text-primary animate-spin" />
@@ -176,7 +176,7 @@ function CloudProvisionDemo() {
                   </span>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`w-4 h-px mx-1 transition-colors duration-500 ${
+                  <div className={`w-4 h-0.5 mx-1 rounded-full transition-colors duration-500 ${
                     activeStep > index ? "bg-green-500" : "bg-border"
                   }`} />
                 )}
@@ -196,8 +196,8 @@ function CloudProvisionDemo() {
               key={provider.name}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-all ${
                 provider.active
-                  ? "bg-primary/10 border border-primary/20 text-primary"
-                  : "bg-secondary/30 border border-border/50 text-muted-foreground"
+                  ? "bg-primary/15 border border-primary/30 text-primary"
+                  : "bg-secondary border border-border text-muted-foreground"
               }`}
             >
               <Box className="h-3 w-3" />
@@ -207,7 +207,7 @@ function CloudProvisionDemo() {
         </div>
 
         {/* Terminal output */}
-        <div className="font-mono text-xs bg-secondary/30 rounded-md p-3 border border-border/50">
+        <div className="font-mono text-xs bg-secondary rounded-md p-3 border border-border">
           {activeStep === 0 && (
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">$</span>
