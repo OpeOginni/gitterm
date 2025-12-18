@@ -6,18 +6,18 @@ import { dirname, join } from "node:path";
 import chalk from "chalk";
 
 // Default production URLs
-// const DEFAULT_WS_URL = "wss://tunnel.gitterm.dev/tunnel/connect";
-// const DEFAULT_SERVER_URL = "https://api.gitterm.dev";
+const DEFAULT_WS_URL = "wss://tunnel.gitterm.dev/tunnel/connect";
+const DEFAULT_SERVER_URL = "https://api.gitterm.dev";
 
-const DEFAULT_WS_URL = "ws://localhost:9000/tunnel/connect";
-const DEFAULT_SERVER_URL = "http://localhost:3000";
+// const DEFAULT_WS_URL = "ws://localhost:9000/tunnel/connect";
+// const DEFAULT_SERVER_URL = "http://localhost:3000";
 
-const usage = `@gitterm/agent
+const usage = `@opeoginni/gitterm-agent
 
 Securely exposes local development ports through your gitterm.dev workspace tunnel.
 
 Usage:
-  npx @gitterm/agent <command> [options]
+  npx @opeoginni/gitterm-agent <command> [options]
 
 Commands:
   login           Sign in via device-code flow
@@ -38,13 +38,13 @@ Connect options:
 
 Examples:
   # First time: login to gitterm
-  npx @gitterm/agent login
+  npx @opeoginni/gitterm-agent login
 
   # Connect a local server to your workspace
-  npx @gitterm/agent connect --workspace-id "ws_abc123" --port 3000
+  npx @opeoginni/gitterm-agent connect --workspace-id "ws_abc123" --port 3000
 
   # Expose multiple ports
-  npx @gitterm/agent connect --workspace-id "ws_abc123" --port 3000 --expose api=3001
+  npx @opeoginni/gitterm-agent connect --workspace-id "ws_abc123" --port 3000 --expose api=3001
 
 Notes:
   - This tool does not start servers for you.
@@ -160,7 +160,7 @@ async function runLogin(rawArgs: string[]) {
 	const codeRes = await fetch(new URL("/api/device/code", serverUrl), {
 		method: "POST",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ clientName: "@gitterm/agent" }),
+		body: JSON.stringify({ clientName: "@opeoginni/gitterm-agent" }),
 	});
 	if (!codeRes.ok) throw new Error(`Failed to start device login: ${codeRes.status}`);
 
@@ -222,7 +222,7 @@ async function mintTunnelToken(params: { serverUrl: string; agentToken: string; 
 		const text = await res.text().catch(() => "");
 		if (res.status === 401 || res.status === 403) {
 			throw new Error(
-				`Authentication failed (${res.status}). Your saved credentials may have expired.\nPlease run: npx @gitterm/agent logout && npx @gitterm/agent login`,
+				`Authentication failed (${res.status}). Your saved credentials may have expired.\nPlease run: npx @opeoginni/gitterm-agent logout && npx @opeoginni/gitterm-agent login`,
 			);
 		}
 		throw new Error(`Failed to mint tunnel token: ${res.status} ${text}`);
@@ -255,7 +255,7 @@ async function updateWorkspacePorts(params: {
 		const text = await res.text().catch(() => "");
 		if (res.status === 401 || res.status === 403) {
 			throw new Error(
-				`Authentication failed (${res.status}). Your saved credentials may have expired.\nPlease run: npx @gitterm/agent logout && npx @gitterm/agent login`,
+				`Authentication failed (${res.status}). Your saved credentials may have expired.\nPlease run: npx @opeoginni/gitterm-agent logout && npx @opeoginni/gitterm-agent login`,
 			);
 		}
 		throw new Error(`Failed to update workspace ports: ${res.status} ${text}`);
@@ -289,7 +289,7 @@ async function runConnect(rawArgs: string[]) {
 	if (!token) {
 		if (!workspaceId) throw new Error("Missing --workspace-id");
 		const config = await loadConfig();
-		if (!config?.agentToken) throw new Error("Not logged in. Run: npx @gitterm/agent login");
+		if (!config?.agentToken) throw new Error("Not logged in. Run: npx @opeoginni/gitterm-agent login");
 		const effectiveServerUrl = serverUrl;
 
 		if (!portStr) {
@@ -398,14 +398,11 @@ async function runConnect(rawArgs: string[]) {
 
 		// Handle close frame - abort the ongoing request
 		if (frame.type === "close") {
-			console.log("[AGENT] Received close frame:", { id: frame.id });
 			const controller = activeRequests.get(frame.id);
 			if (controller) {
-				console.log("[AGENT] Aborting request:", { id: frame.id });
 				controller.abort();
 				activeRequests.delete(frame.id);
 			} else {
-				console.log("[AGENT] No active request to abort:", { id: frame.id });
 			}
 			pendingRequestBodies.delete(frame.id);
 			pendingRequestMeta.delete(frame.id);
@@ -413,7 +410,6 @@ async function runConnect(rawArgs: string[]) {
 		}
 
 		if (frame.type === "request") {
-			console.log("[AGENT] Received request:", { id: frame.id, method: frame.method, path: frame.path });
 			pendingRequestBodies.set(frame.id, []);
 			pendingRequestMeta.set(frame.id, {
 				method: (frame.method ?? "GET").toUpperCase(),
@@ -427,13 +423,11 @@ async function runConnect(rawArgs: string[]) {
 		if (frame.type === "data") {
 			const chunks = pendingRequestBodies.get(frame.id);
 			if (!chunks) {
-				console.log("[AGENT] No pending request for data frame:", { id: frame.id });
 				return;
 			}
 			if (frame.data) chunks.push(base64ToBytes(frame.data));
 			if (!frame.final) return;
 
-			console.log("[AGENT] Processing request:", { id: frame.id });
 
 			// Create abort controller for this request
 			const abortController = new AbortController();
@@ -456,7 +450,6 @@ async function runConnect(rawArgs: string[]) {
 				headers.delete("host");
 				headers.delete("content-length");
 
-				console.log("[AGENT] Fetching upstream:", { id: frame.id, url: url.toString(), method: meta.method });
 				const upstream = await fetch(url, {
 					method: meta.method,
 					headers,
@@ -464,10 +457,6 @@ async function runConnect(rawArgs: string[]) {
 					redirect: "manual",
 					signal: abortController.signal,
 				});
-
-				const contentType = upstream.headers.get("content-type") || "";
-				const isSSE = contentType.includes("text/event-stream");
-				console.log("[AGENT] Upstream response:", { id: frame.id, status: upstream.status, contentType, isSSE });
 
 				ws.send(
 					JSON.stringify({
@@ -478,7 +467,6 @@ async function runConnect(rawArgs: string[]) {
 						timestamp: Date.now(),
 					} satisfies Frame),
 				);
-				console.log("[AGENT] Sent response:", { id: frame.id, status: upstream.status });
 
 				if (!upstream.body) {
 					activeRequests.delete(frame.id);
@@ -509,7 +497,6 @@ async function runConnect(rawArgs: string[]) {
 				activeRequests.delete(frame.id);
 				ws.send(JSON.stringify({ type: "data", id: frame.id, final: true, timestamp: Date.now() } satisfies Frame));
 			} catch (error) {
-				console.error("[AGENT] Request error:", { id: frame.id, error: error instanceof Error ? error.message : error });
 				activeRequests.delete(frame.id);
 				pendingRequestMeta.delete(frame.id);
 				pendingRequestBodies.delete(frame.id);

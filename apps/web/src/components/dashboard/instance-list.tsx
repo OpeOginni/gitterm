@@ -325,7 +325,7 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
                 className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90" 
                 asChild
               >
-                <a href={`https://desktop.opencode.ai/?url=${workspace.domain}`} target="_blank" rel="noreferrer">
+                <a href={`https://desktop.opencode.ai/?url=https://${workspace.domain}`} target="_blank" rel="noreferrer">
                   <Monitor className="h-3.5 w-3.5" />
                   Desktop App
                 </a>
