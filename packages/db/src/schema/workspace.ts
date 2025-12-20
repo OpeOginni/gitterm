@@ -58,7 +58,7 @@ export const volume = pgTable("volume", {
 export const usageSession = pgTable("usage_session", {
 	id: uuid("id").primaryKey().defaultRandom(),
 	workspaceId: uuid("workspace_id").notNull().references(() => workspace.id, { onDelete: "cascade" }),
-	userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+	userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
 	startedAt: timestamp("started_at").notNull(),
 	stoppedAt: timestamp("stopped_at"),
 	durationMinutes: integer("duration_minutes"),
@@ -69,7 +69,7 @@ export const usageSession = pgTable("usage_session", {
 // Tracks daily usage per user for free-tier enforcement
 export const dailyUsage = pgTable("daily_usage", {
 	id: uuid("id").primaryKey().defaultRandom(),
-	userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+	userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
 	date: date("date").notNull(),
 	minutesUsed: integer("minutes_used").notNull().default(0),
 	createdAt: timestamp("created_at").notNull().defaultNow(),

@@ -17,9 +17,10 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@gitpad/db": "workspace:*",
     "better-auth": "catalog:",
+    "discord.js": "^14.25.1",
     "dotenv": "catalog:",
-    "zod": "catalog:",
-    "@gitpad/db": "workspace:*"
+    "zod": "catalog:"
   }
 }

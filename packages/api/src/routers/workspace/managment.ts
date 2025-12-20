@@ -25,6 +25,7 @@ import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { githubAppService } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitpad/db/schema/integrations";
+import { sendAdminMessage } from "../../utils/discord";
 
 /**
  * SUBDOMAIN FEATURE GATING SETUP
@@ -1207,6 +1208,13 @@ export const workspaceRouter = router({
           })
           .returning();
 
+        if (!newWorkspace) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create workspace record",
+          });
+        }
+
         // Create volume record (only for persistent workspaces)
         let newVolume = null;
         if (input.persistent) {
@@ -1245,6 +1253,43 @@ export const workspaceRouter = router({
           const wsUrl = process.env.TUNNEL_PROXY_WS_URL || "wss://tunnel.gitterm.dev/tunnel/connect";
           command = `npx @opeoginni/gitterm-agent connect --workspace-id ${workspaceId}`;
         }
+
+        // Format Discord notification with all workspace details
+        const workspaceDetails = [
+          `🚀 **New Workspace Created**`,
+          ``,
+          `**Workspace Info:**`,
+          `• Domain: \`${domain}\``,
+          `• Subdomain: \`${subdomain}\``,
+          `• Workspace ID: \`${workspaceId}\``,
+          `• Status: \`${newWorkspace.status}\``,
+          `• Tunnel Type: \`${newWorkspace.tunnelType}\``,
+          `• Persistent: ${newWorkspace.persistent ? '✅ Yes' : '❌ No'}`,
+          `• Server Only: ${newWorkspace.serverOnly ? '✅ Yes' : '❌ No'}`,
+          ``,
+          `**User Info:**`,
+          `• Name: \`${fetchedUser.name || 'N/A'}\``,
+          `• Email: \`${fetchedUser.email}\``,
+          `• User ID: \`${userId}\``,
+          ``,
+          `**Configuration:**`,
+          `• Agent Type: \`${agentTypeRecord.name}\``,
+          `• Cloud Provider: \`${cloudProviderRecord.name}\``,
+          `• Region: \`${regionRecord.name} (${regionRecord.externalRegionIdentifier})\``,
+          ``,
+        ];
+
+        if (input.repo) {
+          workspaceDetails.push(`**Repository:**`, `• URL: \`${input.repo}\``, ``);
+        }
+
+        workspaceDetails.push(
+          `**Timestamps:**`,
+          `• Created: \`${new Date(workspaceInfo.serviceCreatedAt).toISOString()}\``,
+          `• Backend URL: \`${newWorkspace.backendUrl || 'N/A'}\``
+        );
+
+        sendAdminMessage(workspaceDetails.join('\n'));
 
         return {
           success: true,

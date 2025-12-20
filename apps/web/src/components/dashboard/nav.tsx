@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -10,11 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Terminal, LayoutDashboard, Link2, BarChart3, User, LogOut, ChevronDown, Menu, X } from "lucide-react"
+import { Terminal, LayoutDashboard, Link2, BarChart3, User, LogOut, ChevronDown, Menu, X, Settings } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { authClient } from "@/lib/auth-client"
 import { Skeleton } from "../ui/skeleton"
+import type { Route } from "next"
 
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
@@ -26,6 +27,7 @@ export function DashboardNav() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { data: session, isPending } = authClient.useSession()
+  const router = useRouter()
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
@@ -69,7 +71,7 @@ export function DashboardNav() {
                 <DropdownMenuTrigger asChild>
                     <Button
                     variant="outline"
-                    className="hidden md:flex items-center gap-2 border-border/50 bg-transparent hover:bg-secondary/50 hover:text-primary"
+                    className="hidden md:flex items-center gap-2 border-border border bg-transparent hover:bg-secondary/50 hover:text-primary"
                     >
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary/80">
                         <User className="h-3.5 w-3.5 text-primary" />
@@ -79,9 +81,20 @@ export function DashboardNav() {
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-48 border-border/50 bg-card">
-                    <DropdownMenuItem className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer">
-                    <LogOut className="h-4 w-4" />
-                        Sign Out
+                    <DropdownMenuItem asChild className="flex items-center gap-2 cursor-pointer">
+                      <Link href={"/dashboard/settings" as Route}>
+                        <Settings className="h-4 w-4" />
+                        Settings
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => 
+                      authClient.signOut().then(() => {
+                        router.push("/")
+                      })
+                    } className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer">
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
                     </DropdownMenuItem>
                 </DropdownMenuContent>
                 </DropdownMenu>
@@ -123,6 +136,14 @@ export function DashboardNav() {
               )
             })}
             <div className="pt-2 mt-2 border-t border-border/50">
+              <Link
+                href={"/dashboard/settings" as Route}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
               <button className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors">
                 <LogOut className="h-4 w-4" />
                 Sign Out

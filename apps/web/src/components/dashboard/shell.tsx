@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils"
 import type React from "react"
+import { FeedbackForm } from "./feedback"
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -8,9 +9,14 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children, className }: DashboardShellProps) {
   return (
-    <div className={`flex-1 space-y-8 p-6 md:p-8 lg:p-10 ${className}`}>
-      <div className="mx-auto max-w-7xl">{children}</div>
-    </div>
+    <>
+      <div className={`flex-1 space-y-8 p-6 md:p-8 lg:p-10 ${className}`}>
+        <div className="mx-auto max-w-7xl">{children}</div>
+      </div>
+      <div className="fixed bottom-6 right-6 z-50">
+        <FeedbackForm />
+      </div>
+    </>
   )
 }
 

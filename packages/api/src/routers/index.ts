@@ -9,6 +9,7 @@ import { githubWebhookRouter } from "./github/webhook";
 import { proxyResolverRouter } from "./proxy";
 import { tunnelRouter } from "./tunnel";
 import { agentRouter } from "./agent";
+import { userRouter } from "./user/user";
 
 export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {
@@ -20,6 +21,7 @@ export const appRouter = router({
 			user: ctx.session.user,
 		};
 	}),
+	user: userRouter,
 	workspace: workspaceRouter,
 	internal: internalRouter,
 	github: githubRouter,
