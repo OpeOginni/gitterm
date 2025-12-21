@@ -357,7 +357,6 @@ app.all("/*", async (c) => {
 				try {
 					// Immediate heartbeat to establish the stream
 					await writer.write(heartbeatComment);
-					console.log("[TUNNEL-PROXY-SSE] Sent initial heartbeat");
 				} catch {
 					// ignore
 				}
@@ -368,7 +367,6 @@ app.all("/*", async (c) => {
 				if (closed) return;
 				try {
 					await writer.write(heartbeatComment);
-					console.log("[TUNNEL-PROXY-SSE] Sent heartbeat");
 				} catch {
 					// Stream may be closed
 				}
@@ -383,7 +381,6 @@ app.all("/*", async (c) => {
 							closed = true;
 							if (heartbeatTimer) clearInterval(heartbeatTimer);
 							await writer.close();
-							console.log("[TUNNEL-PROXY-SSE] Upstream closed");
 							return;
 						}
 						if (value) {
@@ -393,7 +390,6 @@ app.all("/*", async (c) => {
 				} catch (error) {
 					closed = true;
 					if (heartbeatTimer) clearInterval(heartbeatTimer);
-					console.log("[TUNNEL-PROXY-SSE] Upstream error:", error instanceof Error ? error.message : error);
 					try {
 						await writer.abort(error instanceof Error ? error : new Error(String(error)));
 					} catch {

@@ -36,7 +36,6 @@ export class Multiplexer {
 	cancelExistingSSE(sseKey: string): string | undefined {
 		const existingId = this.activeSSE.get(sseKey);
 		if (existingId) {
-			console.log("[MUX-SSE] Cancelling existing SSE for deduplication:", { sseKey, existingId });
 			const entry = this.pending.get(existingId);
 			if (entry) {
 				if (entry.timer) clearTimeout(entry.timer);
@@ -113,10 +112,6 @@ export class Multiplexer {
 				},
 				cancel: () => {
 					const entry = this.pending.get(id);
-					// Log SSE cancellations to debug client disconnects
-					if (entry?.sseKey) {
-						console.log("[MUX-SSE] SSE stream cancelled by client:", { id, sseKey: entry.sseKey });
-					}
 					if (entry?.onCancel) entry.onCancel();
 					if (entry?.sseKey) this.activeSSE.delete(entry.sseKey);
 					if (entry?.timer) clearTimeout(entry.timer);
