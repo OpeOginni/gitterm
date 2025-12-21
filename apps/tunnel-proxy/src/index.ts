@@ -326,14 +326,68 @@ app.all("/*", async (c) => {
 	try {
 		const res = await responsePromise;
 
-		// If this is an SSE response, add headers to discourage any buffering.
+		// If this is an SSE response, wrap the stream to inject heartbeats and add anti-buffering headers.
 		const contentType = res.headers.get("content-type") || "";
 		if (contentType.includes("text/event-stream")) {
 			const headers = new Headers(res.headers);
 			headers.set("cache-control", "no-cache, no-transform");
 			headers.set("connection", "keep-alive");
 			headers.set("x-accel-buffering", "no");
-			return new Response(res.body, { status: res.status, headers });
+
+			// Wrap the SSE stream with heartbeat injection to prevent proxy timeouts (Cloudflare, etc.)
+			const heartbeatInterval = 15_000; // 15 seconds
+			const heartbeatComment = new TextEncoder().encode(": heartbeat\n\n");
+			
+			const upstreamBody = res.body;
+			if (!upstreamBody) {
+				return new Response(null, { status: res.status, headers });
+			}
+
+			const reader = upstreamBody.getReader();
+			let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+			let closed = false;
+
+			// Create a TransformStream to inject heartbeats
+			const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+			const writer = writable.getWriter();
+
+			// Start heartbeat timer immediately
+			heartbeatTimer = setInterval(async () => {
+				if (closed) return;
+				try {
+					await writer.write(heartbeatComment);
+				} catch {
+					// Stream may be closed
+				}
+			}, heartbeatInterval);
+
+			// Pipe upstream data to the transform stream
+			(async () => {
+				try {
+					while (true) {
+						const { done, value } = await reader.read();
+						if (done) {
+							closed = true;
+							if (heartbeatTimer) clearInterval(heartbeatTimer);
+							await writer.close();
+							return;
+						}
+						if (value) {
+							await writer.write(value);
+						}
+					}
+				} catch (error) {
+					closed = true;
+					if (heartbeatTimer) clearInterval(heartbeatTimer);
+					try {
+						await writer.abort(error instanceof Error ? error : new Error(String(error)));
+					} catch {
+						// ignore
+					}
+				}
+			})();
+
+			return new Response(readable, { status: res.status, headers });
 		}
 
 		return res;
