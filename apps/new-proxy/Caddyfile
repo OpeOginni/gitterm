@@ -93,9 +93,8 @@
 			}
 
 			# Tunnel offline: show friendly offline page (only for authenticated users who reach tunnel-proxy)
-			@tunnel_offline status 503 {
-				header X-Tunnel-Offline true
-			}
+			# Uses expression to check both status AND header
+			@tunnel_offline expression {rp.status_code} == 503 && {rp.header.X-Tunnel-Offline} == "true"
 			handle_response @tunnel_offline {
 				root * /srv/errors
 				rewrite * /offline.html
@@ -103,22 +102,6 @@
 			}
 
 			# Other unavailable responses (401/403/404/503 without offline header)
-			@unavailable status 401 403 404 503
-			handle_response @unavailable {
-				root * /srv/errors
-				rewrite * /unavailable.html
-				file_server
-			}
-
-			@server_error status 500 502 504
-			handle_response @server_error {
-				root * /srv/errors
-				rewrite * /error.html
-				file_server
-			}
-		}
-
-			# Intercept upstream error responses and show nice error pages
 			@unavailable status 401 403 404 503
 			handle_response @unavailable {
 				root * /srv/errors
