@@ -335,7 +335,8 @@ app.all("/*", async (c) => {
 			headers.set("x-accel-buffering", "no");
 
 			// Wrap the SSE stream with heartbeat injection to prevent proxy timeouts (Cloudflare, etc.)
-			const heartbeatInterval = 15_000; // 15 seconds
+			// Use 5-second interval to stay well under Cloudflare's ~10s idle timeout
+			const heartbeatInterval = 5_000;
 			const heartbeatComment = new TextEncoder().encode(": heartbeat\n\n");
 			
 			const upstreamBody = res.body;
@@ -351,11 +352,23 @@ app.all("/*", async (c) => {
 			const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
 			const writer = writable.getWriter();
 
-			// Start heartbeat timer immediately
+			// Send initial heartbeat immediately, then start interval
+			(async () => {
+				try {
+					// Immediate heartbeat to establish the stream
+					await writer.write(heartbeatComment);
+					console.log("[TUNNEL-PROXY-SSE] Sent initial heartbeat");
+				} catch {
+					// ignore
+				}
+			})();
+
+			// Start heartbeat timer
 			heartbeatTimer = setInterval(async () => {
 				if (closed) return;
 				try {
 					await writer.write(heartbeatComment);
+					console.log("[TUNNEL-PROXY-SSE] Sent heartbeat");
 				} catch {
 					// Stream may be closed
 				}
@@ -370,6 +383,7 @@ app.all("/*", async (c) => {
 							closed = true;
 							if (heartbeatTimer) clearInterval(heartbeatTimer);
 							await writer.close();
+							console.log("[TUNNEL-PROXY-SSE] Upstream closed");
 							return;
 						}
 						if (value) {
@@ -379,6 +393,7 @@ app.all("/*", async (c) => {
 				} catch (error) {
 					closed = true;
 					if (heartbeatTimer) clearInterval(heartbeatTimer);
+					console.log("[TUNNEL-PROXY-SSE] Upstream error:", error instanceof Error ? error.message : error);
 					try {
 						await writer.abort(error instanceof Error ? error : new Error(String(error)));
 					} catch {
