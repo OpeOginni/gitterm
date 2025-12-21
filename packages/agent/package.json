@@ -1,6 +1,6 @@
 {
   "name": "@opeoginni/gitterm-agent",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Tunnel agent for exposing local development ports through gitterm.dev",
   "type": "module",
   "license": "MIT",
@@ -24,7 +24,7 @@
   ],
   "scripts": {
     "dev": "bun --hot src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
+    "build": "bun build src/index.ts --outdir dist --target node",
     "prepublishOnly": "bun run build",
     "check-types": "tsc -p tsconfig.json --noEmit"
   },

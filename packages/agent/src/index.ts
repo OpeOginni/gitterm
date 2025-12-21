@@ -1,6 +1,6 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { z } from "zod";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import chalk from "chalk";
@@ -123,7 +123,7 @@ async function ensureConfigDir() {
 async function loadConfig(): Promise<AgentConfig | null> {
 	const path = getConfigPath();
 	try {
-		const text = await Bun.file(path).text();
+		const text = await readFile(path, "utf-8");
 		const parsed = JSON.parse(text) as AgentConfig;
 		if (!parsed.agentToken || !parsed.serverUrl) return null;
 		return parsed;
@@ -134,15 +134,13 @@ async function loadConfig(): Promise<AgentConfig | null> {
 
 async function saveConfig(config: AgentConfig) {
 	await ensureConfigDir();
-	await Bun.write(getConfigPath(), JSON.stringify(config, null, 2));
+	await writeFile(getConfigPath(), JSON.stringify(config, null, 2), "utf-8");
 }
 
 async function deleteConfig() {
 	const path = getConfigPath();
 	try {
-		await Bun.write(path, "");
-		const fs = await import("node:fs/promises");
-		await fs.unlink(path);
+		await unlink(path);
 	} catch {
 		// ignore if file doesn't exist
 	}
