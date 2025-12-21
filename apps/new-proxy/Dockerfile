@@ -3,9 +3,6 @@ FROM caddy:2-alpine
 # Copy Caddyfile
 COPY ./apps/new-proxy/Caddyfile /etc/caddy/Caddyfile
 
-# Copy error pages
-COPY ./apps/new-proxy/errors /srv/errors
-
 # Expose port 80 (Railway will handle external routing)
 EXPOSE 80
 

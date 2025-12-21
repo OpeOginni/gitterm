@@ -38,6 +38,7 @@
 	# Main proxy handler  
 	route {
 		# Forward auth to API server (validates workspace exists and user has access)
+		# The API returns HTML error pages directly for non-2xx responses
 		forward_auth server.railway.internal:8080 {
 			uri /internal/proxy-resolve
 
@@ -63,6 +64,7 @@
 		}
 
 		# Local tunnels: route to tunnel-proxy (MUST be first!)
+		# Tunnel-proxy returns HTML error pages directly
 		reverse_proxy @local_tunnel tunnel.railway.internal:8080 {
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
@@ -90,32 +92,6 @@
 				keepalive_idle_conns 10
 				read_buffer 32768
 				write_buffer 32768
-			}
-
-			# Tunnel offline: show friendly offline page (only for authenticated users who reach tunnel-proxy)
-			@tunnel_offline {
-				status 503
-				header X-Tunnel-Offline true
-			}
-			handle_response @tunnel_offline {
-				root * /srv/errors
-				rewrite * /offline.html
-				file_server
-			}
-
-			# Other unavailable responses (401/403/404/503 without offline header)
-			@unavailable status 401 403 404 503
-			handle_response @unavailable {
-				root * /srv/errors
-				rewrite * /unavailable.html
-				file_server
-			}
-
-			@server_error status 500 502 504
-			handle_response @server_error {
-				root * /srv/errors
-				rewrite * /error.html
-				file_server
 			}
 		}
 

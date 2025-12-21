@@ -6,6 +6,9 @@ import { ConnectionManager } from "./connection-manager";
 import { tunnelFrameSchema, type TunnelFrame } from "./protocol";
 import { tunnelJWT } from "./tunnel-jwt";
 
+// Load HTML error pages at startup
+const OFFLINE_HTML = await Bun.file(new URL("./errors/offline.html", import.meta.url)).text();
+
 const app = new Hono();
 const tunnelRepo = new TunnelRepository();
 const connectionManager = new ConnectionManager();
@@ -212,9 +215,9 @@ app.all("/*", async (c) => {
 	// Resolve which port is being requested (primary or service mapping).
 	const targetPort = await tunnelRepo.getServicePort(fullSubdomain);
 	if (!targetPort) {
-		return new Response("Tunnel Offline", {
+		return new Response(OFFLINE_HTML, {
 			status: 503,
-			headers: { "X-Tunnel-Offline": "true" },
+			headers: { "Content-Type": "text/html; charset=utf-8" },
 		});
 	}
 
@@ -228,9 +231,9 @@ app.all("/*", async (c) => {
 
 	const agent = connectionManager.get(baseSubdomain);
 	if (!agent) {
-		return new Response("Tunnel Offline", {
+		return new Response(OFFLINE_HTML, {
 			status: 503,
-			headers: { "X-Tunnel-Offline": "true" },
+			headers: { "Content-Type": "text/html; charset=utf-8" },
 		});
 	}
 
