@@ -135,7 +135,6 @@ app.get(
 					}
 
 					authedSubdomain = claims.subdomain;
-					console.log("[TUNNEL-PROXY] Agent connected:", claims.subdomain);
 					await connectionManager.register({
 						subdomain: claims.subdomain,
 						workspaceId: claims.workspaceId,
@@ -166,7 +165,6 @@ app.get(
 				if (!agent) return;
 
 			if (frame.type === "response") {
-				console.log("[TUNNEL-PROXY] Response from agent:", { id: frame.id, status: frame.statusCode, contentType: frame.headers?.["content-type"] });
 				agent.mux.resolveResponse(frame.id, {
 					status: frame.statusCode ?? 502,
 					headers: frame.headers,
@@ -180,11 +178,13 @@ app.get(
 				}
 			},
 			onClose: async () => {
-				console.log("[TUNNEL-PROXY] Agent WebSocket closed:", { subdomain: authedSubdomain });
 				if (authedSubdomain) await connectionManager.unregister(authedSubdomain);
 			},
 			onError: async (error) => {
-				console.log("[TUNNEL-PROXY] Agent WebSocket error:", { subdomain: authedSubdomain, error });
+				console.error("[TUNNEL-PROXY] Agent WebSocket error:", {
+					subdomain: authedSubdomain,
+					error: error instanceof Error ? error.message : error,
+				});
 				if (authedSubdomain) await connectionManager.unregister(authedSubdomain);
 			},
 		};
@@ -225,17 +225,8 @@ app.all("/*", async (c) => {
 
 	const agent = connectionManager.get(baseSubdomain);
 	if (!agent) {
-		console.log("[TUNNEL-PROXY] No agent found:", { baseSubdomain });
 		return c.text("Tunnel Offline", 503);
 	}
-
-	// Check WebSocket state
-	const wsState = agent.ws.readyState;
-	console.log("[TUNNEL-PROXY] Agent found:", { 
-		baseSubdomain, 
-		wsState,
-		wsStateLabel: wsState === 0 ? "CONNECTING" : wsState === 1 ? "OPEN" : wsState === 2 ? "CLOSING" : "CLOSED"
-	});
 
 	const requestId = agent.mux.createRequestId();
 	const url = new URL(c.req.url);
@@ -247,14 +238,17 @@ app.all("/*", async (c) => {
 		sseKey = `${baseSubdomain}:${c.req.path}`;
 		const cancelledId = agent.mux.cancelExistingSSE(sseKey);
 		if (cancelledId) {
-			console.log("[TUNNEL-PROXY] Cancelled existing SSE connection:", { sseKey, cancelledId, newRequestId: requestId });
 			// Send close frame to agent for the old request
 			try {
-				agent.ws.send(JSON.stringify({ 
-					type: "close", 
-					id: cancelledId, 
-					timestamp: Date.now() 
-				} satisfies TunnelFrame));
+				agent.ws.send(
+					JSON.stringify(
+						{
+							type: "close",
+							id: cancelledId,
+							timestamp: Date.now(),
+						} satisfies TunnelFrame,
+					),
+				);
 			} catch {
 				// ignore if websocket is closed
 			}
@@ -273,21 +267,35 @@ app.all("/*", async (c) => {
 	};
 
 	// Register for response BEFORE sending request to avoid race condition
-	// where agent responds before we're ready to receive
-	// Use longer timeout (120s) to handle slow AI responses
-	const responsePromise = agent.mux.register(requestId, 120_000, () => {
-		// onCancel: notify agent to stop sending data for this request
-		console.log("[TUNNEL-PROXY] Stream cancelled, sending close frame:", { requestId });
-		try {
-			agent.ws.send(JSON.stringify({ 
-				type: "close", 
-				id: requestId, 
-				timestamp: Date.now() 
-			} satisfies TunnelFrame));
-		} catch {
-			// ignore if websocket is closed
-		}
-	}, sseKey);
+	// where agent responds before we're ready to receive.
+	//
+	// NOTE: SSE requests are long-lived; we should not apply a fixed overall timeout
+	// (otherwise event streams will die after N seconds). For non-SSE, keep a longer
+	// timeout (120s) to handle slow upstream responses.
+	const isSSE = agent.mux.shouldDedupeSSE(c.req.path);
+	const timeoutMs = isSSE ? null : 120_000;
+	const responsePromise = agent.mux.register(
+		requestId,
+		timeoutMs,
+		() => {
+			// onCancel: notify agent to stop sending data for this request
+			try {
+				agent.ws.send(
+					JSON.stringify(
+						{
+							type: "close",
+							id: requestId,
+							timestamp: Date.now(),
+						} satisfies TunnelFrame,
+					),
+				);
+			} catch {
+				// ignore if websocket is closed
+			}
+		},
+		sseKey,
+	);
+
 	
 	// If this is an SSE connection, register it for tracking
 	if (sseKey) {
@@ -295,7 +303,6 @@ app.all("/*", async (c) => {
 	}
 
 	agent.ws.send(JSON.stringify(requestFrame));
-	console.log("[TUNNEL-PROXY] Request sent to agent:", { requestId, method: requestFrame.method, path: requestFrame.path });
 
 	// Stream request body to agent.
 	if (c.req.raw.body) {
@@ -318,6 +325,17 @@ app.all("/*", async (c) => {
 
 	try {
 		const res = await responsePromise;
+
+		// If this is an SSE response, add headers to discourage any buffering.
+		const contentType = res.headers.get("content-type") || "";
+		if (contentType.includes("text/event-stream")) {
+			const headers = new Headers(res.headers);
+			headers.set("cache-control", "no-cache, no-transform");
+			headers.set("connection", "keep-alive");
+			headers.set("x-accel-buffering", "no");
+			return new Response(res.body, { status: res.status, headers });
+		}
+
 		return res;
 	} catch (error) {
 		console.error("[TUNNEL-PROXY] Request error:", { requestId, error: error instanceof Error ? error.message : error });
@@ -349,4 +367,3 @@ Bun.serve({
 	websocket,
 });
 
-console.log(`tunnel-proxy listening on :${port}`);

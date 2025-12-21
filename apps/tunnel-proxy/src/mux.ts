@@ -1,7 +1,7 @@
 export interface PendingStreamResponse {
 	resolve: (response: Response) => void;
 	reject: (error: Error) => void;
-	timer: ReturnType<typeof setTimeout>;
+	timer?: ReturnType<typeof setTimeout>;
 	controller?: ReadableStreamDefaultController<Uint8Array>;
 	stream: ReadableStream<Uint8Array>;
 	resolved: boolean;
@@ -36,10 +36,9 @@ export class Multiplexer {
 	cancelExistingSSE(sseKey: string): string | undefined {
 		const existingId = this.activeSSE.get(sseKey);
 		if (existingId) {
-			console.log("[MUX] Cancelling existing SSE connection:", { sseKey, existingId });
 			const entry = this.pending.get(existingId);
 			if (entry) {
-				clearTimeout(entry.timer);
+				if (entry.timer) clearTimeout(entry.timer);
 				// Close the stream gracefully
 				try {
 					entry.controller?.close();
@@ -70,40 +69,56 @@ export class Multiplexer {
 		this.activeSSE.set(sseKey, requestId);
 	}
 
-	register(id: string, timeoutMs: number, onCancel?: () => void, sseKey?: string): Promise<Response> {
+	register(id: string, timeoutMs: number | null, onCancel?: () => void, sseKey?: string): Promise<Response> {
 		return new Promise((resolve, reject) => {
-			const timer = setTimeout(() => {
-				const entry = this.pending.get(id);
-				if (entry?.controller) entry.controller.error(new Error("tunnel response timeout"));
-				this.pending.delete(id);
-				reject(new Error("tunnel response timeout"));
-			}, timeoutMs);
-
-			// Capture controller directly - Bun calls start() synchronously
-			let capturedController: ReadableStreamDefaultController<Uint8Array> | undefined;
+			const timer =
+				timeoutMs == null
+					? undefined
+					: setTimeout(() => {
+						const entry = this.pending.get(id);
+						if (entry?.controller) entry.controller.error(new Error("tunnel response timeout"));
+						this.pending.delete(id);
+						reject(new Error("tunnel response timeout"));
+					}, timeoutMs);
 
 			const stream = new ReadableStream<Uint8Array>({
 				start: (controller) => {
-					capturedController = controller;
+					// IMPORTANT: `start()` timing is not guaranteed. We must be able to flush any
+					// chunks received before the controller was available.
+					const entry = this.pending.get(id);
+					if (!entry) return;
+					entry.controller = controller;
+
+					if (entry.bufferedChunks.length > 0) {
+						for (const buffered of entry.bufferedChunks) {
+							if (buffered.chunk.byteLength > 0) controller.enqueue(buffered.chunk);
+							if (buffered.final) {
+								controller.close();
+								if (entry.sseKey) this.activeSSE.delete(entry.sseKey);
+								this.pending.delete(id);
+								break;
+							}
+						}
+						entry.bufferedChunks = [];
+					}
 				},
 				cancel: () => {
-					console.log("[MUX] stream cancelled:", { id });
 					const entry = this.pending.get(id);
 					if (entry?.onCancel) entry.onCancel();
 					// Clean up SSE tracking if this was an SSE connection
 					if (entry?.sseKey) {
 						this.activeSSE.delete(entry.sseKey);
 					}
+					if (entry?.timer) clearTimeout(entry.timer);
 					this.pending.delete(id);
 				},
 			});
 
-			// Now capturedController is set (since start() ran synchronously)
 			const entry: PendingStreamResponse = {
 				resolve,
 				reject,
 				timer,
-				controller: capturedController,
+				controller: undefined,
 				stream,
 				resolved: false,
 				bufferedChunks: [],
@@ -111,7 +126,6 @@ export class Multiplexer {
 				sseKey,
 			};
 
-			console.log("[MUX] register:", { id, hasController: !!capturedController, sseKey });
 			this.pending.set(id, entry);
 		});
 	}
@@ -119,7 +133,7 @@ export class Multiplexer {
 	resolveResponse(id: string, responseInit: ResponseInit) {
 		const entry = this.pending.get(id);
 		if (!entry || entry.resolved) return;
-		clearTimeout(entry.timer);
+		if (entry.timer) clearTimeout(entry.timer);
 		entry.resolved = true;
 		entry.resolve(new Response(entry.stream, responseInit));
 	}
@@ -127,21 +141,19 @@ export class Multiplexer {
 	pushData(id: string, chunk: Uint8Array, final: boolean) {
 		const entry = this.pending.get(id);
 		if (!entry || !entry.resolved) return;
-		
-		// If controller not ready yet, buffer the chunk
+
+		// If controller not ready yet, buffer the chunk.
+		// This can happen if the agent starts streaming body bytes immediately after the
+		// `response` frame, before the Response stream gets consumed.
 		if (!entry.controller) {
 			entry.bufferedChunks.push({ chunk, final });
 			return;
 		}
-		
-		// Controller is ready, enqueue directly
+
 		if (chunk.byteLength > 0) entry.controller.enqueue(chunk);
 		if (final) {
 			entry.controller.close();
-			// Clean up SSE tracking if this was an SSE connection
-			if (entry.sseKey) {
-				this.activeSSE.delete(entry.sseKey);
-			}
+			if (entry.sseKey) this.activeSSE.delete(entry.sseKey);
 			this.pending.delete(id);
 		}
 	}
@@ -149,24 +161,18 @@ export class Multiplexer {
 	reject(id: string, error: Error) {
 		const entry = this.pending.get(id);
 		if (!entry) return;
-		clearTimeout(entry.timer);
+		if (entry.timer) clearTimeout(entry.timer);
 		entry.controller?.error(error);
-		// Clean up SSE tracking if this was an SSE connection
-		if (entry.sseKey) {
-			this.activeSSE.delete(entry.sseKey);
-		}
+		if (entry.sseKey) this.activeSSE.delete(entry.sseKey);
 		this.pending.delete(id);
 		entry.reject(error);
 	}
 
 	rejectAll(error: Error) {
 		for (const [id, entry] of this.pending.entries()) {
-			clearTimeout(entry.timer);
+			if (entry.timer) clearTimeout(entry.timer);
 			entry.controller?.error(error);
-			// Clean up SSE tracking
-			if (entry.sseKey) {
-				this.activeSSE.delete(entry.sseKey);
-			}
+			if (entry.sseKey) this.activeSSE.delete(entry.sseKey);
 			this.pending.delete(id);
 			entry.reject(error);
 		}
