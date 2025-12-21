@@ -30,8 +30,9 @@
 	# These should already be blocked at workspace creation, but this provides an extra layer
 	@reserved_subdomain header_regexp subdomain Host ^(api|tunnel)\.gitterm\.dev$
 	handle @reserved_subdomain {
-		header Content-Type application/json
-		respond `{"error":"This subdomain is reserved for system use"}` 403
+		root * /srv/errors
+		rewrite * /unavailable.html
+		file_server
 	}
 
 	# Main proxy handler  
@@ -123,23 +124,42 @@
 		}
 	}
 
-	# Error handling
+	# Error handling with nice HTML pages
+	# Security: Group 401/403/404 together to prevent workspace enumeration
 	handle_errors {
-		@400 expression {err.status_code} == 400
-		@401 expression {err.status_code} == 401
-		@403 expression {err.status_code} == 403
-		@404 expression {err.status_code} == 404
-		@500 expression {err.status_code} >= 500
+		# Access denied / not found - use same response to prevent enumeration
+		@unavailable expression {err.status_code} == 401 || {err.status_code} == 403 || {err.status_code} == 404
+		handle @unavailable {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /unavailable.html
+			file_server
+		}
 
-		header Content-Type application/json
-		
-		respond @400 `{"error": "Bad Request"}` 400
-		respond @401 `{"error": "Unauthorized"}` 401
-		respond @403 `{"error": "Forbidden"}` 403
-		respond @404 `{"error": "Workspace not found"}` 404
-		respond @500 `{"error": "Internal Server Error"}` 500
-		
-		# Default error
-		respond `{"error": "An error occurred"}` {err.status_code}
+		# Server errors (5xx)
+		@server_error expression {err.status_code} >= 500
+		handle @server_error {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /error.html
+			file_server
+		}
+
+		# Bad request (400)
+		@bad_request expression {err.status_code} == 400
+		handle @bad_request {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /error.html
+			file_server
+		}
+
+		# Default fallback
+		handle {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /error.html
+			file_server
+		}
 	}
 }

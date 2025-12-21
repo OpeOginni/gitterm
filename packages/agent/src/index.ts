@@ -400,11 +400,9 @@ async function runConnect(rawArgs: string[]) {
 		if (frame.type === "close") {
 			const controller = activeRequests.get(frame.id);
 			if (controller) {
-				console.log("[AGENT] Received close frame, aborting request:", { id: frame.id });
 				controller.abort();
 				activeRequests.delete(frame.id);
 			} else {
-				console.log("[AGENT] Received close frame but no active request found:", { id: frame.id });
 			}
 			pendingRequestBodies.delete(frame.id);
 			pendingRequestMeta.delete(frame.id);
@@ -443,16 +441,6 @@ async function runConnect(rawArgs: string[]) {
 			const acceptHeader = meta.headers["accept"] || meta.headers["Accept"] || "";
 			const looksLikeSSE = acceptHeader.includes("text/event-stream") || meta.path.includes("/event") || meta.path.includes("/sse");
 
-			if (looksLikeSSE) {
-				console.log("[AGENT-SSE] SSE request starting:", {
-					id: frame.id,
-					method: meta.method,
-					path: meta.path,
-					port: meta.port ?? primaryPort,
-					acceptHeader,
-				});
-			}
-
 			try {
 				const reqBody = mergeBody(frame.id);
 
@@ -477,15 +465,6 @@ async function runConnect(rawArgs: string[]) {
 				const contentType = upstream.headers.get("content-type") || "";
 				const isSSE = contentType.includes("text/event-stream");
 
-				if (isSSE) {
-					console.log("[AGENT-SSE] SSE response started:", {
-						id: frame.id,
-						path: meta.path,
-						status: upstream.status,
-						contentType,
-					});
-				}
-
 				ws.send(
 					JSON.stringify({
 						type: "response",
@@ -498,9 +477,6 @@ async function runConnect(rawArgs: string[]) {
 
 				if (!upstream.body) {
 					activeRequests.delete(frame.id);
-					if (isSSE) {
-						console.log("[AGENT-SSE] SSE response has no body:", { id: frame.id, path: meta.path });
-					}
 					ws.send(JSON.stringify({ type: "data", id: frame.id, final: true, timestamp: Date.now() } satisfies Frame));
 					return;
 				}
@@ -515,16 +491,7 @@ async function runConnect(rawArgs: string[]) {
 						if (!value) continue;
 						chunkCount++;
 						totalBytes += value.byteLength;
-						if (isSSE) {
-							// Log SSE chunks (decode for visibility, but keep it concise)
-							const preview = new TextDecoder().decode(value.slice(0, 200));
-							console.log("[AGENT-SSE] SSE chunk:", {
-								id: frame.id,
-								chunkNum: chunkCount,
-								bytes: value.byteLength,
-								preview: preview.length < value.byteLength ? preview + "..." : preview,
-							});
-						}
+
 						ws.send(
 							JSON.stringify({
 								type: "data",
@@ -539,15 +506,6 @@ async function runConnect(rawArgs: string[]) {
 					reader.releaseLock();
 				}
 
-				if (isSSE) {
-					console.log("[AGENT-SSE] SSE stream ended:", {
-						id: frame.id,
-						path: meta.path,
-						totalChunks: chunkCount,
-						totalBytes,
-					});
-				}
-
 				activeRequests.delete(frame.id);
 				ws.send(JSON.stringify({ type: "data", id: frame.id, final: true, timestamp: Date.now() } satisfies Frame));
 			} catch (error) {
@@ -556,22 +514,7 @@ async function runConnect(rawArgs: string[]) {
 				
 				// Don't send error response if request was aborted (client disconnected)
 				if (error instanceof Error && error.name === "AbortError") {
-					if (looksLikeSSE) {
-						console.log("[AGENT-SSE] SSE request aborted (client disconnected):", {
-							id: frame.id,
-							path: meta.path,
-						});
-					}
 					return;
-				}
-
-				// Log SSE errors
-				if (looksLikeSSE) {
-					console.error("[AGENT-SSE] SSE request failed:", {
-						id: frame.id,
-						path: meta.path,
-						error: error instanceof Error ? error.message : error,
-					});
 				}
 				
 				ws.send(

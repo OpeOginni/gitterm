@@ -69,7 +69,7 @@ async function seedDB() {
         },
         {
             name: "gitterm-opencode-web",
-            imageId: "opeoginni/gitterm-opencode-web",
+            imageId: "opeoginni/gitterm-opencode-server",
             agentTypeId: agents[2]?.id ?? "",
         },
     ])
