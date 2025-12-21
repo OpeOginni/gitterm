@@ -93,8 +93,10 @@
 			}
 
 			# Tunnel offline: show friendly offline page (only for authenticated users who reach tunnel-proxy)
-			# Uses expression to check both status AND header
-			@tunnel_offline expression {rp.status_code} == 503 && {rp.header.X-Tunnel-Offline} == "true"
+			@tunnel_offline {
+				status 503
+				header X-Tunnel-Offline true
+			}
 			handle_response @tunnel_offline {
 				root * /srv/errors
 				rewrite * /offline.html
