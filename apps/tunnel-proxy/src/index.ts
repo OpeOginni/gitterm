@@ -212,7 +212,10 @@ app.all("/*", async (c) => {
 	// Resolve which port is being requested (primary or service mapping).
 	const targetPort = await tunnelRepo.getServicePort(fullSubdomain);
 	if (!targetPort) {
-		return c.text("Tunnel Offline", 503);
+		return new Response("Tunnel Offline", {
+			status: 503,
+			headers: { "X-Tunnel-Offline": "true" },
+		});
 	}
 
 	// Resolve agent by base subdomain (service subdomains may contain dashes).
@@ -225,7 +228,10 @@ app.all("/*", async (c) => {
 
 	const agent = connectionManager.get(baseSubdomain);
 	if (!agent) {
-		return c.text("Tunnel Offline", 503);
+		return new Response("Tunnel Offline", {
+			status: 503,
+			headers: { "X-Tunnel-Offline": "true" },
+		});
 	}
 
 	const requestId = agent.mux.createRequestId();
