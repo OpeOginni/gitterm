@@ -1,8 +1,9 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
-import { db, eq, and } from "@gitpad/db";
-import { githubAppInstallation, gitIntegration, workspaceGitConfig } from "@gitpad/db/schema/integrations";
+import { db, eq, and } from "@gitterm/db";
+import { githubAppInstallation, gitIntegration, workspaceGitConfig } from "@gitterm/db/schema/integrations";
 import { logger } from "../utils/logger";
+import env from "@gitterm/env/server";
 
 /**
  * GitHub API error types
@@ -67,8 +68,8 @@ export class GitHubAppService {
   private appOctokit: Octokit;
 
   constructor() {
-    const GITHUB_APP_ID = process.env.GITHUB_APP_ID;
-    const GITHUB_APP_PRIVATE_KEY = process.env.GITHUB_APP_PRIVATE_KEY;
+    const GITHUB_APP_ID = env.GITHUB_APP_ID;
+    const GITHUB_APP_PRIVATE_KEY = env.GITHUB_APP_PRIVATE_KEY;
 
     if (!GITHUB_APP_ID) {
       throw new Error("GITHUB_APP_ID is required for GitHub App integration");

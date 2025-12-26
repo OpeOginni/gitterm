@@ -1,17 +1,17 @@
 import { randomUUID } from "crypto";
 import z from "zod";
 import { protectedProcedure, publicProcedure, workspaceAuthProcedure, router } from "../../index";
-import { db, eq, and, asc, or } from "@gitpad/db";
+import { db, eq, and, asc, or } from "@gitterm/db";
 import {
   agentWorkspaceConfig,
   workspaceEnvironmentVariables,
   workspace,
   volume,
-} from "@gitpad/db/schema/workspace";
-import { agentType, image, cloudProvider, region } from "@gitpad/db/schema/cloud";
-import { user } from "@gitpad/db/schema/auth";
+} from "@gitterm/db/schema/workspace";
+import { agentType, image, cloudProvider, region } from "@gitterm/db/schema/cloud";
+import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
-import { validateAgentConfig } from "@gitpad/schema";
+import { validateAgentConfig } from "@gitterm/schema";
 import {
   getOrCreateDailyUsage,
   hasRemainingQuota,
@@ -24,8 +24,9 @@ import { getProviderByCloudProviderId, type PersistentWorkspaceInfo, type Worksp
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { githubAppService } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";
-import { githubAppInstallation, gitIntegration } from "@gitpad/db/schema/integrations";
+import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { sendAdminMessage } from "../../utils/discord";
+import { getWorkspaceDomain, getTunnelUrl } from "../../utils/routing";
 
 /**
  * SUBDOMAIN FEATURE GATING SETUP
@@ -1139,9 +1140,10 @@ export const workspaceRouter = router({
         // API endpoint for workspace operations
         const WORKSPACE_API_URL = process.env.WORKSPACE_API_URL || process.env.INTERNAL_API_URL || "https://api.gitterm.dev/trpc";
 
-        // Generate domain (assuming a base domain like gitterm.dev)
-        const baseDomain = process.env.BASE_DOMAIN || "gitterm.dev";
-        const domain = `${subdomain}.${baseDomain}`;
+        // Generate domain using routing utils
+        // In path mode: returns just subdomain (stored for lookup)
+        // In subdomain mode: returns subdomain.baseDomain
+        const domain = getWorkspaceDomain(subdomain);
 
         const DEFAULT_DOCKER_ENV_VARS = {
           "REPO_URL": input.repo || undefined,
@@ -1249,8 +1251,7 @@ export const workspaceRouter = router({
         // For local workspaces, generate connection command
         let command: string | undefined;
         if (isLocal) {
-          const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || process.env.WORKSPACE_API_URL || "https://api.gitterm.dev";
-          const wsUrl = process.env.TUNNEL_PROXY_WS_URL || "wss://tunnel.gitterm.dev/tunnel/connect";
+          // The agent CLI will use getTunnelUrl() to determine the correct tunnel endpoint
           command = `npx @opeoginni/gitterm-agent connect --workspace-id ${workspaceId}`;
         }
 

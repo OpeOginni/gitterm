@@ -1,7 +1,8 @@
 import "dotenv/config";
 import { getSdk } from "./graphql/generated/railway";
+import env from "@gitterm/env/server";
 
-const RAILWAY_API_URL = process.env.RAILWAY_API_URL;
+const RAILWAY_API_URL = env.RAILWAY_API_URL;
 
 
 // ============================================================================
@@ -29,7 +30,7 @@ class RailwayAPIError extends Error {
 }
 
 function createRequester(token?: string) {
-  const apiToken = token ?? process.env.RAILWAY_API_TOKEN;
+  const apiToken = token ?? env.RAILWAY_API_TOKEN;
 
   return async <R, V>(doc: string, variables?: V): Promise<R> => {
     if (!apiToken) {

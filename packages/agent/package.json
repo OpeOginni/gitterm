@@ -23,7 +23,7 @@
     "README.md"
   ],
   "scripts": {
-    "dev": "bun --hot src/index.ts",
+    "dev:local": "bun --hot src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target node",
     "prepublishOnly": "bun run build",
     "check-types": "tsc -p tsconfig.json --noEmit"

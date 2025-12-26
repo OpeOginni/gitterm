@@ -5,21 +5,20 @@
   "scripts": {
     "build": "tsdown",
     "check-types": "tsc -b",
-    "dev": "bun run --hot src/idle-reaper.ts",
     "start": "bun run dist/idle-reaper.mjs",
     "idle-reaper": "bun run src/idle-reaper.ts",
     "daily-reset": "bun run src/daily-reset.ts"
   },
   "dependencies": {
     "dotenv": "catalog:",
-    "@gitpad/api": "workspace:*",
+    "@gitterm/api": "workspace:*",
     "@trpc/client": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:",
     "@types/bun": "^1.2.6",
     "tsdown": "^0.16.5",
-    "@gitpad/config": "workspace:*"
+    "@gitterm/config": "workspace:*"
   }
 }
 

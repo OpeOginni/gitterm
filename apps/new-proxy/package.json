@@ -3,11 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "dev": "caddy run --config Caddyfile.local --envfile .env --watch"
   },
   "dependencies": {
-    "@gitpad/config": "*"
+    "@gitterm/config": "*"
   },
   "devDependencies": {
-    "@gitpad/config": "*"
+    "@gitterm/config": "*"
   }
 }

@@ -1,14 +1,14 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
-import { db, eq, and, sql, gt } from "@gitpad/db";
-import { workspace, usageSession, dailyUsage, type SessionStopSource } from "@gitpad/db/schema/workspace";
-import { workspaceGitConfig } from "@gitpad/db/schema/integrations";
-import { cloudProvider, region } from "@gitpad/db/schema/cloud";
+import { db, eq, and, sql, gt } from "@gitterm/db";
+import { workspace, usageSession, dailyUsage, type SessionStopSource } from "@gitterm/db/schema/workspace";
+import { workspaceGitConfig } from "@gitterm/db/schema/integrations";
+import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { IDLE_TIMEOUT_MINUTES, closeUsageSession } from "../../utils/metering";
-import { auth } from "@gitpad/auth";
+import { auth } from "@gitterm/auth";
 import { githubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { logger } from "../../utils/logger";
 

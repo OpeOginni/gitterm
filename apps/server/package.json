@@ -16,16 +16,17 @@
     "better-auth": "catalog:",
     "dotenv": "catalog:",
     "zod": "catalog:",
-    "@gitpad/api": "workspace:*",
-    "@gitpad/auth": "workspace:*",
-    "@gitpad/db": "workspace:*",
-    "@gitpad/schema": "workspace:*",
-    "@gitpad/redis": "workspace:*"
+    "@gitterm/api": "workspace:*",
+    "@gitterm/auth": "workspace:*",
+    "@gitterm/db": "workspace:*",
+    "@gitterm/env": "workspace:*",
+    "@gitterm/schema": "workspace:*",
+    "@gitterm/redis": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",
     "@types/bun": "^1.2.6",
     "tsdown": "^0.16.5",
-    "@gitpad/config": "workspace:*"
+    "@gitterm/config": "workspace:*"
   }
 }

@@ -80,3 +80,15 @@ mutation VolumeCreate($projectId: String!, $environmentId: String!, $serviceId: 
 mutation VolumeDelete($id: String!) {
   volumeDelete(volumeId: $id)
 }
+
+mutation ServiceDomainCreate($environmentId: String!, $serviceId: String!, $targetPort: Int!) {
+  serviceDomainCreate(
+    input: {environmentId: $environmentId, targetPort: $targetPort, serviceId: $serviceId}
+  ) {
+    domain
+  }
+}
+
+mutation ServiceDomainDelete($serviceDomainId: String!) {
+  serviceDomainDelete(id: $serviceDomainId)
+}

@@ -1,9 +1,10 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context } from "./context";
 import { workspaceJWT } from "./service/workspace-jwt";
+import env from "@gitterm/env/server";
 
 // Internal service API key for service-to-service communication
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+const INTERNAL_API_KEY = env.INTERNAL_API_KEY;
 
 export const t = initTRPC.context<Context>().create({
 	sse: {

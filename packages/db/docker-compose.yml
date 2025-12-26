@@ -1,17 +1,17 @@
-name: gitpad
+name: gitterm
 
 services:
   postgres:
     image: postgres
-    container_name: gitpad-postgres
+    container_name: gitterm-postgres
     environment:
-      POSTGRES_DB: gitpad
+      POSTGRES_DB: gitterm
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     ports:
       - "5432:5432"
     volumes:
-      - gitpad_postgres_data:/var/lib/postgresql
+      - gitterm_postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -20,4 +20,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  gitpad_postgres_data:
+  gitterm_postgres_data:

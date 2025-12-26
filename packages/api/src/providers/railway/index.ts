@@ -7,11 +7,14 @@ import type {
   WorkspaceInfo,
   WorkspaceStatusResult,
 } from "../compute";
+import env from "@gitterm/env/server";
 
-const PROJECT_ID = process.env.RAILWAY_PROJECT_ID;
-const ENVIRONMENT_ID = process.env.RAILWAY_ENVIRONMENT_ID;
-const BASE_DOMAIN = process.env.BASE_DOMAIN || "gitterm.dev";
-const RAILWAY_DEFAULT_REGION = process.env.RAILWAY_DEFAULT_REGION || "us-east4-eqdc4a";
+const PROJECT_ID = env.RAILWAY_PROJECT_ID;
+const ENVIRONMENT_ID = env.RAILWAY_ENVIRONMENT_ID;
+const BASE_DOMAIN = env.BASE_DOMAIN;
+const RAILWAY_DEFAULT_REGION = env.RAILWAY_DEFAULT_REGION;
+const PUBLIC_RAILWAY_DOMAINS = env.PUBLIC_RAILWAY_DOMAINS;
+const ROUTING_MODE = env.ROUTING_MODE;
 
 export class RailwayProvider implements ComputeProvider {
   readonly name = "railway";
@@ -62,8 +65,32 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error(`Railway API Error (serviceInstanceDeploy): ${error.message}`);
     });
 
-    const backendUrl = `http://${config.subdomain}.railway.internal:7681`;
-    const domain = `${config.subdomain}.${BASE_DOMAIN}`;
+    let publicDomain = "";
+    
+    if(PUBLIC_RAILWAY_DOMAINS) {
+      const { serviceDomainCreate } = await railway.ServiceDomainCreate({
+        environmentId: ENVIRONMENT_ID,
+        serviceId: serviceCreate.id,
+        targetPort: 7681,
+      }).catch(async (error) => {
+        console.error("Railway API Error (ServiceDomainCreate):", error);
+        await railway.ServiceDelete({ id: serviceCreate.id })
+        throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
+      });
+
+      publicDomain = serviceDomainCreate.domain;
+    }
+
+    const backendUrl = PUBLIC_RAILWAY_DOMAINS ? `https://${publicDomain}` : `http://${config.subdomain}.railway.internal:7681`;
+    const domain = PUBLIC_RAILWAY_DOMAINS 
+      ? `https://${publicDomain}` 
+      : ROUTING_MODE === "path"
+      ? BASE_DOMAIN.includes("localhost") 
+        ? `http://${BASE_DOMAIN}/ws/${config.subdomain}` 
+        : `https://${BASE_DOMAIN}/ws/${config.subdomain}`
+      : BASE_DOMAIN.includes("localhost") 
+        ? `http://${config.subdomain}.${BASE_DOMAIN}` 
+        : `https://${config.subdomain}.${BASE_DOMAIN}`;
 
     return {
       externalServiceId: serviceCreate.id,
@@ -131,8 +158,34 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error(`Railway API Error (serviceInstanceDeploy): ${error.message}`);
     });
 
-    const backendUrl = `http://${config.subdomain}.railway.internal:7681`;
-    const domain = `${config.subdomain}.${BASE_DOMAIN}`;
+    let publicDomain = "";
+
+    console.log('PUBLIC_RAILWAY_DOMAINS', PUBLIC_RAILWAY_DOMAINS);
+    if(PUBLIC_RAILWAY_DOMAINS) {
+      const { serviceDomainCreate } = await railway.ServiceDomainCreate({
+        environmentId: ENVIRONMENT_ID,
+        serviceId: serviceCreate.id,
+        targetPort: 7681,
+      }).catch(async (error) => {
+        console.error("Railway API Error (ServiceDomainCreate):", error);
+        await railway.ServiceDelete({ id: serviceCreate.id })
+        throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
+      });
+
+      publicDomain = serviceDomainCreate.domain;
+    }
+    console.log('publicDomain', publicDomain);
+
+    const backendUrl = PUBLIC_RAILWAY_DOMAINS ? `https://${publicDomain}` : `http://${config.subdomain}.railway.internal:7681`;
+    const domain = PUBLIC_RAILWAY_DOMAINS 
+      ? `https://${publicDomain}` 
+      : ROUTING_MODE === "path"
+      ? BASE_DOMAIN.includes("localhost") 
+        ? `http://${BASE_DOMAIN}/ws/${config.subdomain}` 
+        : `https://${BASE_DOMAIN}/ws/${config.subdomain}`
+      : BASE_DOMAIN.includes("localhost") 
+        ? `http://${config.subdomain}.${BASE_DOMAIN}` 
+        : `https://${config.subdomain}.${BASE_DOMAIN}`;
 
     return {
       externalServiceId: serviceCreate.id,

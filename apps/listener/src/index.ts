@@ -1,20 +1,20 @@
 import "dotenv/config";
 import { trpcServer } from "@hono/trpc-server";
-import { createContext } from "@gitpad/api/context";
-import { listenerRouter } from "@gitpad/api/routers/index";
+import { createContext } from "@gitterm/api/context";
+import { listenerRouter } from "@gitterm/api/routers/index";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import env from "@gitterm/env/listener";
 
 const app = new Hono();
 
 app.use(logger());
 
 app.use("/*", cors({
-    // origin: process.env.CORS_ORIGIN ?? "*",
     origin: (origin) => {
         if (!origin) return null;
-        const BASE_DOMAIN = process.env.BASE_DOMAIN || "gitterm.dev";
+        const BASE_DOMAIN = env.BASE_DOMAIN;
         
         // Allow main web app domain
         const allowedOrigins = [

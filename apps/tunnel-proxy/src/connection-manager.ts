@@ -1,6 +1,7 @@
-import { TunnelRepository } from "@gitpad/redis";
+import { TunnelRepository } from "@gitterm/redis";
 import { internalClient } from "./internal-client";
 import { Multiplexer } from "./mux";
+import env from "@gitterm/env/tunnel-proxy";
 
 export interface ConnectedAgent {
 	subdomain: string;
@@ -17,13 +18,8 @@ export class ConnectionManager {
 	private tunnelRepo = new TunnelRepository();
 	private connections = new Map<string, ConnectedAgent>();
 
-	private idleTimeoutMs = process.env.TUNNEL_IDLE_TIMEOUT_MS
-		? Number.parseInt(process.env.TUNNEL_IDLE_TIMEOUT_MS, 10)
-		: 90_000;
-
-	private pingIntervalMs = process.env.TUNNEL_PING_INTERVAL_MS
-		? Number.parseInt(process.env.TUNNEL_PING_INTERVAL_MS, 10)
-		: 25_000;
+	private idleTimeoutMs = 90_000;
+	private pingIntervalMs = 25_000;
 
 	get(subdomain: string): ConnectedAgent | undefined {
 		return this.connections.get(subdomain);
@@ -92,7 +88,7 @@ export class ConnectionManager {
 			userId: params.userId,
 			primaryPort: params.primaryPort,
 			exposedPorts: params.exposedPorts,
-			instanceId: process.env.INSTANCE_ID || "unknown",
+			instanceId: env.INSTANCE_ID,
 		});
 	}
 

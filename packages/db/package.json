@@ -1,5 +1,5 @@
 {
-  "name": "@gitpad/db",
+  "name": "@gitterm/db",
   "type": "module",
   "exports": {
     ".": {
@@ -23,7 +23,7 @@
   "devDependencies": {
     "drizzle-kit": "^0.31.2",
     "@types/pg": "^8.11.11",
-    "@gitpad/config": "workspace:*"
+    "@gitterm/config": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^5"

@@ -1,0 +1,37 @@
+{
+  "name": "@gitterm/env",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./server": {
+      "default": "./src/server.ts"
+    },
+    "./web": {
+      "default": "./src/web.ts"
+    },
+    "./worker": {
+      "default": "./src/worker.ts"
+    },
+    "./listener": {
+      "default": "./src/listener.ts"
+    },
+    "./tunnel-proxy": {
+      "default": "./src/tunnel-proxy.ts"
+    },
+    "./auth": {
+      "default": "./src/auth.ts"
+    }
+  },
+  "scripts": {},
+  "devDependencies": {
+    "@gitterm/config": "workspace:*"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  }
+}

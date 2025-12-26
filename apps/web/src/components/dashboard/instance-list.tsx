@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getWorkspaceUrl, getAttachCommand, getWorkspaceDisplayUrl, getAgentConnectCommand } from "@/lib/utils";
 
 export function InstanceList() {
   const [workspacesQuery, providersQuery] = useQueries({
@@ -169,11 +170,16 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
   // Running local instances can use opencode attach
   const connectCommand = isLocal 
     ? isPending 
-      ? `npx @opeoginni/gitterm-agent connect --workspace-id ${workspace.id}`
-      : workspace.domain 
-        ? `opencode attach https://${workspace.domain}`
+      ? getAgentConnectCommand(workspace.id)
+      : workspace.subdomain 
+        ? getAttachCommand(workspace.subdomain, workspace.backendUrl)
         : null
     : null;
+  
+  // Get the workspace URL for linking
+  // Uses backendUrl directly if available, otherwise falls back to subdomain-based URL
+  const workspaceUrl = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain, workspace.backendUrl) : null;
+  const workspaceDisplayUrl = workspace.subdomain ? getWorkspaceDisplayUrl(workspace.subdomain, workspace.backendUrl) : null;
 
   return (
     <>
@@ -208,7 +214,7 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Once connected, your local server will be available at <span className="font-mono text-foreground">{workspace.subdomain}.gitterm.dev</span>
+                Once connected, your local server will be available at <span className="font-mono text-foreground">{workspaceDisplayUrl}</span>
               </p>
             </div>
             <DialogFooter>
@@ -282,13 +288,15 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
               <Globe className="h-3.5 w-3.5 shrink-0 text-primary/60" />
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(workspace.domain);
-                  toast.success("Domain copied!");
+                  if (workspaceDisplayUrl) {
+                    navigator.clipboard.writeText(workspaceDisplayUrl);
+                    toast.success("Domain copied!");
+                  }
                 }}
                 className="text-xs font-mono text-primary/80 hover:text-primary truncate transition-colors cursor-pointer underline decoration-dotted underline-offset-2"
-                title={workspace.domain}
+                title={workspaceDisplayUrl || ""}
               >
-                {workspace.domain}
+                {workspaceDisplayUrl}
               </button>
             </div>
           )}
@@ -305,16 +313,18 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
             View Connect Command
           </Button>
         )}
-        {isRunning && workspace.domain && (
+        {isRunning && workspaceUrl && (
           isLocal || workspace.serverOnly ? (
             <div className="flex gap-2 flex-1">
               <Button 
                 size="sm" 
                 className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
                 onClick={() => {
-                  const command = `opencode attach https://${workspace.domain}`;
-                  navigator.clipboard.writeText(command);
-                  toast.success("Attach command copied to clipboard!");
+                  if (workspace.subdomain) {
+                    const command = getAttachCommand(workspace.subdomain, workspace.backendUrl);
+                    navigator.clipboard.writeText(command);
+                    toast.success("Attach command copied to clipboard!");
+                  }
                 }}
               >
                 <Copy className="h-3.5 w-3.5" />
@@ -325,7 +335,7 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
                 className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90" 
                 asChild
               >
-                <a href={`${workspace.domain}`} target="_blank" rel="noreferrer">
+                <a href={workspaceUrl} target="_blank" rel="noreferrer">
                   <Monitor className="h-3.5 w-3.5" />
                   Desktop App
                 </a>
@@ -337,7 +347,7 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
               className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90" 
               asChild
             >
-              <a href={`https://${workspace.domain}`} target="_blank" rel="noreferrer">
+              <a href={workspaceUrl} target="_blank" rel="noreferrer">
                 <ExternalLink className="h-3.5 w-3.5" />
                 Open Workspace
               </a>

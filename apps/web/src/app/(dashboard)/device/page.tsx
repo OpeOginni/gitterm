@@ -10,8 +10,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { CheckCircle, XCircle, Shield, Loader2 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
-
-const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL
+import { trpcClient } from "@/utils/trpc"
 
 export default function DevicePage() {
   const router = useRouter()
@@ -28,10 +27,6 @@ export default function DevicePage() {
   }, [session, isPending, router])
 
   async function submit(action: "approve" | "deny") {
-    if (!serverUrl) {
-      toast.error("NEXT_PUBLIC_SERVER_URL is not set")
-      return
-    }
     if (!normalized) {
       toast.error("Enter a code")
       return
@@ -39,21 +34,16 @@ export default function DevicePage() {
 
     setIsSubmitting(true)
     try {
-      const res = await fetch(`${serverUrl}/api/device/approve`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userCode: normalized, action }),
+      await trpcClient.device.approve.mutate({
+        userCode: normalized,
+        action,
       })
-
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null
-        toast.error(data?.error ?? "Failed")
-        return
-      }
 
       toast.success(action === "approve" ? "Device approved" : "Device denied")
       setUserCode("")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed"
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }

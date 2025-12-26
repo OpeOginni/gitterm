@@ -1,5 +1,5 @@
 {
-  "name": "@gitpad/redis",
+  "name": "@gitterm/redis",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
     "ioredis": "^5.6.1"
   },
   "devDependencies": {
-    "@gitpad/config": "workspace:*",
+    "@gitterm/config": "workspace:*",
     "@types/node": "^24.0.0",
     "typescript": "^5.8.2"
   }

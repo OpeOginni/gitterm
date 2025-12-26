@@ -1,8 +1,10 @@
-import { db, eq, and, sql } from "@gitpad/db";
-import { dailyUsage, usageSession, workspace, type SessionStopSource } from "@gitpad/db/schema/workspace";
+import { db, eq, and, sql } from "@gitterm/db";
+import { dailyUsage, usageSession, workspace, type SessionStopSource } from "@gitterm/db/schema/workspace";
 import { logger } from "./logger";
+import { shouldEnforceQuota, shouldMeterUsage, getDailyMinuteQuota } from "../config/features";
+import { isSelfHosted } from "../config/deployment";
 
-// Free tier: 60 minutes per day
+// Free tier: 60 minutes per day (only applies in managed mode)
 export const FREE_TIER_DAILY_MINUTES = 60;
 // Idle timeout: 30 minutes of no heartbeat
 // Users can step away, read docs, think without losing workspace
@@ -10,8 +12,27 @@ export const IDLE_TIMEOUT_MINUTES = 30;
 
 /**
  * Get or create daily usage record for a user
+ * In self-hosted mode, this still tracks usage but won't enforce limits
  */
-export async function getOrCreateDailyUsage(userId: string): Promise<{ minutesUsed: number; minutesRemaining: number }> {
+export async function getOrCreateDailyUsage(userId: string, userPlan: "free" | "pro" | "enterprise" = "free"): Promise<{ minutesUsed: number; minutesRemaining: number }> {
+  // In self-hosted mode or for paid plans, return unlimited
+  if (isSelfHosted()) {
+    return {
+      minutesUsed: 0,
+      minutesRemaining: Infinity,
+    };
+  }
+
+  const dailyQuota = getDailyMinuteQuota(userPlan);
+  
+  // Paid plans have unlimited minutes
+  if (dailyQuota === Infinity) {
+    return {
+      minutesUsed: 0,
+      minutesRemaining: Infinity,
+    };
+  }
+
   const today = new Date().toISOString().split("T")[0]!; // YYYY-MM-DD
 
   const [existing] = await db
@@ -22,7 +43,7 @@ export async function getOrCreateDailyUsage(userId: string): Promise<{ minutesUs
   if (existing) {
     return {
       minutesUsed: existing.minutesUsed,
-      minutesRemaining: Math.max(0, FREE_TIER_DAILY_MINUTES - existing.minutesUsed),
+      minutesRemaining: Math.max(0, dailyQuota - existing.minutesUsed),
     };
   }
 
@@ -38,25 +59,43 @@ export async function getOrCreateDailyUsage(userId: string): Promise<{ minutesUs
 
   return {
     minutesUsed: created!.minutesUsed,
-    minutesRemaining: FREE_TIER_DAILY_MINUTES,
+    minutesRemaining: dailyQuota,
   };
 }
 
 /**
  * Check if user has remaining daily quota
+ * Always returns true in self-hosted mode or when quota enforcement is disabled
  */
-export async function hasRemainingQuota(userId: string): Promise<boolean> {
-  const usage = await getOrCreateDailyUsage(userId);
+export async function hasRemainingQuota(userId: string, userPlan: "free" | "pro" | "enterprise" = "free"): Promise<boolean> {
+  // Skip quota check if enforcement is disabled
+  if (!shouldEnforceQuota()) {
+    return true;
+  }
+
+  // Paid plans have unlimited quota
+  if (userPlan !== "free") {
+    return true;
+  }
+
+  const usage = await getOrCreateDailyUsage(userId, userPlan);
   if (usage.minutesRemaining <= 0) {
     logger.quotaExhausted(userId);
+    return false;
   }
-  return usage.minutesRemaining > 0;
+  return true;
 }
 
 /**
  * Create a new usage session when workspace starts
+ * Skipped if usage metering is disabled
  */
-export async function createUsageSession(workspaceId: string, userId: string): Promise<string> {
+export async function createUsageSession(workspaceId: string, userId: string): Promise<string | null> {
+  // Skip if metering is disabled
+  if (!shouldMeterUsage()) {
+    return null;
+  }
+
   const [session] = await db
     .insert(usageSession)
     .values({
@@ -71,11 +110,17 @@ export async function createUsageSession(workspaceId: string, userId: string): P
 
 /**
  * Close a usage session and update daily usage
+ * Skipped if usage metering is disabled
  */
 export async function closeUsageSession(
   workspaceId: string,
   stopSource: SessionStopSource
 ): Promise<{ durationMinutes: number }> {
+  // Skip if metering is disabled
+  if (!shouldMeterUsage()) {
+    return { durationMinutes: 0 };
+  }
+
   const now = new Date();
 
   // Find the open session for this workspace

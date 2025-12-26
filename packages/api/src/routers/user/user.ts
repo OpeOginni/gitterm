@@ -1,10 +1,10 @@
 import z from "zod";
 import { protectedProcedure, router } from "../..";
 import { TRPCError } from "@trpc/server";
-import { db, eq, and, sql } from "@gitpad/db";
-import { user } from "@gitpad/db/schema/auth";
-import { workspace, volume, usageSession } from "@gitpad/db/schema/workspace";
-import { cloudProvider } from "@gitpad/db/schema/cloud";
+import { db, eq, and, sql } from "@gitterm/db";
+import { user } from "@gitterm/db/schema/auth";
+import { workspace, volume, usageSession } from "@gitterm/db/schema/workspace";
+import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { sendAdminMessage } from "../../utils/discord";
 import { closeUsageSession } from "../../utils/metering";
 import { getProviderByCloudProviderId } from "../../providers";

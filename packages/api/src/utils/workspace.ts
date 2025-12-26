@@ -9,8 +9,8 @@ export function generateUserData(repoUrl: string, branch: string = "main") {
     -e GIT_REPO_URL="$REPO_URL" \
     -e GIT_BRANCH="$BRANCH" \
     -v /workspace:/workspace \
-    --name gitpad-agent \
-    gitpad-agent:latest
+    --name gitterm-agent \
+    gitterm-agent:latest
     `
   
     const base64 = Buffer.from(script).toString("base64")

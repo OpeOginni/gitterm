@@ -21,8 +21,9 @@ import {
 } from "lucide-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
+import env from "@gitterm/env/web"
 
-const GITHUB_APP_NAME = process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "gitterm-dev"
+const GITHUB_APP_NAME = env.NEXT_PUBLIC_GITHUB_APP_NAME || "gitterm-dev"
 
 export function GitHubConnection() {
   const [isConnecting, setIsConnecting] = useState(false)
@@ -37,7 +38,7 @@ export function GitHubConnection() {
 
   const handleConnect = () => {
     setIsConnecting(true)
-    const redirectUrl = `${process.env.NEXT_PUBLIC_WEB_URL}/api/github/callback`
+    const redirectUrl = `${env.NEXT_PUBLIC_SERVER_URL}/api/github/callback`
     window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${redirectUrl}`
   }
 

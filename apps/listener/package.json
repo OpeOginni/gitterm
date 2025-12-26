@@ -16,12 +16,13 @@
     "@hono/trpc-server": "^0.4.0",
     "dotenv": "catalog:",
     "zod": "catalog:",
-    "@gitpad/api": "workspace:*"
+    "@gitterm/api": "workspace:*",
+    "@gitterm/env": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",
     "@types/bun": "^1.2.6",
     "tsdown": "^0.16.5",
-    "@gitpad/config": "workspace:*"
+    "@gitterm/config": "workspace:*"
   }
 }

@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { workspace } from "@gitpad/db/schema/workspace";
+import { workspace } from "@gitterm/db/schema/workspace";
 
 type WorkspaceStatus = typeof workspace.$inferSelect.status;
 

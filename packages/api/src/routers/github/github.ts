@@ -2,8 +2,8 @@ import z from "zod";
 import { protectedProcedure, router } from "../../index";
 import { githubAppService } from "../../service/github";
 import { TRPCError } from "@trpc/server";
-import { db, eq, and } from "@gitpad/db";
-import { workspaceGitConfig, gitIntegration } from "@gitpad/db/schema/integrations";
+import { db, eq, and } from "@gitterm/db";
+import { workspaceGitConfig, gitIntegration } from "@gitterm/db/schema/integrations";
 import { logger } from "../../utils/logger";
 
 export const githubRouter = router({

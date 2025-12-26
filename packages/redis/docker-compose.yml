@@ -1,13 +1,13 @@
-name: gitpad-redis
+name: gitterm-redis
 
 services:
   redis:
     image: redis:7-alpine
-    container_name: gitpad-redis
+    container_name: gitterm-redis
     ports:
       - "6379:6379"
     volumes:
-      - gitpad_redis_data:/data
+      - gitterm_redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -17,5 +17,5 @@ services:
     command: redis-server --appendonly yes
 
 volumes:
-  gitpad_redis_data:
+  gitterm_redis_data:
 

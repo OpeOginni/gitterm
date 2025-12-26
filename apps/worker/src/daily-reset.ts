@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { internalClient } from "@gitpad/api/client/internal";
+import { internalClient } from "@gitterm/api/client/internal";
 
 /**
  * Daily Reset Worker

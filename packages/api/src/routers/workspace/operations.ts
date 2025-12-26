@@ -1,8 +1,8 @@
 import z from "zod";
 import { workspaceAuthProcedure, router } from "../../index";
-import { db, eq, and, gt } from "@gitpad/db";
-import { workspace } from "@gitpad/db/schema/workspace";
-import { gitIntegration, workspaceGitConfig } from "@gitpad/db/schema/integrations";
+import { db, eq, and, gt } from "@gitterm/db";
+import { workspace } from "@gitterm/db/schema/workspace";
+import { gitIntegration, workspaceGitConfig } from "@gitterm/db/schema/integrations";
 import { TRPCError } from "@trpc/server";
 import { githubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";

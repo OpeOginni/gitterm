@@ -5,9 +5,45 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import chalk from "chalk";
 
-// Default production URLs
+// Default production URLs (hosted gitterm.dev)
 const DEFAULT_WS_URL = "wss://tunnel.gitterm.dev/tunnel/connect";
 const DEFAULT_SERVER_URL = "https://api.gitterm.dev";
+const DEFAULT_BASE_DOMAIN = "gitterm.dev";
+
+/**
+ * Construct a workspace URL from subdomain
+ */
+function getWorkspaceUrl(subdomain: string, cfg?: { routingMode?: "path" | "subdomain"; baseDomain?: string; serverUrl?: string }): string {
+	const routingMode = cfg?.routingMode ?? "subdomain";
+	if (routingMode === "path") {
+		// Path routing uses the server/public origin as the base
+		const origin = cfg?.serverUrl || "http://localhost";
+		return `${origin.replace(/\/+$/, "")}/ws/${subdomain}`;
+	}
+
+	const baseDomain = cfg?.baseDomain || process.env.BASE_DOMAIN || DEFAULT_BASE_DOMAIN;
+	const protocol = baseDomain.includes("localhost") ? "http" : "https";
+	return `${protocol}://${subdomain}.${baseDomain}`;
+}
+
+/**
+ * Construct a service URL (for exposed ports)
+ */
+function getServiceUrl(
+	mainSubdomain: string,
+	serviceName: string,
+	cfg?: { routingMode?: "path" | "subdomain"; baseDomain?: string; serverUrl?: string },
+): string {
+	const routingMode = cfg?.routingMode ?? "subdomain";
+	if (routingMode === "path") {
+		const origin = cfg?.serverUrl || "http://localhost";
+		return `${origin.replace(/\/+$/, "")}/ws/${serviceName}-${mainSubdomain}`;
+	}
+
+	const baseDomain = cfg?.baseDomain || process.env.BASE_DOMAIN || DEFAULT_BASE_DOMAIN;
+	const protocol = baseDomain.includes("localhost") ? "http" : "https";
+	return `${protocol}://${serviceName}-${mainSubdomain}.${baseDomain}`;
+}
 
 // const DEFAULT_WS_URL = "ws://localhost:9000/tunnel/connect";
 // const DEFAULT_SERVER_URL = "http://localhost:3000";
@@ -36,6 +72,9 @@ Connect options:
   --token <jwt>           Tunnel JWT (overrides saved login)
   --expose <name=port>    Expose additional service port (repeatable)
 
+Environment variables:
+  BASE_DOMAIN             Base domain for workspace URLs (default: gitterm.dev)
+
 Examples:
   # First time: login to gitterm
   npx @opeoginni/gitterm-agent login
@@ -45,6 +84,10 @@ Examples:
 
   # Expose multiple ports
   npx @opeoginni/gitterm-agent connect --workspace-id "ws_abc123" --port 3000 --expose api=3001
+
+  # Local development (specify local tunnel server)
+  npx @opeoginni/gitterm-agent connect --workspace-id "ws_abc123" --port 3000 \\
+    --ws-url ws://localhost:9000/tunnel/connect --server-url http://localhost:3000
 
 Notes:
   - This tool does not start servers for you.
@@ -76,6 +119,14 @@ function base64ToBytes(data: string): Uint8Array {
 
 function bytesToBase64(bytes: Uint8Array): string {
 	return Buffer.from(bytes).toString("base64");
+}
+
+function headersToRecord(headers: Headers): Record<string, string> {
+	const out: Record<string, string> = {};
+	headers.forEach((value, key) => {
+		out[key] = value;
+	});
+	return out;
 }
 
 function parseExposeFlags(args: string[]): Record<string, number> {
@@ -150,11 +201,17 @@ function sleep(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function runLogin(rawArgs: string[]) {
-	const serverUrl = getFlag(rawArgs, "--server-url") ?? DEFAULT_SERVER_URL;
+type DeviceCodeResponse = {
+	deviceCode: string;
+	userCode: string;
+	verificationUri: string;
+	intervalSeconds: number;
+	expiresInSeconds: number;
+};
 
-	console.log(`Logging in to gitterm...`);
-	
+async function loginViaDeviceCode(serverUrl: string): Promise<{ agentToken: string }> {
+	console.log(`Your session expired. Starting login...`);
+
 	const codeRes = await fetch(new URL("/api/device/code", serverUrl), {
 		method: "POST",
 		headers: { "content-type": "application/json" },
@@ -162,13 +219,7 @@ async function runLogin(rawArgs: string[]) {
 	});
 	if (!codeRes.ok) throw new Error(`Failed to start device login: ${codeRes.status}`);
 
-	const codeJson = (await codeRes.json()) as {
-		deviceCode: string;
-		userCode: string;
-		verificationUri: string;
-		intervalSeconds: number;
-		expiresInSeconds: number;
-	};
+	const codeJson = (await codeRes.json()) as DeviceCodeResponse;
 
 	console.log("To sign in, visit:");
 	console.log(`  ${codeJson.verificationUri}`);
@@ -185,11 +236,10 @@ async function runLogin(rawArgs: string[]) {
 
 		if (tokenRes.ok) {
 			const tokenJson = (await tokenRes.json()) as { accessToken: string };
-			await saveConfig({ serverUrl, agentToken: tokenJson.accessToken, createdAt: Date.now() });
-			console.log("Logged in successfully!");
-			process.exit(0);
+			return { agentToken: tokenJson.accessToken };
 		}
 
+		// 428 = authorization_pending
 		if (tokenRes.status !== 428) {
 			const errText = await tokenRes.text().catch(() => "");
 			throw new Error(`Login failed: ${tokenRes.status} ${errText}`);
@@ -201,11 +251,29 @@ async function runLogin(rawArgs: string[]) {
 	throw new Error("Device code expired; try again.");
 }
 
+async function runLogin(rawArgs: string[]) {
+	const serverUrl = getFlag(rawArgs, "--server-url") ?? DEFAULT_SERVER_URL;
+
+	console.log(`Logging in to gitterm...`);
+
+	const { agentToken } = await loginViaDeviceCode(serverUrl);
+	await saveConfig({ serverUrl, agentToken, createdAt: Date.now() });
+	console.log("Logged in successfully!");
+	process.exit(0);
+}
+
 async function runLogout() {
 	await deleteConfig();
 	console.log("Logged out successfully. Credentials cleared.");
 	process.exit(0);
 }
+
+type AgentConnectConfig = {
+	serverUrl: string;
+	wsUrl: string;
+	routingMode: "path" | "subdomain";
+	baseDomain: string;
+};
 
 async function mintTunnelToken(params: { serverUrl: string; agentToken: string; workspaceId: string }) {
 	const res = await fetch(new URL("/api/agent/tunnel-token", params.serverUrl), {
@@ -219,15 +287,16 @@ async function mintTunnelToken(params: { serverUrl: string; agentToken: string; 
 	if (!res.ok) {
 		const text = await res.text().catch(() => "");
 		if (res.status === 401 || res.status === 403) {
-			throw new Error(
-				`Authentication failed (${res.status}). Your saved credentials may have expired.\nPlease run: npx @opeoginni/gitterm-agent logout && npx @opeoginni/gitterm-agent login`,
-			);
+			// Auto-login + retry once
+			const refreshed = await loginViaDeviceCode(params.serverUrl);
+			await saveConfig({ serverUrl: params.serverUrl, agentToken: refreshed.agentToken, createdAt: Date.now() });
+			return await mintTunnelToken({ ...params, agentToken: refreshed.agentToken });
 		}
 		throw new Error(`Failed to mint tunnel token: ${res.status} ${text}`);
 	}
-	const json = (await res.json()) as { token: string; subdomain?: string };
+	const json = (await res.json()) as { token: string; subdomain?: string; connect?: AgentConnectConfig };
 	if (!json.token) throw new Error("Server did not return a token");
-	return json.token;
+	return json;
 }
 
 async function updateWorkspacePorts(params: {
@@ -252,9 +321,10 @@ async function updateWorkspacePorts(params: {
 	if (!res.ok) {
 		const text = await res.text().catch(() => "");
 		if (res.status === 401 || res.status === 403) {
-			throw new Error(
-				`Authentication failed (${res.status}). Your saved credentials may have expired.\nPlease run: npx @opeoginni/gitterm-agent logout && npx @opeoginni/gitterm-agent login`,
-			);
+			// Auto-login + retry once
+			const refreshed = await loginViaDeviceCode(params.serverUrl);
+			await saveConfig({ serverUrl: params.serverUrl, agentToken: refreshed.agentToken, createdAt: Date.now() });
+			return await updateWorkspacePorts({ ...params, agentToken: refreshed.agentToken });
 		}
 		throw new Error(`Failed to update workspace ports: ${res.status} ${text}`);
 	}
@@ -272,7 +342,7 @@ function prompt(question: string): Promise<string> {
 }
 
 async function runConnect(rawArgs: string[]) {
-	const wsUrl = getFlag(rawArgs, "--ws-url") ?? DEFAULT_WS_URL;
+	const wsUrlFlag = getFlag(rawArgs, "--ws-url");
 	const portStr = getFlag(rawArgs, "--port");
 	const targetBase = "http://localhost";
 
@@ -283,6 +353,7 @@ async function runConnect(rawArgs: string[]) {
 	let token = tokenFromFlag;
 	let primaryPort: number;
 	let mainSubdomain: string;
+	let connectCfg: AgentConnectConfig | undefined;
 
 	if (!token) {
 		if (!workspaceId) throw new Error("Missing --workspace-id");
@@ -312,7 +383,10 @@ async function runConnect(rawArgs: string[]) {
 			if (!Number.isFinite(primaryPort) || primaryPort <= 0) throw new Error("Invalid --port");
 		}
 
-		token = await mintTunnelToken({ serverUrl: effectiveServerUrl, agentToken: config.agentToken, workspaceId });
+		const minted = await mintTunnelToken({ serverUrl: effectiveServerUrl, agentToken: config.agentToken, workspaceId });
+		token = minted.token;
+		mainSubdomain = minted.subdomain ?? "";
+		connectCfg = minted.connect;
 	} else {
 		if (!portStr) throw new Error("Missing --port");
 		primaryPort = Number.parseInt(portStr, 10);
@@ -346,7 +420,8 @@ async function runConnect(rawArgs: string[]) {
 		return merged;
 	}
 
-	const ws = new WebSocket(wsUrl);
+	const effectiveWsUrl = wsUrlFlag ?? connectCfg?.wsUrl ?? DEFAULT_WS_URL;
+	const ws = new WebSocket(effectiveWsUrl);
 
 	ws.addEventListener("open", () => {
 		console.log("Establishing secure tunnel for workspace...");
@@ -383,13 +458,32 @@ async function runConnect(rawArgs: string[]) {
 		if (frame.type === "pong") return;
 		if (frame.type === "open") return;
 		if (frame.type === "auth") {
-			mainSubdomain = frame.mainSubdomain ?? "";
+			// Prefer server-provided subdomain (it exists even before auth ack),
+			// but allow override from tunnel-proxy frame.
+			mainSubdomain = frame.mainSubdomain ?? mainSubdomain ?? "";
 
 			console.log("Connected! Your local workspace is now live at: \n")
-			console.log(chalk.green(`https://${mainSubdomain}.gitterm.dev`), "\n")
+			console.log(
+				chalk.green(
+					getWorkspaceUrl(mainSubdomain, {
+						routingMode: connectCfg?.routingMode,
+						baseDomain: connectCfg?.baseDomain,
+						serverUrl: connectCfg?.serverUrl,
+					}),
+				),
+				"\n",
+			);
 			if (exposedPorts) {
 				for (const [serviceSubdomain, port] of Object.entries(exposedPorts)) {
-					console.log(chalk.green(`${serviceSubdomain}:${port} -> https://${serviceSubdomain}-${serviceSubdomain}.gitterm.dev`))
+					console.log(
+						chalk.green(
+							`${serviceSubdomain}:${port} -> ${getServiceUrl(mainSubdomain, serviceSubdomain, {
+								routingMode: connectCfg?.routingMode,
+								baseDomain: connectCfg?.baseDomain,
+								serverUrl: connectCfg?.serverUrl,
+							})}`,
+						),
+					);
 				}
 			}
 		};
@@ -455,7 +549,8 @@ async function runConnect(rawArgs: string[]) {
 				const upstream = await fetch(url, {
 					method: meta.method,
 					headers,
-					body: reqBody.byteLength > 0 ? reqBody : undefined,
+					// Node's fetch BodyInit typings can be picky; Uint8Array is valid at runtime.
+					body: reqBody.byteLength > 0 ? (reqBody as unknown as BodyInit) : undefined,
 					redirect: "manual",
 					signal: abortController.signal,
 				});
@@ -468,7 +563,7 @@ async function runConnect(rawArgs: string[]) {
 						type: "response",
 						id: frame.id,
 						statusCode: upstream.status,
-						headers: Object.fromEntries(upstream.headers.entries()),
+						headers: headersToRecord(upstream.headers),
 						timestamp: Date.now(),
 					} satisfies Frame),
 				);
@@ -553,7 +648,7 @@ async function runConnect(rawArgs: string[]) {
 	console.log("\nShutting down...");
 
 	// Abort all active requests
-	for (const controller of activeRequests.values()) {
+	for (const controller of Array.from(activeRequests.values())) {
 		controller.abort();
 	}
 	activeRequests.clear();

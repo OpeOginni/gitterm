@@ -1,16 +1,21 @@
-import { auth } from "@gitpad/auth";
-import { db, eq, and } from "@gitpad/db";
-import { workspace } from "@gitpad/db/schema/workspace";
+import { auth } from "@gitterm/auth";
+import { db, eq, and } from "@gitterm/db";
+import { workspace } from "@gitterm/db/schema/workspace";
 import type { Context } from "hono";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import env from "@gitterm/env/server";
 
 // Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * Extract subdomain from Host header
+ * Used for subdomain-based workspace routing in production
+ */
 function extractSubdomain(host: string): string {
 	const hostname = host.split(':')[0];
 	if (!hostname) {
@@ -43,20 +48,24 @@ function htmlError(c: Context, type: 'unavailable' | 'serverError' | 'offline', 
 
 export const proxyResolverRouter = async (c: Context) => {
 	console.log('[PROXY-RESOLVE] Request received');
+	
 	try {
         const internalKey = c.req.header('X-Internal-Key') || '';
         if (!internalKey) {
 			console.log('[PROXY-RESOLVE] Missing internal key');
             return htmlError(c, 'unavailable', 401);
         }
-        if (internalKey !== process.env.INTERNAL_API_KEY) {
+        if (internalKey !== env.INTERNAL_API_KEY) {
 			console.log('[PROXY-RESOLVE] Invalid internal key');
             return htmlError(c, 'unavailable', 401);
         }
-		const host = c.req.header('Host') || '';
-		const subdomain = extractSubdomain(host);
 		
-		console.log('[PROXY-RESOLVE] Extracted subdomain:', { host, subdomain });
+		const subdomain = extractSubdomain(c.req.header('Host') || '');
+		
+		console.log('[PROXY-RESOLVE] Extracted subdomain:', { 
+			subdomain, 
+			host: c.req.header('Host')
+		});
 		
 		if (!subdomain) {
 			console.log('[PROXY-RESOLVE] No subdomain found');

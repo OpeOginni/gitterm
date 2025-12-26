@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp, boolean, pgEnum } from "drizzle-orm/pg-core";
 
-export const userPlanEnum = pgEnum('user_plan', ['free', 'pro', 'enterprise'] as const);
+export const userPlanEnum = pgEnum('user_plan', ['free', 'tunnel', 'pro', 'enterprise'] as const);
 
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),

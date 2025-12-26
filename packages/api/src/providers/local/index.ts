@@ -1,4 +1,5 @@
 import type { ComputeProvider, WorkspaceConfig, WorkspaceInfo, PersistentWorkspaceConfig, PersistentWorkspaceInfo, WorkspaceStatusResult } from "../compute";
+import { getWorkspaceDomain } from "../../utils/routing";
 
 /**
  * Local Provider Implementation
@@ -20,9 +21,9 @@ class LocalProvider implements ComputeProvider {
     // The workspace ID becomes the external service ID
     const externalServiceId = `local-${config.workspaceId}`;
     
-    // Domain is constructed from subdomain
-    const baseDomain = process.env.BASE_DOMAIN || "gitterm.dev";
-    const domain = `${config.subdomain}.${baseDomain}`;
+    // Domain is constructed from subdomain using routing utils
+    // Returns subdomain.baseDomain (e.g., ws-abc123.gitterm.dev)
+    const domain = getWorkspaceDomain(config.subdomain);
     
     return {
       externalServiceId,

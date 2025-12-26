@@ -2,8 +2,8 @@ import z from "zod";
 import { protectedProcedure, publicProcedure, router } from "../../index";
 import { githubAppService } from "../../service/github";
 import { TRPCError } from "@trpc/server";
-import { db, eq } from "@gitpad/db";
-import { workspaceGitConfig, githubAppInstallation } from "@gitpad/db/schema/integrations";
+import { db, eq } from "@gitterm/db";
+import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/integrations";
 
 export const githubWebhookRouter = router({
   /**

@@ -2,21 +2,28 @@
 	# Global options
 	auto_https off
 	admin off
-	
+
 	# Server options
 	servers {
 		protocols h1 h2
 	}
 }
 
-# Subdomain Format Support:
-# - ws-<uuid>.*           : Cloud workspaces (auto-generated)
-# - local-<name>.*        : Free tier local tunnels
-# - <custom-name>.*       : Paid tier custom subdomains
-# - Reserved (blocked):    api, tunnel, www, admin, etc.
+# SUBDOMAIN-BASED ROUTING (DEFAULT)
 #
-# All formats work with the existing regex: ^([^.]+)\.gitterm\.dev$
-# Reserved subdomains are blocked at both workspace creation and Caddy level.
+# This is the default Caddyfile for managed deployments.
+# For path-based routing (self-hosted), use Caddyfile.path instead.
+#
+# See also:
+# - Caddyfile.subdomain : Subdomain routing (wildcard DNS required)
+# - Caddyfile.path      : Path-based routing (no wildcard DNS required)
+# - Caddyfile.local     : Local development
+#
+# Subdomain Format Support:
+# - ws-<uuid>.gitterm.dev      : Cloud workspaces (auto-generated)
+# - local-<name>.gitterm.dev   : Free tier local tunnels
+# - <custom-name>.gitterm.dev  : Paid tier custom subdomains
+# - Reserved (blocked):         api, tunnel, www, admin, etc.
 
 # Listen on port 80 for all requests
 :80 {
@@ -35,24 +42,25 @@
 		file_server
 	}
 
-	# Main proxy handler  
+	# Main proxy handler
 	route {
 		# Forward auth to API server (validates workspace exists and user has access)
 		# The API returns HTML error pages directly for non-2xx responses
 		forward_auth server.railway.internal:8080 {
-			uri /internal/proxy-resolve
+			uri /api/internal/proxy-resolve
 
 			# Copy select headers from auth response into request
 			copy_headers X-Tunnel-Type X-Workspace-ID X-User-ID X-Subdomain
 
 			# Copy original headers
 			header_up Host {host}
-			header_up X-Internal-Key "EdBY7UDhP-bVJbAns_E9yiFbx_B!tg_"
+			header_up X-Internal-Key {$INTERNAL_API_KEY}
 			header_up Cookie {header.Cookie}
 			header_up Authorization {header.Authorization}
 			header_up X-Original-URI {uri}
 			header_up X-Original-Method {method}
 			header_up X-Forwarded-For {remote_ip}
+			header_up X-Routing-Mode subdomain
 		}
 
 		# Define matchers
@@ -82,6 +90,7 @@
 			header_up Cookie {header.Cookie}
 			header_up X-Subdomain {header.X-Subdomain}
 			header_up X-Tunnel-Type {header.X-Tunnel-Type}
+			header_up X-Routing-Mode subdomain
 
 			transport http {
 				compression off
@@ -104,14 +113,15 @@
 			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
 			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
 			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
-			
+
 			# Standard proxy headers
 			header_up Host {host}
 			header_up X-Real-IP {remote_ip}
 			header_up X-Forwarded-For {remote_ip}
 			header_up User-Agent {header.User-Agent}
 			header_up Cookie {header.Cookie}
-			
+			header_up X-Routing-Mode subdomain
+
 			# Transport settings optimized for WebSocket/ttyd
 			transport http {
 				compression off

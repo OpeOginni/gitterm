@@ -1,0 +1,131 @@
+{
+	# Global options for local development
+	auto_https off
+	admin off
+
+	# Server options
+	servers {
+		protocols h1 h2
+	}
+}
+
+# Local Development Caddy Configuration
+#
+# All traffic goes through a single domain (localhost:8888).
+# No DNS configuration or /etc/hosts required!
+#
+# URL Structure:
+# - /*              -> Web app (Next.js) - DEFAULT
+# - /api/*          -> API server
+# - /listener/*     -> Listener (SSE/tRPC)
+# - /tunnel/*       -> Tunnel-proxy (agent WebSocket connections)
+# - /ws/{subdomain}/* -> Workspace traffic (path-based routing)
+#
+# Backend Ports (local dev):
+# - 8888: Caddy (this proxy) - the main entry point
+# - 3000: Server (API)
+# - 3001: Web (Next.js)
+# - 3003: Listener (SSE)
+# - 9000: Tunnel-proxy (agent connections + workspace traffic)
+#
+# Prerequisites:
+# - Install Caddy: brew install caddy (macOS) or see https://caddyserver.com/docs/install
+
+# Listen on port 8888 for all requests
+:8888 {
+	# Health check endpoint
+	handle /health {
+		header Content-Type application/json
+		respond `{"status":"UP"}` 200
+	}
+
+	# ============================================
+	# tRPC: /api/trpc/* -> localhost:3000/trpc/*
+	# Strip /api prefix, keep /trpc
+	# ============================================
+	handle /api/trpc/* {
+		uri strip_prefix /api
+		reverse_proxy localhost:3000
+	}
+
+	# ============================================
+	# API Server: /api/* -> localhost:3000
+	# Keep /api prefix (server expects it for auth, device, agent routes)
+	# ============================================
+	handle /api/* {
+		reverse_proxy localhost:3000
+	}
+
+	# ============================================
+	# Listener (SSE/tRPC): /listener/* -> localhost:3003
+	# Strip /listener prefix, forward as /trpc/*
+	# ============================================
+	handle_path /listener/* {
+		reverse_proxy localhost:3003
+	}
+
+	# ============================================
+	# Tunnel-proxy WebSocket: /tunnel/* -> localhost:9000
+	# For agent connections only (not workspace traffic)
+	# ============================================
+	handle /tunnel/* {
+		reverse_proxy localhost:9000 {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+		}
+	}
+
+	# ============================================
+	# PATH-BASED WORKSPACE ROUTING: /ws/{subdomain}/*
+	# For local development and self-hosted without wildcard DNS
+	# Routes workspace traffic to tunnel-proxy
+	# ============================================
+	handle /ws/* {
+		reverse_proxy localhost:9000 {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+
+			# Standard proxy headers
+			header_up Host {host}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up X-User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+			header_up X-Routing-Mode path
+		}
+	}
+
+	# ============================================
+	# Default: Everything else -> Web App (Next.js)
+	# This is the fallback, so frontend is at root
+	# ============================================
+	handle {
+		reverse_proxy localhost:3001
+	}
+
+	# Error handling
+	handle_errors {
+		@unavailable expression {err.status_code} == 401 || {err.status_code} == 403 || {err.status_code} == 404
+		handle @unavailable {
+			header Content-Type text/html
+			respond "Service unavailable" {err.status_code}
+		}
+
+		@server_error expression {err.status_code} >= 500
+		handle @server_error {
+			header Content-Type text/html
+			respond "Server error" {err.status_code}
+		}
+
+		handle {
+			header Content-Type text/html
+			respond "Error" 500
+		}
+	}
+}

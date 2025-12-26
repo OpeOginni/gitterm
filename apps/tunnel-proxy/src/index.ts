@@ -1,10 +1,11 @@
 import "dotenv/config";
 import { Hono } from "hono";
 import { upgradeWebSocket, websocket } from "hono/bun";
-import { TunnelRepository } from "@gitpad/redis";
+import { TunnelRepository } from "@gitterm/redis";
 import { ConnectionManager } from "./connection-manager";
 import { tunnelFrameSchema, type TunnelFrame } from "./protocol";
 import { tunnelJWT } from "./tunnel-jwt";
+import env, { isPathRouting } from "@gitterm/env/tunnel-proxy";
 
 // Load HTML error pages at startup
 const OFFLINE_HTML = await Bun.file(new URL("./errors/offline.html", import.meta.url)).text();
@@ -12,6 +13,59 @@ const OFFLINE_HTML = await Bun.file(new URL("./errors/offline.html", import.meta
 const app = new Hono();
 const tunnelRepo = new TunnelRepository();
 const connectionManager = new ConnectionManager();
+
+/**
+ * Extract workspace subdomain from request
+ * 
+ * Supports two routing modes:
+ * - Subdomain: Extract from Host header (ws-abc123.gitterm.dev -> ws-abc123)
+ * - Path: Extract from URL path (/ws/abc123/... -> abc123) or X-Subdomain header
+ * 
+ * Priority:
+ * 1. X-Subdomain header (set by Caddy forward_auth)
+ * 2. Path extraction (for path-based routing)
+ * 3. Host header (for subdomain-based routing)
+ */
+function extractSubdomain(c: { req: { header: (name: string) => string | undefined; path: string } }): string | null {
+	// First, check X-Subdomain header (set by Caddy forward_auth)
+	const headerSubdomain = c.req.header("x-subdomain");
+	if (headerSubdomain) {
+		return headerSubdomain;
+	}
+
+	// Check routing mode from header or env
+	const routingMode = c.req.header("x-routing-mode") || env.ROUTING_MODE;
+
+	// Path-based routing: extract from /ws/{subdomain}/...
+	if (routingMode === "path" || isPathRouting()) {
+		const path = c.req.path;
+		const match = path.match(/^\/ws\/([^/]+)/);
+		if (match?.[1]) {
+			return match[1];
+		}
+	}
+
+	// Subdomain-based routing: extract from Host header
+	const host = c.req.header("host") || "";
+	return host.split(":")[0]?.split(".")[0] || null;
+}
+
+/**
+ * Strip the /ws/{subdomain} prefix from a path (for path-based routing)
+ * 
+ * /ws/abc123/api/status -> /api/status
+ * /api/status -> /api/status (unchanged)
+ */
+function stripWorkspacePrefix(path: string, routingMode: string): string {
+	if (routingMode !== "path") return path;
+	
+	// Remove /ws/{subdomain} prefix
+	const match = path.match(/^\/ws\/[^/]+(\/.*)?$/);
+	if (match) {
+		return match[1] || "/";
+	}
+	return path;
+}
 
 function sendJson(ws: { send: (data: string) => void }, frame: TunnelFrame) {
 	ws.send(JSON.stringify(frame));
@@ -194,16 +248,19 @@ app.get(
 	}),
 );
 
-// HTTP handler for local tunnel traffic from Caddy.
-// Caddy passes `Host` and `X-Subdomain` headers.
+// HTTP handler for tunnel traffic from Caddy.
+// Supports both subdomain-based and path-based routing.
 app.all("/*", async (c) => {
 	try {
 	if (c.req.path === "/health" || c.req.path.startsWith("/tunnel/")) {
 		return c.notFound();
 	}
 
-	const host = c.req.header("host") || "";
-	const fullSubdomain = host.split(":")[0]?.split(".")[0] || "";
+	// Determine routing mode from header or env
+	const routingMode = c.req.header("x-routing-mode") || env.ROUTING_MODE;
+
+	// Extract workspace subdomain (works for both routing modes)
+	const fullSubdomain = extractSubdomain(c);
 	
 	if (!fullSubdomain) {
 		return c.text("Bad Request", 400);
@@ -239,7 +296,11 @@ app.all("/*", async (c) => {
 
 	const requestId = agent.mux.createRequestId();
 	const url = new URL(c.req.url);
-	const requestPath = c.req.path + (url.search || "");
+	
+	// Strip /ws/{subdomain} prefix for path-based routing
+	// So the agent receives the actual path the user intended
+	const rawPath = c.req.path + (url.search || "");
+	const requestPath = stripWorkspacePrefix(rawPath, routingMode);
 	
 	// SSE deduplication: cancel any existing SSE connection for this subdomain+path
 	let sseKey: string | undefined;
@@ -433,11 +494,27 @@ app.all("/*", async (c) => {
 	}
 });
 
-const port = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : 9000;
+const port = env.PORT;
+
+// Startup logs (keep these very early to make local/prod debugging easier)
+console.log("[TUNNEL-PROXY] Starting...", {
+	instanceId: env.INSTANCE_ID,
+	port,
+	routingMode: env.ROUTING_MODE,
+	redisConfigured: !!env.REDIS_URL,
+	serverUrlConfigured: !!env.SERVER_URL,
+});
+console.log(
+	`[TUNNEL-PROXY] Routing: ${
+		env.ROUTING_MODE === "path" ? "path (/ws/<subdomain>/...)" : "subdomain (<subdomain>.<base-domain>)"
+	}`,
+);
 
 Bun.serve({
 	port,
 	fetch: (req, server) => app.fetch(req, { server }),
 	websocket,
 });
+
+console.log(`[TUNNEL-PROXY] Listening on http://localhost:${port}`);
 

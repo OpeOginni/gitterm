@@ -15,7 +15,10 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { authClient } from "@/lib/auth-client"
 import { Skeleton } from "../ui/skeleton"
+import { PlanBadge } from "./billing-section"
 import type { Route } from "next"
+
+type UserPlan = "free" | "tunnel" | "pro" | "enterprise";
 
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
@@ -77,6 +80,7 @@ export function DashboardNav() {
                         <User className="h-3.5 w-3.5 text-primary" />
                     </div>
                     <span className="text-sm">{session?.user?.name}</span>
+                    <PlanBadge plan={((session?.user as any)?.plan as UserPlan) || "free"} />
                     <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                     </Button>
                 </DropdownMenuTrigger>

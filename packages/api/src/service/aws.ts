@@ -1,5 +1,5 @@
-import { db, eq, and } from "@gitpad/db";
-import { cloudAccount, instance, serverType } from "@gitpad/db/schema/cloud";
+import { db, eq, and } from "@gitterm/db";
+import { cloudAccount, instance, serverType } from "@gitterm/db/schema/cloud";
 import { EC2Client, RunInstancesCommand, TerminateInstancesCommand } from "@aws-sdk/client-ec2";
 import { TRPCError } from "@trpc/server";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
@@ -23,7 +23,7 @@ export async function createInstance(serverTypeId: string, userId: string, repoU
     const assumed = await sts.send(
         new AssumeRoleCommand({
           RoleArn: cloudConfig.roleArn,
-          RoleSessionName: `gitpad-session-${userId}`,
+          RoleSessionName: `gitterm-session-${userId}`,
           ExternalId: cloudConfig.externalId
         })
       )
@@ -64,7 +64,7 @@ export async function createInstance(serverTypeId: string, userId: string, repoU
             {
               ResourceType: "instance",
               Tags: [
-                { Key: "Name", Value: "gitpad-agent" },
+                { Key: "Name", Value: "gitterm-agent" },
                 { Key: "Owner", Value: userId },
               ],
             },
@@ -104,7 +104,7 @@ export async function deleteInstance(instanceId: string, userId: string) {
     const assumed = await sts.send(
         new AssumeRoleCommand({
           RoleArn: cloudConfig.roleArn,
-          RoleSessionName: `gitpad-session-${userId}`,
+          RoleSessionName: `gitterm-session-${userId}`,
           ExternalId: cloudConfig.externalId
         })
       )

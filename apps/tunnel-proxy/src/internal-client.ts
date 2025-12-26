@@ -1,8 +1,9 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import type { AppRouter } from "@gitpad/api";
+import type { AppRouter } from "@gitterm/api";
+import env from "@gitterm/env/tunnel-proxy";
 
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:3000";
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+const SERVER_URL = env.SERVER_URL || "http://localhost:3000";
+const INTERNAL_API_KEY = env.INTERNAL_API_KEY;
 
 // Intentionally avoid noisy startup logs; missing key will fail requests.
 

@@ -1,8 +1,8 @@
 import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, router } from "../index";
-import { db, eq } from "@gitpad/db";
-import { workspace } from "@gitpad/db/schema/workspace";
+import { db, eq } from "@gitterm/db";
+import { workspace } from "@gitterm/db/schema/workspace";
 import { tunnelJWT } from "../service/tunnel/tunnel-jwt";
 import { agentJWT } from "../service/tunnel/agent-jwt";
 

@@ -167,7 +167,7 @@ const backendWs = new WebSocket(targetWsUrl, ["tty"], {
     "X-Forwarded-For": req.socket.remoteAddress,
     "X-Forwarded-Proto": "https",
     "X-Forwarded-Host": host,
-    "User-Agent": req.headers["user-agent"] || "GitPad-Proxy/1.0",
+    "User-Agent": req.headers["user-agent"] || "gitterm-Proxy/1.0",
     ...(req.headers.cookie ? { "Cookie": req.headers.cookie } : {}),
   },
   rejectUnauthorized: false,

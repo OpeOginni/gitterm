@@ -10,6 +10,7 @@ import { proxyResolverRouter } from "./proxy";
 import { tunnelRouter } from "./tunnel";
 import { agentRouter } from "./agent";
 import { userRouter } from "./user/user";
+import { deviceRouter } from "./device";
 
 export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {
@@ -27,6 +28,7 @@ export const appRouter = router({
 	github: githubRouter,
 	tunnel: tunnelRouter,
 	agent: agentRouter,
+	device: deviceRouter,
 	workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
 });
 export type AppRouter = typeof appRouter;

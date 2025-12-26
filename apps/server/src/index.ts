@@ -1,19 +1,37 @@
 import "dotenv/config";
+import env from "@gitterm/env/server";
 import { trpcServer } from "@hono/trpc-server";
-import { createContext } from "@gitpad/api/context";
-import { appRouter, proxyResolverRouter } from "@gitpad/api/routers/index";
-import { auth } from "@gitpad/auth";
-import { DeviceCodeService } from "@gitpad/api/service/tunnel/device-code";
-import { AgentAuthService } from "@gitpad/api/service/tunnel/agent-auth";
-import { DeviceCodeRepository } from "@gitpad/redis";
+import { createContext } from "@gitterm/api/context";
+import { appRouter, proxyResolverRouter } from "@gitterm/api/routers/index";
+import { auth } from "@gitterm/auth";
+import { DeviceCodeService } from "@gitterm/api/service/tunnel/device-code";
+import { AgentAuthService } from "@gitterm/api/service/tunnel/agent-auth";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
+function getPublicOriginFromRequest(req: Request): string {
+	// Prefer proxy headers (Caddy / reverse proxies)
+	const xfProto = req.headers.get("x-forwarded-proto");
+	const xfHost = req.headers.get("x-forwarded-host");
+	if (xfProto && xfHost) return `${xfProto}://${xfHost}`;
+
+	// Fallback to request URL origin
+	return new URL(req.url).origin;
+}
+
+function toTunnelWsUrl(origin: string): string {
+	const u = new URL(origin);
+	u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+	u.pathname = "/tunnel/connect";
+	u.search = "";
+	u.hash = "";
+	return u.toString();
+}
+
 const app = new Hono();
 const deviceCodeService = new DeviceCodeService();
 const agentAuthService = new AgentAuthService();
-const deviceRepo = new DeviceCodeRepository();
 
 app.use(logger());
 app.use(
@@ -21,13 +39,12 @@ app.use(
 	cors({
 		origin: (origin) => {
 			if (!origin) return null;
-			const BASE_DOMAIN = process.env.BASE_DOMAIN || "gitterm.dev";
 			
 			// Allow main web app domain (app.gitterm.dev or gitterm.dev)
 			// But NOT workspace subdomains (ws-123.gitterm.dev) - those go through proxy
 			const allowedOrigins = [
-				`https://${BASE_DOMAIN}`,
-				`http://${BASE_DOMAIN}`,
+				`https://${env.BASE_DOMAIN}`,
+				`http://${env.BASE_DOMAIN}`,
 			];
 			
 			if (origin.includes("localhost")) return origin;
@@ -58,21 +75,7 @@ app.post("/api/device/token", async (c) => {
 	return c.json({ accessToken: result.agentToken, tokenType: "Bearer", expiresInSeconds: 30 * 24 * 60 * 60 });
 });
 
-app.post("/api/device/approve", async (c) => {
-	const session = await auth.api.getSession({ headers: c.req.raw.headers });
-	if (!session) return c.json({ error: "unauthorized" }, 401);
-
-	const body = (await c.req.json().catch(() => ({}))) as { userCode?: string; action?: "approve" | "deny" };
-	if (!body.userCode) return c.json({ error: "invalid_request" }, 400);
-
-	if (body.action === "deny") {
-		await deviceRepo.deny({ userCode: body.userCode });
-		return c.json({ ok: true });
-	}
-
-	await deviceRepo.approve({ userCode: body.userCode, userId: session.user.id });
-	return c.json({ ok: true });
-});
+// Device approval is now handled via tRPC: trpc.device.approve
 
 app.post("/api/agent/tunnel-token", async (c) => {
 	const authHeader = c.req.header("authorization") ?? c.req.header("Authorization");
@@ -84,7 +87,20 @@ app.post("/api/agent/tunnel-token", async (c) => {
 
 	try {
 		const result = await agentAuthService.mintTunnelToken({ agentToken: token, workspaceId: body.workspaceId });
-		return c.json(result);
+		const publicOrigin = getPublicOriginFromRequest(c.req.raw);
+
+		return c.json({
+			...result,
+			connect: {
+				// Agent expects an origin (it appends `/api/...` internally).
+				serverUrl: publicOrigin,
+				// Agent websocket connect URL.
+				wsUrl: toTunnelWsUrl(publicOrigin),
+				// Help the agent render workspace/service URLs correctly.
+				routingMode: env.ROUTING_MODE,
+				baseDomain: env.BASE_DOMAIN,
+			},
+		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Internal error";
 		if (message.toLowerCase().includes("unauthorized")) return c.json({ error: "unauthorized" }, 401);
@@ -134,15 +150,19 @@ app.use(
 );
 
 
-app.get("/internal/proxy-resolve", async (c) => await proxyResolverRouter(c));
+app.get("/api/internal/proxy-resolve", async (c) => await proxyResolverRouter(c));
 
 
 app.get("/", (c) => {
 	return c.text("OK");
 });
 
+app.get("/api/health", (c) => {
+	return c.json({ status: "healthy" });
+});
+
 export default {
 	fetch: app.fetch,
 	hostname: "::",
-	port: process.env.PORT ? parseInt(process.env.PORT) : 8080,
+	port: env.PORT,
 };

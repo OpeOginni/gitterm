@@ -1,0 +1,190 @@
+{
+	# Global options
+	auto_https off
+	admin off
+
+	# Server options
+	servers {
+		protocols h1 h2
+	}
+}
+
+# SUBDOMAIN-BASED ROUTING
+#
+# For managed deployments with wildcard DNS (*.gitterm.dev)
+#
+# Subdomain Format Support:
+# - ws-<uuid>.gitterm.dev      : Cloud workspaces (auto-generated)
+# - local-<name>.gitterm.dev   : Free tier local tunnels
+# - <custom-name>.gitterm.dev  : Paid tier custom subdomains
+# - Reserved (blocked):         api, tunnel, www, admin, etc.
+#
+# Requirements:
+# - Wildcard DNS: *.gitterm.dev -> proxy IP
+# - Wildcard SSL certificate (or use Caddy's auto_https)
+
+# Listen on port 80 for all requests
+:80 {
+	# Health check endpoint
+	handle /health {
+		header Content-Type application/json
+		respond `{"status":"UP"}` 200
+	}
+
+	# Block reserved subdomains at the Caddy level (defense in depth)
+	# These should already be blocked at workspace creation, but this provides an extra layer
+	@reserved_subdomain header_regexp subdomain Host ^(api|tunnel)\.gitterm\.dev$
+	handle @reserved_subdomain {
+		root * /srv/errors
+		rewrite * /unavailable.html
+		file_server
+	}
+
+	# Main proxy handler
+	route {
+		# Forward auth to API server (validates workspace exists and user has access)
+		# The API returns HTML error pages directly for non-2xx responses
+		forward_auth server.railway.internal:8080 {
+			uri /api/internal/proxy-resolve
+
+			# Copy select headers from auth response into request
+			copy_headers X-Tunnel-Type X-Workspace-ID X-User-ID X-Subdomain
+
+			# Copy original headers
+			header_up Host {host}
+			header_up X-Internal-Key {$INTERNAL_API_KEY}
+			header_up Cookie {header.Cookie}
+			header_up Authorization {header.Authorization}
+			header_up X-Original-URI {uri}
+			header_up X-Original-Method {method}
+			header_up X-Forwarded-For {remote_ip}
+			header_up X-Routing-Mode subdomain
+		}
+
+		# Define matchers
+		@local_tunnel {
+			header X-Tunnel-Type local
+		}
+		@workspace {
+			header_regexp subdomain Host ^([^.]+)\.gitterm\.dev$
+		}
+
+		# Local tunnels: route to tunnel-proxy (MUST be first!)
+		# Tunnel-proxy returns HTML error pages directly
+		reverse_proxy @local_tunnel tunnel.railway.internal:8080 {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+
+			# Standard proxy headers
+			header_up Host {host}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up X-User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+			header_up X-Subdomain {header.X-Subdomain}
+			header_up X-Tunnel-Type {header.X-Tunnel-Type}
+			header_up X-Routing-Mode subdomain
+
+			transport http {
+				compression off
+				dial_timeout 10s
+				response_header_timeout 0
+				expect_continue_timeout 0
+				keepalive 2m
+				keepalive_idle_conns 10
+				read_buffer 32768
+				write_buffer 32768
+			}
+		}
+
+		# Cloud workspaces: route to containers
+		reverse_proxy @workspace {http.regexp.subdomain.1}.railway.internal:7681 {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+
+			# Standard proxy headers
+			header_up Host {host}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+			header_up X-Routing-Mode subdomain
+
+			# Transport settings optimized for WebSocket/ttyd
+			transport http {
+				compression off
+				dial_timeout 10s
+				response_header_timeout 0
+				expect_continue_timeout 0
+				keepalive 2m
+				keepalive_idle_conns 10
+				read_buffer 32768
+				write_buffer 32768
+			}
+
+			# Intercept upstream error responses and show nice error pages
+			@unavailable status 401 403 404 503
+			handle_response @unavailable {
+				root * /srv/errors
+				rewrite * /unavailable.html
+				file_server
+			}
+
+			@server_error status 500 502 504
+			handle_response @server_error {
+				root * /srv/errors
+				rewrite * /error.html
+				file_server
+			}
+		}
+	}
+
+	# Error handling with nice HTML pages
+	# Security: Group 401/403/404 together to prevent workspace enumeration
+	handle_errors {
+		# Access denied / not found - use same response to prevent enumeration
+		@unavailable expression {err.status_code} == 401 || {err.status_code} == 403 || {err.status_code} == 404
+		handle @unavailable {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /unavailable.html
+			file_server
+		}
+
+		# Server errors (5xx)
+		@server_error expression {err.status_code} >= 500
+		handle @server_error {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /error.html
+			file_server
+		}
+
+		# Bad request (400)
+		@bad_request expression {err.status_code} == 400
+		handle @bad_request {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /error.html
+			file_server
+		}
+
+		# Default fallback
+		handle {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /error.html
+			file_server
+		}
+	}
+}

@@ -37,9 +37,7 @@ export const logger = {
   },
   
   debug: (message: string, context?: WorkspaceLogContext) => {
-    if (process.env.DEBUG === "true") {
-      console.log(formatLog("debug", message, context));
-    }
+    console.log(formatLog("debug", message, context));
   },
 
   // Specific event loggers for observability

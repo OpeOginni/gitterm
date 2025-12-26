@@ -1,7 +1,7 @@
 import z from "zod";
 import { publicProcedure, router } from "../../index";
-import { db, eq } from "@gitpad/db";
-import { workspace } from "@gitpad/db/schema/workspace";
+import { db, eq } from "@gitterm/db";
+import { workspace } from "@gitterm/db/schema/workspace";
 import { TRPCError } from "@trpc/server";
 import {
 	WORKSPACE_STATUS_EVENT,

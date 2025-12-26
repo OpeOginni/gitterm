@@ -7,8 +7,9 @@ import {
 	splitLink,
 } from "@trpc/client";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
-import type { AppRouter, ListenerRouter } from "@gitpad/api/routers/index";
+import type { AppRouter, ListenerRouter } from "@gitterm/api/routers/index";
 import { toast } from "sonner";
+import env from "@gitterm/env/web";
 
 export const queryClient = new QueryClient({
 	queryCache: new QueryCache({
@@ -25,8 +26,8 @@ export const queryClient = new QueryClient({
 	}),
 });
 
-const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL;
-const listenerUrl = process.env.NEXT_PUBLIC_LISTENER_URL;
+const serverUrl = env.NEXT_PUBLIC_SERVER_URL;
+const listenerUrl = env.NEXT_PUBLIC_LISTENER_URL;
 
 if (!listenerUrl) {
 	throw new Error("NEXT_PUBLIC_LISTENER_URL is not set");

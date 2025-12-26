@@ -28,6 +28,7 @@ import Image from "next/image";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
+import { getAgentConnectCommand, getWorkspaceDisplayUrl } from "@/lib/utils";
 
 const ICON_MAP: Record<string, string> = {
   "opencode": "/opencode.svg",
@@ -157,7 +158,8 @@ export function CreateInstanceDialog() {
     onSuccess: async (data) => {
       if (data.command) {
         toast.success("Local tunnel created successfully");
-        setCliCommand(data.command);
+        // Generate the command on the client so it always matches the current host (gitterm.dev vs self-hosted).
+        setCliCommand(getAgentConnectCommand(data.workspace.id));
       } else {
         toast.success("Workspace is provisioning");
         setOpen(false);
@@ -316,7 +318,7 @@ export function CreateInstanceDialog() {
                       className="bg-secondary/30 border-border/50 focus:border-accent"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Your tunnel will be available at: <span className="font-mono text-primary">{localSubdomain || "my-app"}.gitterm.dev</span>
+                      Your tunnel will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(localSubdomain || "my-app")}</span>
                     </p>
                   </div>
                   <div className="grid gap-2">

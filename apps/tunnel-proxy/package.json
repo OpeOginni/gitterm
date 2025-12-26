@@ -10,8 +10,9 @@
     "check-types": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@gitpad/api": "workspace:*",
-    "@gitpad/redis": "workspace:*",
+    "@gitterm/api": "workspace:*",
+    "@gitterm/redis": "workspace:*",
+    "@gitterm/env": "workspace:*",
     "@trpc/client": "catalog:",
     "dotenv": "catalog:",
     "hono": "catalog:",
@@ -19,7 +20,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@gitpad/config": "workspace:*",
+    "@gitterm/config": "workspace:*",
     "@types/bun": "^1.2.6",
     "@types/jsonwebtoken": "^9.0.7",
     "typescript": "catalog:",

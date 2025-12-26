@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { Loader2 } from "lucide-react";
+import env from "@gitterm/env/web";
 
 interface AuthFormProps {
   redirectUrl?: string;
@@ -10,10 +11,10 @@ interface AuthFormProps {
 
 export function AuthForm({ redirectUrl }: AuthFormProps) {
   const { isPending } = authClient.useSession();
-  
-  const callbackURL = redirectUrl 
-    ? `${process.env.NEXT_PUBLIC_WEB_URL}${redirectUrl}` 
-    : `${process.env.NEXT_PUBLIC_WEB_URL}/dashboard`;
+
+  const callbackURL = redirectUrl
+    ? `https://${env.NEXT_PUBLIC_BASE_DOMAIN}${redirectUrl}`
+    : `/dashboard`;
 
   return (
     <div className="flex flex-col items-center space-y-4">
@@ -22,7 +23,7 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
         type="button"
         onClick={() => authClient.signIn.social({ 
           provider: "github", 
-          callbackURL 
+          callbackURL
         })}
         disabled={isPending}
         size="lg"

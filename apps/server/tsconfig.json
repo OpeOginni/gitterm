@@ -1,5 +1,5 @@
 {
-	"extends": "@gitpad/config/tsconfig.base.json",
+	"extends": "@gitterm/config/tsconfig.base.json",
 	"compilerOptions": {
 		"composite": true,
 		"outDir": "dist",

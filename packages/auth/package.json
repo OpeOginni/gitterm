@@ -1,5 +1,5 @@
 {
-  "name": "@gitpad/auth",
+  "name": "@gitterm/auth",
   "exports": {
     ".": {
       "default": "./src/index.ts"
@@ -11,16 +11,20 @@
   "type": "module",
   "scripts": {},
   "devDependencies": {
-    "@gitpad/config": "workspace:*"
+    "@gitterm/config": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "@gitpad/db": "workspace:*",
+    "@gitterm/db": "workspace:*",
+    "@gitterm/env": "workspace:*",
+    "@polar-sh/better-auth": "^1.6.3",
+    "@polar-sh/sdk": "^0.42.1",
     "better-auth": "catalog:",
     "discord.js": "^14.25.1",
     "dotenv": "catalog:",
+    "drizzle-orm": "^0.44.2",
     "zod": "catalog:"
   }
 }

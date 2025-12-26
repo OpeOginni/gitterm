@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authClient } from "@/lib/auth-client";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import type { AppRouter } from "@gitpad/api/routers/index";
+import type { AppRouter } from "@gitterm/api/routers/index";
+import env from "@gitterm/env/web";
 
 /**
  * GitHub App Installation Setup URL Handler
@@ -31,14 +32,11 @@ export async function GET(request: NextRequest) {
     console.log("[GitHub Setup] Request headers host:", request.headers.get("host"));
     console.log("[GitHub Setup] Request headers origin:", request.headers.get("origin"));
     console.log("[GitHub Setup] Request nextUrl.origin:", request.nextUrl.origin);
-    
-    const webUrl = process.env.NEXT_PUBLIC_WEB_URL;
-    if (!webUrl) {
-      console.error("[GitHub Setup] NEXT_PUBLIC_WEB_URL not configured");
-      const errorUrl = new URL("/dashboard/integrations?error=web_misconfigured", request.nextUrl.origin);
-      console.log("[GitHub Setup] Redirecting to:", errorUrl.toString());
-      return NextResponse.redirect(errorUrl);
-    }
+
+    // IMPORTANT:
+    // `NEXT_PUBLIC_SERVER_URL` is the API base (often ends with `/api`).
+    // Redirects must use the web origin, otherwise we end up at `/api/dashboard`.
+    const webUrl = request.nextUrl.origin;
 
     // Get the session using authClient
     const session = await authClient.getSession({
@@ -70,7 +68,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Create a server-side TRPC client with the current request's cookies
-    const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL;
+    const serverUrl = env.NEXT_PUBLIC_SERVER_URL;
     if (!serverUrl) {
       console.error("[GitHub Setup] NEXT_PUBLIC_SERVER_URL not configured");
       return NextResponse.redirect(`${webUrl}/dashboard/integrations?error=server_misconfigured`);
@@ -115,8 +113,8 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     console.error("[GitHub Setup] Callback error:", error);
-    
+
     // Redirect with generic error
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_WEB_URL}/dashboard/integrations?error=callback_failed`);
+    return NextResponse.redirect(`${request.nextUrl.origin}/dashboard/integrations?error=callback_failed`);
   }
 }

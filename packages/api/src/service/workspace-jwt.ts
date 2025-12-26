@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
+import env from "@gitterm/env/server";
 
-const WORKSPACE_JWT_SECRET = process.env.WORKSPACE_JWT_SECRET || 'default-workspace-secret-change-in-production';
+const WORKSPACE_JWT_SECRET = env.WORKSPACE_JWT_SECRET || 'default-workspace-secret-change-in-production';
 const WORKSPACE_JWT_EXPIRY = '2h'; // Workspace tokens valid for 2 hours
 
 export interface WorkspaceTokenPayload {

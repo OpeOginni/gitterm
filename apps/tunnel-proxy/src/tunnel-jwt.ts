@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
+import env from "@gitterm/env/tunnel-proxy";
 
-const TUNNEL_JWT_SECRET = process.env.TUNNEL_JWT_SECRET || "default-tunnel-secret-change-in-production";
+const TUNNEL_JWT_SECRET = env.TUNNEL_JWT_SECRET || "default-tunnel-secret-change-in-production";
 
 export interface TunnelTokenPayload {
 	workspaceId: string;

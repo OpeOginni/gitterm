@@ -1,8 +1,8 @@
 import z from "zod";
 import { publicProcedure, router } from "../../index";
-import { workspace } from "@gitpad/db/schema/workspace";
-import { and, db, eq } from "@gitpad/db";
-import { cloudProvider } from "@gitpad/db/schema/cloud";
+import { workspace } from "@gitterm/db/schema/workspace";
+import { and, db, eq } from "@gitterm/db";
+import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 

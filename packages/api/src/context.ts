@@ -1,5 +1,5 @@
 import type { Context as HonoContext } from "hono";
-import { auth } from "@gitpad/auth";
+import { auth } from "@gitterm/auth";
 
 export type CreateContextOptions = {
 	context: HonoContext;

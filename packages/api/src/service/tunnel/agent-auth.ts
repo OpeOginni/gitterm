@@ -1,8 +1,8 @@
 import { agentJWT } from "./agent-jwt";
 import { tunnelJWT } from "./tunnel-jwt";
-import { DeviceCodeRepository } from "@gitpad/redis";
-import { db, eq } from "@gitpad/db";
-import { workspace } from "@gitpad/db/schema/workspace";
+import { DeviceCodeRepository } from "@gitterm/redis";
+import { db, eq } from "@gitterm/db";
+import { workspace } from "@gitterm/db/schema/workspace";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 
 export class AgentAuthService {

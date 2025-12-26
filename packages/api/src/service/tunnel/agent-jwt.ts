@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
+import env from "@gitterm/env/server";
 
-const AGENT_JWT_SECRET = process.env.AGENT_JWT_SECRET || "default-agent-secret-change-in-production";
+const AGENT_JWT_SECRET = env.AGENT_JWT_SECRET || "default-agent-secret-change-in-production";
 const AGENT_JWT_EXPIRY = "30d";
 
 export interface AgentTokenPayload {

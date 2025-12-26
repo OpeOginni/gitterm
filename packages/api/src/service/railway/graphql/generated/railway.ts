@@ -42,12 +42,10 @@ export enum ActiveFeatureFlag {
   AuditLogs = 'AUDIT_LOGS',
   BucketFileBrowser = 'BUCKET_FILE_BROWSER',
   ConversationalUi = 'CONVERSATIONAL_UI',
-  HttpServiceMetrics = 'HTTP_SERVICE_METRICS',
   MagicConfig = 'MAGIC_CONFIG',
-  MonorepoSupport = 'MONOREPO_SUPPORT',
+  PostgresHa = 'POSTGRES_HA',
   PriorityBoarding = 'PRIORITY_BOARDING',
-  RawSqlQueries = 'RAW_SQL_QUERIES',
-  YogaServer = 'YOGA_SERVER'
+  RawSqlQueries = 'RAW_SQL_QUERIES'
 }
 
 export enum ActivePlatformFlag {
@@ -59,18 +57,18 @@ export enum ActivePlatformFlag {
   CtrdImageStoreRollout = 'CTRD_IMAGE_STORE_ROLLOUT',
   DemoPercentageRollout = 'DEMO_PERCENTAGE_ROLLOUT',
   EnableRawSqlQueries = 'ENABLE_RAW_SQL_QUERIES',
-  MonorepoSupport = 'MONOREPO_SUPPORT',
   ScylladbRoutingEnabled = 'SCYLLADB_ROUTING_ENABLED',
+  ServiceinstanceDataloaderForStaticUrl = 'SERVICEINSTANCE_DATALOADER_FOR_STATIC_URL',
   SplitUsageQueries = 'SPLIT_USAGE_QUERIES',
   UpdatedVmQueries = 'UPDATED_VM_QUERIES',
   UseGhWebhooksForChangeDetection = 'USE_GH_WEBHOOKS_FOR_CHANGE_DETECTION',
-  VmTimeRangeQuery = 'VM_TIME_RANGE_QUERY',
-  YogaServerRollout = 'YOGA_SERVER_ROLLOUT'
+  VmTimeRangeQuery = 'VM_TIME_RANGE_QUERY'
 }
 
 export enum ActiveServiceFeatureFlag {
   CopyVolumeToEnvironment = 'COPY_VOLUME_TO_ENVIRONMENT',
   EnableDockerExtension = 'ENABLE_DOCKER_EXTENSION',
+  EnableOnlineVolumeResizing = 'ENABLE_ONLINE_VOLUME_RESIZING',
   Placeholder = 'PLACEHOLDER',
   UseBuilderV3ForCliDeploys = 'USE_BUILDER_V3_FOR_CLI_DEPLOYS',
   UseGhWebhooksForChangeDetection = 'USE_GH_WEBHOOKS_FOR_CHANGE_DETECTION',
@@ -162,6 +160,39 @@ export type AppliedByMember = {
   id: Scalars['String']['output'];
   name?: Maybe<Scalars['String']['output']>;
   username?: Maybe<Scalars['String']['output']>;
+};
+
+export type AuditLog = Node & {
+  __typename?: 'AuditLog';
+  context?: Maybe<Scalars['JSON']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  environment?: Maybe<Environment>;
+  environmentId?: Maybe<Scalars['String']['output']>;
+  eventType: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  payload?: Maybe<Scalars['JSON']['output']>;
+  project?: Maybe<Project>;
+  projectId?: Maybe<Scalars['String']['output']>;
+  workspaceId?: Maybe<Scalars['String']['output']>;
+};
+
+export type AuditLogEventTypeInfo = {
+  __typename?: 'AuditLogEventTypeInfo';
+  description: Scalars['String']['output'];
+  eventType: Scalars['String']['output'];
+};
+
+export type AuditLogFilterInput = {
+  /** Filter events created on or before this date */
+  endDate?: InputMaybe<Scalars['DateTime']['input']>;
+  /** Filter events for a single environment */
+  environmentId?: InputMaybe<Scalars['String']['input']>;
+  /** List of event types to filter by */
+  eventTypes?: InputMaybe<Array<Scalars['String']['input']>>;
+  /** Filter events for a single project */
+  projectId?: InputMaybe<Scalars['String']['input']>;
+  /** Filter events created on or after this date */
+  startDate?: InputMaybe<Scalars['DateTime']['input']>;
 };
 
 export type BaseEnvironmentOverrideInput = {
@@ -2364,6 +2395,7 @@ export type MutationVolumeDeleteArgs = {
 
 
 export type MutationVolumeInstanceBackupCreateArgs = {
+  name?: InputMaybe<Scalars['String']['input']>;
   volumeInstanceId: Scalars['String']['input'];
 };
 
@@ -2702,13 +2734,12 @@ export enum PlatformFeatureFlag {
   CtrdImageStoreRollout = 'CTRD_IMAGE_STORE_ROLLOUT',
   DemoPercentageRollout = 'DEMO_PERCENTAGE_ROLLOUT',
   EnableRawSqlQueries = 'ENABLE_RAW_SQL_QUERIES',
-  MonorepoSupport = 'MONOREPO_SUPPORT',
   ScylladbRoutingEnabled = 'SCYLLADB_ROUTING_ENABLED',
+  ServiceinstanceDataloaderForStaticUrl = 'SERVICEINSTANCE_DATALOADER_FOR_STATIC_URL',
   SplitUsageQueries = 'SPLIT_USAGE_QUERIES',
   UpdatedVmQueries = 'UPDATED_VM_QUERIES',
   UseGhWebhooksForChangeDetection = 'USE_GH_WEBHOOKS_FOR_CHANGE_DETECTION',
-  VmTimeRangeQuery = 'VM_TIME_RANGE_QUERY',
-  YogaServerRollout = 'YOGA_SERVER_ROLLOUT'
+  VmTimeRangeQuery = 'VM_TIME_RANGE_QUERY'
 }
 
 export type PlatformFeatureFlagStatus = {
@@ -3333,6 +3364,12 @@ export type Query = {
   apiToken: ApiTokenContext;
   /** Gets all API tokens for the authenticated user. */
   apiTokens: QueryApiTokensConnection;
+  /** Get an audit log by ID */
+  auditLog: AuditLog;
+  /** Get a list of all audit log event types and their description */
+  auditLogEventTypeInfo: Array<AuditLogEventTypeInfo>;
+  /** Gets audit logs for a workspace. */
+  auditLogs: QueryAuditLogsConnection;
   /** Fetch logs for a build */
   buildLogs: Array<Log>;
   /** Gets the image URL for a Notion image block */
@@ -3500,6 +3537,8 @@ export type Query = {
   teamTemplates: QueryTeamTemplatesConnection;
   /** Get a template by code or ID or GitHub owner and repo. */
   template: Template;
+  /** Get the metrics for a template. */
+  templateMetrics: TemplateMetrics;
   /** Get the source template for a project. */
   templateSourceForProject?: Maybe<Template>;
   /** Get all published templates. */
@@ -3559,6 +3598,23 @@ export type QueryApiTokensArgs = {
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryAuditLogArgs = {
+  id: Scalars['String']['input'];
+  workspaceId: Scalars['String']['input'];
+};
+
+
+export type QueryAuditLogsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<AuditLogFilterInput>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  sort?: InputMaybe<SortOrder>;
+  workspaceId: Scalars['String']['input'];
 };
 
 
@@ -4034,6 +4090,11 @@ export type QueryTemplateArgs = {
 };
 
 
+export type QueryTemplateMetricsArgs = {
+  id: Scalars['String']['input'];
+};
+
+
 export type QueryTemplateSourceForProjectArgs = {
   projectId: Scalars['String']['input'];
 };
@@ -4159,6 +4220,18 @@ export type QueryApiTokensConnectionEdge = {
   __typename?: 'QueryApiTokensConnectionEdge';
   cursor: Scalars['String']['output'];
   node: ApiToken;
+};
+
+export type QueryAuditLogsConnection = {
+  __typename?: 'QueryAuditLogsConnection';
+  edges: Array<QueryAuditLogsConnectionEdge>;
+  pageInfo: PageInfo;
+};
+
+export type QueryAuditLogsConnectionEdge = {
+  __typename?: 'QueryAuditLogsConnectionEdge';
+  cursor: Scalars['String']['output'];
+  node: AuditLog;
 };
 
 export type QueryDeploymentEventsConnection = {
@@ -4812,6 +4885,11 @@ export type SimilarTemplate = {
   workspaceId?: Maybe<Scalars['String']['output']>;
 };
 
+export enum SortOrder {
+  Asc = 'asc',
+  Desc = 'desc'
+}
+
 export type Subscription = {
   __typename?: 'Subscription';
   /** Stream logs for a build */
@@ -4913,11 +4991,13 @@ export type SubscriptionReplicationProgressArgs = {
 export type SubscriptionDiscount = {
   __typename?: 'SubscriptionDiscount';
   couponId: Scalars['String']['output'];
+  couponName: Scalars['String']['output'];
 };
 
 export type SubscriptionItem = {
   __typename?: 'SubscriptionItem';
   itemId: Scalars['String']['output'];
+  priceDollars?: Maybe<Scalars['Float']['output']>;
   priceId: Scalars['String']['output'];
   productId: Scalars['String']['output'];
   quantity?: Maybe<Scalars['BigInt']['output']>;
@@ -5165,6 +5245,19 @@ export type TemplateGuide = {
   __typename?: 'TemplateGuide';
   post?: Maybe<Scalars['String']['output']>;
   video?: Maybe<Scalars['String']['output']>;
+};
+
+export type TemplateMetrics = {
+  __typename?: 'TemplateMetrics';
+  activeDeployments: Scalars['Int']['output'];
+  deploymentsLast90Days: Scalars['Int']['output'];
+  earningsLast30Days: Scalars['Float']['output'];
+  earningsLast90Days: Scalars['Float']['output'];
+  eligibleForSupportBonus: Scalars['Boolean']['output'];
+  supportHealth: Scalars['Float']['output'];
+  templateHealth: Scalars['Float']['output'];
+  totalDeployments: Scalars['Int']['output'];
+  totalEarnings: Scalars['Float']['output'];
 };
 
 export type TemplatePublishInput = {
@@ -5897,6 +5990,22 @@ export type VolumeDeleteMutationVariables = Exact<{
 
 export type VolumeDeleteMutation = { __typename?: 'Mutation', volumeDelete: boolean };
 
+export type ServiceDomainCreateMutationVariables = Exact<{
+  environmentId: Scalars['String']['input'];
+  serviceId: Scalars['String']['input'];
+  targetPort: Scalars['Int']['input'];
+}>;
+
+
+export type ServiceDomainCreateMutation = { __typename?: 'Mutation', serviceDomainCreate: { __typename?: 'ServiceDomain', domain: string } };
+
+export type ServiceDomainDeleteMutationVariables = Exact<{
+  serviceDomainId: Scalars['String']['input'];
+}>;
+
+
+export type ServiceDomainDeleteMutation = { __typename?: 'Mutation', serviceDomainDelete: boolean };
+
 
 export const ServiceDocument = `
     query Service($id: String!) {
@@ -5990,6 +6099,20 @@ export const VolumeDeleteDocument = `
   volumeDelete(volumeId: $id)
 }
     `;
+export const ServiceDomainCreateDocument = `
+    mutation ServiceDomainCreate($environmentId: String!, $serviceId: String!, $targetPort: Int!) {
+  serviceDomainCreate(
+    input: {environmentId: $environmentId, targetPort: $targetPort, serviceId: $serviceId}
+  ) {
+    domain
+  }
+}
+    `;
+export const ServiceDomainDeleteDocument = `
+    mutation ServiceDomainDelete($serviceDomainId: String!) {
+  serviceDomainDelete(id: $serviceDomainId)
+}
+    `;
 export type Requester<C = {}> = <R, V>(doc: string, vars?: V, options?: C) => Promise<R> | AsyncIterable<R>
 export function getSdk<C>(requester: Requester<C>) {
   return {
@@ -6019,6 +6142,12 @@ export function getSdk<C>(requester: Requester<C>) {
     },
     VolumeDelete(variables: VolumeDeleteMutationVariables, options?: C): Promise<VolumeDeleteMutation> {
       return requester<VolumeDeleteMutation, VolumeDeleteMutationVariables>(VolumeDeleteDocument, variables, options) as Promise<VolumeDeleteMutation>;
+    },
+    ServiceDomainCreate(variables: ServiceDomainCreateMutationVariables, options?: C): Promise<ServiceDomainCreateMutation> {
+      return requester<ServiceDomainCreateMutation, ServiceDomainCreateMutationVariables>(ServiceDomainCreateDocument, variables, options) as Promise<ServiceDomainCreateMutation>;
+    },
+    ServiceDomainDelete(variables: ServiceDomainDeleteMutationVariables, options?: C): Promise<ServiceDomainDeleteMutation> {
+      return requester<ServiceDomainDeleteMutation, ServiceDomainDeleteMutationVariables>(ServiceDomainDeleteDocument, variables, options) as Promise<ServiceDomainDeleteMutation>;
     }
   };
 }

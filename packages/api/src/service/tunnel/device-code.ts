@@ -1,5 +1,6 @@
-import { DeviceCodeRepository } from "@gitpad/redis";
-import type { DeviceCodeState } from "@gitpad/redis";
+import { DeviceCodeRepository } from "@gitterm/redis";
+import type { DeviceCodeState } from "@gitterm/redis";
+import env from "@gitterm/env/server";
 
 const DEFAULT_POLL_INTERVAL_SECONDS = 5;
 
@@ -11,7 +12,7 @@ export class DeviceCodeService {
 		return {
 			deviceCode: session.deviceCode,
 			userCode: session.userCode,
-			verificationUri: process.env.DEVICE_CODE_VERIFICATION_URI || "https://gitterm.dev/device",
+			verificationUri: env.DEVICE_CODE_VERIFICATION_URI || "https://gitterm.dev/device",
 			intervalSeconds: DEFAULT_POLL_INTERVAL_SECONDS,
 			expiresInSeconds: 10 * 60,
 		};

@@ -1,20 +1,20 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Gitpad – Cross-Account Role for EC2 Provisioning
+Description: gitterm – Cross-Account Role for EC2 Provisioning
 
 Resources:
-  GitpadProvisioningRole:
+  gittermProvisioningRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: GitpadProvisioningRole
+      RoleName: gittermProvisioningRole
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-              AWS: "arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:user/gitpad-integration"
+              AWS: "arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:user/gitterm-integration"
             Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: GitpadEC2Provisioning
+        - PolicyName: gittermEC2Provisioning
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -28,5 +28,5 @@ Resources:
 
 Outputs:
   RoleArn:
-    Value: !GetAtt GitpadProvisioningRole.Arn
+    Value: !GetAtt gittermProvisioningRole.Arn
     Description: ARN of the cross-account EC2 provisioning role
