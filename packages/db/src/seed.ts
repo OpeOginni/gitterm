@@ -1,5 +1,6 @@
-import { db, eq } from ".";
+import { db, eq } from "./index";
 import { agentType, cloudProvider, image, region } from "./schema/cloud";
+import { runMigrations } from "./migrate";
 
 /**
  * Seed data definitions
@@ -38,13 +39,17 @@ const seedRegions = [
     { name: "Local", location: "Local Machine", externalRegionIdentifier: "local", providerName: "Local" },
 ];
 
-async function seedDB() {
-    console.log("Starting database seed...");
+/**
+ * Seed the database with initial data
+ * This is idempotent - safe to run multiple times
+ */
+export async function seedDatabase(): Promise<void> {
+    console.log("[seed] Starting database seed...");
 
     // =========================================================================
     // Seed Cloud Providers
     // =========================================================================
-    console.log("\n📦 Seeding cloud providers...");
+    console.log("[seed] Seeding cloud providers...");
     const providerMap = new Map<string, string>(); // name -> id
 
     for (const provider of seedCloudProviders) {
@@ -53,14 +58,14 @@ async function seedDB() {
         });
 
         if (existing) {
-            console.log(`  ✓ Provider "${provider.name}" already exists (enabled: ${existing.isEnabled})`);
+            console.log(`[seed]   Provider "${provider.name}" already exists`);
             providerMap.set(provider.name, existing.id);
         } else {
             const [created] = await db.insert(cloudProvider).values({
                 name: provider.name,
                 isEnabled: true,
             }).returning();
-            console.log(`  + Created provider "${provider.name}"`);
+            console.log(`[seed]   Created provider "${provider.name}"`);
             providerMap.set(provider.name, created!.id);
         }
     }
@@ -68,7 +73,7 @@ async function seedDB() {
     // =========================================================================
     // Seed Agent Types
     // =========================================================================
-    console.log("\n🤖 Seeding agent types...");
+    console.log("[seed] Seeding agent types...");
     const agentTypeMap = new Map<string, string>(); // name -> id
 
     for (const agent of seedAgentTypes) {
@@ -77,7 +82,7 @@ async function seedDB() {
         });
 
         if (existing) {
-            console.log(`  ✓ Agent type "${agent.name}" already exists (enabled: ${existing.isEnabled})`);
+            console.log(`[seed]   Agent type "${agent.name}" already exists`);
             agentTypeMap.set(agent.name, existing.id);
         } else {
             const [created] = await db.insert(agentType).values({
@@ -85,7 +90,7 @@ async function seedDB() {
                 serverOnly: agent.serverOnly,
                 isEnabled: true,
             }).returning();
-            console.log(`  + Created agent type "${agent.name}"`);
+            console.log(`[seed]   Created agent type "${agent.name}"`);
             agentTypeMap.set(agent.name, created!.id);
         }
     }
@@ -93,7 +98,7 @@ async function seedDB() {
     // =========================================================================
     // Seed Images
     // =========================================================================
-    console.log("\n🖼️  Seeding images...");
+    console.log("[seed] Seeding images...");
 
     for (const img of seedImages) {
         const existing = await db.query.image.findFirst({
@@ -101,11 +106,11 @@ async function seedDB() {
         });
 
         if (existing) {
-            console.log(`  ✓ Image "${img.name}" already exists (enabled: ${existing.isEnabled})`);
+            console.log(`[seed]   Image "${img.name}" already exists`);
         } else {
             const agentTypeId = agentTypeMap.get(img.agentTypeName);
             if (!agentTypeId) {
-                console.log(`  ⚠ Skipping image "${img.name}" - agent type "${img.agentTypeName}" not found`);
+                console.log(`[seed]   Skipping image "${img.name}" - agent type not found`);
                 continue;
             }
 
@@ -115,14 +120,14 @@ async function seedDB() {
                 agentTypeId,
                 isEnabled: true,
             });
-            console.log(`  + Created image "${img.name}"`);
+            console.log(`[seed]   Created image "${img.name}"`);
         }
     }
 
     // =========================================================================
     // Seed Regions
     // =========================================================================
-    console.log("\n🌍 Seeding regions...");
+    console.log("[seed] Seeding regions...");
 
     for (const reg of seedRegions) {
         const existing = await db.query.region.findFirst({
@@ -130,11 +135,11 @@ async function seedDB() {
         });
 
         if (existing) {
-            console.log(`  ✓ Region "${reg.name}" already exists (enabled: ${existing.isEnabled})`);
+            console.log(`[seed]   Region "${reg.name}" already exists`);
         } else {
             const providerId = providerMap.get(reg.providerName);
             if (!providerId) {
-                console.log(`  ⚠ Skipping region "${reg.name}" - provider "${reg.providerName}" not found`);
+                console.log(`[seed]   Skipping region "${reg.name}" - provider not found`);
                 continue;
             }
 
@@ -145,16 +150,63 @@ async function seedDB() {
                 cloudProviderId: providerId,
                 isEnabled: true,
             });
-            console.log(`  + Created region "${reg.name}"`);
+            console.log(`[seed]   Created region "${reg.name}"`);
         }
     }
 
-    console.log("\n✅ Database seed completed successfully!");
+    console.log("[seed] Database seed completed");
 }
 
-seedDB().then(() => {
-    process.exit(0);
-}).catch((error) => {
-    console.error("\n❌ Error seeding database:", error);
-    process.exit(1);
-});
+/**
+ * Bootstrap the database: run migrations and seed
+ * This is the main function to call on server startup for Railway templates
+ * 
+ * @param databaseUrl - PostgreSQL connection string
+ * @param options - Bootstrap options
+ */
+export async function bootstrapDatabase(
+    databaseUrl: string,
+    options: {
+        runMigrations?: boolean;
+        runSeed?: boolean;
+    } = {}
+): Promise<{ success: boolean; error?: Error }> {
+    const { runMigrations: shouldMigrate = true, runSeed = true } = options;
+
+    try {
+        // Run migrations first
+        if (shouldMigrate) {
+            const migrationResult = await runMigrations(databaseUrl);
+            if (!migrationResult.success) {
+                return migrationResult;
+            }
+        }
+
+        // Then seed the database
+        if (runSeed) {
+            await seedDatabase();
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error("[bootstrap] Database bootstrap failed:", error);
+        return { success: false, error: error as Error };
+    }
+}
+
+// CLI entry point - run if called directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+        console.error("[seed] DATABASE_URL is required");
+        process.exit(1);
+    }
+
+    seedDatabase().then(() => {
+        console.log("[seed] Done");
+        process.exit(0);
+    }).catch((error) => {
+        console.error("[seed] Error:", error);
+        process.exit(1);
+    });
+}

@@ -35,7 +35,7 @@ function inferBaseUrlOrigin(): string {
 // Plan Types and Product Mapping
 // ============================================================================
 
-type UserPlan = "free" | "tunnel" | "pro" | "enterprise";
+type UserPlan = "free" | "tunnel" | "pro";
 
 /**
  * Maps Polar product IDs to plan names
@@ -46,10 +46,7 @@ const PRODUCT_TO_PLAN: Record<string, UserPlan> = {
     : {}),
   ...(env.POLAR_PRO_PRODUCT_ID
     ? { [env.POLAR_PRO_PRODUCT_ID]: "pro" as const }
-    : {}),
-  ...(env.POLAR_ENTERPRISE_PRODUCT_ID
-    ? { [env.POLAR_ENTERPRISE_PRODUCT_ID]: "enterprise" as const }
-    : {}),
+    : {})
 };
 
 /**

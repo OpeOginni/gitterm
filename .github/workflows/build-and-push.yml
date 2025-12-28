@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/gitterm
 
 jobs:
   # Build API Server
@@ -34,9 +33,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+      - name: Set image name (lowercase)
+        id: image
+        run: |
+          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
+          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push server
         uses: docker/build-push-action@v5
@@ -46,8 +47,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}-server:latest
-            ${{ env.IMAGE_PREFIX }}-server:${{ steps.sha.outputs.short }}
+            ${{ steps.image.outputs.prefix }}-server:latest
+            ${{ steps.image.outputs.prefix }}-server:${{ steps.image.outputs.short }}
           cache-from: type=gha,scope=server
           cache-to: type=gha,mode=max,scope=server
 
@@ -75,9 +76,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+      - name: Set image name (lowercase)
+        id: image
+        run: |
+          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
+          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push listener
         uses: docker/build-push-action@v5
@@ -87,8 +90,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}-listener:latest
-            ${{ env.IMAGE_PREFIX }}-listener:${{ steps.sha.outputs.short }}
+            ${{ steps.image.outputs.prefix }}-listener:latest
+            ${{ steps.image.outputs.prefix }}-listener:${{ steps.image.outputs.short }}
           cache-from: type=gha,scope=listener
           cache-to: type=gha,mode=max,scope=listener
 
@@ -116,9 +119,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+      - name: Set image name (lowercase)
+        id: image
+        run: |
+          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
+          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push tunnel-proxy
         uses: docker/build-push-action@v5
@@ -128,8 +133,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}-tunnel-proxy:latest
-            ${{ env.IMAGE_PREFIX }}-tunnel-proxy:${{ steps.sha.outputs.short }}
+            ${{ steps.image.outputs.prefix }}-tunnel-proxy:latest
+            ${{ steps.image.outputs.prefix }}-tunnel-proxy:${{ steps.image.outputs.short }}
           cache-from: type=gha,scope=tunnel-proxy
           cache-to: type=gha,mode=max,scope=tunnel-proxy
 
@@ -157,9 +162,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+      - name: Set image name (lowercase)
+        id: image
+        run: |
+          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
+          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push web
         uses: docker/build-push-action@v5
@@ -169,8 +176,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}-web:latest
-            ${{ env.IMAGE_PREFIX }}-web:${{ steps.sha.outputs.short }}
+            ${{ steps.image.outputs.prefix }}-web:latest
+            ${{ steps.image.outputs.prefix }}-web:${{ steps.image.outputs.short }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
@@ -198,9 +205,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+      - name: Set image name (lowercase)
+        id: image
+        run: |
+          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
+          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push idle-reaper-worker
         uses: docker/build-push-action@v5
@@ -210,8 +219,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}-idle-reaper-worker:latest
-            ${{ env.IMAGE_PREFIX }}-idle-reaper-worker:${{ steps.sha.outputs.short }}
+            ${{ steps.image.outputs.prefix }}-idle-reaper-worker:latest
+            ${{ steps.image.outputs.prefix }}-idle-reaper-worker:${{ steps.image.outputs.short }}
           cache-from: type=gha,scope=idle-reaper-worker
           cache-to: type=gha,mode=max,scope=idle-reaper-worker
 
@@ -239,9 +248,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+      - name: Set image name (lowercase)
+        id: image
+        run: |
+          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
+          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push proxy (path-based routing)
         uses: docker/build-push-action@v5
@@ -251,7 +262,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}-proxy:latest
-            ${{ env.IMAGE_PREFIX }}-proxy:${{ steps.sha.outputs.short }}
+            ${{ steps.image.outputs.prefix }}-proxy:latest
+            ${{ steps.image.outputs.prefix }}-proxy:${{ steps.image.outputs.short }}
           cache-from: type=gha,scope=proxy
           cache-to: type=gha,mode=max,scope=proxy

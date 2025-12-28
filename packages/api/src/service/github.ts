@@ -609,5 +609,40 @@ export class GitHubAppService {
   }
 }
 
-// Export singleton instance
-export const githubAppService = new GitHubAppService();
+// Lazy-loaded singleton instance
+// This prevents errors when GitHub App is not configured (e.g., in listener service)
+let _githubAppService: GitHubAppService | null = null;
+
+/**
+ * Get the GitHub App service instance (lazy-loaded)
+ * Throws if GitHub App is not configured
+ */
+export function getGitHubAppService(): GitHubAppService {
+  if (!_githubAppService) {
+    _githubAppService = new GitHubAppService();
+  }
+  return _githubAppService;
+}
+
+/**
+ * Check if GitHub App is configured
+ */
+export function isGitHubAppConfigured(): boolean {
+  return !!env.GITHUB_APP_ID && !!env.GITHUB_APP_PRIVATE_KEY;
+}
+
+/**
+ * @deprecated Use getGitHubAppService() instead for lazy loading
+ * This export is kept for backward compatibility but will throw on import
+ * if GitHub App is not configured
+ */
+export const githubAppService = {
+  get getUserInstallation() { return getGitHubAppService().getUserInstallation.bind(getGitHubAppService()); },
+  get getInstallationDetails() { return getGitHubAppService().getInstallationDetails.bind(getGitHubAppService()); },
+  get storeInstallation() { return getGitHubAppService().storeInstallation.bind(getGitHubAppService()); },
+  get removeInstallation() { return getGitHubAppService().removeInstallation.bind(getGitHubAppService()); },
+  get getUserToServerToken() { return getGitHubAppService().getUserToServerToken.bind(getGitHubAppService()); },
+  get forkRepository() { return getGitHubAppService().forkRepository.bind(getGitHubAppService()); },
+  get getAuthenticatedGitUrl() { return getGitHubAppService().getAuthenticatedGitUrl.bind(getGitHubAppService()); },
+  get parseRepoUrl() { return getGitHubAppService().parseRepoUrl.bind(getGitHubAppService()); },
+};

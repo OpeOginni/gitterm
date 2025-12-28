@@ -1,5 +1,5 @@
 import "dotenv/config";
-import env from "@gitterm/env/server";
+import env, { isSelfHosted } from "@gitterm/env/server";
 import { trpcServer } from "@hono/trpc-server";
 import { createContext } from "@gitterm/api/context";
 import { appRouter, proxyResolverRouter } from "@gitterm/api/routers/index";
@@ -7,9 +7,52 @@ import { auth } from "@gitterm/auth";
 import { DeviceCodeService } from "@gitterm/api/service/tunnel/device-code";
 import { AgentAuthService } from "@gitterm/api/service/tunnel/agent-auth";
 import { bootstrapAdmin } from "@gitterm/api/service/admin-bootstrap";
+import { bootstrapDatabase } from "@gitterm/db/seed";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+
+// Database bootstrap: run migrations and seed on startup (self-hosted only)
+// For managed deployments, migrations are handled separately
+async function initializeDatabase() {
+	// Only run for self-hosted deployments
+	if (!isSelfHosted()) {
+		console.log("[startup] Managed mode - skipping automatic database bootstrap");
+		return;
+	}
+
+	const databaseUrl = process.env.DATABASE_URL;
+	if (!databaseUrl) {
+		console.error("[startup] DATABASE_URL not set, skipping database bootstrap");
+		return;
+	}
+
+	// Allow disabling via environment if needed
+	const shouldMigrate = process.env.RUN_MIGRATIONS !== "false";
+	const shouldSeed = process.env.RUN_SEED !== "false";
+
+	if (!shouldMigrate && !shouldSeed) {
+		console.log("[startup] Database bootstrap disabled via environment");
+		return;
+	}
+
+	console.log("[startup] Self-hosted mode - bootstrapping database...");
+	const result = await bootstrapDatabase(databaseUrl, {
+		runMigrations: shouldMigrate,
+		runSeed: shouldSeed,
+	});
+
+	if (!result.success) {
+		console.error("[startup] Database bootstrap failed:", result.error);
+		// Don't exit - let the server try to start anyway
+		// This allows manual intervention if needed
+	} else {
+		console.log("[startup] Database bootstrap complete");
+	}
+}
+
+// Run database initialization before starting the server
+await initializeDatabase();
 
 // Bootstrap admin user on startup (for self-hosted deployments)
 bootstrapAdmin().catch((error) => {

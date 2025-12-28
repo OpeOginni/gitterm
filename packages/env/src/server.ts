@@ -58,7 +58,6 @@ const baseSchema = z.object({
   POLAR_ENVIRONMENT: polarEnvironment,
   POLAR_TUNNEL_PRODUCT_ID: optional,
   POLAR_PRO_PRODUCT_ID: optional,
-  POLAR_ENTERPRISE_PRODUCT_ID: optional,
 
   // Railway
   RAILWAY_API_URL: optional,
@@ -103,9 +102,6 @@ const baseSchema = z.object({
     }
     if (!data.POLAR_PRO_PRODUCT_ID) {
       errors.push({ path: "POLAR_PRO_PRODUCT_ID", message: "POLAR_PRO_PRODUCT_ID is required in managed mode" });
-    }
-    if (!data.POLAR_ENTERPRISE_PRODUCT_ID) {
-      errors.push({ path: "POLAR_ENTERPRISE_PRODUCT_ID", message: "POLAR_ENTERPRISE_PRODUCT_ID is required in managed mode" });
     }
   }
 

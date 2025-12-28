@@ -24,6 +24,10 @@ WORKDIR /app
 COPY --from=builder /app/apps/server/dist ./dist
 COPY --from=builder /app/apps/server/package.json ./
 
+# Copy database migrations for self-hosted bootstrap
+# These are only used when DEPLOYMENT_MODE=self-hosted
+COPY --from=builder /app/packages/db/src/migrations ./migrations
+
 # Install only production dependencies
 RUN bun install --production --frozen-lockfile || true
 
