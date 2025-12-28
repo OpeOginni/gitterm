@@ -16,7 +16,8 @@ export const cloudAccount = pgTable("cloud_account", {
 
 export const cloudProvider = pgTable("cloud_provider", {
 	id: uuid("id").primaryKey().defaultRandom(),
-	name: text("name").notNull(),
+	name: text("name").notNull().unique(),
+	isEnabled: boolean("is_enabled").notNull().default(true),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -26,24 +27,27 @@ export const region = pgTable("region", {
 	cloudProviderId: uuid("cloud_provider_id").notNull().references(() => cloudProvider.id, { onDelete: "cascade" }),
 	name: text("name").notNull(),
 	location: text("location").notNull(),
-	externalRegionIdentifier: text("external_region_identifier").notNull(),
+	externalRegionIdentifier: text("external_region_identifier").notNull().unique(),
+	isEnabled: boolean("is_enabled").notNull().default(true),
 	createdAt: timestamp("created_at").notNull().defaultNow(),
 	updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const image = pgTable("image", {
 	id: uuid("id").primaryKey().defaultRandom(),
-	name: text("name").notNull(),
+	name: text("name").notNull().unique(),
 	imageId: text("image_id").notNull(),
     agentTypeId: uuid("agent_type_id").notNull().references(() => agentType.id, { onDelete: "cascade" }),
+	isEnabled: boolean("is_enabled").notNull().default(true),
 	createdAt: timestamp("created_at").notNull().defaultNow(),
 	updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const agentType = pgTable("agent_type", {
 	id: uuid("id").primaryKey().defaultRandom(),
-	name: text("name").notNull(),
+	name: text("name").notNull().unique(),
 	serverOnly: boolean("server_only").notNull().default(false),
+	isEnabled: boolean("is_enabled").notNull().default(true),
 	createdAt: timestamp("created_at").notNull().defaultNow(),
 	updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

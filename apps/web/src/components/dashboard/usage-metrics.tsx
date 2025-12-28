@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query"
 import { trpc } from "@/utils/trpc"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Clock, TrendingUp, Zap } from "lucide-react"
+import { Clock, Infinity as InfinityIcon, TrendingUp, Zap } from "lucide-react"
 
 export function UsageMetrics() {
   const { data, isLoading } = useQuery(trpc.workspace.getDailyUsage.queryOptions())
@@ -16,7 +16,46 @@ export function UsageMetrics() {
   }
 
   const usage = data || { minutesUsed: 0, minutesRemaining: 60, dailyLimit: 60 }
-  const usagePercent = (usage.minutesUsed / usage.dailyLimit) * 100
+  
+  // Check if we're in unlimited mode (self-hosted or paid plan)
+  // Infinity becomes null when serialized to JSON
+  const isUnlimited = usage.minutesRemaining === null || usage.dailyLimit === null || 
+                      usage.minutesRemaining === Infinity || usage.dailyLimit === Infinity
+  
+  const usagePercent = isUnlimited ? 0 : (usage.minutesUsed / usage.dailyLimit) * 100
+
+  // In unlimited mode, show a simplified view
+  if (isUnlimited) {
+    return (
+      <div className="grid gap-5 md:grid-cols-2">
+        <Card className="border-border/50 bg-card/50 overflow-hidden group hover:border-accent/30 transition-colors">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Usage Today</CardTitle>
+            <div className="p-2 rounded-lg bg-secondary/50">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold">{usage.minutesUsed} min</div>
+            <p className="text-xs text-muted-foreground mt-1">Minutes used today</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 bg-card/50 overflow-hidden group hover:border-accent/30 transition-colors">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Quota</CardTitle>
+            <div className="p-2 rounded-lg bg-accent/10 group-hover:bg-accent/20">
+              <InfinityIcon className="h-4 w-4 text-accent" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold text-primary">Unlimited</div>
+            <p className="text-xs text-muted-foreground mt-1">No usage limits</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   const metrics = [
     {

@@ -6,8 +6,8 @@
  *
  * Self-hosted mode:
  * - No billing/payment processing
- * - No quota enforcement
- * - Users can configure their own providers (Docker, K8s, Railway)
+ * - No quota enforcement (unless enabled)
+ * - Providers are managed via database (seeded and admin-controlled)
  * - Simplified auth options
  *
  * Managed mode:
@@ -20,7 +20,6 @@
 import env, {
   isSelfHosted,
   isManaged,
-  isProviderEnabled,
 } from "@gitterm/env/server";
 
 /**
@@ -28,17 +27,6 @@ import env, {
  * Defaults to 'self-hosted' for easier local development and self-hosting
  */
 export const deploymentMode = env.DEPLOYMENT_MODE;
-
-/**
- * Enabled compute providers
- * Comma-separated list of provider names (e.g., "railway,local" or "docker,local")
- */
-export const enabledProviders = env.ENABLED_PROVIDERS;
-
-/**
- * Default compute provider for new workspaces
- */
-export const defaultProvider: string = env.DEFAULT_PROVIDER || enabledProviders[0] || "local";
 
 /**
  * Re-export isSelfHosted for backward compatibility
@@ -51,11 +39,6 @@ export { isSelfHosted };
 export { isManaged };
 
 /**
- * Re-export isProviderEnabled for backward compatibility
- */
-export { isProviderEnabled };
-
-/**
  * Deployment configuration object
  * Centralizes all deployment-related settings
  */
@@ -63,10 +46,6 @@ export const deploymentConfig = {
   mode: deploymentMode,
   isSelfHosted: isSelfHosted(),
   isManaged: isManaged(),
-  providers: {
-    enabled: enabledProviders,
-    default: defaultProvider,
-  },
 } as const;
 
 export default deploymentConfig;

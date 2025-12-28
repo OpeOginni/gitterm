@@ -123,7 +123,7 @@ export function getAgentServerUrlOrigin(currentOrigin?: string): string | undefi
  *
  * Priority:
  * - NEXT_PUBLIC_TUNNEL_URL (if set) — can be http(s) or ws(s); we normalize to ws(s) + `/tunnel/connect`
- * - otherwise derive from current origin as `${origin}/tunnel/connect` (matches `apps/new-proxy/Caddyfile.local`)
+ * - otherwise derive from current origin as `${origin}/tunnel/connect` (matches `apps/proxy/Caddyfile.local`)
  */
 export function getAgentWsUrl(currentOrigin?: string): string | undefined {
 	const configured = env.NEXT_PUBLIC_TUNNEL_URL;

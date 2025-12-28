@@ -6,9 +6,15 @@ import { appRouter, proxyResolverRouter } from "@gitterm/api/routers/index";
 import { auth } from "@gitterm/auth";
 import { DeviceCodeService } from "@gitterm/api/service/tunnel/device-code";
 import { AgentAuthService } from "@gitterm/api/service/tunnel/agent-auth";
+import { bootstrapAdmin } from "@gitterm/api/service/admin-bootstrap";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+
+// Bootstrap admin user on startup (for self-hosted deployments)
+bootstrapAdmin().catch((error) => {
+	console.error("[startup] Failed to bootstrap admin:", error);
+});
 
 function getPublicOriginFromRequest(req: Request): string {
 	// Prefer proxy headers (Caddy / reverse proxies)

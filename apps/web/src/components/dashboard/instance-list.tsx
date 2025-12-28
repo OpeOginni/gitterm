@@ -4,10 +4,10 @@ import { trpc, queryClient } from "@/utils/trpc";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ExternalLink, Trash2, PlayCircle, GitBranch, Clock, Globe, Box, MapPin, StopCircle, Copy, Terminal, HeartPlusIcon, PauseIcon, Monitor, Server } from 'lucide-react';
+import { Loader2, ExternalLink, Trash2, PlayCircle, GitBranch, Clock, Globe, Box, MapPin, StopCircle, Copy, Terminal, HeartPlusIcon, PauseIcon, Monitor, Server, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
-import { useMutation, useQueries } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Dialog,
@@ -21,13 +21,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getWorkspaceUrl, getAttachCommand, getWorkspaceDisplayUrl, getAgentConnectCommand } from "@/lib/utils";
 
+const ITEMS_PER_PAGE = 6;
+
 export function InstanceList() {
-  const [workspacesQuery, providersQuery] = useQueries({
-    queries: [
-      trpc.workspace.listWorkspaces.queryOptions(),
-      trpc.workspace.listCloudProviders.queryOptions(),
-    ],
-  });
+  const [page, setPage] = useState(0);
+  
+  const workspacesQuery = useQuery(
+    trpc.workspace.listWorkspaces.queryOptions({
+      limit: ITEMS_PER_PAGE,
+      offset: page * ITEMS_PER_PAGE,
+      status: "active",
+    })
+  );
+
+  const providersQuery = useQuery(
+    trpc.workspace.listCloudProviders.queryOptions()
+  );
 
   const isLoading = workspacesQuery.isLoading || providersQuery.isLoading;
 
@@ -42,13 +51,12 @@ export function InstanceList() {
     );
   }
 
-  const activeWorkspaces = (workspacesQuery.data?.workspaces || []).filter(
-    (ws) => ws.status !== "terminated"
-  );
-
+  const workspaces = workspacesQuery.data?.workspaces || [];
+  const pagination = workspacesQuery.data?.pagination;
   const providers = providersQuery.data?.cloudProviders || [];
+  const totalPages = pagination ? Math.ceil(pagination.total / ITEMS_PER_PAGE) : 0;
 
-  if (activeWorkspaces.length === 0) {
+  if (workspaces.length === 0 && page === 0) {
     return (
       <div className="flex h-72 flex-col items-center justify-center rounded-xl border-primary/50 border-dashed border bg-card/30 p-8 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 ring-1 ring-accent/20">
@@ -63,19 +71,53 @@ export function InstanceList() {
   }
 
   return (
-    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-      {activeWorkspaces.map((workspace) => (
-        <InstanceCard 
-          key={workspace.id} 
-          workspace={workspace}
-          providers={providers}
-        />
-      ))}
+    <div className="space-y-6">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {workspaces.map((workspace) => (
+          <InstanceCard 
+            key={workspace.id} 
+            workspace={workspace}
+            providers={providers}
+          />
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {pagination && totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t border-border/30">
+          <p className="text-sm text-muted-foreground">
+            Showing {pagination.offset + 1} to {Math.min(pagination.offset + workspaces.length, pagination.total)} of {pagination.total} workspaces
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage(p => p - 1)}
+              disabled={page === 0 || workspacesQuery.isFetching}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground px-2">
+              Page {page + 1} of {totalPages}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage(p => p + 1)}
+              disabled={!pagination.hasMore || workspacesQuery.isFetching}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-type Workspace = typeof trpc.workspace.listWorkspaces["~types"]["output"]["workspaces"][number];
+type Workspace = NonNullable<typeof trpc.workspace.listWorkspaces["~types"]["output"]>["workspaces"][number];
 type CloudProvider = typeof trpc.workspace.listCloudProviders["~types"]["output"]["cloudProviders"][number];
 
 function InstanceCard({ workspace, providers }: { workspace: Workspace; providers: CloudProvider[] }) {
@@ -84,7 +126,7 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
   const deleteServiceMutation = useMutation(trpc.workspace.deleteWorkspace.mutationOptions({
     onSuccess: () => {
       toast.success("Workspace terminated successfully");
-      queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
+      queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
     },
     onError: (error) => {
       toast.error(`Failed to terminate workspace: ${error.message}`);
@@ -94,7 +136,7 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
   const stopWorkspaceMutation = useMutation(trpc.workspace.stopWorkspace.mutationOptions({
     onSuccess: () => {
       toast.success("Workspace stopped successfully");
-      queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
+      queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
     },
     onError: (error) => {
       toast.error(`Failed to stop workspace: ${error.message}`);
@@ -104,7 +146,7 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
   const restartWorkspaceMutation = useMutation(trpc.workspace.restartWorkspace.mutationOptions({
     onSuccess: () => {
       toast.success("Workspace restarting...");
-      queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
+      queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
     },
     onError: (error) => {
       toast.error(`Failed to restart workspace: ${error.message}`);

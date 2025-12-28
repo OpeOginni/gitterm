@@ -1,0 +1,21 @@
+# =============================================================================
+# PROXY - PATH-BASED ROUTING (Self-Hosted / GitHub Container Registry)
+# =============================================================================
+# Uses path-based routing (/ws/{subdomain}/*) for workspace access.
+# No wildcard DNS required - works with a single domain.
+#
+# For managed/subdomain routing, use the default Dockerfile instead.
+# =============================================================================
+
+FROM caddy:2-alpine
+
+# Copy path-based Caddyfile as the main config
+COPY ./apps/proxy/Caddyfile.path /etc/caddy/Caddyfile
+
+# Copy error pages
+COPY ./apps/proxy/errors /srv/errors
+
+# Expose port 80
+EXPOSE 80
+
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

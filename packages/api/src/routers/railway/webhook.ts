@@ -1,11 +1,25 @@
 import z from "zod";
 import { publicProcedure, router } from "../../index";
-import { workspace } from "@gitterm/db/schema/workspace";
-import { and, db, eq } from "@gitterm/db";
-import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
-import { WORKSPACE_EVENTS } from "../../events/workspace";
+import { createInternalClient } from "../../client/internal";
+import env from "@gitterm/env/listener";
 
+// Create internal client for calling server
+const getClient = () => {
+  const serverUrl = env.SERVER_URL;
+  const apiKey = env.INTERNAL_API_KEY;
+  
+  if (!serverUrl || !apiKey) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Listener not configured: SERVER_URL or INTERNAL_API_KEY missing",
+    });
+  }
+  
+  return createInternalClient(serverUrl, apiKey);
+};
+
+// Railway webhook schema - matches server's expected input
 const deploymentStatus = z.enum(["BUILDING", "DEPLOYING", "FAILED", "SUCCESS"]);
 const webhookType = z.enum(["Deployment.created", "Deployment.deploying", "Deployment.deployed", "Deployment.failed"]);
 const webhookSeverity = z.enum(["INFO", "WARNING", "ERROR"]);
@@ -35,7 +49,7 @@ const railwayWebhookSchema = z.object({
     deployment: z.object({
         id: z.string().optional(),
     }).optional(),
-  }).loose(),
+  }).passthrough(),
   details: z.object({
     id: z.string().optional(),
     source: z.string().optional(),
@@ -48,60 +62,23 @@ const railwayWebhookSchema = z.object({
     commitHash: z.string().optional(),
     commitAuthor: z.string().optional(),
     commitMessage: z.string().optional(),
-  }).loose(),
+  }).passthrough(),
 });
 
 
 export const railwayWebhookRouter = router({
   handleWebhook: publicProcedure.input(railwayWebhookSchema).mutation(async ({ input }) => {
     try {
-      if (input.type === "Deployment.deployed" && input.details?.serviceId) {
-          const serviceId = input.details.serviceId;
-
-          const [railwayProvider] = await db.select().from(cloudProvider)
-          .where(eq(cloudProvider.name, "Railway"))
-
-          if(!railwayProvider) {
-              throw new TRPCError({
-                  code: "INTERNAL_SERVER_ERROR",
-                  message: "Railway Webhook Error",
-                  cause: "Failed to get Railway Provider from Database"
-                });
-          }
-
-        const updatedWorkspaces = await db.update(workspace).set({
-            status: "running",
-            updatedAt: new Date(input.timestamp),
-            externalRunningDeploymentId: input.resource.deployment?.id
-        }).where(and(
-          eq(workspace.cloudProviderId, railwayProvider.id),
-          eq(workspace.externalInstanceId, serviceId),
-          eq(workspace.status, "pending")
-        )).returning({
-          id: workspace.id,
-          status: workspace.status,
-          updatedAt: workspace.updatedAt,
-          userId: workspace.userId,
-          workspaceDomain: workspace.domain
-        });
-
-        updatedWorkspaces.forEach((record) => {
-          WORKSPACE_EVENTS.emitStatus({
-            workspaceId: record.id,
-            status: record.status,
-            updatedAt: record.updatedAt,
-            userId: record.userId,
-            workspaceDomain: record.workspaceDomain
-          });
-        });
-
-      } else {
-        return;
-      }
+      const client = getClient();
+      const result = await client.internal.processRailwayWebhook.mutate(input);
+      return result;
     } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      
+      console.error("[listener] Failed to process Railway webhook:", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to update workspace status",
+        message: "Failed to process webhook",
         cause: error instanceof Error ? error.message : "Unknown error",
       });
     }

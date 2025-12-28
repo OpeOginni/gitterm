@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import z from "zod";
-import { protectedProcedure, publicProcedure, workspaceAuthProcedure, router } from "../../index";
+import { protectedProcedure, workspaceAuthProcedure, router } from "../../index";
 import { db, eq, and, asc, or } from "@gitterm/db";
 import {
   agentWorkspaceConfig,
@@ -26,29 +26,8 @@ import { githubAppService } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { sendAdminMessage } from "../../utils/discord";
-import { getWorkspaceDomain, getTunnelUrl } from "../../utils/routing";
-
-/**
- * SUBDOMAIN FEATURE GATING SETUP
- * 
- * Currently, all users can use custom subdomains. To enable paid feature gating:
- * 
- * 1. Run database migration to add 'plan' field to users:
- *    cd packages/db && bun run db:push
- * 
- * 2. Update canUseCustomSubdomain() function to check user plan:
- *    return userPlan === 'pro' || userPlan === 'enterprise';
- * 
- * 3. Enable the commented-out validation blocks in createWorkspace mutation
- * 
- * 4. Update shouldUseLocalPrefix() to return true for free users:
- *    return userPlan === 'free';
- * 
- * This will enforce:
- * - Free users: Get local-<subdomain> format (e.g., local-myapp.gitterm.dev)
- * - Pro/Enterprise: Can use custom subdomains (e.g., myapp.gitterm.dev)
- * - Reserved subdomains (api, tunnel, etc.): Always blocked for everyone
- */
+import { getWorkspaceDomain } from "../../utils/routing";
+import { canUseCustomSubdomain, type UserPlan } from "../../config/features";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -73,22 +52,6 @@ const RESERVED_SUBDOMAINS = [
 
 function isSubdomainReserved(subdomain: string): boolean {
   return RESERVED_SUBDOMAINS.includes(subdomain.toLowerCase());
-}
-
-function canUseCustomSubdomain(userPlan: 'free' | 'pro' | 'enterprise'): boolean {
-  // For now, allow all users to use custom subdomains
-  // When ready to gate this feature, change to:
-  // return userPlan === 'pro' || userPlan === 'enterprise';
-  return true;
-}
-
-function shouldUseLocalPrefix(userPlan: 'free' | 'pro' | 'enterprise', subdomain: string): boolean {
-  // Free users get local-<subdomain> format
-  // Pro/Enterprise users can use custom subdomain directly
-  // For now, everyone gets the format they request
-  // When ready to gate, uncomment:
-  // return userPlan === 'free';
-  return false;
 }
 
 export const workspaceRouter = router({
@@ -117,10 +80,34 @@ export const workspaceRouter = router({
       installations,
     };
   }),
+
+  /**
+   * Get the current user's subdomain permissions.
+   * Used by the frontend to conditionally show subdomain input fields.
+   */
+  getSubdomainPermissions: protectedProcedure.query(async ({ ctx }) => {
+    const userPlan = ctx.session.user.plan;
+    
+    if (!userPlan) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
+    }
+    
+    return {
+      canUseCustomSubdomain: canUseCustomSubdomain(userPlan as UserPlan),
+      userPlan,
+    };
+  }),
+
   // List all agent types
   listAgentTypes: protectedProcedure.query(async () => {
     try {
-      const types = await db.select().from(agentType);
+      const types = await db
+        .select()
+        .from(agentType)
+        .where(eq(agentType.isEnabled, true));
       return {
         success: true,
         agentTypes: types,
@@ -142,7 +129,10 @@ export const workspaceRouter = router({
         const images = await db
           .select()
           .from(image)
-          .where(eq(image.agentTypeId, input.agentTypeId));
+          .where(and(
+            eq(image.agentTypeId, input.agentTypeId),
+            eq(image.isEnabled, true)
+          ));
         return {
           success: true,
           images,
@@ -160,8 +150,11 @@ export const workspaceRouter = router({
   listCloudProviders: protectedProcedure.query(async () => {
     try {
       const providers = await db.query.cloudProvider.findMany({
+        where: eq(cloudProvider.isEnabled, true),
         with: {
-          regions: true,
+          regions: {
+            where: eq(region.isEnabled, true),
+          },
         },
         orderBy: [asc(cloudProvider.name)],
       });
@@ -180,42 +173,87 @@ export const workspaceRouter = router({
     }
   }),
 
-  // List all workspaces for the authenticated user
-  listWorkspaces: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
+  // List all workspaces for the authenticated user (paginated)
+  listWorkspaces: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(100).default(12),
+        offset: z.number().min(0).default(0),
+        status: z.enum(["all", "active", "terminated"]).default("active"),
+      }).optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const { limit = 12, offset = 0, status = "active" } = input ?? {};
 
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "User not authenticated",
-      });
-    }
+      if (!userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
 
-    try {
-      const workspaces = await db.query.workspace.findMany({
-        where: eq(workspace.userId, userId),
-        with: {
-          image: {
-            with: {
-              agentType: true,
+      try {
+        // Build where clause based on status filter
+        const statusCondition = status === "all" 
+          ? eq(workspace.userId, userId)
+          : status === "terminated"
+            ? and(eq(workspace.userId, userId), eq(workspace.status, "terminated"))
+            : and(
+                eq(workspace.userId, userId),
+                or(
+                  eq(workspace.status, "running"),
+                  eq(workspace.status, "pending"),
+                  eq(workspace.status, "stopped")
+                )
+              );
+
+        // Get total count for pagination
+        const [countResult] = await db
+          .select({ count: workspace.id })
+          .from(workspace)
+          .where(statusCondition);
+        
+        // Count actual rows (drizzle returns undefined for count on empty)
+        const totalWorkspaces = await db
+          .select({ id: workspace.id })
+          .from(workspace)
+          .where(statusCondition);
+        const total = totalWorkspaces.length;
+
+        // Fetch paginated workspaces
+        const workspaces = await db.query.workspace.findMany({
+          where: statusCondition,
+          with: {
+            image: {
+              with: {
+                agentType: true,
+              },
             },
           },
-        },
-      });
+          orderBy: (workspace, { desc }) => [desc(workspace.startedAt)],
+          limit,
+          offset,
+        });
 
-
-      return {
-        success: true,
-        workspaces,
-      };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch workspaces",
-        cause: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }),
+        return {
+          success: true,
+          workspaces,
+          pagination: {
+            total,
+            limit,
+            offset,
+            hasMore: offset + workspaces.length < total,
+          },
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch workspaces",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
 
   // Create or update workspace configuration
   createConfig: protectedProcedure
@@ -906,6 +944,13 @@ export const workspaceRouter = router({
           });
         }
 
+        if (!cloudProviderRecord.isEnabled) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Selected cloud provider is not available",
+          });
+        }
+
         // Determine if this is a local workspace
         const isLocal = cloudProviderRecord.name.toLowerCase() === "local";
 
@@ -963,11 +1008,21 @@ export const workspaceRouter = router({
           });
         }
 
+        if (!regionRecord.isEnabled) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Selected region is not available",
+          });
+        }
+
         // Get image for this agent type (take the first one)
         const [imageRecord] = await db
           .select()
           .from(image)
-          .where(eq(image.agentTypeId, input.agentTypeId));
+          .where(and(
+            eq(image.agentTypeId, input.agentTypeId),
+            eq(image.isEnabled, true)
+          ));
 
         const [agentTypeRecord] = await db
           .select()
@@ -981,10 +1036,17 @@ export const workspaceRouter = router({
           });
         }
 
+        if (!agentTypeRecord.isEnabled) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Selected agent type is not available",
+          });
+        }
+
         if (!imageRecord) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "No image found for this agent type",
+            message: "No enabled image found for this agent type",
           });
         }
 
@@ -1058,8 +1120,10 @@ export const workspaceRouter = router({
 
         // Generate or validate subdomain
         let subdomain: string;
-        if (isLocal && input.subdomain) {
-          // For local workspaces, use provided subdomain and check uniqueness
+        const userPlan = (fetchedUser.plan || 'free') as UserPlan;
+        
+        if (input.subdomain) {
+          // User wants a custom subdomain
           
           // Check if subdomain is reserved
           if (isSubdomainReserved(input.subdomain)) {
@@ -1069,22 +1133,20 @@ export const workspaceRouter = router({
             });
           }
           
-          // TODO: Enable custom subdomain as paid feature
-          // Uncomment the following block when ready to gate custom subdomains:
-          /*
-          const userPlan = fetchedUser.plan || 'free';
+          // Check plan-based permissions for custom subdomains
+          // Note: canUseCustomSubdomain already returns true for self-hosted
           if (!canUseCustomSubdomain(userPlan)) {
             throw new TRPCError({
               code: "FORBIDDEN",
-              message: "Custom subdomains are a Pro feature. Upgrade your plan to use custom subdomains.",
+              message: "Custom subdomains require a Tunnel, Pro, or Enterprise plan.",
             });
           }
-          */
           
+          // Check uniqueness - only among running/pending workspaces
           const [existing] = await db
             .select()
             .from(workspace)
-            .where(and(eq(workspace.subdomain, input.subdomain),or(eq(workspace.status, "running"), eq(workspace.status, "pending"))))
+            .where(and(eq(workspace.subdomain, input.subdomain), or(eq(workspace.status, "running"), eq(workspace.status, "pending"))))
             .limit(1);
 
           if (existing) {
@@ -1093,18 +1155,10 @@ export const workspaceRouter = router({
               message: "Subdomain already taken",
             });
           }
-          subdomain = input.subdomain;
           
-          // TODO: Enable local- prefix for free tier
-          // When enabling paid features, apply local- prefix for free users:
-          /*
-          const userPlan = fetchedUser.plan || 'free';
-          if (shouldUseLocalPrefix(userPlan, subdomain)) {
-            subdomain = `local-${subdomain}`;
-          }
-          */
+          subdomain = input.subdomain;
         } else {
-          // For cloud workspaces, generate unique subdomain
+          // No custom subdomain provided - generate one automatically
           let attempts = 0;
           do {
             if (attempts > 10) {
@@ -1203,7 +1257,7 @@ export const workspaceRouter = router({
             backendUrl: workspaceInfo.backendUrl,
             status: "pending",
             tunnelType: isLocal ? "local" : "cloud",
-            tunnelName: isLocal ? (input.name || `local-${subdomain}`) : undefined,
+            tunnelName: input.name || subdomain,
             startedAt: new Date(workspaceInfo.serviceCreatedAt),
             lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),
             updatedAt: new Date(workspaceInfo.serviceCreatedAt),

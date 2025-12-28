@@ -1,11 +1,6 @@
 import type { ComputeProvider } from "./compute";
 import { railwayProvider } from "./railway";
 import { localProvider } from "./local";
-import {
-  enabledProviders,
-  defaultProvider,
-  isProviderEnabled,
-} from "../config/deployment";
 
 export * from "./compute";
 export { railwayProvider } from "./railway";
@@ -13,7 +8,8 @@ export { localProvider } from "./local";
 
 /**
  * All available provider implementations
- * New providers should be added here
+ * Providers are managed via the database (seeded on first run, admin can enable/disable)
+ * This map contains the actual implementation for each provider type
  */
 const availableProviders: Record<string, ComputeProvider> = {
   railway: railwayProvider,
@@ -24,51 +20,16 @@ const availableProviders: Record<string, ComputeProvider> = {
 };
 
 /**
- * Get enabled providers based on ENABLED_PROVIDERS env var
- * Returns only providers that are both available and enabled
- */
-function getEnabledProviders(): Record<string, ComputeProvider> {
-  const enabled: Record<string, ComputeProvider> = {};
-
-  // Always include 'local' as it's a fallback for tunnel-only mode
-  enabled.local = localProvider;
-
-  for (const providerName of enabledProviders) {
-    const provider = availableProviders[providerName];
-    if (provider) {
-      enabled[providerName] = provider;
-    } else if (providerName !== "local") {
-      console.warn(
-        `[providers] Provider "${providerName}" is enabled but not implemented. Available: ${Object.keys(availableProviders).join(", ")}`
-      );
-    }
-  }
-
-  return enabled;
-}
-
-// Cached enabled providers
-const providers = getEnabledProviders();
-
-/**
  * Get a compute provider by name
- * @throws Error if provider is not enabled or doesn't exist
+ * @throws Error if provider implementation doesn't exist
  */
 export function getProvider(name: string): ComputeProvider {
   const normalizedName = name.toLowerCase();
 
-  // Check if provider exists in available providers
   const provider = availableProviders[normalizedName];
   if (!provider) {
     throw new Error(
-      `Unknown compute provider: ${name}. Available: ${Object.keys(availableProviders).join(", ")}`
-    );
-  }
-
-  // Check if provider is enabled
-  if (!isProviderEnabled(normalizedName) && normalizedName !== "local") {
-    throw new Error(
-      `Compute provider "${name}" is not enabled. Enabled providers: ${enabledProviders.join(", ")}`
+      `Unknown compute provider: ${name}. Available implementations: ${Object.keys(availableProviders).join(", ")}`
     );
   }
 
@@ -76,29 +37,30 @@ export function getProvider(name: string): ComputeProvider {
 }
 
 /**
- * Get the default compute provider
+ * Get the default compute provider (local)
+ * Used as fallback for tunnel-only workspaces
  */
 export function getDefaultProvider(): ComputeProvider {
-  return getProvider(defaultProvider);
+  return localProvider;
 }
 
 /**
- * Get all enabled provider names
+ * Get all available provider implementation names
  */
-export function getEnabledProviderNames(): string[] {
-  return Object.keys(providers);
+export function getAvailableProviderNames(): string[] {
+  return Object.keys(availableProviders);
 }
 
 /**
- * Check if a provider is available and enabled
+ * Check if a provider implementation is available
  */
-export function isProviderAvailable(name: string): boolean {
+export function isProviderImplemented(name: string): boolean {
   const normalizedName = name.toLowerCase();
-  return normalizedName in providers;
+  return normalizedName in availableProviders;
 }
 
 /**
- * Get a compute provider by cloud provider ID from database
+ * Get a compute provider by cloud provider name from database
  */
 export async function getProviderByCloudProviderId(
   cloudProviderName: string

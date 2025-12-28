@@ -53,7 +53,7 @@ gitterm/
 │   ├── server/           # Main API server (Hono + tRPC)
 │   ├── listener/         # Webhook listener (GitHub, Railway events)
 │   ├── tunnel-proxy/     # WebSocket tunnel proxy for local tunnels
-│   ├── new-proxy/        # Caddy configuration for routing
+│   ├── proxy/        # Caddy configuration for routing
 │   └── worker/           # Background jobs (cleanup, daily reset)
 │
 ├── packages/
@@ -103,8 +103,41 @@ cp apps/server/.env.example apps/server/.env
 cp apps/web/.env.example apps/web/.env
 cp apps/tunnel-proxy/.env.example apps/tunnel-proxy/.env
 cp apps/listener/.env.example apps/listener/.env
-cp apps/worker/.env.exanple apps/worker/.env
+cp apps/worker/.env.example apps/worker/.env
 ```
+
+### Key Environment Variables
+
+#### Server (`apps/server/.env`)
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `REDIS_URL` | Redis connection string | Yes |
+| `BETTER_AUTH_SECRET` | Secret for auth tokens (generate with `openssl rand -base64 32`) | Yes |
+| `BETTER_AUTH_URL` | URL where auth endpoints are served | Yes |
+| `INTERNAL_API_KEY` | Shared key for service-to-service auth | Yes |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Bootstrap admin credentials (email auth only) | No |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth credentials | No |
+| `TUNNEL_JWT_SECRET` / `AGENT_JWT_SECRET` | JWT secrets for tunnel auth | For tunnels |
+| `RAILWAY_*` | Railway provider configuration | For Railway |
+
+#### Web (`apps/web/.env`)
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SERVER_URL` | API server URL (e.g., `http://localhost:8888/api`) |
+| `NEXT_PUBLIC_AUTH_URL` | Auth URL without `/api` suffix |
+| `NEXT_PUBLIC_LISTENER_URL` | Listener URL for real-time updates |
+| `NEXT_PUBLIC_TUNNEL_URL` | Tunnel proxy URL |
+| `NEXT_PUBLIC_BASE_DOMAIN` | Base domain for workspace URLs |
+
+#### Other Services
+
+- **tunnel-proxy**: Needs `REDIS_URL`, `TUNNEL_JWT_SECRET`, `INTERNAL_API_KEY`, `SERVER_URL`
+- **listener**: Needs `SERVER_URL`, `INTERNAL_API_KEY`, `CORS_ORIGIN`
+- **worker**: Needs `SERVER_URL`, `INTERNAL_API_KEY`
+- **proxy**: Needs `INTERNAL_API_KEY` (must match server)
 
 ### 3. Start Local Services
 
@@ -181,7 +214,7 @@ Key services to deploy:
 3. **server** - Main API
 4. **web** - Frontend
 5. **tunnel-proxy** - Local tunnel WebSocket server
-6. **new-proxy** - Caddy reverse proxy (needs custom domain setup)
+6. **proxy** - Caddy reverse proxy (needs custom domain setup)
 7. **listener** - Webhook receiver
 8. **worker** - Background jobs
 

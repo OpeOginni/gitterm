@@ -36,7 +36,7 @@ export default async function UsagePage() {
   return (
     <DashboardShell>
       <DashboardHeader heading="Usage & Billing" text="Monitor your workspace usage and quota." />
-      <div className="grid gap-8">
+      <div className="pt-8 grid gap-8">
         <Suspense fallback={<MetricsSkeleton />}>
           <UsageMetrics />
         </Suspense>

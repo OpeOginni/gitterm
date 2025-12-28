@@ -5,12 +5,12 @@ import { workspaceEventsRouter } from "./workspace/events";
 import { workspaceOperationsRouter } from "./workspace/operations";
 import { internalRouter } from "./internal";
 import { githubRouter } from "./github/github";
-import { githubWebhookRouter } from "./github/webhook";
 import { proxyResolverRouter } from "./proxy";
 import { tunnelRouter } from "./tunnel";
 import { agentRouter } from "./agent";
 import { userRouter } from "./user/user";
 import { deviceRouter } from "./device";
+import { adminRouter } from "./admin";
 
 export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {
@@ -29,6 +29,7 @@ export const appRouter = router({
 	tunnel: tunnelRouter,
 	agent: agentRouter,
 	device: deviceRouter,
+	admin: adminRouter,
 	workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
 });
 export type AppRouter = typeof appRouter;
@@ -36,7 +37,6 @@ export type AppRouter = typeof appRouter;
 export const listenerRouter = router({
 	railway: railwayWebhookRouter,
 	workspace: workspaceEventsRouter,
-	github: githubWebhookRouter,
 });
 export type ListenerRouter = typeof listenerRouter;
 

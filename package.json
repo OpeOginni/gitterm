@@ -24,7 +24,7 @@
     "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
-    "dev:proxy": "turbo -F proxy dev:ngrok",
+    "dev:proxy": "turbo -F proxy dev",
     "dev:tunnel-agent": "turbo -F tunnel-agent dev",
     "dev:tunnel-proxy": "turbo -F tunnel-proxy dev",
     "dev:worker": "turbo -F worker dev",

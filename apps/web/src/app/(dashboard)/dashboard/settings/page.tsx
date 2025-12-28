@@ -27,7 +27,7 @@ export default async function SettingsPage() {
         heading="Settings" 
         text="Manage your account settings and preferences." 
       />
-      <div className="mx-auto max-w-4xl space-y-8">
+      <div className="pt-8 mx-auto max-w-4xl space-y-8">
         <BillingSection currentPlan={currentPlan} />
         <DeleteAccountSection />
       </div>

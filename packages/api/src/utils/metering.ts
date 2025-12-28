@@ -1,14 +1,28 @@
 import { db, eq, and, sql } from "@gitterm/db";
 import { dailyUsage, usageSession, workspace, type SessionStopSource } from "@gitterm/db/schema/workspace";
 import { logger } from "./logger";
-import { shouldEnforceQuota, shouldMeterUsage, getDailyMinuteQuota } from "../config/features";
+import { shouldEnforceQuota, shouldMeterUsage, getDailyMinuteQuotaAsync } from "../config/features";
 import { isSelfHosted } from "../config/deployment";
+import { getIdleTimeoutMinutes, getFreeTierDailyMinutes } from "../service/system-config";
 
-// Free tier: 60 minutes per day (only applies in managed mode)
+// Legacy constants - kept for backwards compatibility but should use getters below
+// These are now the DEFAULT values; actual values come from database
 export const FREE_TIER_DAILY_MINUTES = 60;
-// Idle timeout: 30 minutes of no heartbeat
-// Users can step away, read docs, think without losing workspace
 export const IDLE_TIMEOUT_MINUTES = 30;
+
+/**
+ * Get the configured idle timeout in minutes (from database)
+ */
+export async function getConfiguredIdleTimeout(): Promise<number> {
+  return getIdleTimeoutMinutes();
+}
+
+/**
+ * Get the configured free tier daily minutes (from database)
+ */
+export async function getConfiguredFreeTierMinutes(): Promise<number> {
+  return getFreeTierDailyMinutes();
+}
 
 /**
  * Get or create daily usage record for a user
@@ -23,7 +37,7 @@ export async function getOrCreateDailyUsage(userId: string, userPlan: "free" | "
     };
   }
 
-  const dailyQuota = getDailyMinuteQuota(userPlan);
+  const dailyQuota = await getDailyMinuteQuotaAsync(userPlan);
   
   // Paid plans have unlimited minutes
   if (dailyQuota === Infinity) {
@@ -196,9 +210,11 @@ export async function updateLastActive(workspaceId: string): Promise<void> {
 
 /**
  * Get workspaces that have been idle beyond the timeout
+ * Uses configurable idle timeout from database
  */
 export async function getIdleWorkspaces(): Promise<Array<{ id: string; externalInstanceId: string; userId: string; regionId: string }>> {
-  const idleThreshold = new Date(Date.now() - IDLE_TIMEOUT_MINUTES * 60 * 1000);
+  const idleTimeoutMinutes = await getConfiguredIdleTimeout();
+  const idleThreshold = new Date(Date.now() - idleTimeoutMinutes * 60 * 1000);
 
   const idleWorkspaces = await db
     .select({

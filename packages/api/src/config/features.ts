@@ -2,7 +2,9 @@
  * Feature Flags
  *
  * Centralized feature flags for controlling functionality based on deployment mode.
- * Features can be toggled via environment variables or derived from deployment mode.
+ * 
+ * Self-hosted mode: Simplified configuration with sensible defaults
+ * Managed mode: Full feature set with billing, quotas, etc.
  *
  * Usage:
  *   import { features, shouldEnforceQuota } from '@gitterm/api/config/features';
@@ -14,20 +16,24 @@
 
 import env from "@gitterm/env/server";
 import { isSelfHosted, isManaged } from "./deployment";
+import { getFreeTierDailyMinutes } from "../service/system-config";
 
 /**
  * Feature flags configuration
+ * 
+ * Self-hosted: Minimal flags exposed via env (ENABLE_QUOTA_ENFORCEMENT, ENABLE_IDLE_REAPING, etc.)
+ * Managed: Most features auto-enabled based on deployment mode
  */
 export const features = {
   /**
    * Enable billing/payment processing via Polar
-   * Only enabled in managed mode by default
+   * Only enabled in managed mode (no env flag - internal only)
    */
-  billing: env.ENABLE_BILLING || isManaged(),
+  billing: isManaged(),
 
   /**
    * Enable quota enforcement (daily usage limits)
-   * Only enabled in managed mode by default
+   * Configurable in both modes via ENABLE_QUOTA_ENFORCEMENT
    */
   quotaEnforcement: env.ENABLE_QUOTA_ENFORCEMENT || isManaged(),
 
@@ -39,27 +45,15 @@ export const features = {
 
   /**
    * Enable usage metering/tracking
-   * Enabled in managed mode for billing, optional in self-hosted
+   * Configurable in both modes, auto-enabled in managed for billing
    */
   usageMetering: env.ENABLE_USAGE_METERING || isManaged(),
 
   /**
    * Enable Discord notifications for new signups
-   * Only in managed mode by default
+   * Only in managed mode when Discord is configured (no env flag - internal only)
    */
-  discordNotifications: env.ENABLE_DISCORD_NOTIFICATIONS || isManaged(),
-
-  /**
-   * Enable multi-region support
-   * Typically only relevant for managed deployments with Railway
-   */
-  multiRegion: env.ENABLE_MULTI_REGION || isManaged(),
-
-  /**
-   * Enable custom subdomains for workspaces
-   * Can be enabled in both modes
-   */
-  customSubdomains: env.ENABLE_CUSTOM_SUBDOMAINS,
+  discordNotifications: isManaged() && !!env.DISCORD_TOKEN,
 
   /**
    * Enable local tunnels (like ngrok)
@@ -69,9 +63,9 @@ export const features = {
 
   /**
    * Enable GitHub OAuth provider
-   * Can be disabled for self-hosted if using email/password only
+   * Auto-detected from GITHUB_CLIENT_ID presence
    */
-  githubAuth: env.ENABLE_GITHUB_AUTH || !!env.GITHUB_CLIENT_ID,
+  githubAuth: !!env.GITHUB_CLIENT_ID,
 
   /**
    * Enable email/password authentication
@@ -128,8 +122,7 @@ export type UserPlan = "free" | "tunnel" | "pro" | "enterprise";
  * Plan features available for gating
  */
 export type PlanFeature =
-  | "tunnelSubdomain" // Custom subdomain for local tunnel connections
-  | "cloudSubdomain" // Custom subdomain for cloud workspaces
+  | "customSubdomain" // Custom subdomain for any workspace (local or cloud)
   | "cloudHosting" // Access to cloud-hosted workspaces
   | "unlimitedCloudMinutes" // No daily limit on cloud usage
   | "multiRegion" // Deploy to multiple regions
@@ -144,16 +137,14 @@ export type PlanFeature =
  *
  * | Feature              | Free  | Tunnel | Pro   | Enterprise |
  * |----------------------|-------|--------|-------|------------|
- * | tunnelSubdomain      | No    | Yes    | Yes   | Yes        |
- * | cloudSubdomain       | No    | No     | Yes   | Yes        |
+ * | customSubdomain      | No    | Yes    | Yes   | Yes        |
  * | cloudHosting         | Yes   | Yes    | Yes   | Yes        |
  * | unlimitedCloudMinutes| No    | No     | Yes   | Yes        |
  * | multiRegion          | No    | No     | Yes   | Yes        |
  * | prioritySupport      | No    | No     | No    | Yes        |
  */
 const PLAN_FEATURE_MATRIX: Record<PlanFeature, Record<UserPlan, boolean>> = {
-  tunnelSubdomain: { free: false, tunnel: true, pro: true, enterprise: true },
-  cloudSubdomain: { free: false, tunnel: false, pro: true, enterprise: true },
+  customSubdomain: { free: false, tunnel: true, pro: true, enterprise: true },
   cloudHosting: { free: true, tunnel: true, pro: true, enterprise: true },
   unlimitedCloudMinutes: { free: false, tunnel: false, pro: true, enterprise: true },
   multiRegion: { free: false, tunnel: false, pro: true, enterprise: true },
@@ -196,17 +187,27 @@ export const getDailyMinuteQuota = (plan: UserPlan): number => {
 };
 
 /**
- * Check if a plan can use tunnel subdomains
+ * Get daily minute quota for a plan (async version)
+ * Uses database config for free tier quota
+ * In self-hosted mode, returns Infinity (unlimited)
  */
-export const canUseTunnelSubdomain = (plan: UserPlan): boolean => {
-  return planHasFeature(plan, "tunnelSubdomain");
+export const getDailyMinuteQuotaAsync = async (plan: UserPlan): Promise<number> => {
+  if (isSelfHosted()) return Infinity;
+
+  // Pro and enterprise have unlimited
+  if (plan === "pro" || plan === "enterprise") {
+    return Infinity;
+  }
+
+  // Free and tunnel tiers use configurable quota from database
+  return getFreeTierDailyMinutes();
 };
 
 /**
- * Check if a plan can use cloud subdomains
+ * Check if a plan can use custom subdomains
  */
-export const canUseCloudSubdomain = (plan: UserPlan): boolean => {
-  return planHasFeature(plan, "cloudSubdomain");
+export const canUseCustomSubdomain = (plan: UserPlan): boolean => {
+  return planHasFeature(plan, "customSubdomain");
 };
 
 /**

@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, ArrowUpRight, Cloud, InfoIcon, Loader2, Plus, Terminal, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Cloud, Loader2, Plus, Terminal } from 'lucide-react';
 import { toast } from "sonner";
 import Image from "next/image";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -46,12 +46,11 @@ const getIcon = (name: string) => {
 };
 
 export function CreateInstanceDialog() {
-  const { data: session } = authClient.useSession();
-
   const [open, setOpen] = useState(false);
   const [workspaceType, setWorkspaceType] = useState<"cloud" | "local">("cloud");
   const [repoUrl, setRepoUrl] = useState("");
   const [localSubdomain, setLocalSubdomain] = useState("");
+  const [cloudSubdomain, setCloudSubdomain] = useState("");
   const [localName, setLocalName] = useState("");
   const [cliCommand, setCliCommand] = useState<string | null>(null);
   const [selectedAgentTypeId, setSelectedAgentTypeId] = useState<string>("");
@@ -63,6 +62,7 @@ export function CreateInstanceDialog() {
   const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
   const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
+  const { data: subdomainPermissions } = useQuery(trpc.workspace.getSubdomainPermissions.queryOptions());
 
   const localProvider = useMemo(() => {
     return cloudProvidersData?.cloudProviders?.find(
@@ -126,6 +126,7 @@ export function CreateInstanceDialog() {
   useEffect(() => {
     if (!open) {
       setCliCommand(null);
+      setCloudSubdomain("");
     }
   }, [open]); 
 
@@ -217,6 +218,7 @@ export function CreateInstanceDialog() {
       regionId: selectedRegion,
       gitInstallationId: selectedGitInstallationId === "none" ? undefined : selectedGitInstallationId,
       persistent: selectedPersistent,
+      subdomain: cloudSubdomain || undefined, // Include custom subdomain if provided
     });
   };
 
@@ -371,6 +373,27 @@ export function CreateInstanceDialog() {
                       className="bg-secondary/30 border-border/50 focus:border-accent"
                     />
                   </div>
+
+                  {subdomainPermissions?.canUseCustomSubdomain && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="cloud-subdomain" className="text-sm font-medium">
+                        Custom Subdomain <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Input
+                        id="cloud-subdomain"
+                        placeholder="my-workspace"
+                        value={cloudSubdomain}
+                        onChange={(e) => setCloudSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                        className="bg-secondary/30 border-border/50 focus:border-accent"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {cloudSubdomain 
+                          ? <>Your workspace will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(cloudSubdomain)}</span></>
+                          : "Leave empty for an auto-generated subdomain"
+                        }
+                      </p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">

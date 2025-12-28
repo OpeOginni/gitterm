@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Terminal, LayoutDashboard, Link2, BarChart3, User, LogOut, ChevronDown, Menu, X, Settings } from "lucide-react"
+import { Terminal, LayoutDashboard, Link2, BarChart3, User, LogOut, ChevronDown, Menu, X, Settings, Shield } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { authClient } from "@/lib/auth-client"
@@ -85,6 +85,17 @@ export function DashboardNav() {
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-48 border-border/50 bg-card">
+                    {(session?.user as any)?.role === "admin" && (
+                      <>
+                        <DropdownMenuItem asChild className="flex items-center gap-2 cursor-pointer">
+                          <Link href={"/admin" as Route}>
+                            <Shield className="h-4 w-4" />
+                            Admin Panel
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
                     <DropdownMenuItem asChild className="flex items-center gap-2 cursor-pointer">
                       <Link href={"/dashboard/settings" as Route}>
                         <Settings className="h-4 w-4" />
@@ -140,6 +151,16 @@ export function DashboardNav() {
               )
             })}
             <div className="pt-2 mt-2 border-t border-border/50">
+              {(session?.user as any)?.role === "admin" && (
+                <Link
+                  href={"/admin" as Route}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                >
+                  <Shield className="h-4 w-4" />
+                  Admin Panel
+                </Link>
+              )}
               <Link
                 href={"/dashboard/settings" as Route}
                 onClick={() => setMobileMenuOpen(false)}

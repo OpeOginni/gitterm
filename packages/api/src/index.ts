@@ -43,6 +43,28 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 /**
+ * Admin procedure - requires authenticated user with admin role
+ */
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+	// Check if user has admin role
+	const userRole = (ctx.session.user as any).role;
+	
+	if (userRole !== "admin") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Admin access required",
+		});
+	}
+	
+	return next({
+		ctx: {
+			...ctx,
+			session: ctx.session,
+		},
+	});
+});
+
+/**
  * Internal procedure for service-to-service communication
  * Requires INTERNAL_API_KEY in X-Internal-Key header
  */

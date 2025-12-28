@@ -77,10 +77,7 @@ const POLAR_PRODUCTS = [
     : []),
   ...(env.POLAR_PRO_PRODUCT_ID
     ? [{ productId: env.POLAR_PRO_PRODUCT_ID, slug: "pro" as const }]
-    : []),
-  ...(env.POLAR_ENTERPRISE_PRODUCT_ID
-    ? [{ productId: env.POLAR_ENTERPRISE_PRODUCT_ID, slug: "enterprise" as const }]
-    : []),
+    : [])
 ];
 
 // ============================================================================
@@ -136,6 +133,22 @@ export const auth = betterAuth({
         },
       }
     : undefined,
+  user: {
+    additionalFields: {
+      plan: {
+        type: ["free", "tunnel", "pro", "enterprise"],
+        required: false,
+        defaultValue: "free",
+        input: false, // don't allow user to set plan
+      },
+      role: {
+        type: ["user", "admin"],
+        required: false,
+        defaultValue: "user",
+        input: false, // don't allow user to set role
+      }
+    }
+  },
   advanced: {
     defaultCookieAttributes: isProduction()
       ? {

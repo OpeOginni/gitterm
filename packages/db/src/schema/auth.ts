@@ -1,6 +1,7 @@
 import { pgTable, text, timestamp, boolean, pgEnum } from "drizzle-orm/pg-core";
 
 export const userPlanEnum = pgEnum('user_plan', ['free', 'tunnel', 'pro', 'enterprise'] as const);
+export const userRoleEnum = pgEnum('user_role', ['user', 'admin'] as const);
 
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
@@ -10,8 +11,23 @@ export const user = pgTable("user", {
 	image: text("image"),
 	allowTrial: boolean("allow_trial").notNull().default(false),
 	plan: userPlanEnum("plan").notNull().default("free"),
+	role: userRoleEnum("role").notNull().default("user"),
 	createdAt: timestamp("created_at").notNull(),
 	updatedAt: timestamp("updated_at").notNull(),
+});
+
+/**
+ * System configuration table for storing runtime settings.
+ * Uses key-value pairs for flexibility.
+ * 
+ * Known keys:
+ * - "bootstrap_admin_email": The email of the admin created from ADMIN_EMAIL env var
+ */
+export const systemConfig = pgTable("system_config", {
+	key: text("key").primaryKey(),
+	value: text("value").notNull(),
+	createdAt: timestamp("created_at").notNull().defaultNow(),
+	updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const session = pgTable("session", {

@@ -9,8 +9,6 @@ import {
   z,
   parseEnv,
   deploymentMode,
-  providersList,
-  computeProvider,
   polarEnvironment,
   routingMode,
   optional,
@@ -24,8 +22,10 @@ const baseSchema = z.object({
 
   // Deployment
   DEPLOYMENT_MODE: deploymentMode,
-  ENABLED_PROVIDERS: providersList,
-  DEFAULT_PROVIDER: computeProvider.optional(),
+
+  // Admin bootstrap (for self-hosted)
+  ADMIN_EMAIL: optional,
+  ADMIN_PASSWORD: optional,
 
   // URLs
   BASE_URL: optional,
@@ -80,16 +80,11 @@ const baseSchema = z.object({
   DISCORD_TOKEN: optional,
   DISCORD_DM_CHANNEL_ID: optional,
 
-  // Feature flags
-  ENABLE_BILLING: boolWithDefault(false),
+  // Feature flags (for self-hosted customization)
   ENABLE_QUOTA_ENFORCEMENT: boolWithDefault(false),
   ENABLE_IDLE_REAPING: boolWithDefault(true),
   ENABLE_USAGE_METERING: boolWithDefault(false),
-  ENABLE_DISCORD_NOTIFICATIONS: boolWithDefault(false),
-  ENABLE_MULTI_REGION: boolWithDefault(false),
-  ENABLE_CUSTOM_SUBDOMAINS: boolWithDefault(true),
   ENABLE_LOCAL_TUNNELS: boolWithDefault(true),
-  ENABLE_GITHUB_AUTH: boolWithDefault(false),
   ENABLE_EMAIL_AUTH: boolWithDefault(true),
 // ... keep the z.object({ ... }) as-is ...
 }).superRefine((data, ctx) => {
@@ -114,26 +109,14 @@ const baseSchema = z.object({
     }
   }
 
-  // Railway provider requires Railway configuration
-  if (data.ENABLED_PROVIDERS.includes("railway")) {
-    if (!data.RAILWAY_API_TOKEN) {
-      errors.push({ path: "RAILWAY_API_TOKEN", message: "RAILWAY_API_TOKEN is required when Railway provider is enabled" });
-    }
-    if (!data.RAILWAY_PROJECT_ID) {
-      errors.push({ path: "RAILWAY_PROJECT_ID", message: "RAILWAY_PROJECT_ID is required when Railway provider is enabled" });
-    }
-    if (!data.RAILWAY_ENVIRONMENT_ID) {
-      errors.push({ path: "RAILWAY_ENVIRONMENT_ID", message: "RAILWAY_ENVIRONMENT_ID is required when Railway provider is enabled" });
-    }
-  }
+  // Railway provider requires Railway configuration when used
+  // Note: Railway config is optional - only needed if Railway provider is in the database
+  // Validation happens at runtime when trying to use Railway provider
 
-  // Discord notifications require Discord configuration
-  if (data.ENABLE_DISCORD_NOTIFICATIONS) {
-    if (!data.DISCORD_TOKEN) {
-      errors.push({ path: "DISCORD_TOKEN", message: "DISCORD_TOKEN is required when ENABLE_DISCORD_NOTIFICATIONS is true" });
-    }
+  // Discord notifications require Discord configuration (managed mode only)
+  if (data.DEPLOYMENT_MODE === "managed" && data.DISCORD_TOKEN) {
     if (!data.DISCORD_DM_CHANNEL_ID) {
-      errors.push({ path: "DISCORD_DM_CHANNEL_ID", message: "DISCORD_DM_CHANNEL_ID is required when ENABLE_DISCORD_NOTIFICATIONS is true" });
+      errors.push({ path: "DISCORD_DM_CHANNEL_ID", message: "DISCORD_DM_CHANNEL_ID is required when DISCORD_TOKEN is set" });
     }
   }
 
@@ -142,6 +125,13 @@ const baseSchema = z.object({
   const hasPrivateKey = !!data.GITHUB_APP_PRIVATE_KEY;
   if ((hasAppId && !hasPrivateKey) || (!hasAppId && hasPrivateKey)) {
     errors.push({ path: "GITHUB_APP_ID", message: "Both GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY must be set together (or neither)" });
+  }
+
+  // Admin credentials: either both or neither (for self-hosted bootstrap)
+  const hasAdminEmail = !!data.ADMIN_EMAIL;
+  const hasAdminPassword = !!data.ADMIN_PASSWORD;
+  if ((hasAdminEmail && !hasAdminPassword) || (!hasAdminEmail && hasAdminPassword)) {
+    errors.push({ path: "ADMIN_EMAIL", message: "Both ADMIN_EMAIL and ADMIN_PASSWORD must be set together (or neither)" });
   }
 
   for (const e of errors) {
@@ -161,10 +151,26 @@ export default env;
 // Helpers
 export const isManaged = () => env.DEPLOYMENT_MODE === "managed";
 export const isSelfHosted = () => env.DEPLOYMENT_MODE === "self-hosted";
-export const isProviderEnabled = (p: string) => env.ENABLED_PROVIDERS.includes(p);
-export const isBillingEnabled = () => env.ENABLE_BILLING || (isManaged() && !!env.POLAR_ACCESS_TOKEN);
-export const isGitHubAuthEnabled = () => env.ENABLE_GITHUB_AUTH || !!env.GITHUB_CLIENT_ID;
+export const isBillingEnabled = () => isManaged() && !!env.POLAR_ACCESS_TOKEN;
+export const isGitHubAuthEnabled = () => !!env.GITHUB_CLIENT_ID;
+export const isEmailAuthEnabled = () => env.ENABLE_EMAIL_AUTH;
 export const isSubdomainRouting = () => env.ROUTING_MODE === "subdomain";
 export const isPathRouting = () => env.ROUTING_MODE === "path";
+
+/**
+ * Check if admin bootstrap is configured and applicable.
+ * Admin bootstrap only applies when:
+ * - ADMIN_EMAIL and ADMIN_PASSWORD are both set
+ * - Email auth is enabled
+ * - GitHub auth is NOT enabled (otherwise use OAuth flow)
+ */
+export const hasAdminBootstrap = () => 
+  !!env.ADMIN_EMAIL && 
+  !!env.ADMIN_PASSWORD && 
+  isEmailAuthEnabled() && 
+  !isGitHubAuthEnabled();
+export const getAdminCredentials = () => hasAdminBootstrap() 
+  ? { email: env.ADMIN_EMAIL!, password: env.ADMIN_PASSWORD! }
+  : null;
 
 export { baseSchema as serverEnvSchema };

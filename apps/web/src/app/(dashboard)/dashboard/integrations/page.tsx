@@ -137,9 +137,11 @@ export default function IntegrationsPage() {
         text="Connect external services to enhance your workspace capabilities."
         className="mx-auto max-w-4xl"
       />
+      <div className="pt-8">
         <Suspense fallback={<div className="grid gap-8 max-w-4xl animate-pulse"><div className="h-64 bg-secondary/30 rounded-lg" /></div>}>
           <IntegrationsContent />
         </Suspense>
+      </div>
     </DashboardShell>
   )
 }

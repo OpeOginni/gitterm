@@ -12,9 +12,11 @@ const schema = z.object({
   PORT: port.default(3000),
 
   BASE_DOMAIN: z.string().default("gitterm.dev"),
-  DATABASE_URL: optional,
-  RAILWAY_PROJECT_ID: optional,
   CORS_ORIGIN: optional,
+
+  // Server communication (required for internal API calls)
+  SERVER_URL: optional,
+  INTERNAL_API_KEY: optional,
 });
 
 export type ListenerEnv = z.infer<typeof schema>;

@@ -1,14 +1,29 @@
 import z from "zod";
 import { publicProcedure, router } from "../../index";
-import { db, eq } from "@gitterm/db";
-import { workspace } from "@gitterm/db/schema/workspace";
 import { TRPCError } from "@trpc/server";
+import { createInternalClient } from "../../client/internal";
+import env from "@gitterm/env/listener";
 import {
 	WORKSPACE_STATUS_EVENT,
 	workspaceEventEmitter,
 	type WorkspaceStatusEvent,
 } from "../../events/workspace";
 import { on } from "node:events";
+
+// Create internal client for calling server
+const getClient = () => {
+  const serverUrl = env.SERVER_URL;
+  const apiKey = env.INTERNAL_API_KEY;
+  
+  if (!serverUrl || !apiKey) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Listener not configured: SERVER_URL or INTERNAL_API_KEY missing",
+    });
+  }
+  
+  return createInternalClient(serverUrl, apiKey);
+};
 
 export const workspaceEventsRouter = router({
 	status: publicProcedure
@@ -19,30 +34,50 @@ export const workspaceEventsRouter = router({
 			}),
 		)
 		.subscription(async function* ({ input, signal }) {
-			const [existing] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
-
-			if (!existing) {
+			// Validate workspace access via server's internal API
+			const client = getClient();
+			
+			let initialState: WorkspaceStatusEvent;
+			try {
+				const response = await client.internal.validateWorkspaceAccess.query({
+					workspaceId: input.workspaceId,
+					userId: input.userId,
+				});
+				
+				// Convert string date back to Date object (tRPC JSON serialization)
+				initialState = {
+					...response,
+					updatedAt: new Date(response.updatedAt),
+				};
+			} catch (error) {
+				if (error instanceof TRPCError) throw error;
+				
+				// Handle tRPC client errors
+				const trpcError = error as { data?: { code?: string }; message?: string };
+				if (trpcError.data?.code === "NOT_FOUND") {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Workspace not found",
+					});
+				}
+				if (trpcError.data?.code === "UNAUTHORIZED") {
+					throw new TRPCError({
+						code: "UNAUTHORIZED",
+						message: "You are not authorized to access this workspace",
+					});
+				}
+				
+				console.error("[listener] Failed to validate workspace access:", error);
 				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Workspace not found",
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Failed to validate workspace access",
 				});
 			}
 
-			if (existing.userId !== input.userId) {
-				throw new TRPCError({
-					code: "UNAUTHORIZED",
-					message: "You are not authorized to access this workspace",
-				});
-			}
+			// Yield initial state
+			yield initialState;
 
-			yield {
-				workspaceId: existing.id,
-				status: existing.status,
-				updatedAt: existing.updatedAt,
-				userId: existing.userId,
-				workspaceDomain: existing.domain,
-			} satisfies WorkspaceStatusEvent;
-
+			// Listen for status updates
 			const iterable = on(workspaceEventEmitter, WORKSPACE_STATUS_EVENT, {
 				signal,
 			}) as AsyncIterableIterator<[WorkspaceStatusEvent]>;
@@ -54,4 +89,3 @@ export const workspaceEventsRouter = router({
 			}
 		}),
 });
-

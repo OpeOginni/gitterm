@@ -7,10 +7,56 @@ import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
-import { IDLE_TIMEOUT_MINUTES, closeUsageSession } from "../../utils/metering";
+import { closeUsageSession, getConfiguredIdleTimeout, getConfiguredFreeTierMinutes } from "../../utils/metering";
 import { auth } from "@gitterm/auth";
 import { githubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { logger } from "../../utils/logger";
+
+// Railway webhook schema (moved from listener)
+const deploymentStatus = z.enum(["BUILDING", "DEPLOYING", "FAILED", "SUCCESS"]);
+const webhookType = z.enum(["Deployment.created", "Deployment.deploying", "Deployment.deployed", "Deployment.failed"]);
+const webhookSeverity = z.enum(["INFO", "WARNING", "ERROR"]);
+
+const railwayWebhookSchema = z.object({
+  type: webhookType,
+  severity: webhookSeverity,
+  timestamp: z.string(),
+  resource: z.object({
+    workspace: z.object({
+      id: z.string(),
+      name: z.string(),
+    }).optional(),
+    project: z.object({
+      id: z.string(),
+      name: z.string(),
+    }).optional(),
+    environment: z.object({
+      id: z.string(),
+      name: z.string(),
+      isEphemeral: z.boolean(),
+    }).optional(),
+    service: z.object({
+      id: z.string(),
+      name: z.string()
+    }).optional(),
+    deployment: z.object({
+      id: z.string().optional(),
+    }).optional(),
+  }).passthrough(),
+  details: z.object({
+    id: z.string().optional(),
+    source: z.string().optional(),
+    status: deploymentStatus.optional(),
+    builder: z.string().optional(),
+    providers: z.string().optional(),
+    serviceId: z.string().optional(),
+    imageSource: z.string().optional(),
+    branch: z.string().optional(),
+    commitHash: z.string().optional(),
+    commitAuthor: z.string().optional(),
+    commitMessage: z.string().optional(),
+  }).passthrough(),
+});
 
 /**
  * Internal router for service-to-service communication
@@ -74,7 +120,8 @@ export const internalRouter = router({
 
   // Get idle workspaces (for worker)
   getIdleWorkspaces: internalProcedure.query(async () => {
-    const idleThreshold = new Date(Date.now() - IDLE_TIMEOUT_MINUTES * 60 * 1000);
+    const idleTimeoutMinutes = await getConfiguredIdleTimeout();
+    const idleThreshold = new Date(Date.now() - idleTimeoutMinutes * 60 * 1000);
 
     const idleWorkspaces = await db
       .select({
@@ -138,9 +185,9 @@ export const internalRouter = router({
 
     // Filter workspaces where user has exceeded quota
     // If no usage record exists (null), they haven't exceeded (0 minutes used)
-    const FREE_TIER_DAILY_MINUTES = 60; // Import from metering if needed
+    const freeTierDailyMinutes = await getConfiguredFreeTierMinutes();
     const quotaExceededWorkspaces = workspacesWithUsage.filter(
-      ws => (ws.minutesUsed ?? 0) >= FREE_TIER_DAILY_MINUTES
+      ws => (ws.minutesUsed ?? 0) >= freeTierDailyMinutes
     );
 
     logger.info(`Found ${quotaExceededWorkspaces.length} workspaces with exceeded quota`, {
@@ -523,6 +570,100 @@ export const internalRouter = router({
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }
+    }),
+
+  // ============================================================================
+  // LISTENER ENDPOINTS
+  // These endpoints are called by the listener service to avoid direct DB access
+  // ============================================================================
+
+  /**
+   * Process Railway webhook
+   * Called by listener when it receives a Railway deployment webhook
+   */
+  processRailwayWebhook: internalProcedure
+    .input(railwayWebhookSchema)
+    .mutation(async ({ input }) => {
+      if (input.type === "Deployment.deployed" && input.details?.serviceId) {
+        const serviceId = input.details.serviceId;
+
+        const [railwayProvider] = await db.select().from(cloudProvider)
+          .where(eq(cloudProvider.name, "Railway"));
+
+        if (!railwayProvider) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Railway provider not found in database",
+          });
+        }
+
+        const updatedWorkspaces = await db.update(workspace).set({
+          status: "running",
+          updatedAt: new Date(input.timestamp),
+          externalRunningDeploymentId: input.resource.deployment?.id
+        }).where(and(
+          eq(workspace.cloudProviderId, railwayProvider.id),
+          eq(workspace.externalInstanceId, serviceId),
+          eq(workspace.status, "pending")
+        )).returning({
+          id: workspace.id,
+          status: workspace.status,
+          updatedAt: workspace.updatedAt,
+          userId: workspace.userId,
+          workspaceDomain: workspace.domain
+        });
+
+        // Emit status events for each updated workspace
+        for (const record of updatedWorkspaces) {
+          WORKSPACE_EVENTS.emitStatus({
+            workspaceId: record.id,
+            status: record.status,
+            updatedAt: record.updatedAt,
+            userId: record.userId,
+            workspaceDomain: record.workspaceDomain
+          });
+        }
+
+        return { updated: updatedWorkspaces.length };
+      }
+
+      return { updated: 0 };
+    }),
+
+  /**
+   * Validate workspace access for SSE subscription
+   * Returns workspace info if valid, throws if not found or unauthorized
+   */
+  validateWorkspaceAccess: internalProcedure
+    .input(z.object({
+      workspaceId: z.string(),
+      userId: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const [ws] = await db.select().from(workspace)
+        .where(eq(workspace.id, input.workspaceId));
+
+      if (!ws) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      if (ws.userId !== input.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "You are not authorized to access this workspace",
+        });
+      }
+
+      return {
+        workspaceId: ws.id,
+        status: ws.status,
+        updatedAt: ws.updatedAt,
+        userId: ws.userId,
+        workspaceDomain: ws.domain,
+      };
     }),
 });
 
