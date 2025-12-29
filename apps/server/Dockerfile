@@ -32,7 +32,6 @@ COPY --from=builder /app/packages/config ./packages/config
 
 # Copy built server output
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
-COPY --from=builder /app/apps/server/scripts ./apps/server/scripts
 COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
 
 # Copy entrypoint script

@@ -7,8 +7,9 @@
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
-    "start": "bun run dist/index.mjs",
-    "db:seed-admin": "bun run scripts/seed-admin.ts"
+    "start": "bun run dist/src/index.mjs",
+    "db:seed-admin": "bun run scripts/seed-admin.ts",
+    "db:seed-admin:prod": "bun run dist/scripts/seed-admin.mjs"
   },
   "dependencies": {
     "hono": "catalog:",
