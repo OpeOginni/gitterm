@@ -1,0 +1,193 @@
+{
+	# Global options
+	auto_https off
+	admin off
+
+	# Server options
+	servers {
+		protocols h1 h2
+	}
+}
+
+# UNIFIED RAILWAY ROUTING
+#
+# All services behind a single domain - no cross-origin issues.
+# Similar to local development (Caddyfile.local) but for Railway.
+#
+# URL Structure:
+# - /*              -> Web app (Next.js) - DEFAULT
+# - /api/*          -> API server
+# - /api/trpc/*     -> API server tRPC (strip /api prefix)
+# - /listener/*     -> Listener (SSE/tRPC)
+# - /tunnel/*       -> Tunnel-proxy (agent WebSocket connections)
+# - /ws/{subdomain}/* -> Workspace traffic (path-based routing)
+#
+# Environment Variables (with defaults for Railway internal networking):
+# - WEB_URL         -> web.railway.internal:8080 (Next.js)
+# - SERVER_URL      -> server.railway.internal:8080 (API)
+# - LISTENER_URL    -> listener.railway.internal:8080 (SSE)
+# - TUNNEL_PROXY_URL -> tunnel.railway.internal:8080 (Tunnel proxy)
+# - INTERNAL_API_KEY -> Shared key for internal API calls
+#
+# Railway Internal Networking:
+# All backend services use Railway's private networking (*.railway.internal)
+# Only the proxy service has a public URL.
+
+# Listen on port 80 for all requests
+:80 {
+	# Health check endpoint
+	handle /health {
+		header Content-Type application/json
+		respond `{"status":"UP"}` 200
+	}
+
+	# ============================================
+	# tRPC: /api/trpc/* -> SERVER_URL/trpc/*
+	# Strip /api prefix, keep /trpc
+	# ============================================
+	handle /api/trpc/* {
+		uri strip_prefix /api
+		reverse_proxy {$SERVER_URL:server.railway.internal:8080}
+	}
+
+	# ============================================
+	# API Server: /api/* -> SERVER_URL
+	# Keep /api prefix (server expects it for auth, device, agent routes)
+	# ============================================
+	handle /api/* {
+		reverse_proxy {$SERVER_URL:server.railway.internal:8080}
+	}
+
+	# ============================================
+	# Listener (SSE/tRPC): /listener/* -> LISTENER_URL
+	# Strip /listener prefix, forward as /trpc/*
+	# ============================================
+	handle_path /listener/* {
+		reverse_proxy {$LISTENER_URL:listener.railway.internal:8080}
+	}
+
+	# ============================================
+	# Tunnel-proxy WebSocket: /tunnel/* -> TUNNEL_PROXY_URL
+	# For agent connections only (not workspace traffic)
+	# ============================================
+	handle /tunnel/* {
+		reverse_proxy {$TUNNEL_PROXY_URL:tunnel.railway.internal:8080} {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+		}
+	}
+
+	# ============================================
+	# PATH-BASED WORKSPACE ROUTING: /ws/{subdomain}/*
+	# Routes workspace traffic to tunnel-proxy
+	# ============================================
+	handle /ws/* {
+		# Forward auth to API server (validates workspace exists and user has access)
+		forward_auth {$SERVER_URL:server.railway.internal:8080} {
+			uri /api/internal/proxy-resolve
+
+			# Copy select headers from auth response into request
+			copy_headers X-Tunnel-Type X-Workspace-ID X-User-ID X-Subdomain
+
+			# Copy original headers
+			header_up Host {host}
+			header_up X-Internal-Key {$INTERNAL_API_KEY}
+			header_up Cookie {header.Cookie}
+			header_up Authorization {header.Authorization}
+			header_up X-Original-URI {uri}
+			header_up X-Original-Method {method}
+			header_up X-Forwarded-For {remote_ip}
+			header_up X-Routing-Mode path
+		}
+
+		# Route to tunnel-proxy (handles both local tunnels and cloud workspaces in path mode)
+		reverse_proxy {$TUNNEL_PROXY_URL:tunnel.railway.internal:8080} {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+
+			# Standard proxy headers
+			header_up Host {host}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up X-User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+			header_up X-Subdomain {header.X-Subdomain}
+			header_up X-Tunnel-Type {header.X-Tunnel-Type}
+			header_up X-Routing-Mode path
+
+			transport http {
+				compression off
+				dial_timeout 10s
+				response_header_timeout 0
+				expect_continue_timeout 0
+				keepalive 2m
+				keepalive_idle_conns 10
+				read_buffer 32768
+				write_buffer 32768
+			}
+
+			# Intercept upstream error responses and show nice error pages
+			@unavailable status 401 403 404 503
+			handle_response @unavailable {
+				root * /srv/errors
+				rewrite * /unavailable.html
+				file_server
+			}
+
+			@server_error status 500 502 504
+			handle_response @server_error {
+				root * /srv/errors
+				rewrite * /error.html
+				file_server
+			}
+		}
+	}
+
+	# ============================================
+	# Default: Everything else -> Web App (Next.js)
+	# This is the fallback, so frontend is at root
+	# ============================================
+	handle {
+		reverse_proxy {$WEB_URL:web.railway.internal:8080}
+	}
+
+	# Error handling with nice HTML pages
+	handle_errors {
+		@unavailable expression {err.status_code} == 401 || {err.status_code} == 403 || {err.status_code} == 404
+		handle @unavailable {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /unavailable.html
+			file_server
+		}
+
+		@server_error expression {err.status_code} >= 500
+		handle @server_error {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /error.html
+			file_server
+		}
+
+		@bad_request expression {err.status_code} == 400
+		handle @bad_request {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /error.html
+			file_server
+		}
+
+		handle {
+			header Content-Type text/html
+			root * /srv/errors
+			rewrite * /error.html
+			file_server
+		}
+	}
+}
