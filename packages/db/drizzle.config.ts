@@ -14,6 +14,7 @@ if (!process.env.DATABASE_URL) {
 	throw new Error("DATABASE_URL environment variable is required");
 }
 
+console.log("DATABASE_URL", process.env.DATABASE_URL);
 export default defineConfig({
 	schema: "./src/schema",
 	out: "./src/migrations",

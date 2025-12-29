@@ -5,5 +5,6 @@ export default defineConfig({
 	format: "esm",
 	outDir: "./dist",
 	clean: true,
-	noExternal: [/@gitterm\/.*/],
+	// Bundle all dependencies
+	noExternal: [/.*/],
 });
