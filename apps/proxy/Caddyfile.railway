@@ -1,0 +1,153 @@
+{
+	# Global options
+	auto_https off
+	admin off
+
+	# Enable debug logging to see what's happening
+	log {
+		level DEBUG
+	}
+
+	# Server options
+	servers {
+		protocols h1 h2
+	}
+}
+
+# UNIFIED RAILWAY ROUTING
+#
+# All services behind a single domain - no cross-origin issues.
+# Similar to local development (Caddyfile.local) but for Railway.
+#
+# URL Structure:
+# - /*              -> Web app (Next.js) - DEFAULT
+# - /api/*          -> API server
+# - /api/trpc/*     -> API server tRPC (strip /api prefix)
+# - /listener/*     -> Listener (SSE/tRPC)
+# - /tunnel/*       -> Tunnel-proxy (agent WebSocket connections)
+# - /ws/{subdomain}/* -> Workspace traffic (path-based routing)
+#
+# Environment Variables:
+# - WEB_URL         -> e.g., web.railway.internal:8080 or public URL
+# - SERVER_URL      -> e.g., server.railway.internal:8080 or public URL  
+# - LISTENER_URL    -> e.g., listener.railway.internal:8080 or public URL
+# - TUNNEL_PROXY_URL -> e.g., tunnel.railway.internal:8080 or public URL
+# - INTERNAL_API_KEY -> Shared key for internal API calls
+#
+# IMPORTANT: For Railway internal networking, service names must match exactly.
+# The format is: <service-name>.railway.internal (no port needed for internal)
+
+:80 {
+	# Health check endpoint
+	handle /health {
+		header Content-Type application/json
+		respond `{"status":"UP","mode":"railway"}` 200
+	}
+
+	# ============================================
+	# tRPC: /api/trpc/* -> SERVER_URL/trpc/*
+	# Strip /api prefix, keep /trpc
+	# ============================================
+	handle /api/trpc/* {
+		uri strip_prefix /api
+		reverse_proxy {$SERVER_URL}
+	}
+
+	# ============================================
+	# API Server: /api/* -> SERVER_URL
+	# Keep /api prefix (server expects it for auth, device, agent routes)
+	# ============================================
+	handle /api/* {
+		reverse_proxy {$SERVER_URL}
+	}
+
+	# ============================================
+	# Listener (SSE/tRPC): /listener/* -> LISTENER_URL
+	# Strip /listener prefix
+	# ============================================
+	handle_path /listener/* {
+		reverse_proxy {$LISTENER_URL}
+	}
+
+	# ============================================
+	# Tunnel-proxy WebSocket: /tunnel/* -> TUNNEL_PROXY_URL
+	# For agent connections only (not workspace traffic)
+	# ============================================
+	handle /tunnel/* {
+		reverse_proxy {$TUNNEL_PROXY_URL} {
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+		}
+	}
+
+	# ============================================
+	# PATH-BASED WORKSPACE ROUTING: /ws/{subdomain}/*
+	# Routes workspace traffic to tunnel-proxy
+	# ============================================
+	handle /ws/* {
+		# Forward auth to API server (validates workspace exists and user has access)
+		forward_auth {$SERVER_URL} {
+			uri /api/internal/proxy-resolve
+
+			copy_headers X-Tunnel-Type X-Workspace-ID X-User-ID X-Subdomain
+
+			header_up Host {host}
+			header_up X-Internal-Key {$INTERNAL_API_KEY}
+			header_up Cookie {header.Cookie}
+			header_up Authorization {header.Authorization}
+			header_up X-Original-URI {uri}
+			header_up X-Original-Method {method}
+			header_up X-Forwarded-For {remote_ip}
+			header_up X-Routing-Mode path
+		}
+
+		reverse_proxy {$TUNNEL_PROXY_URL} {
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+
+			header_up Host {host}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up X-User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+			header_up X-Subdomain {header.X-Subdomain}
+			header_up X-Tunnel-Type {header.X-Tunnel-Type}
+			header_up X-Routing-Mode path
+
+			transport http {
+				compression off
+				dial_timeout 10s
+				response_header_timeout 0
+				expect_continue_timeout 0
+				keepalive 2m
+				keepalive_idle_conns 10
+			}
+		}
+	}
+
+	# ============================================
+	# Default: Everything else -> Web App (Next.js)
+	# This MUST be last - it's the fallback for all unmatched routes
+	# ============================================
+	handle {
+		reverse_proxy {$WEB_URL}
+	}
+
+	# Error handling
+	handle_errors {
+		@502_503 expression {err.status_code} == 502 || {err.status_code} == 503
+		handle @502_503 {
+			header Content-Type text/html
+			respond "Upstream unavailable - check WEB_URL, SERVER_URL env vars" 503
+		}
+
+		handle {
+			header Content-Type text/html
+			respond "Error {err.status_code}" {err.status_code}
+		}
+	}
+}
