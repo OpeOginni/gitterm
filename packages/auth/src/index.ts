@@ -31,21 +31,6 @@ function inferBaseUrlOrigin(): string {
   return `${isLocal ? "http" : "https"}://${env.BASE_DOMAIN}`;
 }
 
-/**
- * Get the web app URL for redirects after OAuth
- * This ensures users are redirected to the web app, not the API server
- */
-function getWebAppUrl(): string {
-  if (env.WEB_URL) {
-    return env.WEB_URL;
-  }
-  
-  // Derive from BASE_DOMAIN
-  const isLocal =
-    env.BASE_DOMAIN.includes("localhost") || env.BASE_DOMAIN.includes("127.0.0.1");
-  return `${isLocal ? "http" : "https"}://${env.BASE_DOMAIN}`;
-}
-
 // ============================================================================
 // Plan Types and Product Mapping
 // ============================================================================
@@ -142,12 +127,9 @@ export const auth = betterAuth({
         github: {
           clientId: env.GITHUB_CLIENT_ID!,
           clientSecret: env.GITHUB_CLIENT_SECRET!,
-          redirectURI: `${inferBaseUrlOrigin()}${AUTH_BASE_PATH}/callback/github`,
         },
       }
     : undefined,
-  // Redirect to web app after successful auth (not the API server)
-  redirectTo: `${getWebAppUrl()}/dashboard`,
   user: {
     additionalFields: {
       plan: {

@@ -12,9 +12,11 @@ interface AuthFormProps {
 export function AuthForm({ redirectUrl }: AuthFormProps) {
   const { isPending } = authClient.useSession();
 
-  const callbackURL = redirectUrl
-    ? `https://${env.NEXT_PUBLIC_BASE_DOMAIN}${redirectUrl}`
-    : `/dashboard`;
+  const webOrigin = `https://${env.NEXT_PUBLIC_BASE_DOMAIN}`;
+  const callbackURL = new URL(
+    redirectUrl && redirectUrl.startsWith("/") ? redirectUrl : "/dashboard",
+    webOrigin
+  ).toString();
 
   return (
     <div className="flex flex-col items-center space-y-4">
