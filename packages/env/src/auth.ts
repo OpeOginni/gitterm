@@ -30,6 +30,7 @@ const schema = z.object({
   // GitHub
   GITHUB_CLIENT_ID: optional,
   GITHUB_CLIENT_SECRET: optional,
+  ENABLE_GITHUB_AUTH: boolWithDefault(false),
 
   // Polar
   POLAR_ACCESS_TOKEN: optional,
@@ -39,6 +40,11 @@ const schema = z.object({
   POLAR_PRO_PRODUCT_ID: optional,
 
   ENABLE_BILLING: boolWithDefault(false),
+  
+  // Auth cookie configuration
+  // Set to true when web and server are on different domains (e.g., separate Railway services)
+  // Default false assumes same domain (behind Caddy/reverse proxy)
+  SPLIT_DOMAIN_AUTH: boolWithDefault(false),
 });
 
 export type AuthEnv = z.infer<typeof schema>;
@@ -51,6 +57,7 @@ export const isProduction = () =>
   env.NODE_ENV === "production" || env.RAILWAY_ENVIRONMENT === "production";
 export const isBillingEnabled = () =>
   (env.ENABLE_BILLING || isManaged()) && !!env.POLAR_ACCESS_TOKEN;
-export const isGitHubAuthEnabled = () => !!env.GITHUB_CLIENT_ID;
+export const isGitHubAuthEnabled = () => env.ENABLE_GITHUB_AUTH;
+export const isSplitDomainAuth = () => env.SPLIT_DOMAIN_AUTH;
 
 export { schema as authEnvSchema };

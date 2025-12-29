@@ -86,6 +86,11 @@ const baseSchema = z.object({
   ENABLE_LOCAL_TUNNELS: boolWithDefault(true),
   ENABLE_EMAIL_AUTH: boolWithDefault(true),
   ENABLE_GITHUB_AUTH: boolWithDefault(false),
+  
+  // Auth cookie configuration
+  // Set to true when web and server are on different domains (e.g., separate Railway services)
+  // Default false assumes same domain (behind Caddy/reverse proxy)
+  SPLIT_DOMAIN_AUTH: boolWithDefault(false),
 // ... keep the z.object({ ... }) as-is ...
 }).superRefine((data, ctx) => {
   const errors: { path: string; message: string }[] = [];
@@ -161,6 +166,7 @@ export const isSelfHosted = () => env.DEPLOYMENT_MODE === "self-hosted";
 export const isBillingEnabled = () => isManaged() && !!env.POLAR_ACCESS_TOKEN;
 export const isGitHubAuthEnabled = () => env.ENABLE_GITHUB_AUTH;
 export const isEmailAuthEnabled = () => env.ENABLE_EMAIL_AUTH;
+export const isSplitDomainAuth = () => env.SPLIT_DOMAIN_AUTH;
 export const isSubdomainRouting = () => env.ROUTING_MODE === "subdomain";
 export const isPathRouting = () => env.ROUTING_MODE === "path";
 

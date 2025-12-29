@@ -6,7 +6,7 @@ import { nextCookies } from "better-auth/next-js";
 import { Polar } from "@polar-sh/sdk";
 import { polar, checkout, portal, usage, webhooks } from "@polar-sh/better-auth";
 import { eq } from "drizzle-orm";
-import env, { isProduction, isBillingEnabled as checkBillingEnabled, isGitHubAuthEnabled } from "@gitterm/env/auth";
+import env, { isProduction, isBillingEnabled as checkBillingEnabled, isGitHubAuthEnabled, isSplitDomainAuth } from "@gitterm/env/auth";
 
 // ============================================================================
 // Environment Configuration
@@ -116,7 +116,10 @@ export const auth = betterAuth({
     schema: schema,
   }),
   trustedOrigins: env.CORS_ORIGIN ? [env.CORS_ORIGIN] : undefined,
-  crossSubDomainCookies: isProduction()
+  // Only enable cross-subdomain cookies when NOT using split domains
+  // Split domain mode: web and server on different domains (e.g., separate Railway services)
+  // Same domain mode: web and server behind same reverse proxy (e.g., Caddy on gitterm.dev)
+  crossSubDomainCookies: isProduction() && !isSplitDomainAuth()
     ? { enabled: true, domain: SUBDOMAIN_DOMAIN }
     : undefined,
   emailAndPassword: {
@@ -148,14 +151,23 @@ export const auth = betterAuth({
   },
   advanced: {
     defaultCookieAttributes: isProduction()
-      ? {
-          secure: true,
-          httpOnly: true,
-          sameSite: "none",
-          partitioned: true,
-          domain: SUBDOMAIN_DOMAIN,
-        }
+      ? isSplitDomainAuth()
+        ? {
+            // Split domains: no domain restriction, works cross-origin
+            secure: true,
+            httpOnly: true,
+            sameSite: "none",
+          }
+        : {
+            // Same domain: cross-subdomain cookies with domain restriction
+            secure: true,
+            httpOnly: true,
+            sameSite: "none",
+            partitioned: true,
+            domain: SUBDOMAIN_DOMAIN,
+          }
       : {
+          // Development
           sameSite: "lax",
           secure: false,
           httpOnly: true,
