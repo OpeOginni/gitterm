@@ -41,6 +41,7 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
           email,
           password,
           name: name || email.split("@")[0],
+          callbackURL,
         });
         if (result.error) {
           setError(result.error.message || "Failed to sign up");
@@ -50,14 +51,13 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
         const result = await authClient.signIn.email({
           email,
           password,
+          callbackURL,
         });
         if (result.error) {
           setError(result.error.message || "Failed to sign in");
           return;
         }
       }
-      // Redirect on success
-      window.location.href = callbackURL;
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
