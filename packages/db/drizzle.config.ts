@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
+import dotenv from "dotenv";
 import { defineConfig } from "drizzle-kit";
 
 // Load from server .env in development only if file exists and DATABASE_URL is not already set
 if (!process.env.DATABASE_URL) {
 	const envPath = "../../apps/server/.env";
 	if (existsSync(envPath)) {
-		const dotenv = await import("dotenv");
 		dotenv.config({ path: envPath });
 	}
 }
