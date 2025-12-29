@@ -161,8 +161,13 @@ export const isSelfHosted = () => env.DEPLOYMENT_MODE === "self-hosted";
 export const isBillingEnabled = () => isManaged() && !!env.POLAR_ACCESS_TOKEN;
 export const isGitHubAuthEnabled = () => env.ENABLE_GITHUB_AUTH;
 export const isEmailAuthEnabled = () => env.ENABLE_EMAIL_AUTH;
-export const isSubdomainRouting = () => env.ROUTING_MODE === "subdomain";
-export const isPathRouting = () => env.ROUTING_MODE === "path";
+// For routing mode:
+// - Managed deployments always use subdomain routing (wildcard DNS required)
+// - Self-hosted uses whatever ROUTING_MODE is set (defaults to path)
+export const isSubdomainRouting = () => 
+  env.ROUTING_MODE === "subdomain" || env.DEPLOYMENT_MODE === "managed";
+export const isPathRouting = () => 
+  env.ROUTING_MODE === "path" && env.DEPLOYMENT_MODE !== "managed";
 
 /**
  * Check if admin bootstrap is configured and applicable.
