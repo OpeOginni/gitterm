@@ -4,31 +4,26 @@ FROM oven/bun:1.3 AS builder
 WORKDIR /app
 
 # Copy root package files for workspace resolution
-COPY package.json bun.lock ./
+COPY package.json bun.lock turbo.json ./
 COPY packages ./packages
 COPY apps ./apps
 
 # Install dependencies
 RUN bun install --frozen-lockfile
 
-# Build the app
-WORKDIR /app/apps/listener
-RUN bun run build
+# Build using turbo for proper workspace/catalog resolution
+RUN bun run turbo build --filter=listener
 
 # Production stage
 FROM oven/bun:1.3-slim AS runner
 
 WORKDIR /app
 
-# Copy built output and production dependencies
+# Copy built listener output only
 COPY --from=builder /app/apps/listener/dist ./dist
-COPY --from=builder /app/apps/listener/package.json ./
-
-# Install only production dependencies
-RUN bun install --production --frozen-lockfile || true
 
 # Expose port (configurable via PORT env)
-EXPOSE 3003
+EXPOSE 8080
 
 # Run the app
 CMD ["bun", "run", "dist/index.mjs"]

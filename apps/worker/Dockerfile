@@ -4,28 +4,23 @@ FROM oven/bun:1.3 AS builder
 WORKDIR /app
 
 # Copy root package files for workspace resolution
-COPY package.json bun.lock ./
+COPY package.json bun.lock turbo.json ./
 COPY packages ./packages
 COPY apps ./apps
 
 # Install dependencies
 RUN bun install --frozen-lockfile
 
-# Build the app
-WORKDIR /app/apps/worker
-RUN bun run build
+# Build using turbo for proper workspace/catalog resolution
+RUN bun run turbo build --filter=worker
 
 # Production stage
 FROM oven/bun:1.3-slim AS runner
 
 WORKDIR /app
 
-# Copy built output and production dependencies
+# Copy built worker output only
 COPY --from=builder /app/apps/worker/dist ./dist
-COPY --from=builder /app/apps/worker/package.json ./
-
-# Install only production dependencies
-RUN bun install --production --frozen-lockfile || true
 
 # Default to idle-reaper (can be overridden to run daily-reset.mjs)
 CMD ["bun", "run", "dist/idle-reaper.mjs"]

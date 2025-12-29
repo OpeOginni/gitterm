@@ -4,28 +4,30 @@ FROM oven/bun:1.3 AS builder
 WORKDIR /app
 
 # Copy root package files for workspace resolution
-COPY package.json bun.lock ./
+COPY package.json bun.lock turbo.json ./
 COPY packages ./packages
 COPY apps ./apps
 
 # Install dependencies
 RUN bun install --frozen-lockfile
 
-# Build the server app
-WORKDIR /app/apps/server
-RUN bun run build
+# Build using turbo for proper workspace/catalog resolution
+RUN bun run turbo build --filter=server
 
 # Production stage
 FROM oven/bun:1.3-slim AS runner
 
 WORKDIR /app
 
-# Copy root package files and install dependencies
+# Copy root package files and node_modules
 COPY --from=builder /app/package.json /app/bun.lock ./
 COPY --from=builder /app/node_modules ./node_modules
 
-# Copy packages (needed for db scripts, auth, etc.)
-COPY --from=builder /app/packages ./packages
+# Copy only packages needed for db scripts (auth, db, env, config)
+COPY --from=builder /app/packages/db ./packages/db
+COPY --from=builder /app/packages/auth ./packages/auth
+COPY --from=builder /app/packages/env ./packages/env
+COPY --from=builder /app/packages/config ./packages/config
 
 # Copy built server output
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
@@ -36,7 +38,7 @@ COPY --from=builder /app/apps/server/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
 # Expose port (configurable via PORT env)
-EXPOSE 3000
+EXPOSE 8080
 
 # ============================================================================
 # Railway Pre-deploy commands:

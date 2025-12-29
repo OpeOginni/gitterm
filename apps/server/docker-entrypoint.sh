@@ -7,4 +7,4 @@ set -e
 #   bun run /app/dist/seed.mjs
 
 echo "[entrypoint] Starting server..."
-exec bun run /app/dist/index.mjs
+exec bun run /app/server/dist/index.mjs
