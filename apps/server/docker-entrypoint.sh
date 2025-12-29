@@ -1,18 +1,16 @@
 #!/bin/sh
 set -e
 
-# Server entrypoint - just starts the server
-# Migrations and seeding should be run via Railway pre-deploy commands:
-#   bun run /app/dist/migrate.mjs
-#   bun run /app/dist/seed.mjs
-
-echo "[entrypoint] Starting server..."
-
-cd /packages/db
+echo "[entrypoint] Running migrations..."
+cd /app/packages/db
 bun run db:migrate
+
+echo "[entrypoint] Running seed..."
 bun run db:seed
+
+echo "[entrypoint] Running admin seed..."
 bun run db:seed-admin
 
-cd ..
-cd ..
-exec bun run /apps/server/dist/index.mjs
+echo "[entrypoint] Starting server..."
+cd /app/apps/server
+exec bun run dist/index.mjs
