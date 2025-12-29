@@ -27,6 +27,10 @@ const schema = z.object({
   BETTER_AUTH_URL: optional,
   CORS_ORIGIN: optional,
 
+  // Web app URL for redirects after OAuth (e.g., https://app.gitterm.dev)
+  // If not set, derived from BASE_DOMAIN
+  WEB_URL: optional,
+
   // GitHub
   GITHUB_CLIENT_ID: optional,
   GITHUB_CLIENT_SECRET: optional,
