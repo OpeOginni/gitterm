@@ -14,6 +14,7 @@
     "@gitterm/redis": "workspace:*",
     "@gitterm/env": "workspace:*",
     "@trpc/client": "catalog:",
+    "@trpc/server": "catalog:",
     "dotenv": "catalog:",
     "hono": "catalog:",
     "jsonwebtoken": "^9.0.2",

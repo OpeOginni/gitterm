@@ -1,24 +1,27 @@
 #!/bin/sh
 set -e
 
-# Run database migrations and seed for self-hosted deployments
-# Skip if DEPLOYMENT_MODE is not "self-hosted" or if explicitly disabled
-if [ "$DEPLOYMENT_MODE" = "self-hosted" ]; then
-    echo "[entrypoint] Self-hosted mode detected"
-    
-    # Run migrations unless disabled
-    if [ "$RUN_MIGRATIONS" != "false" ]; then
-        echo "[entrypoint] Running database migrations..."
-        bun run /app/dist/migrate.mjs || echo "[entrypoint] Migration failed or already up to date"
-    fi
-    
-    # Run seed unless disabled
-    if [ "$RUN_SEED" != "false" ]; then
-        echo "[entrypoint] Running database seed..."
-        bun run /app/dist/seed.mjs || echo "[entrypoint] Seed failed or already seeded"
-    fi
-else
-    echo "[entrypoint] Managed mode - skipping database bootstrap"
+# NOTE:
+# We intentionally do NOT run migrations/seeding automatically on container startup.
+# - For managed platforms (e.g. Railway), run migrations in a pre-deploy step.
+# - For self-hosted Docker, run these as one-off commands when you choose.
+#
+# Available bundled scripts inside this image:
+#   bun run /app/dist/migrate.mjs
+#   bun run /app/dist/seed.mjs
+#
+# Optional (manual) behavior:
+#   RUN_MIGRATIONS=true  -> runs migrate script before starting
+#   RUN_SEED=true        -> runs seed script before starting
+
+if [ "$RUN_MIGRATIONS" = "true" ]; then
+    echo "[entrypoint] RUN_MIGRATIONS=true - running database migrations..."
+    bun run /app/dist/migrate.mjs
+fi
+
+if [ "$RUN_SEED" = "true" ]; then
+    echo "[entrypoint] RUN_SEED=true - running database seed..."
+    bun run /app/dist/seed.mjs
 fi
 
 # Start the server

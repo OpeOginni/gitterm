@@ -57,6 +57,7 @@
         "dotenv": "catalog:",
         "drizzle-orm": "^0.44.2",
         "hono": "catalog:",
+        "pg": "^8.14.1",
         "postgres": "^3.4.5",
         "zod": "catalog:",
       },
@@ -74,6 +75,7 @@
         "@gitterm/env": "workspace:*",
         "@gitterm/redis": "workspace:*",
         "@trpc/client": "catalog:",
+        "@trpc/server": "catalog:",
         "dotenv": "catalog:",
         "hono": "catalog:",
         "jsonwebtoken": "^9.0.2",
@@ -143,6 +145,7 @@
       "dependencies": {
         "@gitterm/api": "workspace:*",
         "@trpc/client": "catalog:",
+        "@trpc/server": "catalog:",
         "dotenv": "catalog:",
       },
       "devDependencies": {

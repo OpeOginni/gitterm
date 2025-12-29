@@ -37,5 +37,5 @@ RUN chmod +x docker-entrypoint.sh
 # Expose port (configurable via PORT env)
 EXPOSE 3000
 
-# Use entrypoint for database bootstrap
+# Use entrypoint to start the server (migrations/seeding are intentionally manual / pre-deploy)
 ENTRYPOINT ["./docker-entrypoint.sh"]
