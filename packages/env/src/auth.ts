@@ -59,12 +59,11 @@ export const isProduction = () =>
 export const isBillingEnabled = () =>
   (env.ENABLE_BILLING || isManaged()) && !!env.POLAR_ACCESS_TOKEN;
 export const isGitHubAuthEnabled = () => env.ENABLE_GITHUB_AUTH;
-// For routing mode:
-// - Managed deployments always use subdomain routing (wildcard DNS required)
-// - Self-hosted uses whatever ROUTING_MODE is set (defaults to path)
-export const isSubdomainRouting = () => 
-  env.ROUTING_MODE === "subdomain" || env.DEPLOYMENT_MODE === "managed";
+// Path routing is only enabled when EXPLICITLY set to "path" 
+// AND not in managed mode (managed always uses subdomain)
+// Default behavior (no ROUTING_MODE set) uses subdomain/cross-subdomain cookies
 export const isPathRouting = () => 
   env.ROUTING_MODE === "path" && env.DEPLOYMENT_MODE !== "managed";
+export const isSubdomainRouting = () => !isPathRouting();
 
 export { schema as authEnvSchema };

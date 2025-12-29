@@ -6,7 +6,7 @@ import { nextCookies } from "better-auth/next-js";
 import { Polar } from "@polar-sh/sdk";
 import { polar, checkout, portal, usage, webhooks } from "@polar-sh/better-auth";
 import { eq } from "drizzle-orm";
-import env, { isProduction, isBillingEnabled as checkBillingEnabled, isGitHubAuthEnabled, isSubdomainRouting } from "@gitterm/env/auth";
+import env, { isProduction, isBillingEnabled as checkBillingEnabled, isGitHubAuthEnabled, isPathRouting } from "@gitterm/env/auth";
 
 // ============================================================================
 // Environment Configuration
@@ -116,9 +116,9 @@ export const auth = betterAuth({
     schema: schema,
   }),
   trustedOrigins: env.CORS_ORIGIN ? [env.CORS_ORIGIN] : undefined,
-  // Cross-subdomain cookies only needed for subdomain routing (*.gitterm.dev)
-  // Path routing (Railway unified / self-hosted) uses standard same-origin cookies
-  crossSubDomainCookies: isProduction() && isSubdomainRouting()
+  // Cross-subdomain cookies for production (works for both managed and self-hosted behind Caddy)
+  // Only disabled when explicitly using path routing mode
+  crossSubDomainCookies: isProduction() && !isPathRouting()
     ? { enabled: true, domain: SUBDOMAIN_DOMAIN }
     : undefined,
   emailAndPassword: {
@@ -150,20 +150,20 @@ export const auth = betterAuth({
   },
   advanced: {
     defaultCookieAttributes: isProduction()
-      ? isSubdomainRouting()
+      ? isPathRouting()
         ? {
-            // Subdomain routing: cross-subdomain cookies for *.gitterm.dev
+            // Path routing: standard same-origin cookies (unified Railway template)
+            secure: true,
+            httpOnly: true,
+            sameSite: "lax",
+          }
+        : {
+            // Default (subdomain/managed): cross-subdomain cookies
             secure: true,
             httpOnly: true,
             sameSite: "none",
             partitioned: true,
             domain: SUBDOMAIN_DOMAIN,
-          }
-        : {
-            // Path routing: standard same-origin cookies (Railway unified / self-hosted)
-            secure: true,
-            httpOnly: true,
-            sameSite: "lax",
           }
       : {
           // Development

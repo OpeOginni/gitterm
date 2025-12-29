@@ -71,7 +71,7 @@ export type DeploymentMode = z.infer<typeof deploymentMode>;
 export const polarEnvironment = z.enum(["sandbox", "production"]).default("sandbox");
 export type PolarEnvironment = z.infer<typeof polarEnvironment>;
 
-export const routingMode = z.enum(["path", "subdomain"]).default("path");
+export const routingMode = z.enum(["path", "subdomain"]).default("subdomain");
 export type RoutingMode = z.infer<typeof routingMode>;
 
 export const computeProvider = z.enum(["railway", "local", "docker", "kubernetes"]);
