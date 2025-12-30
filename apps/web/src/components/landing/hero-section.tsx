@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Play } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { TerminalDemo } from "@/components/landing/terminal-demo"
 import Link from "next/link"
 
@@ -34,6 +34,12 @@ export function HeroSection() {
               <Link href="/dashboard">
                 <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
                   Start Building
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="https://github.com/OpeOginni/gitterm" target="_blank">
+                <Button size="lg" variant="outline" className="border-border text-foreground hover:bg-secondary bg-transparent">
+                  Source Code
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
