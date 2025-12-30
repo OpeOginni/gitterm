@@ -6,7 +6,7 @@ Currently supports: **OpenCode**.
 
 > **Note:** This README covers self-hosting GitTerm. For the managed service, visit [gitterm.dev](https://gitterm.dev).
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/9_5Q4C?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 ## What is GitTerm?
 

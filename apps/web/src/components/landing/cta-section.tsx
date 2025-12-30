@@ -33,7 +33,7 @@ export function CTASection() {
         <div className="mt-6">
           <p className="text-sm text-muted-foreground mb-3">Or deploy your own instance</p>
           <Link 
-            href="https://railway.com/deploy/9_5Q4C?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic"
+            href="https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic"
             target="_blank"
           >
             <img src="https://railway.com/button.svg" alt="Deploy on Railway" className="mx-auto" height={32} />
