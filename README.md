@@ -1,48 +1,188 @@
 # GitTerm
 
-A cloud development environment platform with local tunnel support. Expose your local development servers through secure `*.gitterm.dev` subdomains.
+Run AI coding agents your way. Connect agents running in the cloud or tunnel your local development setup through secure URLs.
+
+Currently supports: **OpenCode**.
+
+> **Note:** This README covers self-hosting GitTerm. For the managed service, visit [gitterm.dev](https://gitterm.dev).
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/9_5Q4C?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 ## What is GitTerm?
 
-GitTerm provides two ways to access development environments:
+GitTerm gives you flexible ways to run AI coding agents:
 
-1. **Cloud Workspaces** - Spin up cloud-based development environments accessible via browser
-2. **Local Tunnels** - Expose your local development server to the internet through a secure tunnel (like ngrok, but integrated with your workspace)
+1. **Cloud Workspaces** - Spin up cloud-based environments where your agent runs remotely. Access via browser at `https://agent.your-domain.com`
 
-## Quick Start: Local Tunnels
+2. **Local Tunnels** - Run your agent locally, then expose it through a secure tunnel. Your local server becomes accessible at `https://your-domain.com/ws/agent-id/`
 
-Expose your local development server in seconds:
+Both modes work with supported agents (currently OpenCode). Cloud workspaces handle heavy computation remotely, while local tunnels give you full control over your local setup.
 
-```bash
-# Install and login
-npx @opeoginni/gitterm-agent login
+## Self-Hosting Guide
 
-# Connect your local server (e.g., running on port 3000)
-npx @opeoginni/gitterm-agent connect --workspace-id "your-workspace-id" --port 3000
-```
+### Deploy on Railway (Recommended)
 
-Your local server is now accessible at `https://your-subdomain.gitterm.dev`
+The fastest way to deploy your own GitTerm instance:
 
-## Architecture
+1. Click the **Deploy on Railway** button above
+2. Configure the required environment variables as prompted (ADMIN_EMAIL, ADMIN_PASSWORD, etc.)
+3. Add your custom domain to the proxy service
+
+Caddy handles all routing through a single domain.
+
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Caddy Proxy                             │
-│                    (*.gitterm.dev routing)                      │
+│                      Caddy Proxy                                │
+│         (Path-based: /ws/{agent-id}/ → Tunnel Proxy)           │
 └──────────────┬────────────────────────────┬─────────────────────┘
                │                            │
                ▼                            ▼
-┌──────────────────────┐      ┌──────────────────────────────────┐
-│    Cloud Workspaces  │      │         Tunnel Proxy             │
-│  (Railway containers)│      │   (WebSocket multiplexing)       │
-└──────────────────────┘      └──────────────┬───────────────────┘
-                                             │
-                                             ▼
-                              ┌──────────────────────────────────┐
-                              │      gitterm-agent (CLI)         │
-                              │   (runs on your local machine)   │
-                              └──────────────────────────────────┘
+┌──────────────────────────┐   ┌──────────────────────────────────┐
+│   Cloud Agent Runtime    │   │         Tunnel Proxy             │
+│  (agent runs in cloud)   │   │   (WebSocket multiplexing)       │
+│                          │   │                                  │
+│  e.g., OpenCode via      │   │   tunnels local agents           │
+│  browser or API access   │   │   to the internet                │
+└──────────────────────────┘   └──────────────┬───────────────────┘
+                                              │
+                                              ▼
+                               ┌──────────────────────────────────┐
+                               │      gitterm-agent (CLI)         │
+                               │   (connects local agents)        │
+                               └──────────────────────────────────┘
 ```
+
+**How it works:**
+
+- **Cloud Workspaces**: Agent runs in a Railway container, accessible via browser/API
+- **Local Tunnels**: Agent runs on your machine, connected via `gitterm-agent` CLI
+
+**Self-hosted URL format:**
+```
+# Cloud workspaces (agent runs in cloud)
+https://your-domain.com/agent/{workspace-id}/
+
+# Local tunnels (agent runs locally, tunneled to internet)
+https://your-domain.com/ws/{workspace-id}/
+```
+
+### Required Services
+
+| Service | Purpose | Recommended Platform |
+|---------|---------|---------------------|
+| PostgreSQL | Database | Railway Postgres |
+| Redis | Caching, pub/sub | Railway Redis |
+| server | Main API | Railway |
+| web | Frontend (dashboard, auth UI) | Railway |
+| tunnel-proxy | WebSocket tunnel server | Railway |
+| proxy | Caddy reverse proxy | Railway |
+| listener | Webhooks (GitHub, Railway) | Railway |
+| worker | Background jobs | Railway |
+
+All services route through Caddy on a single domain.
+
+### Local Tunnels (for agents running locally)
+
+Connect your local agent setup to the internet through a secure tunnel:
+
+```bash
+# Install the agent CLI
+npm install -g @opeoginni/gitterm-agent
+
+# Login (device code flow)
+npx @opeoginni/gitterm-agent login -s https://your-api-domain.com
+
+# Create a workspace with tunnelType="local" in the dashboard
+# Then connect your local server
+npx @opeoginni/gitterm-agent connect --workspace-id "workspace-id" --port 3000
+```
+
+**URL Format:**
+```
+# Your tunnel URL (self-hosted, path-based)
+https://your-domain.com/ws/workspace-id/
+
+# Managed service (subdomain)
+https://workspace-id.gitterm.dev/
+```
+
+Your local agent is now accessible through the tunnel URL.
+
+### How Local Tunnels Work
+
+1. **Create a workspace** with `tunnelType: "local"` via the dashboard
+2. **Run the agent** on your machine where your coding agent is running
+3. **Agent authenticates** via device code flow and gets a tunnel JWT
+4. **Agent connects** to the tunnel-proxy via WebSocket
+5. **Incoming requests** to your tunnel URL are routed to the tunnel-proxy
+6. **Tunnel-proxy multiplexes** the request over WebSocket to your local agent
+7. **Agent forwards** the request to your local server and streams the response back
+
+## Development Setup
+
+For contributors who want to run GitTerm locally.
+
+### Prerequisites
+
+- [Bun](https://bun.sh) (v1.0+)
+- [Docker](https://docker.com) (for local Postgres & Redis)
+- Node.js 18+ (for some tooling)
+
+### 1. Clone and Install
+
+```bash
+git clone https://github.com/OpeOginni/gitterm.git
+cd gitterm
+bun install
+```
+
+### 2. Set Up Environment Variables
+
+```bash
+# Apps
+cp apps/server/.env.example apps/server/.env
+cp apps/web/.env.example apps/web/.env
+cp apps/tunnel-proxy/.env.example apps/tunnel-proxy/.env
+cp apps/listener/.env.example apps/listener/.env
+cp apps/worker/.env.example apps/worker/.env
+```
+
+### 3. Start Local Services
+
+```bash
+# Start Postgres
+bun turbo db:start
+
+# Start Redis
+bun turbo redis:start
+```
+
+### 4. Set Up Database
+
+```bash
+# Push schema to database
+bun run db:push
+```
+
+### 5. Run Development Servers
+
+```bash
+# Run all services
+bun run dev
+
+# Or run specific apps
+bun run dev --filter=web
+bun run dev --filter=server
+bun run dev --filter=tunnel-proxy
+```
+
+| Service | URL |
+|---------|-----|
+| Web App | http://localhost:3001 |
+| API Server | http://localhost:3000 |
+| Tunnel Proxy | http://localhost:9000 |
 
 ## Project Structure
 
@@ -75,107 +215,7 @@ gitterm/
 - **Auth**: Better Auth (GitHub OAuth)
 - **Monorepo**: Turborepo
 - **Proxy**: Caddy
-- **Deployment**: Railway (Cloudflare, AWS...soon)
-
-## Development Setup
-
-### Prerequisites
-
-- [Bun](https://bun.sh) (v1.0+)
-- [Docker](https://docker.com) (for local Postgres & Redis)
-- Node.js 18+ (for some tooling)
-
-### 1. Clone and Install
-
-```bash
-git clone https://github.com/OpeOginni/gitterm.git
-cd gitterm
-bun install
-```
-
-### 2. Set Up Environment Variables
-
-Copy the example env files and fill in your values:
-
-```bash
-# Apps
-cp apps/server/.env.example apps/server/.env
-cp apps/web/.env.example apps/web/.env
-cp apps/tunnel-proxy/.env.example apps/tunnel-proxy/.env
-cp apps/listener/.env.example apps/listener/.env
-cp apps/worker/.env.example apps/worker/.env
-```
-
-### Key Environment Variables
-
-#### Server (`apps/server/.env`)
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `REDIS_URL` | Redis connection string | Yes |
-| `BETTER_AUTH_SECRET` | Secret for auth tokens (generate with `openssl rand -base64 32`) | Yes |
-| `BETTER_AUTH_URL` | URL where auth endpoints are served | Yes |
-| `INTERNAL_API_KEY` | Shared key for service-to-service auth | Yes |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Bootstrap admin credentials (email auth only) | No |
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth credentials | No |
-| `TUNNEL_JWT_SECRET` / `AGENT_JWT_SECRET` | JWT secrets for tunnel auth | For tunnels |
-| `RAILWAY_*` | Railway provider configuration | For Railway |
-
-#### Web (`apps/web/.env`)
-
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_SERVER_URL` | API server URL (e.g., `http://localhost:8888/api`) |
-| `NEXT_PUBLIC_AUTH_URL` | Auth URL without `/api` suffix |
-| `NEXT_PUBLIC_LISTENER_URL` | Listener URL for real-time updates |
-| `NEXT_PUBLIC_TUNNEL_URL` | Tunnel proxy URL |
-| `NEXT_PUBLIC_BASE_DOMAIN` | Base domain for workspace URLs |
-
-#### Other Services
-
-- **tunnel-proxy**: Needs `REDIS_URL`, `TUNNEL_JWT_SECRET`, `INTERNAL_API_KEY`, `SERVER_URL`
-- **listener**: Needs `SERVER_URL`, `INTERNAL_API_KEY`, `CORS_ORIGIN`
-- **worker**: Needs `SERVER_URL`, `INTERNAL_API_KEY`
-- **proxy**: Needs `INTERNAL_API_KEY` (must match server)
-
-### 3. Start Local Services
-
-```bash
-# Start Postgres
-bun turbo db:start
-
-# Start Redis
-bun turbo redis:start
-```
-
-### 4. Set Up Database
-
-```bash
-# Push schema to database
-bun run db:push
-
-# (Optional) Seed with test data
-bun run db:seed
-```
-
-### 5. Run Development Servers
-
-```bash
-# Run all services
-bun run dev
-
-# Or run specific apps
-bun run dev --filter=web
-bun run dev --filter=server
-bun run dev --filter=tunnel-proxy
-```
-
-| Service | URL |
-|---------|-----|
-| Web App | http://localhost:3001 |
-| API Server | http://localhost:3000 |
-| Tunnel Proxy | http://localhost:9000 |
+- **Deployment**: Railway
 
 ## Available Scripts
 
@@ -189,39 +229,9 @@ bun run db:generate   # Generate migrations
 bun run db:migrate    # Run migrations
 ```
 
-## How Local Tunnels Work
-
-1. **User creates a workspace** with `tunnelType: "local"` via the dashboard
-2. **User runs the agent** on their machine: `npx @opeoginni/gitterm-agent connect`
-3. **Agent authenticates** via device code flow and gets a tunnel JWT
-4. **Agent connects** to the tunnel-proxy via WebSocket
-5. **Incoming requests** to `subdomain.gitterm.dev` are routed through Caddy to the tunnel-proxy
-6. **Tunnel-proxy multiplexes** the request over WebSocket to the agent
-7. **Agent forwards** the request to the local server and streams the response back
-
 ## Contributing
 
-Contributions are welcome! Here's how to get started:
-
-
-## Deploying Your Own Instance
-
-GitTerm is designed to run on [Railway](https://railway.app). Each app has a `railway.config.json` for deployment configuration.
-
-Key services to deploy:
-1. **PostgreSQL** - Database
-2. **Redis** - Caching and pub/sub
-3. **server** - Main API
-4. **web** - Frontend
-5. **tunnel-proxy** - Local tunnel WebSocket server
-6. **proxy** - Caddy reverse proxy (needs custom domain setup)
-7. **listener** - Webhook receiver
-8. **worker** - Background jobs
-
-You'll also need:
-- A domain (e.g., `gitterm.dev`) with wildcard DNS pointing to your proxy
-- GitHub OAuth app for authentication
-- SSL certificates (Caddy handles this automatically with Let's Encrypt)
+Contributions are welcome! Please read the development setup section above.
 
 ## License
 
@@ -231,5 +241,7 @@ See [LICENSE](LICENSE) for the full text.
 
 ## Links
 
-- [Website](https://gitterm.dev)
+- [Website](https://gitterm.dev) - Managed service
+- [OpenCode](https://opencode.ai) - AI coding agent
 - [Agent NPM Package](https://www.npmjs.com/package/@opeoginni/gitterm-agent)
+- [GitHub](https://github.com/OpeOginni/gitterm)

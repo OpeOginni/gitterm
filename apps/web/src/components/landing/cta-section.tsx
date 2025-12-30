@@ -20,14 +20,23 @@ export function CTASection() {
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>
-          <Link href="#">
+          <Link href="https://github.com/OpeOginni/gitterm" target="_blank">
             <Button
               variant="outline"
               size="lg"
               className="border-border text-foreground hover:bg-secondary bg-transparent"
             >
-              Source Coming soon...
+              Source Code
             </Button>
+          </Link>
+        </div>
+        <div className="mt-6">
+          <p className="text-sm text-muted-foreground mb-3">Or deploy your own instance</p>
+          <Link 
+            href="https://railway.com/deploy/9_5Q4C?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic"
+            target="_blank"
+          >
+            <img src="https://railway.com/button.svg" alt="Deploy on Railway" className="mx-auto" height={32} />
           </Link>
         </div>
       </div>
