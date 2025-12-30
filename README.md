@@ -83,6 +83,28 @@ https://your-domain.com/ws/{workspace-id}/
 
 All services route through Caddy on a single domain.
 
+### Worker Cron Jobs
+
+GitTerm has two background workers that run as cron jobs:
+
+| Worker | Schedule | Purpose |
+|--------|----------|---------|
+| **idle-reaper** | Every 10 minutes (`*/10 * * * *`) | Stops idle workspaces and enforces quotas |
+| **daily-reset** | Daily at midnight UTC (`0 0 * * *`) | Logs daily usage statistics |
+
+**On Railway:** These workers are configured with their respective `railway.json` files. Make sure to:
+1. Deploy the worker service with `railway.config.json` for idle-reaper (runs every 10 min)
+2. Deploy the worker service with `railway.daily-reset.json` for daily-reset (runs once daily)
+
+**Locally:** You can run workers manually:
+```bash
+# Run idle reaper once (for testing)
+cd apps/worker && bun run dist/idle-reaper.mjs
+
+# Run daily reset once (for testing)
+cd apps/worker && bun run dist/daily-reset.mjs
+```
+
 ### Local Tunnels (for agents running locally)
 
 Connect your local agent setup to the internet through a secure tunnel:
