@@ -316,9 +316,14 @@ export function CreateInstanceDialog() {
                       value={localSubdomain}
                       onChange={(e) => setLocalSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                       className="bg-secondary/30 border-border/50 focus:border-accent"
+                      disabled={!subdomainPermissions?.canUseCustomSubdomain}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Your tunnel will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(localSubdomain || "my-app")}</span>
+                      {subdomainPermissions?.canUseCustomSubdomain ? (
+                        <>Your tunnel will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(localSubdomain || "my-app")}</span></>
+                      ) : (
+                        "You will be generated a subdomain automatically. Upgrade your plan to use a custom subdomain."
+                      )}
                     </p>
                   </div>
                   <div className="grid gap-2">

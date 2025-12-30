@@ -23,31 +23,10 @@ function getProtocolForBaseDomain(baseDomain: string): "http" | "https" {
 }
 
 /**
- * Normalize a backend URL to ensure it has the correct protocol
- */
-function normalizeBackendUrl(backendUrl: string): string {
-	// If it already has a protocol, return as-is
-	if (backendUrl.startsWith("http://") || backendUrl.startsWith("https://")) {
-		return backendUrl;
-	}
-	// Hardcoded: Railway domains always use https
-	if (backendUrl.endsWith(".railway.app")) {
-		return `https://${backendUrl}`;
-	}
-	// Default to https for unknown domains
-	return `https://${backendUrl}`;
-}
-
-/**
  * Construct a workspace URL
  * Uses backendUrl directly if available, otherwise falls back to subdomain-based URL
  */
 export function getWorkspaceUrl(subdomain: string, backendUrl?: string | null): string {
-	// If we have a direct backend URL, use it
-	if (backendUrl) {
-		return normalizeBackendUrl(backendUrl);
-	}
-
 	const protocol = getProtocolForBaseDomain(env.NEXT_PUBLIC_BASE_DOMAIN);
 	if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
 		return `${protocol}://${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${subdomain}`;
@@ -70,12 +49,6 @@ export function getAttachCommand(subdomain: string, backendUrl?: string | null):
  * Shows the URL without protocol for cleaner display
  */
 export function getWorkspaceDisplayUrl(subdomain: string, backendUrl?: string | null): string {
-	if (backendUrl) {
-		// Normalize first, then remove protocol for display
-		const normalized = normalizeBackendUrl(backendUrl);
-		return normalized.replace(/^https?:\/\//, "");
-	}
-
 	if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
 		return `${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${subdomain}`;
 	}
