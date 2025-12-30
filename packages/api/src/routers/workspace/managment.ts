@@ -22,7 +22,7 @@ import {
 } from "../../utils/metering";
 import { getProviderByCloudProviderId, type PersistentWorkspaceInfo, type WorkspaceInfo } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
-import { githubAppService } from "../../service/github";
+import { getGitHubAppService, githubAppService } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { sendAdminMessage } from "../../utils/discord";
@@ -899,7 +899,7 @@ export const workspaceRouter = router({
       z.object({
         name: z.string().optional(),
         repo: z.string().optional(), // Optional for local workspaces
-        subdomain: z.string().min(1).max(63).regex(/^[a-z0-9-]+$/).optional(), // Required for local, auto-generated for cloud
+        subdomain: z.string().max(63).regex(/^[a-z0-9-]+$/).optional(), // Optional for custom subdomains
         agentTypeId: z.string(),
         cloudProviderId: z.string(),
         regionId: z.string(),
@@ -974,13 +974,6 @@ export const workspaceRouter = router({
           });
         }
 
-        // For local workspaces, repo is optional and subdomain is required
-        if (isLocal && !input.subdomain) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Subdomain is required for local workspaces",
-          });
-        }
 
         // For cloud workspaces, repo is required
         if (!isLocal && !input.repo) {
@@ -1102,10 +1095,10 @@ export const workspaceRouter = router({
             });
           }
 
-        const installation = await githubAppService.getUserInstallation(userId, gitIntegrationRecord.providerInstallationId);
+        const installation = await getGitHubAppService().getUserInstallation(userId, gitIntegrationRecord.providerInstallationId);
         if (installation && !installation.suspended) {
           try {
-              const tokenData = await githubAppService.getUserToServerToken(installation.installationId);
+              const tokenData = await getGitHubAppService().getUserToServerToken(installation.installationId);
               githubAppToken = tokenData.token;
               githubAppTokenExpiry = tokenData.expiresAt;
             } catch (error) {
@@ -1116,7 +1109,7 @@ export const workspaceRouter = router({
         }
 
         // Parse repo URL to get owner/name (only for cloud workspaces)
-        const repoInfo = input.repo ? githubAppService.parseRepoUrl(input.repo) : null;
+        const repoInfo = input.repo ? getGitHubAppService().parseRepoUrl(input.repo) : null;
 
         // Generate or validate subdomain
         let subdomain: string;
