@@ -4,6 +4,8 @@ import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import chalk from "chalk";
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
 
 // Default production URLs (hosted gitterm.dev)
 const DEFAULT_WS_URL = "wss://tunnel.gitterm.dev/tunnel/connect";
@@ -16,7 +18,6 @@ const DEFAULT_BASE_DOMAIN = "gitterm.dev";
 function getWorkspaceUrl(subdomain: string, cfg?: { routingMode?: "path" | "subdomain"; baseDomain?: string; serverUrl?: string }): string {
 	const routingMode = cfg?.routingMode ?? "subdomain";
 	if (routingMode === "path") {
-		// Path routing uses the server/public origin as the base
 		const origin = cfg?.serverUrl || "http://localhost";
 		return `${origin.replace(/\/+$/, "")}/ws/${subdomain}`;
 	}
@@ -44,55 +45,6 @@ function getServiceUrl(
 	const protocol = baseDomain.includes("localhost") ? "http" : "https";
 	return `${protocol}://${serviceName}-${mainSubdomain}.${baseDomain}`;
 }
-
-// const DEFAULT_WS_URL = "ws://localhost:9000/tunnel/connect";
-// const DEFAULT_SERVER_URL = "http://localhost:3000";
-
-const usage = `@opeoginni/gitterm-agent
-
-Securely exposes local development ports through your gitterm.dev workspace tunnel.
-
-Usage:
-  npx @opeoginni/gitterm-agent <command> [options]
-
-Commands:
-  login           Sign in via device-code flow
-  logout          Clear saved credentials
-  connect         Connect a local port (and optional services)
-  help            Show this help
-
-Login options:
-  --server-url <url>      Server base URL (default: ${DEFAULT_SERVER_URL})
-
-Connect options:
-  --workspace-id <id>     Workspace ID (required)
-  --port <number>         Primary local port to expose (required)
-  --ws-url <url>          Tunnel-proxy WS URL (default: ${DEFAULT_WS_URL})
-  --server-url <url>      Server base URL (default: ${DEFAULT_SERVER_URL})
-  --token <jwt>           Tunnel JWT (overrides saved login)
-  --expose <name=port>    Expose additional service port (repeatable)
-
-Environment variables:
-  BASE_DOMAIN             Base domain for workspace URLs (default: gitterm.dev)
-
-Examples:
-  # First time: login to gitterm
-  npx @opeoginni/gitterm-agent login
-
-  # Connect a local server to your workspace
-  npx @opeoginni/gitterm-agent connect --workspace-id "ws_abc123" --port 3000
-
-  # Expose multiple ports
-  npx @opeoginni/gitterm-agent connect --workspace-id "ws_abc123" --port 3000 --expose api=3001
-
-  # Local development (specify local tunnel server)
-  npx @opeoginni/gitterm-agent connect --workspace-id "ws_abc123" --port 3000 \\
-    --ws-url ws://localhost:9000/tunnel/connect --server-url http://localhost:3000
-
-Notes:
-  - This tool does not start servers for you.
-  - Run your local server first, then connect it to gitterm.
-`;
 
 const frameSchema = z.object({
 	type: z.enum(["auth", "open", "close", "ping", "pong", "request", "response", "data", "error"]),
@@ -127,33 +79,6 @@ function headersToRecord(headers: Headers): Record<string, string> {
 		out[key] = value;
 	});
 	return out;
-}
-
-function parseExposeFlags(args: string[]): Record<string, number> {
-	const exposed: Record<string, number> = {};
-	for (let i = 0; i < args.length; i++) {
-		const arg = args[i];
-		if (arg !== "--expose") continue;
-		const value = args[i + 1];
-		if (!value) throw new Error("--expose requires a value like name=3001");
-		i++;
-		const [name, portStr] = value.split("=");
-		if (!name || !portStr) throw new Error("--expose requires a value like name=3001");
-		const port = Number.parseInt(portStr, 10);
-		if (!Number.isFinite(port) || port <= 0) throw new Error(`Invalid port for --expose ${value}`);
-		exposed[name] = port;
-	}
-	return exposed;
-}
-
-function getFlag(args: string[], flag: string): string | undefined {
-	const idx = args.indexOf(flag);
-	if (idx === -1) return undefined;
-	return args[idx + 1];
-}
-
-function hasFlag(args: string[], flag: string): boolean {
-	return args.includes(flag);
 }
 
 type AgentConfig = {
@@ -249,13 +174,15 @@ async function loginViaDeviceCode(serverUrl: string): Promise<{ agentToken: stri
 	throw new Error("Device code expired; try again.");
 }
 
-async function runLogin(rawArgs: string[]) {
-	const serverUrl = getFlag(rawArgs, "--server-url") ?? DEFAULT_SERVER_URL;
+type LoginArgs = {
+	serverUrl: string;
+};
 
+async function runLogin(args: LoginArgs) {
 	console.log(`Logging in to gitterm...`);
 
-	const { agentToken } = await loginViaDeviceCode(serverUrl);
-	await saveConfig({ serverUrl, agentToken, createdAt: Date.now() });
+	const { agentToken } = await loginViaDeviceCode(args.serverUrl);
+	await saveConfig({ serverUrl: args.serverUrl, agentToken, createdAt: Date.now() });
 	console.log("Logged in successfully!");
 	process.exit(0);
 }
@@ -339,25 +266,41 @@ function prompt(question: string): Promise<string> {
 	});
 }
 
-async function runConnect(rawArgs: string[]) {
-	const wsUrlFlag = getFlag(rawArgs, "--ws-url");
-	const portStr = getFlag(rawArgs, "--port");
+type ConnectArgs = {
+	workspaceId: string;
+	port?: number;
+	wsUrl?: string;
+	serverUrl: string;
+	token?: string;
+	expose?: string[];
+};
+
+function parseExposeArgs(exposeArgs: string[] | undefined): Record<string, number> {
+	const exposed: Record<string, number> = {};
+	if (!exposeArgs) return exposed;
+	
+	for (const value of exposeArgs) {
+		const [name, portStr] = value.split("=");
+		if (!name || !portStr) throw new Error("--expose requires a value like name=3001");
+		const port = Number.parseInt(portStr, 10);
+		if (!Number.isFinite(port) || port <= 0) throw new Error(`Invalid port for --expose ${value}`);
+		exposed[name] = port;
+	}
+	return exposed;
+}
+
+async function runConnect(args: ConnectArgs) {
 	const targetBase = "http://localhost";
 
-	const tokenFromFlag = getFlag(rawArgs, "--token");
-	const workspaceId = getFlag(rawArgs, "--workspace-id");
-	const serverUrl = getFlag(rawArgs, "--server-url") ?? DEFAULT_SERVER_URL;
-
-	let token = tokenFromFlag;
+	let token = args.token;
 	let primaryPort: number;
-	let mainSubdomain: string;
+	let mainSubdomain: string = "";
 	let connectCfg: AgentConnectConfig | undefined;
 
 	if (!token) {
-		if (!workspaceId) throw new Error("Missing --workspace-id");
+		if (!args.workspaceId) throw new Error("Missing --workspace-id");
 		let config = await loadConfig();
-		// CLI flag takes precedence over saved config
-		const effectiveServerUrl = serverUrl;
+		const effectiveServerUrl = args.serverUrl;
 		
 		// Auto-login if no saved credentials OR connecting to a different server
 		const savedServerUrl = config?.serverUrl ? new URL(config.serverUrl).origin : null;
@@ -376,7 +319,7 @@ async function runConnect(rawArgs: string[]) {
 			console.log("Logged in successfully!\n");
 		}
 
-		if (!portStr) {
+		if (!args.port) {
 			const portInput = await prompt("Enter the local port to expose (e.g. 3000): ");
 			const parsedPort = Number.parseInt(portInput, 10);
 			if (!Number.isFinite(parsedPort) || parsedPort <= 0) {
@@ -389,26 +332,24 @@ async function runConnect(rawArgs: string[]) {
 			await updateWorkspacePorts({
 				serverUrl: effectiveServerUrl,
 				agentToken: config.agentToken,
-				workspaceId,
+				workspaceId: args.workspaceId,
 				localPort: primaryPort,
 				exposedPorts,
 			});
 		} else {
-			primaryPort = Number.parseInt(portStr, 10);
-			if (!Number.isFinite(primaryPort) || primaryPort <= 0) throw new Error("Invalid --port");
+			primaryPort = args.port;
 		}
 
-		const minted = await mintTunnelToken({ serverUrl: effectiveServerUrl, agentToken: config.agentToken, workspaceId });
+		const minted = await mintTunnelToken({ serverUrl: effectiveServerUrl, agentToken: config.agentToken, workspaceId: args.workspaceId });
 		token = minted.token;
 		mainSubdomain = minted.subdomain ?? "";
 		connectCfg = minted.connect;
 	} else {
-		if (!portStr) throw new Error("Missing --port");
-		primaryPort = Number.parseInt(portStr, 10);
-		if (!Number.isFinite(primaryPort) || primaryPort <= 0) throw new Error("Invalid --port");
+		if (!args.port) throw new Error("Missing --port");
+		primaryPort = args.port;
 	}
 
-	const exposedPorts = parseExposeFlags(rawArgs);
+	const exposedPorts = parseExposeArgs(args.expose);
 
 	type PendingRequestMeta = {
 		method: string;
@@ -435,7 +376,7 @@ async function runConnect(rawArgs: string[]) {
 		return merged;
 	}
 
-	const effectiveWsUrl = wsUrlFlag ?? connectCfg?.wsUrl ?? DEFAULT_WS_URL;
+	const effectiveWsUrl = args.wsUrl ?? connectCfg?.wsUrl ?? DEFAULT_WS_URL;
 	const ws = new WebSocket(effectiveWsUrl);
 
 	ws.addEventListener("open", () => {
@@ -473,11 +414,9 @@ async function runConnect(rawArgs: string[]) {
 		if (frame.type === "pong") return;
 		if (frame.type === "open") return;
 		if (frame.type === "auth") {
-			// Prefer server-provided subdomain (it exists even before auth ack),
-			// but allow override from tunnel-proxy frame.
 			mainSubdomain = frame.mainSubdomain ?? mainSubdomain ?? "";
 
-			console.log("Connected! Your local workspace is now live at: \n")
+			console.log("Connected! Your workspace is now live at:\n")
 			console.log(
 				chalk.green(
 					getWorkspaceUrl(mainSubdomain, {
@@ -488,11 +427,12 @@ async function runConnect(rawArgs: string[]) {
 				),
 				"\n",
 			);
-			if (exposedPorts) {
+			console.log(`Forwarding traffic to localhost:${primaryPort}`);
+			if (Object.keys(exposedPorts).length > 0) {
 				for (const [serviceSubdomain, port] of Object.entries(exposedPorts)) {
 					console.log(
 						chalk.green(
-							`${serviceSubdomain}:${port} -> ${getServiceUrl(mainSubdomain, serviceSubdomain, {
+							`  ${serviceSubdomain}:${port} -> ${getServiceUrl(mainSubdomain, serviceSubdomain, {
 								routingMode: connectCfg?.routingMode,
 								baseDomain: connectCfg?.baseDomain,
 								serverUrl: connectCfg?.serverUrl,
@@ -501,7 +441,8 @@ async function runConnect(rawArgs: string[]) {
 					);
 				}
 			}
-		};
+			console.log("\nPress Ctrl+C to disconnect.\n");
+		}
 
 		// Handle close frame - abort the ongoing request
 		if (frame.type === "close") {
@@ -509,7 +450,6 @@ async function runConnect(rawArgs: string[]) {
 			if (controller) {
 				controller.abort();
 				activeRequests.delete(frame.id);
-			} else {
 			}
 			pendingRequestBodies.delete(frame.id);
 			pendingRequestMeta.delete(frame.id);
@@ -535,7 +475,6 @@ async function runConnect(rawArgs: string[]) {
 			if (frame.data) chunks.push(base64ToBytes(frame.data));
 			if (!frame.final) return;
 
-
 			// Create abort controller for this request
 			const abortController = new AbortController();
 			activeRequests.set(frame.id, abortController);
@@ -543,10 +482,6 @@ async function runConnect(rawArgs: string[]) {
 			const meta = pendingRequestMeta.get(frame.id);
 			if (!meta) return;
 			pendingRequestMeta.delete(frame.id);
-
-			// Check if this looks like an SSE request (Accept header)
-			const acceptHeader = meta.headers["accept"] || meta.headers["Accept"] || "";
-			const looksLikeSSE = acceptHeader.includes("text/event-stream") || meta.path.includes("/event") || meta.path.includes("/sse");
 
 			try {
 				const reqBody = mergeBody(frame.id);
@@ -558,20 +493,26 @@ async function runConnect(rawArgs: string[]) {
 				const url = new URL(meta.path.replace(/^\//, ""), base);
 
 				const headers = new Headers(meta.headers);
+				// Remove hop-by-hop headers that shouldn't be forwarded
+				// Node's undici fetch rejects these headers
 				headers.delete("host");
 				headers.delete("content-length");
+				headers.delete("connection");
+				headers.delete("keep-alive");
+				headers.delete("proxy-authenticate");
+				headers.delete("proxy-authorization");
+				headers.delete("te");
+				headers.delete("trailers");
+				headers.delete("transfer-encoding");
+				headers.delete("upgrade");
 
 				const upstream = await fetch(url, {
 					method: meta.method,
 					headers,
-					// Node's fetch BodyInit typings can be picky; Uint8Array is valid at runtime.
 					body: reqBody.byteLength > 0 ? (reqBody as unknown as BodyInit) : undefined,
 					redirect: "manual",
 					signal: abortController.signal,
 				});
-
-				const contentType = upstream.headers.get("content-type") || "";
-				const isSSE = contentType.includes("text/event-stream");
 
 				ws.send(
 					JSON.stringify({
@@ -590,15 +531,11 @@ async function runConnect(rawArgs: string[]) {
 				}
 
 				const reader = upstream.body.getReader();
-				let chunkCount = 0;
-				let totalBytes = 0;
 				try {
 					while (true) {
 						const { done, value } = await reader.read();
 						if (done) break;
 						if (!value) continue;
-						chunkCount++;
-						totalBytes += value.byteLength;
 
 						ws.send(
 							JSON.stringify({
@@ -648,11 +585,12 @@ async function runConnect(rawArgs: string[]) {
 	});
 
 	ws.addEventListener("close", () => {
-		console.log("gitterm-agent closed");
+		console.log("Disconnected from tunnel.");
+		process.exit(0);
 	});
 
 	ws.addEventListener("error", (event) => {
-		console.error("gitterm-agent error", event);
+		console.error("Connection error:", event);
 	});
 
 	await new Promise<void>((resolve) => {
@@ -660,7 +598,7 @@ async function runConnect(rawArgs: string[]) {
 		process.on("SIGTERM", () => resolve());
 	});
 
-	console.log("\nShutting down...");
+	console.log("\nDisconnecting...");
 
 	// Abort all active requests
 	for (const controller of Array.from(activeRequests.values())) {
@@ -681,44 +619,103 @@ async function runConnect(rawArgs: string[]) {
 	// Give WebSocket a moment to close gracefully
 	await new Promise((resolve) => setTimeout(resolve, 100));
 
-	// Explicitly exit the process
 	process.exit(0);
 }
 
-async function main() {
-	const args = process.argv.slice(2);
-	const command = args[0] ?? "help";
-
-	if (command === "--help" || command === "-h") {
-		console.log(usage);
-		return;
-	}
-
-	if (command === "help" || hasFlag(args, "-h") || hasFlag(args, "--help")) {
-		console.log(usage);
-		return;
-	}
-
-	if (command === "login") {
-		await runLogin(args.slice(1));
-		return;
-	}
-
-	if (command === "logout") {
-		await runLogout();
-		return;
-	}
-
-	if (command === "connect") {
-		await runConnect(args.slice(1));
-		return;
-	}
-
-	console.log(usage);
-	process.exitCode = 1;
-}
-
-main().catch((err) => {
-	console.error(err instanceof Error ? err.message : err);
-	process.exit(1);
-});
+// CLI setup with yargs
+yargs(hideBin(process.argv))
+	.scriptName("gitterm-agent")
+	.usage("$0 <command> [options]")
+	.command(
+		"login",
+		"Sign in via device-code flow",
+		(yargs) => {
+			return yargs.option("server-url", {
+				alias: "s",
+				type: "string",
+				description: "Server base URL",
+				default: DEFAULT_SERVER_URL,
+			});
+		},
+		async (argv) => {
+			try {
+				await runLogin({ serverUrl: argv.serverUrl });
+			} catch (err) {
+				console.error(err instanceof Error ? err.message : err);
+				process.exit(1);
+			}
+		},
+	)
+	.command(
+		"logout",
+		"Clear saved credentials",
+		() => {},
+		async () => {
+			try {
+				await runLogout();
+			} catch (err) {
+				console.error(err instanceof Error ? err.message : err);
+				process.exit(1);
+			}
+		},
+	)
+	.command(
+		"connect",
+		"Connect a local port to your workspace",
+		(yargs) => {
+			return yargs
+				.option("workspace-id", {
+					alias: "w",
+					type: "string",
+					description: "Workspace ID",
+					demandOption: true,
+				})
+				.option("port", {
+					alias: "p",
+					type: "number",
+					description: "Local port to expose",
+				})
+				.option("ws-url", {
+					type: "string",
+					description: "Tunnel-proxy WebSocket URL",
+				})
+				.option("server-url", {
+					alias: "s",
+					type: "string",
+					description: "Server base URL",
+					default: DEFAULT_SERVER_URL,
+				})
+				.option("token", {
+					alias: "t",
+					type: "string",
+					description: "Tunnel JWT (overrides saved login)",
+				})
+				.option("expose", {
+					alias: "e",
+					type: "array",
+					string: true,
+					description: "Expose additional service port (name=port)",
+				});
+		},
+		async (argv) => {
+			try {
+				await runConnect({
+					workspaceId: argv.workspaceId,
+					port: argv.port,
+					wsUrl: argv.wsUrl,
+					serverUrl: argv.serverUrl,
+					token: argv.token,
+					expose: argv.expose,
+				});
+			} catch (err) {
+				console.error(err instanceof Error ? err.message : err);
+				process.exit(1);
+			}
+		},
+	)
+	.demandCommand(1, "Please specify a command")
+	.help()
+	.alias("help", "h")
+	.version(false)
+	.strict()
+	.parse();

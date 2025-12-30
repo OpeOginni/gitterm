@@ -471,6 +471,31 @@ app.all("/*", async (c) => {
 			return new Response(readable, { status: res.status, headers });
 		}
 
+		// For path-based routing, inject <base> tag into HTML responses
+		// so relative URLs (like /assets/...) resolve to /ws/{subdomain}/assets/...
+		if (routingMode === "path" && contentType.includes("text/html")) {
+			const html = await res.text();
+			const baseTag = `<base href="/ws/${baseSubdomain}/">`;
+			
+			// Inject <base> tag after <head> or at the start of the document
+			let modifiedHtml: string;
+			if (html.includes("<head>")) {
+				modifiedHtml = html.replace("<head>", `<head>${baseTag}`);
+			} else if (html.includes("<HEAD>")) {
+				modifiedHtml = html.replace("<HEAD>", `<HEAD>${baseTag}`);
+			} else if (html.includes("<html>") || html.includes("<HTML>")) {
+				modifiedHtml = html.replace(/<html>/i, `<html><head>${baseTag}</head>`);
+			} else {
+				// Prepend base tag for documents without proper HTML structure
+				modifiedHtml = baseTag + html;
+			}
+			
+			const headers = new Headers(res.headers);
+			headers.set("content-length", String(new TextEncoder().encode(modifiedHtml).length));
+			
+			return new Response(modifiedHtml, { status: res.status, headers });
+		}
+
 		return res;
 	} catch (error) {
 		console.error("[TUNNEL-PROXY] Request error:", { requestId, error: error instanceof Error ? error.message : error });
