@@ -55,10 +55,17 @@ export function getTunnelUrl(): string {
  * Construct full domain string for a workspace
  * This is stored in database for subdomain-based access
  * 
- * For path-based routing, this still returns the subdomain identifier
- * but it's used differently in URL construction.
+ * For path-based routing, returns just the subdomain identifier
+ * since the domain is constructed as BASE_DOMAIN/ws/{subdomain}
+ * 
+ * For subdomain routing, returns subdomain.BASE_DOMAIN
  */
 export function getWorkspaceDomain(subdomain: string): string {
+  if (isPathRouting()) {
+    // Path-based: just store the subdomain identifier
+    return subdomain;
+  }
+  // Subdomain-based: full domain for DNS lookup
   return `${subdomain}.${env.BASE_DOMAIN}`;
 }
 

@@ -210,8 +210,6 @@ type DeviceCodeResponse = {
 };
 
 async function loginViaDeviceCode(serverUrl: string): Promise<{ agentToken: string }> {
-	console.log(`Your session expired. Starting login...`);
-
 	const codeRes = await fetch(new URL("/api/device/code", serverUrl), {
 		method: "POST",
 		headers: { "content-type": "application/json" },
@@ -357,9 +355,17 @@ async function runConnect(rawArgs: string[]) {
 
 	if (!token) {
 		if (!workspaceId) throw new Error("Missing --workspace-id");
-		const config = await loadConfig();
-		if (!config?.agentToken) throw new Error("Not logged in. Run: npx @opeoginni/gitterm-agent login");
-		const effectiveServerUrl = serverUrl;
+		let config = await loadConfig();
+		const effectiveServerUrl = config?.serverUrl || serverUrl;
+		
+		// Auto-login if no saved credentials
+		if (!config?.agentToken) {
+			console.log("No saved credentials found. Starting login...");
+			const { agentToken } = await loginViaDeviceCode(effectiveServerUrl);
+			config = { serverUrl: effectiveServerUrl, agentToken, createdAt: Date.now() };
+			await saveConfig(config);
+			console.log("Logged in successfully!\n");
+		}
 
 		if (!portStr) {
 			const portInput = await prompt("Enter the local port to expose (e.g. 3000): ");
