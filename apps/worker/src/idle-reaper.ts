@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { internalClient } from "@gitterm/api/client/internal";
+import { getInternalClient } from "@gitterm/api/client/internal";
 import { features } from "@gitterm/api/config";
 
 /**
@@ -24,6 +24,7 @@ async function main() {
   let totalStopped = 0;
 
   try {
+    const internalClient = getInternalClient();
     // ========================================================================
     // 1. Stop idle workspaces (controlled by ENABLE_IDLE_REAPING)
     // ========================================================================

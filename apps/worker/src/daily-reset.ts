@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { internalClient } from "@gitterm/api/client/internal";
+import { getInternalClient } from "@gitterm/api/client/internal";
 
 /**
  * Daily Reset Worker
@@ -17,6 +17,7 @@ async function main() {
   console.log("[daily-reset] Starting daily reset...");
   
   try {
+    const internalClient = getInternalClient();
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
