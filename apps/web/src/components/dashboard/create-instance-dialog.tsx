@@ -48,23 +48,20 @@ export function CreateInstanceDialog() {
   const [open, setOpen] = useState(false);
   const [workspaceType, setWorkspaceType] = useState<"cloud" | "local">("cloud");
   const [repoUrl, setRepoUrl] = useState("");
-  const [localSubdomain, setLocalSubdomain] = useState<string | undefined>(undefined);
-  const [cloudSubdomain, setCloudSubdomain] = useState<string | undefined>(undefined);
+  const [localSubdomain, setLocalSubdomain] = useState<string>("");
+  const [cloudSubdomain, setCloudSubdomain] = useState<string>("");
   const [localName, setLocalName] = useState("");
   const [cliCommand, setCliCommand] = useState<string | null>(null);
   const [selectedAgentTypeId, setSelectedAgentTypeId] = useState<string>("");
   const [selectedCloudProviderId, setSelectedCloudProviderId] = useState<string>("");
-  const [selectedRegion, setSelectedRegion] = useState<string | undefined>(undefined);
+  const [selectedRegion, setSelectedRegion] = useState<string>("");
   const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>("none");
   const [selectedPersistent, setSelectedPersistent] = useState<boolean>(true);
-  const [isCreating, setIsCreating] = useState<boolean>(false);
 
   const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
   const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
   const { data: subdomainPermissions } = useQuery(trpc.workspace.getSubdomainPermissions.queryOptions());
-
-  console.log(subdomainPermissions?.canUseCustomSubdomain);
 
   const localProvider = useMemo(() => {
     return cloudProvidersData?.cloudProviders?.find(
@@ -120,7 +117,7 @@ export function CreateInstanceDialog() {
           setSelectedRegion(availableRegions[0].id);
         }
       } else {
-        setSelectedRegion(undefined);
+        setSelectedRegion("");
       }
     }
   }, [workspaceType, availableRegions, selectedRegion]);
@@ -129,6 +126,8 @@ export function CreateInstanceDialog() {
     if (!open) {
       setCliCommand(null);
       setCloudSubdomain("");
+      setLocalSubdomain("");
+      setSelectedRegion("");
     }
   }, [open]); 
 
@@ -157,18 +156,19 @@ export function CreateInstanceDialog() {
   };
 
   const createServiceMutation = useMutation(trpc.workspace.createWorkspace.mutationOptions({
-    onSuccess: async (data) => {
+    onSuccess: (data) => {
       if (data.command) {
         toast.success("Local tunnel created successfully");
         // Generate the command on the client so it always matches the current host (gitterm.dev vs self-hosted).
         setCliCommand(getAgentConnectCommand(data.workspace.id));
       } else {
         toast.success("Workspace is provisioning");
-        setOpen(false);
         console.log("Subscribing to workspace status", data.workspace.id);
-        await subscribeToWorkspaceStatus(data.workspace.id, data.workspace.userId);
+        subscribeToWorkspaceStatus(data.workspace.id, data.workspace.userId).catch((error) => {
+          console.error("Subscription error:", error);
+        })
       }
-      setIsCreating(false);
+      setOpen(false);
       queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
     },
     onError: (error) => {
@@ -178,7 +178,6 @@ export function CreateInstanceDialog() {
   }));
 
   const handleSubmit = async () => {
-    setIsCreating(true);
     if (workspaceType === "local") {
       if (!selectedAgentTypeId) {
         toast.error("Please select an agent type.");
@@ -459,7 +458,7 @@ export function CreateInstanceDialog() {
                     <div className="grid gap-2">
                       <Label className="text-sm font-medium">Region</Label>
                       <Select
-                        value={selectedRegion}
+                        value={selectedRegion || availableRegions[0]?.id || ""}
                         onValueChange={setSelectedRegion}
                         disabled={availableRegions.length === 0}
                       >
@@ -558,10 +557,10 @@ export function CreateInstanceDialog() {
               </Button>
               <Button 
                 onClick={handleSubmit} 
-                disabled={isCreating}
+                disabled={createServiceMutation.isPending}
                 className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                {isCreating ? (
+                {createServiceMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Creating...
