@@ -26,7 +26,6 @@ import { AlertCircle, ArrowUpRight, Cloud, Loader2, Plus, Terminal } from 'lucid
 import { toast } from "sonner";
 import Image from "next/image";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
 import { getAgentConnectCommand, getWorkspaceDisplayUrl } from "@/lib/utils";
 
@@ -58,6 +57,7 @@ export function CreateInstanceDialog() {
   const [selectedRegion, setSelectedRegion] = useState<string | undefined>(undefined);
   const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>("none");
   const [selectedPersistent, setSelectedPersistent] = useState<boolean>(true);
+  const [isCreating, setIsCreating] = useState<boolean>(false);
 
   const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
@@ -139,9 +139,8 @@ export function CreateInstanceDialog() {
         {
           onData: (payload) => {
             if (payload.status === "running") {
-              toast.success("Workspace is ready! Redirecting you now");
+              toast.success("Your Workspace is ready");
               queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
-              console.log(payload.workspaceDomain);
               subscription.unsubscribe();
               console.log("Unsubscribed from workspace status");
               resolve();
@@ -169,6 +168,7 @@ export function CreateInstanceDialog() {
         console.log("Subscribing to workspace status", data.workspace.id);
         await subscribeToWorkspaceStatus(data.workspace.id, data.workspace.userId);
       }
+      setIsCreating(false);
       queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
     },
     onError: (error) => {
@@ -178,6 +178,7 @@ export function CreateInstanceDialog() {
   }));
 
   const handleSubmit = async () => {
+    setIsCreating(true);
     if (workspaceType === "local") {
       if (!selectedAgentTypeId) {
         toast.error("Please select an agent type.");
@@ -187,7 +188,6 @@ export function CreateInstanceDialog() {
         toast.error("Local provider not available. Please try again.");
         return;
       }
-      
       await createServiceMutation.mutateAsync({
         subdomain: localSubdomain,
         name: localName || undefined,
@@ -558,10 +558,10 @@ export function CreateInstanceDialog() {
               </Button>
               <Button 
                 onClick={handleSubmit} 
-                disabled={createServiceMutation.isPending}
+                disabled={isCreating}
                 className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                {createServiceMutation.isPending ? (
+                {isCreating ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Creating...
