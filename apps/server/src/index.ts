@@ -20,6 +20,21 @@ function getPublicOriginFromRequest(req: Request): string {
 	return new URL(req.url).origin;
 }
 
+function getTunnelOriginFromRequest(req: Request): string {
+	// Prefer explicit tunnel URL if configured (managed/prod commonly uses a separate tunnel host)
+	if (env.TUNNEL_PUBLIC_URL) {
+		try {
+			return new URL(env.TUNNEL_PUBLIC_URL).origin;
+		} catch {
+			// fall back
+		}
+	}
+
+	// Otherwise derive from the public origin (self-hosted proxy often serves /tunnel/* on the same host)
+	return getPublicOriginFromRequest(req);
+}
+
+
 function toTunnelWsUrl(origin: string): string {
 	const u = new URL(origin);
 	u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
@@ -88,6 +103,7 @@ app.post("/api/agent/tunnel-token", async (c) => {
 	try {
 		const result = await agentAuthService.mintTunnelToken({ agentToken: token, workspaceId: body.workspaceId });
 		const publicOrigin = getPublicOriginFromRequest(c.req.raw);
+		const tunnelOrigin = getTunnelOriginFromRequest(c.req.raw);
 
 		return c.json({
 			...result,
@@ -95,7 +111,7 @@ app.post("/api/agent/tunnel-token", async (c) => {
 				// Agent expects an origin (it appends `/api/...` internally).
 				serverUrl: publicOrigin,
 				// Agent websocket connect URL.
-				wsUrl: toTunnelWsUrl(publicOrigin),
+				wsUrl: toTunnelWsUrl(tunnelOrigin),
 				// Help the agent render workspace/service URLs correctly.
 				routingMode: env.ROUTING_MODE,
 				baseDomain: env.BASE_DOMAIN,

@@ -320,7 +320,7 @@ async function runConnect(args: ConnectArgs) {
 		}
 
 		if (!args.port) {
-			const portInput = await prompt("Enter the local port to expose (e.g. 3000): ");
+			const portInput = await prompt("Enter the local port to expose (e.g. 4096): ");
 			const parsedPort = Number.parseInt(portInput, 10);
 			if (!Number.isFinite(parsedPort) || parsedPort <= 0) {
 				throw new Error("Invalid port number");

@@ -35,6 +35,7 @@ const baseSchema = z.object({
   BETTER_AUTH_SECRET: optional, // Required but handled by auth package
   API_URL: optional,
   TUNNEL_URL: optional,
+  TUNNEL_PUBLIC_URL: optional,
 
   // Database & Redis
   DATABASE_URL: optional, // Required but may be set elsewhere
