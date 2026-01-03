@@ -935,8 +935,8 @@ export const workspaceRouter = router({
       // Validate that the provided repo is publicly clonable using `git ls-remote`
       if (input.repo) {
         const repoUrl = input.repo;
-        // Only support HTTPS URLs for now
-        if (!/^https:\/\/.+\.git$/i.test(repoUrl)) {
+        // Only support HTTPS URLs for now; `.git` suffix is added later if missing
+        if (!/^https:\/\/.+$/i.test(repoUrl)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL must be a valid HTTPS Git URL" });
         }
 
