@@ -900,7 +900,12 @@ export const workspaceRouter = router({
     .input(
       z.object({
         name: z.string().optional(),
-        repo: z.string().transform((val) => val && !val.endsWith('.git') ? `${val}.git` : val).optional(), // Optional for local workspaces
+        repo: z.string().transform((val) => {
+          if (val.length > 0 && !val.endsWith('.git')) {
+            return `${val}.git`;
+          }
+          return val;
+        }).optional(), // Optional for local workspaces
         subdomain: z.union([
           z.string().min(1).max(63).regex(/^[a-z0-9-]+$/),
           z.literal("")
