@@ -11,10 +11,12 @@ export const t = initTRPC.context<Context>().create({
 		maxDurationMs: 5 * 60 * 1_000, // 5 minutes
 		ping: {
 		  enabled: true,
-		  intervalMs: 3_000,
+		  // Keep connections alive aggressively in dev/proxies to avoid EventSource reconnect loops.
+		  intervalMs: 1_000,
 		},
 		client: {
-		  reconnectAfterInactivityMs: 5_000,
+		  // The client will auto-reconnect if it doesn't see any events (including pings) in this window.
+		  reconnectAfterInactivityMs: 20_000,
 		},
 	}
 });

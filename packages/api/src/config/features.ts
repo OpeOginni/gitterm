@@ -121,7 +121,8 @@ export type UserPlan = "free" | "tunnel" | "pro";
  * Plan features available for gating
  */
 export type PlanFeature =
-  | "customSubdomain" // Custom subdomain for any workspace (local or cloud)
+  | "customTunnelSubdomain" // Custom subdomain for local workspaces
+  | "customCloudSubdomain" // Custom subdomain for cloud-hosted workspaces
   | "cloudHosting" // Access to cloud-hosted workspaces
   | "unlimitedCloudMinutes" // No daily limit on cloud usage
   | "multiRegion" // Deploy to multiple regions
@@ -136,14 +137,16 @@ export type PlanFeature =
  *
  * | Feature              | Free  | Tunnel | Pro   |
  * |----------------------|-------|--------|-------|
- * | customSubdomain      | No    | Yes    | Yes   |
+ * | customTunnelSubdomain| No    | Yes    | Yes   |
+ * | customCloudSubdomain | No    | No    | Yes   |
  * | cloudHosting         | Yes   | Yes    | Yes   |
  * | unlimitedCloudMinutes| No    | No     | Yes   |
  * | multiRegion          | No    | No     | Yes   |
  * | prioritySupport      | No    | No     | No    |
  */
 const PLAN_FEATURE_MATRIX: Record<PlanFeature, Record<UserPlan, boolean>> = {
-  customSubdomain: { free: false, tunnel: true, pro: true },
+  customTunnelSubdomain: { free: false, tunnel: true, pro: true },
+  customCloudSubdomain: { free: false, tunnel: false, pro: true },
   cloudHosting: { free: true, tunnel: true, pro: true },
   unlimitedCloudMinutes: { free: false, tunnel: false, pro: true },
   multiRegion: { free: false, tunnel: false, pro: true },
@@ -201,10 +204,17 @@ export const getDailyMinuteQuotaAsync = async (plan: UserPlan): Promise<number> 
 };
 
 /**
- * Check if a plan can use custom subdomains
+ * Check if a plan can use custom tunnel subdomains
  */
-export const canUseCustomSubdomain = (plan: UserPlan): boolean => {
-  return planHasFeature(plan, "customSubdomain");
+export const canUseCustomTunnelSubdomain = (plan: UserPlan): boolean => {
+  return planHasFeature(plan, "customTunnelSubdomain");
+};
+
+/**
+ * Check if a plan can use custom cloud subdomains
+ */
+export const canUseCustomCloudSubdomain = (plan: UserPlan): boolean => {
+  return planHasFeature(plan, "customCloudSubdomain");
 };
 
 /**

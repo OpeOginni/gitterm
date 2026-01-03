@@ -54,9 +54,10 @@ app.get("/", (c) => {
 	return c.text("OK");
 });
 
-export default app;
-
-// export default {
-// 	fetch: app.fetch,
-// 	port: process.env.PORT ? parseInt(process.env.PORT) : 8080,
-// };
+// Bun's default request timeout is ~10s; that breaks long-lived SSE subscriptions
+// and can also kill slower internal webhook processing.
+export default {
+	fetch: app.fetch,
+	port: env.PORT,
+	idleTimeout: 120, // seconds
+};

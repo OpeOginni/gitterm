@@ -625,21 +625,10 @@ export const internalRouter = router({
           workspaceDomain: workspace.domain
         });
 
-        // Emit status events for each updated workspace
-        for (const record of updatedWorkspaces) {
-          WORKSPACE_EVENTS.emitStatus({
-            workspaceId: record.id,
-            status: record.status,
-            updatedAt: record.updatedAt,
-            userId: record.userId,
-            workspaceDomain: record.workspaceDomain
-          });
-        }
-
-        return { updated: updatedWorkspaces.length };
+        return { updated: updatedWorkspaces };
       }
 
-      return { updated: 0 };
+      return { updated: [] };
     }),
 
   /**

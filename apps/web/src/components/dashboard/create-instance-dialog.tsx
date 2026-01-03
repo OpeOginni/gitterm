@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { listenerTrpc, queryClient, trpc } from "@/utils/trpc";
+import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,6 +30,7 @@ import Link from "next/link";
 import { getAgentConnectCommand, getWorkspaceDisplayUrl } from "@/lib/utils";
 import { isBillingEnabled } from "@gitterm/env/web";
 import type { Route } from "next";
+import { useWorkspaceStatusWatcher } from "@/components/workspace-status-watcher";
 
 const ICON_MAP: Record<string, string> = {
   "opencode": "/opencode.svg",
@@ -60,6 +61,7 @@ export function CreateInstanceDialog() {
   const [selectedRegion, setSelectedRegion] = useState<string>("");
   const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>("none");
   const [selectedPersistent, setSelectedPersistent] = useState<boolean>(true);
+  const { watchWorkspaceStatus } = useWorkspaceStatusWatcher();
 
   const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
@@ -134,42 +136,15 @@ export function CreateInstanceDialog() {
     }
   }, [open]); 
 
-  const subscribeToWorkspaceStatus = async (workspaceId: string, userId: string) => {
-    return new Promise<void>((resolve, reject) => {
-      const subscription = listenerTrpc.workspace.status.subscribe(
-        { workspaceId, userId },
-        {
-          onData: (payload) => {
-            if (payload.status === "running") {
-              toast.success("Your Workspace is ready");
-              queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
-              subscription.unsubscribe();
-              console.log("Unsubscribed from workspace status");
-              resolve();
-            }
-          },
-          onError: (error) => {
-            console.error(error);
-            toast.error(`Failed to subscribe to workspace status: ${error.message}`);
-            reject(error);
-          },
-        }
-      );
-    });
-  };
-
   const createServiceMutation = useMutation(trpc.workspace.createWorkspace.mutationOptions({
     onSuccess: (data) => {
       if (data.command) {
         toast.success("Local tunnel created successfully");
-        // Generate the command on the client so it always matches the current host (gitterm.dev vs self-hosted).
         setCliCommand(getAgentConnectCommand(data.workspace.id));
       } else {
         toast.success("Workspace is provisioning");
         console.log("Subscribing to workspace status", data.workspace.id);
-        subscribeToWorkspaceStatus(data.workspace.id, data.workspace.userId).catch((error) => {
-          console.error("Subscription error:", error);
-        })
+        watchWorkspaceStatus({ workspaceId: data.workspace.id, userId: data.workspace.userId });
       }
       setOpen(false);
       queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
@@ -222,9 +197,6 @@ export function CreateInstanceDialog() {
     });
   };
 
-  console.log("subdomainPermissions", subdomainPermissions);
-
-  console.log("isBillingEnabled", isBillingEnabled());
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -321,10 +293,10 @@ export function CreateInstanceDialog() {
                       value={localSubdomain}
                       onChange={(e) => setLocalSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                       className="bg-secondary/30 border-border/50 focus:border-accent"
-                      disabled={!subdomainPermissions?.canUseCustomSubdomain}
+                      disabled={!subdomainPermissions?.canUseCustomTunnelSubdomain}
                     />
                     <p className="text-xs text-muted-foreground">
-                      {subdomainPermissions?.canUseCustomSubdomain ? (
+                      {subdomainPermissions?.canUseCustomTunnelSubdomain ? (
                         <>Your tunnel will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(localSubdomain || "my-app")}</span></>
                       ) : (
                         <span className="flex items-center gap-1 flex-wrap">
@@ -403,10 +375,10 @@ export function CreateInstanceDialog() {
                       value={cloudSubdomain}
                       onChange={(e) => setCloudSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                       className="bg-secondary/30 border-border/50 focus:border-accent"
-                      disabled={!subdomainPermissions?.canUseCustomSubdomain}
+                      disabled={!subdomainPermissions?.canUseCustomCloudSubdomain}
                     />
                     <p className="text-xs text-muted-foreground">
-                      {subdomainPermissions?.canUseCustomSubdomain ? (
+                      {subdomainPermissions?.canUseCustomCloudSubdomain ? (
                         cloudSubdomain 
                           ? <>Your workspace will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(cloudSubdomain)}</span></>
                           : "Leave empty for an auto-generated subdomain"

@@ -1,8 +1,7 @@
 import z from "zod";
 import { publicProcedure, router } from "../../index";
 import { TRPCError } from "@trpc/server";
-import { createInternalClient } from "../../client/internal";
-import env from "@gitterm/env/listener";
+import { getInternalClient } from "../../client/internal";
 import {
 	WORKSPACE_STATUS_EVENT,
 	workspaceEventEmitter,
@@ -10,20 +9,6 @@ import {
 } from "../../events/workspace";
 import { on } from "node:events";
 
-// Create internal client for calling server
-const getClient = () => {
-  const serverUrl = env.SERVER_URL;
-  const apiKey = env.INTERNAL_API_KEY;
-  
-  if (!serverUrl || !apiKey) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Listener not configured: SERVER_URL or INTERNAL_API_KEY missing",
-    });
-  }
-  
-  return createInternalClient(serverUrl, apiKey);
-};
 
 export const workspaceEventsRouter = router({
 	status: publicProcedure
@@ -35,7 +20,7 @@ export const workspaceEventsRouter = router({
 		)
 		.subscription(async function* ({ input, signal }) {
 			// Validate workspace access via server's internal API
-			const client = getClient();
+			const client = getInternalClient();
 			
 			let initialState: WorkspaceStatusEvent;
 			try {
