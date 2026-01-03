@@ -961,6 +961,10 @@ export const workspaceRouter = router({
             throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
           }
         } catch (err: any) {
+          console.error("Failed to validate repository URL with git ls-remote", {
+            repoUrl,
+            error: err,
+          });
           throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
         }
       }
