@@ -23,7 +23,8 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
   const emailAuthEnabled = isEmailAuthEnabled();
   const githubAuthEnabled = isGitHubAuthEnabled();
 
-  const webOrigin = `https://${env.NEXT_PUBLIC_BASE_DOMAIN}`;
+  const webOrigin = env.NODE_ENV === "development" ? `http://${env.NEXT_PUBLIC_BASE_DOMAIN}` : `https://${env.NEXT_PUBLIC_BASE_DOMAIN}`;
+  
   const callbackURL = new URL(
     redirectUrl && redirectUrl.startsWith("/") ? redirectUrl : "/dashboard",
     webOrigin

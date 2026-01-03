@@ -22,7 +22,7 @@ import {
 } from "../../utils/metering";
 import { getProviderByCloudProviderId, type PersistentWorkspaceInfo, type WorkspaceInfo } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
-import { getGitHubAppService, githubAppService } from "../../service/github";
+import { getGitHubAppService } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { sendAdminMessage } from "../../utils/discord";
@@ -94,6 +94,7 @@ export const workspaceRouter = router({
         message: "User not authenticated",
       });
     }
+    
     
     return {
       canUseCustomSubdomain: canUseCustomSubdomain(userPlan as UserPlan),
@@ -1134,7 +1135,7 @@ export const workspaceRouter = router({
           if (!canUseCustomSubdomain(userPlan)) {
             throw new TRPCError({
               code: "FORBIDDEN",
-              message: "Custom subdomains require a Tunnel, Pro, or Enterprise plan.",
+              message: "Custom subdomains require a Tunnel or Pro plan.",
             });
           }
           

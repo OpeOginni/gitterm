@@ -155,7 +155,7 @@
     },
     "packages/agent": {
       "name": "@opeoginni/gitterm-agent",
-      "version": "0.1.12",
+      "version": "0.1.13",
       "bin": {
         "gitterm-agent": "./dist/index.js",
       },

@@ -22,12 +22,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, ArrowUpRight, Cloud, Loader2, Plus, Terminal } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Cloud, Loader2, Plus, Terminal, Sparkles } from 'lucide-react';
 import { toast } from "sonner";
 import Image from "next/image";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { getAgentConnectCommand, getWorkspaceDisplayUrl } from "@/lib/utils";
+import { isBillingEnabled } from "@gitterm/env/web";
+import type { Route } from "next";
 
 const ICON_MAP: Record<string, string> = {
   "opencode": "/opencode.svg",
@@ -220,6 +222,9 @@ export function CreateInstanceDialog() {
     });
   };
 
+  console.log("subdomainPermissions", subdomainPermissions);
+
+  console.log("isBillingEnabled", isBillingEnabled());
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -322,7 +327,18 @@ export function CreateInstanceDialog() {
                       {subdomainPermissions?.canUseCustomSubdomain ? (
                         <>Your tunnel will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(localSubdomain || "my-app")}</span></>
                       ) : (
-                        "You will be generated a subdomain automatically. Upgrade your plan to use a custom subdomain."
+                        <span className="flex items-center gap-1 flex-wrap">
+                          A subdomain will be generated automatically.
+                          {isBillingEnabled() && (
+                            <Link 
+                              href={"/pricing" as Route} 
+                              className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              Upgrade for custom subdomains
+                            </Link>
+                          )}
+                        </span>
                       )}
                     </p>
                   </div>
@@ -377,27 +393,39 @@ export function CreateInstanceDialog() {
                     />
                   </div>
 
-                  {subdomainPermissions?.canUseCustomSubdomain && (
-                    <div className="grid gap-2">
-                      <Label htmlFor="cloud-subdomain" className="text-sm font-medium">
-                        Custom Subdomain <span className="text-muted-foreground font-normal">(optional)</span>
-                      </Label>
-                      <Input
-                        id="cloud-subdomain"
-                        placeholder="my-workspace"
-                        value={cloudSubdomain}
-                        onChange={(e) => setCloudSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                        className="bg-secondary/30 border-border/50 focus:border-accent"
-                        disabled={!subdomainPermissions?.canUseCustomSubdomain}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {cloudSubdomain 
+                  <div className="grid gap-2">
+                    <Label htmlFor="cloud-subdomain" className="text-sm font-medium">
+                      Custom Subdomain <span className="text-muted-foreground font-normal">(optional)</span>
+                    </Label>
+                    <Input
+                      id="cloud-subdomain"
+                      placeholder="my-workspace"
+                      value={cloudSubdomain}
+                      onChange={(e) => setCloudSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                      className="bg-secondary/30 border-border/50 focus:border-accent"
+                      disabled={!subdomainPermissions?.canUseCustomSubdomain}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {subdomainPermissions?.canUseCustomSubdomain ? (
+                        cloudSubdomain 
                           ? <>Your workspace will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(cloudSubdomain)}</span></>
                           : "Leave empty for an auto-generated subdomain"
-                        }
-                      </p>
-                    </div>
-                  )}
+                      ) : (
+                        <span className="flex items-center gap-1 flex-wrap">
+                          A subdomain will be generated automatically.
+                          {isBillingEnabled() && (
+                            <Link 
+                              href={"/pricing" as Route} 
+                              className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              Upgrade for custom subdomains
+                            </Link>
+                          )}
+                        </span>
+                      )}
+                    </p>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">

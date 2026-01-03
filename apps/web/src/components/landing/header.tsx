@@ -1,12 +1,15 @@
 "use client"
 
 import Link from "next/link"
+import type { Route } from "next"
 import { Button } from "@/components/ui/button"
 import { Terminal } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
+import { isBillingEnabled } from "@gitterm/env/web"
 
 export function LandingHeader() {
   const { data: session } = authClient.useSession()
+  const showPricing = isBillingEnabled()
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
@@ -23,6 +26,11 @@ export function LandingHeader() {
           <Link href="#how-it-works" className="text-sm text-muted-foreground transition-colors hover:text-primary">
             How it Works
           </Link>
+          {showPricing && (
+            <Link href={"/pricing" as Route} className="text-sm text-muted-foreground transition-colors hover:text-primary">
+              Pricing
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-3">

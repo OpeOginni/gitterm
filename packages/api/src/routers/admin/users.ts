@@ -27,16 +27,16 @@ const listUsersSchema = z.object({
 
 const updateUserSchema = z.object({
   id: z.string().min(1),
-  plan: z.enum(["free", "tunnel", "pro", "enterprise"]).optional(),
+  plan: z.enum(["free", "tunnel", "pro"]).optional(),
   role: z.enum(["user", "admin"]).optional(),
 });
 
 const createUserSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8, "Password must be at least 8 characters"),
   name: z.string().min(1, "Name is required"),
   role: z.enum(["user", "admin"]).default("user"),
-  plan: z.enum(["free", "tunnel", "pro", "enterprise"]).default("free"),
+  plan: z.enum(["free", "tunnel", "pro"]).default("free"),
 });
 
 // ============================================================================

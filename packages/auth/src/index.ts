@@ -133,7 +133,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       plan: {
-        type: ["free", "tunnel", "pro", "enterprise"],
+        type: ["free", "tunnel", "pro"],
         required: false,
         defaultValue: "free",
         input: false, // don't allow user to set plan

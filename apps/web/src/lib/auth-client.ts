@@ -56,12 +56,12 @@ export const authClient = isBillingEnabled
  * Initiate checkout for a subscription plan
  * Redirects to Polar checkout page
  * 
- * @param slug - Product slug ("tunnel", "pro", or "enterprise")
+ * @param slug - Product slug ("tunnel", "pro")
  * 
  * @example
  * await initiateCheckout("pro");
  */
-export async function initiateCheckout(slug: "tunnel" | "pro" | "enterprise") {
+export async function initiateCheckout(slug: "tunnel" | "pro") {
   if (!isBillingEnabled) {
     console.warn("[auth-client] Billing is not enabled. Checkout unavailable.");
     return;

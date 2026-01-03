@@ -1,7 +1,13 @@
+"use client"
+
 import Link from "next/link"
+import type { Route } from "next"
 import { Terminal } from "lucide-react"
+import { isBillingEnabled } from "@gitterm/env/web"
 
 export function Footer() {
+  const showPricing = isBillingEnabled()
+  
   return (
     <footer className="border-t border-border py-12">
       <div className="mx-auto max-w-6xl px-6">
@@ -15,7 +21,11 @@ export function Footer() {
             <Link href="/dashboard" className="hover:text-foreground transition-colors">
               Dashboard
             </Link>
-
+            {showPricing && (
+              <Link href={"/pricing" as Route} className="hover:text-foreground transition-colors">
+                Pricing
+              </Link>
+            )}
             <Link href="https://www.npmjs.com/package/@opeoginni/gitterm-agent" target="_blank" className="hover:text-foreground transition-colors">
               npm
             </Link>

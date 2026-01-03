@@ -11,6 +11,7 @@ const schema = z.object({
   NODE_ENV: nodeEnv,
 
   NEXT_PUBLIC_ENABLE_BILLING: boolWithDefault(false),
+  NEXT_PUBLIC_ENABLE_PRICING: boolWithDefault(false),
   NEXT_PUBLIC_ENABLE_EMAIL_AUTH: boolWithDefault(false),
   NEXT_PUBLIC_ENABLE_GITHUB_AUTH: boolWithDefault(true),
   NEXT_PUBLIC_BASE_DOMAIN: z.string().default("gitterm.dev"),
@@ -31,6 +32,7 @@ export type WebEnv = z.infer<typeof schema>;
 const rawEnv: Record<string, string | undefined> = {
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_ENABLE_BILLING: process.env.NEXT_PUBLIC_ENABLE_BILLING,
+  NEXT_PUBLIC_ENABLE_PRICING: process.env.NEXT_PUBLIC_ENABLE_PRICING,
   NEXT_PUBLIC_ENABLE_EMAIL_AUTH: process.env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH,
   NEXT_PUBLIC_ENABLE_GITHUB_AUTH: process.env.NEXT_PUBLIC_ENABLE_GITHUB_AUTH,
   NEXT_PUBLIC_BASE_DOMAIN: process.env.NEXT_PUBLIC_BASE_DOMAIN,
@@ -46,6 +48,7 @@ const env = parseEnv(schema, rawEnv);
 export default env;
 
 export const isBillingEnabled = () => env.NEXT_PUBLIC_ENABLE_BILLING;
+export const isPricingEnabled = () => env.NEXT_PUBLIC_ENABLE_PRICING;
 export const isEmailAuthEnabled = () => env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH;
 export const isGitHubAuthEnabled = () => env.NEXT_PUBLIC_ENABLE_GITHUB_AUTH;
 

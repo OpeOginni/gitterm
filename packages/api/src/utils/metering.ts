@@ -28,7 +28,7 @@ export async function getConfiguredFreeTierMinutes(): Promise<number> {
  * Get or create daily usage record for a user
  * In self-hosted mode, this still tracks usage but won't enforce limits
  */
-export async function getOrCreateDailyUsage(userId: string, userPlan: "free" | "pro" | "enterprise" = "free"): Promise<{ minutesUsed: number; minutesRemaining: number }> {
+export async function getOrCreateDailyUsage(userId: string, userPlan: "free" | "pro" = "free"): Promise<{ minutesUsed: number; minutesRemaining: number }> {
   // In self-hosted mode or for paid plans, return unlimited
   if (isSelfHosted()) {
     return {
@@ -81,7 +81,7 @@ export async function getOrCreateDailyUsage(userId: string, userPlan: "free" | "
  * Check if user has remaining daily quota
  * Always returns true in self-hosted mode or when quota enforcement is disabled
  */
-export async function hasRemainingQuota(userId: string, userPlan: "free" | "pro" | "enterprise" = "free"): Promise<boolean> {
+export async function hasRemainingQuota(userId: string, userPlan: "free" | "pro" = "free"): Promise<boolean> {
   // Skip quota check if enforcement is disabled
   if (!shouldEnforceQuota()) {
     return true;

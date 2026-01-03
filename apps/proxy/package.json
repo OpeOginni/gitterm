@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "caddy run --config Caddyfile.local --envfile .env --watch"
+    "dev": "caddy run --config Caddyfile.local --envfile .env --watch",
+    "ngrok": "ngrok http --url=bluebird-thankful-previously.ngrok-free.app 8888"
   },
   "dependencies": {
     "@gitterm/config": "*"
