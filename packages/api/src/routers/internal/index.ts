@@ -1,6 +1,6 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
-import { db, eq, and, sql, gt } from "@gitterm/db";
+import { db, eq, and, sql, gt, or } from "@gitterm/db";
 import { workspace, usageSession, dailyUsage, type SessionStopSource } from "@gitterm/db/schema/workspace";
 import { workspaceGitConfig } from "@gitterm/db/schema/integrations";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
@@ -9,7 +9,7 @@ import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { closeUsageSession, getConfiguredIdleTimeout, getConfiguredFreeTierMinutes } from "../../utils/metering";
 import { auth } from "@gitterm/auth";
-import { githubAppService, GitHubInstallationNotFoundError } from "../../service/github";
+import { GitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { logger } from "../../utils/logger";
 
 // Railway webhook schema (moved from listener)
@@ -354,7 +354,18 @@ export const internalRouter = router({
 
       return { success: true };
     }),
+  getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
+    const longTermInactiveWorkspaces = await db
+      .select()
+      .from(workspace)
+      .where(and(
+        or(eq(workspace.status, "running"), eq(workspace.status, "stopped")),
+        eq(workspace.tunnelType, "cloud"),
+        sql`${workspace.lastActiveAt} < ${new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)}` // 4 days ago
+      ));
 
+    return longTermInactiveWorkspaces;
+  }),
   // Get daily stats (for worker/analytics)
   getDailyStats: internalProcedure
     .input(z.object({ date: z.string() }))
@@ -436,6 +447,7 @@ export const internalRouter = router({
           });
         }
 
+        const githubAppService = new GitHubAppService();
         // Get GitHub App installation with verification
         const installation = await githubAppService.getUserInstallation(
           userId, 
@@ -613,21 +625,10 @@ export const internalRouter = router({
           workspaceDomain: workspace.domain
         });
 
-        // Emit status events for each updated workspace
-        for (const record of updatedWorkspaces) {
-          WORKSPACE_EVENTS.emitStatus({
-            workspaceId: record.id,
-            status: record.status,
-            updatedAt: record.updatedAt,
-            userId: record.userId,
-            workspaceDomain: record.workspaceDomain
-          });
-        }
-
-        return { updated: updatedWorkspaces.length };
+        return { updated: updatedWorkspaces };
       }
 
-      return { updated: 0 };
+      return { updated: [] };
     }),
 
   /**

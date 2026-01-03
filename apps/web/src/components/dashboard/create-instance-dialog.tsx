@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { listenerTrpc, queryClient, trpc } from "@/utils/trpc";
+import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,12 +22,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, ArrowUpRight, Cloud, Loader2, Plus, Terminal } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Cloud, Loader2, Plus, Terminal, Sparkles } from 'lucide-react';
 import { toast } from "sonner";
 import Image from "next/image";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { getAgentConnectCommand, getWorkspaceDisplayUrl } from "@/lib/utils";
+import { isBillingEnabled } from "@gitterm/env/web";
+import type { Route } from "next";
+import { useWorkspaceStatusWatcher } from "@/components/workspace-status-watcher";
 
 const ICON_MAP: Record<string, string> = {
   "opencode": "/opencode.svg",
@@ -58,6 +61,7 @@ export function CreateInstanceDialog() {
   const [selectedRegion, setSelectedRegion] = useState<string>("");
   const [selectedGitInstallationId, setSelectedGitInstallationId] = useState<string | undefined>("none");
   const [selectedPersistent, setSelectedPersistent] = useState<boolean>(true);
+  const { watchWorkspaceStatus } = useWorkspaceStatusWatcher();
 
   const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
@@ -132,42 +136,15 @@ export function CreateInstanceDialog() {
     }
   }, [open]); 
 
-  const subscribeToWorkspaceStatus = async (workspaceId: string, userId: string) => {
-    return new Promise<void>((resolve, reject) => {
-      const subscription = listenerTrpc.workspace.status.subscribe(
-        { workspaceId, userId },
-        {
-          onData: (payload) => {
-            if (payload.status === "running") {
-              toast.success("Your Workspace is ready");
-              queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
-              subscription.unsubscribe();
-              console.log("Unsubscribed from workspace status");
-              resolve();
-            }
-          },
-          onError: (error) => {
-            console.error(error);
-            toast.error(`Failed to subscribe to workspace status: ${error.message}`);
-            reject(error);
-          },
-        }
-      );
-    });
-  };
-
   const createServiceMutation = useMutation(trpc.workspace.createWorkspace.mutationOptions({
     onSuccess: (data) => {
       if (data.command) {
         toast.success("Local tunnel created successfully");
-        // Generate the command on the client so it always matches the current host (gitterm.dev vs self-hosted).
         setCliCommand(getAgentConnectCommand(data.workspace.id));
       } else {
         toast.success("Workspace is provisioning");
         console.log("Subscribing to workspace status", data.workspace.id);
-        subscribeToWorkspaceStatus(data.workspace.id, data.workspace.userId).catch((error) => {
-          console.error("Subscription error:", error);
-        })
+        watchWorkspaceStatus({ workspaceId: data.workspace.id, userId: data.workspace.userId });
       }
       setOpen(false);
       queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
@@ -316,13 +293,24 @@ export function CreateInstanceDialog() {
                       value={localSubdomain}
                       onChange={(e) => setLocalSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                       className="bg-secondary/30 border-border/50 focus:border-accent"
-                      disabled={!subdomainPermissions?.canUseCustomSubdomain}
+                      disabled={!subdomainPermissions?.canUseCustomTunnelSubdomain}
                     />
                     <p className="text-xs text-muted-foreground">
-                      {subdomainPermissions?.canUseCustomSubdomain ? (
+                      {subdomainPermissions?.canUseCustomTunnelSubdomain ? (
                         <>Your tunnel will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(localSubdomain || "my-app")}</span></>
                       ) : (
-                        "You will be generated a subdomain automatically. Upgrade your plan to use a custom subdomain."
+                        <span className="flex items-center gap-1 flex-wrap">
+                          A subdomain will be generated automatically.
+                          {isBillingEnabled() && (
+                            <Link 
+                              href={"/pricing" as Route} 
+                              className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              Upgrade for custom subdomains
+                            </Link>
+                          )}
+                        </span>
                       )}
                     </p>
                   </div>
@@ -377,27 +365,39 @@ export function CreateInstanceDialog() {
                     />
                   </div>
 
-                  {subdomainPermissions?.canUseCustomSubdomain && (
-                    <div className="grid gap-2">
-                      <Label htmlFor="cloud-subdomain" className="text-sm font-medium">
-                        Custom Subdomain <span className="text-muted-foreground font-normal">(optional)</span>
-                      </Label>
-                      <Input
-                        id="cloud-subdomain"
-                        placeholder="my-workspace"
-                        value={cloudSubdomain}
-                        onChange={(e) => setCloudSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                        className="bg-secondary/30 border-border/50 focus:border-accent"
-                        disabled={!subdomainPermissions?.canUseCustomSubdomain}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {cloudSubdomain 
+                  <div className="grid gap-2">
+                    <Label htmlFor="cloud-subdomain" className="text-sm font-medium">
+                      Custom Subdomain <span className="text-muted-foreground font-normal">(optional)</span>
+                    </Label>
+                    <Input
+                      id="cloud-subdomain"
+                      placeholder="my-workspace"
+                      value={cloudSubdomain}
+                      onChange={(e) => setCloudSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                      className="bg-secondary/30 border-border/50 focus:border-accent"
+                      disabled={!subdomainPermissions?.canUseCustomCloudSubdomain}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {subdomainPermissions?.canUseCustomCloudSubdomain ? (
+                        cloudSubdomain 
                           ? <>Your workspace will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(cloudSubdomain)}</span></>
                           : "Leave empty for an auto-generated subdomain"
-                        }
-                      </p>
-                    </div>
-                  )}
+                      ) : (
+                        <span className="flex items-center gap-1 flex-wrap">
+                          A subdomain will be generated automatically.
+                          {isBillingEnabled() && (
+                            <Link 
+                              href={"/pricing" as Route} 
+                              className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              Upgrade for custom subdomains
+                            </Link>
+                          )}
+                        </span>
+                      )}
+                    </p>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">

@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { queryClient } from "@/utils/trpc";
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
+import { WorkspaceStatusWatcherProvider } from "./workspace-status-watcher";
 
 export default function Providers({ children }: { children: React.ReactNode }) {	
 	return (
@@ -15,7 +16,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 			disableTransitionOnChange
 		>
 			<QueryClientProvider client={queryClient}>
-				{children}
+				<WorkspaceStatusWatcherProvider>
+					{children}
+				</WorkspaceStatusWatcherProvider>
 				<ReactQueryDevtools />
 			</QueryClientProvider>
 			<Toaster richColors position="top-right" />

@@ -30,6 +30,7 @@
     "dev:worker": "turbo -F worker dev",
     "dev:listener": "turbo -F listener dev",
     "dev:listener:ngrok": "turbo -F listener ngrok",
+    "dev:proxy:ngrok": "turbo -F proxy ngrok",
     "db:push": "turbo -F @gitterm/db db:push",
     "db:studio": "turbo -F @gitterm/db db:studio",
     "db:generate": "turbo -F @gitterm/db db:generate",

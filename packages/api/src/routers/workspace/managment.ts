@@ -20,14 +20,14 @@ import {
   createUsageSession,
   FREE_TIER_DAILY_MINUTES,
 } from "../../utils/metering";
-import { getProviderByCloudProviderId, type PersistentWorkspaceInfo, type WorkspaceInfo } from "../../providers";
+import { getProviderByCloudProviderId, type PersistentWorkspaceInfo } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
-import { getGitHubAppService, githubAppService } from "../../service/github";
+import { getGitHubAppService } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { sendAdminMessage } from "../../utils/discord";
 import { getWorkspaceDomain } from "../../utils/routing";
-import { canUseCustomSubdomain, type UserPlan } from "../../config/features";
+import { canUseCustomCloudSubdomain, canUseCustomTunnelSubdomain, type UserPlan } from "../../config/features";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -95,8 +95,10 @@ export const workspaceRouter = router({
       });
     }
     
+
     return {
-      canUseCustomSubdomain: canUseCustomSubdomain(userPlan as UserPlan),
+      canUseCustomTunnelSubdomain: canUseCustomTunnelSubdomain(userPlan as UserPlan),
+      canUseCustomCloudSubdomain: canUseCustomCloudSubdomain(userPlan as UserPlan),
       userPlan,
     };
   }),
@@ -898,7 +900,12 @@ export const workspaceRouter = router({
     .input(
       z.object({
         name: z.string().optional(),
-        repo: z.string().optional(), // Optional for local workspaces
+        repo: z.string().transform((val) => {
+          if (val.length > 0 && !val.endsWith('.git')) {
+            return `${val}.git`;
+          }
+          return val;
+        }).optional(), // Optional for local workspaces
         subdomain: z.union([
           z.string().min(1).max(63).regex(/^[a-z0-9-]+$/),
           z.literal("")
@@ -928,6 +935,38 @@ export const workspaceRouter = router({
           code: "NOT_FOUND",
           message: "User not found",
         });
+      }
+
+      // Validate that the provided repo is publicly clonable using `git ls-remote`
+      if (input.repo) {
+        const repoUrl = input.repo;
+        // Only support HTTPS URLs for now; `.git` suffix is added later if missing
+        if (!/^https:\/\/.+$/i.test(repoUrl)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL must be a valid HTTPS Git URL" });
+        }
+
+        try {
+          const proc = Bun.spawn(
+            ["git", "ls-remote", repoUrl],
+            {
+              env: {
+                ...process.env,
+                GIT_TERMINAL_PROMPT: "0",
+              },
+              timeout: 4000,
+            }
+          );
+          const exitCode = await proc.exited;
+          if (exitCode !== 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
+          }
+        } catch (err: any) {
+          console.error("Failed to validate repository URL with git ls-remote", {
+            repoUrl,
+            error: err,
+          });
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
+        }
       }
 
       // if (fetchedUser && !fetchedUser.allowTrial) 
@@ -1128,15 +1167,24 @@ export const workspaceRouter = router({
               message: `Subdomain '${input.subdomain}' is reserved and cannot be used`,
             });
           }
-          
-          // Check plan-based permissions for custom subdomains
-          // Note: canUseCustomSubdomain already returns true for self-hosted
-          if (!canUseCustomSubdomain(userPlan)) {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: "Custom subdomains require a Tunnel, Pro, or Enterprise plan.",
-            });
+
+        // Check plan-based permissions for custom subdomains
+          if (isLocal) {
+            if (!canUseCustomTunnelSubdomain(userPlan)) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: "Custom tunnel subdomains require a Tunnel or Pro plan.",
+              });
+            }
+          } else {
+            if (!canUseCustomCloudSubdomain(userPlan)) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: "Custom cloud subdomains require a Pro plan.",
+              });
+            }
           }
+
           
           // Check uniqueness - only among running/pending workspaces
           const [existing] = await db

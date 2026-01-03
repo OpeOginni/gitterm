@@ -1,23 +1,8 @@
 import z from "zod";
 import { publicProcedure, router } from "../../index";
 import { TRPCError } from "@trpc/server";
-import { createInternalClient } from "../../client/internal";
-import env from "@gitterm/env/listener";
-
-// Create internal client for calling server
-const getClient = () => {
-  const serverUrl = env.SERVER_URL;
-  const apiKey = env.INTERNAL_API_KEY;
-  
-  if (!serverUrl || !apiKey) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Listener not configured: SERVER_URL or INTERNAL_API_KEY missing",
-    });
-  }
-  
-  return createInternalClient(serverUrl, apiKey);
-};
+import { WORKSPACE_EVENTS } from "../../events/workspace";
+import { getInternalClient } from "../../client";
 
 // Railway webhook schema - matches server's expected input
 const deploymentStatus = z.enum(["BUILDING", "DEPLOYING", "FAILED", "SUCCESS"]);
@@ -62,15 +47,26 @@ const railwayWebhookSchema = z.object({
     commitHash: z.string().optional(),
     commitAuthor: z.string().optional(),
     commitMessage: z.string().optional(),
-  }).passthrough(),
+  }).loose(),
 });
 
 
 export const railwayWebhookRouter = router({
   handleWebhook: publicProcedure.input(railwayWebhookSchema).mutation(async ({ input }) => {
     try {
-      const client = getClient();
+      const client = getInternalClient();
       const result = await client.internal.processRailwayWebhook.mutate(input);
+      // The server updated the DB; now emit locally in the listener process so any
+      // open SSE subscriptions (`workspace.status`) can yield the update.
+      for (const record of result.updated) {
+        WORKSPACE_EVENTS.emitStatus({
+          workspaceId: record.id,
+          status: record.status,
+          updatedAt: new Date(record.updatedAt),
+          userId: record.userId,
+          workspaceDomain: record.workspaceDomain,
+        });
+      }
       return result;
     } catch (error) {
       if (error instanceof TRPCError) throw error;
