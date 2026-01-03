@@ -16,7 +16,7 @@ import {
   openCustomerPortal,
   isBillingEnabled,
 } from "@/lib/auth-client";
-import { Check, ExternalLink, Loader2, Sparkles, Zap, Terminal, ArrowRight } from "lucide-react";
+import { Check, ExternalLink, Loader2, Sparkles, Terminal, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 
