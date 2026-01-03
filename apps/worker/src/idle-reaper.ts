@@ -120,6 +120,30 @@ async function main() {
       );
     }
 
+    // ========================================================================
+    // 3. Delete workspaces that have not been reached or used in 4 days
+    // ========================================================================
+    if (features.idleReaping) {
+      console.log("[idle-reaper] Checking for workspaces that have not been reached or used in 4 days...");
+      const workspaces = await internalClient.internal.getLongTermInactiveWorkspaces.query();
+      if (workspaces.length === 0) {
+        console.log("[idle-reaper] No workspaces found that have not been reached or used in 4 days");
+      } else {
+        console.log(`[idle-reaper] Found ${workspaces.length} workspace(s) that have not been reached or used in 4 days`);
+      }
+      for (const ws of workspaces) {
+        try {
+          console.log(`[idle-reaper] Deleting workspace ${ws.id}...`);
+          await internalClient.internal.terminateWorkspaceInternal.mutate({ workspaceId: ws.id });
+          console.log(`[idle-reaper] Workspace ${ws.id} terminated`);
+          totalStopped++;
+        } catch (error) {
+          console.error(`[idle-reaper] Failed to delete workspace ${ws.id}:`, error);
+        }
+      }
+    }
+
+
     console.log(
       `[idle-reaper] Completed. Total workspaces stopped: ${totalStopped}`
     );
