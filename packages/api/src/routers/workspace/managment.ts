@@ -900,12 +900,7 @@ export const workspaceRouter = router({
     .input(
       z.object({
         name: z.string().optional(),
-        repo: z.string().transform((val) => {
-          if (val.length > 0 && !val.endsWith('.git')) {
-            return `${val}.git`;
-          }
-          return val;
-        }).optional(), // Optional for local workspaces
+        repo: z.string().optional(), // Optional for local workspaces
         subdomain: z.union([
           z.string().min(1).max(63).regex(/^[a-z0-9-]+$/),
           z.literal("")
@@ -939,7 +934,8 @@ export const workspaceRouter = router({
 
       // Validate that the provided repo is publicly clonable using `git ls-remote`
       if (input.repo) {
-        const repoUrl = input.repo;
+        const repoUrl = input.repo.endsWith('.git') ? input.repo : `${input.repo}.git`;
+        
         // Only support HTTPS URLs for now; `.git` suffix is added later if missing
         if (!/^https:\/\/.+$/i.test(repoUrl)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL must be a valid HTTPS Git URL" });
