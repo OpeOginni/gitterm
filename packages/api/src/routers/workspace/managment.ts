@@ -945,28 +945,28 @@ export const workspaceRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL must be a valid HTTPS Git URL" });
         }
 
-        try {
-          const proc = Bun.spawn(
-            ["git", "ls-remote", repoUrl],
-            {
-              env: {
-                ...process.env,
-                GIT_TERMINAL_PROMPT: "0",
-              },
-              timeout: 4000,
-            }
-          );
-          const exitCode = await proc.exited;
-          if (exitCode !== 0) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
-          }
-        } catch (err: any) {
-          console.error("Failed to validate repository URL with git ls-remote", {
-            repoUrl,
-            error: err,
-          });
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
-        }
+        // try {
+        //   const proc = Bun.spawn(
+        //     ["git", "ls-remote", repoUrl],
+        //     {
+        //       env: {
+        //         ...process.env,
+        //         GIT_TERMINAL_PROMPT: "0",
+        //       },
+        //       timeout: 4000,
+        //     }
+        //   );
+        //   const exitCode = await proc.exited;
+        //   if (exitCode !== 0) {
+        //     throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
+        //   }
+        // } catch (err: any) {
+        //   console.error("Failed to validate repository URL with git ls-remote", {
+        //     repoUrl,
+        //     error: err,
+        //   });
+        //   throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
+        // }
       }
 
       // if (fetchedUser && !fetchedUser.allowTrial) 
