@@ -90,11 +90,26 @@ export function CreateInstanceDialog() {
     return selectedCloud?.regions ?? [];
   }, [selectedCloudProviderId, cloudProvidersData]);
 
-  useEffect(() => {
-    if (!selectedAgentTypeId && agentTypesData?.agentTypes?.[0]) {
-      setSelectedAgentTypeId(agentTypesData.agentTypes[0].id);
+  // Get filtered agent types based on workspace type
+  const filteredAgentTypes = useMemo(() => {
+    if (!agentTypesData?.agentTypes) return [];
+    if (workspaceType === "local") {
+      return agentTypesData.agentTypes.filter((agent) => agent.serverOnly);
     }
-  }, [agentTypesData, selectedAgentTypeId]);
+    return agentTypesData.agentTypes;
+  }, [agentTypesData, workspaceType]);
+
+  // Auto-select first agent when workspace type changes or on initial load
+  useEffect(() => {
+    if (filteredAgentTypes.length > 0) {
+      const currentAgentValid = filteredAgentTypes.some(
+        (agent) => agent.id === selectedAgentTypeId
+      );
+      if (!currentAgentValid) {
+        setSelectedAgentTypeId(filteredAgentTypes[0].id);
+      }
+    }
+  }, [filteredAgentTypes, selectedAgentTypeId]);
 
   useEffect(() => {
     if (workspaceType === "local" && localProvider) {
@@ -330,7 +345,7 @@ export function CreateInstanceDialog() {
                         <SelectValue placeholder="Select agent" />
                       </SelectTrigger>
                       <SelectContent>
-                        {agentTypesData?.agentTypes?.map((agent) => (
+                        {filteredAgentTypes.map((agent) => (
                           <SelectItem key={agent.id} value={agent.id}>
                             <div className="flex items-center">
                               <Image 
@@ -406,7 +421,7 @@ export function CreateInstanceDialog() {
                           <SelectValue placeholder="Select agent" />
                         </SelectTrigger>
                         <SelectContent>
-                          {agentTypesData?.agentTypes?.map((agent) => (
+                          {filteredAgentTypes.map((agent) => (
                             <SelectItem key={agent.id} value={agent.id}>
                               <div className="flex items-center">
                                 <Image 

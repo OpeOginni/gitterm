@@ -850,6 +850,14 @@ export const workspaceRouter = router({
           });
         }
 
+        // Local workspaces can only use serverOnly agent types
+        if (isLocal && !agentTypeRecord.serverOnly) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Local workspaces can only use server-only agent types",
+          });
+        }
+
         if (!imageRecord) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
