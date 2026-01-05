@@ -28,7 +28,6 @@ export function FeedbackForm() {
     }))
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-        console.log("submit feedback");
         event.preventDefault();
         const feedback = textareaRef.current?.value || "";
         if (feedback.trim()) {

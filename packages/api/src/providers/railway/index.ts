@@ -28,7 +28,6 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
     }
 
-    console.log('config', config);
     const { serviceCreate } = await railway.ServiceCreate({
       input: {
         projectId: PROJECT_ID,

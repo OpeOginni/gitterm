@@ -202,7 +202,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
   return (
     <div className="space-y-6">
       {/* Current Plan Display */}
-      <Card>
+      <Card className="mb-4 border-border">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>

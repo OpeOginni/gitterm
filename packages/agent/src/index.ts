@@ -24,8 +24,6 @@ function getWorkspaceUrl(
 	const protocol = baseDomain.includes("localhost") ? "http" : "https";
 
 	if (routingMode === "path") {
-		// In many deployments the API host differs from the public app/proxy host (e.g. api.example.com vs example.com).
-		// Prefer BASE_DOMAIN for the public URL; fall back to serverUrl when BASE_DOMAIN isn't provided.
 		const origin = cfg?.baseDomain ? `${protocol}://${baseDomain}` : cfg?.serverUrl || "http://localhost";
 		return `${origin.replace(/\/+$/, "")}/ws/${subdomain}`;
 	}

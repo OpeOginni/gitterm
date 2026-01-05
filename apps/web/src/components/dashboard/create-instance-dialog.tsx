@@ -143,7 +143,6 @@ export function CreateInstanceDialog() {
         setCliCommand(getAgentConnectCommand(data.workspace.id));
       } else {
         toast.success("Workspace is provisioning");
-        console.log("Subscribing to workspace status", data.workspace.id);
         watchWorkspaceStatus({ workspaceId: data.workspace.id, userId: data.workspace.userId });
       }
       setOpen(false);
