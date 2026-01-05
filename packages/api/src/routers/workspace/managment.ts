@@ -1028,7 +1028,7 @@ export const workspaceRouter = router({
           "OPENCODE_CONFIG_BASE64": agentConfig ? Buffer.from(JSON.stringify({
             ...(agentConfig.config as Record<string, any>),
             "username": `Gitterm: ${fetchedUser.name}`,
-           })).toString("base64") : DEFAULT_OPENCODE_CONFIG,
+           })).toString("base64") : Buffer.from(JSON.stringify(DEFAULT_OPENCODE_CONFIG)).toString("base64"),
           "USER_GITHUB_USERNAME": githubUsername,
           "GITHUB_APP_TOKEN": githubAppToken,
           "GITHUB_APP_TOKEN_EXPIRY": githubAppTokenExpiry,
