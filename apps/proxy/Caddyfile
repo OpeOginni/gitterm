@@ -9,27 +9,27 @@
 	}
 }
 
-# SUBDOMAIN-BASED ROUTING (DEFAULT)
+# SUBDOMAIN-BASED ROUTING (MANAGED)
 #
-# This is the default Caddyfile for managed deployments.
-# For path-based routing (self-hosted), use Caddyfile.path instead.
-#
-# See also:
-# - Caddyfile.subdomain : Subdomain routing (wildcard DNS required)
-# - Caddyfile.path      : Path-based routing (no wildcard DNS required)
-# - Caddyfile.local     : Local development
+# This is the Caddyfile for managed deployments with wildcard DNS.
+# Used by Dockerfile.managed for Railway managed deployment.
 #
 # Subdomain Format Support:
 # - ws-<uuid>.gitterm.dev      : Cloud & Local workspaces (auto-generated)
 # - <custom-name>.gitterm.dev  : Paid tier custom subdomains
 # - Reserved (blocked):         api, tunnel, www, admin, etc.
+#
+# Environment Variables:
+# - SERVER_URL       -> API server URL (e.g., server.railway.internal:8080)
+# - TUNNEL_PROXY_URL -> Tunnel proxy URL (e.g., tunnel.railway.internal:8080)
+# - INTERNAL_API_KEY -> Shared key for internal API calls
 
 # Listen on port 80 for all requests
 :80 {
 	# Health check endpoint
 	handle /health {
 		header Content-Type application/json
-		respond `{"status":"UP"}` 200
+		respond `{"status":"UP","mode":"managed"}` 200
 	}
 
 	# Block reserved subdomains at the Caddy level (defense in depth)
@@ -45,11 +45,11 @@
 	route {
 		# Forward auth to API server (validates workspace exists and user has access)
 		# The API returns HTML error pages directly for non-2xx responses
-		forward_auth server.railway.internal:8080 {
+		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			# Copy select headers from auth response into request
-			copy_headers X-Tunnel-Type X-Workspace-ID X-User-ID X-Subdomain
+			# Copy headers from auth response into request
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Container-Host X-Container-Port X-Container-Protocol
 
 			# Copy original headers
 			header_up Host {host}
@@ -63,16 +63,16 @@
 		}
 
 		# Define matchers
-		@local_tunnel {
-			header X-Tunnel-Type local
+		@local_workspace {
+			header X-Hosting-Type local
 		}
-		@workspace {
-			header_regexp subdomain Host ^([^.]+)\.gitterm\.dev$
+		@cloud_workspace {
+			header X-Hosting-Type cloud
 		}
 
-		# Local tunnels: route to tunnel-proxy (MUST be first!)
+		# Local workspaces: route to tunnel-proxy (MUST be first!)
 		# Tunnel-proxy returns HTML error pages directly
-		reverse_proxy @local_tunnel tunnel.railway.internal:8080 {
+		reverse_proxy @local_workspace {$TUNNEL_PROXY_URL} {
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
@@ -88,7 +88,7 @@
 			header_up X-User-Agent {header.User-Agent}
 			header_up Cookie {header.Cookie}
 			header_up X-Subdomain {header.X-Subdomain}
-			header_up X-Tunnel-Type {header.X-Tunnel-Type}
+			header_up X-Hosting-Type {header.X-Hosting-Type}
 			header_up X-Routing-Mode subdomain
 
 			transport http {
@@ -103,8 +103,8 @@
 			}
 		}
 
-		# Cloud workspaces: route to containers
-		reverse_proxy @workspace {http.regexp.subdomain.1}.railway.internal:7681 {
+		# Cloud workspaces: route to containers using dynamic host/port from headers
+		reverse_proxy @cloud_workspace {header.X-Container-Host}:{header.X-Container-Port} {
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
@@ -114,7 +114,7 @@
 			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 
 			# Standard proxy headers
-			header_up Host {host}
+			header_up Host {header.X-Container-Host}
 			header_up X-Real-IP {remote_ip}
 			header_up X-Forwarded-For {remote_ip}
 			header_up User-Agent {header.User-Agent}

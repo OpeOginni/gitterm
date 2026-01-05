@@ -26,7 +26,7 @@ export class AgentAuthService {
 		const [ws] = await db.select().from(workspace).where(eq(workspace.id, params.workspaceId)).limit(1);
 		if (!ws) throw new Error("Not found");
 		if (ws.userId !== userId) throw new Error("Forbidden");
-		if (ws.tunnelType !== "local") throw new Error("Workspace is not a local tunnel");
+		if (ws.hostingType !== "local") throw new Error("Workspace is not a local tunnel workspace");
 
 		const tokenExposedPorts: Record<string, number> = {};
 		if (ws.localPort) tokenExposedPorts.root = ws.localPort;
@@ -68,7 +68,7 @@ export class AgentAuthService {
 		const [ws] = await db.select().from(workspace).where(eq(workspace.id, params.workspaceId)).limit(1);
 		if (!ws) throw new Error("Not found");
 		if (ws.userId !== userId) throw new Error("Forbidden");
-		if (ws.tunnelType !== "local") throw new Error("Workspace is not a local tunnel");
+		if (ws.hostingType !== "local") throw new Error("Workspace is not a local tunnel workspace");
 
 		await db
 			.update(workspace)

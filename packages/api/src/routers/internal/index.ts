@@ -136,7 +136,7 @@ export const internalRouter = router({
       .where(
         and(
           eq(workspace.status, "running"),
-          eq(workspace.tunnelType, "cloud"), // Only check cloud workspaces for idle timeout
+          eq(workspace.hostingType, "cloud"), // Only check cloud workspaces for idle timeout
           sql`${workspace.lastActiveAt} < ${idleThreshold}`
         )
       );
@@ -179,7 +179,7 @@ export const internalRouter = router({
       .where(
         and(
           eq(workspace.status, "running"),
-          eq(workspace.tunnelType, "cloud") // Only check cloud workspaces
+          eq(workspace.hostingType, "cloud") // Only check cloud workspaces
         )
       );
 
@@ -309,7 +309,7 @@ export const internalRouter = router({
       }
 
       // Close usage session if workspace was running (only for cloud workspaces)
-      if (ws.tunnelType !== "local" && (ws.status === "running" || ws.status === "pending")) {
+      if (ws.hostingType !== "local" && (ws.status === "running" || ws.status === "pending")) {
         await closeUsageSession(input.workspaceId, "manual");
       }
 
@@ -360,7 +360,7 @@ export const internalRouter = router({
       .from(workspace)
       .where(and(
         or(eq(workspace.status, "running"), eq(workspace.status, "stopped")),
-        eq(workspace.tunnelType, "cloud"),
+        eq(workspace.hostingType, "cloud"),
         sql`${workspace.lastActiveAt} < ${new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)}` // 4 days ago
       ));
 

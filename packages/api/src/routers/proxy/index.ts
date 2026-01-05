@@ -234,9 +234,9 @@ const ERROR_HTML = `<!DOCTYPE html>
         <div class="terminal-dot green"></div>
       </div>
       <div class="terminal-body">
-        <div class="terminal-line"><span class="terminal-prompt">$</span> gitterm connect</div>
-        <div class="terminal-line"><span class="terminal-error">error:</span> internal server error</div>
-        <div class="terminal-line">retrying in 5s...</div>
+        <div class="terminal-line"><span class="terminal-prompt">$</span> curl workspace.gitterm.dev</div>
+        <div class="terminal-line"><span class="terminal-error">error:</span> connection failed</div>
+        <div class="terminal-line">_</div>
       </div>
     </div>
     <h1>Something Went Wrong</h1>
@@ -325,43 +325,43 @@ export const proxyResolverRouter = async (c: Context) => {
 		console.log('[PROXY-RESOLVE] Workspace found:', { 
 			id: ws.id, 
 			subdomain: ws.subdomain, 
-			tunnelType: ws.tunnelType,
+			hostingType: ws.hostingType,
 			status: ws.status,
 			userId: ws.userId
 		});
 	
-		// Local tunnels: route via tunnel-proxy
-		if (ws.tunnelType === "local") {
-			// Server-only local tunnels skip auth (for API servers, etc.)
+		// Local tunnel workspaces: route via tunnel-proxy
+		if (ws.hostingType === "local") {
+			// Server-only local tunnel workspaces skip auth (for API servers, etc.)
 			if (ws.serverOnly) {
-				console.log('[PROXY-RESOLVE] Local tunnel (server-only) - skipping auth:', { 
+				console.log('[PROXY-RESOLVE] Local tunnel workspace (server-only) - skipping auth:', { 
 					subdomain: ws.subdomain,
 					workspaceId: ws.id
 				});
 				return c.text("OK", 200, {
-					"X-Tunnel-Type": "local",
+					"X-Hosting-Type": "local",
 					"X-Workspace-ID": ws.id,
 					"X-Subdomain": ws.subdomain ?? "",
 				});
 			}
 
-			// Non-server-only local tunnels require auth
+			// Non-server-only tunnel workspaces require auth
 			if (!session) {
-				console.log('[PROXY-RESOLVE] Local tunnel requires auth - no session');
+				console.log('[PROXY-RESOLVE] Tunnel workspace requires auth - no session');
 				return htmlError(c, 'unavailable', 401);
 			}
 			if (ws.userId !== session.user?.id) {
-				console.log('[PROXY-RESOLVE] Local tunnel - user mismatch');
+				console.log('[PROXY-RESOLVE] Tunnel workspace - user mismatch');
 				return htmlError(c, 'unavailable', 403);
 			}
 
-			console.log('[PROXY-RESOLVE] Local tunnel authorized:', { 
+			console.log('[PROXY-RESOLVE] Tunnel workspace authorized:', { 
 				subdomain: ws.subdomain,
 				workspaceId: ws.id,
 				userId: session.user.id
 			});
 			return c.text("OK", 200, {
-				"X-Tunnel-Type": "local",
+				"X-Hosting-Type": "local",
 				"X-Workspace-ID": ws.id,
 				"X-User-ID": session.user.id,
 				"X-Subdomain": ws.subdomain ?? "",
@@ -370,15 +370,17 @@ export const proxyResolverRouter = async (c: Context) => {
 
 		// Server-only workspaces skip auth
 		if (ws.serverOnly) {
-		  if (!ws.backendUrl) {
+		  if (!ws.upstreamUrl) {
 			return htmlError(c, 'error', 500);
 		  }
-          const backendUrl = new URL(ws.backendUrl);
+          const upstreamUrl = new URL(ws.upstreamUrl);
+		  const port = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
 
 		  return c.text('OK', 200, {
-            'X-Upstream-URL': ws.backendUrl,
-			'X-Container-Host': backendUrl.hostname,
-            'X-Container-Port': backendUrl.port,
+            'X-Upstream-URL': ws.upstreamUrl,
+			'X-Container-Host': upstreamUrl.hostname,
+            'X-Container-Port': port,
+			'X-Container-Protocol': upstreamUrl.protocol.replace(':', ''),
 		  });
 		}
 	
@@ -391,17 +393,27 @@ export const proxyResolverRouter = async (c: Context) => {
 		  return htmlError(c, 'unavailable', 403);
 		}
 	
-		if (!ws.backendUrl) {
+		if (!ws.upstreamUrl) {
 		  return htmlError(c, 'error', 500);
 		}
 	
-        const backendUrl = new URL(ws.backendUrl);
+        const upstreamUrl = new URL(ws.upstreamUrl);
+		const port = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
+		
+		console.log('[PROXY-RESOLVE] Cloud workspace routing:', {
+			upstreamUrl: ws.upstreamUrl,
+			containerHost: upstreamUrl.hostname,
+			containerPort: port,
+			protocol: upstreamUrl.protocol,
+		});
+		
 		return c.text('OK', 200, {
-          'X-Upstream-URL': ws.backendUrl,
-		  'X-Container-Host': backendUrl.hostname,
-          'X-Container-Port': backendUrl.port,
+          'X-Upstream-URL': ws.upstreamUrl,
+		  'X-Container-Host': upstreamUrl.hostname,
+          'X-Container-Port': port,
+		  'X-Container-Protocol': upstreamUrl.protocol.replace(':', ''),
 		  'X-User-ID': session.user.id,
-		  'X-Tunnel-Type': ws.tunnelType,
+		  'X-Hosting-Type': ws.hostingType,
 		});
 		
 	  } catch (error) {

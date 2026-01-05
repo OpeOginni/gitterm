@@ -975,6 +975,7 @@ export const workspaceRouter = router({
           subdomain = input.subdomain;
         } else {
           // No custom subdomain provided - generate one automatically
+          // Format: ws-{first2sections} e.g., ws-abc12345-def67890
           let attempts = 0;
           do {
             if (attempts > 10) {
@@ -983,7 +984,9 @@ export const workspaceRouter = router({
                 message: "Failed to generate unique subdomain",
               });
             }
-            subdomain = `ws-${randomUUID().split('-')[0]}`;
+            const uuid = randomUUID();
+            const uuidParts = uuid.split('-');
+            subdomain = `ws-${uuidParts[0]}}`;
             attempts++;
             
             // Check if generated subdomain is reserved (unlikely but possible)
@@ -1078,10 +1081,10 @@ export const workspaceRouter = router({
             domain,
             subdomain,
             serverOnly: agentTypeRecord.serverOnly,
-            backendUrl: workspaceInfo.backendUrl,
+            upstreamUrl: workspaceInfo.upstreamUrl,
             status: "pending",
-            tunnelType: isLocal ? "local" : "cloud",
-            tunnelName: input.name || subdomain,
+            hostingType: isLocal ? "local" : "cloud",
+            name: input.name || subdomain,
             startedAt: new Date(workspaceInfo.serviceCreatedAt),
             lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),
             updatedAt: new Date(workspaceInfo.serviceCreatedAt),
@@ -1112,7 +1115,7 @@ export const workspaceRouter = router({
           newVolume = volumeRecord;
         }
 
-        // Create usage session for billing (only for cloud workspaces)
+        // Create usage session for billing (only for remote workspaces)
         if (!isLocal) {
           await createUsageSession(workspaceId, userId);
         }
@@ -1126,7 +1129,7 @@ export const workspaceRouter = router({
           workspaceDomain: domain,
         });
 
-        // For local workspaces, generate connection command
+        // For tunnel workspaces, generate connection command
         let command: string | undefined;
         if (isLocal) {
           // The agent CLI will use getTunnelUrl() to determine the correct tunnel endpoint
@@ -1142,7 +1145,7 @@ export const workspaceRouter = router({
           `• Subdomain: \`${subdomain}\``,
           `• Workspace ID: \`${workspaceId}\``,
           `• Status: \`${newWorkspace.status}\``,
-          `• Tunnel Type: \`${newWorkspace.tunnelType}\``,
+          `• Hosting Type: \`${newWorkspace.hostingType}\``,
           `• Persistent: ${newWorkspace.persistent ? '✅ Yes' : '❌ No'}`,
           `• Server Only: ${newWorkspace.serverOnly ? '✅ Yes' : '❌ No'}`,
           ``,
@@ -1165,7 +1168,7 @@ export const workspaceRouter = router({
         workspaceDetails.push(
           `**Timestamps:**`,
           `• Created: \`${new Date(workspaceInfo.serviceCreatedAt).toISOString()}\``,
-          `• Backend URL: \`${newWorkspace.backendUrl || 'N/A'}\``
+          `• Upstream URL: \`${newWorkspace.upstreamUrl || 'N/A'}\``
         );
 
         sendAdminMessage(workspaceDetails.join('\n'));

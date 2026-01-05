@@ -27,7 +27,7 @@ class LocalProvider implements ComputeProvider {
     
     return {
       externalServiceId,
-      backendUrl: "", // Local workspaces don't have a backend URL until tunnel connects
+      upstreamUrl: "", // Tunnel workspaces don't have an upstream URL until tunnel connects
       domain,
       serviceCreatedAt: new Date(),
     };

@@ -9,11 +9,8 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Workspace URL Utilities
  * 
- * URL resolution priority:
- * 1. If backendUrl is available, use it directly (Railway public URL, tunnel URL, etc.)
- * 2. Fall back to routing-mode-based URL:
- *    - subdomain: https://<subdomain>.<base-domain>
- *    - path: http(s)://<base-domain>/ws/<subdomain>
+ * URLs are constructed from subdomain based on routing mode.
+ * The backend handles proxying to the actual upstream.
  */
 
 function getProtocolForBaseDomain(baseDomain: string): "http" | "https" {
@@ -23,24 +20,22 @@ function getProtocolForBaseDomain(baseDomain: string): "http" | "https" {
 }
 
 /**
- * Construct a workspace URL
- * Uses backendUrl directly if available, otherwise falls back to subdomain-based URL
+ * Construct a workspace URL from subdomain
  */
-export function getWorkspaceUrl(subdomain: string, backendUrl?: string | null): string {
+export function getWorkspaceUrl(subdomain: string): string {
 	const protocol = getProtocolForBaseDomain(env.NEXT_PUBLIC_BASE_DOMAIN);
 	if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
 		return `${protocol}://${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${subdomain}`;
 	}
 
-	// Fall back to subdomain-based URL
 	return `${protocol}://${subdomain}.${env.NEXT_PUBLIC_BASE_DOMAIN}`;
 }
 
 /**
  * Construct the opencode attach command
  */
-export function getAttachCommand(subdomain: string, agentName: string, backendUrl?: string | null): string {
-	const url = getWorkspaceUrl(subdomain, backendUrl);
+export function getAttachCommand(subdomain: string, agentName: string): string {
+	const url = getWorkspaceUrl(subdomain);
 
 	// TODO: Better agent name detection
 	if (agentName.toLocaleLowerCase().includes("opencode")) {
@@ -57,7 +52,7 @@ export function getAttachCommand(subdomain: string, agentName: string, backendUr
  * Get display text for a workspace URL
  * Shows the URL without protocol for cleaner display
  */
-export function getWorkspaceDisplayUrl(subdomain: string, backendUrl?: string | null): string {
+export function getWorkspaceDisplayUrl(subdomain: string): string {
 	if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
 		return `${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${subdomain}`;
 	}
@@ -66,7 +61,7 @@ export function getWorkspaceDisplayUrl(subdomain: string, backendUrl?: string | 
 }
 
 // ============================================================================
-// Agent (local tunnel) command helpers
+// Agent (tunnel workspace) command helpers
 // ============================================================================
 
 /**

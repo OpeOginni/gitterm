@@ -203,25 +203,24 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
   const isStopped = workspace.status === "stopped";
   const isPending = workspace.status === "pending";
   
-  // Check if this is a local instance
+  // Check if this is a tunnel workspace (runs on user's local machine)
   const isLocal = providers.find((p) => p.id === workspace.cloudProviderId)?.name.toLowerCase() === "local";
   const isLocalPending = isPending && isLocal;
   
-  // Generate the connect command for local instances only
-  // Pending local instances need the gitterm-agent connect command
-  // Running local instances can use opencode attach
+  // Generate the connect command for tunnel workspaces only
+  // Pending tunnel workspaces need the gitterm-agent connect command
+  // Running tunnel workspaces can use opencode attach
   const connectCommand = isLocal 
     ? isPending 
       ? getAgentConnectCommand(workspace.id)
       : workspace.subdomain 
-        ? getAttachCommand(workspace.subdomain, workspace.image.agentType.name, workspace.backendUrl)
+        ? getAttachCommand(workspace.subdomain, workspace.image.agentType.name)
         : null
     : null;
   
   // Get the workspace URL for linking
-  // Uses backendUrl directly if available, otherwise falls back to subdomain-based URL
-  const workspaceUrl = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain, workspace.backendUrl) : null;
-  const workspaceDisplayUrl = workspace.subdomain ? getWorkspaceDisplayUrl(workspace.subdomain, workspace.backendUrl) : null;
+  const workspaceUrl = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
+  const workspaceDisplayUrl = workspace.subdomain ? getWorkspaceDisplayUrl(workspace.subdomain) : null;
 
   return (
     <>
@@ -363,7 +362,7 @@ function InstanceCard({ workspace, providers }: { workspace: Workspace; provider
                 className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
                 onClick={() => {
                   if (workspace.subdomain) {
-                    const command = getAttachCommand(workspace.subdomain, workspace.image.agentType.name, workspace.backendUrl);
+                    const command = getAttachCommand(workspace.subdomain, workspace.image.agentType.name);
                     navigator.clipboard.writeText(command);
                     toast.success("Attach command copied to clipboard!");
                   }

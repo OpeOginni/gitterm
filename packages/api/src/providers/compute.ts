@@ -21,7 +21,7 @@ export interface PersistentWorkspaceConfig extends WorkspaceConfig {
 
 export interface WorkspaceInfo {
   externalServiceId: string;
-  backendUrl: string;
+  upstreamUrl: string; // URL to proxy requests to (e.g., Railway internal URL)
   domain: string;
   serviceCreatedAt: Date;
 }

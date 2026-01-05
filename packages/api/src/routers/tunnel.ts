@@ -25,8 +25,8 @@ export const tunnelRouter = router({
 				throw new TRPCError({ code: "FORBIDDEN", message: "Forbidden" });
 			}
 
-			if (ws.tunnelType !== "local") {
-				throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace is not a local tunnel" });
+			if (ws.hostingType !== "local") {
+				throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace is not a local tunnel workspace" });
 			}
 
 			const tokenExposedPorts: Record<string, number> = {};
@@ -79,8 +79,8 @@ export const tunnelRouter = router({
 				throw new TRPCError({ code: "FORBIDDEN", message: "Forbidden" });
 			}
 
-			if (ws.tunnelType !== "local") {
-				throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace is not a local tunnel" });
+			if (ws.hostingType !== "local") {
+				throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace is not a local tunnel workspace" });
 			}
 
 			const tokenExposedPorts: Record<string, number> = {};

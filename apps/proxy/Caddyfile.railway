@@ -94,14 +94,16 @@
 
 	# ============================================
 	# PATH-BASED WORKSPACE ROUTING: /ws/{subdomain}/*
-	# Routes workspace traffic to tunnel-proxy
+	# Routes workspace traffic based on hosting type:
+	# - local: tunnel-proxy (TUNNEL_PROXY_URL)
+	# - cloud: Railway container URL (with path prefix stripped)
 	# ============================================
 	handle /ws/* {
 		# Forward auth to API server (validates workspace exists and user has access)
 		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Tunnel-Type X-Workspace-ID X-User-ID X-Subdomain
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol
 
 			header_up Host {host}
 			header_up X-Internal-Key {$INTERNAL_API_KEY}
@@ -113,21 +115,22 @@
 			header_up X-Routing-Mode path
 		}
 
-		reverse_proxy {$TUNNEL_PROXY_URL} {
+		# Local workspaces: route to tunnel-proxy (keep full path)
+		@local_workspace header X-Hosting-Type local
+		reverse_proxy @local_workspace {$TUNNEL_PROXY_URL} {
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
 			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
 			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
 			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
 			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
-
 			header_up Host {host}
 			header_up X-Real-IP {remote_ip}
 			header_up X-Forwarded-For {remote_ip}
 			header_up X-User-Agent {header.User-Agent}
 			header_up Cookie {header.Cookie}
 			header_up X-Subdomain {header.X-Subdomain}
-			header_up X-Tunnel-Type {header.X-Tunnel-Type}
+			header_up X-Hosting-Type {header.X-Hosting-Type}
 			header_up X-Routing-Mode path
 
 			transport http {
@@ -137,6 +140,37 @@
 				expect_continue_timeout 0
 				keepalive 2m
 				keepalive_idle_conns 10
+			}
+		}
+
+		# Cloud workspaces: strip /ws/{subdomain} prefix and proxy to container
+		@cloud_workspace header X-Hosting-Type cloud
+		route @cloud_workspace {
+			# Strip /ws/{subdomain} prefix: /ws/abc123/foo -> /foo, /ws/abc123 -> /
+			uri path_regexp "^/ws/[^/]+(/.*)$" "$1"
+			uri path_regexp "^/ws/[^/]+/?$" "/"
+
+			reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
+				header_up Upgrade {header.Upgrade}
+				header_up Connection {header.Connection}
+				header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+				header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+				header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+				header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+				header_up Host {header.X-Container-Host}
+				header_up X-Real-IP {remote_ip}
+				header_up X-Forwarded-For {remote_ip}
+				header_up User-Agent {header.User-Agent}
+				header_up Cookie {header.Cookie}
+
+				transport http {
+					compression off
+					dial_timeout 10s
+					response_header_timeout 0
+					expect_continue_timeout 0
+					keepalive 2m
+					keepalive_idle_conns 10
+				}
 			}
 		}
 	}

@@ -81,7 +81,7 @@ export class RailwayProvider implements ComputeProvider {
       publicDomain = serviceDomainCreate.domain;
     }
 
-    const backendUrl = PUBLIC_RAILWAY_DOMAINS ? `https://${publicDomain}` : `http://${config.subdomain}.railway.internal:7681`;
+    const upstreamUrl = PUBLIC_RAILWAY_DOMAINS ? `https://${publicDomain}` : `http://${config.subdomain}.railway.internal:7681`;
     const domain = PUBLIC_RAILWAY_DOMAINS 
       ? `https://${publicDomain}` 
       : ROUTING_MODE === "path"
@@ -94,7 +94,7 @@ export class RailwayProvider implements ComputeProvider {
 
     return {
       externalServiceId: serviceCreate.id,
-      backendUrl,
+      upstreamUrl,
       domain,
       serviceCreatedAt: new Date(serviceCreate.createdAt),
     };
@@ -176,7 +176,7 @@ export class RailwayProvider implements ComputeProvider {
     }
     console.log('publicDomain', publicDomain);
 
-    const backendUrl = PUBLIC_RAILWAY_DOMAINS ? `https://${publicDomain}` : `http://${config.subdomain}.railway.internal:7681`;
+    const upstreamUrl = PUBLIC_RAILWAY_DOMAINS ? `https://${publicDomain}` : `http://${config.subdomain}.railway.internal:7681`;
     const domain = PUBLIC_RAILWAY_DOMAINS 
       ? `https://${publicDomain}` 
       : ROUTING_MODE === "path"
@@ -190,7 +190,7 @@ export class RailwayProvider implements ComputeProvider {
     return {
       externalServiceId: serviceCreate.id,
       externalVolumeId: volumeCreate.id,
-      backendUrl,
+      upstreamUrl,
       domain,
       serviceCreatedAt: new Date(serviceCreate.createdAt),
       volumeCreatedAt: new Date(volumeCreate.createdAt),

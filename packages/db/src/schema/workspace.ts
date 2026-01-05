@@ -7,7 +7,7 @@ import { gitIntegration } from "./integrations";
 export const instanceStatusEnum = pgEnum('instance_status', ['pending', 'running', 'stopped', 'terminated'] as const);
 export const workspaceStatusEnum = pgEnum('workspace_status', ['pending', 'running', 'stopped', 'terminated'] as const);
 export const sessionStopSourceEnum = pgEnum('session_stop_source', ['manual', 'idle', 'quota_exhausted', 'error'] as const);
-export const workspaceTunnelTypeEnum = pgEnum('workspace_tunnel_type', ['cloud', 'local'] as const);
+export const workspaceHostingTypeEnum = pgEnum('workspace_hosting_type', ['cloud', 'local'] as const);
 
 export const workspace = pgTable("workspace", {
 	id: uuid("id").primaryKey().defaultRandom(),
@@ -19,18 +19,18 @@ export const workspace = pgTable("workspace", {
 	cloudProviderId: uuid("cloud_provider_id").notNull().references(() => cloudProvider.id, { onDelete: "cascade" }),
 	regionId: uuid("region_id").notNull().references(() => region.id, { onDelete: "cascade" }),
     repositoryUrl: text("repository_url"),
-    domain: text("domain").notNull(), // Full domain: ws-123.gitterm.dev
-    subdomain: text("subdomain"), // ws-123
-    backendUrl: text("backend_url"), // Internal URL
+    domain: text("domain").notNull(), // Full domain: {uuid}.gitterm.dev or just {uuid} in path mode
+    subdomain: text("subdomain"), // The workspace URL identifier (UUID format)
+    upstreamUrl: text("upstream_url"), // URL to proxy requests to (cloud container or tunnel endpoint)
     status: workspaceStatusEnum("status").notNull(),
 	persistent: boolean("persistent").notNull().default(false),
 	serverOnly: boolean("server_only").notNull().default(false),
 
-	// Local tunnel support
-	tunnelType: workspaceTunnelTypeEnum("tunnel_type").notNull().default("cloud"),
-	tunnelName: text("tunnel_name"),
-	reservedSubdomain: text("reserved_subdomain"), // paid feature
-	localPort: integer("local_port"), // primary local port for tunnelType=local
+	// Workspace hosting configuration
+	hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"), // 'cloud' = cloud-hosted, 'local' = local machine via tunnel
+	name: text("name"), // Display name for the workspace
+	reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
+	localPort: integer("local_port"), // primary local port for hostingType=local
 	exposedPorts: jsonb("exposed_ports").$type<Record<string, { port: number; description?: string }>>(),
 	tunnelConnectedAt: timestamp("tunnel_connected_at"),
 	tunnelLastPingAt: timestamp("tunnel_last_ping_at"),
