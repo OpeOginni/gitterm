@@ -1,18 +1,21 @@
 import z from "zod";
+import type { JSONSchema } from "zod/v4/core";
+import opencodeConfigSchemaJson from "./opencode-config.json";
+
+// Cache the compiled schema to avoid recreating it on every validation
+let cachedOpenCodeSchema: z.ZodType | null = null;
+
+function getOpenCodeSchema(): z.ZodType {
+  if (!cachedOpenCodeSchema) {
+    cachedOpenCodeSchema = z.fromJSONSchema(opencodeConfigSchemaJson as JSONSchema.BaseSchema);
+  }
+  return cachedOpenCodeSchema;
+}
 
 // OpenCode Config Validator using SDK type
-export async function validateOpenCodeConfig(config: unknown) {
-  // Resolve path relative to this file's location
-  const configPath = new URL("./opencode-config.json", import.meta.url);
-  const openCodeConfigJson = Bun.file(configPath);
-  
-  if (!(await openCodeConfigJson.exists())) {
-    throw new Error("OpenCode config file not found");
-  }
-
-  const openCodeConfigSchema = z.fromJSONSchema(JSON.parse(await openCodeConfigJson.text()));
-
-  return openCodeConfigSchema.safeParse(config);
+export function validateOpenCodeConfig(config: unknown) {
+  const schema = getOpenCodeSchema();
+  return schema.safeParse(config);
 }
 
 // Validator registry for dynamic access
@@ -43,4 +46,3 @@ export function validateAgentConfig(
   const validator = agentValidators[validatorKey] || validateOpenCodeConfig;
   return validator(config);
 }
-
