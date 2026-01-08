@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@gitterm/api": "workspace:*",
-    "@gitterm/redis": "workspace:*",
     "@gitterm/env": "workspace:*",
+    "@gitterm/redis": "workspace:*",
     "dotenv": "catalog:",
     "hono": "catalog:",
     "jsonwebtoken": "^9.0.2",
@@ -22,7 +22,7 @@
     "@gitterm/config": "workspace:*",
     "@types/bun": "^1.2.6",
     "@types/jsonwebtoken": "^9.0.7",
-    "typescript": "catalog:",
-    "tsdown": "^0.16.5"
+    "tsdown": "^0.16.5",
+    "typescript": "catalog:"
   }
 }

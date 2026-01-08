@@ -1,51 +1,51 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { toast } from "sonner"
-import { CheckCircle, XCircle, Shield, Loader2 } from "lucide-react"
-import { authClient } from "@/lib/auth-client"
-import { trpcClient } from "@/utils/trpc"
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { CheckCircle, XCircle, Shield, Loader2 } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
+import { trpcClient } from "@/utils/trpc";
 
 export default function DevicePage() {
-  const router = useRouter()
-  const { data: session, isPending } = authClient.useSession()
-  const [userCode, setUserCode] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const normalized = useMemo(() => userCode.trim().toUpperCase(), [userCode])
+  const router = useRouter();
+  const { data: session, isPending } = authClient.useSession();
+  const [userCode, setUserCode] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const normalized = useMemo(() => userCode.trim().toUpperCase(), [userCode]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isPending && !session) {
-      router.push("/login?redirect=/device")
+      router.push("/login?redirect=/device");
     }
-  }, [session, isPending, router])
+  }, [session, isPending, router]);
 
   async function submit(action: "approve" | "deny") {
     if (!normalized) {
-      toast.error("Enter a code")
-      return
+      toast.error("Enter a code");
+      return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     try {
       await trpcClient.device.approve.mutate({
         userCode: normalized,
         action,
-      })
+      });
 
-      toast.success(action === "approve" ? "Device approved" : "Device denied")
-      setUserCode("")
+      toast.success(action === "approve" ? "Device approved" : "Device denied");
+      setUserCode("");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed"
-      toast.error(message)
+      const message = error instanceof Error ? error.message : "Failed";
+      toast.error(message);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
   }
 
@@ -55,12 +55,11 @@ export default function DevicePage() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
-    )
+    );
   }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-
       {/* Main content */}
       <main className="flex flex-1 items-center justify-center px-6 py-12">
         <Card className="w-full max-w-md border-border/50">
@@ -111,7 +110,8 @@ export default function DevicePage() {
             <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
               <Shield className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
               <p className="text-xs text-muted-foreground">
-                Only approve devices you personally control. This will grant access to your GitTerm workspaces.
+                Only approve devices you personally control. This will grant access to your GitTerm
+                workspaces.
               </p>
             </div>
           </CardContent>
@@ -128,5 +128,5 @@ export default function DevicePage() {
         </p>
       </footer>
     </div>
-  )
+  );
 }

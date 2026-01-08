@@ -1,20 +1,23 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Cloud, Monitor, Terminal, Box, Globe, Loader2, Check, Server } from "lucide-react"
+import { useEffect, useState } from "react";
+import { Cloud, Monitor, Terminal, Box, Globe, Loader2, Check, Server } from "lucide-react";
 
 const localCommands = [
   { prompt: "$ npx @opeoginni/gitterm-agent login", delay: 100 },
   { output: "Logging in to gitterm...", delay: 800 },
   { output: "Logged in successfully!", delay: 600 },
-  { prompt: "$ npx @opeoginni/gitterm-agent connect --workspace-id ws_abc123 --port 3000", delay: 1200 },
+  {
+    prompt: "$ npx @opeoginni/gitterm-agent connect --workspace-id ws_abc123 --port 3000",
+    delay: 1200,
+  },
   { output: "Establishing secure tunnel for workspace...", delay: 700 },
   { output: "Connected! Your local workspace is now live at:", delay: 500 },
   { output: "https://my-app.gitterm.dev", delay: 400, color: "border-green-500/50" },
-]
+];
 
 export function TerminalDemo() {
-  const [mode, setMode] = useState<"cloud" | "local">("cloud")
+  const [mode, setMode] = useState<"cloud" | "local">("cloud");
 
   return (
     <div className="flex flex-col gap-4">
@@ -51,34 +54,34 @@ export function TerminalDemo() {
         {mode === "local" ? <LocalTerminalDemo /> : <CloudProvisionDemo />}
       </div>
     </div>
-  )
+  );
 }
 
 function LocalTerminalDemo() {
-  const [lines, setLines] = useState<string[]>([])
-  const [currentIndex, setCurrentIndex] = useState(0)
+  const [lines, setLines] = useState<string[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
-    setLines([])
-    setCurrentIndex(0)
-  }, [])
+    setLines([]);
+    setCurrentIndex(0);
+  }, []);
 
   useEffect(() => {
     if (currentIndex < localCommands.length) {
       const timer = setTimeout(() => {
-        const cmd = localCommands[currentIndex]
-        setLines((prev) => [...prev, cmd.prompt || cmd.output || ""])
-        setCurrentIndex((prev) => prev + 1)
-      }, localCommands[currentIndex]?.delay || 500)
-      return () => clearTimeout(timer)
+        const cmd = localCommands[currentIndex];
+        setLines((prev) => [...prev, cmd.prompt || cmd.output || ""]);
+        setCurrentIndex((prev) => prev + 1);
+      }, localCommands[currentIndex]?.delay || 500);
+      return () => clearTimeout(timer);
     } else {
       const resetTimer = setTimeout(() => {
-        setLines([])
-        setCurrentIndex(0)
-      }, 3000)
-      return () => clearTimeout(resetTimer)
+        setLines([]);
+        setCurrentIndex(0);
+      }, 3000);
+      return () => clearTimeout(resetTimer);
     }
-  }, [currentIndex])
+  }, [currentIndex]);
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
@@ -106,25 +109,25 @@ function LocalTerminalDemo() {
         <span className="inline-block h-4 w-2 bg-foreground animate-pulse" />
       </div>
     </div>
-  )
+  );
 }
 
 function CloudProvisionDemo() {
-  const [activeStep, setActiveStep] = useState(0)
+  const [activeStep, setActiveStep] = useState(0);
 
   useEffect(() => {
-    setActiveStep(0)
+    setActiveStep(0);
     const interval = setInterval(() => {
-      setActiveStep((prev) => (prev + 1) % 4)
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [])
+      setActiveStep((prev) => (prev + 1) % 4);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   const steps = [
     { icon: Terminal, label: "Select", description: "Choose agent & provider" },
     { icon: Server, label: "Provision", description: "Spinning up instance" },
     { icon: Globe, label: "Ready", description: "Workspace is live" },
-  ]
+  ];
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
@@ -140,10 +143,10 @@ function CloudProvisionDemo() {
         {/* Progress Steps */}
         <div className="flex items-center justify-between gap-2">
           {steps.map((step, index) => {
-            const isActive = activeStep === index
-            const isComplete = activeStep > index
-            const isPending = activeStep < index
-            const StepIcon = step.icon
+            const isActive = activeStep === index;
+            const isComplete = activeStep > index;
+            const isPending = activeStep < index;
+            const StepIcon = step.icon;
 
             return (
               <div key={step.label} className="flex items-center flex-1">
@@ -156,32 +159,36 @@ function CloudProvisionDemo() {
                         : "border-border bg-secondary/50"
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-8 w-8 rounded-full transition-all duration-300 ${
-                    isActive
-                      ? "bg-primary/20"
-                      : isComplete
-                        ? "bg-green-500/20"
-                        : "bg-muted"
-                  }`}>
+                  <div
+                    className={`flex items-center justify-center h-8 w-8 rounded-full transition-all duration-300 ${
+                      isActive ? "bg-primary/20" : isComplete ? "bg-green-500/20" : "bg-muted"
+                    }`}
+                  >
                     {isActive && index === 1 ? (
                       <Loader2 className="h-4 w-4 text-primary animate-spin" />
                     ) : isComplete ? (
                       <Check className="h-4 w-4 text-green-500" />
                     ) : (
-                      <StepIcon className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                      <StepIcon
+                        className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                      />
                     )}
                   </div>
-                  <span className={`text-xs font-medium ${isActive ? "text-primary" : isComplete ? "text-green-500" : "text-muted-foreground"}`}>
+                  <span
+                    className={`text-xs font-medium ${isActive ? "text-primary" : isComplete ? "text-green-500" : "text-muted-foreground"}`}
+                  >
                     {step.label}
                   </span>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`w-4 h-0.5 mx-1 rounded-full transition-colors duration-500 ${
-                    activeStep > index ? "bg-green-500" : "bg-border"
-                  }`} />
+                  <div
+                    className={`w-4 h-0.5 mx-1 rounded-full transition-colors duration-500 ${
+                      activeStep > index ? "bg-green-500" : "bg-border"
+                    }`}
+                  />
                 )}
               </div>
-            )
+            );
           })}
         </div>
 
@@ -236,5 +243,5 @@ function CloudProvisionDemo() {
         </div>
       </div>
     </div>
-  )
+  );
 }

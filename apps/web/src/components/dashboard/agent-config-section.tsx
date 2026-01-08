@@ -3,13 +3,7 @@
 import { useState, useEffect } from "react";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -99,12 +93,10 @@ export function AgentConfigSection() {
   const [isEditing, setIsEditing] = useState(false);
 
   const { theme } = useTheme();
-  const { data: agentTypesData } = useQuery(
-    trpc.workspace.listAgentTypes.queryOptions()
-  );
+  const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
 
   const { data: configurationsData, isLoading: isLoadingConfigs } = useQuery(
-    trpc.user.listAgentConfigurations.queryOptions()
+    trpc.user.listAgentConfigurations.queryOptions(),
   );
 
   // Set default agent type when data loads
@@ -159,7 +151,7 @@ export function AgentConfigSection() {
       onError: (error) => {
         toast.error(`Failed to create configuration: ${error.message}`);
       },
-    })
+    }),
   );
 
   const { mutate: updateConfig, isPending: isUpdating } = useMutation(
@@ -172,7 +164,7 @@ export function AgentConfigSection() {
       onError: (error) => {
         toast.error(`Failed to update configuration: ${error.message}`);
       },
-    })
+    }),
   );
 
   const { mutate: deleteConfig, isPending: isDeleting } = useMutation(
@@ -186,7 +178,7 @@ export function AgentConfigSection() {
       onError: (error) => {
         toast.error(`Failed to delete configuration: ${error.message}`);
       },
-    })
+    }),
   );
 
   const handleSubmit = () => {
@@ -258,8 +250,7 @@ export function AgentConfigSection() {
   };
 
   const selectedAgentName =
-    agentTypesData?.agentTypes?.find((a) => a.id === formData.agentTypeId)
-      ?.name || "Agent";
+    agentTypesData?.agentTypes?.find((a) => a.id === formData.agentTypeId)?.name || "Agent";
 
   const isPending = isAdding || isUpdating;
   const configurations = configurationsData?.configurations || [];
@@ -302,13 +293,12 @@ export function AgentConfigSection() {
                         Test Locally First
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Before adding your configuration here, test it locally by
-                        creating a{" "}
+                        Before adding your configuration here, test it locally by creating a{" "}
                         <code className="px-1 py-0.5 bg-muted rounded text-[11px]">
                           opencode.json
                         </code>{" "}
-                        file in your project root and running the agent. Once
-                        verified, paste the working configuration below.
+                        file in your project root and running the agent. Once verified, paste the
+                        working configuration below.
                       </p>
                     </div>
                   </div>
@@ -319,9 +309,7 @@ export function AgentConfigSection() {
                   <Label className="text-sm font-medium">Configuration Name</Label>
                   <Input
                     value={formData.name}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, name: e.target.value }))
-                    }
+                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g., My MCP Setup, TypeScript Project, etc."
                     className="bg-secondary/30 border-border/50"
                   />
@@ -370,9 +358,7 @@ export function AgentConfigSection() {
                 {/* JSON Configuration Input */}
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">
-                      Configuration (JSON)
-                    </Label>
+                    <Label className="text-sm font-medium">Configuration (JSON)</Label>
                     <Button
                       type="button"
                       variant="ghost"
@@ -441,10 +427,7 @@ export function AgentConfigSection() {
                 <Button
                   onClick={handleSubmit}
                   disabled={
-                    isPending ||
-                    !!jsonError ||
-                    !formData.configJson.trim() ||
-                    !formData.name.trim()
+                    isPending || !!jsonError || !formData.configJson.trim() || !formData.name.trim()
                   }
                   className="gap-2"
                 >
@@ -465,8 +448,8 @@ export function AgentConfigSection() {
           </Dialog>
         </div>
         <CardDescription>
-          Create and manage named configurations for your AI coding agents.
-          These can be applied when creating new workspaces.
+          Create and manage named configurations for your AI coding agents. These can be applied
+          when creating new workspaces.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -479,9 +462,7 @@ export function AgentConfigSection() {
           <div className="text-center py-8 text-muted-foreground">
             <Code2 className="h-10 w-10 mx-auto mb-3 opacity-50" />
             <p className="text-sm">No configurations yet</p>
-            <p className="text-xs mt-1">
-              Create your first configuration to get started
-            </p>
+            <p className="text-xs mt-1">Create your first configuration to get started</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -557,15 +538,11 @@ export function AgentConfigSection() {
           <DialogHeader>
             <DialogTitle>Delete Configuration</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this configuration? This action
-              cannot be undone.
+              Are you sure you want to delete this configuration? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
             <Button

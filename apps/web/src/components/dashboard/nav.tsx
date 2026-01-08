@@ -1,22 +1,35 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Terminal, LayoutDashboard, Link2, BarChart3, User, LogOut, ChevronDown, Menu, X, Settings, Shield, Repeat } from "lucide-react"
-import { useState } from "react"
-import { cn } from "@/lib/utils"
-import { authClient } from "@/lib/auth-client"
-import { Skeleton } from "../ui/skeleton"
-import { PlanBadge } from "./billing-section"
-import type { Route } from "next"
+} from "@/components/ui/dropdown-menu";
+import {
+  Terminal,
+  LayoutDashboard,
+  Link2,
+  BarChart3,
+  User,
+  LogOut,
+  ChevronDown,
+  Menu,
+  X,
+  Settings,
+  Shield,
+  Repeat,
+} from "lucide-react";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
+import { Skeleton } from "../ui/skeleton";
+import { PlanBadge } from "./billing-section";
+import type { Route } from "next";
 
 type UserPlan = "free" | "tunnel" | "pro";
 
@@ -25,13 +38,13 @@ const navItems = [
   { href: "/dashboard/loops", label: "Agent Loops", icon: Repeat },
   { href: "/dashboard/integrations", label: "Integrations", icon: Link2 },
   { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
-]
+];
 
 export function DashboardNav() {
-  const pathname = usePathname()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { data: session, isPending } = authClient.useSession()
-  const router = useRouter()
+  const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { data: session, isPending } = authClient.useSession();
+  const router = useRouter();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
@@ -46,7 +59,9 @@ export function DashboardNav() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map((item) => {
-              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/dashboard" && pathname.startsWith(item.href));
               return (
                 <Link
                   key={item.href}
@@ -61,7 +76,7 @@ export function DashboardNav() {
                   <item.icon className="h-4 w-4" />
                   {item.label}
                 </Link>
-              )
+              );
             })}
           </nav>
 
@@ -71,49 +86,52 @@ export function DashboardNav() {
             {isPending ? (
               <Skeleton className="h-9 w-20" />
             ) : (
-                <DropdownMenu>
+              <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button
+                  <Button
                     variant="outline"
                     className="hidden md:flex items-center gap-2 border-border border bg-transparent hover:bg-secondary/50 hover:text-primary"
-                    >
+                  >
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary/80">
-                        <User className="h-3.5 w-3.5 text-primary" />
+                      <User className="h-3.5 w-3.5 text-primary" />
                     </div>
                     <span className="text-sm">{session?.user?.name}</span>
                     <PlanBadge plan={((session?.user as any)?.plan as UserPlan) || "free"} />
                     <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    </Button>
+                  </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-48 border-border/50 bg-card">
-                    {(session?.user as any)?.role === "admin" && (
-                      <>
-                        <DropdownMenuItem asChild className="flex items-center gap-2 cursor-pointer">
-                          <Link href={"/admin" as Route}>
-                            <Shield className="h-4 w-4" />
-                            Admin Panel
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    <DropdownMenuItem asChild className="flex items-center gap-2 cursor-pointer">
-                      <Link href={"/dashboard/settings" as Route}>
-                        <Settings className="h-4 w-4" />
-                        Settings
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => 
+                  {(session?.user as any)?.role === "admin" && (
+                    <>
+                      <DropdownMenuItem asChild className="flex items-center gap-2 cursor-pointer">
+                        <Link href={"/admin" as Route}>
+                          <Shield className="h-4 w-4" />
+                          Admin Panel
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem asChild className="flex items-center gap-2 cursor-pointer">
+                    <Link href={"/dashboard/settings" as Route}>
+                      <Settings className="h-4 w-4" />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() =>
                       authClient.signOut().then(() => {
-                        router.push("/")
+                        router.push("/");
                       })
-                    } className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer">
-                      <LogOut className="h-4 w-4" />
-                      Sign Out
-                    </DropdownMenuItem>
+                    }
+                    className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign Out
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
-                </DropdownMenu>
+              </DropdownMenu>
             )}
             {/* Mobile menu button */}
             <Button
@@ -133,7 +151,9 @@ export function DashboardNav() {
         <div className="md:hidden border-t border-border/50 bg-background">
           <nav className="px-4 py-3 space-y-1">
             {navItems.map((item) => {
-              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/dashboard" && pathname.startsWith(item.href));
               return (
                 <Link
                   key={item.href}
@@ -149,7 +169,7 @@ export function DashboardNav() {
                   <item.icon className="h-4 w-4" />
                   {item.label}
                 </Link>
-              )
+              );
             })}
             <div className="pt-2 mt-2 border-t border-border/50">
               {(session?.user as any)?.role === "admin" && (
@@ -179,5 +199,5 @@ export function DashboardNav() {
         </div>
       )}
     </header>
-  )
+  );
 }

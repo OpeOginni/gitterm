@@ -1,7 +1,11 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import { db, eq, and } from "@gitterm/db";
-import { githubAppInstallation, gitIntegration, workspaceGitConfig } from "@gitterm/db/schema/integrations";
+import {
+  githubAppInstallation,
+  gitIntegration,
+  workspaceGitConfig,
+} from "@gitterm/db/schema/integrations";
 import { logger } from "../utils/logger";
 import env from "@gitterm/env/server";
 
@@ -16,7 +20,10 @@ export class GitHubInstallationNotFoundError extends Error {
 }
 
 export class GitHubAPIError extends Error {
-  constructor(message: string, public readonly statusCode?: number) {
+  constructor(
+    message: string,
+    public readonly statusCode?: number,
+  ) {
     super(message);
     this.name = "GitHubAPIError";
   }
@@ -27,25 +34,25 @@ export class GitHubAPIError extends Error {
  */
 function decodePrivateKey(key: string): string {
   // Check if the key is base64 encoded (doesn't start with -----)
-  if (!key.startsWith('-----BEGIN')) {
+  if (!key.startsWith("-----BEGIN")) {
     try {
       // Decode base64 to get the actual PEM key
-      const decoded = Buffer.from(key, 'base64').toString('utf-8');
+      const decoded = Buffer.from(key, "base64").toString("utf-8");
       return decoded;
     } catch (error) {
       throw new Error("Invalid GitHub App private key format");
     }
   }
-  
+
   // Key is already in PEM format, just handle escaped newlines
-  return key.replace(/\\n/g, '\n');
+  return key.replace(/\\n/g, "\n");
 }
 
 /**
  * Check if error is a 404 Not Found from GitHub API
  */
 function isNotFoundError(error: unknown): boolean {
-  if (error && typeof error === 'object' && 'status' in error) {
+  if (error && typeof error === "object" && "status" in error) {
     return (error as { status: number }).status === 404;
   }
   return false;
@@ -53,12 +60,12 @@ function isNotFoundError(error: unknown): boolean {
 
 /**
  * GitHub App Service
- * 
+ *
  * Handles all GitHub App operations:
  * - Installation management
  * - Token generation
  * - Repository operations (clone, fork, push)
- * 
+ *
  * This service uses GitHub App authentication, which is separate from OAuth.
  * OAuth is used for user login, GitHub App is used for git operations.
  */
@@ -79,9 +86,9 @@ export class GitHubAppService {
 
     // Decode and prepare the private key
     const privateKey = decodePrivateKey(GITHUB_APP_PRIVATE_KEY!);
-    
+
     logger.info("Initializing GitHub App Service", { action: "github_init" });
-    
+
     // Initialize Octokit with App authentication
     this.appOctokit = new Octokit({
       authStrategy: createAppAuth,
@@ -96,10 +103,14 @@ export class GitHubAppService {
    * Get a user-to-server access token for a specific installation
    * This token is short-lived (1 hour) and scoped to the installation's permissions
    */
-  async getUserToServerToken(installationId: string): Promise<{ token: string; expiresAt: string }> {
+  async getUserToServerToken(
+    installationId: string,
+    repositories?: string[] | undefined,
+  ): Promise<{ token: string; expiresAt: string }> {
     try {
       const { data } = await this.appOctokit.apps.createInstallationAccessToken({
         installation_id: parseInt(installationId),
+        repositories: repositories,
       });
 
       return {
@@ -110,7 +121,11 @@ export class GitHubAppService {
       if (isNotFoundError(error)) {
         throw new GitHubInstallationNotFoundError(installationId);
       }
-      logger.error("Failed to create installation access token", { action: "create_token" }, error as Error);
+      logger.error(
+        "Failed to create installation access token",
+        { action: "create_token" },
+        error as Error,
+      );
       throw new GitHubAPIError("Failed to generate GitHub access token");
     }
   }
@@ -118,7 +133,7 @@ export class GitHubAppService {
   /**
    * Verify that a GitHub installation still exists and is valid
    * If the installation is deleted on GitHub's side, clean up our local records
-   * 
+   *
    * @param userId - The user ID who owns the installation
    * @param installationId - The GitHub installation ID
    * @returns true if installation is valid, false if it was deleted/cleaned up
@@ -136,12 +151,12 @@ export class GitHubAppService {
           userId,
           action: "installation_cleanup",
         });
-        
+
         // Clean up our local records
         await this.cleanupStaleInstallation(userId, installationId);
         return false;
       }
-      
+
       // Other errors (network, auth, etc.) - don't cleanup, just throw
       throw error;
     }
@@ -151,7 +166,7 @@ export class GitHubAppService {
    * Clean up stale GitHub installation and related records
    * This is called when we detect an installation has been deleted on GitHub's side
    * This method directly cleans up the database (doesn't rely on webhook)
-   * 
+   *
    * @param userId - The user ID
    * @param installationId - The GitHub installation ID
    */
@@ -169,8 +184,8 @@ export class GitHubAppService {
         .where(
           and(
             eq(gitIntegration.userId, userId),
-            eq(gitIntegration.providerInstallationId, installationId)
-          )
+            eq(gitIntegration.providerInstallationId, installationId),
+          ),
         )
         .limit(1);
 
@@ -181,10 +196,13 @@ export class GitHubAppService {
           .from(workspaceGitConfig)
           .where(eq(workspaceGitConfig.gitIntegrationId, gitIntegrationRecord.id));
 
-        logger.info(`Found ${workspaceConfigs.length} workspace git config(s) using this integration`, {
-          userId,
-          action: "cleanup_workspace_configs",
-        });
+        logger.info(
+          `Found ${workspaceConfigs.length} workspace git config(s) using this integration`,
+          {
+            userId,
+            action: "cleanup_workspace_configs",
+          },
+        );
 
         // Nullify the gitIntegrationId in workspace configs (keep the configs for history)
         if (workspaceConfigs.length > 0) {
@@ -195,7 +213,7 @@ export class GitHubAppService {
               updatedAt: new Date(),
             })
             .where(eq(workspaceGitConfig.gitIntegrationId, gitIntegrationRecord.id));
-          
+
           logger.info("Nullified gitIntegrationId in workspace configs", {
             userId,
             action: "nullify_git_integration",
@@ -222,7 +240,7 @@ export class GitHubAppService {
    */
   async getRepositoryScopedToken(
     installationId: string,
-    repositories: string[]
+    repositories: string[],
   ): Promise<{ token: string; expiresAt: string }> {
     try {
       const { data } = await this.appOctokit.apps.createInstallationAccessToken({
@@ -238,7 +256,11 @@ export class GitHubAppService {
       if (isNotFoundError(error)) {
         throw new GitHubInstallationNotFoundError(installationId);
       }
-      logger.error("Failed to create repository-scoped token", { action: "create_repo_token" }, error as Error);
+      logger.error(
+        "Failed to create repository-scoped token",
+        { action: "create_repo_token" },
+        error as Error,
+      );
       throw new GitHubAPIError("Failed to generate repository-scoped GitHub token");
     }
   }
@@ -250,7 +272,7 @@ export class GitHubAppService {
   async forkRepository(
     installationId: string,
     owner: string,
-    repo: string
+    repo: string,
   ): Promise<{
     owner: string;
     repo: string;
@@ -261,7 +283,7 @@ export class GitHubAppService {
     try {
       // Get installation token
       const { token } = await this.getUserToServerToken(installationId);
-      
+
       // Create authenticated Octokit instance with the installation token
       const userOctokit = new Octokit({ auth: token });
 
@@ -298,7 +320,7 @@ export class GitHubAppService {
   async getRepository(
     installationId: string,
     owner: string,
-    repo: string
+    repo: string,
   ): Promise<{
     owner: string;
     repo: string;
@@ -340,22 +362,27 @@ export class GitHubAppService {
   /**
    * Get GitHub App installation for a user
    * Now includes automatic verification against GitHub API
-   * 
+   *
    * @param userId - The user ID
    * @param installationId - The GitHub installation ID (text), not the database UUID
    * @param verify - Whether to verify installation still exists on GitHub (default: true)
    * @returns Installation record or null if not found or deleted
    */
   async getUserInstallation(
-    userId: string, 
+    userId: string,
     installationId: string,
-    verify: boolean = true
+    verify: boolean = true,
   ): Promise<typeof githubAppInstallation.$inferSelect | null> {
     try {
       const [installation] = await db
         .select()
         .from(githubAppInstallation)
-        .where(and(eq(githubAppInstallation.userId, userId), eq(githubAppInstallation.installationId, installationId)))
+        .where(
+          and(
+            eq(githubAppInstallation.userId, userId),
+            eq(githubAppInstallation.installationId, installationId),
+          ),
+        )
         .limit(1);
 
       if (!installation) {
@@ -373,7 +400,11 @@ export class GitHubAppService {
 
       return installation;
     } catch (error) {
-      logger.error("Failed to get user installation", { userId, action: "get_installation" }, error as Error);
+      logger.error(
+        "Failed to get user installation",
+        { userId, action: "get_installation" },
+        error as Error,
+      );
       return null;
     }
   }
@@ -395,8 +426,10 @@ export class GitHubAppService {
     suspended: boolean;
   }> {
     try {
-      logger.debug("Fetching installation details from GitHub", { action: "get_installation_details" });
-      
+      logger.debug("Fetching installation details from GitHub", {
+        action: "get_installation_details",
+      });
+
       // Use the app-level Octokit (authenticates as the app with JWT)
       // This is the correct way to get installation details
       const { data } = await this.appOctokit.apps.getInstallation({
@@ -413,8 +446,8 @@ export class GitHubAppService {
         id: data.id,
         account: {
           id: account.id,
-          login: 'login' in account ? account.login : account.name ?? '',
-          type: 'type' in account ? account.type : 'NO_TYPE',
+          login: "login" in account ? account.login : (account.name ?? ""),
+          type: "type" in account ? account.type : "NO_TYPE",
         },
         repositorySelection: data.repository_selection,
         permissions: (data.permissions || {}) as Record<string, string>,
@@ -424,7 +457,11 @@ export class GitHubAppService {
       if (isNotFoundError(error)) {
         throw new GitHubInstallationNotFoundError(installationId);
       }
-      logger.error("Failed to fetch installation details from GitHub", { action: "get_installation_details" }, error as Error);
+      logger.error(
+        "Failed to fetch installation details from GitHub",
+        { action: "get_installation_details" },
+        error as Error,
+      );
       throw new GitHubAPIError("Failed to fetch installation details from GitHub");
     }
   }
@@ -453,12 +490,15 @@ export class GitHubAppService {
         .where(
           and(
             eq(githubAppInstallation.userId, data.userId),
-            eq(githubAppInstallation.installationId, data.installationId)
-          )
+            eq(githubAppInstallation.installationId, data.installationId),
+          ),
         );
 
       if (existingInstallation) {
-        logger.info("Installation exists, updating", { userId: data.userId, action: "update_installation" });
+        logger.info("Installation exists, updating", {
+          userId: data.userId,
+          action: "update_installation",
+        });
         // Update existing installation
         const [updated] = await db
           .update(githubAppInstallation)
@@ -483,10 +523,7 @@ export class GitHubAppService {
             updatedAt: new Date(),
           })
           .where(
-            and(
-              eq(gitIntegration.userId, data.userId),
-              eq(gitIntegration.provider, "github")
-            )
+            and(eq(gitIntegration.userId, data.userId), eq(gitIntegration.provider, "github")),
           );
 
         return updated!;
@@ -496,20 +533,16 @@ export class GitHubAppService {
       const [existingIntegration] = await db
         .select()
         .from(gitIntegration)
-        .where(
-          and(
-            eq(gitIntegration.userId, data.userId),
-            eq(gitIntegration.provider, "github")
-          )
-        );
+        .where(and(eq(gitIntegration.userId, data.userId), eq(gitIntegration.provider, "github")));
 
       // Delete any old githubAppInstallation records for this user
       // (they reinstalled with a new installation ID)
-      await db
-        .delete(githubAppInstallation)
-        .where(eq(githubAppInstallation.userId, data.userId));
+      await db.delete(githubAppInstallation).where(eq(githubAppInstallation.userId, data.userId));
 
-      logger.info("Creating new GitHub installation", { userId: data.userId, action: "create_installation" });
+      logger.info("Creating new GitHub installation", {
+        userId: data.userId,
+        action: "create_installation",
+      });
       // Create new installation
       const [installation] = await db
         .insert(githubAppInstallation)
@@ -526,9 +559,9 @@ export class GitHubAppService {
 
       if (existingIntegration) {
         // Update existing git integration with new installation details
-        logger.info("Updating existing git integration with new installation", { 
-          userId: data.userId, 
-          action: "update_git_integration" 
+        logger.info("Updating existing git integration with new installation", {
+          userId: data.userId,
+          action: "update_git_integration",
         });
         await db
           .update(gitIntegration)
@@ -551,10 +584,17 @@ export class GitHubAppService {
         });
       }
 
-      logger.info("Successfully stored GitHub installation", { userId: data.userId, action: "installation_stored" });
+      logger.info("Successfully stored GitHub installation", {
+        userId: data.userId,
+        action: "installation_stored",
+      });
       return installation!;
     } catch (error) {
-      logger.error("Failed to store GitHub installation", { userId: data.userId, action: "store_installation" }, error as Error);
+      logger.error(
+        "Failed to store GitHub installation",
+        { userId: data.userId, action: "store_installation" },
+        error as Error,
+      );
       throw new Error("Failed to store GitHub App installation");
     }
   }
@@ -562,43 +602,47 @@ export class GitHubAppService {
   /**
    * Request GitHub to uninstall the app
    * This only calls GitHub API - database cleanup happens via webhook
-   * 
+   *
    * @param installationId - The GitHub installation ID
    * @returns true if uninstall was successful or installation already deleted
    */
   async requestUninstallFromGitHub(installationId: string): Promise<boolean> {
     try {
-      logger.info("Requesting GitHub App uninstall from GitHub", { 
+      logger.info("Requesting GitHub App uninstall from GitHub", {
         installationId,
-        action: "request_github_uninstall" 
+        action: "request_github_uninstall",
       });
 
       await this.appOctokit.apps.deleteInstallation({
         installation_id: parseInt(installationId),
       });
-      
-      logger.info("Successfully requested GitHub App uninstall from GitHub", { 
+
+      logger.info("Successfully requested GitHub App uninstall from GitHub", {
         installationId,
-        action: "github_uninstall_requested" 
+        action: "github_uninstall_requested",
       });
-      
+
       return true;
     } catch (githubError) {
       // If the installation doesn't exist on GitHub (404), that's fine
       // This can happen if the user already uninstalled from GitHub's side
-      if (githubError instanceof Error && 'status' in githubError && (githubError as { status: number }).status === 404) {
-        logger.info("GitHub App installation not found on GitHub (already uninstalled)", { 
+      if (
+        githubError instanceof Error &&
+        "status" in githubError &&
+        (githubError as { status: number }).status === 404
+      ) {
+        logger.info("GitHub App installation not found on GitHub (already uninstalled)", {
           installationId,
-          action: "github_uninstall_not_found" 
+          action: "github_uninstall_not_found",
         });
         return true;
       }
-      
+
       // For other errors, throw
-      logger.error("Failed to request GitHub App uninstall from GitHub", { 
+      logger.error("Failed to request GitHub App uninstall from GitHub", {
         installationId,
         action: "github_uninstall_failed",
-        error: githubError instanceof Error ? githubError.message : "Unknown error"
+        error: githubError instanceof Error ? githubError.message : "Unknown error",
       });
       throw githubError;
     }
@@ -606,7 +650,7 @@ export class GitHubAppService {
 
   /**
    * @deprecated Use requestUninstallFromGitHub() instead. Database cleanup now happens via webhook.
-   * 
+   *
    * Remove GitHub App installation from database
    * This is kept for backward compatibility but should not be called directly.
    * Database cleanup is now handled by the webhook handler via removeInstallationByInstallationId()
@@ -614,10 +658,10 @@ export class GitHubAppService {
   async removeInstallation(userId: string, installationId: string): Promise<void> {
     // Just call the GitHub API - webhook will handle DB cleanup
     await this.requestUninstallFromGitHub(installationId);
-    logger.info("GitHub App uninstall requested - database cleanup will happen via webhook", { 
-      userId, 
+    logger.info("GitHub App uninstall requested - database cleanup will happen via webhook", {
+      userId,
       installationId,
-      action: "remove_installation_deprecated" 
+      action: "remove_installation_deprecated",
     });
   }
 
@@ -633,15 +677,20 @@ export class GitHubAppService {
    * List repositories accessible through a GitHub App installation
    * Paginates through all repos (up to maxRepos limit)
    */
-  async listAccessibleRepos(installationId: string, maxRepos: number = 500): Promise<{
-    id: number;
-    name: string;
-    fullName: string;
-    owner: string;
-    private: boolean;
-    defaultBranch: string;
-    htmlUrl: string;
-  }[]> {
+  async listAccessibleRepos(
+    installationId: string,
+    maxRepos: number = 500,
+  ): Promise<
+    {
+      id: number;
+      name: string;
+      fullName: string;
+      owner: string;
+      private: boolean;
+      defaultBranch: string;
+      htmlUrl: string;
+    }[]
+  > {
     try {
       const { token } = await this.getUserToServerToken(installationId);
       const userOctokit = new Octokit({ auth: token });
@@ -701,11 +750,13 @@ export class GitHubAppService {
   async listBranches(
     installationId: string,
     owner: string,
-    repo: string
-  ): Promise<{
-    name: string;
-    protected: boolean;
-  }[]> {
+    repo: string,
+  ): Promise<
+    {
+      name: string;
+      protected: boolean;
+    }[]
+  > {
     try {
       const { token } = await this.getUserToServerToken(installationId);
       const userOctokit = new Octokit({ auth: token });
@@ -736,12 +787,14 @@ export class GitHubAppService {
     installationId: string,
     owner: string,
     repo: string,
-    ref?: string
-  ): Promise<{
-    path: string;
-    type: "blob" | "tree";
-    size?: number;
-  }[]> {
+    ref?: string,
+  ): Promise<
+    {
+      path: string;
+      type: "blob" | "tree";
+      size?: number;
+    }[]
+  > {
     try {
       const { token } = await this.getUserToServerToken(installationId);
       const userOctokit = new Octokit({ auth: token });
@@ -782,15 +835,17 @@ export class GitHubAppService {
     repo: string,
     query: string,
     ref?: string,
-    extensions: string[] = ["txt", "md", "json"]
-  ): Promise<{
-    path: string;
-    name: string;
-    size?: number;
-  }[]> {
+    extensions: string[] = ["txt", "md", "json"],
+  ): Promise<
+    {
+      path: string;
+      name: string;
+      size?: number;
+    }[]
+  > {
     try {
       const tree = await this.getFileTree(installationId, owner, repo, ref);
-      
+
       const lowerQuery = query.toLowerCase();
       const extPattern = new RegExp(`\\.(${extensions.join("|")})$`, "i");
 
@@ -824,7 +879,7 @@ export class GitHubAppService {
     owner: string,
     repo: string,
     path: string,
-    ref?: string
+    ref?: string,
   ): Promise<{
     content: string;
     encoding: string;
@@ -871,25 +926,25 @@ export class GitHubAppService {
     deletedIntegrations: number;
   }> {
     try {
-      logger.info("Removing GitHub installation by installationId (webhook)", { 
-        installationId, 
-        action: "webhook_remove_installation" 
+      logger.info("Removing GitHub installation by installationId (webhook)", {
+        installationId,
+        action: "webhook_remove_installation",
       });
 
       // First, mark all git integrations with this installation as inactive
       const updatedIntegrations = await db
         .update(gitIntegration)
-        .set({ 
+        .set({
           active: false,
           updatedAt: new Date(),
         })
         .where(eq(gitIntegration.providerInstallationId, installationId))
         .returning();
-      
+
       if (updatedIntegrations.length > 0) {
-        logger.info(`Marked ${updatedIntegrations.length} git integration(s) as inactive`, { 
+        logger.info(`Marked ${updatedIntegrations.length} git integration(s) as inactive`, {
           installationId,
-          action: "deactivate_integrations" 
+          action: "deactivate_integrations",
         });
       }
 
@@ -898,10 +953,10 @@ export class GitHubAppService {
         .delete(githubAppInstallation)
         .where(eq(githubAppInstallation.installationId, installationId))
         .returning();
-      
-      logger.info(`Deleted ${deletedInstallations.length} GitHub installation record(s)`, { 
+
+      logger.info(`Deleted ${deletedInstallations.length} GitHub installation record(s)`, {
         installationId,
-        action: "delete_installations" 
+        action: "delete_installations",
       });
 
       // Delete generic git integration records
@@ -909,15 +964,15 @@ export class GitHubAppService {
         .delete(gitIntegration)
         .where(eq(gitIntegration.providerInstallationId, installationId))
         .returning();
-      
-      logger.info(`Deleted ${deletedIntegrations.length} git integration record(s)`, { 
+
+      logger.info(`Deleted ${deletedIntegrations.length} git integration record(s)`, {
         installationId,
-        action: "delete_integrations" 
+        action: "delete_integrations",
       });
-      
-      logger.info("Successfully removed GitHub installation via webhook", { 
-        installationId, 
-        action: "webhook_installation_removed" 
+
+      logger.info("Successfully removed GitHub installation via webhook", {
+        installationId,
+        action: "webhook_installation_removed",
       });
 
       return {
@@ -925,10 +980,14 @@ export class GitHubAppService {
         deletedIntegrations: deletedIntegrations.length,
       };
     } catch (error) {
-      logger.error("Failed to remove GitHub installation via webhook", { 
-        installationId, 
-        action: "webhook_remove_installation" 
-      }, error as Error);
+      logger.error(
+        "Failed to remove GitHub installation via webhook",
+        {
+          installationId,
+          action: "webhook_remove_installation",
+        },
+        error as Error,
+      );
       throw new Error("Failed to remove GitHub App installation via webhook");
     }
   }
@@ -941,7 +1000,7 @@ export class GitHubAppService {
     // https://github.com/owner/repo
     // https://github.com/owner/repo.git
     // git@github.com:owner/repo.git
-    
+
     const httpsMatch = url.match(/github\.com\/([^\/]+)\/([^\/\.]+)(\.git)?$/);
     if (httpsMatch) {
       return { owner: httpsMatch[1]!, repo: httpsMatch[2]! };

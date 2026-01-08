@@ -1,9 +1,9 @@
 /**
  * System Configuration Service
- * 
+ *
  * Manages runtime-configurable system settings stored in the database.
  * Used for admin-adjustable values like idle timeout and daily quotas.
- * 
+ *
  * Settings are cached in memory and refreshed periodically to avoid
  * excessive database reads while still allowing runtime changes.
  */
@@ -18,23 +18,24 @@ import { systemConfig } from "@gitterm/db/schema/auth";
 /**
  * Available system configuration keys
  */
-export type SystemConfigKey = 
-  | "idle_timeout_minutes"
-  | "free_tier_daily_minutes";
+export type SystemConfigKey = "idle_timeout_minutes" | "free_tier_daily_minutes";
 
 /**
  * Default values for each configuration key
  * Used when no database value exists
  */
 const DEFAULTS: Record<SystemConfigKey, number> = {
-  idle_timeout_minutes: 30,        // 30 minutes idle before workspace is stopped
-  free_tier_daily_minutes: 60,     // 60 minutes (1 hour) per day for free users
+  idle_timeout_minutes: 30, // 30 minutes idle before workspace is stopped
+  free_tier_daily_minutes: 60, // 60 minutes (1 hour) per day for free users
 };
 
 /**
  * Human-readable descriptions for each setting
  */
-export const CONFIG_DESCRIPTIONS: Record<SystemConfigKey, { label: string; description: string; min: number; max: number }> = {
+export const CONFIG_DESCRIPTIONS: Record<
+  SystemConfigKey,
+  { label: string; description: string; min: number; max: number }
+> = {
   idle_timeout_minutes: {
     label: "Idle Timeout",
     description: "Minutes of inactivity before a workspace is automatically stopped",
@@ -84,17 +85,13 @@ export async function getSystemConfig(key: SystemConfigKey): Promise<number> {
   }
 
   try {
-    const [config] = await db
-      .select()
-      .from(systemConfig)
-      .where(eq(systemConfig.key, key))
-      .limit(1);
-    
+    const [config] = await db.select().from(systemConfig).where(eq(systemConfig.key, key)).limit(1);
+
     const value = config ? parseInt(config.value, 10) : DEFAULTS[key];
-    
+
     // Update cache
     cache.set(key, { value, timestamp: Date.now() });
-    
+
     return value;
   } catch (error) {
     console.error(`[system-config] Failed to get ${key}:`, error);
@@ -108,7 +105,7 @@ export async function getSystemConfig(key: SystemConfigKey): Promise<number> {
  */
 export async function setSystemConfig(key: SystemConfigKey, value: number): Promise<void> {
   const config = CONFIG_DESCRIPTIONS[key];
-  
+
   // Validate value is within bounds
   if (value < config.min || value > config.max) {
     throw new Error(`Value for ${key} must be between ${config.min} and ${config.max}`);
@@ -132,7 +129,7 @@ export async function setSystemConfig(key: SystemConfigKey, value: number): Prom
 
   // Clear cache for this key
   cache.delete(key);
-  
+
   console.log(`[system-config] Updated ${key} to ${value}`);
 }
 
@@ -142,11 +139,11 @@ export async function setSystemConfig(key: SystemConfigKey, value: number): Prom
 export async function getAllSystemConfig(): Promise<Record<SystemConfigKey, number>> {
   const keys = Object.keys(DEFAULTS) as SystemConfigKey[];
   const result: Record<string, number> = {};
-  
+
   for (const key of keys) {
     result[key] = await getSystemConfig(key);
   }
-  
+
   return result as Record<SystemConfigKey, number>;
 }
 

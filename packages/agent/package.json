@@ -2,19 +2,18 @@
   "name": "@opeoginni/gitterm-agent",
   "version": "0.1.13",
   "description": "Tunnel agent for exposing local development ports through gitterm.dev",
-  "type": "module",
+  "keywords": [
+    "development",
+    "gitterm",
+    "localtunnel",
+    "ngrok",
+    "opencode",
+    "proxy",
+    "tunnel"
+  ],
+  "homepage": "https://gitterm.dev",
   "license": "MIT",
   "author": "Opeyemi Oginni",
-  "homepage": "https://gitterm.dev",
-  "keywords": [
-    "tunnel",
-    "ngrok",
-    "localtunnel",
-    "development",
-    "proxy",
-    "gitterm",
-    "opencode"
-  ],
   "bin": {
     "gitterm-agent": "./dist/index.js"
   },
@@ -22,6 +21,10 @@
     "dist",
     "README.md"
   ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev:local": "bun --hot src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target node",
@@ -40,8 +43,5 @@
   },
   "engines": {
     "node": ">=18"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

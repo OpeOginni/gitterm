@@ -1,12 +1,12 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Switch } from "@/components/ui/switch"
+import { useState } from "react";
+import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -15,52 +15,52 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
-import type { Route } from "next"
-import { Plus, Server } from "lucide-react"
-import { trpcClient } from "@/utils/trpc"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
-import Link from "next/link"
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import type { Route } from "next";
+import { Plus, Server } from "lucide-react";
+import { trpcClient } from "@/utils/trpc";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import Link from "next/link";
 
 export default function AgentTypesPage() {
-  const queryClient = useQueryClient()
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [newAgent, setNewAgent] = useState({ name: "", serverOnly: false })
+  const queryClient = useQueryClient();
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newAgent, setNewAgent] = useState({ name: "", serverOnly: false });
 
   const { data: agentTypes, isLoading } = useQuery({
     queryKey: ["admin", "agentTypes"],
     queryFn: () => trpcClient.admin.infrastructure.listAgentTypes.query(),
-  })
+  });
 
   const createAgentType = useMutation({
     mutationFn: (params: { name: string; serverOnly: boolean }) =>
       trpcClient.admin.infrastructure.createAgentType.mutate(params),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "agentTypes"] })
-      setIsCreateOpen(false)
-      setNewAgent({ name: "", serverOnly: false })
-      toast.success("Agent type created")
+      queryClient.invalidateQueries({ queryKey: ["admin", "agentTypes"] });
+      setIsCreateOpen(false);
+      setNewAgent({ name: "", serverOnly: false });
+      toast.success("Agent type created");
     },
     onError: (error) => toast.error(error.message),
-  })
+  });
 
   const toggleAgentType = useMutation({
-    mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) => 
+    mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) =>
       trpcClient.admin.infrastructure.toggleAgentType.mutate({ id, isEnabled }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "agentTypes"] })
-      toast.success(`Agent type ${data.isEnabled ? "enabled" : "disabled"}`)
+      queryClient.invalidateQueries({ queryKey: ["admin", "agentTypes"] });
+      toast.success(`Agent type ${data.isEnabled ? "enabled" : "disabled"}`);
     },
     onError: (error) => toast.error(error.message),
-  })
+  });
 
   return (
     <DashboardShell>
-      <DashboardHeader 
-        heading="Agent Types" 
+      <DashboardHeader
+        heading="Agent Types"
         text="Configure the types of agents available for workspaces. Disabled agents won't appear in workspace creation."
       >
         <div className="flex gap-2">
@@ -95,7 +95,7 @@ export default function AgentTypesPage() {
                   <Checkbox
                     id="serverOnly"
                     checked={newAgent.serverOnly}
-                    onCheckedChange={(checked) => 
+                    onCheckedChange={(checked) =>
                       setNewAgent({ ...newAgent, serverOnly: checked === true })
                     }
                   />
@@ -142,12 +142,18 @@ export default function AgentTypesPage() {
                     <div className="flex items-center gap-3">
                       <span className="font-medium">{agent.name}</span>
                       {!agent.isEnabled && (
-                        <Badge variant="secondary" className="text-xs">Disabled</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Disabled
+                        </Badge>
                       )}
                       {agent.serverOnly ? (
-                        <Badge variant="secondary" className="text-xs">Server Only</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Server Only
+                        </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-xs">Terminal</Badge>
+                        <Badge variant="outline" className="text-xs">
+                          Terminal
+                        </Badge>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -157,7 +163,9 @@ export default function AgentTypesPage() {
                 </div>
                 <Switch
                   checked={agent.isEnabled}
-                  onCheckedChange={(checked) => toggleAgentType.mutate({ id: agent.id, isEnabled: checked })}
+                  onCheckedChange={(checked) =>
+                    toggleAgentType.mutate({ id: agent.id, isEnabled: checked })
+                  }
                 />
               </div>
             ))}
@@ -171,5 +179,5 @@ export default function AgentTypesPage() {
         )}
       </div>
     </DashboardShell>
-  )
+  );
 }

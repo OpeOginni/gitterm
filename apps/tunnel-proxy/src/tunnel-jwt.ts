@@ -4,27 +4,27 @@ import env from "@gitterm/env/tunnel-proxy";
 const TUNNEL_JWT_SECRET = env.TUNNEL_JWT_SECRET || "default-tunnel-secret-change-in-production";
 
 export interface TunnelTokenPayload {
-	workspaceId: string;
-	userId: string;
-	subdomain: string;
-	scope: string[];
-	exposedPorts?: Record<string, number>;
-	iat: number;
-	exp: number;
+  workspaceId: string;
+  userId: string;
+  subdomain: string;
+  scope: string[];
+  exposedPorts?: Record<string, number>;
+  iat: number;
+  exp: number;
 }
 
 export const tunnelJWT = {
-	verifyToken(token: string): TunnelTokenPayload {
-		try {
-			return jwt.verify(token, TUNNEL_JWT_SECRET, {
-				algorithms: ["HS256"],
-			}) as TunnelTokenPayload;
-		} catch {
-			throw new Error("Invalid tunnel token");
-		}
-	},
-	hasScope(payload: TunnelTokenPayload, requiredScope: string) {
-		if (payload.scope.includes("tunnel:*")) return true;
-		return payload.scope.includes(requiredScope);
-	},
+  verifyToken(token: string): TunnelTokenPayload {
+    try {
+      return jwt.verify(token, TUNNEL_JWT_SECRET, {
+        algorithms: ["HS256"],
+      }) as TunnelTokenPayload;
+    } catch {
+      throw new Error("Invalid tunnel token");
+    }
+  },
+  hasScope(payload: TunnelTokenPayload, requiredScope: string) {
+    if (payload.scope.includes("tunnel:*")) return true;
+    return payload.scope.includes(requiredScope);
+  },
 };

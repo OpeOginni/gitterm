@@ -1,5 +1,6 @@
 {
   "name": "@gitterm/auth",
+  "type": "module",
   "exports": {
     ".": {
       "default": "./src/index.ts"
@@ -8,14 +9,7 @@
       "default": "./src/*.ts"
     }
   },
-  "type": "module",
   "scripts": {},
-  "devDependencies": {
-    "@gitterm/config": "workspace:*"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
-  },
   "dependencies": {
     "@gitterm/db": "workspace:*",
     "@gitterm/env": "workspace:*",
@@ -26,5 +20,11 @@
     "dotenv": "catalog:",
     "drizzle-orm": "^0.44.2",
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@gitterm/config": "workspace:*"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
   }
 }

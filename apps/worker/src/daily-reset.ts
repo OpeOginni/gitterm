@@ -3,19 +3,19 @@ import { getInternalClient } from "@gitterm/api/client/internal";
 
 /**
  * Daily Reset Worker
- * 
+ *
  * Run once per day (via cron) to:
  * 1. Log yesterday's usage stats
  * 2. Optionally archive old records
- * 
+ *
  * Note: Daily usage records are created on-demand when users start workspaces,
  * so we don't need to pre-create them. This job is mainly for observability.
- * 
+ *
  * Runs as a Railway cron job once per day at midnight UTC.
  */
 async function main() {
   console.log("[daily-reset] Starting daily reset...");
-  
+
   try {
     const internalClient = getInternalClient();
     const today = new Date();
@@ -45,4 +45,3 @@ async function main() {
 
 // Run the job
 main();
-

@@ -19,12 +19,14 @@ export const githubRouter = router({
       const [gitIntegrationRecord] = await db
         .select()
         .from(gitIntegration)
-        .where(and(
-          eq(gitIntegration.userId, userId), 
-          eq(gitIntegration.provider, "github"),
-          eq(gitIntegration.active, true)
-        ));
-      
+        .where(
+          and(
+            eq(gitIntegration.userId, userId),
+            eq(gitIntegration.provider, "github"),
+            eq(gitIntegration.active, true),
+          ),
+        );
+
       if (!gitIntegrationRecord) {
         return {
           connected: false,
@@ -35,9 +37,9 @@ export const githubRouter = router({
       // Get installation from our database (don't verify against GitHub API)
       // Cleanup happens via webhook when the app is uninstalled
       const installation = await getGitHubAppService().getUserInstallation(
-        userId, 
+        userId,
         gitIntegrationRecord.providerInstallationId,
-        false // don't verify against GitHub API
+        false, // don't verify against GitHub API
       );
 
       if (!installation) {
@@ -59,7 +61,11 @@ export const githubRouter = router({
         },
       };
     } catch (error) {
-      logger.error("Failed to get installation status", { userId, action: "get_installation_status" }, error as Error);
+      logger.error(
+        "Failed to get installation status",
+        { userId, action: "get_installation_status" },
+        error as Error,
+      );
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to get installation status",
@@ -77,20 +83,20 @@ export const githubRouter = router({
       z.object({
         installationId: z.string(),
         setupAction: z.enum(["install", "update"]),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
 
       try {
-        logger.info("Handling GitHub App installation", { 
-          userId, 
-          action: "handle_installation" 
+        logger.info("Handling GitHub App installation", {
+          userId,
+          action: "handle_installation",
         });
-        
+
         // Get installation details from GitHub using SDK
         const installationData = await getGitHubAppService().getInstallationDetails(
-          input.installationId
+          input.installationId,
         );
 
         // Store installation in database
@@ -103,9 +109,9 @@ export const githubRouter = router({
           repositorySelection: installationData.repositorySelection,
         });
 
-        logger.info("GitHub App installation handled successfully", { 
-          userId, 
-          action: "installation_success" 
+        logger.info("GitHub App installation handled successfully", {
+          userId,
+          action: "installation_success",
         });
 
         return {
@@ -117,11 +123,15 @@ export const githubRouter = router({
           },
         };
       } catch (error) {
-        logger.error("Failed to handle GitHub App installation", { 
-          userId, 
-          action: "handle_installation" 
-        }, error as Error);
-        
+        logger.error(
+          "Failed to handle GitHub App installation",
+          {
+            userId,
+            action: "handle_installation",
+          },
+          error as Error,
+        );
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to connect GitHub App",
@@ -141,11 +151,8 @@ export const githubRouter = router({
       const [gitIntegrationRecord] = await db
         .select()
         .from(gitIntegration)
-        .where(and(
-          eq(gitIntegration.userId, userId), 
-          eq(gitIntegration.provider, "github")
-        ));
-      
+        .where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
+
       if (!gitIntegrationRecord) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -156,13 +163,13 @@ export const githubRouter = router({
       // Request GitHub to uninstall the app
       // Database cleanup will happen via webhook when GitHub sends the "deleted" event
       await getGitHubAppService().requestUninstallFromGitHub(
-        gitIntegrationRecord.providerInstallationId
+        gitIntegrationRecord.providerInstallationId,
       );
 
-      logger.info("GitHub App disconnect requested - awaiting webhook for cleanup", { 
+      logger.info("GitHub App disconnect requested - awaiting webhook for cleanup", {
         userId,
         installationId: gitIntegrationRecord.providerInstallationId,
-        action: "disconnect_app" 
+        action: "disconnect_app",
       });
 
       return {
@@ -171,12 +178,16 @@ export const githubRouter = router({
       };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
-      
-      logger.error("Failed to disconnect GitHub App", { 
-        userId, 
-        action: "disconnect_app" 
-      }, error as Error);
-      
+
+      logger.error(
+        "Failed to disconnect GitHub App",
+        {
+          userId,
+          action: "disconnect_app",
+        },
+        error as Error,
+      );
+
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to disconnect GitHub App",
@@ -198,10 +209,12 @@ export const githubRouter = router({
         const [gitIntegrationRecord] = await db
           .select()
           .from(gitIntegration)
-          .where(and(
-            eq(gitIntegration.userId, userId),
-            eq(gitIntegration.providerInstallationId, input.installationId)
-          ));
+          .where(
+            and(
+              eq(gitIntegration.userId, userId),
+              eq(gitIntegration.providerInstallationId, input.installationId),
+            ),
+          );
 
         if (!gitIntegrationRecord) {
           throw new TRPCError({
@@ -216,10 +229,14 @@ export const githubRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
-        logger.error("Failed to list accessible repos", {
-          userId,
-          action: "list_repos"
-        }, error as Error);
+        logger.error(
+          "Failed to list accessible repos",
+          {
+            userId,
+            action: "list_repos",
+          },
+          error as Error,
+        );
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -233,11 +250,13 @@ export const githubRouter = router({
    * List branches for a repository
    */
   listBranches: protectedProcedure
-    .input(z.object({
-      installationId: z.string(),
-      owner: z.string(),
-      repo: z.string(),
-    }))
+    .input(
+      z.object({
+        installationId: z.string(),
+        owner: z.string(),
+        repo: z.string(),
+      }),
+    )
     .query(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
 
@@ -246,10 +265,12 @@ export const githubRouter = router({
         const [gitIntegrationRecord] = await db
           .select()
           .from(gitIntegration)
-          .where(and(
-            eq(gitIntegration.userId, userId),
-            eq(gitIntegration.providerInstallationId, input.installationId)
-          ));
+          .where(
+            and(
+              eq(gitIntegration.userId, userId),
+              eq(gitIntegration.providerInstallationId, input.installationId),
+            ),
+          );
 
         if (!gitIntegrationRecord) {
           throw new TRPCError({
@@ -261,17 +282,21 @@ export const githubRouter = router({
         const branches = await getGitHubAppService().listBranches(
           input.installationId,
           input.owner,
-          input.repo
+          input.repo,
         );
 
         return { branches };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
-        logger.error("Failed to list branches", {
-          userId,
-          action: "list_branches"
-        }, error as Error);
+        logger.error(
+          "Failed to list branches",
+          {
+            userId,
+            action: "list_branches",
+          },
+          error as Error,
+        );
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -285,14 +310,16 @@ export const githubRouter = router({
    * Search files in a repository
    */
   searchFiles: protectedProcedure
-    .input(z.object({
-      installationId: z.string(),
-      owner: z.string(),
-      repo: z.string(),
-      query: z.string(),
-      ref: z.string().optional(),
-      extensions: z.array(z.string()).optional(),
-    }))
+    .input(
+      z.object({
+        installationId: z.string(),
+        owner: z.string(),
+        repo: z.string(),
+        query: z.string(),
+        ref: z.string().optional(),
+        extensions: z.array(z.string()).optional(),
+      }),
+    )
     .query(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
 
@@ -301,10 +328,12 @@ export const githubRouter = router({
         const [gitIntegrationRecord] = await db
           .select()
           .from(gitIntegration)
-          .where(and(
-            eq(gitIntegration.userId, userId),
-            eq(gitIntegration.providerInstallationId, input.installationId)
-          ));
+          .where(
+            and(
+              eq(gitIntegration.userId, userId),
+              eq(gitIntegration.providerInstallationId, input.installationId),
+            ),
+          );
 
         if (!gitIntegrationRecord) {
           throw new TRPCError({
@@ -319,17 +348,21 @@ export const githubRouter = router({
           input.repo,
           input.query,
           input.ref,
-          input.extensions
+          input.extensions,
         );
 
         return { files };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
-        logger.error("Failed to search files", {
-          userId,
-          action: "search_files"
-        }, error as Error);
+        logger.error(
+          "Failed to search files",
+          {
+            userId,
+            action: "search_files",
+          },
+          error as Error,
+        );
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -374,12 +407,16 @@ export const githubRouter = router({
           },
         };
       } catch (error) {
-        logger.error("Failed to get workspace git configuration", { 
-          userId, 
-          workspaceId: input.workspaceId,
-          action: "get_workspace_config" 
-        }, error as Error);
-        
+        logger.error(
+          "Failed to get workspace git configuration",
+          {
+            userId,
+            workspaceId: input.workspaceId,
+            action: "get_workspace_config",
+          },
+          error as Error,
+        );
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to get workspace git configuration",

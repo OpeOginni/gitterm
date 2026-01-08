@@ -11,7 +11,7 @@ import { logger } from "../../utils/logger";
 /**
  * Workspace operations router
  * All procedures use workspaceAuthProcedure which validates JWT tokens
- * 
+ *
  * Security flow:
  * 1. JWT token extracted from Authorization: Bearer <token> header
  * 2. Token verified and decoded (checks signature, expiry)
@@ -31,7 +31,7 @@ export const workspaceOperationsRouter = router({
         workspaceId: z.string(),
         owner: z.string(),
         repo: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const { workspaceAuth } = ctx;
@@ -45,7 +45,7 @@ export const workspaceOperationsRouter = router({
       }
 
       // Check scope
-      if (!workspaceJWT.hasScope(workspaceAuth, 'git:fork')) {
+      if (!workspaceJWT.hasScope(workspaceAuth, "git:fork")) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Insufficient scope for fork operation",
@@ -53,10 +53,7 @@ export const workspaceOperationsRouter = router({
       }
 
       // Verify workspace exists and belongs to user
-      const [ws] = await db
-        .select()
-        .from(workspace)
-        .where(eq(workspace.id, input.workspaceId));
+      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
 
       if (!ws) {
         throw new TRPCError({
@@ -87,10 +84,7 @@ export const workspaceOperationsRouter = router({
         const [gitIntegrationRecord] = await db
           .select()
           .from(gitIntegration)
-          .where(and(
-            eq(gitIntegration.userId, userId), 
-            eq(gitIntegration.provider, "github")
-          ));
+          .where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
 
         if (!gitIntegrationRecord) {
           throw new TRPCError({
@@ -101,9 +95,9 @@ export const workspaceOperationsRouter = router({
 
         // Verify installation and auto-cleanup if deleted on GitHub
         const installation = await getGitHubAppService().getUserInstallation(
-          userId, 
+          userId,
           gitIntegrationRecord.providerInstallationId,
-          true // verify
+          true, // verify
         );
 
         if (!installation) {
@@ -127,8 +121,8 @@ export const workspaceOperationsRouter = router({
           .where(
             and(
               eq(workspaceGitConfig.userId, userId),
-              gt(workspaceGitConfig.forkCreatedAt, new Date(Date.now() - 60000))
-            )
+              gt(workspaceGitConfig.forkCreatedAt, new Date(Date.now() - 60000)),
+            ),
           );
 
         if (recentForks.length >= 3) {
@@ -142,7 +136,7 @@ export const workspaceOperationsRouter = router({
         const fork = await getGitHubAppService().forkRepository(
           installation.installationId,
           input.owner,
-          input.repo
+          input.repo,
         );
 
         // Update or create workspace git config
@@ -183,8 +177,14 @@ export const workspaceOperationsRouter = router({
         }
 
         // Generate authenticated URL
-        const { token } = await getGitHubAppService().getUserToServerToken(installation.installationId);
-        const authenticatedUrl = getGitHubAppService().getAuthenticatedGitUrl(token, fork.owner, fork.repo);
+        const { token } = await getGitHubAppService().getUserToServerToken(
+          installation.installationId,
+        );
+        const authenticatedUrl = getGitHubAppService().getAuthenticatedGitUrl(
+          token,
+          fork.owner,
+          fork.repo,
+        );
 
         logger.info("Fork operation completed", {
           workspaceId: input.workspaceId,
@@ -205,7 +205,7 @@ export const workspaceOperationsRouter = router({
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        
+
         // Handle installation not found specifically
         if (error instanceof GitHubInstallationNotFoundError) {
           logger.warn("GitHub installation not found during fork", {
@@ -217,12 +217,16 @@ export const workspaceOperationsRouter = router({
             message: "GitHub App installation has been removed. Please reconnect.",
           });
         }
-        
-        logger.error("Failed to fork repository", {
-          workspaceId: input.workspaceId,
-          action: "fork_repository",
-        }, error as Error);
-        
+
+        logger.error(
+          "Failed to fork repository",
+          {
+            workspaceId: input.workspaceId,
+            action: "fork_repository",
+          },
+          error as Error,
+        );
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fork repository",
@@ -239,7 +243,7 @@ export const workspaceOperationsRouter = router({
     .input(
       z.object({
         workspaceId: z.uuid(),
-      })
+      }),
     )
     .query(async ({ input, ctx }) => {
       const { workspaceAuth } = ctx;
@@ -253,7 +257,7 @@ export const workspaceOperationsRouter = router({
       }
 
       // Check scope
-      if (!workspaceJWT.hasScope(workspaceAuth, 'git:refresh')) {
+      if (!workspaceJWT.hasScope(workspaceAuth, "git:refresh")) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Insufficient scope for token refresh",
@@ -261,10 +265,7 @@ export const workspaceOperationsRouter = router({
       }
 
       // Verify workspace exists and belongs to user
-      const [ws] = await db
-        .select()
-        .from(workspace)
-        .where(eq(workspace.id, input.workspaceId));
+      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
 
       if (!ws) {
         throw new TRPCError({
@@ -294,10 +295,7 @@ export const workspaceOperationsRouter = router({
         const [gitIntegrationRecord] = await db
           .select()
           .from(gitIntegration)
-          .where(and(
-            eq(gitIntegration.userId, userId), 
-            eq(gitIntegration.provider, "github")
-          ));
+          .where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
 
         // we only support GitHub for now
         if (!gitIntegrationRecord) {
@@ -309,9 +307,9 @@ export const workspaceOperationsRouter = router({
 
         // Get GitHub App installation with verification
         const installation = await getGitHubAppService().getUserInstallation(
-          userId, 
+          userId,
           gitIntegrationRecord.providerInstallationId,
-          true // verify
+          true, // verify
         );
 
         if (!installation) {
@@ -329,7 +327,9 @@ export const workspaceOperationsRouter = router({
         }
 
         // Generate new token
-        const tokenData = await getGitHubAppService().getUserToServerToken(installation.installationId);
+        const tokenData = await getGitHubAppService().getUserToServerToken(
+          installation.installationId,
+        );
 
         logger.info("Git token refresh completed", {
           workspaceId: input.workspaceId,
@@ -344,7 +344,7 @@ export const workspaceOperationsRouter = router({
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        
+
         // Handle installation not found specifically
         if (error instanceof GitHubInstallationNotFoundError) {
           logger.warn("GitHub installation not found during token refresh", {
@@ -356,12 +356,16 @@ export const workspaceOperationsRouter = router({
             message: "GitHub App installation has been removed. Please reconnect.",
           });
         }
-        
-        logger.error("Failed to refresh token", {
-          workspaceId: input.workspaceId,
-          action: "refresh_git_token",
-        }, error as Error);
-        
+
+        logger.error(
+          "Failed to refresh token",
+          {
+            workspaceId: input.workspaceId,
+            action: "refresh_git_token",
+          },
+          error as Error,
+        );
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to refresh GitHub token",

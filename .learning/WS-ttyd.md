@@ -11,16 +11,19 @@ The original proxy was only receiving 3 WebSocket messages when connecting to tt
 ### 1. **Fixed `serverMaxWindowBits` Configuration**
 
 **Original Code:**
+
 ```typescript
 serverMaxWindowBits: 1024, // WRONG!
 ```
 
 **Fixed Code:**
+
 ```typescript
 serverMaxWindowBits: 10, // Correct range: 8-15
 ```
 
 **Why This Matters:**
+
 - `serverMaxWindowBits` controls the LZ77 sliding window size for compression
 - Valid range is **8-15** (representing 2^8 to 2^15 bytes)
 - Setting it to 1024 is invalid and causes WebSocket compression to fail
@@ -32,6 +35,7 @@ serverMaxWindowBits: 10, // Correct range: 8-15
 ### 2. **Added Message Buffering for Race Condition**
 
 **The Problem:**
+
 ```typescript
 // Original code - messages sent before backend connects are LOST
 clientWs.on("message", (data, isBinary) => {
@@ -43,6 +47,7 @@ clientWs.on("message", (data, isBinary) => {
 ```
 
 **The Fix:**
+
 ```typescript
 const messageBuffer: Array<{ data: any; isBinary: boolean }> = [];
 let backendConnected = false;
@@ -67,6 +72,7 @@ backendWs.on("open", () => {
 ```
 
 **Why This Matters:**
+
 - WebSocket connections aren't instant - there's a brief period between creating the backend WebSocket and it being ready
 - During this time, the client might send initialization messages (terminal size, capabilities, etc.)
 - Without buffering, these critical setup messages are **silently dropped**
@@ -74,6 +80,7 @@ backendWs.on("open", () => {
 - Missing these messages causes the terminal UI to fail initialization
 
 **Timeline:**
+
 ```
 t=0ms:   Client connects to proxy
 t=1ms:   Proxy accepts client connection
@@ -88,6 +95,7 @@ t=50ms:  Backend WebSocket connects ← Messages sent at t=2-3ms are gone!
 ### 3. **Added Ping/Pong Keepalive**
 
 **Added Code:**
+
 ```typescript
 let pingInterval: NodeJS.Timeout;
 
@@ -112,6 +120,7 @@ clientWs.on("ping", () => {
 ```
 
 **Why This Matters:**
+
 - Idle WebSocket connections can be closed by intermediate proxies, firewalls, or load balancers
 - Many cloud providers (Cloudflare, AWS ALB, etc.) drop idle connections after 30-60 seconds
 - Terminal sessions are often idle (user reading output, thinking, etc.)
@@ -123,6 +132,7 @@ clientWs.on("ping", () => {
 ### 4. **Improved Connection State Handling**
 
 **Original Code:**
+
 ```typescript
 const closeBoth = () => {
   if (clientWs.readyState === WebSocket.OPEN) clientWs.close();
@@ -131,25 +141,25 @@ const closeBoth = () => {
 ```
 
 **Fixed Code:**
+
 ```typescript
 const closeBoth = () => {
   if (pingInterval) {
     clearInterval(pingInterval);
   }
-  
-  if (clientWs.readyState === WebSocket.OPEN || 
-      clientWs.readyState === WebSocket.CONNECTING) {
+
+  if (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING) {
     clientWs.close();
   }
-  
-  if (backendWs.readyState === WebSocket.OPEN || 
-      backendWs.readyState === WebSocket.CONNECTING) {
+
+  if (backendWs.readyState === WebSocket.OPEN || backendWs.readyState === WebSocket.CONNECTING) {
     backendWs.close();
   }
 };
 ```
 
 **Why This Matters:**
+
 - WebSocket has 4 states: CONNECTING, OPEN, CLOSING, CLOSED
 - Original code only closed OPEN connections, leaving CONNECTING connections hanging
 - Hanging connections can prevent new connections and leak resources
@@ -160,22 +170,24 @@ const closeBoth = () => {
 ### 5. **Enhanced Headers for Backend Connection**
 
 **Added Code:**
+
 ```typescript
 const backendWs = new WebSocket(targetWsUrl, ["tty"], {
   headers: {
-    "Host": backendUrl.host,  // Proper virtual host routing
+    Host: backendUrl.host, // Proper virtual host routing
     "X-Forwarded-For": req.socket.remoteAddress,
     "X-Forwarded-Proto": "https",
     "X-Forwarded-Host": host,
     "User-Agent": req.headers["user-agent"] || "gitterm-Proxy/1.0",
-    ...(req.headers.cookie ? { "Cookie": req.headers.cookie } : {}),
+    ...(req.headers.cookie ? { Cookie: req.headers.cookie } : {}),
   },
   rejectUnauthorized: false,
-  perMessageDeflate: true,  // Enable compression
+  perMessageDeflate: true, // Enable compression
 });
 ```
 
 **Why This Matters:**
+
 - **`Host` header**: Required for proper virtual host routing on the backend
 - **`User-Agent`**: Some servers reject connections without a User-Agent
 - **`perMessageDeflate: true`**: Enables compression on the backend connection (must match server settings)
@@ -188,10 +200,12 @@ const backendWs = new WebSocket(targetWsUrl, ["tty"], {
 To enable secure, private communication between services within Railway (Proxy ↔ Workspace), we moved to IPv6 and internal DNS.
 
 ### The Change
+
 - **Bind Address**: Changed from `0.0.0.0` (IPv4) to `::` (IPv6 + IPv4 dual-stack).
 - **Internal DNS**: Using `*.railway.internal` domains instead of public `*.up.railway.app` or custom domains.
 
 ### Why This Matters
+
 1.  **Private Networking**: Railway's private network allows services to communicate securely without exposing ports to the public internet.
 2.  **IPv6 Support**: Railway's internal network infrastructure relies heavily on IPv6. Binding to `::` ensures the application listens on the correct interfaces for internal traffic.
 3.  **Performance & Security**: Internal traffic doesn't leave the datacenter and isn't subject to public internet latency or security risks.
@@ -204,12 +218,14 @@ To enable secure, private communication between services within Railway (Proxy �
 Understanding why `serverMaxWindowBits` was critical:
 
 ### LZ77 Compression in WebSockets
+
 - WebSockets use DEFLATE compression (LZ77 + Huffman coding)
 - The "window" is a sliding buffer of recently seen data
 - `serverMaxWindowBits` sets the window size: 2^n bytes
 - Valid range: 8-15 (256 bytes to 32 KB)
 
 ### Why Invalid Settings Break Everything
+
 1. During WebSocket handshake, client and server negotiate compression parameters
 2. If server advertises invalid `serverMaxWindowBits` (like 1024), the negotiation fails
 3. Many WebSocket implementations silently fall back to **no compression**
@@ -222,6 +238,7 @@ Understanding why `serverMaxWindowBits` was critical:
 ## The Complete Message Flow
 
 ### Before the Fix:
+
 ```
 1. Client connects → Proxy accepts
 2. Client sends: terminal size [LOST - backend not ready]
@@ -232,6 +249,7 @@ Understanding why `serverMaxWindowBits` was critical:
 ```
 
 ### After the Fix:
+
 ```
 1. Client connects → Proxy accepts
 2. Client sends: terminal size [BUFFERED]

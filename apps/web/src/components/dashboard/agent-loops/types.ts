@@ -2,12 +2,12 @@ import type { trpc } from "@/utils/trpc";
 
 // Type for a loop from listLoops
 export type AgentLoop = NonNullable<
-  typeof trpc.agentLoop.listLoops["~types"]["output"]
+  (typeof trpc.agentLoop.listLoops)["~types"]["output"]
 >["loops"][number];
 
 // Type for a loop with runs from getLoop
 export type AgentLoopWithRuns = NonNullable<
-  typeof trpc.agentLoop.getLoop["~types"]["output"]
+  (typeof trpc.agentLoop.getLoop)["~types"]["output"]
 >["loop"];
 
 // Type for a run

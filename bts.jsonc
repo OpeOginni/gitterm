@@ -9,17 +9,13 @@
   "orm": "drizzle",
   "backend": "hono",
   "runtime": "bun",
-  "frontend": [
-    "next"
-  ],
-  "addons": [
-    "turborepo"
-  ],
+  "frontend": ["next"],
+  "addons": ["turborepo"],
   "examples": [],
   "auth": "better-auth",
   "packageManager": "bun",
   "dbSetup": "docker",
   "api": "trpc",
   "webDeploy": "none",
-  "serverDeploy": "none"
+  "serverDeploy": "none",
 }

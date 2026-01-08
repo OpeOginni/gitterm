@@ -3,49 +3,49 @@ import { twMerge } from "tailwind-merge";
 import env from "@gitterm/env/web";
 
 export function cn(...inputs: ClassValue[]) {
-	return twMerge(clsx(inputs));
+  return twMerge(clsx(inputs));
 }
 
 /**
  * Workspace URL Utilities
- * 
+ *
  * URLs are constructed from subdomain based on routing mode.
  * The backend handles proxying to the actual upstream.
  */
 
 function getProtocolForBaseDomain(baseDomain: string): "http" | "https" {
-	// local dev: "localhost:8888" or "127.0.0.1:8888"
-	if (baseDomain.includes("localhost") || baseDomain.includes("127.0.0.1")) return "http";
-	return "https";
+  // local dev: "localhost:8888" or "127.0.0.1:8888"
+  if (baseDomain.includes("localhost") || baseDomain.includes("127.0.0.1")) return "http";
+  return "https";
 }
 
 /**
  * Construct a workspace URL from subdomain
  */
 export function getWorkspaceUrl(subdomain: string): string {
-	const protocol = getProtocolForBaseDomain(env.NEXT_PUBLIC_BASE_DOMAIN);
-	if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
-		return `${protocol}://${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${subdomain}`;
-	}
+  const protocol = getProtocolForBaseDomain(env.NEXT_PUBLIC_BASE_DOMAIN);
+  if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
+    return `${protocol}://${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${subdomain}`;
+  }
 
-	return `${protocol}://${subdomain}.${env.NEXT_PUBLIC_BASE_DOMAIN}`;
+  return `${protocol}://${subdomain}.${env.NEXT_PUBLIC_BASE_DOMAIN}`;
 }
 
 /**
  * Construct the opencode attach command
  */
 export function getAttachCommand(subdomain: string, agentName: string): string {
-	const url = getWorkspaceUrl(subdomain);
+  const url = getWorkspaceUrl(subdomain);
 
-	// TODO: Better agent name detection
-	if (agentName.toLocaleLowerCase().includes("opencode")) {
-		return `opencode attach ${url}`;
-	}
-	if (agentName.toLocaleLowerCase().includes("shuvcode")) {
-		return `shuvcode attach ${url}`;
-	}
+  // TODO: Better agent name detection
+  if (agentName.toLocaleLowerCase().includes("opencode")) {
+    return `opencode attach ${url}`;
+  }
+  if (agentName.toLocaleLowerCase().includes("shuvcode")) {
+    return `shuvcode attach ${url}`;
+  }
 
-	return `opencode attach ${url}`;
+  return `opencode attach ${url}`;
 }
 
 /**
@@ -53,11 +53,11 @@ export function getAttachCommand(subdomain: string, agentName: string): string {
  * Shows the URL without protocol for cleaner display
  */
 export function getWorkspaceDisplayUrl(subdomain: string): string {
-	if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
-		return `${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${subdomain}`;
-	}
+  if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
+    return `${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${subdomain}`;
+  }
 
-	return `${subdomain}.${env.NEXT_PUBLIC_BASE_DOMAIN}`;
+  return `${subdomain}.${env.NEXT_PUBLIC_BASE_DOMAIN}`;
 }
 
 // ============================================================================
@@ -69,11 +69,11 @@ export function getWorkspaceDisplayUrl(subdomain: string): string {
  * In that case, the agent defaults (api.gitterm.dev + tunnel.gitterm.dev) work.
  */
 export function isHostedGittermDomain(): boolean {
-	// Prefer runtime host check so local/self-hosted doesn't depend on NEXT_PUBLIC_BASE_DOMAIN being configured.
-	if (typeof window !== "undefined") {
-		return window.location.hostname === "gitterm.dev";
-	}
-	return env.NEXT_PUBLIC_BASE_DOMAIN === "gitterm.dev";
+  // Prefer runtime host check so local/self-hosted doesn't depend on NEXT_PUBLIC_BASE_DOMAIN being configured.
+  if (typeof window !== "undefined") {
+    return window.location.hostname === "gitterm.dev";
+  }
+  return env.NEXT_PUBLIC_BASE_DOMAIN === "gitterm.dev";
 }
 
 /**
@@ -81,18 +81,18 @@ export function isHostedGittermDomain(): boolean {
  * so we normalize any configured API URL back to its origin.
  */
 export function getAgentServerUrlOrigin(currentOrigin?: string): string | undefined {
-	const configured = env.NEXT_PUBLIC_SERVER_URL;
-	if (configured) {
-		try {
-			// UI may provide an API base (e.g. http://localhost:8888/api). Agent needs the origin.
-			return new URL(configured).origin;
-		} catch {
-			// fall through
-		}
-	}
-	if (currentOrigin) return currentOrigin;
-	if (typeof window !== "undefined") return window.location.origin;
-	return undefined;
+  const configured = env.NEXT_PUBLIC_SERVER_URL;
+  if (configured) {
+    try {
+      // UI may provide an API base (e.g. http://localhost:8888/api). Agent needs the origin.
+      return new URL(configured).origin;
+    } catch {
+      // fall through
+    }
+  }
+  if (currentOrigin) return currentOrigin;
+  if (typeof window !== "undefined") return window.location.origin;
+  return undefined;
 }
 
 /**
@@ -103,21 +103,20 @@ export function getAgentServerUrlOrigin(currentOrigin?: string): string | undefi
  * - otherwise derive from current origin as `${origin}/tunnel/connect` (matches `apps/proxy/Caddyfile.local`)
  */
 export function getAgentWsUrl(currentOrigin?: string): string | undefined {
-	const configured = env.NEXT_PUBLIC_TUNNEL_URL;
-	const fallbackOrigin = getAgentServerUrlOrigin(currentOrigin);
-	const base = configured ?? fallbackOrigin;
-	if (!base) return undefined;
-	try {
-		const u = new URL(base);
-		u.protocol =
-			u.protocol === "https:" ? "wss:" : u.protocol === "http:" ? "ws:" : u.protocol;
-		u.pathname = "/tunnel/connect";
-		u.search = "";
-		u.hash = "";
-		return u.toString();
-	} catch {
-		return undefined;
-	}
+  const configured = env.NEXT_PUBLIC_TUNNEL_URL;
+  const fallbackOrigin = getAgentServerUrlOrigin(currentOrigin);
+  const base = configured ?? fallbackOrigin;
+  if (!base) return undefined;
+  try {
+    const u = new URL(base);
+    u.protocol = u.protocol === "https:" ? "wss:" : u.protocol === "http:" ? "ws:" : u.protocol;
+    u.pathname = "/tunnel/connect";
+    u.search = "";
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -125,14 +124,17 @@ export function getAgentWsUrl(currentOrigin?: string): string | undefined {
  * - Hosted: keep it minimal.
  * - Self-hosted: include `--ws-url` + `--server-url` so the agent knows where to connect.
  */
-export function getAgentConnectCommand(workspaceId: string, opts?: { currentOrigin?: string }): string {
-	const base = `npx @opeoginni/gitterm-agent connect --workspace-id ${workspaceId}`;
+export function getAgentConnectCommand(
+  workspaceId: string,
+  opts?: { currentOrigin?: string },
+): string {
+  const base = `npx @opeoginni/gitterm-agent connect --workspace-id ${workspaceId}`;
 
-	if (isHostedGittermDomain()) return base;
+  if (isHostedGittermDomain()) return base;
 
-	const serverUrl = getAgentServerUrlOrigin(opts?.currentOrigin);
-	if (!serverUrl) return base;
+  const serverUrl = getAgentServerUrlOrigin(opts?.currentOrigin);
+  if (!serverUrl) return base;
 
-	// With the new backend response, the agent can learn wsUrl after auth.
-	return `${base} --server-url ${serverUrl}`;
+  // With the new backend response, the agent can learn wsUrl after auth.
+  return `${base} --server-url ${serverUrl}`;
 }

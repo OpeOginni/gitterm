@@ -69,16 +69,22 @@ export function RepoFileSearch({
     enabled: expanded && !!installationId && !!owner && !!repo && debouncedQuery.length > 0,
   });
 
-  const handleSelect = useCallback((file: RepoFile) => {
-    onChange(file);
-    setExpanded(false);
-    setSearchQuery("");
-  }, [onChange]);
+  const handleSelect = useCallback(
+    (file: RepoFile) => {
+      onChange(file);
+      setExpanded(false);
+      setSearchQuery("");
+    },
+    [onChange],
+  );
 
-  const handleClear = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange(null);
-  }, [onChange]);
+  const handleClear = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onChange(null);
+    },
+    [onChange],
+  );
 
   const handleTriggerClick = () => {
     if (installationId && owner && repo) {
@@ -94,11 +100,11 @@ export function RepoFileSearch({
     const itemHeight = 52; // Approximate height per file item (has 2 lines)
     const maxHeight = 280;
     const minHeight = 60; // For empty/loading states
-    
+
     if (isLoading || debouncedQuery.length === 0 || filesCount === 0) {
       return minHeight;
     }
-    
+
     const contentHeight = filesCount * itemHeight + 8; // +8 for padding
     return Math.min(contentHeight, maxHeight);
   }, [filesCount, isLoading, debouncedQuery.length]);
@@ -119,21 +125,16 @@ export function RepoFileSearch({
             "flex items-center justify-between w-full px-3 py-2 text-sm rounded-md border bg-secondary/30 border-border/50 hover:bg-secondary/50 transition-colors text-left",
             isDisabled && "opacity-50 cursor-not-allowed",
             !value && "text-muted-foreground",
-            expanded && "rounded-b-none border-b-0"
+            expanded && "rounded-b-none border-b-0",
           )}
         >
           <div className="flex items-center gap-2 truncate">
             <FileText className="h-4 w-4 shrink-0" />
-            <span className="truncate">
-              {value ? value.path : placeholder}
-            </span>
+            <span className="truncate">{value ? value.path : placeholder}</span>
           </div>
           <div className="flex items-center gap-1">
             {value && (
-              <X
-                className="h-4 w-4 shrink-0 opacity-50 hover:opacity-100"
-                onClick={handleClear}
-              />
+              <X className="h-4 w-4 shrink-0 opacity-50 hover:opacity-100" onClick={handleClear} />
             )}
             {expanded ? (
               <ChevronUp className="h-4 w-4 shrink-0 opacity-50" />
@@ -179,7 +180,7 @@ export function RepoFileSearch({
                       onClick={() => handleSelect(file)}
                       className={cn(
                         "w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-secondary/60 transition-colors text-left",
-                        value?.path === file.path && "bg-secondary/60"
+                        value?.path === file.path && "bg-secondary/60",
                       )}
                     >
                       <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -202,9 +203,7 @@ export function RepoFileSearch({
           </div>
         )}
       </div>
-      {description && (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      )}
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
     </div>
   );
 }

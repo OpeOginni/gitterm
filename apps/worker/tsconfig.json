@@ -1,11 +1,11 @@
 {
-	"extends": "@gitterm/config/tsconfig.base.json",
-	"compilerOptions": {
-		"composite": true,
-		"outDir": "dist",
-		"baseUrl": ".",
-		"paths": {
-			"@/*": ["./src/*"]
-		}
-	}
+  "extends": "@gitterm/config/tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
 }

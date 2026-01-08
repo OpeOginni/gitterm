@@ -14,11 +14,10 @@
 
 //     const [cloudConfig] = await db.select().from(cloudAccount).where(and(eq(cloudAccount.userId, userId), eq(cloudAccount.providerId, fetchedServerType.cloudProviderId)));
 
-//     if (!cloudConfig) 
+//     if (!cloudConfig)
 //         throw new TRPCError({ code: "NOT_FOUND", message: "Cloud config not found" });
-    
-//     const sts = new STSClient({ region: 'us-east-1' })
 
+//     const sts = new STSClient({ region: 'us-east-1' })
 
 //     const assumed = await sts.send(
 //         new AssumeRoleCommand({
@@ -28,9 +27,9 @@
 //         })
 //       )
 
-//       if (!assumed.Credentials) 
+//       if (!assumed.Credentials)
 //         throw new TRPCError({ code: "NOT_FOUND", message: "Credentials not found" });
-      
+
 //       if (!assumed.Credentials.AccessKeyId)
 //         throw new TRPCError({ code: "NOT_FOUND", message: "Access key ID not found" });
 
@@ -51,9 +50,8 @@
 //         region: cloudConfig.region,
 //     })
 
-
 //     const userData = generateUserData(repoUrl, branch);
-    
+
 //     const run = await ec2.send(
 //         new RunInstancesCommand({
 //           ImageId: "ami-0c02fb55956c7d316", // Ubuntu 22.04 example
@@ -91,7 +89,7 @@
 // export async function deleteInstance(instanceId: string, userId: string) {
 //     const [fetchedInstance] = await db.select().from(instance).where(and(eq(instance.id, instanceId), eq(instance.userId, userId)));
 
-//     if (!fetchedInstance) 
+//     if (!fetchedInstance)
 //         throw new TRPCError({ code: "NOT_FOUND", message: "Instance not found" });
 
 //     const [cloudConfig] = await db.select().from(cloudAccount).where(and(eq(cloudAccount.userId, userId), eq(cloudAccount.providerId, fetchedInstance.serverTypeId)));
@@ -109,9 +107,9 @@
 //         })
 //       )
 
-//       if (!assumed.Credentials) 
+//       if (!assumed.Credentials)
 //         throw new TRPCError({ code: "NOT_FOUND", message: "Credentials not found" });
-      
+
 //       if (!assumed.Credentials.AccessKeyId)
 //         throw new TRPCError({ code: "NOT_FOUND", message: "Access key ID not found" });
 

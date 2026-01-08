@@ -17,10 +17,7 @@
  * - Full auth with GitHub OAuth
  */
 
-import env, {
-  isSelfHosted,
-  isManaged,
-} from "@gitterm/env/server";
+import env, { isSelfHosted, isManaged } from "@gitterm/env/server";
 
 /**
  * Current deployment mode

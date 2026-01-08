@@ -45,18 +45,18 @@ export const logger = {
   info: (message: string, context?: LogContext) => {
     console.log(formatLog("info", message, context));
   },
-  
+
   warn: (message: string, context?: LogContext) => {
     console.warn(formatLog("warn", message, context));
   },
-  
+
   error: (message: string, context?: LogContext, error?: Error) => {
     console.error(formatLog("error", message, context));
     if (error) {
       console.error(error);
     }
   },
-  
+
   debug: (message: string, context?: LogContext) => {
     console.log(formatLog("debug", message, context));
   },
@@ -66,8 +66,19 @@ export const logger = {
     logger.info("Workspace started", { workspaceId, userId, provider, action: "start" });
   },
 
-  workspaceStopped: (workspaceId: string, userId: string, stopSource: string, durationMinutes: number) => {
-    logger.info("Workspace stopped", { workspaceId, userId, stopSource, durationMinutes, action: "stop" });
+  workspaceStopped: (
+    workspaceId: string,
+    userId: string,
+    stopSource: string,
+    durationMinutes: number,
+  ) => {
+    logger.info("Workspace stopped", {
+      workspaceId,
+      userId,
+      stopSource,
+      durationMinutes,
+      action: "stop",
+    });
   },
 
   workspaceRestarted: (workspaceId: string, userId: string) => {
@@ -83,11 +94,14 @@ export const logger = {
   },
 
   quotaWorkspaceFound: (workspaceId: string, userId: string) => {
-    logger.info("Workspace found with exceeded quota", { workspaceId, userId, action: "quota_enforcement" });
+    logger.info("Workspace found with exceeded quota", {
+      workspaceId,
+      userId,
+      action: "quota_enforcement",
+    });
   },
 
   idleWorkspaceFound: (workspaceId: string, userId: string) => {
     logger.info("Idle workspace detected", { workspaceId, userId, action: "idle_check" });
   },
 };
-

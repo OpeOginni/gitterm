@@ -10,16 +10,10 @@ const config: CodegenConfig = {
       },
     },
   },
-  documents: [
-    "src/**/*.graphql",
-  ],
+  documents: ["src/**/*.graphql"],
   generates: {
     "src/service/railway/graphql/generated/railway.ts": {
-      plugins: [
-        "typescript",
-        "typescript-operations",
-        "typescript-generic-sdk",
-      ],
+      plugins: ["typescript", "typescript-operations", "typescript-generic-sdk"],
       config: {
         rawRequest: false,
         documentMode: "string",
@@ -30,4 +24,3 @@ const config: CodegenConfig = {
 };
 
 export default config;
-

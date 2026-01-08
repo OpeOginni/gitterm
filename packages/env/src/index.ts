@@ -17,7 +17,7 @@ import { z } from "zod";
  */
 export function parseEnv<T extends z.ZodType>(
   schema: T,
-  env: Record<string, string | undefined> = process.env
+  env: Record<string, string | undefined> = process.env,
 ): z.infer<T> {
   const result = schema.safeParse(env);
 

@@ -1,5 +1,5 @@
-import { Cloud, Globe, Lock, Save, Zap } from "lucide-react"
-import { GitHub } from "../logos/Github"
+import { Cloud, Globe, Lock, Save, Zap } from "lucide-react";
+import { GitHub } from "../logos/Github";
 
 const features = [
   {
@@ -10,19 +10,21 @@ const features = [
   {
     icon: Globe,
     title: "Local Tunnels",
-    description: "Expose your local OpenCode server with a shareable gitterm.dev URL. No port forwarding needed.",
+    description:
+      "Expose your local OpenCode server with a shareable gitterm.dev URL. No port forwarding needed.",
   },
   {
     icon: GitHub,
     title: "GitHub Integration",
-    description: "Connect your GitHub account for seamless repo cloning and authenticated git operations.",
+    description:
+      "Connect your GitHub account for seamless repo cloning and authenticated git operations.",
   },
   {
     icon: Save,
     title: "Persistent Storage",
     description: "Your workspace files persist across sessions. Pick up right where you left off.",
   },
-]
+];
 
 export function FeaturesSection() {
   return (
@@ -33,13 +35,17 @@ export function FeaturesSection() {
             Everything you need for remote AI coding
           </h2>
           <p className="text-lg text-muted-foreground">
-            A complete platform for running agentic coding environments. Cloud or local, we've got you covered.
+            A complete platform for running agentic coding environments. Cloud or local, we've got
+            you covered.
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 rounded-lg overflow-hidden">
           {features.map((feature) => (
-            <div key={feature.title} className="bg-background p-4 transition-colors hover:bg-secondary">
+            <div
+              key={feature.title}
+              className="bg-background p-4 transition-colors hover:bg-secondary"
+            >
               <feature.icon className="mb-4 h-8 w-8 text-primary" />
               <h3 className="mb-2 text-lg font-semibold text-foreground">{feature.title}</h3>
               <p className="text-sm leading-relaxed text-muted-foreground">{feature.description}</p>
@@ -48,5 +54,5 @@ export function FeaturesSection() {
         </div>
       </div>
     </section>
-  )
+  );
 }

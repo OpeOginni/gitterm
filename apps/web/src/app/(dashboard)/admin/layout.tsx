@@ -1,17 +1,13 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useRouter } from "next/navigation"
-import { authClient } from "@/lib/auth-client"
-import { Skeleton } from "@/components/ui/skeleton"
+import type React from "react";
+import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const { data: session, isPending } = authClient.useSession()
-  const router = useRouter()
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { data: session, isPending } = authClient.useSession();
+  const router = useRouter();
 
   // Show loading while checking session
   if (isPending) {
@@ -23,15 +19,15 @@ export default function AdminLayout({
           <Skeleton className="h-64 w-full" />
         </div>
       </div>
-    )
+    );
   }
 
   // Check if user is admin
-  const userRole = (session?.user as any)?.role
+  const userRole = (session?.user as any)?.role;
   if (!session?.user || userRole !== "admin") {
-    router.push("/dashboard")
-    return null
+    router.push("/dashboard");
+    return null;
   }
 
-  return <>{children}</>
+  return <>{children}</>;
 }

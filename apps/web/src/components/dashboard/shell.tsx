@@ -1,10 +1,10 @@
-import { cn } from "@/lib/utils"
-import type React from "react"
-import { FeedbackForm } from "./feedback"
+import { cn } from "@/lib/utils";
+import type React from "react";
+import { FeedbackForm } from "./feedback";
 
 interface DashboardShellProps {
-  children: React.ReactNode
-  className?: string
+  children: React.ReactNode;
+  className?: string;
 }
 
 export function DashboardShell({ children, className }: DashboardShellProps) {
@@ -17,7 +17,7 @@ export function DashboardShell({ children, className }: DashboardShellProps) {
         <FeedbackForm />
       </div>
     </>
-  )
+  );
 }
 
 export function DashboardHeader({
@@ -26,18 +26,25 @@ export function DashboardHeader({
   children,
   className,
 }: {
-  heading: string
-  text?: string
-  children?: React.ReactNode
-  className?: string
+  heading: string;
+  text?: string;
+  children?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between", className)}>
+    <div
+      className={cn(
+        "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between",
+        className,
+      )}
+    >
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl text-balance">{heading}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl text-balance">
+          {heading}
+        </h1>
         {text && <p className="text-muted-foreground text-sm md:text-base">{text}</p>}
       </div>
       {children}
     </div>
-  )
+  );
 }

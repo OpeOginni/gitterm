@@ -16,33 +16,33 @@ import { agentLoopRouter } from "./agent-loop";
 import { agentLoopWebhookRouter } from "./agent-loop/webhook";
 
 export const appRouter = router({
-	healthCheck: publicProcedure.query(() => {
-		return "OK";
-	}),
-	privateData: protectedProcedure.query(({ ctx }) => {
-		return {
-			message: "This is private",
-			user: ctx.session.user,
-		};
-	}),
-	user: userRouter,
-	workspace: workspaceRouter,
-	internal: internalRouter,
-	github: githubRouter,
-	tunnel: tunnelRouter,
-	agent: agentRouter,
-	device: deviceRouter,
-	admin: adminRouter,
-	agentLoop: agentLoopRouter,
-	workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
+  healthCheck: publicProcedure.query(() => {
+    return "OK";
+  }),
+  privateData: protectedProcedure.query(({ ctx }) => {
+    return {
+      message: "This is private",
+      user: ctx.session.user,
+    };
+  }),
+  user: userRouter,
+  workspace: workspaceRouter,
+  internal: internalRouter,
+  github: githubRouter,
+  tunnel: tunnelRouter,
+  agent: agentRouter,
+  device: deviceRouter,
+  admin: adminRouter,
+  agentLoop: agentLoopRouter,
+  workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
 });
 export type AppRouter = typeof appRouter;
 
 export const listenerRouter = router({
-	railway: railwayWebhookRouter,
-	github: githubWebhookRouter,
-	workspace: workspaceEventsRouter,
-	agentLoop: agentLoopWebhookRouter,
+  railway: railwayWebhookRouter,
+  github: githubWebhookRouter,
+  workspace: workspaceEventsRouter,
+  agentLoop: agentLoopWebhookRouter,
 });
 
 export type ListenerRouter = typeof listenerRouter;

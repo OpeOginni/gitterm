@@ -1,5 +1,6 @@
 {
   "name": "@gitterm/api",
+  "type": "module",
   "exports": {
     ".": {
       "default": "./src/index.ts"
@@ -38,24 +39,12 @@
       "default": "./src/client/internal.ts"
     }
   },
-  "type": "module",
   "scripts": {
     "codegen": "graphql-codegen --config codegen.ts",
     "wrangler:deploy": "wrangler deploy",
     "wrangler:dev": "wrangler dev",
     "wrangler:start": "wrangler dev",
     "wrangler:cf-typegen": "wrangler types"
-  },
-  "devDependencies": {
-    "@gitterm/config": "workspace:*",
-    "@graphql-codegen/cli": "^6.1.0",
-    "@graphql-codegen/typescript": "^5.0.5",
-    "@graphql-codegen/typescript-generic-sdk": "^4.0.2",
-    "@graphql-codegen/typescript-operations": "^5.0.5",
-    "@types/jsonwebtoken": "^9.0.7"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
   },
   "dependencies": {
     "@aws-sdk/client-ec2": "^3.938.0",
@@ -78,7 +67,18 @@
     "graphql": "^16.12.0",
     "hono": "catalog:",
     "jsonwebtoken": "^9.0.2",
-    "wrangler": "^4.54.0",
+    "wrangler": "^4.58.0",
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@gitterm/config": "workspace:*",
+    "@graphql-codegen/cli": "^6.1.0",
+    "@graphql-codegen/typescript": "^5.0.5",
+    "@graphql-codegen/typescript-generic-sdk": "^4.0.2",
+    "@graphql-codegen/typescript-operations": "^5.0.5",
+    "@types/jsonwebtoken": "^9.0.7"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
   }
 }

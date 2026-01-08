@@ -1,5 +1,10 @@
 import { db, eq, and, sql } from "@gitterm/db";
-import { dailyUsage, usageSession, workspace, type SessionStopSource } from "@gitterm/db/schema/workspace";
+import {
+  dailyUsage,
+  usageSession,
+  workspace,
+  type SessionStopSource,
+} from "@gitterm/db/schema/workspace";
 import { logger } from "./logger";
 import { shouldEnforceQuota, shouldMeterUsage, getDailyMinuteQuotaAsync } from "../config/features";
 import { isSelfHosted } from "../config/deployment";
@@ -28,7 +33,10 @@ export async function getConfiguredFreeTierMinutes(): Promise<number> {
  * Get or create daily usage record for a user
  * In self-hosted mode, this still tracks usage but won't enforce limits
  */
-export async function getOrCreateDailyUsage(userId: string, userPlan: "free" | "pro" = "free"): Promise<{ minutesUsed: number; minutesRemaining: number }> {
+export async function getOrCreateDailyUsage(
+  userId: string,
+  userPlan: "free" | "pro" = "free",
+): Promise<{ minutesUsed: number; minutesRemaining: number }> {
   // In self-hosted mode or for paid plans, return unlimited
   if (isSelfHosted()) {
     return {
@@ -38,7 +46,7 @@ export async function getOrCreateDailyUsage(userId: string, userPlan: "free" | "
   }
 
   const dailyQuota = await getDailyMinuteQuotaAsync(userPlan);
-  
+
   // Paid plans have unlimited minutes
   if (dailyQuota === Infinity) {
     return {
@@ -81,7 +89,10 @@ export async function getOrCreateDailyUsage(userId: string, userPlan: "free" | "
  * Check if user has remaining daily quota
  * Always returns true in self-hosted mode or when quota enforcement is disabled
  */
-export async function hasRemainingQuota(userId: string, userPlan: "free" | "pro" = "free"): Promise<boolean> {
+export async function hasRemainingQuota(
+  userId: string,
+  userPlan: "free" | "pro" = "free",
+): Promise<boolean> {
   // Skip quota check if enforcement is disabled
   if (!shouldEnforceQuota()) {
     return true;
@@ -104,7 +115,10 @@ export async function hasRemainingQuota(userId: string, userPlan: "free" | "pro"
  * Create a new usage session when workspace starts
  * Skipped if usage metering is disabled
  */
-export async function createUsageSession(workspaceId: string, userId: string): Promise<string | null> {
+export async function createUsageSession(
+  workspaceId: string,
+  userId: string,
+): Promise<string | null> {
   // Skip if metering is disabled
   if (!shouldMeterUsage()) {
     return null;
@@ -128,7 +142,7 @@ export async function createUsageSession(workspaceId: string, userId: string): P
  */
 export async function closeUsageSession(
   workspaceId: string,
-  stopSource: SessionStopSource
+  stopSource: SessionStopSource,
 ): Promise<{ durationMinutes: number }> {
   // Skip if metering is disabled
   if (!shouldMeterUsage()) {
@@ -141,12 +155,7 @@ export async function closeUsageSession(
   const [openSession] = await db
     .select()
     .from(usageSession)
-    .where(
-      and(
-        eq(usageSession.workspaceId, workspaceId),
-        sql`${usageSession.stoppedAt} IS NULL`
-      )
-    );
+    .where(and(eq(usageSession.workspaceId, workspaceId), sql`${usageSession.stoppedAt} IS NULL`));
 
   if (!openSession) {
     console.warn(`No open session found for workspace ${workspaceId}`);
@@ -169,7 +178,7 @@ export async function closeUsageSession(
 
   // Update daily usage
   const today = now.toISOString().split("T")[0]!;
-  
+
   // Check if daily usage record exists
   const [existingDailyUsage] = await db
     .select()
@@ -212,7 +221,9 @@ export async function updateLastActive(workspaceId: string): Promise<void> {
  * Get workspaces that have been idle beyond the timeout
  * Uses configurable idle timeout from database
  */
-export async function getIdleWorkspaces(): Promise<Array<{ id: string; externalInstanceId: string; userId: string; regionId: string }>> {
+export async function getIdleWorkspaces(): Promise<
+  Array<{ id: string; externalInstanceId: string; userId: string; regionId: string }>
+> {
   const idleTimeoutMinutes = await getConfiguredIdleTimeout();
   const idleThreshold = new Date(Date.now() - idleTimeoutMinutes * 60 * 1000);
 
@@ -224,12 +235,7 @@ export async function getIdleWorkspaces(): Promise<Array<{ id: string; externalI
       regionId: workspace.regionId,
     })
     .from(workspace)
-    .where(
-      and(
-        eq(workspace.status, "running"),
-        sql`${workspace.lastActiveAt} < ${idleThreshold}`
-      )
-    );
+    .where(and(eq(workspace.status, "running"), sql`${workspace.lastActiveAt} < ${idleThreshold}`));
 
   return idleWorkspaces;
 }
@@ -242,11 +248,10 @@ export async function resetDailyUsage(): Promise<number> {
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = yesterday.toISOString().split("T")[0]!;
 
-  // We don't actually delete old records (for analytics), 
+  // We don't actually delete old records (for analytics),
   // new records are created automatically for the new day
   // This function can be used to clean up very old records if needed
-  
+
   console.log(`Daily usage reset completed for ${yesterdayStr}`);
   return 0;
 }
-

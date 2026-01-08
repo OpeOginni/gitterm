@@ -54,10 +54,10 @@ export function getTunnelUrl(): string {
 /**
  * Construct full domain string for a workspace
  * This is stored in database for subdomain-based access
- * 
+ *
  * For path-based routing, returns just the subdomain identifier
  * since the domain is constructed as BASE_DOMAIN/ws/{subdomain}
- * 
+ *
  * For subdomain routing, returns subdomain.BASE_DOMAIN
  */
 export function getWorkspaceDomain(subdomain: string): string {
@@ -71,12 +71,13 @@ export function getWorkspaceDomain(subdomain: string): string {
 
 /**
  * Construct a workspace URL given its subdomain
- * 
+ *
  * In subdomain mode: https://ws-abc123.gitterm.dev
  * In path mode: https://gitterm.dev/ws/ws-abc123
  */
 export function getWorkspaceUrl(subdomain: string): string {
-  const isLocalhost = env.BASE_DOMAIN.includes("localhost") || env.BASE_DOMAIN.includes("127.0.0.1");
+  const isLocalhost =
+    env.BASE_DOMAIN.includes("localhost") || env.BASE_DOMAIN.includes("127.0.0.1");
   const protocol = isLocalhost ? "http" : "https";
 
   if (isPathRouting()) {
@@ -90,7 +91,7 @@ export function getWorkspaceUrl(subdomain: string): string {
 
 /**
  * Construct a workspace URL with a specific path
- * 
+ *
  * In subdomain mode: https://ws-abc123.gitterm.dev/api/status
  * In path mode: https://gitterm.dev/ws/ws-abc123/api/status
  */
@@ -102,11 +103,11 @@ export function getWorkspaceUrlWithPath(subdomain: string, path: string): string
 
 /**
  * Extract workspace subdomain from request context
- * 
+ *
  * Supports both routing modes:
  * - Subdomain: Extract from Host header (ws-abc123.gitterm.dev -> ws-abc123)
  * - Path: Extract from URL path (/ws/abc123/... -> abc123) or X-Subdomain header
- * 
+ *
  * @param host - The Host header value
  * @param path - The request path (optional, for path-based routing)
  * @param headers - Additional headers (optional, for X-Subdomain)
@@ -114,7 +115,7 @@ export function getWorkspaceUrlWithPath(subdomain: string, path: string): string
 export function extractWorkspaceSubdomain(
   host: string,
   path?: string,
-  headers?: { "x-subdomain"?: string; "x-routing-mode"?: string }
+  headers?: { "x-subdomain"?: string; "x-routing-mode"?: string },
 ): string | null {
   // If X-Subdomain header is present (set by forward_auth), use it
   if (headers?.["x-subdomain"]) {
@@ -123,7 +124,7 @@ export function extractWorkspaceSubdomain(
 
   // Check if this is path-based routing
   const routingMode = headers?.["x-routing-mode"] || env.ROUTING_MODE;
-  
+
   if (routingMode === "path" && path) {
     // Path-based: extract from /ws/{subdomain}/...
     const match = path.match(/^\/ws\/([^/]+)/);
@@ -146,13 +147,13 @@ export function extractWorkspaceSubdomain(
 
 /**
  * Strip the workspace prefix from a path (for path-based routing)
- * 
+ *
  * /ws/abc123/api/status -> /api/status
  * /api/status -> /api/status (unchanged if no prefix)
  */
 export function stripWorkspacePrefix(path: string): string {
   if (!isPathRouting()) return path;
-  
+
   // Remove /ws/{subdomain} prefix
   const match = path.match(/^\/ws\/[^/]+(\/.*)?$/);
   if (match) {

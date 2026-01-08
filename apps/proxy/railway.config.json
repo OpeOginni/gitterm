@@ -3,11 +3,6 @@
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "./apps/proxy/Dockerfile.managed",
-    "watchPatterns": [
-        "apps/proxy/**/*",
-        "turbo.json",
-        "package.json",
-        "bun.lock"
-    ]
+    "watchPatterns": ["apps/proxy/**/*", "turbo.json", "package.json", "bun.lock"]
   }
 }

@@ -1,5 +1,16 @@
 export type WorkspaceType = "cloud" | "local" | "ralph-wiggum";
 
+// Result types for form submissions
+export type CreateInstanceResult =
+  | { type: "workspace"; workspaceId: string; userId: string }
+  | { type: "tunnel"; command: string }
+  | { type: "agent-loop" };
+
+export interface CreateInstanceFormProps {
+  onSuccess: (result: CreateInstanceResult) => void;
+  onCancel: () => void;
+}
+
 export interface AgentType {
   id: string;
   name: string;
@@ -73,14 +84,24 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     id: "anthropic",
     name: "Anthropic",
     models: [
-      { id: "claude-opus-4-5", name: "Claude Opus 4.5", description: "Most capable model", requiresApiKey: true },
+      {
+        id: "claude-opus-4-5",
+        name: "Claude Opus 4.5",
+        description: "Most capable model",
+        requiresApiKey: true,
+      },
     ],
   },
   {
     id: "opencode",
     name: "OpenCode",
     models: [
-      { id: "glm-4.7-free", name: "GLM 4.7 Free", description: "Free tier model", requiresApiKey: false },
+      {
+        id: "glm-4.7-free",
+        name: "GLM 4.7 Free",
+        description: "Free tier model",
+        requiresApiKey: false,
+      },
       { id: "gpt-5.2", name: "GPT 5.2", description: "Advanced reasoning", requiresApiKey: true },
     ],
   },
@@ -89,7 +110,12 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     name: "OpenAI",
     models: [
       { id: "gpt-5.2", name: "GPT 5.2", description: "Standard model", requiresApiKey: true },
-      { id: "gpt-5.2-pro", name: "GPT 5.2 Pro", description: "Enhanced capabilities", requiresApiKey: true },
+      {
+        id: "gpt-5.2-pro",
+        name: "GPT 5.2 Pro",
+        description: "Enhanced capabilities",
+        requiresApiKey: true,
+      },
     ],
   },
 ];
@@ -125,12 +151,12 @@ export interface RalphWiggumConfig {
 }
 
 export const ICON_MAP: Record<string, string> = {
-  "opencode": "/opencode.svg",
-  "shuvcode": "/opencode.svg",
-  "railway": "/railway.svg",
-  "aws": "/EC2.svg",
-  "claude": "/code.svg",
-  "ralph": "/ralph-wiggum.svg",
+  opencode: "/opencode.svg",
+  shuvcode: "/opencode.svg",
+  railway: "/railway.svg",
+  aws: "/EC2.svg",
+  claude: "/code.svg",
+  ralph: "/ralph-wiggum.svg",
 };
 
 export const getIcon = (name: string): string => {

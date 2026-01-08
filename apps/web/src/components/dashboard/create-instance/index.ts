@@ -1,10 +1,16 @@
+// Types
 export * from "./types";
-export * from "./workspace-type-selector";
-export * from "./agent-type-select";
-export * from "./local-tunnel-form";
-export * from "./cloud-workspace-form";
-export * from "./cli-command-display";
-export * from "./repo-file-search";
-export * from "./repo-search";
-export * from "./ralph-wiggum-form";
-export * from "./model-provider-select";
+
+// Main dialog
+export { CreateInstanceDialog } from "./create-instance-dialog";
+
+// Self-contained form components (each handles its own state, UI, and submission)
+export { CreateCloudInstance } from "./create-cloud-instance";
+export { CreateLocalInstance } from "./create-local-instance";
+export { CreateAutoAgent } from "./create-auto-agent";
+
+// Shared UI components
+export { WorkspaceTypeSelector } from "./workspace-type-selector";
+export { CliCommandDisplay } from "./cli-command-display";
+export { RepoSearch } from "./repo-search";
+export { RepoFileSearch } from "./repo-file-search";

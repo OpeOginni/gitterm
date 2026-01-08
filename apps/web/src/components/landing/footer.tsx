@@ -1,13 +1,13 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import type { Route } from "next"
-import { Terminal } from "lucide-react"
-import { isBillingEnabled } from "@gitterm/env/web"
+import Link from "next/link";
+import type { Route } from "next";
+import { Terminal } from "lucide-react";
+import { isBillingEnabled } from "@gitterm/env/web";
 
 export function Footer() {
-  const showPricing = isBillingEnabled()
-  
+  const showPricing = isBillingEnabled();
+
   return (
     <footer className="border-t border-border py-12">
       <div className="mx-auto max-w-6xl px-6">
@@ -26,19 +26,27 @@ export function Footer() {
                 Pricing
               </Link>
             )}
-            <Link href="https://www.npmjs.com/package/@opeoginni/gitterm-agent" target="_blank" className="hover:text-foreground transition-colors">
+            <Link
+              href="https://www.npmjs.com/package/@opeoginni/gitterm-agent"
+              target="_blank"
+              className="hover:text-foreground transition-colors"
+            >
               npm
             </Link>
           </nav>
 
           <p className="text-sm text-muted-foreground">
             Built by{" "}
-            <Link href="https://github.com/opeoginni" target="_blank" className="hover:text-foreground transition-colors underline">
+            <Link
+              href="https://github.com/opeoginni"
+              target="_blank"
+              className="hover:text-foreground transition-colors underline"
+            >
               @opeoginni
             </Link>
           </p>
         </div>
       </div>
     </footer>
-  )
+  );
 }

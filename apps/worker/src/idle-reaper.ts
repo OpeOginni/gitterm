@@ -19,7 +19,9 @@ import { features } from "@gitterm/api/config";
 async function main() {
   console.log("[idle-reaper] Starting workspace reaper...");
   console.log(`[idle-reaper] Idle reaping: ${features.idleReaping ? "enabled" : "disabled"}`);
-  console.log(`[idle-reaper] Quota enforcement: ${features.quotaEnforcement ? "enabled" : "disabled"}`);
+  console.log(
+    `[idle-reaper] Quota enforcement: ${features.quotaEnforcement ? "enabled" : "disabled"}`,
+  );
 
   let totalStopped = 0;
 
@@ -30,35 +32,28 @@ async function main() {
     // ========================================================================
     if (features.idleReaping) {
       console.log("[idle-reaper] Checking for idle workspaces...");
-      const idleWorkspaces =
-        await internalClient.internal.getIdleWorkspaces.query();
+      const idleWorkspaces = await internalClient.internal.getIdleWorkspaces.query();
 
       if (idleWorkspaces.length === 0) {
         console.log("[idle-reaper] No idle workspaces found");
       } else {
-        console.log(
-          `[idle-reaper] Found ${idleWorkspaces.length} idle workspace(s)`
-        );
+        console.log(`[idle-reaper] Found ${idleWorkspaces.length} idle workspace(s)`);
 
         for (const ws of idleWorkspaces) {
           try {
             console.log(`[idle-reaper] Stopping idle workspace ${ws.id}...`);
 
-            const result =
-              await internalClient.internal.stopWorkspaceInternal.mutate({
-                workspaceId: ws.id,
-                stopSource: "idle",
-              });
+            const result = await internalClient.internal.stopWorkspaceInternal.mutate({
+              workspaceId: ws.id,
+              stopSource: "idle",
+            });
 
             console.log(
-              `[idle-reaper] Workspace ${ws.id} stopped (idle), duration: ${result.durationMinutes} minutes`
+              `[idle-reaper] Workspace ${ws.id} stopped (idle), duration: ${result.durationMinutes} minutes`,
             );
             totalStopped++;
           } catch (error) {
-            console.error(
-              `[idle-reaper] Failed to stop idle workspace ${ws.id}:`,
-              error
-            );
+            console.error(`[idle-reaper] Failed to stop idle workspace ${ws.id}:`, error);
           }
         }
       }
@@ -73,50 +68,45 @@ async function main() {
       console.log("[idle-reaper] Checking for quota-exceeded workspaces...");
 
       try {
-        const quotaWorkspaces =
-          await internalClient.internal.getQuotaExceededWorkspaces.query();
+        const quotaWorkspaces = await internalClient.internal.getQuotaExceededWorkspaces.query();
 
         if (quotaWorkspaces.length === 0) {
           console.log("[idle-reaper] No quota-exceeded workspaces found");
         } else {
           console.log(
-            `[idle-reaper] Found ${quotaWorkspaces.length} workspace(s) with exceeded quota`
+            `[idle-reaper] Found ${quotaWorkspaces.length} workspace(s) with exceeded quota`,
           );
 
           for (const ws of quotaWorkspaces) {
             try {
               console.log(
-                `[idle-reaper] Stopping workspace ${ws.id} (user ${ws.userId} exceeded quota)...`
+                `[idle-reaper] Stopping workspace ${ws.id} (user ${ws.userId} exceeded quota)...`,
               );
 
-              const result =
-                await internalClient.internal.stopWorkspaceInternal.mutate({
-                  workspaceId: ws.id,
-                  stopSource: "quota_exhausted",
-                });
+              const result = await internalClient.internal.stopWorkspaceInternal.mutate({
+                workspaceId: ws.id,
+                stopSource: "quota_exhausted",
+              });
 
               console.log(
-                `[idle-reaper] Workspace ${ws.id} stopped (quota), duration: ${result.durationMinutes} minutes`
+                `[idle-reaper] Workspace ${ws.id} stopped (quota), duration: ${result.durationMinutes} minutes`,
               );
               totalStopped++;
             } catch (error) {
               console.error(
                 `[idle-reaper] Failed to stop quota-exceeded workspace ${ws.id}:`,
-                error
+                error,
               );
             }
           }
         }
       } catch (error) {
-        console.error(
-          "[idle-reaper] Error checking quota-exceeded workspaces:",
-          error
-        );
+        console.error("[idle-reaper] Error checking quota-exceeded workspaces:", error);
         // Don't fail the entire job if quota check fails
       }
     } else {
       console.log(
-        "[idle-reaper] Quota enforcement disabled (self-hosted mode or ENABLE_QUOTA_ENFORCEMENT=false)"
+        "[idle-reaper] Quota enforcement disabled (self-hosted mode or ENABLE_QUOTA_ENFORCEMENT=false)",
       );
     }
 
@@ -124,12 +114,18 @@ async function main() {
     // 3. Terminate workspaces that have not been reached or used in 4 days
     // ========================================================================
     if (features.idleReaping) {
-      console.log("[idle-reaper] Checking for workspaces that have not been reached or used in 4 days...");
+      console.log(
+        "[idle-reaper] Checking for workspaces that have not been reached or used in 4 days...",
+      );
       const workspaces = await internalClient.internal.getLongTermInactiveWorkspaces.query();
       if (workspaces.length === 0) {
-        console.log("[idle-reaper] No workspaces found that have not been reached or used in 4 days");
+        console.log(
+          "[idle-reaper] No workspaces found that have not been reached or used in 4 days",
+        );
       } else {
-        console.log(`[idle-reaper] Found ${workspaces.length} workspace(s) that have not been reached or used in 4 days`);
+        console.log(
+          `[idle-reaper] Found ${workspaces.length} workspace(s) that have not been reached or used in 4 days`,
+        );
       }
       for (const ws of workspaces) {
         try {
@@ -143,10 +139,7 @@ async function main() {
       }
     }
 
-
-    console.log(
-      `[idle-reaper] Completed. Total workspaces stopped: ${totalStopped}`
-    );
+    console.log(`[idle-reaper] Completed. Total workspaces stopped: ${totalStopped}`);
     process.exit(0);
   } catch (error) {
     console.error("[idle-reaper] Fatal error:", error);

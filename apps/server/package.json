@@ -1,7 +1,7 @@
 {
   "name": "server",
-  "main": "src/index.ts",
   "type": "module",
+  "main": "src/index.ts",
   "scripts": {
     "build": "tsdown",
     "check-types": "tsc -b",
@@ -12,26 +12,26 @@
     "db:seed-admin:prod": "bun run dist/scripts/seed-admin.mjs"
   },
   "dependencies": {
-    "hono": "catalog:",
-    "@trpc/server": "catalog:",
-    "@hono/trpc-server": "^0.4.0",
-    "better-auth": "catalog:",
-    "dotenv": "catalog:",
-    "zod": "catalog:",
-    "drizzle-orm": "^0.44.2",
-    "postgres": "^3.4.5",
-    "pg": "^8.14.1",
     "@gitterm/api": "workspace:*",
     "@gitterm/auth": "workspace:*",
     "@gitterm/db": "workspace:*",
     "@gitterm/env": "workspace:*",
+    "@gitterm/redis": "workspace:*",
     "@gitterm/schema": "workspace:*",
-    "@gitterm/redis": "workspace:*"
+    "@hono/trpc-server": "^0.4.0",
+    "@trpc/server": "catalog:",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "drizzle-orm": "^0.44.2",
+    "hono": "catalog:",
+    "pg": "^8.14.1",
+    "postgres": "^3.4.5",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "typescript": "catalog:",
+    "@gitterm/config": "workspace:*",
     "@types/bun": "^1.2.6",
     "tsdown": "^0.16.5",
-    "@gitterm/config": "workspace:*"
+    "typescript": "catalog:"
   }
 }

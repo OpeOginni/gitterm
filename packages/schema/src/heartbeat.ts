@@ -35,14 +35,13 @@ export type HeartbeatAction = "continue" | "shutdown";
 export const HEARTBEAT_CONFIG = {
   /** Interval between heartbeats in milliseconds */
   INTERVAL_MS: 30_000, // 30 seconds
-  
+
   /** Timeout before workspace is considered idle (in minutes) */
   IDLE_TIMEOUT_MINUTES: 5,
-  
+
   /** Maximum retries before giving up on heartbeat */
   MAX_RETRIES: 3,
-  
+
   /** Delay between retries in milliseconds */
   RETRY_DELAY_MS: 5_000, // 5 seconds
 } as const;
-

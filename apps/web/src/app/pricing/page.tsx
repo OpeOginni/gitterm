@@ -1,6 +1,13 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
@@ -114,7 +121,8 @@ function PricingCard({
       className={cn(
         "w-full max-w-[320px] flex flex-col justify-between py-1 mx-auto sm:mx-0",
         plan.popular && "border-primary shadow-lg shadow-primary/20",
-        plan.exclusive && "animate-background-shine bg-background dark:bg-[linear-gradient(110deg,#000103,45%,#1e2631,55%,#000103)] bg-[length:200%_100%] transition-colors border-muted-foreground/30"
+        plan.exclusive &&
+          "animate-background-shine bg-background dark:bg-[linear-gradient(110deg,#000103,45%,#1e2631,55%,#000103)] bg-[length:200%_100%] transition-colors border-muted-foreground/30",
       )}
     >
       <div>
@@ -142,9 +150,7 @@ function PricingCard({
               </span>
             )}
           </div>
-          <CardDescription className="pt-1.5 min-h-12">
-            {plan.description}
-          </CardDescription>
+          <CardDescription className="pt-1.5 min-h-12">{plan.description}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {plan.features.map((feature) => (
@@ -160,7 +166,7 @@ function PricingCard({
             className={cn(
               "relative inline-flex w-full items-center justify-center rounded-md px-6 py-2.5 text-sm font-medium transition-colors",
               "bg-foreground text-background hover:bg-foreground/90",
-              "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
             )}
           >
             <div className="absolute -inset-0.5 -z-10 rounded-lg bg-gradient-to-b from-muted to-primary/50 opacity-75 blur" />
@@ -181,7 +187,7 @@ function PricingCard({
               "disabled:opacity-70 disabled:cursor-not-allowed",
               plan.popular
                 ? "bg-foreground text-background hover:bg-foreground/90"
-                : "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "bg-primary text-primary-foreground hover:bg-primary/90",
             )}
           >
             {plan.popular && (
@@ -204,7 +210,7 @@ function PricingCard({
             href="/dashboard"
             className={cn(
               "inline-flex w-full items-center justify-center rounded-md border border-input bg-background px-6 py-2.5 text-sm font-medium",
-              "hover:bg-accent hover:text-accent-foreground transition-colors"
+              "hover:bg-accent hover:text-accent-foreground transition-colors",
             )}
           >
             {plan.actionLabel}
@@ -234,7 +240,12 @@ function PricingPageContent() {
   // Auto-trigger checkout if user returns from login with a plan parameter
   useEffect(() => {
     const planParam = searchParams.get("plan");
-    if (planParam && (planParam === "tunnel" || planParam === "pro") && session?.user && !isLoading) {
+    if (
+      planParam &&
+      (planParam === "tunnel" || planParam === "pro") &&
+      session?.user &&
+      !isLoading
+    ) {
       // User is logged in and has a plan parameter, trigger checkout
       const triggerCheckout = async () => {
         setIsLoading(true);
@@ -303,7 +314,8 @@ function PricingPageContent() {
               Simple, transparent pricing
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Start free, upgrade when you need more. All plans include access to cloud workspaces and local tunnels.
+              Start free, upgrade when you need more. All plans include access to cloud workspaces
+              and local tunnels.
             </p>
           </div>
 
@@ -329,8 +341,8 @@ function PricingPageContent() {
                 Tunnel is ideal for
               </h3>
               <p className="text-muted-foreground text-sm">
-                Developers who want a reliable <strong>ngrok alternative</strong> with permanent URLs and zero setup overhead.
-                Perfect for webhooks, demos, and local testing.
+                Developers who want a reliable <strong>ngrok alternative</strong> with permanent
+                URLs and zero setup overhead. Perfect for webhooks, demos, and local testing.
               </p>
             </div>
             <div className="rounded-lg border border-border p-6 bg-card">
@@ -339,8 +351,9 @@ function PricingPageContent() {
                 Pro is ideal for
               </h3>
               <p className="text-muted-foreground text-sm">
-                Developers who live in the cloud and want <strong>fast, always-on environments</strong> with full control
-                and branding. Built for professional and freelance workflows.
+                Developers who live in the cloud and want{" "}
+                <strong>fast, always-on environments</strong> with full control and branding. Built
+                for professional and freelance workflows.
               </p>
             </div>
           </div>
@@ -352,15 +365,15 @@ function PricingPageContent() {
               Need help choosing the right plan? Check out our docs or reach out.
             </p>
             <div className="flex justify-center gap-4 flex-wrap">
-              <Link 
-                href="https://github.com/OpeOginni/gitterm" 
+              <Link
+                href="https://github.com/OpeOginni/gitterm"
                 target="_blank"
                 className="inline-flex items-center justify-center rounded-md border border-input bg-background px-6 py-2.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
               >
                 View on GitHub
                 <ExternalLink className="ml-2 h-4 w-4" />
               </Link>
-              <Link 
+              <Link
                 href="/dashboard"
                 className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-6 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors"
               >

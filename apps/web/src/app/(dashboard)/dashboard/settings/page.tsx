@@ -1,22 +1,22 @@
-import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell"
-import { DeleteAccountSection } from "@/components/dashboard/delete-account"
-import { BillingSection } from "@/components/dashboard/billing-section"
-import { AgentConfigSection } from "@/components/dashboard/agent-config-section"
-import { authClient } from "@/lib/auth-client"
-import { redirect } from "next/navigation"
-import { headers } from "next/headers"
+import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
+import { DeleteAccountSection } from "@/components/dashboard/delete-account";
+import { BillingSection } from "@/components/dashboard/billing-section";
+import { AgentConfigSection } from "@/components/dashboard/agent-config-section";
+import { authClient } from "@/lib/auth-client";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 type UserPlan = "free" | "tunnel" | "pro";
 
 export default async function SettingsPage() {
   const session = await authClient.getSession({
     fetchOptions: {
-      headers: await headers()
-    }
-  })
+      headers: await headers(),
+    },
+  });
 
   if (!session.data?.user) {
-    redirect("/login")
+    redirect("/login");
   }
 
   // Get user's current plan (default to 'free' if not set)
@@ -24,15 +24,12 @@ export default async function SettingsPage() {
 
   return (
     <DashboardShell>
-      <DashboardHeader 
-        heading="Settings" 
-        text="Manage your account settings and preferences." 
-      />
+      <DashboardHeader heading="Settings" text="Manage your account settings and preferences." />
       <div className="pt-8 mx-auto max-w-4xl space-y-8">
         <BillingSection currentPlan={currentPlan} />
         <AgentConfigSection />
         <DeleteAccountSection />
       </div>
     </DashboardShell>
-  )
+  );
 }

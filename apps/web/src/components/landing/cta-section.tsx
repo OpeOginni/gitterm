@@ -1,6 +1,6 @@
-import { Button } from "@/components/ui/button"
-import { ArrowRight } from "lucide-react"
-import Link from "next/link"
+import { Button } from "@/components/ui/button";
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 export function CTASection() {
   return (
@@ -10,8 +10,8 @@ export function CTASection() {
           Ready to code from anywhere?
         </h2>
         <p className="mx-auto mb-8 max-w-lg text-lg text-muted-foreground">
-          Start with our free tier. No credit card required. 
-          Get daily minutes to run your cloud workspaces.
+          Start with our free tier. No credit card required. Get daily minutes to run your cloud
+          workspaces.
         </p>
         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
           <Link href="/dashboard">
@@ -32,14 +32,19 @@ export function CTASection() {
         </div>
         <div className="mt-6">
           <p className="text-sm text-muted-foreground mb-3">Or deploy your own instance</p>
-          <Link 
+          <Link
             href="https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic"
             target="_blank"
           >
-            <img src="https://railway.com/button.svg" alt="Deploy on Railway" className="mx-auto" height={32} />
+            <img
+              src="https://railway.com/button.svg"
+              alt="Deploy on Railway"
+              className="mx-auto"
+              height={32}
+            />
           </Link>
         </div>
       </div>
     </section>
-  )
+  );
 }

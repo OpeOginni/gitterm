@@ -28,69 +28,82 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
     }
 
-    const { serviceCreate } = await railway.ServiceCreate({
-      input: {
-        projectId: PROJECT_ID,
-        name: config.subdomain,
-        variables: config.environmentVariables,
-      },
-    }).catch(async (error) => {
-      console.error("Railway API Error (ServiceCreate):", error);
-      throw new Error(`Railway API Error (ServiceCreate): ${error.message}`);
-    });
+    const { serviceCreate } = await railway
+      .ServiceCreate({
+        input: {
+          projectId: PROJECT_ID,
+          name: config.subdomain,
+          variables: config.environmentVariables,
+        },
+      })
+      .catch(async (error) => {
+        console.error("Railway API Error (ServiceCreate):", error);
+        throw new Error(`Railway API Error (ServiceCreate): ${error.message}`);
+      });
 
-    const multiRegionConfig = RAILWAY_DEFAULT_REGION === config.regionIdentifier ? { [RAILWAY_DEFAULT_REGION]: { numReplicas: 1 } } : {
-      [RAILWAY_DEFAULT_REGION]: null,
-      [config.regionIdentifier]: { numReplicas: 1 },
-    };
+    const multiRegionConfig =
+      RAILWAY_DEFAULT_REGION === config.regionIdentifier
+        ? { [RAILWAY_DEFAULT_REGION]: { numReplicas: 1 } }
+        : {
+            [RAILWAY_DEFAULT_REGION]: null,
+            [config.regionIdentifier]: { numReplicas: 1 },
+          };
 
-    await railway.serviceInstanceUpdate({
-      environmentId: ENVIRONMENT_ID,
-      serviceId: serviceCreate.id,
-      image: config.imageId,
-      multiRegionConfig: multiRegionConfig,
-    }).catch(async (error) => {
-      console.error("Railway API Error (serviceInstanceUpdate):", error);
-      await railway.ServiceDelete({ id: serviceCreate.id })
-      throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
-    });
-
-    await railway.serviceInstanceDeploy({
-      environmentId: ENVIRONMENT_ID,
-      serviceId: serviceCreate.id,
-      latestCommit: true,
-    }).catch(async (error) => {
-      console.error("Railway API Error (serviceInstanceDeploy):", error);
-      await railway.ServiceDelete({ id: serviceCreate.id })
-      throw new Error(`Railway API Error (serviceInstanceDeploy): ${error.message}`);
-    });
-
-    let publicDomain = "";
-    
-    if(PUBLIC_RAILWAY_DOMAINS) {
-      const { serviceDomainCreate } = await railway.ServiceDomainCreate({
+    await railway
+      .serviceInstanceUpdate({
         environmentId: ENVIRONMENT_ID,
         serviceId: serviceCreate.id,
-        targetPort: 7681,
-      }).catch(async (error) => {
-        console.error("Railway API Error (ServiceDomainCreate):", error);
-        await railway.ServiceDelete({ id: serviceCreate.id })
-        throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
+        image: config.imageId,
+        multiRegionConfig: multiRegionConfig,
+      })
+      .catch(async (error) => {
+        console.error("Railway API Error (serviceInstanceUpdate):", error);
+        await railway.ServiceDelete({ id: serviceCreate.id });
+        throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
       });
+
+    await railway
+      .serviceInstanceDeploy({
+        environmentId: ENVIRONMENT_ID,
+        serviceId: serviceCreate.id,
+        latestCommit: true,
+      })
+      .catch(async (error) => {
+        console.error("Railway API Error (serviceInstanceDeploy):", error);
+        await railway.ServiceDelete({ id: serviceCreate.id });
+        throw new Error(`Railway API Error (serviceInstanceDeploy): ${error.message}`);
+      });
+
+    let publicDomain = "";
+
+    if (PUBLIC_RAILWAY_DOMAINS) {
+      const { serviceDomainCreate } = await railway
+        .ServiceDomainCreate({
+          environmentId: ENVIRONMENT_ID,
+          serviceId: serviceCreate.id,
+          targetPort: 7681,
+        })
+        .catch(async (error) => {
+          console.error("Railway API Error (ServiceDomainCreate):", error);
+          await railway.ServiceDelete({ id: serviceCreate.id });
+          throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
+        });
 
       publicDomain = serviceDomainCreate.domain;
     }
 
-    const upstreamUrl = PUBLIC_RAILWAY_DOMAINS ? `https://${publicDomain}` : `http://${config.subdomain}.railway.internal:7681`;
-    const domain = PUBLIC_RAILWAY_DOMAINS 
-      ? `https://${publicDomain}` 
+    const upstreamUrl = PUBLIC_RAILWAY_DOMAINS
+      ? `https://${publicDomain}`
+      : `http://${config.subdomain}.railway.internal:7681`;
+    const domain = PUBLIC_RAILWAY_DOMAINS
+      ? `https://${publicDomain}`
       : ROUTING_MODE === "path"
-      ? BASE_DOMAIN.includes("localhost") 
-        ? `http://${BASE_DOMAIN}/ws/${config.subdomain}` 
-        : `https://${BASE_DOMAIN}/ws/${config.subdomain}`
-      : BASE_DOMAIN.includes("localhost") 
-        ? `http://${config.subdomain}.${BASE_DOMAIN}` 
-        : `https://${config.subdomain}.${BASE_DOMAIN}`;
+        ? BASE_DOMAIN.includes("localhost")
+          ? `http://${BASE_DOMAIN}/ws/${config.subdomain}`
+          : `https://${BASE_DOMAIN}/ws/${config.subdomain}`
+        : BASE_DOMAIN.includes("localhost")
+          ? `http://${config.subdomain}.${BASE_DOMAIN}`
+          : `https://${config.subdomain}.${BASE_DOMAIN}`;
 
     return {
       externalServiceId: serviceCreate.id,
@@ -100,7 +113,9 @@ export class RailwayProvider implements ComputeProvider {
     };
   }
 
-  async createPersistentWorkspace(config: PersistentWorkspaceConfig): Promise<PersistentWorkspaceInfo> {
+  async createPersistentWorkspace(
+    config: PersistentWorkspaceConfig,
+  ): Promise<PersistentWorkspaceInfo> {
     if (!PROJECT_ID) {
       throw new Error("RAILWAY_PROJECT_ID is not set");
     }
@@ -109,83 +124,98 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
     }
 
-    const { serviceCreate } = await railway.ServiceCreate({
-      input: {
-        projectId: PROJECT_ID,
-        name: config.subdomain,
-        variables: config.environmentVariables,
-      },
-    }).catch(async (error) => {
-      console.error("Railway API Error (ServiceCreate):", error);
-      throw new Error(`Railway API Error (ServiceCreate): ${error.message}`);
-    });
+    const { serviceCreate } = await railway
+      .ServiceCreate({
+        input: {
+          projectId: PROJECT_ID,
+          name: config.subdomain,
+          variables: config.environmentVariables,
+        },
+      })
+      .catch(async (error) => {
+        console.error("Railway API Error (ServiceCreate):", error);
+        throw new Error(`Railway API Error (ServiceCreate): ${error.message}`);
+      });
 
-    const multiRegionConfig = RAILWAY_DEFAULT_REGION === config.regionIdentifier ? { [RAILWAY_DEFAULT_REGION]: { numReplicas: 1 } } : {
-      [RAILWAY_DEFAULT_REGION]: null,
-      [config.regionIdentifier]: { numReplicas: 1 },
-    };
+    const multiRegionConfig =
+      RAILWAY_DEFAULT_REGION === config.regionIdentifier
+        ? { [RAILWAY_DEFAULT_REGION]: { numReplicas: 1 } }
+        : {
+            [RAILWAY_DEFAULT_REGION]: null,
+            [config.regionIdentifier]: { numReplicas: 1 },
+          };
 
-    await railway.serviceInstanceUpdate({
-      environmentId: ENVIRONMENT_ID,
-      serviceId: serviceCreate.id,
-      image: config.imageId,
-      multiRegionConfig: multiRegionConfig,
-    }).catch(async (error) => {
-      console.error("Railway API Error (serviceInstanceUpdate):", error);
-      await railway.ServiceDelete({ id: serviceCreate.id })
-      throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
-    });
+    await railway
+      .serviceInstanceUpdate({
+        environmentId: ENVIRONMENT_ID,
+        serviceId: serviceCreate.id,
+        image: config.imageId,
+        multiRegionConfig: multiRegionConfig,
+      })
+      .catch(async (error) => {
+        console.error("Railway API Error (serviceInstanceUpdate):", error);
+        await railway.ServiceDelete({ id: serviceCreate.id });
+        throw new Error(`Railway API Error (serviceInstanceUpdate): ${error.message}`);
+      });
 
-      const { volumeCreate } = await railway.VolumeCreate({
+    const { volumeCreate } = await railway
+      .VolumeCreate({
         projectId: PROJECT_ID,
         environmentId: ENVIRONMENT_ID,
         serviceId: serviceCreate.id,
         mountPath: "/workspace",
         region: config.regionIdentifier,
-      }).catch(async (error) => {
-        await railway.ServiceDelete({ id: serviceCreate.id })
+      })
+      .catch(async (error) => {
+        await railway.ServiceDelete({ id: serviceCreate.id });
         console.error("Railway API Error (VolumeCreate):", error);
         throw new Error(`Railway API Error (VolumeCreate): ${error.message}`);
       });
 
-    await railway.serviceInstanceDeploy({
-      environmentId: ENVIRONMENT_ID,
-      serviceId: serviceCreate.id,
-      latestCommit: true,
-    }).catch(async (error) => {
-      console.error("Railway API Error (serviceInstanceDeploy):", error);
-      await railway.ServiceDelete({ id: serviceCreate.id })
-      throw new Error(`Railway API Error (serviceInstanceDeploy): ${error.message}`);
-    });
+    await railway
+      .serviceInstanceDeploy({
+        environmentId: ENVIRONMENT_ID,
+        serviceId: serviceCreate.id,
+        latestCommit: true,
+      })
+      .catch(async (error) => {
+        console.error("Railway API Error (serviceInstanceDeploy):", error);
+        await railway.ServiceDelete({ id: serviceCreate.id });
+        throw new Error(`Railway API Error (serviceInstanceDeploy): ${error.message}`);
+      });
 
     let publicDomain = "";
 
-    console.log('PUBLIC_RAILWAY_DOMAINS', PUBLIC_RAILWAY_DOMAINS);
-    if(PUBLIC_RAILWAY_DOMAINS) {
-      const { serviceDomainCreate } = await railway.ServiceDomainCreate({
-        environmentId: ENVIRONMENT_ID,
-        serviceId: serviceCreate.id,
-        targetPort: 7681,
-      }).catch(async (error) => {
-        console.error("Railway API Error (ServiceDomainCreate):", error);
-        await railway.ServiceDelete({ id: serviceCreate.id })
-        throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
-      });
+    console.log("PUBLIC_RAILWAY_DOMAINS", PUBLIC_RAILWAY_DOMAINS);
+    if (PUBLIC_RAILWAY_DOMAINS) {
+      const { serviceDomainCreate } = await railway
+        .ServiceDomainCreate({
+          environmentId: ENVIRONMENT_ID,
+          serviceId: serviceCreate.id,
+          targetPort: 7681,
+        })
+        .catch(async (error) => {
+          console.error("Railway API Error (ServiceDomainCreate):", error);
+          await railway.ServiceDelete({ id: serviceCreate.id });
+          throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
+        });
 
       publicDomain = serviceDomainCreate.domain;
     }
-    console.log('publicDomain', publicDomain);
+    console.log("publicDomain", publicDomain);
 
-    const upstreamUrl = PUBLIC_RAILWAY_DOMAINS ? `https://${publicDomain}` : `http://${config.subdomain}.railway.internal:7681`;
-    const domain = PUBLIC_RAILWAY_DOMAINS 
-      ? `https://${publicDomain}` 
+    const upstreamUrl = PUBLIC_RAILWAY_DOMAINS
+      ? `https://${publicDomain}`
+      : `http://${config.subdomain}.railway.internal:7681`;
+    const domain = PUBLIC_RAILWAY_DOMAINS
+      ? `https://${publicDomain}`
       : ROUTING_MODE === "path"
-      ? BASE_DOMAIN.includes("localhost") 
-        ? `http://${BASE_DOMAIN}/ws/${config.subdomain}` 
-        : `https://${BASE_DOMAIN}/ws/${config.subdomain}`
-      : BASE_DOMAIN.includes("localhost") 
-        ? `http://${config.subdomain}.${BASE_DOMAIN}` 
-        : `https://${config.subdomain}.${BASE_DOMAIN}`;
+        ? BASE_DOMAIN.includes("localhost")
+          ? `http://${BASE_DOMAIN}/ws/${config.subdomain}`
+          : `https://${BASE_DOMAIN}/ws/${config.subdomain}`
+        : BASE_DOMAIN.includes("localhost")
+          ? `http://${config.subdomain}.${BASE_DOMAIN}`
+          : `https://${config.subdomain}.${BASE_DOMAIN}`;
 
     return {
       externalServiceId: serviceCreate.id,
@@ -197,7 +227,11 @@ export class RailwayProvider implements ComputeProvider {
     };
   }
 
-  async stopWorkspace(externalId: string, regionIdentifier: string, externalRunningDeploymentId?: string): Promise<void> {
+  async stopWorkspace(
+    externalId: string,
+    regionIdentifier: string,
+    externalRunningDeploymentId?: string,
+  ): Promise<void> {
     if (!ENVIRONMENT_ID) {
       throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
     }
@@ -212,7 +246,11 @@ export class RailwayProvider implements ComputeProvider {
     });
   }
 
-  async restartWorkspace(externalId: string, regionIdentifier: string, externalRunningDeploymentId?: string): Promise<void> {
+  async restartWorkspace(
+    externalId: string,
+    regionIdentifier: string,
+    externalRunningDeploymentId?: string,
+  ): Promise<void> {
     if (!ENVIRONMENT_ID) {
       throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
     }
@@ -243,7 +281,7 @@ export class RailwayProvider implements ComputeProvider {
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
     const result = await railway.Service({ id: externalId });
-    
+
     // Railway doesn't have a direct status field, so we infer from service existence
     // In a more complete implementation, we'd check deployments status
     if (!result.service) {
@@ -258,4 +296,3 @@ export class RailwayProvider implements ComputeProvider {
 
 // Singleton instance
 export const railwayProvider = new RailwayProvider();
-

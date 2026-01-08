@@ -61,10 +61,12 @@ npx @opeoginni/gitterm-agent connect --workspace-id <id> --port <number>
 ```
 
 **Required options:**
+
 - `--workspace-id <id>` - Your workspace ID
 - `--port <number>` - Local port to expose
 
 **Optional:**
+
 - `--expose <name=port>` - Expose additional ports (repeatable)
 - `--ws-url <url>` - Custom tunnel proxy URL (default: wss://tunnel.gitterm.dev/tunnel/connect)
 - `--server-url <url>` - Custom API server URL (default: https://api.gitterm.dev)
@@ -92,10 +94,10 @@ npx @opeoginni/gitterm-agent connect \
 ```
 
 This maps:
+
 - `https://your-subdomain.gitterm.dev` -> `localhost:3000`
 - `https://your-subdomain-api.gitterm.dev` -> `localhost:3001`
 - `https://your-subdomain-docs.gitterm.dev` -> `localhost:4000`
-
 
 ## How It Works
 

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version_type:
-        description: 'Version bump type'
+        description: "Version bump type"
         required: true
         type: choice
         options:
@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Get latest version tag
         id: get_version
         run: |
@@ -39,16 +39,16 @@ jobs:
           echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
           echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
           echo "Latest version: $LATEST_VERSION"
-      
+
       - name: Bump version
         id: version
         run: |
           OLD_VERSION="${{ steps.get_version.outputs.latest_version }}"
           VERSION_TYPE="${{ github.event.inputs.version_type }}"
-          
+
           # Parse version components
           IFS='.' read -r MAJOR MINOR PATCH <<< "$OLD_VERSION"
-          
+
           # Bump based on type
           case "$VERSION_TYPE" in
             major)
@@ -64,7 +64,7 @@ jobs:
               PATCH=$((PATCH + 1))
               ;;
           esac
-          
+
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Bumping $OLD_VERSION -> $NEW_VERSION ($VERSION_TYPE)"

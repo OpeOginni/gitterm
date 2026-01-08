@@ -6,7 +6,11 @@ import { nextCookies } from "better-auth/next-js";
 import { Polar } from "@polar-sh/sdk";
 import { polar, checkout, portal, usage, webhooks } from "@polar-sh/better-auth";
 import { eq } from "drizzle-orm";
-import env, { isProduction, isBillingEnabled as checkBillingEnabled, isGitHubAuthEnabled } from "@gitterm/env/auth";
+import env, {
+  isProduction,
+  isBillingEnabled as checkBillingEnabled,
+  isGitHubAuthEnabled,
+} from "@gitterm/env/auth";
 
 // ============================================================================
 // Environment Configuration
@@ -26,8 +30,7 @@ function inferBaseUrlOrigin(): string {
   }
 
   // Derive from BASE_DOMAIN (supports localhost:8888 in local dev)
-  const isLocal =
-    env.BASE_DOMAIN.includes("localhost") || env.BASE_DOMAIN.includes("127.0.0.1");
+  const isLocal = env.BASE_DOMAIN.includes("localhost") || env.BASE_DOMAIN.includes("127.0.0.1");
   return `${isLocal ? "http" : "https"}://${env.BASE_DOMAIN}`;
 }
 
@@ -41,12 +44,8 @@ type UserPlan = "free" | "tunnel" | "pro";
  * Maps Polar product IDs to plan names
  */
 const PRODUCT_TO_PLAN: Record<string, UserPlan> = {
-  ...(env.POLAR_TUNNEL_PRODUCT_ID
-    ? { [env.POLAR_TUNNEL_PRODUCT_ID]: "tunnel" as const }
-    : {}),
-  ...(env.POLAR_PRO_PRODUCT_ID
-    ? { [env.POLAR_PRO_PRODUCT_ID]: "pro" as const }
-    : {})
+  ...(env.POLAR_TUNNEL_PRODUCT_ID ? { [env.POLAR_TUNNEL_PRODUCT_ID]: "tunnel" as const } : {}),
+  ...(env.POLAR_PRO_PRODUCT_ID ? { [env.POLAR_PRO_PRODUCT_ID]: "pro" as const } : {}),
 };
 
 /**
@@ -74,7 +73,7 @@ const POLAR_PRODUCTS = [
     : []),
   ...(env.POLAR_PRO_PRODUCT_ID
     ? [{ productId: env.POLAR_PRO_PRODUCT_ID, slug: "pro" as const }]
-    : [])
+    : []),
 ];
 
 // ============================================================================
@@ -116,9 +115,7 @@ export const auth = betterAuth({
     schema: schema,
   }),
   trustedOrigins: env.CORS_ORIGIN ? [env.CORS_ORIGIN] : undefined,
-  crossSubDomainCookies: isProduction()
-    ? { enabled: true, domain: SUBDOMAIN_DOMAIN }
-    : undefined,
+  crossSubDomainCookies: isProduction() ? { enabled: true, domain: SUBDOMAIN_DOMAIN } : undefined,
   emailAndPassword: {
     enabled: true,
   },
@@ -143,8 +140,8 @@ export const auth = betterAuth({
         required: false,
         defaultValue: "user",
         input: false, // don't allow user to set role
-      }
-    }
+      },
+    },
   },
   advanced: {
     defaultCookieAttributes: isProduction()
@@ -193,7 +190,9 @@ export const auth = betterAuth({
                         }
 
                         const plan = getPlanFromProductId(productId);
-                        console.log(`[polar] Subscription active: user=${userId}, product=${productId}, plan=${plan}`);
+                        console.log(
+                          `[polar] Subscription active: user=${userId}, product=${productId}, plan=${plan}`,
+                        );
 
                         await updateUserPlan(userId, plan);
                       },

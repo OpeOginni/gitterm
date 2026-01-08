@@ -1,4 +1,6 @@
-- Scheduling deletion of service if not being used.
+- Scheduling deletion of whole service including volume after days of inactivity.
+- Checking of github/gitlab url before passed to api.
+- Config Configuration
 - Onboarding on UI, letting users connect to the APP, then create instances
 
 https://github.com/coder/ghostty-web

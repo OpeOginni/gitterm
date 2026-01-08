@@ -1,17 +1,17 @@
 {
-	"exports": {
-		".": {
-			"default": "./src/index.ts"
-		},
-		"./*": {
-			"default": "./src/*.ts"
-		}
-	},
-	"name": "@gitterm/schema",
-	"version": "0.0.0",
-	"private": true,
-	"type": "module",
-	"dependencies": {
-		"zod": "^4.1.13"
-	}
+  "name": "@gitterm/schema",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "dependencies": {
+    "zod": "^4.1.13"
+  }
 }

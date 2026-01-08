@@ -18,7 +18,17 @@ import {
   isBillingEnabled,
   authClient,
 } from "@/lib/auth-client";
-import { Check, ExternalLink, Loader2, Sparkles, Terminal, ArrowRight, CreditCard, Settings, Zap } from "lucide-react";
+import {
+  Check,
+  ExternalLink,
+  Loader2,
+  Sparkles,
+  Terminal,
+  ArrowRight,
+  CreditCard,
+  Settings,
+  Zap,
+} from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 import { cn } from "@/lib/utils";
@@ -96,16 +106,12 @@ function PlanCard({
   return (
     <Card
       className={`relative flex flex-col ${
-        config.popular
-          ? "border-primary/50 shadow-lg shadow-primary/10"
-          : ""
+        config.popular ? "border-primary/50 shadow-lg shadow-primary/10" : ""
       }`}
     >
       {config.popular && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <Badge className="bg-primary text-primary-foreground">
-            Most Popular
-          </Badge>
+          <Badge className="bg-primary text-primary-foreground">Most Popular</Badge>
         </div>
       )}
 
@@ -139,23 +145,13 @@ function PlanCard({
             Current Plan
           </Button>
         ) : isDowngrade ? (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => openCustomerPortal()}
-          >
+          <Button variant="outline" className="w-full" onClick={() => openCustomerPortal()}>
             Manage Subscription
             <ExternalLink className="ml-2 h-4 w-4" />
           </Button>
         ) : (
-          <Button
-            className="w-full"
-            onClick={() => onUpgrade(plan)}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
+          <Button className="w-full" onClick={() => onUpgrade(plan)} disabled={isLoading}>
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Upgrade to {config.name}
           </Button>
         )}
@@ -176,9 +172,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
       <Card>
         <CardHeader>
           <CardTitle>Subscription</CardTitle>
-          <CardDescription>
-            Billing is not enabled for this instance.
-          </CardDescription>
+          <CardDescription>Billing is not enabled for this instance.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
@@ -230,10 +224,9 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
   // For subscribed users, show a more detailed subscription management section
   if (currentPlan !== "free") {
     return (
-      <div className={cn(
-        "grid gap-6",
-        currentPlan === "tunnel" ? "md:grid-cols-2" : "grid-cols-1"
-      )}>
+      <div
+        className={cn("grid gap-6", currentPlan === "tunnel" ? "md:grid-cols-2" : "grid-cols-1")}
+      >
         {/* Active Subscription Card */}
         <Card className="border-primary/20 flex flex-col">
           <CardHeader>
@@ -250,7 +243,8 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
                     </Badge>
                   </CardTitle>
                   <CardDescription>
-                    {planConfig?.price}{planConfig?.period}
+                    {planConfig?.price}
+                    {planConfig?.period}
                   </CardDescription>
                 </div>
               </div>
@@ -261,7 +255,10 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
               <p className="text-sm font-medium mb-2">Your plan includes:</p>
               <ul className="space-y-2">
                 {planConfig?.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <li
+                    key={feature}
+                    className="flex items-start gap-2 text-sm text-muted-foreground"
+                  >
                     <Check className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
                     <span>{feature}</span>
                   </li>
@@ -270,8 +267,8 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col sm:flex-row gap-3 border-t pt-6">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={handleOpenPortal}
               disabled={isPortalLoading}
               className="w-full"
@@ -297,9 +294,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
                 </div>
                 <div>
                   <CardTitle className="text-lg">Upgrade to Pro</CardTitle>
-                  <CardDescription>
-                    $15/month
-                  </CardDescription>
+                  <CardDescription>$15/month</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -325,11 +320,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
               </ul>
             </CardContent>
             <CardFooter className="border-t pt-6">
-              <Button 
-                onClick={() => handleUpgrade("pro")}
-                disabled={isLoading}
-                className="w-full"
-              >
+              <Button onClick={() => handleUpgrade("pro")} disabled={isLoading} className="w-full">
                 {isLoading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
@@ -354,14 +345,9 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Your Plan</CardTitle>
-              <CardDescription>
-                {PLAN_DESCRIPTIONS[currentPlan]}
-              </CardDescription>
+              <CardDescription>{PLAN_DESCRIPTIONS[currentPlan]}</CardDescription>
             </div>
-            <Badge
-              variant="secondary"
-              className="capitalize"
-            >
+            <Badge variant="secondary" className="capitalize">
               {currentPlan}
             </Badge>
           </div>
@@ -389,7 +375,6 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
  * Plan badge for display in navigation/header
  */
 export function PlanBadge({ plan }: { plan: UserPlan }) {
-  
   // Don't show badge if pricing is disabled or user is on free plan
   if (!isBillingEnabled || plan === "free") {
     return null;
@@ -411,22 +396,22 @@ export function PlanBadge({ plan }: { plan: UserPlan }) {
 /**
  * Simple upgrade prompt component for use throughout the app
  */
-export function UpgradePrompt({ 
+export function UpgradePrompt({
   message = "Unlock more features",
-  size = "default" 
-}: { 
+  size = "default",
+}: {
   message?: string;
   size?: "default" | "compact";
 }) {
   const showPricing = isBillingEnabled;
-  
+
   if (!showPricing) {
     return null;
   }
 
   if (size === "compact") {
     return (
-      <Link 
+      <Link
         href={"/pricing" as Route}
         className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
       >

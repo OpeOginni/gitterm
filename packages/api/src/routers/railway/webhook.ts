@@ -6,50 +6,68 @@ import { getInternalClient } from "../../client";
 
 // Railway webhook schema - matches server's expected input
 export const deploymentStatus = z.enum(["BUILDING", "DEPLOYING", "FAILED", "SUCCESS"]);
-export const webhookType = z.enum(["Deployment.created", "Deployment.deploying", "Deployment.deployed", "Deployment.failed"]);
+export const webhookType = z.enum([
+  "Deployment.created",
+  "Deployment.deploying",
+  "Deployment.deployed",
+  "Deployment.failed",
+]);
 export const webhookSeverity = z.enum(["INFO", "WARNING", "ERROR"]);
 
 export const railwayWebhookSchema = z.object({
   type: webhookType,
   severity: webhookSeverity,
   timestamp: z.string(),
-  resource: z.object({
-    workspace: z.object({
-        id: z.string(),
-        name: z.string(),
-    }).optional(),
-    project: z.object({
-        id: z.string(),
-        name: z.string(),
-    }).optional(),
-    environment: z.object({
-        id: z.string(),
-        name: z.string(),
-        isEphemeral: z.boolean(),
-    }).optional(),
-    service: z.object({
-        id: z.string(),
-        name: z.string()
-    }).optional(),
-    deployment: z.object({
-        id: z.string().optional(),
-    }).optional(),
-  }).loose(),
-  details: z.object({
-    id: z.string().optional(),
-    source: z.string().optional(),
-    status: deploymentStatus.optional(),
-    builder: z.string().optional(),
-    providers: z.string().optional(),
-    serviceId: z.string().optional(),
-    imageSource: z.string().optional(),
-    branch: z.string().optional(),
-    commitHash: z.string().optional(),
-    commitAuthor: z.string().optional(),
-    commitMessage: z.string().optional(),
-  }).loose(),
+  resource: z
+    .object({
+      workspace: z
+        .object({
+          id: z.string(),
+          name: z.string(),
+        })
+        .optional(),
+      project: z
+        .object({
+          id: z.string(),
+          name: z.string(),
+        })
+        .optional(),
+      environment: z
+        .object({
+          id: z.string(),
+          name: z.string(),
+          isEphemeral: z.boolean(),
+        })
+        .optional(),
+      service: z
+        .object({
+          id: z.string(),
+          name: z.string(),
+        })
+        .optional(),
+      deployment: z
+        .object({
+          id: z.string().optional(),
+        })
+        .optional(),
+    })
+    .loose(),
+  details: z
+    .object({
+      id: z.string().optional(),
+      source: z.string().optional(),
+      status: deploymentStatus.optional(),
+      builder: z.string().optional(),
+      providers: z.string().optional(),
+      serviceId: z.string().optional(),
+      imageSource: z.string().optional(),
+      branch: z.string().optional(),
+      commitHash: z.string().optional(),
+      commitAuthor: z.string().optional(),
+      commitMessage: z.string().optional(),
+    })
+    .loose(),
 });
-
 
 export const railwayWebhookRouter = router({
   handleWebhook: publicProcedure.input(railwayWebhookSchema).mutation(async ({ input }) => {
@@ -70,7 +88,7 @@ export const railwayWebhookRouter = router({
       return result;
     } catch (error) {
       if (error instanceof TRPCError) throw error;
-      
+
       console.error("[listener] Failed to process Railway webhook:", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",

@@ -1,5 +1,5 @@
 export function generateUserData(repoUrl: string, branch: string = "main") {
-    const script = `#!/bin/bash
+  const script = `#!/bin/bash
   REPO_URL="${repoUrl}"
   BRANCH="${branch}"
   
@@ -11,9 +11,8 @@ export function generateUserData(repoUrl: string, branch: string = "main") {
     -v /workspace:/workspace \
     --name gitterm-agent \
     gitterm-agent:latest
-    `
-  
-    const base64 = Buffer.from(script).toString("base64")
-    return base64
-  }
-  
+    `;
+
+  const base64 = Buffer.from(script).toString("base64");
+  return base64;
+}

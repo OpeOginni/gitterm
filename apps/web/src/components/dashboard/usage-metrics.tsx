@@ -1,28 +1,31 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useQuery } from "@tanstack/react-query"
-import { trpc } from "@/utils/trpc"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Clock, Infinity as InfinityIcon, TrendingUp, Zap } from "lucide-react"
+import { useQuery } from "@tanstack/react-query";
+import { trpc } from "@/utils/trpc";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Clock, Infinity as InfinityIcon, TrendingUp, Zap } from "lucide-react";
 
 export function UsageMetrics() {
-  const { data, isLoading } = useQuery(trpc.workspace.getDailyUsage.queryOptions())
+  const { data, isLoading } = useQuery(trpc.workspace.getDailyUsage.queryOptions());
 
   if (isLoading) {
-    return null
+    return null;
   }
 
-  const usage = data || { minutesUsed: 0, minutesRemaining: 60, dailyLimit: 60 }
-  
+  const usage = data || { minutesUsed: 0, minutesRemaining: 60, dailyLimit: 60 };
+
   // Check if we're in unlimited mode (self-hosted or paid plan)
   // Infinity becomes null when serialized to JSON
-  const isUnlimited = usage.minutesRemaining === null || usage.dailyLimit === null || 
-                      usage.minutesRemaining === Infinity || usage.dailyLimit === Infinity
-  
-  const usagePercent = isUnlimited ? 0 : (usage.minutesUsed / usage.dailyLimit) * 100
+  const isUnlimited =
+    usage.minutesRemaining === null ||
+    usage.dailyLimit === null ||
+    usage.minutesRemaining === Infinity ||
+    usage.dailyLimit === Infinity;
+
+  const usagePercent = isUnlimited ? 0 : (usage.minutesUsed / usage.dailyLimit) * 100;
 
   // In unlimited mode, show a simplified view
   if (isUnlimited) {
@@ -54,7 +57,7 @@ export function UsageMetrics() {
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   const metrics = [
@@ -79,20 +82,22 @@ export function UsageMetrics() {
       icon: TrendingUp,
       warning: usagePercent > 80,
     },
-  ]
+  ];
 
   return (
     <>
       <div className="grid gap-5 md:grid-cols-3">
         {metrics.map((metric) => {
-          const Icon = metric.icon
+          const Icon = metric.icon;
           return (
             <Card
               key={metric.title}
               className="border-border/50 bg-card/50 overflow-hidden group hover:border-accent/30 transition-colors"
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{metric.title}</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {metric.title}
+                </CardTitle>
                 <div
                   className={`p-2 rounded-lg transition-colors ${
                     metric.accent
@@ -124,7 +129,7 @@ export function UsageMetrics() {
                 <p className="text-xs text-muted-foreground mt-1">{metric.subtitle}</p>
               </CardContent>
             </Card>
-          )
+          );
         })}
       </div>
 
@@ -140,7 +145,8 @@ export function UsageMetrics() {
               style={
                 {
                   // @ts-ignore
-                  "--progress-foreground": usagePercent > 80 ? "var(--destructive)" : "var(--accent)",
+                  "--progress-foreground":
+                    usagePercent > 80 ? "var(--destructive)" : "var(--accent)",
                 } as React.CSSProperties
               }
             />
@@ -162,5 +168,5 @@ export function UsageMetrics() {
         </CardContent>
       </Card>
     </>
-  )
+  );
 }

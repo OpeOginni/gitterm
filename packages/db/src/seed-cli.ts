@@ -9,14 +9,16 @@ import { seedDatabase } from "./seed";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
-    console.error("[seed] DATABASE_URL is required");
-    process.exit(1);
+  console.error("[seed] DATABASE_URL is required");
+  process.exit(1);
 }
 
-seedDatabase().then(() => {
+seedDatabase()
+  .then(() => {
     console.log("[seed] Done");
     process.exit(0);
-}).catch((error) => {
+  })
+  .catch((error) => {
     console.error("[seed] Error:", error);
     process.exit(1);
-});
+  });

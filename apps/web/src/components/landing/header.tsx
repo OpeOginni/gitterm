@@ -1,15 +1,15 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import type { Route } from "next"
-import { Button } from "@/components/ui/button"
-import { Terminal } from "lucide-react"
-import { authClient } from "@/lib/auth-client"
-import { isBillingEnabled } from "@gitterm/env/web"
+import Link from "next/link";
+import type { Route } from "next";
+import { Button } from "@/components/ui/button";
+import { Terminal } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
+import { isBillingEnabled } from "@gitterm/env/web";
 
 export function LandingHeader() {
-  const { data: session } = authClient.useSession()
-  const showPricing = isBillingEnabled()
+  const { data: session } = authClient.useSession();
+  const showPricing = isBillingEnabled();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
@@ -20,14 +20,23 @@ export function LandingHeader() {
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
-          <Link href="#features" className="text-sm text-muted-foreground transition-colors hover:text-primary">
+          <Link
+            href="#features"
+            className="text-sm text-muted-foreground transition-colors hover:text-primary"
+          >
             Features
           </Link>
-          <Link href="#how-it-works" className="text-sm text-muted-foreground transition-colors hover:text-primary">
+          <Link
+            href="#how-it-works"
+            className="text-sm text-muted-foreground transition-colors hover:text-primary"
+          >
             How it Works
           </Link>
           {showPricing && (
-            <Link href={"/pricing" as Route} className="text-sm text-muted-foreground transition-colors hover:text-primary">
+            <Link
+              href={"/pricing" as Route}
+              className="text-sm text-muted-foreground transition-colors hover:text-primary"
+            >
               Pricing
             </Link>
           )}
@@ -43,12 +52,19 @@ export function LandingHeader() {
           ) : (
             <>
               <Link href="/login">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   Log in
                 </Button>
               </Link>
               <Link href="/dashboard">
-                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground">
+                <Button
+                  size="sm"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                >
                   Get Started
                 </Button>
               </Link>
@@ -57,5 +73,5 @@ export function LandingHeader() {
         </div>
       </div>
     </header>
-  )
+  );
 }

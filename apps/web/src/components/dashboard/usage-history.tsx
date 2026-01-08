@@ -1,32 +1,38 @@
-"use client"
+"use client";
 
-import { useQuery } from "@tanstack/react-query"
-import { trpc } from "@/utils/trpc"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { formatDistanceToNow } from "date-fns"
-import { Badge } from "@/components/ui/badge"
-import { Clock, GitBranch } from "lucide-react"
+import { useQuery } from "@tanstack/react-query";
+import { trpc } from "@/utils/trpc";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatDistanceToNow } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import { Clock, GitBranch } from "lucide-react";
 
 export function UsageHistory() {
-  const { data, isLoading } = useQuery(trpc.workspace.listWorkspaces.queryOptions())
+  const { data, isLoading } = useQuery(trpc.workspace.listWorkspaces.queryOptions());
 
   if (isLoading) {
-    return null
+    return null;
   }
 
-  const workspaces = data?.workspaces || []
+  const workspaces = data?.workspaces || [];
 
-  const activeWorkspaces = workspaces.filter((ws) => ws.status !== "terminated")
-  const terminatedWorkspaces = workspaces.filter((ws) => ws.status === "terminated")
+  const activeWorkspaces = workspaces.filter((ws) => ws.status !== "terminated");
+  const terminatedWorkspaces = workspaces.filter((ws) => ws.status === "terminated");
 
-  const WorkspaceTable = ({ workspaces, emptyMessage }: { workspaces: any[]; emptyMessage: string }) => {
+  const WorkspaceTable = ({
+    workspaces,
+    emptyMessage,
+  }: {
+    workspaces: any[];
+    emptyMessage: string;
+  }) => {
     if (workspaces.length === 0) {
       return (
         <div className="text-center py-12 text-muted-foreground">
           <p className="text-sm">{emptyMessage}</p>
         </div>
-      )
+      );
     }
 
     return (
@@ -53,15 +59,19 @@ export function UsageHistory() {
             <div className="text-right text-xs text-muted-foreground space-y-1">
               <div className="flex items-center gap-1.5 justify-end">
                 <Clock className="h-3 w-3" />
-                <span>Started {formatDistanceToNow(new Date(ws.startedAt), { addSuffix: true })}</span>
+                <span>
+                  Started {formatDistanceToNow(new Date(ws.startedAt), { addSuffix: true })}
+                </span>
               </div>
-              {ws.stoppedAt && <p>Stopped {formatDistanceToNow(new Date(ws.stoppedAt), { addSuffix: true })}</p>}
+              {ws.stoppedAt && (
+                <p>Stopped {formatDistanceToNow(new Date(ws.stoppedAt), { addSuffix: true })}</p>
+              )}
             </div>
           </div>
         ))}
       </div>
-    )
-  }
+    );
+  };
 
   return (
     <Card className="border-border/50 bg-card/50">
@@ -71,10 +81,16 @@ export function UsageHistory() {
       <CardContent>
         <Tabs defaultValue="active" className="w-full">
           <TabsList className="grid w-full grid-cols-2 bg-secondary/30 p-1">
-            <TabsTrigger value="active" className="data-[state=active]:bg-card data-[state=active]:text-foreground">
+            <TabsTrigger
+              value="active"
+              className="data-[state=active]:bg-card data-[state=active]:text-foreground"
+            >
               Active ({activeWorkspaces.length})
             </TabsTrigger>
-            <TabsTrigger value="terminated" className="data-[state=active]:bg-card data-[state=active]:text-foreground">
+            <TabsTrigger
+              value="terminated"
+              className="data-[state=active]:bg-card data-[state=active]:text-foreground"
+            >
               Terminated ({terminatedWorkspaces.length})
             </TabsTrigger>
           </TabsList>
@@ -84,12 +100,15 @@ export function UsageHistory() {
           </TabsContent>
 
           <TabsContent value="terminated" className="mt-4">
-            <WorkspaceTable workspaces={terminatedWorkspaces} emptyMessage="No terminated workspaces" />
+            <WorkspaceTable
+              workspaces={terminatedWorkspaces}
+              emptyMessage="No terminated workspaces"
+            />
           </TabsContent>
         </Tabs>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -110,9 +129,9 @@ function StatusBadge({ status }: { status: string }) {
       className: "bg-destructive/10 text-destructive border-destructive/20",
       label: "Terminated",
     },
-  }
+  };
 
-  const variant = variants[status] || { className: "", label: status }
+  const variant = variants[status] || { className: "", label: status };
 
-  return <Badge className={variant.className}>{variant.label}</Badge>
+  return <Badge className={variant.className}>{variant.label}</Badge>;
 }

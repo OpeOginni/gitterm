@@ -46,7 +46,7 @@ function LiveDuration({ startedAt }: { startedAt: Date | string }) {
 
   useEffect(() => {
     const start = new Date(startedAt).getTime();
-    
+
     const updateElapsed = () => {
       const now = Date.now();
       const seconds = Math.floor((now - start) / 1000);
@@ -76,9 +76,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
   const router = useRouter();
   const [showRunDialog, setShowRunDialog] = useState(false);
 
-  const loopQuery = useQuery(
-    trpc.agentLoop.getLoop.queryOptions({ loopId })
-  );
+  const loopQuery = useQuery(trpc.agentLoop.getLoop.queryOptions({ loopId }));
 
   const pauseMutation = useMutation(
     trpc.agentLoop.pauseLoop.mutationOptions({
@@ -87,7 +85,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
         queryClient.invalidateQueries({ queryKey: trpc.agentLoop.getLoop.queryKey({ loopId }) });
       },
       onError: (error) => toast.error(`Failed to pause: ${error.message}`),
-    })
+    }),
   );
 
   const resumeMutation = useMutation(
@@ -97,7 +95,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
         queryClient.invalidateQueries({ queryKey: trpc.agentLoop.getLoop.queryKey({ loopId }) });
       },
       onError: (error) => toast.error(`Failed to resume: ${error.message}`),
-    })
+    }),
   );
 
   const archiveMutation = useMutation(
@@ -107,7 +105,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
         router.push("/dashboard/loops");
       },
       onError: (error) => toast.error(`Failed to archive: ${error.message}`),
-    })
+    }),
   );
 
   if (loopQuery.isLoading) {
@@ -136,8 +134,12 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
 
   const loop = loopQuery.data.loop;
   const runs = loop.runs || [];
-  const canStartRun = loop.status === "active" && !(loop.automationEnabled && loop.totalRuns > 0);
-  const isLoading = pauseMutation.isPending || resumeMutation.isPending || archiveMutation.isPending;
+  const hasOngoingRun = runs.some(
+    (run: AgentLoopRun) => run.status === "running" || run.status === "pending",
+  );
+  const canStartRun = loop.status === "active" && loop.totalRuns < loop.maxRuns && !hasOngoingRun;
+  const isLoading =
+    pauseMutation.isPending || resumeMutation.isPending || archiveMutation.isPending;
 
   const getRunStatusBadge = (status: RunStatus) => {
     switch (status) {
@@ -183,16 +185,17 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
   return (
     <div className="space-y-6">
       {/* Run Dialog */}
-      <RunNextIterationDialog
-        open={showRunDialog}
-        onOpenChange={setShowRunDialog}
-        loop={loop}
-      />
+      <RunNextIterationDialog open={showRunDialog} onOpenChange={setShowRunDialog} loop={loop} />
 
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/loops")} className="gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push("/dashboard/loops")}
+            className="gap-2"
+          >
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
@@ -272,12 +275,10 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Runs
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Runs</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -287,48 +288,65 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
         </Card>
         <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Successful
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Successful</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">
-              {loop.successfulRuns}
-            </div>
+            <div className="text-2xl font-bold text-green-500">{loop.successfulRuns}</div>
           </CardContent>
         </Card>
         <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Failed
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Failed</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">
-              {loop.failedRuns}
-            </div>
+            <div className="text-2xl font-bold text-destructive">{loop.failedRuns}</div>
           </CardContent>
         </Card>
         <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Plan File
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Plan File</CardTitle>
           </CardHeader>
           <CardContent>
-            <Link className="flex items-center gap-1.5 hover:text-primary transition-colors" href={`https://github.com/${loop.repositoryOwner}/${loop.repositoryName}/blob/${loop.branch}/${loop.planFilePath}`} target="_blank" rel="noopener noreferrer" title={loop.planFilePath}>
+            <Link
+              className="flex items-center gap-1.5 hover:text-primary transition-colors"
+              href={`https://github.com/${loop.repositoryOwner}/${loop.repositoryName}/blob/${loop.branch}/${loop.planFilePath}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={loop.planFilePath}
+            >
               <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="font-mono text-sm">
-                {loop.planFilePath}
-              </span>
+              <span className="font-mono text-sm">{loop.planFilePath}</span>
             </Link>
+          </CardContent>
+        </Card>
+        <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Progress File
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loop.progressFilePath ? (
+              <Link
+                className="flex items-center gap-1.5 hover:text-primary transition-colors"
+                href={`https://github.com/${loop.repositoryOwner}/${loop.repositoryName}/blob/${loop.branch}/${loop.progressFilePath}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={loop.progressFilePath}
+              >
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-mono text-sm">{loop.progressFilePath}</span>
+              </Link>
+            ) : (
+              <span className="text-sm text-muted-foreground">No progress file</span>
+            )}
           </CardContent>
         </Card>
       </div>
 
       {/* Run History */}
       <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
-      <CardHeader>
+        <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Repeat className="h-5 w-5" />
             Run History
@@ -356,9 +374,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
                   <TableRow key={run.id}>
                     <TableCell className="font-mono">{run.runNumber}</TableCell>
                     <TableCell>{getRunStatusBadge(run.status)}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {run.model || "-"}
-                    </TableCell>
+                    <TableCell className="font-mono text-xs">{run.model || "-"}</TableCell>
                     <TableCell className="text-sm">
                       {run.startedAt
                         ? formatDistanceToNow(new Date(run.startedAt), { addSuffix: true })
@@ -382,12 +398,13 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
                           className="flex items-center gap-1.5 hover:text-primary transition-colors underline"
                         >
                           <GitCommit className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="font-mono text-xs">
-                            {run.commitSha.substring(0, 7)}
-                          </span>
+                          <span className="font-mono text-xs">{run.commitSha.substring(0, 7)}</span>
                         </Link>
                       ) : run.errorMessage ? (
-                        <span className="text-xs text-destructive truncate max-w-[200px] block" title={run.errorMessage}>
+                        <span
+                          className="text-xs text-destructive truncate max-w-[200px] block"
+                          title={run.errorMessage}
+                        >
                           {run.errorMessage}
                         </span>
                       ) : (

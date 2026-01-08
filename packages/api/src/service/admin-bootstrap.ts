@@ -1,10 +1,10 @@
 /**
  * Admin Bootstrap Service
- * 
+ *
  * Creates an admin user from environment variables on first startup.
  * This is primarily for self-hosted deployments where users need
  * a way to access the admin panel without manual database seeding.
- * 
+ *
  * Key behavior:
  * - On startup, checks ADMIN_EMAIL env var
  * - If the env email differs from the stored bootstrap email, the old admin
@@ -14,7 +14,12 @@
 
 import { db, eq } from "@gitterm/db";
 import * as schema from "@gitterm/db/schema/auth";
-import { getAdminCredentials, hasAdminBootstrap, isEmailAuthEnabled, isGitHubAuthEnabled } from "@gitterm/env/server";
+import {
+  getAdminCredentials,
+  hasAdminBootstrap,
+  isEmailAuthEnabled,
+  isGitHubAuthEnabled,
+} from "@gitterm/env/server";
 import { auth } from "@gitterm/auth";
 
 const BOOTSTRAP_ADMIN_KEY = "bootstrap_admin_email";
@@ -30,7 +35,7 @@ async function getStoredBootstrapEmail(): Promise<string | null> {
     .from(schema.systemConfig)
     .where(eq(schema.systemConfig.key, BOOTSTRAP_ADMIN_KEY))
     .limit(1);
-  
+
   return config?.value ?? null;
 }
 
@@ -59,9 +64,7 @@ async function setStoredBootstrapEmail(email: string): Promise<void> {
  * Clear the stored bootstrap admin email (when env is removed)
  */
 async function clearStoredBootstrapEmail(): Promise<void> {
-  await db
-    .delete(schema.systemConfig)
-    .where(eq(schema.systemConfig.key, BOOTSTRAP_ADMIN_KEY));
+  await db.delete(schema.systemConfig).where(eq(schema.systemConfig.key, BOOTSTRAP_ADMIN_KEY));
 }
 
 /**
@@ -75,21 +78,25 @@ async function demoteUser(email: string): Promise<void> {
       updatedAt: new Date(),
     })
     .where(eq(schema.user.email, email));
-  
+
   console.log(`[admin-bootstrap] Demoted previous bootstrap admin: ${email}`);
 }
 
 /**
  * Bootstrap admin user from environment variables
- * 
+ *
  * This function handles:
  * 1. First-time setup: Creates admin from ADMIN_EMAIL/ADMIN_PASSWORD
  * 2. Email change: Demotes old admin, promotes/creates new admin
  * 3. Env removed: Demotes the bootstrap admin (but leaves other admins)
- * 
+ *
  * Should be called once on server startup.
  */
-export async function bootstrapAdmin(): Promise<{ created: boolean; email?: string; changed?: boolean }> {
+export async function bootstrapAdmin(): Promise<{
+  created: boolean;
+  email?: string;
+  changed?: boolean;
+}> {
   // Only run once per process
   if (bootstrapComplete) {
     return { created: false };
@@ -102,7 +109,9 @@ export async function bootstrapAdmin(): Promise<{ created: boolean; email?: stri
 
     // Case 1: No env configured anymore, but we have a stored bootstrap admin
     if (!hasAdminBootstrap() && storedEmail) {
-      console.log("[admin-bootstrap] ADMIN_EMAIL removed from env, demoting previous bootstrap admin");
+      console.log(
+        "[admin-bootstrap] ADMIN_EMAIL removed from env, demoting previous bootstrap admin",
+      );
       await demoteUser(storedEmail);
       await clearStoredBootstrapEmail();
       bootstrapComplete = true;
@@ -117,7 +126,9 @@ export async function bootstrapAdmin(): Promise<{ created: boolean; email?: stri
       } else if (!isEmailAuthEnabled()) {
         console.log("[admin-bootstrap] Email auth disabled, skipping admin bootstrap");
       } else {
-        console.log("[admin-bootstrap] No ADMIN_EMAIL/ADMIN_PASSWORD configured, skipping bootstrap");
+        console.log(
+          "[admin-bootstrap] No ADMIN_EMAIL/ADMIN_PASSWORD configured, skipping bootstrap",
+        );
       }
       bootstrapComplete = true;
       return { created: false };
@@ -145,22 +156,22 @@ export async function bootstrapAdmin(): Promise<{ created: boolean; email?: stri
 
     if (existingUser.length > 0) {
       const user = existingUser[0]!;
-      
+
       // Ensure user has admin role
       if ((user as any).role !== "admin") {
         await db
           .update(schema.user)
-          .set({ 
+          .set({
             role: "admin" as const,
-            updatedAt: new Date() 
+            updatedAt: new Date(),
           })
           .where(eq(schema.user.id, user.id));
-        
+
         console.log(`[admin-bootstrap] Upgraded existing user ${email} to admin role`);
       } else {
         console.log(`[admin-bootstrap] Admin user ${email} already exists`);
       }
-      
+
       // Update stored bootstrap email
       await setStoredBootstrapEmail(email);
       bootstrapComplete = true;
@@ -184,10 +195,10 @@ export async function bootstrapAdmin(): Promise<{ created: boolean; email?: stri
     // Update the user to have admin role
     await db
       .update(schema.user)
-      .set({ 
+      .set({
         role: "admin" as const,
         emailVerified: true, // Auto-verify admin
-        updatedAt: new Date() 
+        updatedAt: new Date(),
       })
       .where(eq(schema.user.id, result.user.id));
 
@@ -196,7 +207,7 @@ export async function bootstrapAdmin(): Promise<{ created: boolean; email?: stri
 
     console.log(`[admin-bootstrap] Created admin user: ${email}`);
     bootstrapComplete = true;
-    
+
     return { created: true, email };
   } catch (error) {
     console.error("[admin-bootstrap] Failed to bootstrap admin user:", error);

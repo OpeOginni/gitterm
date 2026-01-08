@@ -11,21 +11,27 @@ const webhooks = new Webhooks({
 
 // GitHub installation webhook payload schema - only validate fields we need
 // Use passthrough to allow additional fields GitHub sends
-const githubInstallationAccountSchema = z.object({
-  login: z.string(),
-  id: z.number(),
-  type: z.string(),
-}).loose();
+const githubInstallationAccountSchema = z
+  .object({
+    login: z.string(),
+    id: z.number(),
+    type: z.string(),
+  })
+  .loose();
 
-const githubInstallationSchema = z.object({
-  id: z.number(),
-  account: githubInstallationAccountSchema,
-}).loose();
+const githubInstallationSchema = z
+  .object({
+    id: z.number(),
+    account: githubInstallationAccountSchema,
+  })
+  .loose();
 
-const githubWebhookPayloadSchema = z.object({
-  action: z.string(),
-  installation: githubInstallationSchema,
-}).loose();
+const githubWebhookPayloadSchema = z
+  .object({
+    action: z.string(),
+    installation: githubInstallationSchema,
+  })
+  .loose();
 
 // Actions we handle
 const HANDLED_ACTIONS = ["created", "deleted", "suspend", "unsuspend", "new_permissions_accepted"];
@@ -39,8 +45,8 @@ export const githubWebhookRouter = router({
     .input(githubWebhookPayloadSchema)
     .mutation(async ({ input, ctx }) => {
       const verified = await webhooks.verify(ctx.githubRawBody, ctx.githubXHubSignature256!);
-      
-      if(!verified) {
+
+      if (!verified) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "GitHub X-Hub-Signature-256 verification failed",
@@ -57,12 +63,16 @@ export const githubWebhookRouter = router({
         return { success: true, message: "Action ignored", action: input.action };
       }
 
-
       try {
         const client = getInternalClient();
 
         const result = await client.internal.processGitHubInstallationWebhook.mutate({
-          action: input.action as "created" | "deleted" | "suspend" | "unsuspend" | "new_permissions_accepted",
+          action: input.action as
+            | "created"
+            | "deleted"
+            | "suspend"
+            | "unsuspend"
+            | "new_permissions_accepted",
           installationId: String(input.installation.id),
           accountLogin: input.installation.account.login,
           accountId: String(input.installation.account.id),

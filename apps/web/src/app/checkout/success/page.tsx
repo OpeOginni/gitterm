@@ -79,21 +79,21 @@ function CheckoutSuccessContent() {
               <span className="text-sm text-muted-foreground">Your Plan</span>
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                <span className={cn(
-                  "font-semibold capitalize",
-                  userPlan === "pro" && "text-primary",
-                  userPlan === "tunnel" && "text-foreground"
-                )}>
+                <span
+                  className={cn(
+                    "font-semibold capitalize",
+                    userPlan === "pro" && "text-primary",
+                    userPlan === "tunnel" && "text-foreground",
+                  )}
+                >
                   {isPending && !checkoutPlan ? "Loading..." : planName}
                 </span>
               </div>
             </div>
-            
+
             {checkoutId && (
               <div className="pt-4 border-t border-border">
-                <span className="text-xs text-muted-foreground">
-                  Checkout ID: {checkoutId}
-                </span>
+                <span className="text-xs text-muted-foreground">Checkout ID: {checkoutId}</span>
               </div>
             )}
           </div>

@@ -25,13 +25,13 @@
     }
   },
   "scripts": {},
+  "dependencies": {
+    "zod": "catalog:"
+  },
   "devDependencies": {
     "@gitterm/config": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "dependencies": {
-    "zod": "catalog:"
   }
 }

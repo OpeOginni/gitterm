@@ -1,14 +1,23 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
 import { db, eq, and, sql, gt, or } from "@gitterm/db";
-import { workspace, usageSession, dailyUsage, type SessionStopSource } from "@gitterm/db/schema/workspace";
+import {
+  workspace,
+  usageSession,
+  dailyUsage,
+  type SessionStopSource,
+} from "@gitterm/db/schema/workspace";
 import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/integrations";
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
-import { closeUsageSession, getConfiguredIdleTimeout, getConfiguredFreeTierMinutes } from "../../utils/metering";
+import {
+  closeUsageSession,
+  getConfiguredIdleTimeout,
+  getConfiguredFreeTierMinutes,
+} from "../../utils/metering";
 import { auth } from "@gitterm/auth";
 import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { logger } from "../../utils/logger";
@@ -23,17 +32,19 @@ import { AgentLoopService, getAgentLoopService } from "../../service/agent-loop"
 export const internalRouter = router({
   // Validate session from cookie (for proxy)
   validateSession: internalProcedure
-    .input(z.object({ 
-      cookie: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        cookie: z.string().optional(),
+      }),
+    )
     .query(async ({ input }) => {
       const headers = new Headers();
       if (input.cookie) {
         headers.set("cookie", input.cookie);
       }
-      
+
       const session = await auth.api.getSession({ headers });
-      
+
       return {
         userId: session?.user?.id ?? null,
         valid: !!session?.user?.id,
@@ -95,8 +106,8 @@ export const internalRouter = router({
         and(
           eq(workspace.status, "running"),
           eq(workspace.hostingType, "cloud"), // Only check cloud workspaces for idle timeout
-          sql`${workspace.lastActiveAt} < ${idleThreshold}`
-        )
+          sql`${workspace.lastActiveAt} < ${idleThreshold}`,
+        ),
       );
 
     return idleWorkspaces;
@@ -108,7 +119,7 @@ export const internalRouter = router({
   /**
    * Get workspaces that belong to users who have exceeded their daily quota
    * Used by idle-reaper worker to enforce free tier limits
-   * 
+   *
    * NOTE: Comment out this entire procedure when moving to paid plans
    */
   getQuotaExceededWorkspaces: internalProcedure.query(async () => {
@@ -129,30 +140,27 @@ export const internalRouter = router({
       .from(workspace)
       .leftJoin(
         dailyUsage,
-        and(
-          eq(workspace.userId, dailyUsage.userId),
-          eq(dailyUsage.date, today)
-        )
+        and(eq(workspace.userId, dailyUsage.userId), eq(dailyUsage.date, today)),
       )
       .where(
         and(
           eq(workspace.status, "running"),
-          eq(workspace.hostingType, "cloud") // Only check cloud workspaces
-        )
+          eq(workspace.hostingType, "cloud"), // Only check cloud workspaces
+        ),
       );
 
     // Filter workspaces where user has exceeded quota
     // If no usage record exists (null), they haven't exceeded (0 minutes used)
     const freeTierDailyMinutes = await getConfiguredFreeTierMinutes();
     const quotaExceededWorkspaces = workspacesWithUsage.filter(
-      ws => (ws.minutesUsed ?? 0) >= freeTierDailyMinutes
+      (ws) => (ws.minutesUsed ?? 0) >= freeTierDailyMinutes,
     );
 
     logger.info(`Found ${quotaExceededWorkspaces.length} workspaces with exceeded quota`, {
       action: "quota_check",
     });
 
-    return quotaExceededWorkspaces.map(ws => ({
+    return quotaExceededWorkspaces.map((ws) => ({
       id: ws.id,
       externalInstanceId: ws.externalInstanceId,
       userId: ws.userId,
@@ -170,14 +178,11 @@ export const internalRouter = router({
       z.object({
         workspaceId: z.string(),
         stopSource: z.enum(["manual", "idle", "quota_exhausted", "error"]),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Get workspace with related data
-      const [ws] = await db
-        .select()
-        .from(workspace)
-        .where(eq(workspace.id, input.workspaceId));
+      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
 
       if (!ws) {
         throw new TRPCError({
@@ -200,10 +205,7 @@ export const internalRouter = router({
       }
 
       // Get region
-      const [workspaceRegion] = await db
-        .select()
-        .from(region)
-        .where(eq(region.id, ws.regionId));
+      const [workspaceRegion] = await db.select().from(region).where(eq(region.id, ws.regionId));
 
       if (!workspaceRegion) {
         throw new TRPCError({
@@ -217,13 +219,13 @@ export const internalRouter = router({
       await computeProvider.stopWorkspace(
         ws.externalInstanceId,
         workspaceRegion.externalRegionIdentifier,
-        ws.externalRunningDeploymentId || undefined
+        ws.externalRunningDeploymentId || undefined,
       );
 
       // Close usage session
       const { durationMinutes } = await closeUsageSession(
         input.workspaceId,
-        input.stopSource as SessionStopSource
+        input.stopSource as SessionStopSource,
       );
 
       // Update workspace status
@@ -254,10 +256,7 @@ export const internalRouter = router({
     .input(z.object({ workspaceId: z.string() }))
     .mutation(async ({ input }) => {
       // Get workspace with related data
-      const [ws] = await db
-        .select()
-        .from(workspace)
-        .where(eq(workspace.id, input.workspaceId));
+      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
 
       if (!ws) {
         throw new TRPCError({
@@ -316,11 +315,13 @@ export const internalRouter = router({
     const longTermInactiveWorkspaces = await db
       .select()
       .from(workspace)
-      .where(and(
-        or(eq(workspace.status, "running"), eq(workspace.status, "stopped")),
-        eq(workspace.hostingType, "cloud"),
-        sql`${workspace.lastActiveAt} < ${new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)}` // 4 days ago
-      ));
+      .where(
+        and(
+          or(eq(workspace.status, "running"), eq(workspace.status, "stopped")),
+          eq(workspace.hostingType, "cloud"),
+          sql`${workspace.lastActiveAt} < ${new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)}`, // 4 days ago
+        ),
+      );
 
     return longTermInactiveWorkspaces;
   }),
@@ -370,7 +371,7 @@ export const internalRouter = router({
         workspaceId: z.uuid(),
         owner: z.string(),
         repo: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       try {
@@ -408,15 +409,16 @@ export const internalRouter = router({
         const githubService = getGitHubAppService();
         // Get GitHub App installation with verification
         const installation = await githubService.getUserInstallation(
-          userId, 
+          userId,
           workspaceRecord.gitIntegrationId,
-          true // verify
+          true, // verify
         );
 
         if (!installation) {
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: "GitHub App not connected or has been removed. Please reconnect your GitHub account.",
+            message:
+              "GitHub App not connected or has been removed. Please reconnect your GitHub account.",
           });
         }
 
@@ -435,8 +437,8 @@ export const internalRouter = router({
           .where(
             and(
               eq(workspaceGitConfig.userId, userId),
-              gt(workspaceGitConfig.forkCreatedAt, new Date(Date.now() - 60000)) // Last minute
-            )
+              gt(workspaceGitConfig.forkCreatedAt, new Date(Date.now() - 60000)), // Last minute
+            ),
           );
 
         if (recentForks.length >= 3) {
@@ -450,7 +452,7 @@ export const internalRouter = router({
         const fork = await githubService.forkRepository(
           installation.installationId,
           input.owner,
-          input.repo
+          input.repo,
         );
 
         // Update or create workspace git config
@@ -516,7 +518,7 @@ export const internalRouter = router({
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        
+
         // Handle installation not found specifically
         if (error instanceof GitHubInstallationNotFoundError) {
           logger.warn("GitHub installation not found during fork", {
@@ -528,12 +530,16 @@ export const internalRouter = router({
             message: "GitHub App installation has been removed. Please reconnect.",
           });
         }
-        
-        logger.error("Failed to fork repository", {
-          workspaceId: input.workspaceId,
-          action: "fork_repository_internal",
-        }, error as Error);
-        
+
+        logger.error(
+          "Failed to fork repository",
+          {
+            workspaceId: input.workspaceId,
+            action: "fork_repository_internal",
+          },
+          error as Error,
+        );
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fork repository",
@@ -557,7 +563,9 @@ export const internalRouter = router({
       if (input.type === "Deployment.deployed" && input.details?.serviceId) {
         const serviceId = input.details.serviceId;
 
-        const [railwayProvider] = await db.select().from(cloudProvider)
+        const [railwayProvider] = await db
+          .select()
+          .from(cloudProvider)
           .where(eq(cloudProvider.name, "Railway"));
 
         if (!railwayProvider) {
@@ -567,21 +575,27 @@ export const internalRouter = router({
           });
         }
 
-        const updatedWorkspaces = await db.update(workspace).set({
-          status: "running",
-          updatedAt: new Date(input.timestamp),
-          externalRunningDeploymentId: input.resource.deployment?.id
-        }).where(and(
-          eq(workspace.cloudProviderId, railwayProvider.id),
-          eq(workspace.externalInstanceId, serviceId),
-          eq(workspace.status, "pending")
-        )).returning({
-          id: workspace.id,
-          status: workspace.status,
-          updatedAt: workspace.updatedAt,
-          userId: workspace.userId,
-          workspaceDomain: workspace.domain
-        });
+        const updatedWorkspaces = await db
+          .update(workspace)
+          .set({
+            status: "running",
+            updatedAt: new Date(input.timestamp),
+            externalRunningDeploymentId: input.resource.deployment?.id,
+          })
+          .where(
+            and(
+              eq(workspace.cloudProviderId, railwayProvider.id),
+              eq(workspace.externalInstanceId, serviceId),
+              eq(workspace.status, "pending"),
+            ),
+          )
+          .returning({
+            id: workspace.id,
+            status: workspace.status,
+            updatedAt: workspace.updatedAt,
+            userId: workspace.userId,
+            workspaceDomain: workspace.domain,
+          });
 
         return { updated: updatedWorkspaces };
       }
@@ -594,13 +608,14 @@ export const internalRouter = router({
    * Returns workspace info if valid, throws if not found or unauthorized
    */
   validateWorkspaceAccess: internalProcedure
-    .input(z.object({
-      workspaceId: z.string(),
-      userId: z.string(),
-    }))
+    .input(
+      z.object({
+        workspaceId: z.string(),
+        userId: z.string(),
+      }),
+    )
     .query(async ({ input }) => {
-      const [ws] = await db.select().from(workspace)
-        .where(eq(workspace.id, input.workspaceId));
+      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
 
       if (!ws) {
         throw new TRPCError({
@@ -630,13 +645,15 @@ export const internalRouter = router({
    * Called by listener when it receives a GitHub App installation webhook
    */
   processGitHubInstallationWebhook: internalProcedure
-    .input(z.object({
-      action: z.enum(["created", "deleted", "suspend", "unsuspend", "new_permissions_accepted"]),
-      installationId: z.string(),
-      accountLogin: z.string(),
-      accountId: z.string(),
-      accountType: z.string(),
-    }))
+    .input(
+      z.object({
+        action: z.enum(["created", "deleted", "suspend", "unsuspend", "new_permissions_accepted"]),
+        installationId: z.string(),
+        accountLogin: z.string(),
+        accountId: z.string(),
+        accountType: z.string(),
+      }),
+    )
     .mutation(async ({ input }) => {
       logger.info("Processing GitHub installation webhook", {
         action: `github_webhook_${input.action}`,
@@ -648,7 +665,7 @@ export const internalRouter = router({
         // Clean up our database records
         const githubService = getGitHubAppService();
         const result = await githubService.removeInstallationByInstallationId(input.installationId);
-        
+
         logger.info("GitHub installation deleted via webhook", {
           action: "github_webhook_deleted",
           installationId: input.installationId,
@@ -665,10 +682,10 @@ export const internalRouter = router({
       if (input.action === "suspend") {
         // App was suspended - mark as suspended in our database
         const now = new Date();
-        
+
         const updatedInstallations = await db
           .update(githubAppInstallation)
-          .set({ 
+          .set({
             suspended: true,
             suspendedAt: now,
             updatedAt: now,
@@ -691,10 +708,10 @@ export const internalRouter = router({
       if (input.action === "unsuspend") {
         // App was unsuspended - clear the suspended flag
         const now = new Date();
-        
+
         const updatedInstallations = await db
           .update(githubAppInstallation)
-          .set({ 
+          .set({
             suspended: false,
             suspendedAt: null,
             updatedAt: now,
@@ -778,7 +795,8 @@ export const internalRouter = router({
 
       const loop = run.loop;
       const now = new Date();
-      const durationSeconds = input.durationSeconds || 
+      const durationSeconds =
+        input.durationSeconds ||
         (run.startedAt ? Math.floor((now.getTime() - run.startedAt.getTime()) / 1000) : 0);
 
       if (input.success) {
@@ -858,7 +876,7 @@ export const internalRouter = router({
             model: newRun.model,
             apiKey: "", // TODO: Get API key from loop
             prompt: loop.prompt || undefined,
-          })
+          });
 
           if (!startResult.success) {
             throw new TRPCError({
@@ -867,10 +885,13 @@ export const internalRouter = router({
             });
           }
 
-          await db.update(agentLoop).set({
-            totalRuns: loop.totalRuns + 1,
-            lastRunId: newRun.id
-          }).where(eq(agentLoop.id, loop.id));
+          await db
+            .update(agentLoop)
+            .set({
+              totalRuns: loop.totalRuns + 1,
+              lastRunId: newRun.id,
+            })
+            .where(eq(agentLoop.id, loop.id));
 
           logger.info("Created next automated run", {
             action: "automated_run_created",
@@ -878,7 +899,6 @@ export const internalRouter = router({
             runId: newRun?.id,
             runNumber: nextRunNumber,
           });
-
 
           return {
             success: true,
@@ -935,4 +955,3 @@ export const internalRouter = router({
 });
 
 export type InternalRouter = typeof internalRouter;
-

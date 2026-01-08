@@ -1,7 +1,7 @@
 {
   "name": "worker",
-  "main": "src/idle-reaper.ts",
   "type": "module",
+  "main": "src/idle-reaper.ts",
   "scripts": {
     "build": "tsdown",
     "check-types": "tsc -b",
@@ -10,14 +10,13 @@
     "daily-reset": "bun run src/daily-reset.ts"
   },
   "dependencies": {
-    "dotenv": "catalog:",
-    "@gitterm/api": "workspace:*"
+    "@gitterm/api": "workspace:*",
+    "dotenv": "catalog:"
   },
   "devDependencies": {
-    "typescript": "catalog:",
+    "@gitterm/config": "workspace:*",
     "@types/bun": "^1.2.6",
     "tsdown": "^0.16.5",
-    "@gitterm/config": "workspace:*"
+    "typescript": "catalog:"
   }
 }
-

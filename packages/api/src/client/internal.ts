@@ -4,7 +4,7 @@ import type { AppRouter } from "../routers/index";
 /**
  * Create an internal tRPC client for service-to-service communication
  * Uses INTERNAL_API_KEY for authentication
- * 
+ *
  * @param serverUrl - The server URL (e.g., http://localhost:3000)
  * @param apiKey - The internal API key
  */

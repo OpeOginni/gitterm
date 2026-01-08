@@ -2,7 +2,7 @@
  * Feature Flags
  *
  * Centralized feature flags for controlling functionality based on deployment mode.
- * 
+ *
  * Self-hosted mode: Simplified configuration with sensible defaults
  * Managed mode: Full feature set with billing, quotas, etc.
  *
@@ -20,7 +20,7 @@ import { getFreeTierDailyMinutes } from "../service/system-config";
 
 /**
  * Feature flags configuration
- * 
+ *
  * Self-hosted: Minimal flags exposed via env (ENABLE_QUOTA_ENFORCEMENT, ENABLE_IDLE_REAPING, etc.)
  * Managed: Most features auto-enabled based on deployment mode
  */
@@ -227,7 +227,9 @@ export const hasUnlimitedCloudMinutes = (plan: UserPlan): boolean => {
 /**
  * Get plan display info for UI
  */
-export const getPlanInfo = (plan: UserPlan): {
+export const getPlanInfo = (
+  plan: UserPlan,
+): {
   name: string;
   description: string;
   badge?: "popular" | "best-value";

@@ -1,7 +1,7 @@
 {
   "name": "listener",
-  "main": "src/index.ts",
   "type": "module",
+  "main": "src/index.ts",
   "scripts": {
     "build": "tsdown",
     "check-types": "tsc -b",
@@ -11,18 +11,18 @@
     "start": "bun run dist/index.mjs"
   },
   "dependencies": {
-    "hono": "catalog:",
-    "@trpc/server": "catalog:",
-    "@hono/trpc-server": "^0.4.0",
-    "dotenv": "catalog:",
-    "zod": "catalog:",
     "@gitterm/api": "workspace:*",
-    "@gitterm/env": "workspace:*"
+    "@gitterm/env": "workspace:*",
+    "@hono/trpc-server": "^0.4.0",
+    "@trpc/server": "catalog:",
+    "dotenv": "catalog:",
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "typescript": "catalog:",
+    "@gitterm/config": "workspace:*",
     "@types/bun": "^1.2.6",
     "tsdown": "^0.16.5",
-    "@gitterm/config": "workspace:*"
+    "typescript": "catalog:"
   }
 }

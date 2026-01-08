@@ -26,35 +26,32 @@ export function WorkspaceStatusWatcherProvider({ children }: { children: React.R
     }
   }, []);
 
-  const watchWorkspaceStatus = useCallback(
-    ({ workspaceId, userId }: WatchParams) => {
-      // Ensure only one active subscription per workspace.
-      if (subsRef.current.has(workspaceId)) return;
+  const watchWorkspaceStatus = useCallback(({ workspaceId, userId }: WatchParams) => {
+    // Ensure only one active subscription per workspace.
+    if (subsRef.current.has(workspaceId)) return;
 
-      const sub = listenerTrpc.workspace.status.subscribe(
-        { workspaceId, userId },
-        {
-          onData: (payload) => {
-            if (payload.status === "running") {
-              toast.success("Your Workspace is ready");
-              queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
-              sub.unsubscribe();
-              subsRef.current.delete(workspaceId);
-            }
-          },
-          onError: (error) => {
-            // Don't spam toasts if the SSE connection is flapping; keep it console-visible.
-            console.error("[workspace-status] subscription error", error);
+    const sub = listenerTrpc.workspace.status.subscribe(
+      { workspaceId, userId },
+      {
+        onData: (payload) => {
+          if (payload.status === "running") {
+            toast.success("Your Workspace is ready");
+            queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
             sub.unsubscribe();
             subsRef.current.delete(workspaceId);
-          },
+          }
         },
-      );
+        onError: (error) => {
+          // Don't spam toasts if the SSE connection is flapping; keep it console-visible.
+          console.error("[workspace-status] subscription error", error);
+          sub.unsubscribe();
+          subsRef.current.delete(workspaceId);
+        },
+      },
+    );
 
-      subsRef.current.set(workspaceId, sub);
-    },
-    [],
-  );
+    subsRef.current.set(workspaceId, sub);
+  }, []);
 
   const value = useMemo<Ctx>(
     () => ({
@@ -78,5 +75,3 @@ export function useWorkspaceStatusWatcher(): Ctx {
   }
   return ctx;
 }
-
-

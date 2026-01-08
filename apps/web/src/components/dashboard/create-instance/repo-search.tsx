@@ -24,18 +24,18 @@ interface RepoSearchProps {
 function filterMatch(query: string, target: string): { match: boolean; score: number } {
   const lowerQuery = query.toLowerCase();
   const lowerTarget = target.toLowerCase();
-  
+
   if (!query) return { match: true, score: 0 };
-  
+
   // Exact match gets highest score
   if (lowerTarget === lowerQuery) return { match: true, score: 1000 };
-  
+
   // Starts with gets high score
   if (lowerTarget.startsWith(lowerQuery)) return { match: true, score: 500 };
-  
+
   // Contains gets medium score
   if (lowerTarget.includes(lowerQuery)) return { match: true, score: 200 };
-  
+
   return { match: false, score: 0 };
 }
 
@@ -55,12 +55,12 @@ export function RepoSearch({
   // Filter and sort repos based on search query
   const filteredRepos = useMemo(() => {
     if (!repos) return [];
-    
+
     if (!query.trim()) {
       // No query - return first 20 repos
       return repos.slice(0, 20);
     }
-    
+
     // Score and filter repos
     const scored = repos
       .map((repo) => {
@@ -68,7 +68,7 @@ export function RepoSearch({
         const fullNameMatch = filterMatch(query, repo.fullName);
         const nameMatch = filterMatch(query, repo.name);
         const bestScore = Math.max(fullNameMatch.score, nameMatch.score);
-        
+
         return {
           repo,
           score: bestScore,
@@ -77,7 +77,7 @@ export function RepoSearch({
       })
       .filter((item) => item.match && item.score > 0)
       .sort((a, b) => b.score - a.score);
-    
+
     return scored.map((item) => item.repo).slice(0, 20);
   }, [repos, query]);
 
@@ -86,11 +86,11 @@ export function RepoSearch({
     const itemHeight = 40; // Approximate height per repo item
     const maxHeight = 280;
     const minHeight = 60; // For empty/loading states
-    
+
     if (isLoading || filteredRepos.length === 0) {
       return minHeight;
     }
-    
+
     const contentHeight = filteredRepos.length * itemHeight + 8; // +8 for padding
     return Math.min(contentHeight, maxHeight);
   }, [filteredRepos.length, isLoading]);
@@ -127,7 +127,7 @@ export function RepoSearch({
             "flex items-center justify-between w-full px-3 py-2 text-sm rounded-md border bg-secondary/30 border-border/50 hover:bg-secondary/50 transition-colors text-left",
             disabled && "opacity-50 cursor-not-allowed",
             !value && "text-muted-foreground",
-            expanded && "rounded-b-none border-b-0"
+            expanded && "rounded-b-none border-b-0",
           )}
         >
           {isLoading ? (
@@ -187,7 +187,7 @@ export function RepoSearch({
                       onClick={() => handleSelect(repo)}
                       className={cn(
                         "w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-secondary/60 transition-colors text-left",
-                        value?.id === repo.id && "bg-secondary/60"
+                        value?.id === repo.id && "bg-secondary/60",
                       )}
                     >
                       <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -199,9 +199,7 @@ export function RepoSearch({
                           Private
                         </Badge>
                       )}
-                      {value?.id === repo.id && (
-                        <Check className="h-4 w-4 shrink-0 text-primary" />
-                      )}
+                      {value?.id === repo.id && <Check className="h-4 w-4 shrink-0 text-primary" />}
                     </button>
                   ))}
                 </div>

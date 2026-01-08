@@ -20,18 +20,18 @@
     "db:down": "docker compose down",
     "db:seed": "bun run ./src/seed-cli.ts"
   },
+  "dependencies": {
+    "dotenv": "catalog:",
+    "drizzle-orm": "^0.44.2",
+    "pg": "^8.14.1",
+    "zod": "catalog:"
+  },
   "devDependencies": {
-    "drizzle-kit": "^0.31.2",
+    "@gitterm/config": "workspace:*",
     "@types/pg": "^8.11.11",
-    "@gitterm/config": "workspace:*"
+    "drizzle-kit": "^0.31.2"
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "dependencies": {
-    "drizzle-orm": "^0.44.2",
-    "pg": "^8.14.1",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
   }
 }

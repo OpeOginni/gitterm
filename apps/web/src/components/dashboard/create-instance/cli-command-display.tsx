@@ -17,7 +17,11 @@ export function CliCommandDisplay({ command, onDone }: CliCommandDisplayProps) {
       <div className="grid gap-3">
         <Label className="text-sm font-medium">Run this command to connect:</Label>
         <div className="flex gap-2">
-          <Input value={command} readOnly className="font-mono text-sm bg-secondary/50 border-border/50" />
+          <Input
+            value={command}
+            readOnly
+            className="font-mono text-sm bg-secondary/50 border-border/50"
+          />
           <Button
             variant="outline"
             className="border-border/50 hover:bg-secondary/50"
@@ -34,10 +38,7 @@ export function CliCommandDisplay({ command, onDone }: CliCommandDisplayProps) {
         </p>
       </div>
       <DialogFooter>
-        <Button
-          onClick={onDone}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-        >
+        <Button onClick={onDone} className="bg-primary text-primary-foreground hover:bg-primary/90">
           Done
         </Button>
       </DialogFooter>

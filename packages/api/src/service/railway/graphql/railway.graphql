@@ -56,20 +56,49 @@ mutation DeploymentRedeploy($id: String!) {
 }
 
 mutation DeploymentRemove($id: String!) {
-	deploymentRemove(id: $id)
+  deploymentRemove(id: $id)
 }
 
-mutation serviceInstanceUpdate($environmentId: String!, $serviceId: String!, $image: String!, $multiRegionConfig: JSON!) {
-  serviceInstanceUpdate(environmentId: $environmentId, serviceId: $serviceId, input: {source: {image: $image}, multiRegionConfig: $multiRegionConfig})
+mutation serviceInstanceUpdate(
+  $environmentId: String!
+  $serviceId: String!
+  $image: String!
+  $multiRegionConfig: JSON!
+) {
+  serviceInstanceUpdate(
+    environmentId: $environmentId
+    serviceId: $serviceId
+    input: { source: { image: $image }, multiRegionConfig: $multiRegionConfig }
+  )
 }
 
-mutation serviceInstanceDeploy($environmentId: String!, $serviceId: String!, $latestCommit: Boolean!) {
-  serviceInstanceDeploy(environmentId: $environmentId, serviceId: $serviceId, latestCommit: $latestCommit)
+mutation serviceInstanceDeploy(
+  $environmentId: String!
+  $serviceId: String!
+  $latestCommit: Boolean!
+) {
+  serviceInstanceDeploy(
+    environmentId: $environmentId
+    serviceId: $serviceId
+    latestCommit: $latestCommit
+  )
 }
 
-mutation VolumeCreate($projectId: String!, $environmentId: String!, $serviceId: String!, $mountPath: String!, $region: String!) {
+mutation VolumeCreate(
+  $projectId: String!
+  $environmentId: String!
+  $serviceId: String!
+  $mountPath: String!
+  $region: String!
+) {
   volumeCreate(
-    input: {projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId, mountPath: $mountPath, region: $region}
+    input: {
+      projectId: $projectId
+      environmentId: $environmentId
+      serviceId: $serviceId
+      mountPath: $mountPath
+      region: $region
+    }
   ) {
     id
     name
@@ -83,7 +112,7 @@ mutation VolumeDelete($id: String!) {
 
 mutation ServiceDomainCreate($environmentId: String!, $serviceId: String!, $targetPort: Int!) {
   serviceDomainCreate(
-    input: {environmentId: $environmentId, targetPort: $targetPort, serviceId: $serviceId}
+    input: { environmentId: $environmentId, targetPort: $targetPort, serviceId: $serviceId }
   ) {
     domain
   }

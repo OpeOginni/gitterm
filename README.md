@@ -62,6 +62,7 @@ Caddy handles all routing through a single domain.
 - **Local Tunnels**: Agent runs on your machine, connected via `gitterm-agent` CLI
 
 **Self-hosted URL format:**
+
 ```
 # All workspaces use /ws/ path routing
 https://your-domain.com/ws/{workspace-id}/
@@ -69,16 +70,16 @@ https://your-domain.com/ws/{workspace-id}/
 
 ### Required Services
 
-| Service | Purpose | Recommended Platform |
-|---------|---------|---------------------|
-| PostgreSQL | Database | Railway Postgres |
-| Redis | Caching, pub/sub | Railway Redis |
-| server | Main API | Railway |
-| web | Frontend (dashboard, auth UI) | Railway |
-| tunnel-proxy | WebSocket tunnel server | Railway |
-| proxy | Caddy reverse proxy | Railway |
-| listener | Webhooks (GitHub, Railway) | Railway |
-| worker | Background jobs | Railway |
+| Service      | Purpose                       | Recommended Platform |
+| ------------ | ----------------------------- | -------------------- |
+| PostgreSQL   | Database                      | Railway Postgres     |
+| Redis        | Caching, pub/sub              | Railway Redis        |
+| server       | Main API                      | Railway              |
+| web          | Frontend (dashboard, auth UI) | Railway              |
+| tunnel-proxy | WebSocket tunnel server       | Railway              |
+| proxy        | Caddy reverse proxy           | Railway              |
+| listener     | Webhooks (GitHub, Railway)    | Railway              |
+| worker       | Background jobs               | Railway              |
 
 All services route through Caddy on a single domain.
 
@@ -86,16 +87,18 @@ All services route through Caddy on a single domain.
 
 GitTerm has two background workers that run as cron jobs:
 
-| Worker | Schedule | Purpose |
-|--------|----------|---------|
-| **idle-reaper** | Every 10 minutes (`*/10 * * * *`) | Stops idle workspaces and enforces quotas |
-| **daily-reset** | Daily at midnight UTC (`0 0 * * *`) | Logs daily usage statistics |
+| Worker          | Schedule                            | Purpose                                   |
+| --------------- | ----------------------------------- | ----------------------------------------- |
+| **idle-reaper** | Every 10 minutes (`*/10 * * * *`)   | Stops idle workspaces and enforces quotas |
+| **daily-reset** | Daily at midnight UTC (`0 0 * * *`) | Logs daily usage statistics               |
 
 **On Railway:** These workers are configured with their respective `railway.json` files. Make sure to:
+
 1. Deploy the worker service with `railway.config.json` for idle-reaper (runs every 10 min)
 2. Deploy the worker service with `railway.daily-reset.json` for daily-reset (runs once daily)
 
 **Locally:** You can run workers manually:
+
 ```bash
 # Run idle reaper once (for testing)
 cd apps/worker && bun run dist/idle-reaper.mjs
@@ -121,6 +124,7 @@ npx @opeoginni/gitterm-agent connect --workspace-id "workspace-id" --port 3000
 ```
 
 **URL Format:**
+
 ```
 # Your tunnel URL (self-hosted, path-based)
 https://your-domain.com/ws/workspace-id/
@@ -199,10 +203,10 @@ bun run dev --filter=server
 bun run dev --filter=tunnel-proxy
 ```
 
-| Service | URL |
-|---------|-----|
-| Web App | http://localhost:3001 |
-| API Server | http://localhost:3000 |
+| Service      | URL                   |
+| ------------ | --------------------- |
+| Web App      | http://localhost:3001 |
+| API Server   | http://localhost:3000 |
 | Tunnel Proxy | http://localhost:9000 |
 
 ## Project Structure

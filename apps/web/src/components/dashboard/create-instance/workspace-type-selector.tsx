@@ -41,7 +41,7 @@ const workspaceOptions: WorkspaceOption[] = [
 export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelectorProps) {
   const renderIcon = (option: WorkspaceOption, isSelected: boolean) => {
     const iconClass = `h-5 w-5 ${isSelected ? "text-primary" : "text-muted-foreground"}`;
-    
+
     switch (option.type) {
       case "cloud":
         return <Cloud className={iconClass} />;

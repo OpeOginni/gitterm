@@ -24,7 +24,7 @@ export const agentValidators = {
   "opencode web": validateOpenCodeConfig,
   "opencode cli": validateOpenCodeConfig,
   "opencode server": validateOpenCodeConfig,
-  "shuvcode": validateOpenCodeConfig,
+  shuvcode: validateOpenCodeConfig,
   "shuvcode server": validateOpenCodeConfig,
   // Add more agent validators here:
   // "claude-code": validateClaudeCodeConfig,
@@ -40,7 +40,7 @@ export const agentValidators = {
  */
 export function validateAgentConfig(
   agentTypeName: string,
-  config: unknown
+  config: unknown,
 ): ReturnType<typeof validateOpenCodeConfig> {
   const validatorKey = agentTypeName.toLowerCase() as keyof typeof agentValidators;
   const validator = agentValidators[validatorKey] || validateOpenCodeConfig;

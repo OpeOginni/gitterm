@@ -1,6 +1,6 @@
 /**
  * Infrastructure Admin Router
- * 
+ *
  * Manages cloud providers, regions, agent types, and images.
  */
 
@@ -8,10 +8,10 @@ import { z } from "zod";
 import { adminProcedure, router } from "../..";
 import { TRPCError } from "@trpc/server";
 import { db, eq } from "@gitterm/db";
-import { 
-  cloudProvider, 
-  region, 
-  agentType, 
+import {
+  cloudProvider,
+  region,
+  agentType,
   image,
   type NewCloudProvider,
   type NewAgentType,
@@ -81,7 +81,7 @@ export const infrastructureRouter = router({
   // ========================================================================
   // Cloud Providers
   // ========================================================================
-  
+
   listProviders: adminProcedure.query(async () => {
     const providers = await db.query.cloudProvider.findMany({
       with: {
@@ -92,58 +92,52 @@ export const infrastructureRouter = router({
     return providers;
   }),
 
-  getProvider: adminProcedure
-    .input(z.object({ id: z.uuid() }))
-    .query(async ({ input }) => {
-      const provider = await db.query.cloudProvider.findFirst({
-        where: eq(cloudProvider.id, input.id),
-        with: {
-          regions: true,
-        },
-      });
-      
-      if (!provider) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
-      }
-      
-      return provider;
-    }),
+  getProvider: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
+    const provider = await db.query.cloudProvider.findFirst({
+      where: eq(cloudProvider.id, input.id),
+      with: {
+        regions: true,
+      },
+    });
 
-  createProvider: adminProcedure
-    .input(createCloudProviderSchema)
-    .mutation(async ({ input }) => {
-      const [newProvider] = await db
-        .insert(cloudProvider)
-        .values({
-          name: input.name,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        } as NewCloudProvider)
-        .returning();
-      
-      return newProvider;
-    }),
+    if (!provider) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
+    }
 
-  updateProvider: adminProcedure
-    .input(updateCloudProviderSchema)
-    .mutation(async ({ input }) => {
-      const { id, ...updates } = input;
-      
-      const [updated] = await db
-        .update(cloudProvider)
-        .set({
-          ...updates,
-          updatedAt: new Date(),
-        })
-        .where(eq(cloudProvider.id, id))
-        .returning();
-      
-      if (!updated) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
-      }
-      
-      return updated;
-    }),
+    return provider;
+  }),
+
+  createProvider: adminProcedure.input(createCloudProviderSchema).mutation(async ({ input }) => {
+    const [newProvider] = await db
+      .insert(cloudProvider)
+      .values({
+        name: input.name,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as NewCloudProvider)
+      .returning();
+
+    return newProvider;
+  }),
+
+  updateProvider: adminProcedure.input(updateCloudProviderSchema).mutation(async ({ input }) => {
+    const { id, ...updates } = input;
+
+    const [updated] = await db
+      .update(cloudProvider)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(cloudProvider.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
+    }
+
+    return updated;
+  }),
 
   toggleProvider: adminProcedure
     .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
@@ -156,18 +150,18 @@ export const infrastructureRouter = router({
         })
         .where(eq(cloudProvider.id, input.id))
         .returning();
-      
+
       if (!updated) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
       }
-      
+
       return updated;
     }),
 
   // ========================================================================
   // Regions
   // ========================================================================
-  
+
   listRegions: adminProcedure.query(async () => {
     const regions = await db.query.region.findMany({
       with: {
@@ -178,70 +172,64 @@ export const infrastructureRouter = router({
     return regions;
   }),
 
-  getRegion: adminProcedure
-    .input(z.object({ id: z.uuid() }))
-    .query(async ({ input }) => {
-      const r = await db.query.region.findFirst({
-        where: eq(region.id, input.id),
-        with: {
-          cloudProvider: true,
-        },
-      });
-      
-      if (!r) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Region not found" });
-      }
-      
-      return r;
-    }),
+  getRegion: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
+    const r = await db.query.region.findFirst({
+      where: eq(region.id, input.id),
+      with: {
+        cloudProvider: true,
+      },
+    });
 
-  createRegion: adminProcedure
-    .input(createRegionSchema)
-    .mutation(async ({ input }) => {
-      // Verify provider exists
-      const provider = await db.query.cloudProvider.findFirst({
-        where: eq(cloudProvider.id, input.cloudProviderId),
-      });
-      
-      if (!provider) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Cloud provider not found" });
-      }
-      
-      const [newRegion] = await db
-        .insert(region)
-        .values({
-          cloudProviderId: input.cloudProviderId,
-          name: input.name,
-          location: input.location,
-          externalRegionIdentifier: input.externalRegionIdentifier,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning();
-      
-      return newRegion;
-    }),
+    if (!r) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Region not found" });
+    }
 
-  updateRegion: adminProcedure
-    .input(updateRegionSchema)
-    .mutation(async ({ input }) => {
-      const { id, ...updates } = input;
-      
-      const [updated] = await db
-        .update(region)
-        .set({
-          ...updates,
-          updatedAt: new Date(),
-        })
-        .where(eq(region.id, id))
-        .returning();
-      
-      if (!updated) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Region not found" });
-      }
-      
-      return updated;
-    }),
+    return r;
+  }),
+
+  createRegion: adminProcedure.input(createRegionSchema).mutation(async ({ input }) => {
+    // Verify provider exists
+    const provider = await db.query.cloudProvider.findFirst({
+      where: eq(cloudProvider.id, input.cloudProviderId),
+    });
+
+    if (!provider) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Cloud provider not found" });
+    }
+
+    const [newRegion] = await db
+      .insert(region)
+      .values({
+        cloudProviderId: input.cloudProviderId,
+        name: input.name,
+        location: input.location,
+        externalRegionIdentifier: input.externalRegionIdentifier,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return newRegion;
+  }),
+
+  updateRegion: adminProcedure.input(updateRegionSchema).mutation(async ({ input }) => {
+    const { id, ...updates } = input;
+
+    const [updated] = await db
+      .update(region)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(region.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Region not found" });
+    }
+
+    return updated;
+  }),
 
   toggleRegion: adminProcedure
     .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
@@ -254,18 +242,18 @@ export const infrastructureRouter = router({
         })
         .where(eq(region.id, input.id))
         .returning();
-      
+
       if (!updated) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Region not found" });
       }
-      
+
       return updated;
     }),
 
   // ========================================================================
   // Agent Types
   // ========================================================================
-  
+
   listAgentTypes: adminProcedure.query(async () => {
     const types = await db.query.agentType.findMany({
       orderBy: (t, { asc }) => [asc(t.name)],
@@ -273,56 +261,50 @@ export const infrastructureRouter = router({
     return types;
   }),
 
-  getAgentType: adminProcedure
-    .input(z.object({ id: z.uuid() }))
-    .query(async ({ input }) => {
-      const type = await db.query.agentType.findFirst({
-        where: eq(agentType.id, input.id),
-      });
-      
-      if (!type) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
-      }
-      
-      return type;
-    }),
+  getAgentType: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
+    const type = await db.query.agentType.findFirst({
+      where: eq(agentType.id, input.id),
+    });
 
-  createAgentType: adminProcedure
-    .input(createAgentTypeSchema)
-    .mutation(async ({ input }) => {
-      const [newType] = await db
-        .insert(agentType)
-        .values({
-          name: input.name,
-          serverOnly: input.serverOnly,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        } as NewAgentType)
-        .returning();
-      
-      return newType;
-    }),
+    if (!type) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
+    }
 
-  updateAgentType: adminProcedure
-    .input(updateAgentTypeSchema)
-    .mutation(async ({ input }) => {
-      const { id, ...updates } = input;
-      
-      const [updated] = await db
-        .update(agentType)
-        .set({
-          ...updates,
-          updatedAt: new Date(),
-        })
-        .where(eq(agentType.id, id))
-        .returning();
-      
-      if (!updated) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
-      }
-      
-      return updated;
-    }),
+    return type;
+  }),
+
+  createAgentType: adminProcedure.input(createAgentTypeSchema).mutation(async ({ input }) => {
+    const [newType] = await db
+      .insert(agentType)
+      .values({
+        name: input.name,
+        serverOnly: input.serverOnly,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as NewAgentType)
+      .returning();
+
+    return newType;
+  }),
+
+  updateAgentType: adminProcedure.input(updateAgentTypeSchema).mutation(async ({ input }) => {
+    const { id, ...updates } = input;
+
+    const [updated] = await db
+      .update(agentType)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(agentType.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
+    }
+
+    return updated;
+  }),
 
   toggleAgentType: adminProcedure
     .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
@@ -335,18 +317,18 @@ export const infrastructureRouter = router({
         })
         .where(eq(agentType.id, input.id))
         .returning();
-      
+
       if (!updated) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
       }
-      
+
       return updated;
     }),
 
   // ========================================================================
   // Images
   // ========================================================================
-  
+
   listImages: adminProcedure.query(async () => {
     const images = await db.query.image.findMany({
       with: {
@@ -357,80 +339,74 @@ export const infrastructureRouter = router({
     return images;
   }),
 
-  getImage: adminProcedure
-    .input(z.object({ id: z.uuid() }))
-    .query(async ({ input }) => {
-      const img = await db.query.image.findFirst({
-        where: eq(image.id, input.id),
-        with: {
-          agentType: true,
-        },
-      });
-      
-      if (!img) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
-      }
-      
-      return img;
-    }),
+  getImage: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
+    const img = await db.query.image.findFirst({
+      where: eq(image.id, input.id),
+      with: {
+        agentType: true,
+      },
+    });
 
-  createImage: adminProcedure
-    .input(createImageSchema)
-    .mutation(async ({ input }) => {
-      // Verify agent type exists
+    if (!img) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
+    }
+
+    return img;
+  }),
+
+  createImage: adminProcedure.input(createImageSchema).mutation(async ({ input }) => {
+    // Verify agent type exists
+    const type = await db.query.agentType.findFirst({
+      where: eq(agentType.id, input.agentTypeId),
+    });
+
+    if (!type) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
+    }
+
+    const [newImage] = await db
+      .insert(image)
+      .values({
+        name: input.name,
+        imageId: input.imageId,
+        agentTypeId: input.agentTypeId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as NewImage)
+      .returning();
+
+    return newImage;
+  }),
+
+  updateImage: adminProcedure.input(updateImageSchema).mutation(async ({ input }) => {
+    const { id, ...updates } = input;
+
+    // Verify agent type exists if updating
+    if (updates.agentTypeId) {
       const type = await db.query.agentType.findFirst({
-        where: eq(agentType.id, input.agentTypeId),
+        where: eq(agentType.id, updates.agentTypeId),
       });
-      
+
       if (!type) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
       }
-      
-      const [newImage] = await db
-        .insert(image)
-        .values({
-          name: input.name,
-          imageId: input.imageId,
-          agentTypeId: input.agentTypeId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        } as NewImage)
-        .returning();
-      
-      return newImage;
-    }),
+    }
 
-  updateImage: adminProcedure
-    .input(updateImageSchema)
-    .mutation(async ({ input }) => {
-      const { id, ...updates } = input;
-      
-      // Verify agent type exists if updating
-      if (updates.agentTypeId) {
-        const type = await db.query.agentType.findFirst({
-          where: eq(agentType.id, updates.agentTypeId),
-        });
-        
-        if (!type) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
-        }
-      }
-      
-      const [updated] = await db
-        .update(image)
-        .set({
-          ...updates,
-          updatedAt: new Date(),
-        })
-        .where(eq(image.id, id))
-        .returning();
-      
-      if (!updated) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
-      }
-      
-      return updated;
-    }),
+    const [updated] = await db
+      .update(image)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(image.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
+    }
+
+    return updated;
+  }),
 
   toggleImage: adminProcedure
     .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
@@ -443,11 +419,11 @@ export const infrastructureRouter = router({
         })
         .where(eq(image.id, input.id))
         .returning();
-      
+
       if (!updated) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
       }
-      
+
       return updated;
     }),
 });

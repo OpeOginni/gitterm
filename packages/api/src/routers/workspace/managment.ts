@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import z from "zod";
 import { protectedProcedure, workspaceAuthProcedure, router } from "../../index";
-import { db, eq, and, asc, or } from "@gitterm/db";
+import { db, eq, and, asc, or, ne, SQL } from "@gitterm/db";
 import {
   agentWorkspaceConfig,
   workspaceEnvironmentVariables,
@@ -26,27 +26,31 @@ import { workspaceJWT } from "../../service/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { sendAdminMessage } from "../../utils/discord";
 import { getWorkspaceDomain } from "../../utils/routing";
-import { canUseCustomCloudSubdomain, canUseCustomTunnelSubdomain, type UserPlan } from "../../config/features";
+import {
+  canUseCustomCloudSubdomain,
+  canUseCustomTunnelSubdomain,
+  type UserPlan,
+} from "../../config/features";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
-  'api',
-  'tunnel',
-  'www',
-  'app',
-  'admin',
-  'dashboard',
-  'cdn',
-  'static',
-  'assets',
-  'mail',
-  'email',
-  'ftp',
-  'ssh',
-  'docs',
-  'blog',
-  'status',
-  'support',
+  "api",
+  "tunnel",
+  "www",
+  "app",
+  "admin",
+  "dashboard",
+  "cdn",
+  "static",
+  "assets",
+  "mail",
+  "email",
+  "ftp",
+  "ssh",
+  "docs",
+  "blog",
+  "status",
+  "support",
 ];
 
 function isSubdomainReserved(subdomain: string): boolean {
@@ -54,7 +58,6 @@ function isSubdomainReserved(subdomain: string): boolean {
 }
 
 export const workspaceRouter = router({
-
   listUserInstallations: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
 
@@ -70,7 +73,7 @@ export const workspaceRouter = router({
       .from(gitIntegration)
       .innerJoin(
         githubAppInstallation,
-        eq(gitIntegration.providerInstallationId, githubAppInstallation.installationId)
+        eq(gitIntegration.providerInstallationId, githubAppInstallation.installationId),
       )
       .where(eq(gitIntegration.userId, userId));
 
@@ -86,14 +89,13 @@ export const workspaceRouter = router({
    */
   getSubdomainPermissions: protectedProcedure.query(async ({ ctx }) => {
     const userPlan = ctx.session.user.plan;
-    
+
     if (!userPlan) {
       throw new TRPCError({
         code: "UNAUTHORIZED",
         message: "User not authenticated",
       });
     }
-    
 
     return {
       canUseCustomTunnelSubdomain: canUseCustomTunnelSubdomain(userPlan as UserPlan),
@@ -103,24 +105,35 @@ export const workspaceRouter = router({
   }),
 
   // List all agent types
-  listAgentTypes: protectedProcedure.query(async () => {
-    try {
-      const types = await db
-        .select()
-        .from(agentType)
-        .where(eq(agentType.isEnabled, true));
-      return {
-        success: true,
-        agentTypes: types,
-      };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch agent types",
-        cause: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }),
+  listAgentTypes: protectedProcedure
+    .input(
+      z
+        .object({
+          serverOnly: z.boolean().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input }) => {
+      let whereClause: SQL<unknown> | undefined = eq(agentType.isEnabled, true);
+
+      if (input?.serverOnly) {
+        whereClause = and(whereClause, eq(agentType.serverOnly, true));
+      }
+
+      try {
+        const types = await db.select().from(agentType).where(whereClause);
+        return {
+          success: true,
+          agentTypes: types,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch agent types",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
 
   // List images for a specific agent type
   listImages: protectedProcedure
@@ -130,10 +143,7 @@ export const workspaceRouter = router({
         const images = await db
           .select()
           .from(image)
-          .where(and(
-            eq(image.agentTypeId, input.agentTypeId),
-            eq(image.isEnabled, true)
-          ));
+          .where(and(eq(image.agentTypeId, input.agentTypeId), eq(image.isEnabled, true)));
         return {
           success: true,
           images,
@@ -148,40 +158,71 @@ export const workspaceRouter = router({
     }),
 
   // List cloud providers
-  listCloudProviders: protectedProcedure.query(async () => {
-    try {
-      const providers = await db.query.cloudProvider.findMany({
-        where: eq(cloudProvider.isEnabled, true),
-        with: {
-          regions: {
-            where: eq(region.isEnabled, true),
+  listCloudProviders: protectedProcedure
+    .input(
+      z
+        .object({
+          localOnly: z.boolean().optional(),
+          cloudOnly: z.boolean().optional(),
+          sandboxOnly: z.boolean().optional(),
+          nonSandboxOnly: z.boolean().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input }) => {
+      let whereClause: SQL<unknown> | undefined = eq(cloudProvider.isEnabled, true);
+
+      if (input?.localOnly) {
+        whereClause = and(whereClause, eq(cloudProvider.name, "Local"));
+      }
+
+      if (input?.cloudOnly) {
+        whereClause = and(whereClause, ne(cloudProvider.name, "Local"));
+      }
+
+      if (input?.sandboxOnly) {
+        whereClause = and(whereClause, eq(cloudProvider.isSandbox, true));
+      }
+
+      if (input?.nonSandboxOnly) {
+        whereClause = and(whereClause, eq(cloudProvider.isSandbox, false));
+      }
+
+      try {
+        const providers = await db.query.cloudProvider.findMany({
+          where: whereClause,
+          with: {
+            regions: {
+              where: eq(region.isEnabled, true),
+            },
           },
-        },
-        orderBy: [asc(cloudProvider.name)],
-      });
-      
-      return {
-        success: true,
-        cloudProviders: providers,
-      };
-    } catch (error) {
-      console.error("Failed to fetch cloud providers", error);
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch cloud providers",
-        cause: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }),
+          orderBy: [asc(cloudProvider.name)],
+        });
+
+        return {
+          success: true,
+          cloudProviders: providers,
+        };
+      } catch (error) {
+        console.error("Failed to fetch cloud providers", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch cloud providers",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
 
   // List all workspaces for the authenticated user (paginated)
   listWorkspaces: protectedProcedure
     .input(
-      z.object({
-        limit: z.number().min(1).max(100).default(12),
-        offset: z.number().min(0).default(0),
-        status: z.enum(["all", "active", "terminated"]).default("active"),
-      }).optional()
+      z
+        .object({
+          limit: z.number().min(1).max(100).default(12),
+          offset: z.number().min(0).default(0),
+          status: z.enum(["all", "active", "terminated"]).default("active"),
+        })
+        .optional(),
     )
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
@@ -196,25 +237,26 @@ export const workspaceRouter = router({
 
       try {
         // Build where clause based on status filter
-        const statusCondition = status === "all" 
-          ? eq(workspace.userId, userId)
-          : status === "terminated"
-            ? and(eq(workspace.userId, userId), eq(workspace.status, "terminated"))
-            : and(
-                eq(workspace.userId, userId),
-                or(
-                  eq(workspace.status, "running"),
-                  eq(workspace.status, "pending"),
-                  eq(workspace.status, "stopped")
-                )
-              );
+        const statusCondition =
+          status === "all"
+            ? eq(workspace.userId, userId)
+            : status === "terminated"
+              ? and(eq(workspace.userId, userId), eq(workspace.status, "terminated"))
+              : and(
+                  eq(workspace.userId, userId),
+                  or(
+                    eq(workspace.status, "running"),
+                    eq(workspace.status, "pending"),
+                    eq(workspace.status, "stopped"),
+                  ),
+                );
 
         // Get total count for pagination
         const [countResult] = await db
           .select({ count: workspace.id })
           .from(workspace)
           .where(statusCondition);
-        
+
         // Count actual rows (drizzle returns undefined for count on empty)
         const totalWorkspaces = await db
           .select({ id: workspace.id })
@@ -255,7 +297,7 @@ export const workspaceRouter = router({
         });
       }
     }),
-    
+
   // Create or update environment variables for a workspace
   createEnvironmentVariables: protectedProcedure
     .input(
@@ -263,11 +305,10 @@ export const workspaceRouter = router({
         agentTypeId: z.string().min(1, "Agent type ID is required"),
         environmentVariables: z
           .record(z.string(), z.string())
-          .refine(
-            (obj) => Object.keys(obj).length > 0,
-            { message: "Environment variables cannot be empty" }
-          ),
-      })
+          .refine((obj) => Object.keys(obj).length > 0, {
+            message: "Environment variables cannot be empty",
+          }),
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
@@ -287,8 +328,8 @@ export const workspaceRouter = router({
           .where(
             and(
               eq(workspaceEnvironmentVariables.userId, userId),
-              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId)
-            )
+              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId),
+            ),
           );
 
         if (existingVars.length > 0) {
@@ -299,9 +340,7 @@ export const workspaceRouter = router({
               environmentVariables: input.environmentVariables,
               updatedAt: new Date(),
             })
-            .where(
-              eq(workspaceEnvironmentVariables.id, existingVars[0]!.id)
-            )
+            .where(eq(workspaceEnvironmentVariables.id, existingVars[0]!.id))
             .returning();
 
           return {
@@ -340,7 +379,7 @@ export const workspaceRouter = router({
     .input(
       z.object({
         agentTypeId: z.string().min(1, "Agent type ID is required"),
-      })
+      }),
     )
     .query(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
@@ -359,8 +398,8 @@ export const workspaceRouter = router({
           .where(
             and(
               eq(workspaceEnvironmentVariables.userId, userId),
-              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId)
-            )
+              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId),
+            ),
           );
 
         if (vars.length === 0) {
@@ -419,7 +458,7 @@ export const workspaceRouter = router({
     .input(
       z.object({
         agentTypeId: z.string().min(1, "Agent type ID is required"),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
@@ -438,8 +477,8 @@ export const workspaceRouter = router({
           .where(
             and(
               eq(workspaceEnvironmentVariables.userId, userId),
-              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId)
-            )
+              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId),
+            ),
           );
 
         if (vars.length === 0) {
@@ -451,9 +490,7 @@ export const workspaceRouter = router({
 
         await db
           .delete(workspaceEnvironmentVariables)
-          .where(
-            eq(workspaceEnvironmentVariables.id, vars[0]!.id)
-          );
+          .where(eq(workspaceEnvironmentVariables.id, vars[0]!.id));
 
         return {
           success: true,
@@ -476,7 +513,7 @@ export const workspaceRouter = router({
         agentTypeId: z.string().min(1, "Agent type ID is required"),
         key: z.string().min(1, "Key is required"),
         value: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
@@ -495,8 +532,8 @@ export const workspaceRouter = router({
           .where(
             and(
               eq(workspaceEnvironmentVariables.userId, userId),
-              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId)
-            )
+              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId),
+            ),
           );
 
         if (vars.length === 0) {
@@ -581,7 +618,7 @@ export const workspaceRouter = router({
     try {
       const canStart = await hasRemainingQuota(userId);
       const usage = await getOrCreateDailyUsage(userId);
-      
+
       return {
         success: true,
         canStartWorkspace: canStart,
@@ -605,7 +642,7 @@ export const workspaceRouter = router({
         timestamp: z.number().optional(),
         cpu: z.number().optional(),
         active: z.boolean().optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const { workspaceAuth } = ctx;
@@ -642,7 +679,7 @@ export const workspaceRouter = router({
 
         // Check if workspace is still allowed to run (quota check)
         const hasQuota = await hasRemainingQuota(existingWorkspace.userId);
-        
+
         if (!hasQuota) {
           // User exceeded quota - signal shutdown
           return {
@@ -676,16 +713,22 @@ export const workspaceRouter = router({
       z.object({
         name: z.string().optional(),
         repo: z.string().optional(), // Optional for local workspaces
-        subdomain: z.union([
-          z.string().min(1).max(63).regex(/^[a-z0-9-]+$/),
-          z.literal("")
-        ]).optional(),        
+        subdomain: z
+          .union([
+            z
+              .string()
+              .min(1)
+              .max(63)
+              .regex(/^[a-z0-9-]+$/),
+            z.literal(""),
+          ])
+          .optional(),
         agentTypeId: z.string(),
         cloudProviderId: z.string(),
         regionId: z.string(),
         gitInstallationId: z.string().optional(),
         persistent: z.boolean(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
@@ -709,11 +752,14 @@ export const workspaceRouter = router({
 
       // Validate that the provided repo is publicly clonable using `git ls-remote`
       if (input.repo) {
-        const repoUrl = input.repo.endsWith('.git') ? input.repo : `${input.repo}.git`;
-        
+        const repoUrl = input.repo.endsWith(".git") ? input.repo : `${input.repo}.git`;
+
         // Only support HTTPS URLs for now; `.git` suffix is added later if missing
         if (!/^https:\/\/.+$/i.test(repoUrl)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL must be a valid HTTPS Git URL" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Repository URL must be a valid HTTPS Git URL",
+          });
         }
 
         // try {
@@ -740,7 +786,7 @@ export const workspaceRouter = router({
         // }
       }
 
-      // if (fetchedUser && !fetchedUser.allowTrial) 
+      // if (fetchedUser && !fetchedUser.allowTrial)
       //   throw new TRPCError({ code: "FORBIDDEN", message: "Reachout for Access" });
 
       try {
@@ -778,15 +824,27 @@ export const workspaceRouter = router({
           }
         }
 
-        const runningWorkspaces = await db.select().from(workspace).where(and(eq(workspace.userId, userId), or(eq(workspace.status, "running"), eq(workspace.status, "pending"), eq(workspace.status, "stopped"))));
+        const runningWorkspaces = await db
+          .select()
+          .from(workspace)
+          .where(
+            and(
+              eq(workspace.userId, userId),
+              or(
+                eq(workspace.status, "running"),
+                eq(workspace.status, "pending"),
+                eq(workspace.status, "stopped"),
+              ),
+            ),
+          );
 
         if (fetchedUser.email !== "brightoginni123@gmail.com" && runningWorkspaces.length >= 1) {
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: "You have reached the maximum number of workspaces. Please upgrade to a paid plan or delete some workspaces.",
+            message:
+              "You have reached the maximum number of workspaces. Please upgrade to a paid plan or delete some workspaces.",
           });
         }
-
 
         // For cloud workspaces, repo is required
         if (!isLocal && !input.repo) {
@@ -801,10 +859,7 @@ export const workspaceRouter = router({
           .select()
           .from(region)
           .where(
-            and(
-              eq(region.id, input.regionId),
-              eq(region.cloudProviderId, input.cloudProviderId)
-            )
+            and(eq(region.id, input.regionId), eq(region.cloudProviderId, input.cloudProviderId)),
           );
 
         if (!regionRecord) {
@@ -825,10 +880,7 @@ export const workspaceRouter = router({
         const [imageRecord] = await db
           .select()
           .from(image)
-          .where(and(
-            eq(image.agentTypeId, input.agentTypeId),
-            eq(image.isEnabled, true)
-          ));
+          .where(and(eq(image.agentTypeId, input.agentTypeId), eq(image.isEnabled, true)));
 
         const [agentTypeRecord] = await db
           .select()
@@ -871,8 +923,8 @@ export const workspaceRouter = router({
           .where(
             and(
               eq(agentWorkspaceConfig.userId, userId),
-              eq(agentWorkspaceConfig.agentTypeId, input.agentTypeId)
-            )
+              eq(agentWorkspaceConfig.agentTypeId, input.agentTypeId),
+            ),
           );
 
         // Fetch user's workspace environment variables
@@ -882,15 +934,12 @@ export const workspaceRouter = router({
           .where(
             and(
               eq(workspaceEnvironmentVariables.userId, userId),
-              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId)
-            )
+              eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId),
+            ),
           );
 
         // Get GitHub username from user.name (set during OAuth)
-        const [userRecord] = await db
-          .select()
-          .from(user)
-          .where(eq(user.id, userId));
+        const [userRecord] = await db.select().from(user).where(eq(user.id, userId));
 
         const githubUsername = userRecord?.name;
 
@@ -899,7 +948,15 @@ export const workspaceRouter = router({
         let githubAppTokenExpiry: string | undefined;
 
         if (input.gitInstallationId) {
-          const [gitIntegrationRecord] = await db.select().from(gitIntegration).where(and(eq(gitIntegration.id, input.gitInstallationId), eq(gitIntegration.userId, userId)));
+          const [gitIntegrationRecord] = await db
+            .select()
+            .from(gitIntegration)
+            .where(
+              and(
+                eq(gitIntegration.id, input.gitInstallationId),
+                eq(gitIntegration.userId, userId),
+              ),
+            );
 
           if (!gitIntegrationRecord) {
             throw new TRPCError({
@@ -916,10 +973,15 @@ export const workspaceRouter = router({
             });
           }
 
-        const installation = await getGitHubAppService().getUserInstallation(userId, gitIntegrationRecord.providerInstallationId);
-        if (installation && !installation.suspended) {
-          try {
-              const tokenData = await getGitHubAppService().getUserToServerToken(installation.installationId);
+          const installation = await getGitHubAppService().getUserInstallation(
+            userId,
+            gitIntegrationRecord.providerInstallationId,
+          );
+          if (installation && !installation.suspended) {
+            try {
+              const tokenData = await getGitHubAppService().getUserToServerToken(
+                installation.installationId,
+              );
               githubAppToken = tokenData.token;
               githubAppTokenExpiry = tokenData.expiresAt;
             } catch (error) {
@@ -934,11 +996,11 @@ export const workspaceRouter = router({
 
         // Generate or validate subdomain
         let subdomain: string;
-        const userPlan = (fetchedUser.plan || 'free') as UserPlan;
-        
+        const userPlan = (fetchedUser.plan || "free") as UserPlan;
+
         if (input.subdomain) {
           // User wants a custom subdomain
-          
+
           // Check if subdomain is reserved
           if (isSubdomainReserved(input.subdomain)) {
             throw new TRPCError({
@@ -947,7 +1009,7 @@ export const workspaceRouter = router({
             });
           }
 
-        // Check plan-based permissions for custom subdomains
+          // Check plan-based permissions for custom subdomains
           if (isLocal) {
             if (!canUseCustomTunnelSubdomain(userPlan)) {
               throw new TRPCError({
@@ -964,12 +1026,16 @@ export const workspaceRouter = router({
             }
           }
 
-          
           // Check uniqueness - only among running/pending workspaces
           const [existing] = await db
             .select()
             .from(workspace)
-            .where(and(eq(workspace.subdomain, input.subdomain), or(eq(workspace.status, "running"), eq(workspace.status, "pending"))))
+            .where(
+              and(
+                eq(workspace.subdomain, input.subdomain),
+                or(eq(workspace.status, "running"), eq(workspace.status, "pending")),
+              ),
+            )
             .limit(1);
 
           if (existing) {
@@ -978,7 +1044,7 @@ export const workspaceRouter = router({
               message: "Subdomain already taken",
             });
           }
-          
+
           subdomain = input.subdomain;
         } else {
           // No custom subdomain provided - generate one automatically
@@ -992,10 +1058,10 @@ export const workspaceRouter = router({
               });
             }
             const uuid = randomUUID();
-            const uuidParts = uuid.split('-');
+            const uuidParts = uuid.split("-");
             subdomain = `ws-${uuidParts[0]}`;
             attempts++;
-            
+
             // Check if generated subdomain is reserved (unlikely but possible)
             if (isSubdomainReserved(subdomain)) {
               continue;
@@ -1014,11 +1080,14 @@ export const workspaceRouter = router({
         const workspaceAuthToken = workspaceJWT.generateToken(
           workspaceId,
           userId,
-          ['git:*', 'git:fork', 'git:refresh'] // All git scopes
+          ["git:*", "git:fork", "git:refresh"], // All git scopes
         );
 
         // API endpoint for workspace operations
-        const WORKSPACE_API_URL = process.env.WORKSPACE_API_URL || process.env.INTERNAL_API_URL || "https://api.gitterm.dev/trpc";
+        const WORKSPACE_API_URL =
+          process.env.WORKSPACE_API_URL ||
+          process.env.INTERNAL_API_URL ||
+          "https://api.gitterm.dev/trpc";
 
         // Generate domain using routing utils
         // In path mode: returns just subdomain (stored for lookup)
@@ -1026,25 +1095,31 @@ export const workspaceRouter = router({
         const domain = getWorkspaceDomain(subdomain);
 
         const DEFAULT_OPENCODE_CONFIG = {
-          "$schema": "https://opencode.ai/config.json",
-          "username": `Gitterm: ${fetchedUser.name}`,
+          $schema: "https://opencode.ai/config.json",
+          username: `Gitterm: ${fetchedUser.name}`,
         };
 
         const DEFAULT_DOCKER_ENV_VARS = {
-          "REPO_URL": input.repo || undefined,
-          "OPENCODE_CONFIG_BASE64": agentConfig ? Buffer.from(JSON.stringify({
-            ...(agentConfig.config as Record<string, any>),
-            "username": `Gitterm: ${fetchedUser.name}`,
-           })).toString("base64") : Buffer.from(JSON.stringify(DEFAULT_OPENCODE_CONFIG)).toString("base64"),
-          "USER_GITHUB_USERNAME": githubUsername,
-          "GITHUB_APP_TOKEN": githubAppToken,
-          "GITHUB_APP_TOKEN_EXPIRY": githubAppTokenExpiry,
-          "REPO_OWNER": repoInfo?.owner,
-          "REPO_NAME": repoInfo?.repo,
-          "WORKSPACE_ID": workspaceId,
-          "WORKSPACE_AUTH_TOKEN": workspaceAuthToken, // JWT instead of shared key
-          "WORKSPACE_API_URL": WORKSPACE_API_URL,
-          ...(userWorkspaceEnvironmentVariables ? userWorkspaceEnvironmentVariables.environmentVariables as any : {}),
+          REPO_URL: input.repo || undefined,
+          OPENCODE_CONFIG_BASE64: agentConfig
+            ? Buffer.from(
+                JSON.stringify({
+                  ...(agentConfig.config as Record<string, any>),
+                  username: `Gitterm: ${fetchedUser.name}`,
+                }),
+              ).toString("base64")
+            : Buffer.from(JSON.stringify(DEFAULT_OPENCODE_CONFIG)).toString("base64"),
+          USER_GITHUB_USERNAME: githubUsername,
+          GITHUB_APP_TOKEN: githubAppToken,
+          GITHUB_APP_TOKEN_EXPIRY: githubAppTokenExpiry,
+          REPO_OWNER: repoInfo?.owner,
+          REPO_NAME: repoInfo?.repo,
+          WORKSPACE_ID: workspaceId,
+          WORKSPACE_AUTH_TOKEN: workspaceAuthToken, // JWT instead of shared key
+          WORKSPACE_API_URL: WORKSPACE_API_URL,
+          ...(userWorkspaceEnvironmentVariables
+            ? (userWorkspaceEnvironmentVariables.environmentVariables as any)
+            : {}),
         };
 
         // Get compute provider
@@ -1109,16 +1184,19 @@ export const workspaceRouter = router({
         let newVolume = null;
         if (input.persistent) {
           const persistentInfo = workspaceInfo as PersistentWorkspaceInfo;
-          const [volumeRecord] = await db.insert(volume).values({
-            workspaceId: workspaceId,
-            userId: userId,
-            cloudProviderId: input.cloudProviderId,
-            regionId: input.regionId,
-            externalVolumeId: persistentInfo.externalVolumeId,
-            mountPath: "/workspace",
-            createdAt: new Date(persistentInfo.volumeCreatedAt),
-            updatedAt: new Date(persistentInfo.volumeCreatedAt),
-          }).returning();
+          const [volumeRecord] = await db
+            .insert(volume)
+            .values({
+              workspaceId: workspaceId,
+              userId: userId,
+              cloudProviderId: input.cloudProviderId,
+              regionId: input.regionId,
+              externalVolumeId: persistentInfo.externalVolumeId,
+              mountPath: "/workspace",
+              createdAt: new Date(persistentInfo.volumeCreatedAt),
+              updatedAt: new Date(persistentInfo.volumeCreatedAt),
+            })
+            .returning();
           newVolume = volumeRecord;
         }
 
@@ -1153,11 +1231,11 @@ export const workspaceRouter = router({
           `• Workspace ID: \`${workspaceId}\``,
           `• Status: \`${newWorkspace.status}\``,
           `• Hosting Type: \`${newWorkspace.hostingType}\``,
-          `• Persistent: ${newWorkspace.persistent ? '✅ Yes' : '❌ No'}`,
-          `• Server Only: ${newWorkspace.serverOnly ? '✅ Yes' : '❌ No'}`,
+          `• Persistent: ${newWorkspace.persistent ? "✅ Yes" : "❌ No"}`,
+          `• Server Only: ${newWorkspace.serverOnly ? "✅ Yes" : "❌ No"}`,
           ``,
           `**User Info:**`,
-          `• Name: \`${fetchedUser.name || 'N/A'}\``,
+          `• Name: \`${fetchedUser.name || "N/A"}\``,
           `• Email: \`${fetchedUser.email}\``,
           `• User ID: \`${userId}\``,
           ``,
@@ -1175,10 +1253,10 @@ export const workspaceRouter = router({
         workspaceDetails.push(
           `**Timestamps:**`,
           `• Created: \`${new Date(workspaceInfo.serviceCreatedAt).toISOString()}\``,
-          `• Upstream URL: \`${newWorkspace.upstreamUrl || 'N/A'}\``
+          `• Upstream URL: \`${newWorkspace.upstreamUrl || "N/A"}\``,
         );
 
-        sendAdminMessage(workspaceDetails.join('\n'));
+        sendAdminMessage(workspaceDetails.join("\n"));
 
         return {
           success: true,
@@ -1205,7 +1283,7 @@ export const workspaceRouter = router({
     .input(
       z.object({
         workspaceId: z.uuid(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
@@ -1215,12 +1293,7 @@ export const workspaceRouter = router({
         const [existingWorkspace] = await db
           .select()
           .from(workspace)
-          .where(
-            and(
-              eq(workspace.id, input.workspaceId),
-              eq(workspace.userId, userId)
-            )
-          );
+          .where(and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)));
 
         if (!existingWorkspace) {
           throw new TRPCError({
@@ -1267,7 +1340,7 @@ export const workspaceRouter = router({
         await computeProvider.stopWorkspace(
           existingWorkspace.externalInstanceId,
           workspaceRegion.externalRegionIdentifier,
-          existingWorkspace.externalRunningDeploymentId ?? undefined
+          existingWorkspace.externalRunningDeploymentId ?? undefined,
         );
 
         // Close the usage session
@@ -1313,7 +1386,7 @@ export const workspaceRouter = router({
     .input(
       z.object({
         workspaceId: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
@@ -1332,12 +1405,7 @@ export const workspaceRouter = router({
         const [existingWorkspace] = await db
           .select()
           .from(workspace)
-          .where(
-            and(
-              eq(workspace.id, input.workspaceId),
-              eq(workspace.userId, userId)
-            )
-          );
+          .where(and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)));
 
         if (!existingWorkspace) {
           throw new TRPCError({
@@ -1383,7 +1451,7 @@ export const workspaceRouter = router({
         await computeProvider.restartWorkspace(
           existingWorkspace.externalInstanceId,
           workspaceRegion.externalRegionIdentifier,
-          existingWorkspace.externalRunningDeploymentId ?? undefined
+          existingWorkspace.externalRunningDeploymentId ?? undefined,
         );
 
         // Update workspace status
@@ -1432,7 +1500,7 @@ export const workspaceRouter = router({
         where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
         with: {
           volume: true,
-        }
+        },
       });
 
       if (!fetchedWorkspace) {
@@ -1459,15 +1527,22 @@ export const workspaceRouter = router({
 
       // Get compute provider and terminate the workspace
       const computeProvider = await getProviderByCloudProviderId(provider.name);
-      await computeProvider.terminateWorkspace(fetchedWorkspace.externalInstanceId, fetchedWorkspace.persistent ? fetchedWorkspace.volume.externalVolumeId : undefined);
+      await computeProvider.terminateWorkspace(
+        fetchedWorkspace.externalInstanceId,
+        fetchedWorkspace.persistent ? fetchedWorkspace.volume.externalVolumeId : undefined,
+      );
 
       // Update workspace status
-      const [updatedWorkspace] = await db.update(workspace).set({
-        status: "terminated",
-        stoppedAt: new Date(),
-        terminatedAt: new Date(),
-        updatedAt: new Date()
-      }).where(eq(workspace.id, input.workspaceId)).returning();
+      const [updatedWorkspace] = await db
+        .update(workspace)
+        .set({
+          status: "terminated",
+          stoppedAt: new Date(),
+          terminatedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(workspace.id, input.workspaceId))
+        .returning();
 
       // Delete volume record
       if (fetchedWorkspace.persistent) {
@@ -1489,4 +1564,3 @@ export const workspaceRouter = router({
       };
     }),
 });
-

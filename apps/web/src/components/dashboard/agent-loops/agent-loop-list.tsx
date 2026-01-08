@@ -20,7 +20,7 @@ export function AgentLoopList() {
       limit: ITEMS_PER_PAGE,
       offset: page * ITEMS_PER_PAGE,
       status: statusFilter,
-    })
+    }),
   );
 
   if (loopsQuery.isLoading) {
@@ -61,19 +61,34 @@ export function AgentLoopList() {
     <div className="space-y-6">
       <Tabs value={statusFilter} onValueChange={handleTabChange}>
         <TabsList className="bg-secondary/50 flex justify-start gap-2 p-2 rounded-lg shadow-sm">
-          <TabsTrigger value="all" className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow">
+          <TabsTrigger
+            value="all"
+            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow"
+          >
             All
           </TabsTrigger>
-          <TabsTrigger value="active" className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-green-100 data-[state=active]:text-green-700 data-[state=active]:shadow">
+          <TabsTrigger
+            value="active"
+            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-green-100 data-[state=active]:text-green-700 data-[state=active]:shadow"
+          >
             Active
           </TabsTrigger>
-          <TabsTrigger value="paused" className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-800 data-[state=active]:shadow">
+          <TabsTrigger
+            value="paused"
+            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-800 data-[state=active]:shadow"
+          >
             Paused
           </TabsTrigger>
-          <TabsTrigger value="completed" className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-green-200 data-[state=active]:text-green-900 data-[state=active]:shadow">
+          <TabsTrigger
+            value="completed"
+            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-green-200 data-[state=active]:text-green-900 data-[state=active]:shadow"
+          >
             Completed
           </TabsTrigger>
-          <TabsTrigger value="archived" className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-muted data-[state=active]:text-muted-foreground data-[state=active]:shadow">
+          <TabsTrigger
+            value="archived"
+            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-muted data-[state=active]:text-muted-foreground data-[state=active]:shadow"
+          >
             Archived
           </TabsTrigger>
         </TabsList>
@@ -88,10 +103,7 @@ export function AgentLoopList() {
           ) : (
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {loops.map((loop) => (
-                <AgentLoopCard
-                  key={loop.id}
-                  loop={loop}
-                />
+                <AgentLoopCard key={loop.id} loop={loop} />
               ))}
             </div>
           )}
@@ -103,8 +115,8 @@ export function AgentLoopList() {
         <div className="flex items-center justify-between pt-4 border-t border-border/30">
           <p className="text-sm text-muted-foreground">
             Showing {pagination.offset + 1} to{" "}
-            {Math.min(pagination.offset + loops.length, pagination.total)} of{" "}
-            {pagination.total} loops
+            {Math.min(pagination.offset + loops.length, pagination.total)} of {pagination.total}{" "}
+            loops
           </p>
           <div className="flex items-center gap-2">
             <Button

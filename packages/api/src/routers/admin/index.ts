@@ -1,6 +1,6 @@
 /**
  * Admin Router
- * 
+ *
  * Provides admin-only endpoints for managing:
  * - Cloud providers
  * - Regions
@@ -21,7 +21,7 @@ export const adminRouter = router({
   infrastructure: infrastructureRouter,
   users: usersRouter,
   settings: settingsRouter,
-  
+
   /**
    * Get system configuration for the admin panel.
    * Returns auth settings and feature flags relevant to admin operations.

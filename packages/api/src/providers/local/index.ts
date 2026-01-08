@@ -1,12 +1,19 @@
-import type { ComputeProvider, WorkspaceConfig, WorkspaceInfo, PersistentWorkspaceConfig, PersistentWorkspaceInfo, WorkspaceStatusResult } from "../compute";
+import type {
+  ComputeProvider,
+  WorkspaceConfig,
+  WorkspaceInfo,
+  PersistentWorkspaceConfig,
+  PersistentWorkspaceInfo,
+  WorkspaceStatusResult,
+} from "../compute";
 import { getWorkspaceDomain } from "../../utils/routing";
 
 /**
  * Local Provider Implementation
- * 
+ *
  * This provider handles local tunnel workspaces where the compute runs on the user's machine.
  * Most operations are no-ops since there are no actual cloud resources to manage.
- * 
+ *
  * Lifecycle:
  * - createWorkspace: Just returns metadata (no cloud resources created)
  * - stopWorkspace: No-op (tunnel disconnect handles this)
@@ -20,11 +27,11 @@ class LocalProvider implements ComputeProvider {
     // For local workspaces, we don't create any cloud resources
     // The workspace ID becomes the external service ID
     const externalServiceId = `local-${config.workspaceId}`;
-    
+
     // Domain is constructed from subdomain using routing utils
     // Returns subdomain.baseDomain (e.g., ws-abc123.gitterm.dev)
     const domain = getWorkspaceDomain(config.subdomain);
-    
+
     return {
       externalServiceId,
       upstreamUrl: "", // Tunnel workspaces don't have an upstream URL until tunnel connects
@@ -33,19 +40,29 @@ class LocalProvider implements ComputeProvider {
     };
   }
 
-  async createPersistentWorkspace(config: PersistentWorkspaceConfig): Promise<PersistentWorkspaceInfo> {
+  async createPersistentWorkspace(
+    config: PersistentWorkspaceConfig,
+  ): Promise<PersistentWorkspaceInfo> {
     // Local workspaces don't support persistent volumes yet
     // This could be implemented in the future to use local directories
     throw new Error("Persistent volumes are not supported for local workspaces");
   }
 
-  async stopWorkspace(externalId: string, regionIdentifier: string, externalRunningDeploymentId?: string): Promise<void> {
+  async stopWorkspace(
+    externalId: string,
+    regionIdentifier: string,
+    externalRunningDeploymentId?: string,
+  ): Promise<void> {
     // No-op: Local workspaces are stopped when the tunnel disconnects
     // The tunnel-proxy handles updating the workspace status
     console.log(`[LocalProvider] stopWorkspace called for ${externalId} (no-op)`);
   }
 
-  async restartWorkspace(externalId: string, regionIdentifier: string, externalRunningDeploymentId?: string): Promise<void> {
+  async restartWorkspace(
+    externalId: string,
+    regionIdentifier: string,
+    externalRunningDeploymentId?: string,
+  ): Promise<void> {
     // No-op: Local workspaces are restarted when the tunnel reconnects
     console.log(`[LocalProvider] restartWorkspace called for ${externalId} (no-op)`);
   }

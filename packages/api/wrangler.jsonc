@@ -1,0 +1,41 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "gitterm",
+  "main": "src/providers/cloudflare/agent-worker/src/index.ts",
+  "compatibility_date": "2025-10-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./src/providers/cloudflare/agent-worker/Dockerfile",
+      "instance_type": "standard-1",
+    },
+  ],
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "Sandbox",
+        "name": "Sandbox",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["Sandbox"],
+      "tag": "v1",
+    },
+  ],
+  "vars": {
+    "INTERNAL_API_KEY": "EdBY7UDhP-bVJbAns_E9yiFbx_B!tg_",
+    "SANDBOX_LOG_LEVEL": "debug",
+    "SANDBOX_LOG_FORMAT": "json",
+  },
+}

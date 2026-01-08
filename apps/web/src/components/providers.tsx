@@ -7,21 +7,19 @@ import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
 import { WorkspaceStatusWatcherProvider } from "./workspace-status-watcher";
 
-export default function Providers({ children }: { children: React.ReactNode }) {	
-	return (
-		<ThemeProvider
-			attribute="class"
-			defaultTheme="dark"
-			forcedTheme="dark"
-			disableTransitionOnChange
-		>
-			<QueryClientProvider client={queryClient}>
-				<WorkspaceStatusWatcherProvider>
-					{children}
-				</WorkspaceStatusWatcherProvider>
-				<ReactQueryDevtools />
-			</QueryClientProvider>
-			<Toaster richColors position="top-right" />
-		</ThemeProvider>
-	);
+export default function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      forcedTheme="dark"
+      disableTransitionOnChange
+    >
+      <QueryClientProvider client={queryClient}>
+        <WorkspaceStatusWatcherProvider>{children}</WorkspaceStatusWatcherProvider>
+        <ReactQueryDevtools />
+      </QueryClientProvider>
+      <Toaster richColors position="top-right" />
+    </ThemeProvider>
+  );
 }

@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { trpc, queryClient } from "@/utils/trpc";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { RunNextIterationDialog } from "./run-next-iteration-dialog";
 import type { AgentLoop, LoopStatus } from "./types";
@@ -40,7 +40,7 @@ export function AgentLoopCard({ loop }: AgentLoopCardProps) {
         queryClient.invalidateQueries({ queryKey: trpc.agentLoop.listLoops.queryKey() });
       },
       onError: (error) => toast.error(`Failed to pause: ${error.message}`),
-    })
+    }),
   );
 
   const resumeMutation = useMutation(
@@ -50,7 +50,7 @@ export function AgentLoopCard({ loop }: AgentLoopCardProps) {
         queryClient.invalidateQueries({ queryKey: trpc.agentLoop.listLoops.queryKey() });
       },
       onError: (error) => toast.error(`Failed to resume: ${error.message}`),
-    })
+    }),
   );
 
   const archiveMutation = useMutation(
@@ -60,7 +60,11 @@ export function AgentLoopCard({ loop }: AgentLoopCardProps) {
         queryClient.invalidateQueries({ queryKey: trpc.agentLoop.listLoops.queryKey() });
       },
       onError: (error) => toast.error(`Failed to archive: ${error.message}`),
-    })
+    }),
+  );
+
+  const { data: onGoingRuns } = useQuery(
+    trpc.agentLoop.listRuns.queryOptions({ loopId: loop.id, status: "running" }),
   );
 
   const getStatusBadge = (status: LoopStatus) => {
@@ -98,16 +102,17 @@ export function AgentLoopCard({ loop }: AgentLoopCardProps) {
     }
   };
 
-  const canStartRun = loop.status === "active" && (loop.automationEnabled ? loop.totalRuns === 0 : loop.totalRuns < loop.maxRuns);
-  const isLoading = pauseMutation.isPending || resumeMutation.isPending || archiveMutation.isPending;
+  const canStartRun =
+    loop.status === "active" &&
+    (loop.automationEnabled
+      ? loop.totalRuns === 0 || onGoingRuns?.runs.length === 0
+      : loop.totalRuns < loop.maxRuns);
+  const isLoading =
+    pauseMutation.isPending || resumeMutation.isPending || archiveMutation.isPending;
 
   return (
     <>
-      <RunNextIterationDialog
-        open={showRunDialog}
-        onOpenChange={setShowRunDialog}
-        loop={loop}
-      />
+      <RunNextIterationDialog open={showRunDialog} onOpenChange={setShowRunDialog} loop={loop} />
 
       <Card className="group overflow-hidden border-primary/10 bg-card/50 backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 flex flex-col">
         <CardHeader className="pb-3 px-5 pt-5">
@@ -143,14 +148,10 @@ export function AgentLoopCard({ loop }: AgentLoopCardProps) {
               <span>
                 {loop.totalRuns} / {loop.maxRuns} runs
                 {loop.successfulRuns > 0 && (
-                  <span className="text-green-500 ml-1">
-                    ({loop.successfulRuns} successful)
-                  </span>
+                  <span className="text-green-500 ml-1">({loop.successfulRuns} successful)</span>
                 )}
                 {loop.failedRuns > 0 && (
-                  <span className="text-destructive ml-1">
-                    ({loop.failedRuns} failed)
-                  </span>
+                  <span className="text-destructive ml-1">({loop.failedRuns} failed)</span>
                 )}
               </span>
             </div>
@@ -231,12 +232,7 @@ export function AgentLoopCard({ loop }: AgentLoopCardProps) {
             </Button>
           )}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 px-3 text-xs"
-            asChild
-          >
+          <Button variant="ghost" size="sm" className="h-9 px-3 text-xs" asChild>
             <Link href={`/dashboard/loops/${loop.id}`}>
               <ChevronRight className="h-4 w-4" />
             </Link>

@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useMutation } from "@tanstack/react-query"
-import { AlertTriangle, Trash2 } from "lucide-react"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { AlertTriangle, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,40 +14,40 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogClose,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { trpc } from "@/utils/trpc"
-import { authClient } from "@/lib/auth-client"
-import { useRouter } from "next/navigation"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { trpc } from "@/utils/trpc";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 
 export function DeleteAccountSection() {
-  const [isOpen, setIsOpen] = useState(false)
-  const [confirmText, setConfirmText] = useState("")
-  const router = useRouter()
+  const [isOpen, setIsOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const router = useRouter();
 
   const deleteAccountMutation = useMutation(
     trpc.user.deleteUser.mutationOptions({
       onSuccess: async () => {
-        toast.success("Account deleted successfully")
-        await authClient.signOut()
-        router.push("/")
+        toast.success("Account deleted successfully");
+        await authClient.signOut();
+        router.push("/");
       },
       onError: (error) => {
-        toast.error(`Failed to delete account: ${error.message}`)
+        toast.error(`Failed to delete account: ${error.message}`);
       },
-    })
-  )
+    }),
+  );
 
   const handleDelete = () => {
     if (confirmText !== "delete my account") {
-      toast.error("Please type 'delete my account' to confirm")
-      return
+      toast.error("Please type 'delete my account' to confirm");
+      return;
     }
-    deleteAccountMutation.mutate()
-  }
+    deleteAccountMutation.mutate();
+  };
 
-  const isConfirmValid = confirmText === "delete my account"
+  const isConfirmValid = confirmText === "delete my account";
 
   return (
     <div className="space-y-6 pt-10">
@@ -57,9 +57,7 @@ export function DeleteAccountSection() {
         </div>
         <div>
           <h2 className="text-base font-medium text-destructive">Danger Zone</h2>
-          <p className="text-sm text-muted-foreground">
-            Irreversible and destructive actions
-          </p>
+          <p className="text-sm text-muted-foreground">Irreversible and destructive actions</p>
         </div>
       </div>
 
@@ -120,9 +118,7 @@ export function DeleteAccountSection() {
               <div className="space-y-2">
                 <Label htmlFor="confirm" className="text-sm text-muted-foreground">
                   Type{" "}
-                  <span className="font-mono text-destructive font-medium">
-                    delete my account
-                  </span>{" "}
+                  <span className="font-mono text-destructive font-medium">delete my account</span>{" "}
                   to confirm
                 </Label>
                 <Input
@@ -138,10 +134,7 @@ export function DeleteAccountSection() {
 
             <DialogFooter className="gap-2 sm:gap-0">
               <DialogClose asChild>
-                <Button
-                  variant="ghost"
-                  onClick={() => setConfirmText("")}
-                >
+                <Button variant="ghost" onClick={() => setConfirmText("")}>
                   Cancel
                 </Button>
               </DialogClose>
@@ -168,5 +161,5 @@ export function DeleteAccountSection() {
         </Dialog>
       </div>
     </div>
-  )
+  );
 }

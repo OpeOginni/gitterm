@@ -23,7 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Play, Key, Cpu } from "lucide-react";
-import { MODEL_PROVIDERS, getModelsForProvider, modelRequiresApiKey } from "../create-instance/types";
+import {
+  MODEL_PROVIDERS,
+  getModelsForProvider,
+  modelRequiresApiKey,
+} from "../create-instance/types";
 import type { AgentLoop } from "./types";
 
 interface RunNextIterationDialogProps {
@@ -32,14 +36,11 @@ interface RunNextIterationDialogProps {
   loop: AgentLoop;
 }
 
-export function RunNextIterationDialog({
-  open,
-  onOpenChange,
-  loop,
-}: RunNextIterationDialogProps) {
+export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIterationDialogProps) {
   // Use loop's stored provider/model as defaults, or fall back to first provider
   const defaultProvider = loop.modelProvider || MODEL_PROVIDERS[0]?.id || "";
-  const defaultModel = loop.model?.split("/")[1] || getModelsForProvider(defaultProvider)[0]?.id || "";
+  const defaultModel =
+    loop.model?.split("/")[1] || getModelsForProvider(defaultProvider)[0]?.id || "";
 
   const [provider, setProvider] = useState(defaultProvider);
   const [model, setModel] = useState(defaultModel);
@@ -54,14 +55,16 @@ export function RunNextIterationDialog({
         console.error(error);
         toast.error(`Failed to start run: ${error.message}`);
       },
-    })
+    }),
   );
 
   const executeRunMutation = useMutation(
     trpc.agentLoop.executeRun.mutationOptions({
       onSuccess: () => {
         toast.success("Run started successfully!");
-        queryClient.invalidateQueries({ queryKey: trpc.agentLoop.getLoop.queryKey({ loopId: loop.id }) });
+        queryClient.invalidateQueries({
+          queryKey: trpc.agentLoop.getLoop.queryKey({ loopId: loop.id }),
+        });
         queryClient.invalidateQueries({ queryKey: trpc.agentLoop.listLoops.queryKey() });
         onOpenChange(false);
         resetForm();
@@ -70,7 +73,7 @@ export function RunNextIterationDialog({
         console.error(error);
         toast.error(`Failed to execute run: ${error.message}`);
       },
-    })
+    }),
   );
 
   const isSubmitting = startRunMutation.isPending || executeRunMutation.isPending;
@@ -211,8 +214,8 @@ export function RunNextIterationDialog({
               <span className="font-mono">{loop.branch}</span>
             </p>
             <p className="text-muted-foreground">
-              <span className="text-foreground font-medium">Runs:</span>{" "}
-              {loop.totalRuns} / {loop.maxRuns}
+              <span className="text-foreground font-medium">Runs:</span> {loop.totalRuns} /{" "}
+              {loop.maxRuns}
             </p>
           </div>
         </div>

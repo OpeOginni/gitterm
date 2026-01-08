@@ -1,18 +1,18 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
+import { useState } from "react";
+import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -21,57 +21,57 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Skeleton } from "@/components/ui/skeleton"
-import type { Route } from "next"
-import { Badge } from "@/components/ui/badge"
-import { Plus, Container } from "lucide-react"
-import { trpcClient } from "@/utils/trpc"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
-import Link from "next/link"
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Route } from "next";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Container } from "lucide-react";
+import { trpcClient } from "@/utils/trpc";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import Link from "next/link";
 
 export default function ImagesPage() {
-  const queryClient = useQueryClient()
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [newImage, setNewImage] = useState({ name: "", imageId: "", agentTypeId: "" })
+  const queryClient = useQueryClient();
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newImage, setNewImage] = useState({ name: "", imageId: "", agentTypeId: "" });
 
   const { data: images, isLoading } = useQuery({
     queryKey: ["admin", "images"],
     queryFn: () => trpcClient.admin.infrastructure.listImages.query(),
-  })
+  });
 
   const { data: agentTypes } = useQuery({
     queryKey: ["admin", "agentTypes"],
     queryFn: () => trpcClient.admin.infrastructure.listAgentTypes.query(),
-  })
+  });
 
   const createImage = useMutation({
     mutationFn: (params: { name: string; imageId: string; agentTypeId: string }) =>
       trpcClient.admin.infrastructure.createImage.mutate(params),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "images"] })
-      setIsCreateOpen(false)
-      setNewImage({ name: "", imageId: "", agentTypeId: "" })
-      toast.success("Image created")
+      queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
+      setIsCreateOpen(false);
+      setNewImage({ name: "", imageId: "", agentTypeId: "" });
+      toast.success("Image created");
     },
     onError: (error) => toast.error(error.message),
-  })
+  });
 
   const toggleImage = useMutation({
-    mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) => 
+    mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) =>
       trpcClient.admin.infrastructure.toggleImage.mutate({ id, isEnabled }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "images"] })
-      toast.success(`Image ${data.isEnabled ? "enabled" : "disabled"}`)
+      queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
+      toast.success(`Image ${data.isEnabled ? "enabled" : "disabled"}`);
     },
     onError: (error) => toast.error(error.message),
-  })
+  });
 
   return (
     <DashboardShell>
-      <DashboardHeader 
-        heading="Container Images" 
+      <DashboardHeader
+        heading="Container Images"
         text="Manage Docker images used for workspaces. Disabled images won't appear in workspace creation."
       >
         <div className="flex gap-2">
@@ -88,9 +88,7 @@ export default function ImagesPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add Container Image</DialogTitle>
-                <DialogDescription>
-                  Register a new Docker image for workspaces.
-                </DialogDescription>
+                <DialogDescription>Register a new Docker image for workspaces.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -139,7 +137,12 @@ export default function ImagesPage() {
                 </Button>
                 <Button
                   onClick={() => createImage.mutate(newImage)}
-                  disabled={!newImage.name || !newImage.imageId || !newImage.agentTypeId || createImage.isPending}
+                  disabled={
+                    !newImage.name ||
+                    !newImage.imageId ||
+                    !newImage.agentTypeId ||
+                    createImage.isPending
+                  }
                 >
                   {createImage.isPending ? "Creating..." : "Create"}
                 </Button>
@@ -171,11 +174,17 @@ export default function ImagesPage() {
                     <div className="flex items-center gap-3">
                       <span className="font-medium">{image.name}</span>
                       {!image.isEnabled && (
-                        <Badge variant="secondary" className="text-xs">Disabled</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Disabled
+                        </Badge>
                       )}
-                      <Badge variant="outline" className="text-xs">{image.agentType.name}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {image.agentType.name}
+                      </Badge>
                       {image.agentType.serverOnly && (
-                        <Badge variant="secondary" className="text-xs">Server Only</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Server Only
+                        </Badge>
                       )}
                     </div>
                     <code className="text-xs text-muted-foreground mt-0.5 block truncate max-w-md">
@@ -185,7 +194,9 @@ export default function ImagesPage() {
                 </div>
                 <Switch
                   checked={image.isEnabled}
-                  onCheckedChange={(checked) => toggleImage.mutate({ id: image.id, isEnabled: checked })}
+                  onCheckedChange={(checked) =>
+                    toggleImage.mutate({ id: image.id, isEnabled: checked })
+                  }
                 />
               </div>
             ))}
@@ -199,5 +210,5 @@ export default function ImagesPage() {
         )}
       </div>
     </DashboardShell>
-  )
+  );
 }

@@ -1,7 +1,6 @@
 {
   "name": "gitterm",
   "private": true,
-  "type": "module",
   "workspaces": {
     "packages": [
       "apps/*",
@@ -17,6 +16,7 @@
       "@trpc/client": "^11.8.1"
     }
   },
+  "type": "module",
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
@@ -43,7 +43,8 @@
     "db:seed-admin": "turbo -F server db:seed-admin",
     "redis:start": "turbo -F @gitterm/redis redis:start",
     "redis:stop": "turbo -F @gitterm/redis redis:stop",
-    "redis:down": "turbo -F @gitterm/redis redis:down"
+    "redis:down": "turbo -F @gitterm/redis redis:down",
+    "format": "bunx oxfmt@latest"
   },
   "dependencies": {
     "@trpc/client": "^11.8.1",

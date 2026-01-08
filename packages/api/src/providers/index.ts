@@ -29,7 +29,7 @@ export function getProvider(name: string): ComputeProvider {
   const provider = availableProviders[normalizedName];
   if (!provider) {
     throw new Error(
-      `Unknown compute provider: ${name}. Available implementations: ${Object.keys(availableProviders).join(", ")}`
+      `Unknown compute provider: ${name}. Available implementations: ${Object.keys(availableProviders).join(", ")}`,
     );
   }
 
@@ -63,8 +63,7 @@ export function isProviderImplemented(name: string): boolean {
  * Get a compute provider by cloud provider name from database
  */
 export async function getProviderByCloudProviderId(
-  cloudProviderName: string
+  cloudProviderName: string,
 ): Promise<ComputeProvider> {
   return getProvider(cloudProviderName);
 }
-

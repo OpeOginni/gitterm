@@ -1,6 +1,6 @@
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { AgentLoopList } from "@/components/dashboard/agent-loops";
-import { CreateInstanceDialog } from "@/components/dashboard/create-instance-dialog";
+import { CreateInstanceDialog } from "@/components/dashboard/create-instance/create-instance-dialog";
 
 export default function AgentLoopsPage() {
   return (

@@ -1,6 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import { inferAdditionalFields } from "better-auth/client/plugins";
-import { polarClient } from '@polar-sh/better-auth/client'
+import { polarClient } from "@polar-sh/better-auth/client";
 import env from "@gitterm/env/web";
 
 // Define the additional fields type inline to avoid importing @gitterm/auth
@@ -44,9 +44,7 @@ const createBillingAuthClient = () =>
   });
 
 // Export the appropriate client based on billing status
-export const authClient = isBillingEnabled
-  ? createBillingAuthClient()
-  : createStandardAuthClient();
+export const authClient = isBillingEnabled ? createBillingAuthClient() : createStandardAuthClient();
 
 // ============================================================================
 // Polar Billing Helpers (only work when billing is enabled)
@@ -55,9 +53,9 @@ export const authClient = isBillingEnabled
 /**
  * Initiate checkout for a subscription plan
  * Redirects to Polar checkout page
- * 
+ *
  * @param slug - Product slug ("tunnel", "pro")
- * 
+ *
  * @example
  * await initiateCheckout("pro");
  */
@@ -80,14 +78,11 @@ export async function initiateCheckout(slug: "tunnel" | "pro") {
 
 /**
  * Initiate checkout with specific product IDs
- * 
+ *
  * @param productIds - Array of Polar product IDs
  * @param referenceId - Optional reference ID (e.g., organization ID)
  */
-export async function initiateCheckoutWithProducts(
-  productIds: string[],
-  referenceId?: string
-) {
+export async function initiateCheckoutWithProducts(productIds: string[], referenceId?: string) {
   if (!isBillingEnabled) {
     console.warn("[auth-client] Billing is not enabled. Checkout unavailable.");
     return;
@@ -105,9 +100,7 @@ export async function initiateCheckoutWithProducts(
  */
 export async function openCustomerPortal() {
   if (!isBillingEnabled) {
-    console.warn(
-      "[auth-client] Billing is not enabled. Customer portal unavailable."
-    );
+    console.warn("[auth-client] Billing is not enabled. Customer portal unavailable.");
     return;
   }
 
@@ -118,7 +111,7 @@ export async function openCustomerPortal() {
 /**
  * Get the current customer state from Polar
  * Contains subscriptions, benefits, meters, etc.
- * 
+ *
  * @returns Customer state object or null if billing is disabled
  */
 export async function getCustomerState() {
@@ -137,7 +130,7 @@ export async function getCustomerState() {
 
 /**
  * List current user's subscriptions
- * 
+ *
  * @param options - Pagination and filter options
  * @returns Subscriptions list or empty array if billing is disabled
  */
@@ -167,7 +160,7 @@ export async function listSubscriptions(options?: {
 
 /**
  * List current user's orders
- * 
+ *
  * @param options - Pagination and filter options
  * @returns Orders list or empty array if billing is disabled
  */
@@ -199,7 +192,7 @@ export async function listOrders(options?: {
 
 /**
  * List current user's granted benefits
- * 
+ *
  * @param options - Pagination options
  * @returns Benefits list or empty array if billing is disabled
  */
@@ -224,13 +217,13 @@ export async function listBenefits(options?: { page?: number; limit?: number }) 
 
 /**
  * Ingest a usage event for usage-based billing
- * 
+ *
  * @param event - Event name (e.g., "workspace_minutes", "api_calls")
  * @param metadata - Event metadata with numeric or string values
  */
 export async function ingestUsageEvent(
   event: string,
-  metadata: Record<string, string | number | boolean>
+  metadata: Record<string, string | number | boolean>,
 ) {
   if (!isBillingEnabled) {
     return null;
@@ -250,14 +243,11 @@ export async function ingestUsageEvent(
 
 /**
  * List customer meters for usage-based billing
- * 
+ *
  * @param options - Pagination options
  * @returns Customer meters or null if billing is disabled
  */
-export async function listCustomerMeters(options?: {
-  page?: number;
-  limit?: number;
-}) {
+export async function listCustomerMeters(options?: { page?: number; limit?: number }) {
   if (!isBillingEnabled) {
     return null;
   }

@@ -4,7 +4,6 @@ import env from "@gitterm/env/server";
 
 const RAILWAY_API_URL = env.RAILWAY_API_URL;
 
-
 // ============================================================================
 // GraphQL Request Function
 // ============================================================================
@@ -22,7 +21,7 @@ interface GraphQLResponse<T> {
 class RailwayAPIError extends Error {
   constructor(
     message: string,
-    public errors?: GraphQLResponse<unknown>["errors"]
+    public errors?: GraphQLResponse<unknown>["errors"],
   ) {
     super(message);
     this.name = "RailwayAPIError";
@@ -55,7 +54,7 @@ function createRequester(token?: string) {
 
     if (!response.ok) {
       throw new RailwayAPIError(
-        `Railway API request failed: ${response.status} ${response.statusText}`
+        `Railway API request failed: ${response.status} ${response.statusText}`,
       );
     }
 
@@ -64,7 +63,7 @@ function createRequester(token?: string) {
     if (result.errors && result.errors.length > 0) {
       throw new RailwayAPIError(
         `GraphQL errors: ${result.errors.map((e) => e.message).join(", ")}`,
-        result.errors
+        result.errors,
       );
     }
 

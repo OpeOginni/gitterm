@@ -260,164 +260,160 @@ const ERROR_HTML = `<!DOCTYPE html>
 </html>`;
 
 // Return HTML error page for user-facing errors
-function htmlError(c: Context, type: 'unavailable' | 'error', status: ContentfulStatusCode) {
-	const html = type === 'unavailable' ? UNAVAILABLE_HTML : ERROR_HTML;
-	return c.html(html, status);
+function htmlError(c: Context, type: "unavailable" | "error", status: ContentfulStatusCode) {
+  const html = type === "unavailable" ? UNAVAILABLE_HTML : ERROR_HTML;
+  return c.html(html, status);
 }
 
 export const proxyResolverRouter = async (c: Context) => {
-	console.log('[PROXY-RESOLVE] Request received');
-	
-	try {
-        const internalKey = c.req.header('X-Internal-Key') || '';
-        if (!internalKey) {
-			console.log('[PROXY-RESOLVE] Missing internal key');
-            return htmlError(c, 'unavailable', 401);
-        }
-        if (internalKey !== env.INTERNAL_API_KEY) {
-			console.log('[PROXY-RESOLVE] Invalid internal key');
-            return htmlError(c, 'unavailable', 401);
-        }
-		
-		// Extract subdomain from path (for path-based routing) or host (for subdomain routing)
-		const originalUri = c.req.header('X-Original-URI') || c.req.path;
-		const routingMode = c.req.header('X-Routing-Mode') || env.ROUTING_MODE;
-		const host = c.req.header('Host') || '';
-		
-		const subdomain = extractWorkspaceSubdomain(host, originalUri, {
-			"x-subdomain": c.req.header('X-Subdomain'),
-			"x-routing-mode": routingMode,
-		});
-		
-		console.log('[PROXY-RESOLVE] Extracted subdomain:', { 
-			subdomain, 
-			host,
-			originalUri,
-			routingMode,
-		});
-		
-		if (!subdomain) {
-			console.log('[PROXY-RESOLVE] No subdomain found');
-		  return htmlError(c, 'unavailable', 400);
-		}
-	
-		// Get session from cookies
-		const session = await auth.api.getSession({
-		  headers: c.req.raw.headers,
-		});
-	
-		// Check workspace - only match active (running) workspaces
-		// Subdomain is not unique, so we must filter by status to get the correct one
-		const [ws] = await db
-		  .select()
-		  .from(workspace)
-		  .where(and(
-			eq(workspace.subdomain, subdomain),
-			eq(workspace.status, 'running')
-		  ))
-		  .limit(1);
-	
-		if (!ws) {
-            console.log('[PROXY-RESOLVE] Workspace not found for subdomain:', subdomain);
-		  return htmlError(c, 'unavailable', 404);
-		}
-		
-		console.log('[PROXY-RESOLVE] Workspace found:', { 
-			id: ws.id, 
-			subdomain: ws.subdomain, 
-			hostingType: ws.hostingType,
-			status: ws.status,
-			userId: ws.userId
-		});
-	
-		// Local tunnel workspaces: route via tunnel-proxy
-		if (ws.hostingType === "local") {
-			// Server-only local tunnel workspaces skip auth (for API servers, etc.)
-			if (ws.serverOnly) {
-				console.log('[PROXY-RESOLVE] Local tunnel workspace (server-only) - skipping auth:', { 
-					subdomain: ws.subdomain,
-					workspaceId: ws.id
-				});
-				return c.text("OK", 200, {
-					"X-Hosting-Type": "local",
-					"X-Workspace-ID": ws.id,
-					"X-Subdomain": ws.subdomain ?? "",
-				});
-			}
+  console.log("[PROXY-RESOLVE] Request received");
 
-			// Non-server-only tunnel workspaces require auth
-			if (!session) {
-				console.log('[PROXY-RESOLVE] Tunnel workspace requires auth - no session');
-				return htmlError(c, 'unavailable', 401);
-			}
-			if (ws.userId !== session.user?.id) {
-				console.log('[PROXY-RESOLVE] Tunnel workspace - user mismatch');
-				return htmlError(c, 'unavailable', 403);
-			}
+  try {
+    const internalKey = c.req.header("X-Internal-Key") || "";
+    if (!internalKey) {
+      console.log("[PROXY-RESOLVE] Missing internal key");
+      return htmlError(c, "unavailable", 401);
+    }
+    if (internalKey !== env.INTERNAL_API_KEY) {
+      console.log("[PROXY-RESOLVE] Invalid internal key");
+      return htmlError(c, "unavailable", 401);
+    }
 
-			console.log('[PROXY-RESOLVE] Tunnel workspace authorized:', { 
-				subdomain: ws.subdomain,
-				workspaceId: ws.id,
-				userId: session.user.id
-			});
-			return c.text("OK", 200, {
-				"X-Hosting-Type": "local",
-				"X-Workspace-ID": ws.id,
-				"X-User-ID": session.user.id,
-				"X-Subdomain": ws.subdomain ?? "",
-			});
-		}
+    // Extract subdomain from path (for path-based routing) or host (for subdomain routing)
+    const originalUri = c.req.header("X-Original-URI") || c.req.path;
+    const routingMode = c.req.header("X-Routing-Mode") || env.ROUTING_MODE;
+    const host = c.req.header("Host") || "";
 
-		// Server-only workspaces skip auth
-		if (ws.serverOnly) {
-		  if (!ws.upstreamUrl) {
-			return htmlError(c, 'error', 500);
-		  }
-          const upstreamUrl = new URL(ws.upstreamUrl);
-		  const port = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
+    const subdomain = extractWorkspaceSubdomain(host, originalUri, {
+      "x-subdomain": c.req.header("X-Subdomain"),
+      "x-routing-mode": routingMode,
+    });
 
-		  return c.text('OK', 200, {
-            'X-Upstream-URL': ws.upstreamUrl,
-			'X-Container-Host': upstreamUrl.hostname,
-            'X-Container-Port': port,
-			'X-Container-Protocol': upstreamUrl.protocol.replace(':', ''),
-		  });
-		}
-	
-		// Validate auth for non-server-only
-		if (!session) {
-		  return htmlError(c, 'unavailable', 401);
-		}
-	
-		if (ws.userId !== session.user?.id) {
-		  return htmlError(c, 'unavailable', 403);
-		}
-	
-		if (!ws.upstreamUrl) {
-		  return htmlError(c, 'error', 500);
-		}
-	
-        const upstreamUrl = new URL(ws.upstreamUrl);
-		const port = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
-		
-		console.log('[PROXY-RESOLVE] Cloud workspace routing:', {
-			upstreamUrl: ws.upstreamUrl,
-			containerHost: upstreamUrl.hostname,
-			containerPort: port,
-			protocol: upstreamUrl.protocol,
-		});
-		
-		return c.text('OK', 200, {
-          'X-Upstream-URL': ws.upstreamUrl,
-		  'X-Container-Host': upstreamUrl.hostname,
-          'X-Container-Port': port,
-		  'X-Container-Protocol': upstreamUrl.protocol.replace(':', ''),
-		  'X-User-ID': session.user.id,
-		  'X-Hosting-Type': ws.hostingType,
-		});
-		
-	  } catch (error) {
-		console.error('Auth resolve error:', error);
-		return htmlError(c, 'error', 500);
-	  }
-}
+    console.log("[PROXY-RESOLVE] Extracted subdomain:", {
+      subdomain,
+      host,
+      originalUri,
+      routingMode,
+    });
+
+    if (!subdomain) {
+      console.log("[PROXY-RESOLVE] No subdomain found");
+      return htmlError(c, "unavailable", 400);
+    }
+
+    // Get session from cookies
+    const session = await auth.api.getSession({
+      headers: c.req.raw.headers,
+    });
+
+    // Check workspace - only match active (running) workspaces
+    // Subdomain is not unique, so we must filter by status to get the correct one
+    const [ws] = await db
+      .select()
+      .from(workspace)
+      .where(and(eq(workspace.subdomain, subdomain), eq(workspace.status, "running")))
+      .limit(1);
+
+    if (!ws) {
+      console.log("[PROXY-RESOLVE] Workspace not found for subdomain:", subdomain);
+      return htmlError(c, "unavailable", 404);
+    }
+
+    console.log("[PROXY-RESOLVE] Workspace found:", {
+      id: ws.id,
+      subdomain: ws.subdomain,
+      hostingType: ws.hostingType,
+      status: ws.status,
+      userId: ws.userId,
+    });
+
+    // Local tunnel workspaces: route via tunnel-proxy
+    if (ws.hostingType === "local") {
+      // Server-only local tunnel workspaces skip auth (for API servers, etc.)
+      if (ws.serverOnly) {
+        console.log("[PROXY-RESOLVE] Local tunnel workspace (server-only) - skipping auth:", {
+          subdomain: ws.subdomain,
+          workspaceId: ws.id,
+        });
+        return c.text("OK", 200, {
+          "X-Hosting-Type": "local",
+          "X-Workspace-ID": ws.id,
+          "X-Subdomain": ws.subdomain ?? "",
+        });
+      }
+
+      // Non-server-only tunnel workspaces require auth
+      if (!session) {
+        console.log("[PROXY-RESOLVE] Tunnel workspace requires auth - no session");
+        return htmlError(c, "unavailable", 401);
+      }
+      if (ws.userId !== session.user?.id) {
+        console.log("[PROXY-RESOLVE] Tunnel workspace - user mismatch");
+        return htmlError(c, "unavailable", 403);
+      }
+
+      console.log("[PROXY-RESOLVE] Tunnel workspace authorized:", {
+        subdomain: ws.subdomain,
+        workspaceId: ws.id,
+        userId: session.user.id,
+      });
+      return c.text("OK", 200, {
+        "X-Hosting-Type": "local",
+        "X-Workspace-ID": ws.id,
+        "X-User-ID": session.user.id,
+        "X-Subdomain": ws.subdomain ?? "",
+      });
+    }
+
+    // Server-only workspaces skip auth
+    if (ws.serverOnly) {
+      if (!ws.upstreamUrl) {
+        return htmlError(c, "error", 500);
+      }
+      const upstreamUrl = new URL(ws.upstreamUrl);
+      const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
+
+      return c.text("OK", 200, {
+        "X-Upstream-URL": ws.upstreamUrl,
+        "X-Container-Host": upstreamUrl.hostname,
+        "X-Container-Port": port,
+        "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+      });
+    }
+
+    // Validate auth for non-server-only
+    if (!session) {
+      return htmlError(c, "unavailable", 401);
+    }
+
+    if (ws.userId !== session.user?.id) {
+      return htmlError(c, "unavailable", 403);
+    }
+
+    if (!ws.upstreamUrl) {
+      return htmlError(c, "error", 500);
+    }
+
+    const upstreamUrl = new URL(ws.upstreamUrl);
+    const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
+
+    console.log("[PROXY-RESOLVE] Cloud workspace routing:", {
+      upstreamUrl: ws.upstreamUrl,
+      containerHost: upstreamUrl.hostname,
+      containerPort: port,
+      protocol: upstreamUrl.protocol,
+    });
+
+    return c.text("OK", 200, {
+      "X-Upstream-URL": ws.upstreamUrl,
+      "X-Container-Host": upstreamUrl.hostname,
+      "X-Container-Port": port,
+      "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+      "X-User-ID": session.user.id,
+      "X-Hosting-Type": ws.hostingType,
+    });
+  } catch (error) {
+    console.error("Auth resolve error:", error);
+    return htmlError(c, "error", 500);
+  }
+};
