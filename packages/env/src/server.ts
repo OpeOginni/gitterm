@@ -52,6 +52,7 @@ const baseSchema = z.object({
   // GitHub App (either both or neither)
   GITHUB_APP_ID: optional,
   GITHUB_APP_PRIVATE_KEY: optional,
+  GITHUB_WEBHOOK_SECRET: z.string().optional().default(""),
 
   // Polar (conditionally required in managed mode)
   POLAR_ACCESS_TOKEN: optional,
@@ -68,6 +69,13 @@ const baseSchema = z.object({
   RAILWAY_DEFAULT_REGION: z.string().default("us-east4-eqdc4a"),
   PUBLIC_RAILWAY_DOMAINS: boolWithDefault(false),
 
+  // Cloudflare
+  CLOUDFLARE_WORKER_URL: optional,
+  CLOUDFLARE_CALLBACK_SECRET: optional,
+  
+  // Listener (for internal callbacks)
+  LISTENER_URL: optional,
+  
   // Tunnel
   TUNNEL_JWT_SECRET: optional,
   AGENT_JWT_SECRET: optional,

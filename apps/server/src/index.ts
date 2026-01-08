@@ -6,9 +6,12 @@ import { appRouter, proxyResolverRouter } from "@gitterm/api/routers/index";
 import { auth } from "@gitterm/auth";
 import { DeviceCodeService } from "@gitterm/api/service/tunnel/device-code";
 import { AgentAuthService } from "@gitterm/api/service/tunnel/agent-auth";
+import { getGitHubAppService } from "@gitterm/api/service/github";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import type { AppRouter } from "@gitterm/api/routers/index";
 
 function getPublicOriginFromRequest(req: Request): string {
 	// Prefer proxy headers (Caddy / reverse proxies)
@@ -73,6 +76,66 @@ app.use(
 );
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+
+// GitHub App Installation callback
+// Called after user installs/updates the GitHub App
+app.get("/api/github/callback", async (c) => {
+	const webUrl = env.BASE_URL || `http://${env.BASE_DOMAIN}`;
+	
+	try {
+		// Get session from auth
+		const session = await auth.api.getSession({ headers: c.req.raw.headers });
+		
+		if (!session) {
+			return c.redirect(`${webUrl}/login?returnTo=/dashboard/integrations`);
+		}
+
+		const installationId = c.req.query("installation_id");
+		const setupAction = c.req.query("setup_action") || "install";
+
+		if (!installationId) {
+			console.error("[GitHub Setup] Missing installation_id parameter");
+			return c.redirect(`${webUrl}/dashboard/integrations?error=missing_installation_id`);
+		}
+
+		console.log("[GitHub Setup] Received callback:", {
+			userId: session.user.id,
+			installationId,
+			setupAction,
+		});
+
+		try {
+			const githubAppService = getGitHubAppService();
+			
+			// Get installation details from GitHub
+			const installationData = await githubAppService.getInstallationDetails(installationId);
+
+			// Store installation in database
+			await githubAppService.storeInstallation({
+				userId: session.user.id,
+				installationId,
+				accountId: installationData.account.id.toString(),
+				accountLogin: installationData.account.login,
+				accountType: installationData.account.type,
+				repositorySelection: installationData.repositorySelection,
+			});
+
+			console.log("[GitHub Setup] Installation saved successfully:", {
+				userId: session.user.id,
+				installationId,
+				accountLogin: installationData.account.login,
+			});
+
+			return c.redirect(`${webUrl}/dashboard/integrations?success=github_connected`);
+		} catch (error) {
+			console.error("[GitHub Setup] Failed to handle installation:", error);
+			return c.redirect(`${webUrl}/dashboard/integrations?error=installation_failed`);
+		}
+	} catch (error) {
+		console.error("[GitHub Setup] Callback error:", error);
+		return c.redirect(`${webUrl}/dashboard/integrations?error=callback_failed`);
+	}
+});
 
 // Device code flow for CLI/agent login.
 app.post("/api/device/code", async (c) => {

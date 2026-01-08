@@ -4,7 +4,7 @@ import { db, eq, and, gt } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { gitIntegration, workspaceGitConfig } from "@gitterm/db/schema/integrations";
 import { TRPCError } from "@trpc/server";
-import { githubAppService, GitHubInstallationNotFoundError } from "../../service/github";
+import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { workspaceJWT } from "../../service/workspace-jwt";
 import { logger } from "../../utils/logger";
 
@@ -100,7 +100,7 @@ export const workspaceOperationsRouter = router({
         }
 
         // Verify installation and auto-cleanup if deleted on GitHub
-        const installation = await githubAppService.getUserInstallation(
+        const installation = await getGitHubAppService().getUserInstallation(
           userId, 
           gitIntegrationRecord.providerInstallationId,
           true // verify
@@ -139,7 +139,7 @@ export const workspaceOperationsRouter = router({
         }
 
         // Fork the repository
-        const fork = await githubAppService.forkRepository(
+        const fork = await getGitHubAppService().forkRepository(
           installation.installationId,
           input.owner,
           input.repo
@@ -183,8 +183,8 @@ export const workspaceOperationsRouter = router({
         }
 
         // Generate authenticated URL
-        const { token } = await githubAppService.getUserToServerToken(installation.installationId);
-        const authenticatedUrl = githubAppService.getAuthenticatedGitUrl(token, fork.owner, fork.repo);
+        const { token } = await getGitHubAppService().getUserToServerToken(installation.installationId);
+        const authenticatedUrl = getGitHubAppService().getAuthenticatedGitUrl(token, fork.owner, fork.repo);
 
         logger.info("Fork operation completed", {
           workspaceId: input.workspaceId,
@@ -238,7 +238,7 @@ export const workspaceOperationsRouter = router({
   refreshGitToken: workspaceAuthProcedure
     .input(
       z.object({
-        workspaceId: z.string().uuid(),
+        workspaceId: z.uuid(),
       })
     )
     .query(async ({ input, ctx }) => {
@@ -308,7 +308,7 @@ export const workspaceOperationsRouter = router({
         }
 
         // Get GitHub App installation with verification
-        const installation = await githubAppService.getUserInstallation(
+        const installation = await getGitHubAppService().getUserInstallation(
           userId, 
           gitIntegrationRecord.providerInstallationId,
           true // verify
@@ -329,7 +329,7 @@ export const workspaceOperationsRouter = router({
         }
 
         // Generate new token
-        const tokenData = await githubAppService.getUserToServerToken(installation.installationId);
+        const tokenData = await getGitHubAppService().getUserToServerToken(installation.installationId);
 
         logger.info("Git token refresh completed", {
           workspaceId: input.workspaceId,

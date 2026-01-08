@@ -5,11 +5,11 @@ import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { getInternalClient } from "../../client";
 
 // Railway webhook schema - matches server's expected input
-const deploymentStatus = z.enum(["BUILDING", "DEPLOYING", "FAILED", "SUCCESS"]);
-const webhookType = z.enum(["Deployment.created", "Deployment.deploying", "Deployment.deployed", "Deployment.failed"]);
-const webhookSeverity = z.enum(["INFO", "WARNING", "ERROR"]);
+export const deploymentStatus = z.enum(["BUILDING", "DEPLOYING", "FAILED", "SUCCESS"]);
+export const webhookType = z.enum(["Deployment.created", "Deployment.deploying", "Deployment.deployed", "Deployment.failed"]);
+export const webhookSeverity = z.enum(["INFO", "WARNING", "ERROR"]);
 
-const railwayWebhookSchema = z.object({
+export const railwayWebhookSchema = z.object({
   type: webhookType,
   severity: webhookSeverity,
   timestamp: z.string(),
@@ -34,7 +34,7 @@ const railwayWebhookSchema = z.object({
     deployment: z.object({
         id: z.string().optional(),
     }).optional(),
-  }).passthrough(),
+  }).loose(),
   details: z.object({
     id: z.string().optional(),
     source: z.string().optional(),

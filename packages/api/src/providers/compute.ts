@@ -73,3 +73,66 @@ export interface ComputeProvider {
   getStatus(externalId: string): Promise<WorkspaceStatusResult>;
 }
 
+export interface StartSandboxRunConfig {
+	/** Unique identifier for this sandbox instance */
+	sandboxId: string;
+	/** Repository owner (e.g., "octocat") */
+	repoOwner: string;
+	/** Repository name (e.g., "hello-world") */
+	repoName: string;
+	/** Branch to work on */
+	branch: string;
+	/** GitHub App installation token for git operations */
+	gitAuthToken: string;
+	/** Path to the plan/feature list file in the repo */
+	planFilePath: string;
+	/** Path to the progress file in the repo (optional) */
+	documentedProgressPath?: string;
+	/** AI provider (e.g., "anthropic", "openai") */
+	provider: string;
+	/** Model identifier (e.g., "anthropic/claude-sonnet-4-20250514") */
+	model: string;
+	/** API key for the AI provider */
+	apiKey: string;
+	/** Custom prompt to send to the agent */
+	prompt: string;
+	/** Iteration number for the session */
+	iteration: number;
+	/** Callback URL for async completion notification */
+	callbackUrl?: string;
+	/** Secret for authenticating callback requests */
+	callbackSecret?: string;
+	/** Run ID for callback identification */
+	runId?: string;
+}
+
+
+export interface SandboxProvider {
+  readonly name: string;
+
+
+}
+
+/**
+ * Legacy type for Cloudflare worker compatibility
+ * Maps to StartSandboxRunConfig with different field names
+ */
+export interface SandboxConfig {
+	userSandboxId: string;
+	repoOwner: string;
+	repoName: string;
+	branch: string;
+	gitAuthToken: string;
+	featureListPath: string;
+	documentedProgressPath?: string;
+	model: string;
+	apiKey: string;
+	prompt: string;
+	iteration: number;
+	/** Callback URL for async completion notification */
+	callbackUrl?: string;
+	/** Secret for authenticating callback requests */
+	callbackSecret?: string;
+	/** Run ID for callback identification */
+	runId?: string;
+}

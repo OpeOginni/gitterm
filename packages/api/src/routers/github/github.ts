@@ -1,6 +1,6 @@
 import z from "zod";
 import { protectedProcedure, router } from "../../index";
-import { githubAppService } from "../../service/github";
+import { getGitHubAppService } from "../../service/github";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and } from "@gitterm/db";
 import { workspaceGitConfig, gitIntegration } from "@gitterm/db/schema/integrations";
@@ -9,7 +9,8 @@ import { logger } from "../../utils/logger";
 export const githubRouter = router({
   /**
    * Get GitHub App installation status for the current user
-   * Now uses automatic verification and cleanup via getUserInstallation
+   * Returns the installation from our database without verifying against GitHub API
+   * Cleanup happens via webhook when the app is uninstalled
    */
   getInstallationStatus: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
@@ -20,7 +21,8 @@ export const githubRouter = router({
         .from(gitIntegration)
         .where(and(
           eq(gitIntegration.userId, userId), 
-          eq(gitIntegration.provider, "github")
+          eq(gitIntegration.provider, "github"),
+          eq(gitIntegration.active, true)
         ));
       
       if (!gitIntegrationRecord) {
@@ -30,15 +32,15 @@ export const githubRouter = router({
         };
       }
 
-      // getUserInstallation now automatically verifies and cleans up if needed
-      const installation = await githubAppService.getUserInstallation(
+      // Get installation from our database (don't verify against GitHub API)
+      // Cleanup happens via webhook when the app is uninstalled
+      const installation = await getGitHubAppService().getUserInstallation(
         userId, 
         gitIntegrationRecord.providerInstallationId,
-        true // verify against GitHub API
+        false // don't verify against GitHub API
       );
 
       if (!installation) {
-        // Installation was either not found or deleted on GitHub's side
         return {
           connected: false,
           installation: null,
@@ -87,12 +89,12 @@ export const githubRouter = router({
         });
         
         // Get installation details from GitHub using SDK
-        const installationData = await githubAppService.getInstallationDetails(
+        const installationData = await getGitHubAppService().getInstallationDetails(
           input.installationId
         );
 
         // Store installation in database
-        const installation = await githubAppService.storeInstallation({
+        const installation = await getGitHubAppService().storeInstallation({
           userId,
           installationId: input.installationId,
           accountId: installationData.account.id.toString(),
@@ -130,6 +132,7 @@ export const githubRouter = router({
 
   /**
    * Disconnect GitHub App
+   * This requests GitHub to uninstall the app - database cleanup happens via webhook
    */
   disconnectApp: protectedProcedure.mutation(async ({ ctx }) => {
     const userId = ctx.session.user.id;
@@ -150,34 +153,21 @@ export const githubRouter = router({
         });
       }
 
-      // Don't verify here - if user wants to disconnect, let them disconnect
-      // even if GitHub already deleted it
-      const installation = await githubAppService.getUserInstallation(
-        userId, 
-        gitIntegrationRecord.providerInstallationId,
-        false // skip verification
+      // Request GitHub to uninstall the app
+      // Database cleanup will happen via webhook when GitHub sends the "deleted" event
+      await getGitHubAppService().requestUninstallFromGitHub(
+        gitIntegrationRecord.providerInstallationId
       );
 
-      if (!installation) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "GitHub App not connected",
-        });
-      }
-
-      await githubAppService.removeInstallation(
+      logger.info("GitHub App disconnect requested - awaiting webhook for cleanup", { 
         userId,
-        installation.installationId
-      );
-
-      logger.info("GitHub App disconnected successfully", { 
-        userId, 
+        installationId: gitIntegrationRecord.providerInstallationId,
         action: "disconnect_app" 
       });
 
       return {
         success: true,
-        message: "GitHub App disconnected successfully",
+        message: "GitHub App disconnect requested. Changes will take effect shortly.",
       };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -196,10 +186,164 @@ export const githubRouter = router({
   }),
 
   /**
+   * List repositories accessible through a GitHub installation
+   */
+  listAccessibleRepos: protectedProcedure
+    .input(z.object({ installationId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      try {
+        // Verify the installation belongs to the user
+        const [gitIntegrationRecord] = await db
+          .select()
+          .from(gitIntegration)
+          .where(and(
+            eq(gitIntegration.userId, userId),
+            eq(gitIntegration.providerInstallationId, input.installationId)
+          ));
+
+        if (!gitIntegrationRecord) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "GitHub installation not found",
+          });
+        }
+
+        const repos = await getGitHubAppService().listAccessibleRepos(input.installationId);
+
+        return { repos };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
+        logger.error("Failed to list accessible repos", {
+          userId,
+          action: "list_repos"
+        }, error as Error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to list accessible repositories",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
+  /**
+   * List branches for a repository
+   */
+  listBranches: protectedProcedure
+    .input(z.object({
+      installationId: z.string(),
+      owner: z.string(),
+      repo: z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      try {
+        // Verify the installation belongs to the user
+        const [gitIntegrationRecord] = await db
+          .select()
+          .from(gitIntegration)
+          .where(and(
+            eq(gitIntegration.userId, userId),
+            eq(gitIntegration.providerInstallationId, input.installationId)
+          ));
+
+        if (!gitIntegrationRecord) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "GitHub installation not found",
+          });
+        }
+
+        const branches = await getGitHubAppService().listBranches(
+          input.installationId,
+          input.owner,
+          input.repo
+        );
+
+        return { branches };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
+        logger.error("Failed to list branches", {
+          userId,
+          action: "list_branches"
+        }, error as Error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to list branches",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
+  /**
+   * Search files in a repository
+   */
+  searchFiles: protectedProcedure
+    .input(z.object({
+      installationId: z.string(),
+      owner: z.string(),
+      repo: z.string(),
+      query: z.string(),
+      ref: z.string().optional(),
+      extensions: z.array(z.string()).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      try {
+        // Verify the installation belongs to the user
+        const [gitIntegrationRecord] = await db
+          .select()
+          .from(gitIntegration)
+          .where(and(
+            eq(gitIntegration.userId, userId),
+            eq(gitIntegration.providerInstallationId, input.installationId)
+          ));
+
+        if (!gitIntegrationRecord) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "GitHub installation not found",
+          });
+        }
+
+        const files = await getGitHubAppService().searchFiles(
+          input.installationId,
+          input.owner,
+          input.repo,
+          input.query,
+          input.ref,
+          input.extensions
+        );
+
+        return { files };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
+        logger.error("Failed to search files", {
+          userId,
+          action: "search_files"
+        }, error as Error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to search files",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
+  /**
    * Get workspace git configuration
    */
   getWorkspaceGitConfig: protectedProcedure
-    .input(z.object({ workspaceId: z.string().uuid() }))
+    .input(z.object({ workspaceId: z.uuid() }))
     .query(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
 

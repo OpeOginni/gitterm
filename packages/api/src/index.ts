@@ -90,6 +90,49 @@ export const internalProcedure = t.procedure.use(({ ctx, next }) => {
 	return next({ ctx });
 });
 
+export const githubWebhookProcedure = t.procedure.use(({ ctx, next }) => {
+	const githubEvent = ctx.githubEvent;
+	const githubInstallationTargetId = ctx.githubInstallationTargetId;
+
+	const githubXHubSignature256 = ctx.githubXHubSignature256;
+
+	if (!githubXHubSignature256) {
+		throw new TRPCError({
+			code: "UNAUTHORIZED",
+			message: "GitHub X-Hub-Signature-256 required",
+		});
+	}
+	
+	if (!githubEvent) {
+		throw new TRPCError({
+			code: "UNAUTHORIZED",
+			message: "GitHub event required",
+		});
+	}
+	
+	if (!githubInstallationTargetId) {
+		throw new TRPCError({
+			code: "UNAUTHORIZED",
+			message: "GitHub installation target ID required",
+		});
+	}
+
+	return next({ ctx });
+});
+
+export const cloudflareWebhookProcedure = t.procedure.use(({ ctx, next }) => {
+	const token = ctx.bearerToken;
+
+	if (!token) {
+		throw new TRPCError({
+			code: "UNAUTHORIZED",
+			message: "Bearer token required",
+		});
+	}
+
+	return next({ ctx });
+});
+
 /**
  * Workspace-authenticated procedure
  * Uses JWT tokens for workspace-to-backend communication
@@ -100,7 +143,7 @@ export const internalProcedure = t.procedure.use(({ ctx, next }) => {
  * - Workspace auth: Bearer token in Authorization header
  */
 export const workspaceAuthProcedure = t.procedure.use(({ ctx, next }) => {
-	const token = ctx.workspaceToken;
+	const token = ctx.bearerToken;
 	
 	if (!token) {
 		throw new TRPCError({

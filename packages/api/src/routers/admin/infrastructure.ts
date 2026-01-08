@@ -27,20 +27,20 @@ const createCloudProviderSchema = z.object({
 });
 
 const updateCloudProviderSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string().min(1, "Provider name is required").optional(),
   isEnabled: z.boolean().optional(),
 });
 
 const createRegionSchema = z.object({
-  cloudProviderId: z.string().uuid(),
+  cloudProviderId: z.uuid(),
   name: z.string().min(1, "Region name is required"),
   location: z.string().min(1, "Location is required"),
   externalRegionIdentifier: z.string().min(1, "External identifier is required"),
 });
 
 const updateRegionSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string().min(1).optional(),
   location: z.string().min(1).optional(),
   externalRegionIdentifier: z.string().min(1).optional(),
@@ -53,7 +53,7 @@ const createAgentTypeSchema = z.object({
 });
 
 const updateAgentTypeSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string().min(1).optional(),
   serverOnly: z.boolean().optional(),
   isEnabled: z.boolean().optional(),
@@ -62,14 +62,14 @@ const updateAgentTypeSchema = z.object({
 const createImageSchema = z.object({
   name: z.string().min(1, "Image name is required"),
   imageId: z.string().min(1, "Docker image ID is required"),
-  agentTypeId: z.string().uuid(),
+  agentTypeId: z.uuid(),
 });
 
 const updateImageSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string().min(1).optional(),
   imageId: z.string().min(1).optional(),
-  agentTypeId: z.string().uuid().optional(),
+  agentTypeId: z.uuid().optional(),
   isEnabled: z.boolean().optional(),
 });
 
@@ -93,7 +93,7 @@ export const infrastructureRouter = router({
   }),
 
   getProvider: adminProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .query(async ({ input }) => {
       const provider = await db.query.cloudProvider.findFirst({
         where: eq(cloudProvider.id, input.id),
@@ -146,7 +146,7 @@ export const infrastructureRouter = router({
     }),
 
   toggleProvider: adminProcedure
-    .input(z.object({ id: z.string().uuid(), isEnabled: z.boolean() }))
+    .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
     .mutation(async ({ input }) => {
       const [updated] = await db
         .update(cloudProvider)
@@ -179,7 +179,7 @@ export const infrastructureRouter = router({
   }),
 
   getRegion: adminProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .query(async ({ input }) => {
       const r = await db.query.region.findFirst({
         where: eq(region.id, input.id),
@@ -244,7 +244,7 @@ export const infrastructureRouter = router({
     }),
 
   toggleRegion: adminProcedure
-    .input(z.object({ id: z.string().uuid(), isEnabled: z.boolean() }))
+    .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
     .mutation(async ({ input }) => {
       const [updated] = await db
         .update(region)
@@ -274,7 +274,7 @@ export const infrastructureRouter = router({
   }),
 
   getAgentType: adminProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .query(async ({ input }) => {
       const type = await db.query.agentType.findFirst({
         where: eq(agentType.id, input.id),
@@ -325,7 +325,7 @@ export const infrastructureRouter = router({
     }),
 
   toggleAgentType: adminProcedure
-    .input(z.object({ id: z.string().uuid(), isEnabled: z.boolean() }))
+    .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
     .mutation(async ({ input }) => {
       const [updated] = await db
         .update(agentType)
@@ -358,7 +358,7 @@ export const infrastructureRouter = router({
   }),
 
   getImage: adminProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .query(async ({ input }) => {
       const img = await db.query.image.findFirst({
         where: eq(image.id, input.id),
@@ -433,7 +433,7 @@ export const infrastructureRouter = router({
     }),
 
   toggleImage: adminProcedure
-    .input(z.object({ id: z.string().uuid(), isEnabled: z.boolean() }))
+    .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
     .mutation(async ({ input }) => {
       const [updated] = await db
         .update(image)

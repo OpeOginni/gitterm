@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,45 +12,31 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, ArrowUpRight, Cloud, Loader2, Plus, Terminal, Sparkles } from 'lucide-react';
+import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
-import Image from "next/image";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import { getAgentConnectCommand, getWorkspaceDisplayUrl } from "@/lib/utils";
-import { isBillingEnabled } from "@gitterm/env/web";
-import type { Route } from "next";
+import { getAgentConnectCommand } from "@/lib/utils";
 import { useWorkspaceStatusWatcher } from "@/components/workspace-status-watcher";
-
-const ICON_MAP: Record<string, string> = {
-  "opencode": "/opencode.svg",
-  "shuvcode": "/shuvcode.svg",
-  "railway": "/railway.svg",
-  "aws": "/EC2.svg",
-  "claude": "/code.svg", 
-};
-
-const getIcon = (name: string) => {
-  const key = name.toLowerCase();
-  for (const [k, v] of Object.entries(ICON_MAP)) {
-    if (key.includes(k)) return v;
-  }
-  return "/opencode.svg";
-};
+import {
+  WorkspaceTypeSelector,
+  LocalTunnelForm,
+  CloudWorkspaceForm,
+  CliCommandDisplay,
+  RalphWiggumForm,
+  MODEL_PROVIDERS,
+  getModelsForProvider,
+  type WorkspaceType,
+  type AgentType,
+  type CloudProvider,
+  type Region,
+  type Repository,
+  type RepoFile,
+  type RunMode,
+} from "./create-instance";
 
 export function CreateInstanceDialog() {
   const [open, setOpen] = useState(false);
-  const [workspaceType, setWorkspaceType] = useState<"cloud" | "local">("cloud");
+  const [workspaceType, setWorkspaceType] = useState<WorkspaceType>("cloud");
   const [repoUrl, setRepoUrl] = useState("");
   const [localSubdomain, setLocalSubdomain] = useState<string>("");
   const [cloudSubdomain, setCloudSubdomain] = useState<string>("");
@@ -63,6 +49,17 @@ export function CreateInstanceDialog() {
   const [selectedPersistent, setSelectedPersistent] = useState<boolean>(true);
   const { watchWorkspaceStatus } = useWorkspaceStatusWatcher();
 
+  // Ralph Wiggum specific state
+  const [ralphInstallationId, setRalphInstallationId] = useState<string>("");
+  const [ralphRepository, setRalphRepository] = useState<Repository | null>(null);
+  const [ralphBranch, setRalphBranch] = useState<string>("");
+  const [ralphPlanFile, setRalphPlanFile] = useState<RepoFile | null>(null);
+  const [ralphDocumentationFile, setRalphDocumentationFile] = useState<RepoFile | null>(null);
+  const [ralphRunMode, setRalphRunMode] = useState<RunMode>("automatic");
+  const [ralphIterations, setRalphIterations] = useState<number>(5);
+  const [ralphProvider, setRalphProvider] = useState<string>(MODEL_PROVIDERS[0]?.id ?? "");
+  const [ralphModel, setRalphModel] = useState<string>(MODEL_PROVIDERS[0]?.models[0]?.id ?? "");
+
   const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
   const { data: cloudProvidersData } = useQuery(trpc.workspace.listCloudProviders.queryOptions());
   const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
@@ -74,34 +71,34 @@ export function CreateInstanceDialog() {
     );
   }, [cloudProvidersData]);
 
-  const cloudProviders = useMemo(() => {
-    return cloudProvidersData?.cloudProviders?.filter(
+  const cloudProviders = useMemo((): CloudProvider[] => {
+    return (cloudProvidersData?.cloudProviders?.filter(
       (cloud) => cloud.name.toLowerCase() !== "local"
-    ) ?? [];
+    ) ?? []) as CloudProvider[];
   }, [cloudProvidersData]);
 
-  const availableRegions = useMemo(() => {
+  const availableRegions = useMemo((): Region[] => {
     if (!selectedCloudProviderId || !cloudProvidersData?.cloudProviders) {
       return [];
     }
     const selectedCloud = cloudProvidersData.cloudProviders.find(
-      (cloud) => cloud.id === selectedCloudProviderId,
+      (cloud) => cloud.id === selectedCloudProviderId
     );
-    return selectedCloud?.regions ?? [];
+    return (selectedCloud?.regions ?? []) as Region[];
   }, [selectedCloudProviderId, cloudProvidersData]);
 
   // Get filtered agent types based on workspace type
-  const filteredAgentTypes = useMemo(() => {
+  const filteredAgentTypes = useMemo((): AgentType[] => {
     if (!agentTypesData?.agentTypes) return [];
     if (workspaceType === "local") {
-      return agentTypesData.agentTypes.filter((agent) => agent.serverOnly);
+      return agentTypesData.agentTypes.filter((agent) => agent.serverOnly) as AgentType[];
     }
-    return agentTypesData.agentTypes;
+    return agentTypesData.agentTypes as AgentType[];
   }, [agentTypesData, workspaceType]);
 
   // Auto-select first agent when workspace type changes or on initial load
   useEffect(() => {
-    if (filteredAgentTypes.length > 0) {
+    if (filteredAgentTypes.length > 0 && workspaceType !== "ralph-wiggum") {
       const currentAgentValid = filteredAgentTypes.some(
         (agent) => agent.id === selectedAgentTypeId
       );
@@ -109,7 +106,19 @@ export function CreateInstanceDialog() {
         setSelectedAgentTypeId(filteredAgentTypes[0].id);
       }
     }
-  }, [filteredAgentTypes, selectedAgentTypeId]);
+  }, [filteredAgentTypes, selectedAgentTypeId, workspaceType]);
+
+  // Auto-select first installation for Ralph Wiggum
+  useEffect(() => {
+    if (
+      workspaceType === "ralph-wiggum" &&
+      installationsData?.installations &&
+      installationsData.installations.length > 0 &&
+      !ralphInstallationId
+    ) {
+      setRalphInstallationId(installationsData.installations[0].git_integration.id);
+    }
+  }, [workspaceType, installationsData, ralphInstallationId]);
 
   useEffect(() => {
     if (workspaceType === "local" && localProvider) {
@@ -133,7 +142,7 @@ export function CreateInstanceDialog() {
   useEffect(() => {
     if (workspaceType === "cloud") {
       if (availableRegions.length > 0) {
-        if (!selectedRegion || !availableRegions.some(reg => reg.id === selectedRegion)) {
+        if (!selectedRegion || !availableRegions.some((reg) => reg.id === selectedRegion)) {
           setSelectedRegion(availableRegions[0].id);
         }
       } else {
@@ -148,26 +157,68 @@ export function CreateInstanceDialog() {
       setCloudSubdomain("");
       setLocalSubdomain("");
       setSelectedRegion("");
+      // Reset Ralph Wiggum state
+      setRalphRepository(null);
+      setRalphBranch("");
+      setRalphPlanFile(null);
+      setRalphDocumentationFile(null);
+      setRalphRunMode("automatic");
+      setRalphIterations(5);
+      setRalphProvider(MODEL_PROVIDERS[0]?.id ?? "");
+      setRalphModel(MODEL_PROVIDERS[0]?.models[0]?.id ?? "");
     }
-  }, [open]); 
+  }, [open]);
 
-  const createServiceMutation = useMutation(trpc.workspace.createWorkspace.mutationOptions({
-    onSuccess: (data) => {
-      if (data.command) {
-        toast.success("Local tunnel created successfully");
-        setCliCommand(getAgentConnectCommand(data.workspace.id));
-      } else {
-        toast.success("Workspace is provisioning");
-        watchWorkspaceStatus({ workspaceId: data.workspace.id, userId: data.workspace.userId });
-      }
-      setOpen(false);
-      queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
-    },
-    onError: (error) => {
-      console.error(error);
-      toast.error(`Failed to create workspace: ${error.message}`);
-    },
-  }));
+  const createServiceMutation = useMutation(
+    trpc.workspace.createWorkspace.mutationOptions({
+      onSuccess: (data) => {
+        if (data.command) {
+          toast.success("Local tunnel created successfully");
+          setCliCommand(getAgentConnectCommand(data.workspace.id));
+        } else {
+          toast.success("Workspace is provisioning");
+          watchWorkspaceStatus({ workspaceId: data.workspace.id, userId: data.workspace.userId });
+        }
+        setOpen(false);
+        queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
+      },
+      onError: (error) => {
+        console.error(error);
+        toast.error(`Failed to create workspace: ${error.message}`);
+      },
+    })
+  );
+
+  const createAgentLoopMutation = useMutation(
+    trpc.agentLoop.createLoop.mutationOptions({
+      onSuccess: () => {
+        toast.success("Agent loop created! Go to Agent Loops to start your first run.");
+        queryClient.invalidateQueries(trpc.agentLoop.listLoops.queryOptions());
+        setOpen(false);
+      },
+      onError: (error) => {
+        console.error(error);
+        toast.error(`Failed to create agent loop: ${error.message}`);
+      },
+    })
+  );
+
+  // Memoized callbacks for Ralph Wiggum form to prevent unnecessary rerenders
+  const handleRalphRepositoryChange = useCallback((repo: Repository | null) => {
+    setRalphRepository(repo);
+  }, []);
+
+  const handleRalphBranchChange = useCallback((branch: string) => {
+    setRalphBranch(branch);
+  }, []);
+
+  const handleRalphPlanFileChange = useCallback((file: RepoFile | null) => {
+    setRalphPlanFile(file);
+  }, []);
+
+  const handleRalphDocumentationFileChange = useCallback((file: RepoFile | null) => {
+    setRalphDocumentationFile(file);
+  }, []);
 
   const handleSubmit = async () => {
     if (workspaceType === "local") {
@@ -190,6 +241,60 @@ export function CreateInstanceDialog() {
       return;
     }
 
+    if (workspaceType === "ralph-wiggum") {
+      if (!ralphInstallationId) {
+        toast.error("Please select a GitHub account.");
+        return;
+      }
+      if (!ralphRepository) {
+        toast.error("Please select a repository.");
+        return;
+      }
+      if (!ralphBranch) {
+        toast.error("Please select a branch.");
+        return;
+      }
+      if (!ralphPlanFile) {
+        toast.error("Please select a plan file.");
+        return;
+      }
+      if (!ralphProvider) {
+        toast.error("Please select an AI provider.");
+        return;
+      }
+      if (!ralphModel) {
+        toast.error("Please select a model.");
+        return;
+      }
+
+      // Get the first cloud provider as sandbox provider (Cloudflare sandbox is used internally)
+      const sandboxProvider = cloudProviders[0];
+      if (!sandboxProvider) {
+        toast.error("No sandbox provider available. Please try again later.");
+        return;
+      }
+
+      const fullModelId = `${ralphProvider}/${ralphModel}`;
+      
+      // Create the loop only - user will start runs from the Agent Loops dashboard
+      await createAgentLoopMutation.mutateAsync({
+        gitIntegrationId: ralphInstallationId,
+        sandboxProviderId: sandboxProvider.id,
+        repositoryOwner: ralphRepository.owner,
+        repositoryName: ralphRepository.name,
+        branch: ralphBranch,
+        planFilePath: ralphPlanFile.path,
+        progressFilePath: ralphDocumentationFile?.path,
+        modelProvider: ralphProvider,
+        model: fullModelId,
+        automationEnabled: ralphRunMode === "automatic",
+        maxRuns: ralphIterations,
+      });
+
+      return;
+    }
+
+    // Cloud workspace
     if (!repoUrl) {
       toast.error("Please enter a repository URL.");
       return;
@@ -207,9 +312,78 @@ export function CreateInstanceDialog() {
       regionId: selectedRegion,
       gitInstallationId: selectedGitInstallationId === "none" ? undefined : selectedGitInstallationId,
       persistent: selectedPersistent,
-      subdomain: cloudSubdomain || undefined, // Include custom subdomain if provided
+      subdomain: cloudSubdomain || undefined,
     });
   };
+
+  const getDialogDescription = () => {
+    switch (workspaceType) {
+      case "cloud":
+        return "Deploy a new development workspace from a GitHub repository.";
+      case "local":
+        return "Create a local tunnel to expose your local development server.";
+      case "ralph-wiggum":
+        return "Create an autonomous agent that executes tasks from your plan file.";
+      default:
+        return "";
+    }
+  };
+
+  const getSubmitButtonText = () => {
+    if (workspaceType === "ralph-wiggum") {
+      if (createAgentLoopMutation.isPending) return "Creating loop...";
+      return "Create Ralph Wiggum";
+    }
+    if (createServiceMutation.isPending) {
+      return "Creating...";
+    }
+    return "Create Instance";
+  };
+
+  const isSubmitting = useMemo(() => {
+    return createServiceMutation.isPending || createAgentLoopMutation.isPending;
+  }, [
+    createServiceMutation.isPending,
+    createAgentLoopMutation.isPending,
+  ]);
+
+  // Validation for each form type
+  const isFormValid = useMemo(() => {
+    switch (workspaceType) {
+      case "local":
+        return !!(selectedAgentTypeId && localProvider && selectedRegion);
+      case "cloud":
+        return !!(repoUrl && selectedAgentTypeId && selectedCloudProviderId && selectedRegion);
+      case "ralph-wiggum":
+        const hasRequiredFields = !!(
+          ralphInstallationId &&
+          ralphRepository &&
+          ralphBranch &&
+          ralphPlanFile &&
+          ralphProvider &&
+          ralphModel
+        );
+        const hasValidIterations = ralphRunMode === "manual" || (ralphIterations >= 1 && ralphIterations <= 100);
+        return hasRequiredFields && hasValidIterations;
+      default:
+        return false;
+    }
+  }, [
+    workspaceType,
+    selectedAgentTypeId,
+    localProvider,
+    selectedRegion,
+    repoUrl,
+    selectedCloudProviderId,
+    ralphInstallationId,
+    ralphRepository,
+    ralphBranch,
+    ralphPlanFile,
+    ralphRunMode,
+    ralphIterations,
+    ralphProvider,
+    ralphModel,
+  ]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -218,372 +392,111 @@ export function CreateInstanceDialog() {
           <Plus className="h-4 w-4" /> New Instance
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px] border-border/50 bg-card">
+      <DialogContent className="sm:max-w-[600px] border-border/50 bg-card max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl">Create New Instance</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {workspaceType === "cloud" 
-              ? "Deploy a new development workspace from a GitHub repository."
-              : "Create a local tunnel to expose your local development server."}
+            {getDialogDescription()}
           </DialogDescription>
         </DialogHeader>
 
         {cliCommand ? (
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-3">
-              <Label className="text-sm font-medium">Run this command to connect:</Label>
-              <div className="flex gap-2">
-                <Input value={cliCommand} readOnly className="font-mono text-sm bg-secondary/50 border-border/50" />
-                <Button
-                  variant="outline"
-                  className="border-border/50 hover:bg-secondary/50"
-                  onClick={() => {
-                    navigator.clipboard.writeText(cliCommand);
-                    toast.success("Copied to clipboard");
-                  }}
-                >
-                  Copy
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Once connected, your local server will be available at the subdomain you chose.
-              </p>
-            </div>
-            <DialogFooter>
-              <Button 
-                onClick={() => {setOpen(false); setCliCommand(null); }}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Done
-              </Button>
-            </DialogFooter>
-          </div>
+          <CliCommandDisplay
+            command={cliCommand}
+            onDone={() => {
+              setOpen(false);
+              setCliCommand(null);
+            }}
+          />
         ) : (
           <>
             <div className="grid gap-5 py-4">
-              <div className="grid gap-2">
-                <Label className="text-sm font-medium">Workspace Type</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setWorkspaceType("cloud")}
-                    className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
-                      workspaceType === "cloud"
-                        ? "border-accent bg-primary/10"
-                        : "border-border/50 hover:border-border hover:bg-secondary"
-                    }`}
-                  >
-                    <Cloud className={`h-5 w-5 ${workspaceType === "cloud" ? "text-primary" : "text-muted-foreground"}`} />
-                    <div className="text-left">
-                      <p className={`text-sm font-medium ${workspaceType === "cloud" ? "text-foreground" : ""}`}>Cloud Instance</p>
-                      <p className="text-xs text-muted-foreground">Remote workspace</p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWorkspaceType("local")}
-                    className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
-                      workspaceType === "local"
-                        ? "border-accent bg-primary/10"
-                        : "border-border/50 hover:border-border hover:bg-secondary"
-                    }`}
-                  >
-                    <Terminal className={`h-5 w-5 ${workspaceType === "local" ? "text-primary" : "text-muted-foreground"}`} />
-                    <div className="text-left">
-                      <p className={`text-sm font-medium ${workspaceType === "local" ? "text-foreground" : ""}`}>Local Tunnel</p>
-                      <p className="text-xs text-muted-foreground">Expose local server</p>
-                    </div>
-                  </button>
-                </div>
-              </div>
+              <WorkspaceTypeSelector value={workspaceType} onChange={setWorkspaceType} />
 
-              {workspaceType === "local" ? (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="subdomain" className="text-sm font-medium">Subdomain</Label>
-                    <Input
-                      id="subdomain"
-                      placeholder="my-app"
-                      value={localSubdomain}
-                      onChange={(e) => setLocalSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                      className="bg-secondary/30 border-border/50 focus:border-accent"
-                      disabled={!subdomainPermissions?.canUseCustomTunnelSubdomain}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {subdomainPermissions?.canUseCustomTunnelSubdomain ? (
-                        <>Your tunnel will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(localSubdomain || "my-app")}</span></>
-                      ) : (
-                        <span className="flex items-center gap-1 flex-wrap">
-                          A subdomain will be generated automatically.
-                          {isBillingEnabled() && (
-                            <Link 
-                              href={"/pricing" as Route} 
-                              className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
-                            >
-                              <Sparkles className="h-3 w-3" />
-                              Upgrade for custom subdomains
-                            </Link>
-                          )}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="local-name" className="text-sm font-medium">Name (optional)</Label>
-                    <Input
-                      id="local-name"
-                      placeholder="My Local App"
-                      value={localName}
-                      onChange={(e) => setLocalName(e.target.value)}
-                      className="bg-secondary/30 border-border/50 focus:border-accent"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Agent Type</Label>
-                    <Select value={selectedAgentTypeId} onValueChange={setSelectedAgentTypeId}>
-                      <SelectTrigger className="bg-secondary/30 border-border/50">
-                        <SelectValue placeholder="Select agent" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {filteredAgentTypes.map((agent) => (
-                          <SelectItem key={agent.id} value={agent.id}>
-                            <div className="flex items-center">
-                              <Image 
-                                src={getIcon(agent.name) || "/placeholder.svg"} 
-                                alt={agent.name} 
-                                width={16} 
-                                height={16} 
-                                className="mr-2 h-4 w-4" 
-                              />
-                              {agent.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Choose which agent you are going to run in your local environment
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="repo" className="text-sm font-medium">GitHub Repository URL</Label>
-                    <Input
-                      id="repo"
-                      placeholder="https://github.com/username/repo"
-                      value={repoUrl}
-                      onChange={(e) => setRepoUrl(e.target.value)}
-                      className="bg-secondary/30 border-border/50 focus:border-accent"
-                    />
-                  </div>
+              {workspaceType === "local" && (
+                <LocalTunnelForm
+                  subdomain={localSubdomain}
+                  onSubdomainChange={setLocalSubdomain}
+                  name={localName}
+                  onNameChange={setLocalName}
+                  selectedAgentTypeId={selectedAgentTypeId}
+                  onAgentTypeChange={setSelectedAgentTypeId}
+                  agentTypes={filteredAgentTypes}
+                  subdomainPermissions={subdomainPermissions}
+                />
+              )}
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="cloud-subdomain" className="text-sm font-medium">
-                      Custom Subdomain <span className="text-muted-foreground font-normal">(optional)</span>
-                    </Label>
-                    <Input
-                      id="cloud-subdomain"
-                      placeholder="my-workspace"
-                      value={cloudSubdomain}
-                      onChange={(e) => setCloudSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                      className="bg-secondary/30 border-border/50 focus:border-accent"
-                      disabled={!subdomainPermissions?.canUseCustomCloudSubdomain}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {subdomainPermissions?.canUseCustomCloudSubdomain ? (
-                        cloudSubdomain 
-                          ? <>Your workspace will be available at: <span className="font-mono text-primary">{getWorkspaceDisplayUrl(cloudSubdomain)}</span></>
-                          : "Leave empty for an auto-generated subdomain"
-                      ) : (
-                        <span className="flex items-center gap-1 flex-wrap">
-                          A subdomain will be generated automatically.
-                          {isBillingEnabled() && (
-                            <Link 
-                              href={"/pricing" as Route} 
-                              className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
-                            >
-                              <Sparkles className="h-3 w-3" />
-                              Upgrade for custom subdomains
-                            </Link>
-                          )}
-                        </span>
-                      )}
-                    </p>
-                  </div>
+              {workspaceType === "cloud" && (
+                <CloudWorkspaceForm
+                  repoUrl={repoUrl}
+                  onRepoUrlChange={setRepoUrl}
+                  subdomain={cloudSubdomain}
+                  onSubdomainChange={setCloudSubdomain}
+                  selectedAgentTypeId={selectedAgentTypeId}
+                  onAgentTypeChange={setSelectedAgentTypeId}
+                  agentTypes={filteredAgentTypes}
+                  selectedCloudProviderId={selectedCloudProviderId}
+                  onCloudProviderChange={setSelectedCloudProviderId}
+                  cloudProviders={cloudProviders}
+                  selectedRegion={selectedRegion}
+                  onRegionChange={setSelectedRegion}
+                  availableRegions={availableRegions}
+                  selectedGitInstallationId={selectedGitInstallationId}
+                  onGitInstallationChange={setSelectedGitInstallationId}
+                  installations={installationsData?.installations}
+                  persistent={selectedPersistent}
+                  onPersistentChange={setSelectedPersistent}
+                  subdomainPermissions={subdomainPermissions}
+                />
+              )}
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label className="text-sm font-medium">Agent Type</Label>
-                      <Select value={selectedAgentTypeId} onValueChange={setSelectedAgentTypeId}>
-                        <SelectTrigger className="bg-secondary/30 border-border/50">
-                          <SelectValue placeholder="Select agent" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {filteredAgentTypes.map((agent) => (
-                            <SelectItem key={agent.id} value={agent.id}>
-                              <div className="flex items-center">
-                                <Image 
-                                  src={getIcon(agent.name) || "/placeholder.svg"} 
-                                  alt={agent.name} 
-                                  width={16} 
-                                  height={16} 
-                                  className="mr-2 h-4 w-4" 
-                                />
-                                {agent.name}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label className="text-sm font-medium">Cloud Provider</Label>
-                      <Select value={selectedCloudProviderId} onValueChange={setSelectedCloudProviderId}>
-                        <SelectTrigger className="bg-secondary/30 border-border/50">
-                          <SelectValue placeholder="Select cloud" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {cloudProviders.length > 0 ? (
-                            cloudProviders.map((cloud) => (
-                              <SelectItem key={cloud.id} value={cloud.id}>
-                                <div className="flex items-center">
-                                  <Image 
-                                    src={getIcon(cloud.name) || "/placeholder.svg"} 
-                                    alt={cloud.name} 
-                                    width={16} 
-                                    height={16} 
-                                    className="mr-2 h-4 w-4" 
-                                  />
-                                  {cloud.name}
-                                </div>
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="no-cloud-providers" disabled>No cloud providers found</SelectItem>
-                          )} 
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-          
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label className="text-sm font-medium">Region</Label>
-                      <Select
-                        value={selectedRegion || availableRegions[0]?.id || ""}
-                        onValueChange={setSelectedRegion}
-                        disabled={availableRegions.length === 0}
-                      >
-                        <SelectTrigger className="bg-secondary/30 border-border/50">
-                          <SelectValue
-                            placeholder={availableRegions.length > 0 ? "Select region" : "Coming soon"}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableRegions.length > 0 ? (
-                            availableRegions.map((region) => (
-                              <SelectItem key={region.id} value={region.id}>
-                                {region.name}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="no-regions" disabled>
-                              <div className="flex items-center">
-                                <AlertCircle className="mr-2 h-4 w-4" />
-                                Coming soon
-                              </div>
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label className="text-sm font-medium flex items-center gap-1">
-                        Git Setup 
-                        <Link href="/dashboard/integrations" className="text-primary hover:text-primary/80">
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </Label>
-                      <Select 
-                        value={selectedGitInstallationId} 
-                        onValueChange={setSelectedGitInstallationId}
-                        disabled={installationsData?.installations && installationsData.installations.length === 0}
-                      >
-                        <SelectTrigger className="bg-secondary/30 border-border/50">
-                          <SelectValue placeholder={installationsData?.installations && installationsData.installations.length > 0 ? "Select git installation" : "No git installations found"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none" key="none">
-                            <div className="flex items-center">
-                              None
-                            </div>
-                          </SelectItem>
-                          {installationsData?.installations && installationsData.installations.length > 0 && (
-                            installationsData?.installations?.map((installation) => (
-                              <SelectItem key={installation.git_integration.id} value={installation.git_integration.id}>
-                                <div className="flex items-center">
-                                  <Image 
-                                    src={"/github.svg"} 
-                                    alt="GitHub" 
-                                    width={16} 
-                                    height={16} 
-                                    className="mr-2 h-4 w-4" 
-                                  />
-                                  {installation.git_integration.providerAccountLogin}
-                                </div>
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-start gap-3 col-span-2 p-4 rounded-lg bg-secondary/30 border border-border/50">
-                      <Checkbox
-                        id="persistent"
-                        checked={selectedPersistent}
-                        onCheckedChange={(checked) => setSelectedPersistent(checked as boolean)}
-                        className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-accent"
-                      />
-                      <div className="grid gap-1">
-                        <Label htmlFor="persistent" className="text-sm font-medium cursor-pointer">
-                          Persistent Storage
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Keep your files and data between sessions. Disable for ephemeral workspaces.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </>
+              {workspaceType === "ralph-wiggum" && (
+                <RalphWiggumForm
+                  installations={installationsData?.installations}
+                  selectedInstallationId={ralphInstallationId}
+                  onInstallationChange={setRalphInstallationId}
+                  selectedRepository={ralphRepository}
+                  onRepositoryChange={handleRalphRepositoryChange}
+                  selectedBranch={ralphBranch}
+                  onBranchChange={handleRalphBranchChange}
+                  planFile={ralphPlanFile}
+                  onPlanFileChange={handleRalphPlanFileChange}
+                  documentationFile={ralphDocumentationFile}
+                  onDocumentationFileChange={handleRalphDocumentationFileChange}
+                  runMode={ralphRunMode}
+                  onRunModeChange={setRalphRunMode}
+                  iterations={ralphIterations}
+                  onIterationsChange={setRalphIterations}
+                  selectedProvider={ralphProvider}
+                  onProviderChange={setRalphProvider}
+                  selectedModel={ralphModel}
+                  onModelChange={setRalphModel}
+                />
               )}
             </div>
             <DialogFooter>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setOpen(false)}
+                disabled={isSubmitting}
                 className="border-border/50 hover:bg-secondary/50"
               >
                 Cancel
               </Button>
-              <Button 
-                onClick={handleSubmit} 
-                disabled={createServiceMutation.isPending}
+              <Button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !isFormValid}
                 className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                {createServiceMutation.isPending ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Creating...
+                    {getSubmitButtonText()}
                   </>
                 ) : (
                   <>
                     <Plus className="h-4 w-4" />
-                    Create Instance
+                    {getSubmitButtonText()}
                   </>
                 )}
               </Button>

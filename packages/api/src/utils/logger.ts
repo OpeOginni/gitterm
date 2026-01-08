@@ -12,31 +12,52 @@ export interface WorkspaceLogContext {
   region?: string;
   durationMinutes?: number;
   stopSource?: string;
+  installationId?: string;
+  error?: string;
 }
 
-function formatLog(level: LogLevel, message: string, context?: WorkspaceLogContext): string {
+export interface AgentLoopLogContext {
+  loopId?: string;
+  runId?: string;
+  runNumber?: number;
+  userId?: string;
+  action?: string;
+  sandboxId?: string;
+  commitSha?: string;
+  durationSeconds?: number;
+  isComplete?: boolean;
+  acknowledged?: boolean;
+  error?: string;
+  status?: string;
+  totalRuns?: number;
+  maxRuns?: number;
+}
+
+export type LogContext = WorkspaceLogContext | AgentLoopLogContext;
+
+function formatLog(level: LogLevel, message: string, context?: LogContext): string {
   const timestamp = new Date().toISOString();
   const contextStr = context ? ` ${JSON.stringify(context)}` : "";
   return `[${timestamp}] [${level.toUpperCase()}] ${message}${contextStr}`;
 }
 
 export const logger = {
-  info: (message: string, context?: WorkspaceLogContext) => {
+  info: (message: string, context?: LogContext) => {
     console.log(formatLog("info", message, context));
   },
   
-  warn: (message: string, context?: WorkspaceLogContext) => {
+  warn: (message: string, context?: LogContext) => {
     console.warn(formatLog("warn", message, context));
   },
   
-  error: (message: string, context?: WorkspaceLogContext, error?: Error) => {
+  error: (message: string, context?: LogContext, error?: Error) => {
     console.error(formatLog("error", message, context));
     if (error) {
       console.error(error);
     }
   },
   
-  debug: (message: string, context?: WorkspaceLogContext) => {
+  debug: (message: string, context?: LogContext) => {
     console.log(formatLog("debug", message, context));
   },
 

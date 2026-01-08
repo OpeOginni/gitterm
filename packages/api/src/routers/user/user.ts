@@ -217,7 +217,7 @@ export const userRouter = router({
     }),
 
     deleteAgentConfiguration: protectedProcedure.input(z.object({
-        id: z.string().uuid(),
+        id: z.uuid(),
     })).mutation(async ({ ctx, input }) => {
         const userId = ctx.session.user.id;
         if (!userId) {

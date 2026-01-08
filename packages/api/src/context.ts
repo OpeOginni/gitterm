@@ -15,15 +15,23 @@ export async function createContext({ context }: CreateContextOptions) {
 	
 	// Extract workspace JWT token from Authorization header
 	const authHeader = context.req.raw.headers.get("authorization");
-	const workspaceToken = authHeader?.startsWith("Bearer ") 
+	const bearerToken = authHeader?.startsWith("Bearer ") 
 		? authHeader.substring(7) 
 		: undefined;
 
+	const githubEvent = context.req.raw.headers.get("X-GitHub-Event");
+	const githubInstallationTargetId = context.req.raw.headers.get("X-GitHub-Hook-Installation-Target-ID");
+	const githubXHubSignature256 = context.req.raw.headers.get("x-hub-signature-256");
+	const githubRawBody = await context.req.text();
 
 	return {
 		session,
 		internalApiKey,
-		workspaceToken,
+		bearerToken,
+		githubEvent,
+		githubInstallationTargetId,
+		githubXHubSignature256,
+		githubRawBody
 	};
 }
 

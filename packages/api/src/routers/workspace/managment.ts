@@ -11,7 +11,6 @@ import {
 import { agentType, image, cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
-import { validateAgentConfig } from "@gitterm/schema";
 import {
   getOrCreateDailyUsage,
   hasRemainingQuota,
@@ -602,7 +601,7 @@ export const workspaceRouter = router({
   heartbeat: workspaceAuthProcedure
     .input(
       z.object({
-        workspaceId: z.string().uuid(),
+        workspaceId: z.uuid(),
         timestamp: z.number().optional(),
         cpu: z.number().optional(),
         active: z.boolean().optional(),
@@ -1205,7 +1204,7 @@ export const workspaceRouter = router({
   stopWorkspace: protectedProcedure
     .input(
       z.object({
-        workspaceId: z.string().uuid(),
+        workspaceId: z.uuid(),
       })
     )
     .mutation(async ({ input, ctx }) => {

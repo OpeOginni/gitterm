@@ -2,61 +2,19 @@ import z from "zod";
 import { internalProcedure, router } from "../../index";
 import { db, eq, and, sql, gt, or } from "@gitterm/db";
 import { workspace, usageSession, dailyUsage, type SessionStopSource } from "@gitterm/db/schema/workspace";
-import { workspaceGitConfig } from "@gitterm/db/schema/integrations";
+import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/integrations";
+import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { closeUsageSession, getConfiguredIdleTimeout, getConfiguredFreeTierMinutes } from "../../utils/metering";
 import { auth } from "@gitterm/auth";
-import { GitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
+import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { logger } from "../../utils/logger";
-
-// Railway webhook schema (moved from listener)
-const deploymentStatus = z.enum(["BUILDING", "DEPLOYING", "FAILED", "SUCCESS"]);
-const webhookType = z.enum(["Deployment.created", "Deployment.deploying", "Deployment.deployed", "Deployment.failed"]);
-const webhookSeverity = z.enum(["INFO", "WARNING", "ERROR"]);
-
-const railwayWebhookSchema = z.object({
-  type: webhookType,
-  severity: webhookSeverity,
-  timestamp: z.string(),
-  resource: z.object({
-    workspace: z.object({
-      id: z.string(),
-      name: z.string(),
-    }).optional(),
-    project: z.object({
-      id: z.string(),
-      name: z.string(),
-    }).optional(),
-    environment: z.object({
-      id: z.string(),
-      name: z.string(),
-      isEphemeral: z.boolean(),
-    }).optional(),
-    service: z.object({
-      id: z.string(),
-      name: z.string()
-    }).optional(),
-    deployment: z.object({
-      id: z.string().optional(),
-    }).optional(),
-  }).passthrough(),
-  details: z.object({
-    id: z.string().optional(),
-    source: z.string().optional(),
-    status: deploymentStatus.optional(),
-    builder: z.string().optional(),
-    providers: z.string().optional(),
-    serviceId: z.string().optional(),
-    imageSource: z.string().optional(),
-    branch: z.string().optional(),
-    commitHash: z.string().optional(),
-    commitAuthor: z.string().optional(),
-    commitMessage: z.string().optional(),
-  }).passthrough(),
-});
+import { railwayWebhookSchema } from "../railway/webhook";
+import { agentLoopWebhookSchema } from "../agent-loop/webhook";
+import { AgentLoopService, getAgentLoopService } from "../../service/agent-loop";
 
 /**
  * Internal router for service-to-service communication
@@ -409,7 +367,7 @@ export const internalRouter = router({
   forkRepository: internalProcedure
     .input(
       z.object({
-        workspaceId: z.string().uuid(),
+        workspaceId: z.uuid(),
         owner: z.string(),
         repo: z.string(),
       })
@@ -447,9 +405,9 @@ export const internalRouter = router({
           });
         }
 
-        const githubAppService = new GitHubAppService();
+        const githubService = getGitHubAppService();
         // Get GitHub App installation with verification
-        const installation = await githubAppService.getUserInstallation(
+        const installation = await githubService.getUserInstallation(
           userId, 
           workspaceRecord.gitIntegrationId,
           true // verify
@@ -489,7 +447,7 @@ export const internalRouter = router({
         }
 
         // Fork the repository
-        const fork = await githubAppService.forkRepository(
+        const fork = await githubService.forkRepository(
           installation.installationId,
           input.owner,
           input.repo
@@ -535,8 +493,8 @@ export const internalRouter = router({
         }
 
         // Generate authenticated URL for the workspace to use
-        const { token } = await githubAppService.getUserToServerToken(installation.installationId);
-        const authenticatedUrl = githubAppService.getAuthenticatedGitUrl(token, fork.owner, fork.repo);
+        const { token } = await githubService.getUserToServerToken(installation.installationId);
+        const authenticatedUrl = githubService.getAuthenticatedGitUrl(token, fork.owner, fork.repo);
 
         logger.info("Fork operation completed", {
           workspaceId: input.workspaceId,
@@ -665,6 +623,314 @@ export const internalRouter = router({
         userId: ws.userId,
         workspaceDomain: ws.domain,
       };
+    }),
+
+  /**
+   * Process GitHub installation webhook
+   * Called by listener when it receives a GitHub App installation webhook
+   */
+  processGitHubInstallationWebhook: internalProcedure
+    .input(z.object({
+      action: z.enum(["created", "deleted", "suspend", "unsuspend", "new_permissions_accepted"]),
+      installationId: z.string(),
+      accountLogin: z.string(),
+      accountId: z.string(),
+      accountType: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      logger.info("Processing GitHub installation webhook", {
+        action: `github_webhook_${input.action}`,
+        installationId: input.installationId,
+      });
+
+      if (input.action === "deleted") {
+        // User uninstalled the GitHub App from GitHub's side
+        // Clean up our database records
+        const githubService = getGitHubAppService();
+        const result = await githubService.removeInstallationByInstallationId(input.installationId);
+        
+        logger.info("GitHub installation deleted via webhook", {
+          action: "github_webhook_deleted",
+          installationId: input.installationId,
+        });
+
+        return {
+          success: true,
+          action: "deleted",
+          deletedInstallations: result.deletedInstallations,
+          deletedIntegrations: result.deletedIntegrations,
+        };
+      }
+
+      if (input.action === "suspend") {
+        // App was suspended - mark as suspended in our database
+        const now = new Date();
+        
+        const updatedInstallations = await db
+          .update(githubAppInstallation)
+          .set({ 
+            suspended: true,
+            suspendedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(githubAppInstallation.installationId, input.installationId))
+          .returning();
+
+        logger.info("GitHub installation suspended", {
+          action: "github_webhook_suspend",
+          installationId: input.installationId,
+        });
+
+        return {
+          success: true,
+          action: "suspended",
+          updatedCount: updatedInstallations.length,
+        };
+      }
+
+      if (input.action === "unsuspend") {
+        // App was unsuspended - clear the suspended flag
+        const now = new Date();
+        
+        const updatedInstallations = await db
+          .update(githubAppInstallation)
+          .set({ 
+            suspended: false,
+            suspendedAt: null,
+            updatedAt: now,
+          })
+          .where(eq(githubAppInstallation.installationId, input.installationId))
+          .returning();
+
+        logger.info("GitHub installation unsuspended", {
+          action: "github_webhook_unsuspend",
+          installationId: input.installationId,
+        });
+
+        return {
+          success: true,
+          action: "unsuspended",
+          updatedCount: updatedInstallations.length,
+        };
+      }
+
+      // For "created" and "new_permissions_accepted", we just acknowledge
+      // The user flow already handles storing installation on the callback
+      logger.info(`GitHub installation webhook received: ${input.action}`, {
+        action: `github_webhook_${input.action}`,
+        installationId: input.installationId,
+      });
+
+      return {
+        success: true,
+        action: input.action,
+      };
+    }),
+
+  // ============================================================================
+  // AGENT LOOP CALLBACK
+  // Called by Cloudflare worker when a sandbox run completes or fails
+  // ============================================================================
+
+  /**
+   * Process agent loop run callback from Cloudflare worker
+   * Updates run status, loop counters, and triggers next run if automated
+   */
+  processAgentLoopCallback: internalProcedure
+    .input(agentLoopWebhookSchema)
+    .mutation(async ({ input }) => {
+      logger.info("Processing agent loop callback", {
+        action: "agent_loop_callback",
+        runId: input.runId,
+      });
+
+      // Get the run with its loop
+      const run = await db.query.agentLoopRun.findFirst({
+        where: eq(agentLoopRun.id, input.runId),
+        with: {
+          loop: true,
+        },
+      });
+
+      if (!run) {
+        logger.warn("Agent loop callback: run not found", {
+          action: "agent_loop_callback_not_found",
+          runId: input.runId,
+        });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Run not found",
+        });
+      }
+
+      // Check if run is in a state that can be updated
+      if (run.status !== "running" && run.status !== "pending") {
+        logger.warn("Agent loop callback: run already completed", {
+          action: "agent_loop_callback_already_done",
+          runId: input.runId,
+          status: run.status,
+        });
+        return {
+          success: true,
+          message: "Run already completed, callback ignored",
+        };
+      }
+
+      const loop = run.loop;
+      const now = new Date();
+      const durationSeconds = input.durationSeconds || 
+        (run.startedAt ? Math.floor((now.getTime() - run.startedAt.getTime()) / 1000) : 0);
+
+      if (input.success) {
+        // Update run as completed
+        await db
+          .update(agentLoopRun)
+          .set({
+            status: "completed",
+            completedAt: now,
+            durationSeconds,
+            sandboxId: input.sandboxId,
+            commitSha: input.commitSha,
+            commitMessage: input.commitMessage,
+          })
+          .where(eq(agentLoopRun.id, input.runId));
+
+        // Update loop counters
+
+        const isLastIteration = loop.totalRuns + 1 >= loop.maxRuns;
+
+        await db
+          .update(agentLoop)
+          .set({
+            successfulRuns: loop.successfulRuns + 1,
+            lastRunId: input.runId,
+            lastRunAt: now,
+            updatedAt: now,
+            // Mark loop as completed if agent says so
+            ...(isLastIteration ? { status: "completed" as const } : {}),
+          })
+          .where(eq(agentLoop.id, loop.id));
+
+        logger.info("Agent loop run completed successfully", {
+          action: "agent_loop_run_complete",
+          loopId: loop.id,
+          runId: input.runId,
+          runNumber: run.runNumber,
+          commitSha: input.commitSha,
+          durationSeconds,
+          isComplete: input.isComplete,
+        });
+
+        // Trigger next run if automation is enabled and not complete
+        if (loop.automationEnabled && !isLastIteration) {
+          // Create next pending run with the same AI config as the completed run
+          const nextRunNumber = loop.totalRuns + 1; // +1 for next
+          const [newRun] = await db
+            .insert(agentLoopRun)
+            .values({
+              loopId: loop.id,
+              runNumber: nextRunNumber,
+              status: "pending",
+              triggerType: "automated",
+              modelProvider: run.modelProvider,
+              model: run.model,
+            })
+            .returning();
+
+          if (!newRun) {
+            logger.error("Failed to create next automated run", {
+              action: "automated_run_creation_failed",
+              loopId: loop.id,
+              runNumber: nextRunNumber,
+            });
+
+            return {
+              success: false,
+              message: "Failed to create next automated run",
+            };
+          }
+
+          const service = getAgentLoopService();
+          const startResult = await service.startRunAsync({
+            loopId: loop.id,
+            runId: newRun.id,
+            provider: run.modelProvider,
+            model: newRun.model,
+            apiKey: "", // TODO: Get API key from loop
+            prompt: loop.prompt || undefined,
+          })
+
+          if (!startResult.success) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: startResult.error || "Failed to start run",
+            });
+          }
+
+          await db.update(agentLoop).set({
+            totalRuns: loop.totalRuns + 1,
+            lastRunId: newRun.id
+          }).where(eq(agentLoop.id, loop.id));
+
+          logger.info("Created next automated run", {
+            action: "automated_run_created",
+            loopId: loop.id,
+            runId: newRun?.id,
+            runNumber: nextRunNumber,
+          });
+
+
+          return {
+            success: true,
+            message: "Run completed, next run created",
+            nextRunId: newRun?.id,
+          };
+        }
+
+        return {
+          success: true,
+          message: input.isComplete ? "Run completed, plan is complete" : "Run completed",
+        };
+      } else {
+        // Update run as failed
+        await db
+          .update(agentLoopRun)
+          .set({
+            status: "failed",
+            completedAt: now,
+            durationSeconds,
+            sandboxId: input.sandboxId,
+            errorMessage: input.error,
+          })
+          .where(eq(agentLoopRun.id, input.runId));
+
+        // Update loop counters
+        await db
+          .update(agentLoop)
+          .set({
+            totalRuns: loop.totalRuns + 1,
+            failedRuns: loop.failedRuns + 1,
+            lastRunId: input.runId,
+            lastRunAt: now,
+            updatedAt: now,
+          })
+          .where(eq(agentLoop.id, loop.id));
+
+        logger.error("Agent loop run failed", {
+          action: "agent_loop_run_failed",
+          loopId: loop.id,
+          runId: input.runId,
+          runNumber: run.runNumber,
+          error: input.error,
+        });
+
+        // TODO: Send email notification about failure
+
+        return {
+          success: true,
+          message: "Run failure recorded",
+        };
+      }
     }),
 });
 

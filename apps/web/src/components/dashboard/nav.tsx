@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Terminal, LayoutDashboard, Link2, BarChart3, User, LogOut, ChevronDown, Menu, X, Settings, Shield } from "lucide-react"
+import { Terminal, LayoutDashboard, Link2, BarChart3, User, LogOut, ChevronDown, Menu, X, Settings, Shield, Repeat } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { authClient } from "@/lib/auth-client"
@@ -22,6 +22,7 @@ type UserPlan = "free" | "tunnel" | "pro";
 
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
+  { href: "/dashboard/loops", label: "Agent Loops", icon: Repeat },
   { href: "/dashboard/integrations", label: "Integrations", icon: Link2 },
   { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
 ]

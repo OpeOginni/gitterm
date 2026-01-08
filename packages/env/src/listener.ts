@@ -17,6 +17,9 @@ const schema = z.object({
   // Server communication (required for internal API calls)
   SERVER_URL: optional,
   INTERNAL_API_KEY: optional,
+
+  // GitHub webhook verification
+  GITHUB_WEBHOOK_SECRET: optional,
 });
 
 export type ListenerEnv = z.infer<typeof schema>;

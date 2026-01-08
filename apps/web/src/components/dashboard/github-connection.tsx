@@ -4,8 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import Loader from "@/components/loader"
-import { trpc } from "@/utils/trpc"
+import { queryClient, trpc } from "@/utils/trpc"
 import {
   CheckCircle2,
   XCircle,
@@ -18,6 +17,7 @@ import {
   ExternalLink,
   Shield,
   RefreshCw,
+  Loader2,
 } from "lucide-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -38,8 +38,10 @@ export function GitHubConnection() {
 
   const handleConnect = () => {
     setIsConnecting(true)
-    const redirectUrl = `${env.NEXT_PUBLIC_SERVER_URL}/api/github/callback`
-    window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${redirectUrl}`
+    // Use window.location.origin to get the base URL (e.g., http://localhost:8888)
+    // The callback route is at /api/github/callback on the backend server (routed via Caddy)
+    const redirectUrl = `${env.NEXT_PUBLIC_AUTH_URL}/api/github/callback`
+    window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`
   }
 
   const handleRefresh = async () => {
@@ -55,19 +57,14 @@ export function GitHubConnection() {
   }
 
   const handleDisconnect = async () => {
-    if (
-      confirm(
-        "Are you sure you want to disconnect your GitHub App? This will disable git operations in your workspaces.",
-      )
-    ) {
       try {
         await disconnectMutation.mutateAsync()
-        await refetch()
-        toast.success("GitHub App disconnected successfully")
+        toast.success("GitHub App disconnect requested. Changes will take effect shortly.")
+        
+        await queryClient.invalidateQueries({ queryKey: trpc.github.getInstallationStatus.queryKey() })
       } catch (error) {
         toast.error("Failed to disconnect GitHub App")
       }
-    }
   }
 
   if (isLoading) {
@@ -82,7 +79,7 @@ export function GitHubConnection() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
-            <Loader />
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         </CardContent>
       </Card>
@@ -101,8 +98,8 @@ export function GitHubConnection() {
             <Github className="h-5 w-5" />
             GitHub Integration
             {isConnected && (
-              <Badge className="bg-accent/10 text-accent border-accent/20">
-                <CheckCircle2 className="h-3 w-3 mr-1" />
+              <Badge className="bg-accent/10 text-green-500 border-green-500/20">
+                <CheckCircle2 className="h-3 w-3 mr-1 text-green-500" />
                 Connected
               </Badge>
             )}
@@ -130,7 +127,7 @@ export function GitHubConnection() {
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4">
                   <div className="p-2.5 rounded-lg bg-accent/10 ring-1 ring-accent/20">
-                    <CheckCircle2 className="h-5 w-5 text-accent" />
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -205,22 +202,22 @@ export function GitHubConnection() {
 
             <div className="flex gap-3 pt-2">
               <Button
-                variant="outline"
                 onClick={() => window.open(`https://github.com/settings/installations`, "_blank")}
-                className="flex-1 border-border/50 hover:bg-secondary/50"
+                variant="outline"
+                className="flex-1 border-border/60 bg-accent hover:bg-accent/50 hover:border-accent/60 hover:text-accent-foreground transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98]"
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Manage on GitHub
               </Button>
               <Button
-                variant="outline"
                 onClick={handleDisconnect}
                 disabled={disconnectMutation.isPending}
-                className="flex-1 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20 bg-transparent"
+                variant="destructive"
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700 transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-red-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600 disabled:hover:shadow-sm"
               >
                 {disconnectMutation.isPending ? (
                   <>
-                    <Loader className="mr-2 h-4 w-4" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Disconnecting...
                   </>
                 ) : (
@@ -269,13 +266,13 @@ export function GitHubConnection() {
             </div>
 
             <Button
-              className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
+              className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={handleConnect}
               disabled={isConnecting}
             >
               {isConnecting ? (
                 <>
-                  <Loader className="mr-2 h-4 w-4" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Redirecting to GitHub...
                 </>
               ) : (
