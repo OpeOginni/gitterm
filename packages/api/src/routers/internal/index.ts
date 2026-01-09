@@ -756,9 +756,12 @@ export const internalRouter = router({
   processAgentLoopCallback: internalProcedure
     .input(agentLoopWebhookSchema)
     .mutation(async ({ input }) => {
-      logger.info("Processing agent loop callback", {
+
+      try{
+
+      console.log("Processing agent loop callback", {
         action: "agent_loop_callback",
-        runId: input.runId,
+        input: input,
       });
 
       // Get the run with its loop
@@ -795,9 +798,7 @@ export const internalRouter = router({
 
       const loop = run.loop;
       const now = new Date();
-      const durationSeconds =
-        input.durationSeconds ||
-        (run.startedAt ? Math.floor((now.getTime() - run.startedAt.getTime()) / 1000) : 0);
+      const durationSeconds = Math.round((now.getTime() - run.startedAt.getTime()) / 1000);
 
       if (input.success) {
         // Update run as completed
@@ -815,7 +816,9 @@ export const internalRouter = router({
 
         // Update loop counters
 
-        const isLastIteration = loop.totalRuns + 1 >= loop.maxRuns;
+        // Check if this is the last iteration
+        // Use run.runNumber instead of loop.totalRuns to handle restart scenarios correctly
+        const isLastIteration = run.runNumber >= loop.maxRuns;
 
         await db
           .update(agentLoop)
@@ -836,13 +839,12 @@ export const internalRouter = router({
           runNumber: run.runNumber,
           commitSha: input.commitSha,
           durationSeconds,
-          isComplete: input.isComplete,
         });
 
         // Trigger next run if automation is enabled and not complete
         if (loop.automationEnabled && !isLastIteration) {
           // Create next pending run with the same AI config as the completed run
-          const nextRunNumber = loop.totalRuns + 1; // +1 for next
+          const nextRunNumber = run.runNumber + 1; // Next run after the completing one
           const [newRun] = await db
             .insert(agentLoopRun)
             .values({
@@ -888,7 +890,7 @@ export const internalRouter = router({
           await db
             .update(agentLoop)
             .set({
-              totalRuns: loop.totalRuns + 1,
+              totalRuns: nextRunNumber, // Use the new run number directly
               lastRunId: newRun.id,
             })
             .where(eq(agentLoop.id, loop.id));
@@ -909,7 +911,7 @@ export const internalRouter = router({
 
         return {
           success: true,
-          message: input.isComplete ? "Run completed, plan is complete" : "Run completed",
+          message: "Run completed, plan is complete",
         };
       } else {
         // Update run as failed
@@ -925,10 +927,10 @@ export const internalRouter = router({
           .where(eq(agentLoopRun.id, input.runId));
 
         // Update loop counters
+        // Note: totalRuns was already incremented when the run was created, so don't increment again
         await db
           .update(agentLoop)
           .set({
-            totalRuns: loop.totalRuns + 1,
             failedRuns: loop.failedRuns + 1,
             lastRunId: input.runId,
             lastRunAt: now,
@@ -950,6 +952,17 @@ export const internalRouter = router({
           success: true,
           message: "Run failure recorded",
         };
+      } 
+    } catch (error) {
+        logger.error("Failed to process agent loop callback", {
+          action: "agent_loop_callback_failed",
+          runId: input.runId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to process agent loop callback",
+        });
       }
     }),
 });

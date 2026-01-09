@@ -10,8 +10,6 @@ export const agentLoopWebhookSchema = z.object({
   commitSha: z.string().optional(),
   commitMessage: z.string().optional(),
   error: z.string().optional(),
-  isComplete: z.boolean().optional(),
-  durationSeconds: z.number().optional(),
 });
 
 export const agentLoopWebhookRouter = router({

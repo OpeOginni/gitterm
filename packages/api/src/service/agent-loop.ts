@@ -6,6 +6,7 @@ import type { StartSandboxRunConfig } from "../providers/compute";
 import { getGitHubAppService } from "./github";
 import { logger } from "../utils/logger";
 import env from "@gitterm/env/server";
+import { AGENT_LOOP_RUN_TIMEOUT_MS } from "../config/agent-loop";
 
 /**
  * Configuration for executing an agent loop run
@@ -93,11 +94,18 @@ export class AgentLoopService {
       };
     }
 
-    if (run.status !== "pending") {
+    // Check if run can be started:
+    // - pending runs can always be started
+    // - running runs can be restarted if they're stalled (exceeded timeout)
+    const isPending = run.status === "pending";
+    const isStalled = run.status === "running" && 
+      run.startedAt.getTime() < Date.now() - AGENT_LOOP_RUN_TIMEOUT_MS;
+    
+    if (!isPending && !isStalled) {
       return {
         success: false,
         runId: config.runId,
-        error: `Run is in ${run.status} state, not pending`,
+        error: `Run is in ${run.status} state and cannot be started`,
       };
     }
 

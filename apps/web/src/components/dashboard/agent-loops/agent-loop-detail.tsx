@@ -19,6 +19,7 @@ import {
   Repeat,
   AlertCircle,
   RefreshCw,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,12 @@ import { toast } from "sonner";
 import { RunNextIterationDialog } from "./run-next-iteration-dialog";
 import type { AgentLoopRun, RunStatus } from "./types";
 import Link from "next/link";
+
+/**
+ * Maximum time (in minutes) a run can be active before being considered stuck.
+ * Must match AGENT_LOOP_RUN_TIMEOUT_MINUTES in packages/api/src/config/agent-loop.ts
+ */
+const AGENT_LOOP_RUN_TIMEOUT_MINUTES = 40;
 
 interface AgentLoopDetailProps {
   loopId: string;
@@ -108,6 +115,16 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
     }),
   );
 
+  const restartRunMutation = useMutation(
+    trpc.agentLoop.restartRun.mutationOptions({
+      onSuccess: () => {
+        toast.success("Run restarted");
+        queryClient.invalidateQueries({ queryKey: trpc.agentLoop.getLoop.queryKey({ loopId }) });
+      },
+      onError: (error) => toast.error(`Failed to restart run: ${error.message}`),
+    }),
+  );
+
   if (loopQuery.isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -140,6 +157,18 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
   const canStartRun = loop.status === "active" && loop.totalRuns < loop.maxRuns && !hasOngoingRun;
   const isLoading =
     pauseMutation.isPending || resumeMutation.isPending || archiveMutation.isPending;
+
+  // Check if a run is stuck (running/pending for longer than the timeout)
+  const isRunStuck = (run: AgentLoopRun): boolean => {
+    if (run.status !== "running" && run.status !== "pending") return false;
+    if (!run.startedAt) return false;
+    const startedAtMs = new Date(run.startedAt).getTime();
+    const timeoutMs = AGENT_LOOP_RUN_TIMEOUT_MINUTES * 60 * 1000;
+    return Date.now() - startedAtMs > timeoutMs;
+  };
+
+  // Find any stalled run
+  const stalledRun = runs.find((run: AgentLoopRun) => isRunStuck(run));
 
   const getRunStatusBadge = (status: RunStatus) => {
     switch (status) {
@@ -226,6 +255,22 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
             >
               <Play className="h-4 w-4" />
               Run Next Iteration
+            </Button>
+          )}
+          {stalledRun && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 text-destructive border-destructive/50 hover:bg-destructive/10"
+              disabled={restartRunMutation.isPending}
+              onClick={() => restartRunMutation.mutate({ loopId, runId: stalledRun.id })}
+            >
+              {restartRunMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
+              Restart Stalled #{stalledRun.runNumber}
             </Button>
           )}
           {loop.status === "active" && (

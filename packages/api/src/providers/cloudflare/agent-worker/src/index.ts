@@ -6,66 +6,15 @@ import type { SandboxConfig } from "../../../compute";
 export { Sandbox } from "@cloudflare/sandbox";
 
 /**
- * Send callback to the listener with run results
- */
-async function sendCallback(
-  callbackUrl: string,
-  callbackSecret: string,
-  payload: {
-    runId: string;
-    success: boolean;
-    sandboxId?: string;
-    commitSha?: string;
-    commitMessage?: string;
-    error?: string;
-    isComplete?: boolean;
-    durationSeconds?: number;
-  },
-): Promise<void> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10_000);
-
-    const response = await fetch(callbackUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${callbackSecret}`,
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      console.error(`Callback failed with status ${response.status}: ${await response.text()}`);
-    } else {
-      console.log("[Worker] Callback sent successfully");
-    }
-  } catch (error) {
-    console.error("Failed to send callback:", error);
-  }
-}
-
-/**
  * Execute the agent run and return the result
  */
 async function executeAgentRun(
   config: SandboxConfig,
   sandbox: Sandbox<unknown>,
-  callbackUrl?: string,
-  callbackSecret?: string,
-  runId?: string,
-  startTime?: number,
 ): Promise<{
   success: boolean;
-  sandboxId: string;
-  commitHash?: string;
-  commitMessage?: string;
-  response?: any;
   error?: string;
-  isComplete?: boolean;
+  sandboxId: string;
 }> {
   const {
     userSandboxId,
@@ -99,6 +48,9 @@ fi
     "git config --global credential.helper '/workspace/.git-credential-helper.sh'",
   );
 
+  await sandbox.exec('git config --global user.name "Opencode: Gitterm"');
+  await sandbox.exec('git config --global user.email "opencode@gitterm.dev"');
+
   const repoUrl = `https://x-access-token:${gitAuthToken}@github.com/${repoPath}.git`;
   const checkoutResult = await sandbox.gitCheckout(repoUrl, {
     branch: branch,
@@ -107,17 +59,6 @@ fi
 
   if (!checkoutResult.success) {
     const errorMsg = `Failed to checkout repository ${repoPath} on branch ${branch}`;
-
-    if (callbackUrl && callbackSecret && runId && startTime) {
-      console.log("[Worker] Sending checkout error callback...");
-      await sendCallback(callbackUrl, callbackSecret, {
-        runId,
-        success: false,
-        sandboxId: userSandboxId,
-        error: errorMsg,
-        durationSeconds: Math.floor((Date.now() - startTime) / 1000),
-      });
-    }
 
     return {
       success: false,
@@ -131,16 +72,6 @@ fi
 
   if (!providerId || !specificModel) {
     const errorMsg = "Provider ID or specific model not found";
-
-    if (callbackUrl && callbackSecret && runId && startTime) {
-      await sendCallback(callbackUrl, callbackSecret, {
-        runId,
-        success: false,
-        sandboxId: userSandboxId,
-        error: errorMsg,
-        durationSeconds: Math.floor((Date.now() - startTime) / 1000),
-      });
-    }
 
     return {
       success: false,
@@ -164,17 +95,6 @@ fi
     console.error(`Failed to set auth:`, error);
     const errorMsg = `Failed to set auth: ${error instanceof Error ? error.message : "Unknown error"}`;
 
-    if (callbackUrl && callbackSecret && runId && startTime) {
-      console.log("[Worker] Sending auth error callback...");
-      await sendCallback(callbackUrl, callbackSecret, {
-        runId,
-        success: false,
-        sandboxId: userSandboxId,
-        error: errorMsg,
-        durationSeconds: Math.floor((Date.now() - startTime) / 1000),
-      });
-    }
-
     return {
       success: false,
       sandboxId: userSandboxId,
@@ -194,17 +114,6 @@ fi
     console.error("Failed to create session:", session.error);
     const errorMsg = `Failed to create session: ${JSON.stringify(session.error)}`;
 
-    if (callbackUrl && callbackSecret && runId && startTime) {
-      console.log("[Worker] Sending session creation error callback...");
-      await sendCallback(callbackUrl, callbackSecret, {
-        runId,
-        success: false,
-        sandboxId: userSandboxId,
-        error: errorMsg,
-        durationSeconds: Math.floor((Date.now() - startTime) / 1000),
-      });
-    }
-
     return {
       success: false,
       sandboxId: userSandboxId,
@@ -219,22 +128,32 @@ fi
 CRITICAL CONSTRAINTS:
 1. DO NOT checkout, switch, or create any branches. Stay on the current branch "${branch}" at all times.
 2. Work on ONE feature from the plan file (@${featureListPath}) completely - do not start multiple features.
-3. Make all necessary changes to complete the feature you choose.
-4. Commit ALL your changes in a SINGLE commit with a clear, descriptive message.
-5. Do NOT make partial commits or multiple commits - finish the feature entirely, then commit once.
+3. You MUST commit AND push your changes before calling the agent-callback tool.
 
 WORKFLOW:
-1. Read the plan file (@${featureListPath})${documentedProgressPath ? ` and the progress file (@${documentedProgressPath})` : ""}.
-2. Choose ONE incomplete feature of your choice from the plan.
-3. Implement the entire feature completely.
-${documentedProgressPath ? `4. Update the progress file (@${documentedProgressPath}) to document what you completed.` : ""}
-${documentedProgressPath ? "5" : "4"}. Stage all changes: git add -A
-${documentedProgressPath ? "6" : "5"}. Commit once with a descriptive message: git commit -m "feat: [description of what you implemented]"
-${documentedProgressPath ? "7" : "6"}. If the plan is complete after implementing this feature, output <promise>COMPLETE</promise>.
 
-${prompt ? `\nADDITIONAL INSTRUCTIONS:\n${prompt}` : ""}
+STEP 1 - UNDERSTAND THE TASK:
+- Read the plan file (@${featureListPath})${documentedProgressPath ? ` and the progress file (@${documentedProgressPath})` : ""}.
+- Choose ONE incomplete feature to implement.
 
-Remember: Complete one feature fully, commit once, stay on branch "${branch}".`;
+STEP 2 - IMPLEMENT:
+- Implement the entire feature completely.
+- Make all necessary code changes.
+${documentedProgressPath ? `- Update the progress file (@${documentedProgressPath}) to document what you completed.` : ""}
+
+STEP 3 - COMMIT AND PUSH:
+- Stage all changes: git add -A
+- Commit with a descriptive message: git commit -m "feat: [description]"
+- Push to remote: git push
+
+STEP 4 - CALL agent-callback:
+- If you successfully committed and pushed, call agent-callback with success=true
+- If something went wrong, call agent-callback with success=false and describe the error
+
+The agent-callback tool will automatically verify your commit. You do NOT need to provide the commit SHA or message - the tool fetches these automatically.
+
+${prompt ? `ADDITIONAL INSTRUCTIONS:\n${prompt}\n` : ""}
+IMPORTANT: You MUST call the agent-callback tool ONLY after you have: 1) Made changes for the feature, 2) Committed them, and 3) Pushed the changes to the remote repository.`;
 
   const result = await (client as OpencodeClient).session.prompt({
     path: { id: session.data.id },
@@ -246,6 +165,9 @@ Remember: Complete one feature fully, commit once, stay on branch "${branch}".`;
           text: fullPrompt,
         },
       ],
+      tools: {
+        "agent-callback": true,
+      },
     },
   });
 
@@ -261,17 +183,6 @@ Remember: Complete one feature fully, commit once, stay on branch "${branch}".`;
       errorMsg = (error as BadRequestError).errors.map((error) => error.message).join(", ");
     }
 
-    if (callbackUrl && callbackSecret && runId && startTime) {
-      console.log("[Worker] Sending prompt execution error callback...");
-      await sendCallback(callbackUrl, callbackSecret, {
-        runId,
-        success: false,
-        sandboxId: userSandboxId,
-        error: errorMsg,
-        durationSeconds: Math.floor((Date.now() - startTime) / 1000),
-      });
-    }
-
     return {
       success: false,
       sandboxId: userSandboxId,
@@ -279,57 +190,9 @@ Remember: Complete one feature fully, commit once, stay on branch "${branch}".`;
     };
   }
 
-  console.log("COMPLETED OPENCODE SESSION PROMPT");
-  const latestCommit = await sandbox.exec(
-    `cd /home/user/workspace/${repoName} && git log -1 --pretty=format:"%H %s"`,
-  );
-
-  if (latestCommit.exitCode !== 0) {
-    const errorMsg = `Failed to get latest commit: ${latestCommit.stderr || latestCommit.stdout}`;
-
-    if (callbackUrl && callbackSecret && runId && startTime) {
-      console.log("[Worker] Sending commit check error callback...");
-      await sendCallback(callbackUrl, callbackSecret, {
-        runId,
-        success: false,
-        sandboxId: userSandboxId,
-        error: errorMsg,
-        durationSeconds: Math.floor((Date.now() - startTime) / 1000),
-      });
-    }
-
-    return {
-      success: false,
-      sandboxId: userSandboxId,
-      error: errorMsg,
-    };
-  }
-
-  const commitHash = latestCommit.stdout.split(" ")[0];
-  const commitMessage = latestCommit.stdout.split(" ").slice(1).join(" ");
-
-  if (callbackUrl && callbackSecret && runId && startTime) {
-    console.log("[Worker] Sending success callback...");
-    await sendCallback(callbackUrl, callbackSecret, {
-      runId,
-      success: true,
-      sandboxId: userSandboxId,
-      commitSha: commitHash,
-      commitMessage,
-      isComplete: true,
-      durationSeconds: Math.floor((Date.now() - startTime) / 1000),
-    });
-    console.log("[Worker] Success callback sent");
-  }
-
-  console.log("RETURNING FROM OPENCODE SESSION LATEST COMMIT", latestCommit);
   return {
     success: true,
     sandboxId: userSandboxId,
-    commitHash,
-    commitMessage,
-    response: result.data,
-    isComplete: true,
   };
 }
 
@@ -356,42 +219,41 @@ export default {
     }
 
     const config = await request.json<SandboxConfig>();
-    const startTime = Date.now();
 
-    // Keep keepAlive: true for long-running OpenCode sessions
-    // The alarm() handler in our extended Sandbox class will handle the keepAlive heartbeats
+    // Sandbox timeout - must match AGENT_LOOP_RUN_TIMEOUT_MINUTES in config/agent-loop.ts
     const sandbox = getSandbox(env.Sandbox, config.userSandboxId, {
-      // keepAlive: true,
+      sleepAfter: "40m",
     });
 
     try {
+
+      await sandbox.setEnvVars({
+        AGENT_CALLBACK_URL: config.callbackUrl,
+        AGENT_CALLBACK_SECRET: config.callbackSecret,
+        RUN_ID: config.runId,
+        SANDBOX_ID: config.userSandboxId,
+      });
+
       const result = await executeAgentRun(
         config,
         sandbox,
-        config.callbackUrl,
-        config.callbackSecret,
-        config.runId,
-        startTime,
       );
+
+      if (result.error) {
+        return Response.json({
+          success: false,
+          error: result.error,
+        }, { status: 500 });
+      }
 
       return Response.json({
         success: true,
         message: "Run completed",
         result,
       });
+
     } catch (error) {
       console.error("Failed to execute agent run:", error);
-
-      // Send error callback if configured
-      if (config.callbackUrl && config.callbackSecret && config.runId) {
-        await sendCallback(config.callbackUrl, config.callbackSecret, {
-          runId: config.runId,
-          success: false,
-          sandboxId: config.userSandboxId,
-          error: error instanceof Error ? error.message : "Unknown error",
-          durationSeconds: Math.floor((Date.now() - startTime) / 1000),
-        });
-      }
 
       return Response.json(
         {

@@ -1,6 +1,6 @@
 import z from "zod";
 import { protectedProcedure, router } from "../../index";
-import { db, eq, and, desc } from "@gitterm/db";
+import { db, eq, and, desc, asc } from "@gitterm/db";
 import {
   agentLoop,
   agentLoopRun,
@@ -9,6 +9,7 @@ import {
 } from "@gitterm/db/schema/agent-loop";
 import { gitIntegration } from "@gitterm/db/schema/integrations";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
+import { AGENT_LOOP_RUN_TIMEOUT_MS } from "../../config/agent-loop";
 import { TRPCError } from "@trpc/server";
 import { getAgentLoopService } from "../../service/agent-loop";
 
@@ -153,7 +154,7 @@ export const agentLoopRouter = router({
           gitIntegration: true,
           sandboxProvider: true,
           runs: {
-            orderBy: [desc(agentLoopRun.runNumber)],
+            orderBy: [asc(agentLoopRun.runNumber)],
             limit: 50, // Last 50 runs
           },
         },
@@ -487,6 +488,78 @@ export const agentLoopRouter = router({
       };
     }),
 
+  restartRun: protectedProcedure
+    .input(z.object({ loopId: z.uuid(), runId: z.uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      const [loop] = await db
+        .select()
+        .from(agentLoop)
+        .where(and(eq(agentLoop.id, input.loopId), eq(agentLoop.userId, userId)));
+
+      if (!loop) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Loop not found",
+        });
+      }
+
+      const [existingRun] = await db
+        .select()
+        .from(agentLoopRun)
+        .where(and(eq(agentLoopRun.id, input.runId), eq(agentLoopRun.loopId, input.loopId)));
+
+      if (!existingRun) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Run not found",
+        });
+      }
+
+      // Only allow restarting stalled runs (running for longer than the timeout)
+      const isStalled = (existingRun.status === "running" || existingRun.status === "pending") && 
+        existingRun.startedAt.getTime() < Date.now() - AGENT_LOOP_RUN_TIMEOUT_MS;
+      
+      if (!isStalled) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only stalled runs (running/pending for too long) can be restarted",
+        });
+      }
+
+      const service = getAgentLoopService();
+      const result = await service.startRunAsync({
+        loopId: input.loopId,
+        runId: input.runId,
+        provider: loop.modelProvider,
+        model: loop.model,
+        apiKey: "",
+        prompt: loop.prompt || undefined,
+      });
+
+      if (!result.success) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: result.error || "Failed to restart run",
+        });
+      }
+
+      const [updatedRun] = await db
+        .update(agentLoopRun)
+        .set({
+          status: "running",
+          startedAt: new Date(),
+        })
+        .where(eq(agentLoopRun.id, input.runId))
+        .returning();
+
+      return {
+        success: true,
+        run: updatedRun,
+      };
+    }),
+
   /**
    * Execute a pending run with AI provider configuration
    * This starts the agent run in the Cloudflare sandbox asynchronously
@@ -719,7 +792,7 @@ export const agentLoopRouter = router({
                 eq(agentLoopRun.loopId, input.loopId),
                 eq(agentLoopRun.status, input.status as AgentLoopRunStatus),
               ),
-        orderBy: [desc(agentLoopRun.runNumber)],
+        orderBy: [asc(agentLoopRun.runNumber)],
         limit: input.limit,
         offset: input.offset,
       });

@@ -135,9 +135,9 @@ export interface SandboxConfig {
   prompt: string;
   iteration: number;
   /** Callback URL for async completion notification */
-  callbackUrl?: string;
+  callbackUrl: string;
   /** Secret for authenticating callback requests */
-  callbackSecret?: string;
+  callbackSecret: string;
   /** Run ID for callback identification */
-  runId?: string;
+  runId: string;
 }
