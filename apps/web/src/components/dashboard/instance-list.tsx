@@ -318,7 +318,7 @@ function InstanceCard({
                 </div>
                 <div className="flex flex-col min-w-0">
                   <CardTitle className="text-sm font-semibold truncate">
-                    {workspace.subdomain}
+                    {workspace.name || workspace.subdomain}
                   </CardTitle>
                   <span className="text-xs text-muted-foreground truncate">
                     {workspace.image.agentType.name}
@@ -365,7 +365,7 @@ function InstanceCard({
               </div>
             )}
             {workspace.domain && isRunning && (
-              <div className="flex items-center gap-2 mt-0.5">
+              <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <Globe className="h-3.5 w-3.5 shrink-0 text-primary/60" />
                 <button
                   onClick={() => {
@@ -374,7 +374,7 @@ function InstanceCard({
                       toast.success("Domain copied!");
                     }
                   }}
-                  className="text-xs font-mono text-primary/80 hover:text-primary truncate transition-colors cursor-pointer underline decoration-dotted underline-offset-2"
+                  className="text-xs font-mono text-primary/80 hover:text-primary truncate transition-colors cursor-pointer underline decoration-dotted underline-offset-2 text-left min-w-0"
                   title={workspaceDisplayUrl || ""}
                 >
                   {workspaceDisplayUrl}
