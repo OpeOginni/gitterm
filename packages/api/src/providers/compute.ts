@@ -81,6 +81,27 @@ export interface ComputeProvider {
   getStatus(externalId: string): Promise<WorkspaceStatusResult>;
 }
 
+/**
+ * Credential configuration for sandbox runs.
+ * Either an API key or OAuth tokens (for GitHub Copilot, etc.)
+ */
+export type SandboxCredential =
+  | {
+      type: "api_key";
+      apiKey: string;
+    }
+  | {
+      type: "oauth";
+      /** Provider name for the auth.json file (e.g., "github-copilot") */
+      providerName: string;
+      /** OAuth refresh token */
+      refresh: string;
+      /** OAuth access token */
+      access: string;
+      /** Token expiry timestamp (Unix ms) */
+      expires: number;
+    };
+
 export interface StartSandboxRunConfig {
   /** Unique identifier for this sandbox instance */
   sandboxId: string;
@@ -99,9 +120,9 @@ export interface StartSandboxRunConfig {
   /** AI provider (e.g., "anthropic", "openai") */
   provider: string;
   /** Model identifier (e.g., "anthropic/claude-sonnet-4-20250514") */
-  model: string;
-  /** API key for the AI provider */
-  apiKey: string;
+  modelId: string;
+  /** Credential for the AI provider (API key or OAuth tokens) */
+  credential: SandboxCredential;
   /** Custom prompt to send to the agent */
   prompt: string;
   /** Iteration number for the session */
@@ -130,8 +151,10 @@ export interface SandboxConfig {
   gitAuthToken: string;
   featureListPath: string;
   documentedProgressPath?: string;
-  model: string;
-  apiKey: string;
+  /** Model identifier (e.g., "anthropic/claude-sonnet-4-20250514") */
+  modelId: string;
+  /** Credential for the AI provider (API key or OAuth tokens) */
+  credential: SandboxCredential;
   prompt: string;
   iteration: number;
   /** Callback URL for async completion notification */

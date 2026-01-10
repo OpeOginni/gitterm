@@ -2,6 +2,7 @@ import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { DeleteAccountSection } from "@/components/dashboard/delete-account";
 import { BillingSection } from "@/components/dashboard/billing-section";
 import { AgentConfigSection } from "@/components/dashboard/agent-config-section";
+import { ModelCredentialsSection } from "@/components/dashboard/model-credentials-section";
 import { authClient } from "@/lib/auth-client";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -27,6 +28,7 @@ export default async function SettingsPage() {
       <DashboardHeader heading="Settings" text="Manage your account settings and preferences." />
       <div className="pt-8 mx-auto max-w-4xl space-y-8">
         <BillingSection currentPlan={currentPlan} />
+        <ModelCredentialsSection />
         <AgentConfigSection />
         <DeleteAccountSection />
       </div>

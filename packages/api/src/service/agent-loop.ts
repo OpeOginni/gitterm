@@ -2,7 +2,7 @@ import { db, eq, and } from "@gitterm/db";
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { githubAppInstallation } from "@gitterm/db/schema/integrations";
 import { cloudflareSandboxProvider } from "../providers/cloudflare";
-import type { StartSandboxRunConfig } from "../providers/compute";
+import type { StartSandboxRunConfig, SandboxCredential } from "../providers/compute";
 import { getGitHubAppService } from "./github";
 import { logger } from "../utils/logger";
 import env from "@gitterm/env/server";
@@ -19,9 +19,9 @@ export interface ExecuteRunConfig {
   /** AI provider (e.g., "anthropic") */
   provider: string;
   /** Model identifier (e.g., "anthropic/claude-sonnet-4-20250514") */
-  model: string;
-  /** API key for the AI provider */
-  apiKey: string;
+  modelId: string;
+  /** Credential for the AI provider (API key or OAuth tokens) */
+  credential: SandboxCredential;
   /** Custom prompt (optional - will use default if not provided) */
   prompt?: string;
 }
@@ -171,8 +171,8 @@ export class AgentLoopService {
         planFilePath: loop.planFilePath,
         documentedProgressPath: loop.progressFilePath || undefined,
         provider: config.provider,
-        model: config.model,
-        apiKey: config.apiKey,
+        modelId: config.modelId,
+        credential: config.credential,
         prompt,
         iteration: run.runNumber,
         callbackUrl,
@@ -212,29 +212,15 @@ export class AgentLoopService {
 
       console.log("Updating the run to running");
       // NOW mark run as running - sandbox acknowledged and execution has started
+      // Note: modelProviderId and modelId are already set when the run is created from the loop
       await db
         .update(agentLoopRun)
         .set({
           status: "running",
           startedAt: new Date(),
-          modelProvider: config.provider,
-          model: config.model,
           sandboxId,
         })
         .where(eq(agentLoopRun.id, config.runId));
-
-      // Also update the loop with model config if not already set
-      // This ensures automated runs can use the same config
-      if (!loop.modelProvider || !loop.model) {
-        await db
-          .update(agentLoop)
-          .set({
-            modelProvider: config.provider,
-            model: config.model,
-            updatedAt: new Date(),
-          })
-          .where(eq(agentLoop.id, loop.id));
-      }
 
       // Worker acknowledged - run is executing in background
       logger.info("Sandbox run started, awaiting callback", {

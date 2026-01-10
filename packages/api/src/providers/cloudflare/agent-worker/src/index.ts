@@ -1,9 +1,68 @@
 import { getSandbox, Sandbox } from "@cloudflare/sandbox";
 import { createOpencode } from "@cloudflare/sandbox/opencode";
 import { OpencodeClient, type BadRequestError, type NotFoundError } from "@opencode-ai/sdk";
-import type { SandboxConfig } from "../../../compute";
+import type { SandboxConfig, SandboxCredential } from "../../../compute";
 
 export { Sandbox } from "@cloudflare/sandbox";
+
+/**
+ * Set up authentication for the AI provider.
+ * For API keys, use the SDK auth.set method.
+ * For OAuth (GitHub Copilot), write an auth.json file.
+ */
+async function setupAuth(
+  sandbox: Sandbox<unknown>,
+  client: OpencodeClient,
+  providerId: string,
+  credential: SandboxCredential,
+): Promise<{ success: boolean; error?: string }> {
+  if (credential.type === "api_key") {
+    // API key auth - use the SDK
+    try {
+      await client.auth.set({
+        path: { id: providerId },
+        body: { type: "api", key: credential.apiKey },
+      });
+      console.log(`Auth set successfully for provider ${providerId}`);
+      return { success: true };
+    } catch (error) {
+      console.error(`Failed to set auth:`, error);
+      return {
+        success: false,
+        error: `Failed to set auth: ${error instanceof Error ? error.message : "Unknown error"}`,
+      };
+    }
+  }
+
+  // OAuth auth - write auth.json file
+  // The sandbox runs as root, so the path is /root/.local/share/opencode/auth.json
+  const authJsonPath = "/root/.local/share/opencode/auth.json";
+  
+  // Build the auth.json content
+  const authJson: Record<string, unknown> = {};
+  authJson[credential.providerName] = {
+    type: "oauth",
+    refresh: credential.refresh,
+    access: credential.access,
+    expires: credential.expires,
+  };
+
+  try {
+    // Ensure the directory exists using the sandbox API
+    await sandbox.mkdir("/root/.local/share/opencode", { recursive: true });
+    
+    // Write the auth.json file
+    await sandbox.writeFile(authJsonPath, JSON.stringify(authJson, null, 2));
+    console.log(`OAuth auth.json written for provider ${credential.providerName}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`Failed to write auth.json:`, error);
+    return {
+      success: false,
+      error: `Failed to write auth.json: ${error instanceof Error ? error.message : "Unknown error"}`,
+    };
+  }
+}
 
 /**
  * Execute the agent run and return the result
@@ -25,8 +84,8 @@ async function executeAgentRun(
     prompt,
     featureListPath,
     documentedProgressPath,
-    model,
-    apiKey,
+    modelId,
+    credential,
     iteration,
   } = config;
 
@@ -54,7 +113,7 @@ fi
   const repoUrl = `https://x-access-token:${gitAuthToken}@github.com/${repoPath}.git`;
   const checkoutResult = await sandbox.gitCheckout(repoUrl, {
     branch: branch,
-    targetDir: `/home/user/workspace/${repoName}`,
+    targetDir: `/root/workspace/${repoName}`,
   });
 
   if (!checkoutResult.success) {
@@ -67,8 +126,8 @@ fi
     };
   }
 
-  const providerId = model.split("/")[0];
-  const specificModel = model.split("/")[1];
+  const providerId = modelId.split("/")[0];
+  const specificModel = modelId.split("/")[1];
 
   if (!providerId || !specificModel) {
     const errorMsg = "Provider ID or specific model not found";
@@ -81,24 +140,18 @@ fi
   }
 
   const { client } = await createOpencode(sandbox, {
-    directory: `/home/user/workspace/${repoName}`,
+    directory: `/root/workspace/${repoName}`,
   });
 
+  // Set up authentication based on credential type
   console.log(`Setting auth for provider ${providerId}...`);
-  try {
-    await (client as OpencodeClient).auth.set({
-      path: { id: providerId },
-      body: { type: "api", key: apiKey },
-    });
-    console.log(`Auth set successfully for provider ${providerId}`);
-  } catch (error) {
-    console.error(`Failed to set auth:`, error);
-    const errorMsg = `Failed to set auth: ${error instanceof Error ? error.message : "Unknown error"}`;
-
+  const authResult = await setupAuth(sandbox, client as OpencodeClient, providerId, credential);
+  
+  if (!authResult.success) {
     return {
       success: false,
       sandboxId: userSandboxId,
-      error: errorMsg,
+      error: authResult.error,
     };
   }
 
@@ -107,7 +160,7 @@ fi
     body: {
       title: `Agent Loop Iteration ${iteration}`,
     },
-    query: { directory: `/home/user/workspace/${repoName}` },
+    query: { directory: `/root/workspace/${repoName}` },
   });
 
   if (session.error) {

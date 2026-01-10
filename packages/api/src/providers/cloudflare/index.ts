@@ -88,8 +88,8 @@ export class CloudflareSandboxProvider {
       repoOwner: config.repoOwner,
       repoName: config.repoName,
       branch: config.branch,
-      model: config.model,
-      apiKey: config.apiKey,
+      modelId: config.modelId,
+      credential: config.credential,
       gitAuthToken: config.gitAuthToken,
       prompt: config.prompt,
       featureListPath: config.planFilePath, // Worker uses featureListPath

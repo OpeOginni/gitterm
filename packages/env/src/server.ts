@@ -85,6 +85,9 @@ const baseSchema = z
     AGENT_JWT_SECRET: optional,
     WORKSPACE_JWT_SECRET: optional,
 
+    // Encryption (for storing API keys/credentials)
+    ENCRYPTION_MASTER_KEY: optional, // 32-byte key in hex (64 chars) for AES-256-GCM
+
     // Routing
     ROUTING_MODE: routingMode,
 

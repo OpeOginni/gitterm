@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { trpc, queryClient } from "@/utils/trpc";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -13,21 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Loader2, Play, Key, Cpu } from "lucide-react";
-import {
-  MODEL_PROVIDERS,
-  getModelsForProvider,
-  modelRequiresApiKey,
-} from "../create-instance/types";
+import { Loader2, Play, AlertCircle, Cpu, Bot } from "lucide-react";
 import type { AgentLoop } from "./types";
 
 interface RunNextIterationDialogProps {
@@ -37,29 +23,27 @@ interface RunNextIterationDialogProps {
 }
 
 export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIterationDialogProps) {
-  // Use loop's stored provider/model as defaults, or fall back to first provider
-  const defaultProvider = loop.modelProvider || MODEL_PROVIDERS[0]?.id || "";
-  const defaultModel =
-    loop.model?.split("/")[1] || getModelsForProvider(defaultProvider)[0]?.id || "";
+  // Fetch credentials to check if user has one for the loop's provider
+  const { data: credentialsData, isLoading: credentialsLoading } = useQuery(
+    trpc.modelCredentials.listMyCredentials.queryOptions()
+  );
 
-  const [provider, setProvider] = useState(defaultProvider);
-  const [model, setModel] = useState(defaultModel);
-  const [apiKey, setApiKey] = useState("");
+  const credentials = credentialsData?.credentials ?? [];
 
-  const availableModels = getModelsForProvider(provider);
-  const requiresApiKey = modelRequiresApiKey(provider, model);
+  // Find the credential for this loop's provider
+  const credentialForProvider = useMemo(() => {
+    if (!loop.modelProvider?.name) return null;
+    return credentials.find(
+      (c) => c.providerName === loop.modelProvider?.name && c.isActive
+    );
+  }, [credentials, loop.modelProvider?.name]);
+
+  const hasValidCredential = !!credentialForProvider;
+  const isFreeModel = loop.model?.isFree ?? false;
+  const canRun = isFreeModel || hasValidCredential;
 
   const startRunMutation = useMutation(
     trpc.agentLoop.startRun.mutationOptions({
-      onError: (error) => {
-        console.error(error);
-        toast.error(`Failed to start run: ${error.message}`);
-      },
-    }),
-  );
-
-  const executeRunMutation = useMutation(
-    trpc.agentLoop.executeRun.mutationOptions({
       onSuccess: () => {
         toast.success("Run started successfully!");
         queryClient.invalidateQueries({
@@ -67,58 +51,26 @@ export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIter
         });
         queryClient.invalidateQueries({ queryKey: trpc.agentLoop.listLoops.queryKey() });
         onOpenChange(false);
-        resetForm();
       },
       onError: (error) => {
         console.error(error);
-        toast.error(`Failed to execute run: ${error.message}`);
+        toast.error(`Failed to start run: ${error.message}`);
       },
-    }),
+    })
   );
 
-  const isSubmitting = startRunMutation.isPending || executeRunMutation.isPending;
-
-  const resetForm = () => {
-    setProvider(defaultProvider);
-    setModel(defaultModel);
-    setApiKey("");
-  };
-
   const handleSubmit = async () => {
-    if (requiresApiKey && !apiKey) {
-      toast.error("Please enter your API key");
+    if (!canRun) {
+      toast.error("No valid API key configured for this provider");
       return;
     }
 
     try {
-      // Step 1: Create a pending run
-      const runResult = await startRunMutation.mutateAsync({
+      await startRunMutation.mutateAsync({
         loopId: loop.id,
       });
-
-      if (!runResult.success || !runResult.run) {
-        toast.error("Failed to create run");
-        return;
-      }
-
-      // Step 2: Execute the run with the API key
-      const fullModelId = `${provider}/${model}`;
-      await executeRunMutation.mutateAsync({
-        runId: runResult.run.id,
-        provider,
-        model: fullModelId,
-        apiKey: apiKey,
-      });
-    } catch (error) {
+    } catch {
       // Error handling done in mutation callbacks
-    }
-  };
-
-  const handleProviderChange = (newProvider: string) => {
-    setProvider(newProvider);
-    const models = getModelsForProvider(newProvider);
-    if (models.length > 0) {
-      setModel(models[0].id);
     }
   };
 
@@ -139,67 +91,55 @@ export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIter
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          {/* Provider Selection */}
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium flex items-center gap-2">
+          {/* Model/Provider Info (read-only) */}
+          <div className="rounded-lg bg-secondary/30 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm">
               <Cpu className="h-4 w-4 text-muted-foreground" />
-              AI Provider
-            </Label>
-            <Select value={provider} onValueChange={handleProviderChange}>
-              <SelectTrigger className="bg-secondary/50 border-border/50">
-                <SelectValue placeholder="Select provider" />
-              </SelectTrigger>
-              <SelectContent>
-                {MODEL_PROVIDERS.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <span className="text-muted-foreground">Provider:</span>
+              <span className="font-medium">
+                {loop.modelProvider?.displayName ?? "Not configured"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Bot className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground">Model:</span>
+              <span className="font-medium">
+                {loop.model?.displayName ?? "Not configured"}
+                {isFreeModel && (
+                  <span className="ml-2 text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                    Free
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
 
-          {/* Model Selection */}
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium">Model</Label>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="bg-secondary/50 border-border/50">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableModels.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    <div className="flex items-center gap-2">
-                      {m.name}
-                      {!m.requiresApiKey && (
-                        <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
-                          Free
-                        </span>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* API Key Input */}
-          {requiresApiKey && (
-            <div className="grid gap-2">
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <Key className="h-4 w-4 text-muted-foreground" />
-                API Key
-              </Label>
-              <Input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter your API key"
-                className="bg-secondary/50 border-border/50 font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Your API key is used for this run only and is not stored.
-              </p>
+          {/* Credential Status */}
+          {!isFreeModel && (
+            <div className={`rounded-lg p-3 text-sm ${
+              hasValidCredential 
+                ? "bg-green-500/10 border border-green-500/20" 
+                : "bg-destructive/10 border border-destructive/20"
+            }`}>
+              {credentialsLoading ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking credentials...
+                </div>
+              ) : hasValidCredential ? (
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <div className="h-2 w-2 rounded-full bg-green-500" />
+                  API key configured for {loop.modelProvider?.displayName}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  No API key configured for {loop.modelProvider?.displayName ?? "this provider"}.
+                  <a href="/dashboard/integrations" className="underline hover:no-underline">
+                    Add one
+                  </a>
+                </div>
+              )}
             </div>
           )}
 
@@ -224,20 +164,20 @@ export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIter
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={isSubmitting}
+            disabled={startRunMutation.isPending}
             className="border-border/50"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || (requiresApiKey && !apiKey)}
+            disabled={startRunMutation.isPending || !canRun || credentialsLoading}
             className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            {isSubmitting ? (
+            {startRunMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {startRunMutation.isPending ? "Creating run..." : "Executing..."}
+                Starting...
               </>
             ) : (
               <>

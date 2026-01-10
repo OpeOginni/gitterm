@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
@@ -21,8 +21,6 @@ import {
 import { RepoSearch } from "./repo-search";
 import { RepoFileSearch } from "./repo-file-search";
 import {
-  MODEL_PROVIDERS,
-  getModelsForProvider,
   type Repository,
   type RepoFile,
   type RunMode,
@@ -35,7 +33,36 @@ interface CreateAutoAgentProps {
   onCancel: () => void;
 }
 
+interface Model {
+  id: string;
+  name: string;
+  displayName: string;
+  modelId: string; // External model ID (e.g., "claude-opus-4")
+  isFree: boolean;
+  provider: Provider;
+}
+
+interface Provider {
+  id: string;
+  name: string;
+  displayName: string;
+}
+
 export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
+  // Fetch providers and models from the database
+  const { data: providersData, isLoading: isLoadingProviders } = useQuery(
+    trpc.modelCredentials.listProviders.queryOptions()
+  );
+  const { data: modelsData, isLoading: isLoadingModels } = useQuery(
+    trpc.modelCredentials.listModels.queryOptions()
+  );
+  const { data: credentialsData } = useQuery(
+    trpc.modelCredentials.listMyCredentials.queryOptions()
+  );
+
+  const providers = (providersData?.providers ?? []) as Provider[];
+  const allModels = (modelsData?.models ?? []) as Model[];
+
   // Form state (null = use default)
   const [userInstallationId, setUserInstallationId] = useState<string | null>(null);
   const [repository, setRepository] = useState<Repository | null>(null);
@@ -44,8 +71,24 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
   const [documentationFile, setDocumentationFile] = useState<RepoFile | null>(null);
   const [runMode, setRunMode] = useState<RunMode>("automatic");
   const [iterations, setIterations] = useState(5);
-  const [provider, setProvider] = useState(MODEL_PROVIDERS[0]?.id ?? "");
-  const [model, setModel] = useState(MODEL_PROVIDERS[0]?.models[0]?.id ?? "");
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("");
+  const [selectedModelId, setSelectedModelId] = useState<string>("");
+
+  // Set default provider/model when data loads
+  useEffect(() => {
+    if (providers.length > 0 && !selectedProviderId) {
+      setSelectedProviderId(providers[0].id);
+    }
+  }, [providers, selectedProviderId]);
+
+  useEffect(() => {
+    if (selectedProviderId && allModels.length > 0 && !selectedModelId) {
+      const providerModels = allModels.filter((m) => m.provider.id === selectedProviderId);
+      if (providerModels.length > 0) {
+        setSelectedModelId(providerModels[0].id);
+      }
+    }
+  }, [selectedProviderId, allModels, selectedModelId]);
 
   // Data fetching
   const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
@@ -84,7 +127,19 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
   });
 
   // Computed values
-  const availableModels = useMemo(() => getModelsForProvider(provider), [provider]);
+  const availableModels = useMemo(
+    () => allModels.filter((m) => m.provider.id === selectedProviderId),
+    [allModels, selectedProviderId]
+  );
+
+  const selectedProvider = providers.find((p) => p.id === selectedProviderId);
+  const selectedModel = allModels.find((m) => m.id === selectedModelId);
+  
+  // Find credential for selected provider
+  const credentialForProvider = useMemo(() => {
+    if (!selectedProviderId || !credentialsData?.credentials) return null;
+    return credentialsData.credentials.find((c) => c.providerId === selectedProviderId) ?? null;
+  }, [selectedProviderId, credentialsData?.credentials]);
 
   // Handlers with cascading resets
   const handleInstallationChange = (id: string) => {
@@ -109,9 +164,14 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
   };
 
   const handleProviderChange = (providerId: string) => {
-    setProvider(providerId);
-    const models = getModelsForProvider(providerId);
-    setModel(models[0]?.id ?? "");
+    setSelectedProviderId(providerId);
+    // Select first model for the new provider
+    const providerModels = allModels.filter((m) => m.provider.id === providerId);
+    if (providerModels.length > 0) {
+      setSelectedModelId(providerModels[0].id);
+    } else {
+      setSelectedModelId("");
+    }
   };
 
   // Mutation
@@ -136,12 +196,12 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
       repository &&
       branch &&
       planFile &&
-      provider &&
-      model
+      selectedProviderId &&
+      selectedModelId
     );
     const hasValidIterations = runMode === "manual" || (iterations >= 1 && iterations <= 100);
     return hasRequiredFields && hasValidIterations;
-  }, [selectedInstallationId, repository, branch, planFile, provider, model, runMode, iterations]);
+  }, [selectedInstallationId, repository, branch, planFile, selectedProviderId, selectedModelId, runMode, iterations]);
 
   const isSubmitting = createAgentLoopMutation.isPending;
 
@@ -162,6 +222,10 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
       toast.error("Please select a plan file.");
       return;
     }
+    if (!selectedProviderId || !selectedModelId) {
+      toast.error("Please select a provider and model.");
+      return;
+    }
 
     const sandboxProvider = cloudProvidersData?.cloudProviders[0];
     if (!sandboxProvider) {
@@ -177,8 +241,9 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
       branch,
       planFilePath: planFile.path,
       progressFilePath: documentationFile?.path,
-      modelProvider: provider,
-      model: `${provider}/${model}`,
+      modelProviderId: selectedProviderId,
+      modelId: selectedModelId,
+      credentialId: credentialForProvider?.id,
       automationEnabled: runMode === "automatic",
       maxRuns: iterations,
     });
@@ -331,14 +396,25 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-2">
             <Label className="text-sm font-medium">AI Provider</Label>
-            <Select value={provider} onValueChange={handleProviderChange}>
+            <Select 
+              value={selectedProviderId} 
+              onValueChange={handleProviderChange}
+              disabled={isLoadingProviders}
+            >
               <SelectTrigger className="bg-secondary/30 border-border/50">
-                <SelectValue placeholder="Select provider" />
+                {isLoadingProviders ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Loading...</span>
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Select provider" />
+                )}
               </SelectTrigger>
               <SelectContent>
-                {MODEL_PROVIDERS.map((p) => (
+                {providers.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
-                    {p.name}
+                    {p.displayName}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -347,19 +423,26 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
           <div className="grid gap-2">
             <Label className="text-sm font-medium">Model</Label>
             <Select
-              value={model}
-              onValueChange={setModel}
-              disabled={!provider || availableModels.length === 0}
+              value={selectedModelId}
+              onValueChange={setSelectedModelId}
+              disabled={!selectedProviderId || availableModels.length === 0 || isLoadingModels}
             >
               <SelectTrigger className="bg-secondary/30 border-border/50">
-                <SelectValue placeholder="Select model" />
+                {isLoadingModels ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Loading...</span>
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Select model" />
+                )}
               </SelectTrigger>
               <SelectContent>
                 {availableModels.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     <div className="flex items-center gap-2">
-                      {m.name}
-                      {m.requiresApiKey === false && (
+                      {m.displayName}
+                      {m.isFree && (
                         <span className="text-xs bg-green-500/20 text-green-600 px-1.5 py-0.5 rounded">
                           Free
                         </span>
@@ -372,7 +455,7 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
           </div>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
-          API keys will be provided when starting each run from the Agent Loops dashboard.
+          API keys are managed in Settings. You'll need to add one before starting runs.
         </p>
 
         {/* Run Mode */}

@@ -10,6 +10,7 @@ import {
   Play,
   Pause,
   Archive,
+  Trash2,
   CheckCircle,
   XCircle,
   Clock,
@@ -24,6 +25,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -82,6 +91,7 @@ function LiveDuration({ startedAt }: { startedAt: Date | string }) {
 export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
   const router = useRouter();
   const [showRunDialog, setShowRunDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const loopQuery = useQuery(trpc.agentLoop.getLoop.queryOptions({ loopId }));
 
@@ -112,6 +122,16 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
         router.push("/dashboard/loops");
       },
       onError: (error) => toast.error(`Failed to archive: ${error.message}`),
+    }),
+  );
+
+  const deleteMutation = useMutation(
+    trpc.agentLoop.deleteLoop.mutationOptions({
+      onSuccess: () => {
+        toast.success("Loop deleted");
+        router.push("/dashboard/loops");
+      },
+      onError: (error) => toast.error(`Failed to delete: ${error.message}`),
     }),
   );
 
@@ -156,7 +176,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
   );
   const canStartRun = loop.status === "active" && loop.totalRuns < loop.maxRuns && !hasOngoingRun;
   const isLoading =
-    pauseMutation.isPending || resumeMutation.isPending || archiveMutation.isPending;
+    pauseMutation.isPending || resumeMutation.isPending || archiveMutation.isPending || deleteMutation.isPending;
 
   // Check if a run is stuck (running/pending for longer than the timeout)
   const isRunStuck = (run: AgentLoopRun): boolean => {
@@ -316,8 +336,58 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
               )}
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="hover:text-destructive hover:bg-destructive/10"
+            disabled={isLoading}
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            {deleteMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Loop</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this loop? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                deleteMutation.mutate({ loopId });
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-5">
@@ -419,7 +489,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
                   <TableRow key={run.id}>
                     <TableCell className="font-mono">{run.runNumber}</TableCell>
                     <TableCell>{getRunStatusBadge(run.status)}</TableCell>
-                    <TableCell className="font-mono text-xs">{run.model || "-"}</TableCell>
+                    <TableCell className="font-mono text-xs">{run.model?.displayName || "-"}</TableCell>
                     <TableCell className="text-sm">
                       {run.startedAt
                         ? formatDistanceToNow(new Date(run.startedAt), { addSuffix: true })

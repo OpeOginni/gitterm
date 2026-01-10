@@ -9,6 +9,7 @@ import {
 } from "@gitterm/db/schema/workspace";
 import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/integrations";
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
+import { modelProvider, model } from "@gitterm/db/schema/model-credentials";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
@@ -23,7 +24,8 @@ import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../serv
 import { logger } from "../../utils/logger";
 import { railwayWebhookSchema } from "../railway/webhook";
 import { agentLoopWebhookSchema } from "../agent-loop/webhook";
-import { AgentLoopService, getAgentLoopService } from "../../service/agent-loop";
+import { getAgentLoopService } from "../../service/agent-loop";
+import { getModelCredentialsService } from "../../service/model-credentials";
 
 /**
  * Internal router for service-to-service communication
@@ -852,8 +854,8 @@ export const internalRouter = router({
               runNumber: nextRunNumber,
               status: "pending",
               triggerType: "automated",
-              modelProvider: run.modelProvider,
-              model: run.model,
+              modelProviderId: run.modelProviderId,
+              modelId: run.modelId,
             })
             .returning();
 
@@ -870,13 +872,74 @@ export const internalRouter = router({
             };
           }
 
+          // Resolve model provider and model names from UUIDs for the service
+          const [providerRecord] = await db
+            .select()
+            .from(modelProvider)
+            .where(eq(modelProvider.id, run.modelProviderId));
+
+          const [modelRecord] = await db
+            .select()
+            .from(model)
+            .where(eq(model.id, run.modelId));
+
+          if (!providerRecord || !modelRecord) {
+            logger.error("Model provider or model not found", {
+              action: "model_lookup_failed",
+              loopId: loop.id,
+            });
+
+            return {
+              success: false,
+              message: "Model provider or model not found",
+            };
+          }
+
+          // Get the credential for this automated run
+          const credService = getModelCredentialsService();
+          let credential: import("../../providers/compute").SandboxCredential = {
+            type: "api_key",
+            apiKey: "", // Default empty for free models
+          };
+
+          // Only require credential for non-free models
+          if (!modelRecord.isFree) {
+            if (!loop.credentialId) {
+              logger.error("No credential configured for automated run", {
+                action: "credential_missing",
+                loopId: loop.id,
+              });
+
+              // Mark the run as failed so it doesn't stay pending forever
+              await db
+                .update(agentLoopRun)
+                .set({
+                  status: "failed",
+                  completedAt: new Date(),
+                  errorMessage: "No API key configured for this loop. Please update the loop settings or recreate it.",
+                })
+                .where(eq(agentLoopRun.id, newRun.id));
+
+              return {
+                success: false,
+                message: "No credential configured for automated run",
+              };
+            }
+
+            credential = await credService.getCredentialForRun(
+              loop.credentialId,
+              loop.userId,
+              { loopId: loop.id, runId: newRun.id },
+            );
+          }
+
           const service = getAgentLoopService();
           const startResult = await service.startRunAsync({
             loopId: loop.id,
             runId: newRun.id,
-            provider: run.modelProvider,
-            model: newRun.model,
-            apiKey: "", // TODO: Get API key from loop
+            provider: providerRecord.name,
+            modelId: modelRecord.modelId,
+            credential,
             prompt: loop.prompt || undefined,
           });
 
