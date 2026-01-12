@@ -9,5 +9,5 @@ COPY ./apps/proxy/errors /srv/errors
 # Expose port 80 (Railway handles external TLS termination)
 EXPOSE 80
 
-CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile", "--debug"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
 

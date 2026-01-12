@@ -376,6 +376,13 @@ export const proxyResolverRouter = async (c: Context) => {
           const upstreamUrl = new URL(ws.upstreamUrl);
 		  const port = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
 
+      console.log('[PROXY-RESOLVE] Server-only workspace response:', {
+        "X-Upstream-URL": ws.upstreamUrl,
+        "X-Container-Host": upstreamUrl.hostname,
+        "X-Container-Port": port,
+        "X-Container-Protocol": upstreamUrl.protocol.replace(':', ''),
+      });
+      
 		  return c.text('OK', 200, {
             'X-Upstream-URL': ws.upstreamUrl,
 			'X-Container-Host': upstreamUrl.hostname,

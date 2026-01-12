@@ -72,84 +72,80 @@
 
 		# Local workspaces: route to tunnel-proxy (MUST be first!)
 		# Tunnel-proxy returns HTML error pages directly
-		handle @local_workspace {
-			reverse_proxy {$TUNNEL_PROXY_URL} {
-				# WebSocket support
-				header_up Upgrade {header.Upgrade}
-				header_up Connection {header.Connection}
-				header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-				header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-				header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-				header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+		reverse_proxy @local_workspace {$TUNNEL_PROXY_URL} {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 
-				# Standard proxy headers
-				header_up Host {host}
-				header_up X-Real-IP {remote_ip}
-				header_up X-Forwarded-For {remote_ip}
-				header_up X-User-Agent {header.User-Agent}
-				header_up Cookie {header.Cookie}
-				header_up X-Subdomain {header.X-Subdomain}
-				header_up X-Hosting-Type {header.X-Hosting-Type}
-				header_up X-Routing-Mode subdomain
+			# Standard proxy headers
+			header_up Host {host}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up X-User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+			header_up X-Subdomain {header.X-Subdomain}
+			header_up X-Hosting-Type {header.X-Hosting-Type}
+			header_up X-Routing-Mode subdomain
 
-				transport http {
-					compression off
-					dial_timeout 10s
-					response_header_timeout 0
-					expect_continue_timeout 0
-					keepalive 2m
-					keepalive_idle_conns 10
-					read_buffer 32768
-					write_buffer 32768
-				}
+			transport http {
+				compression off
+				dial_timeout 10s
+				response_header_timeout 0
+				expect_continue_timeout 0
+				keepalive 2m
+				keepalive_idle_conns 10
+				read_buffer 32768
+				write_buffer 32768
 			}
 		}
 
 		# Cloud workspaces: route to containers using dynamic host/port from headers
-		handle @cloud_workspace {
-			reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
-				# WebSocket support
-				header_up Upgrade {header.Upgrade}
-				header_up Connection {header.Connection}
-				header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-				header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-				header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-				header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+		reverse_proxy @cloud_workspace {header.X-Container-Host}:{header.X-Container-Port} {
+			# WebSocket support
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 
-				# Standard proxy headers
-				header_up Host {header.X-Container-Host}
-				header_up X-Real-IP {remote_ip}
-				header_up X-Forwarded-For {remote_ip}
-				header_up User-Agent {header.User-Agent}
-				header_up Cookie {header.Cookie}
-				header_up X-Routing-Mode subdomain
+			# Standard proxy headers
+			header_up Host {header.X-Container-Host}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+			header_up X-Routing-Mode subdomain
 
-				# Transport settings optimized for WebSocket/ttyd
-				transport http {
-					compression off
-					dial_timeout 10s
-					response_header_timeout 0
-					expect_continue_timeout 0
-					keepalive 2m
-					keepalive_idle_conns 10
-					read_buffer 32768
-					write_buffer 32768
-				}
+			# Transport settings optimized for WebSocket/ttyd
+			transport http {
+				compression off
+				dial_timeout 10s
+				response_header_timeout 0
+				expect_continue_timeout 0
+				keepalive 2m
+				keepalive_idle_conns 10
+				read_buffer 32768
+				write_buffer 32768
+			}
 
-				# Intercept upstream error responses and show nice error pages
-				@unavailable status 401 403 404 503
-				handle_response @unavailable {
-					root * /srv/errors
-					rewrite * /unavailable.html
-					file_server
-				}
+			# Intercept upstream error responses and show nice error pages
+			@unavailable status 401 403 404 503
+			handle_response @unavailable {
+				root * /srv/errors
+				rewrite * /unavailable.html
+				file_server
+			}
 
-				@server_error status 500 502 504
-				handle_response @server_error {
-					root * /srv/errors
-					rewrite * /error.html
-					file_server
-				}
+			@server_error status 500 502 504
+			handle_response @server_error {
+				root * /srv/errors
+				rewrite * /error.html
+				file_server
 			}
 		}
 	}
