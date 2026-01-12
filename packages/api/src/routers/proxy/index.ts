@@ -382,12 +382,13 @@ export const proxyResolverRouter = async (c: Context) => {
         "X-Container-Port": port,
         "X-Container-Protocol": upstreamUrl.protocol.replace(':', ''),
       });
-      
+
 		  return c.text('OK', 200, {
             'X-Upstream-URL': ws.upstreamUrl,
 			'X-Container-Host': upstreamUrl.hostname,
             'X-Container-Port': port,
 			'X-Container-Protocol': upstreamUrl.protocol.replace(':', ''),
+      'X-Hosting-Type': "cloud",
 		  });
 		}
 	
