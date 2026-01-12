@@ -36,15 +36,20 @@ import {
   Trash2,
   RefreshCw,
   Copy,
+  FileJson,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import Image from "next/image";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import CodeMirror from "@uiw/react-codemirror";
+import { json } from "@codemirror/lang-json";
+import { useTheme } from "next-themes";
 
 type AuthType = "api_key" | "oauth";
 
@@ -53,6 +58,8 @@ interface Provider {
   name: string;
   displayName: string;
   authType: AuthType;
+  plugin?: string;
+  isRecommended?: boolean;
 }
 
 interface Credential {
@@ -70,6 +77,30 @@ interface Credential {
   updatedAt: string;
 }
 
+// Auth.json structure from OpenCode CLI
+interface AuthJsonEntry {
+  type: "oauth";
+  refresh: string;
+  access?: string;
+  expires?: number;
+  accountId?: string;
+}
+
+interface AuthJson {
+  [key: string]: AuthJsonEntry;
+}
+
+// Helper to get provider logo path - logos are named after the provider name
+const getProviderLogo = (providerName: string): string => {
+  return `/${providerName}.svg`;
+};
+
+// Helper to check if a provider is recommended
+const isProviderRecommended = (providerName: string, providers: Provider[]): boolean => {
+  const provider = providers.find((p) => p.name === providerName);
+  return provider?.isRecommended ?? false;
+};
+
 export function ModelCredentialsSection() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -77,8 +108,13 @@ export function ModelCredentialsSection() {
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [apiKey, setApiKey] = useState("");
   const [label, setLabel] = useState("");
+  const [authJsonInput, setAuthJsonInput] = useState("");
+  const [authJsonError, setAuthJsonError] = useState<string | null>(null);
 
-  // OAuth state
+  // Theme for CodeMirror
+  const { theme } = useTheme();
+
+  // OAuth state (for device code flow - GitHub Copilot)
   const [oauthStep, setOauthStep] = useState<"idle" | "pending" | "polling">("idle");
   const [deviceCode, setDeviceCode] = useState<{
     verificationUri: string;
@@ -101,26 +137,78 @@ export function ModelCredentialsSection() {
   const credentials = (credentialsData?.credentials ?? []) as Credential[];
 
   const selectedProvider = providers.find((p) => p.id === selectedProviderId);
+  const isCodexProvider = selectedProvider?.plugin === "codex-auth";
+
+  // Get the best default provider (prefer recommended, then first)
+  const getDefaultProvider = useCallback(() => {
+    if (providers.length === 0) return undefined;
+    // Prefer recommended providers, specifically look for "opencode-zen" first
+    const zenProvider = providers.find((p) => p.name === "opencode-zen");
+    if (zenProvider) return zenProvider;
+    const recommended = providers.find((p) => p.isRecommended);
+    if (recommended) return recommended;
+    return providers[0];
+  }, [providers]);
 
   // Set default provider when data loads
   useEffect(() => {
     if (!selectedProviderId && providers.length > 0) {
-      setSelectedProviderId(providers[0].id);
+      const defaultProvider = getDefaultProvider();
+      if (defaultProvider) {
+        setSelectedProviderId(defaultProvider.id);
+      }
     }
-  }, [providers, selectedProviderId]);
+  }, [providers, selectedProviderId, getDefaultProvider]);
 
   // Reset form when dialog closes
   useEffect(() => {
     if (!addDialogOpen) {
       setApiKey("");
       setLabel("");
+      setAuthJsonInput("");
+      setAuthJsonError(null);
       setOauthStep("idle");
       setDeviceCode(null);
-      if (providers.length > 0) {
-        setSelectedProviderId(providers[0].id);
+      const defaultProvider = getDefaultProvider();
+      if (defaultProvider) {
+        setSelectedProviderId(defaultProvider.id);
       }
     }
-  }, [addDialogOpen, providers]);
+  }, [addDialogOpen, getDefaultProvider]);
+
+  // Validate auth.json as user types
+  useEffect(() => {
+    if (!authJsonInput.trim()) {
+      setAuthJsonError(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(authJsonInput) as AuthJson;
+      
+      // Look for openai key (could be "openai" or the tokens directly)
+      let entry: AuthJsonEntry | undefined;
+      
+      if (parsed.openai && parsed.openai.type === "oauth") {
+        entry = parsed.openai;
+      } else if ((parsed as unknown as AuthJsonEntry).type === "oauth") {
+        entry = parsed as unknown as AuthJsonEntry;
+      }
+
+      if (!entry) {
+        setAuthJsonError("Missing OpenAI OAuth tokens");
+        return;
+      }
+
+      if (!entry.refresh) {
+        setAuthJsonError("Missing refresh token");
+        return;
+      }
+
+      setAuthJsonError(null);
+    } catch {
+      setAuthJsonError("Invalid JSON format");
+    }
+  }, [authJsonInput]);
 
   const invalidateCredentials = useCallback(() => {
     queryClient.invalidateQueries({
@@ -142,17 +230,33 @@ export function ModelCredentialsSection() {
     })
   );
 
+  const storeOAuthTokensMutation = useMutation(
+    trpc.modelCredentials.storeOAuthTokens.mutationOptions({
+      onSuccess: () => {
+        toast.success("OpenAI Codex tokens saved successfully");
+        setAddDialogOpen(false);
+        invalidateCredentials();
+      },
+      onError: (error) => {
+        toast.error(`Failed to save tokens: ${error.message}`);
+      },
+    })
+  );
+
   const initiateOAuthMutation = useMutation(
     trpc.modelCredentials.initiateOAuth.mutationOptions({
       onSuccess: (data) => {
-        setDeviceCode({
-          verificationUri: data.verificationUri,
-          userCode: data.userCode,
-          deviceCode: data.deviceCode,
-          interval: data.interval,
-          expiresIn: data.expiresIn,
-        });
-        setOauthStep("pending");
+        if (data.flowType === "device_code") {
+          // Device code flow (GitHub Copilot)
+          setDeviceCode({
+            verificationUri: data.verificationUri,
+            userCode: data.userCode,
+            deviceCode: data.deviceCode,
+            interval: data.interval,
+            expiresIn: data.expiresIn,
+          });
+          setOauthStep("pending");
+        }
       },
       onError: (error) => {
         toast.error(`Failed to start OAuth: ${error.message}`);
@@ -263,6 +367,67 @@ export function ModelCredentialsSection() {
     });
   };
 
+  const parseAndValidateAuthJson = (input: string): { refresh: string; access?: string; expires?: number } | null => {
+    try {
+      const parsed = JSON.parse(input) as AuthJson;
+      
+      // Look for openai key (could be "openai" or the tokens directly)
+      let entry: AuthJsonEntry | undefined;
+      
+      if (parsed.openai && parsed.openai.type === "oauth") {
+        entry = parsed.openai;
+      } else if ((parsed as unknown as AuthJsonEntry).type === "oauth") {
+        // User might have pasted just the openai object
+        entry = parsed as unknown as AuthJsonEntry;
+      }
+
+      if (!entry) {
+        setAuthJsonError("Could not find OpenAI OAuth tokens. Make sure you copy the auth.json content from ~/.local/share/opencode/auth.json");
+        return null;
+      }
+
+      if (!entry.refresh) {
+        setAuthJsonError("Missing refresh token in auth.json");
+        return null;
+      }
+
+      setAuthJsonError(null);
+      return {
+        refresh: entry.refresh,
+        access: entry.access,
+        expires: entry.expires,
+      };
+    } catch {
+      setAuthJsonError("Invalid JSON format. Please paste the contents of your auth.json file.");
+      return null;
+    }
+  };
+
+  const handleSubmitAuthJson = () => {
+    if (!authJsonInput.trim()) {
+      toast.error("Please paste your auth.json content");
+      return;
+    }
+
+    if (!selectedProvider) {
+      toast.error("Please select a provider");
+      return;
+    }
+
+    const tokens = parseAndValidateAuthJson(authJsonInput);
+    if (!tokens) {
+      return;
+    }
+
+    storeOAuthTokensMutation.mutate({
+      providerName: selectedProvider.name,
+      refreshToken: tokens.refresh,
+      accessToken: tokens.access,
+      expiresAt: tokens.expires,
+      label: label || undefined,
+    });
+  };
+
   const handleStartOAuth = () => {
     if (!selectedProvider) {
       toast.error("Please select a provider");
@@ -270,6 +435,7 @@ export function ModelCredentialsSection() {
     }
 
     setOauthStep("polling");
+    
     initiateOAuthMutation.mutate({
       providerName: selectedProvider.name,
     });
@@ -305,17 +471,9 @@ export function ModelCredentialsSection() {
 
   const isSubmitting =
     storeApiKeyMutation.isPending ||
+    storeOAuthTokensMutation.isPending ||
     initiateOAuthMutation.isPending ||
     completeOAuthMutation.isPending;
-
-  const getProviderIcon = (name: string) => {
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes("anthropic")) return "/anthropic.svg";
-    if (lowerName.includes("openai")) return "/openai.svg";
-    if (lowerName.includes("github") || lowerName.includes("copilot")) return "/github.svg";
-    if (lowerName.includes("google")) return "/google.svg";
-    return "/code.svg";
-  };
 
   return (
     <Card className="mb-4 border-border">
@@ -332,7 +490,7 @@ export function ModelCredentialsSection() {
                 Add Credential
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px] border-border/50 bg-card">
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto border-border/50 bg-card">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
@@ -356,14 +514,33 @@ export function ModelCredentialsSection() {
                       <SelectValue placeholder="Select provider" />
                     </SelectTrigger>
                     <SelectContent>
-                      {providers.map((provider) => (
-                        <SelectItem key={provider.id} value={provider.id}>
+                      {/* Sort providers: recommended first, then alphabetically */}
+                      {[...providers]
+                        .sort((a, b) => {
+                          if (a.isRecommended && !b.isRecommended) return -1;
+                          if (!a.isRecommended && b.isRecommended) return 1;
+                          return a.displayName.localeCompare(b.displayName);
+                        })
+                        .map((provider) => (
+                        <SelectItem 
+                          key={provider.id} 
+                          value={provider.id}
+                          className=""
+                        >
                           <div className="flex items-center gap-2">
+                            <Image
+                              src={getProviderLogo(provider.name)}
+                              alt={provider.displayName}
+                              width={16}
+                              height={16}
+                              className="h-4 w-4"
+                            />
                             {provider.displayName}
+                            {provider.isRecommended && (
+                              <span className="text-xs text-muted-foreground">Recommended</span>
+                            )}
                             {provider.authType === "oauth" && (
-                              <Badge variant="outline" className="text-xs px-2 py-0.5 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800">
-                                OAuth
-                              </Badge>
+                              <span className="text-xs text-muted-foreground/70">OAuth</span>
                             )}
                           </div>
                         </SelectItem>
@@ -408,8 +585,73 @@ export function ModelCredentialsSection() {
                   </div>
                 )}
 
-                {/* OAuth Flow (for oauth providers) */}
-                {selectedProvider?.authType === "oauth" && (
+                {/* Codex Auth - Paste auth.json */}
+                {selectedProvider?.authType === "oauth" && isCodexProvider && (
+                  <div className="grid gap-4">
+                    <div className="flex items-start gap-2 text-sm text-muted-foreground p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                      <FileJson className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
+                      <div>
+                        <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
+                          Paste tokens from OpenCode CLI
+                        </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                          1. Run <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">opencode auth login</code> and authenticate with OpenAI (ChatGPT Pro/Plus)
+                        </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                          2. Copy contents of <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">~/.local/share/opencode/auth.json</code>
+                        </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                          3. Paste below
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label className="text-sm font-medium flex items-center gap-2">
+                        <FileJson className="h-4 w-4 text-muted-foreground" />
+                        auth.json contents
+                      </Label>
+                      <div className="rounded-md border border-border/50 overflow-hidden">
+                        <CodeMirror
+                          value={authJsonInput}
+                          height="160px"
+                          extensions={[json()]}
+                          onChange={(value) => {
+                            setAuthJsonInput(value);
+                          }}
+                          theme={theme as "light" | "dark"}
+                          placeholder='{"openai": {"type": "oauth", "refresh": "...", "access": "...", "expires": ...}}'
+                          basicSetup={{
+                            lineNumbers: true,
+                            foldGutter: true,
+                          }}
+                          className="text-sm"
+                        />
+                      </div>
+                      {authJsonError ? (
+                        <div className="flex items-center gap-1.5 text-xs text-red-500">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {authJsonError}
+                        </div>
+                      ) : authJsonInput.trim() ? (
+                        <div className="flex items-center gap-1.5 text-xs text-green-500">
+                          <Check className="h-3.5 w-3.5" />
+                          Valid JSON
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="flex items-start gap-2 text-xs text-muted-foreground p-3 rounded-lg bg-muted/50">
+                      <Shield className="h-4 w-4 shrink-0 mt-0.5 text-green-500" />
+                      <p>
+                        Your tokens are encrypted at rest and will be automatically refreshed when needed.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* GitHub Copilot OAuth Flow (Device Code) */}
+                {selectedProvider?.authType === "oauth" && !isCodexProvider && (
                   <div className="grid gap-4">
                     {oauthStep === "idle" && (
                       <div className="flex flex-col items-center gap-4 p-6 rounded-lg bg-secondary/30 border border-border/50">
@@ -432,6 +674,7 @@ export function ModelCredentialsSection() {
                       </div>
                     )}
 
+                    {/* Device Code Flow UI (GitHub Copilot) */}
                     {oauthStep === "pending" && deviceCode && (
                       <div className="flex flex-col items-center gap-4 p-6 rounded-lg bg-secondary/30 border border-border/50">
                         <p className="text-sm text-center">
@@ -461,6 +704,7 @@ export function ModelCredentialsSection() {
                       </div>
                     )}
 
+                    {/* Device Code Polling UI */}
                     {oauthStep === "polling" && (
                       <div className="flex flex-col items-center gap-4 p-6 rounded-lg bg-secondary/30 border border-border/50">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -500,6 +744,25 @@ export function ModelCredentialsSection() {
                     )}
                   </Button>
                 )}
+                {selectedProvider?.authType === "oauth" && isCodexProvider && (
+                  <Button
+                    onClick={handleSubmitAuthJson}
+                    disabled={isSubmitting || !authJsonInput.trim()}
+                    className="gap-2"
+                  >
+                    {storeOAuthTokensMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="h-4 w-4" />
+                        Save Tokens
+                      </>
+                    )}
+                  </Button>
+                )}
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -525,7 +788,9 @@ export function ModelCredentialsSection() {
           </div>
         ) : (
           <div className="space-y-3">
-            {credentials.map((credential) => (
+            {credentials.map((credential) => {
+              const isRecommended = isProviderRecommended(credential.providerName, providers);
+              return (
               <div
                 key={credential.id}
                 className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
@@ -536,11 +801,20 @@ export function ModelCredentialsSection() {
               >
                 <div className="flex items-center gap-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                    <Key className="h-5 w-5 text-primary" />
+                    <Image
+                      src={getProviderLogo(credential.providerName)}
+                      alt={credential.providerDisplayName}
+                      width={20}
+                      height={20}
+                      className="h-5 w-5"
+                    />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{credential.providerDisplayName}</p>
+                      {isRecommended && credential.isActive && (
+                        <span className="text-xs text-muted-foreground">Recommended</span>
+                      )}
                       {credential.label && (
                         <Badge variant="outline" className="text-xs">
                           {credential.label}
@@ -552,9 +826,7 @@ export function ModelCredentialsSection() {
                         </Badge>
                       )}
                       {credential.authType === "oauth" && (
-                        <Badge variant="outline" className="text-xs px-2 py-0.5 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800">
-                          OAuth
-                        </Badge>
+                        <span className="text-xs text-muted-foreground/70">OAuth</span>
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -596,7 +868,8 @@ export function ModelCredentialsSection() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>

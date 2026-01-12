@@ -11,7 +11,7 @@ import {
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
-import { CheckCircle2, Terminal, Zap, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle2, Terminal, Zap, ExternalLink, ArrowRight, Loader2, Package } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
@@ -31,17 +31,27 @@ interface PlanTier {
   actionLabel: string;
 }
 
+interface RunPack {
+  runs: number;
+  price: number;
+  slug: "run_pack_50" | "run_pack_100";
+  pricePerRun: string;
+}
+
 const PLAN_TIERS: PlanTier[] = [
   {
     name: "Free",
     price: 0,
-    description: "Get started with cloud workspaces",
+    description: "Get started with cloud workspaces and agentic coding for free",
     features: [
       "60 minutes/day cloud runtime",
       "Auto-generated subdomains",
-      "GitHub integration",
       "Persistent storage",
-      "Community support",
+      "Git operations on cloud workspaces",
+      "10 sandbox runs / month",
+      "Max 40 min per run",
+      "Bring-your-own inference",
+      "Community support and updates",
     ],
     actionLabel: "Get Started",
   },
@@ -49,28 +59,27 @@ const PLAN_TIERS: PlanTier[] = [
     name: "Tunnel",
     slug: "tunnel",
     price: 5,
-    description: "Best for local development & exposing services",
+    description: "Custom URL for your local tunnels",
     features: [
       "Custom tunnel subdomain (yourname.gitterm.dev)",
       "Secure public access to local services",
       "Ideal for webhooks, demos, and local testing",
-      "Same daily cloud minutes as Free",
-      "Cancel anytime",
+      "Same daily runtime limit as Free",
+      "10 sandbox runs / month (same as Free)",
     ],
-    actionLabel: "Start with Tunnel",
+    actionLabel: "Get Tunnel",
   },
   {
     name: "Pro",
     slug: "pro",
-    price: 15,
-    description: "Full cloud development - no limits",
+    price: 20,
+    description: "Full-featured cloud development and agentic coding platform",
     features: [
-      "Unlimited cloud runtime",
-      "Custom subdomain for cloud workspaces",
-      "Multi-region deployments (US, EU, Asia)",
-      "Priority support",
-      "Local tunnels included",
-      "Built for professional workflows",
+      "Unlimited loop projects and cloud workspaces",
+      "100 sandbox runs / month",
+      "Max 40 min per run",
+      "Custom tunnel subdomain included",
+      "Built for professional workflows"
     ],
     popular: true,
     actionLabel: "Go Pro",
@@ -92,12 +101,87 @@ const PLAN_TIERS: PlanTier[] = [
   },
 ];
 
+const RUN_PACKS: RunPack[] = [
+  {
+    runs: 50,
+    price: 15,
+    slug: "run_pack_50",
+    pricePerRun: "$0.30",
+  },
+  {
+    runs: 100,
+    price: 25,
+    slug: "run_pack_100",
+    pricePerRun: "$0.25",
+  },
+];
+
 const CheckItem = ({ text }: { text: string }) => (
   <div className="flex gap-2">
     <CheckCircle2 size={18} className="my-auto text-green-500 shrink-0" />
     <p className="pt-0.5 text-muted-foreground text-sm">{text}</p>
   </div>
 );
+
+function RunPackCard({
+  pack,
+  onPurchase,
+  isLoading,
+  loadingPack,
+}: {
+  pack: RunPack;
+  onPurchase: (slug: "run_pack_50" | "run_pack_100") => void;
+  isLoading: boolean;
+  loadingPack?: string | null;
+}) {
+  const isThisPackLoading = isLoading && loadingPack === pack.slug;
+
+  return (
+    <Card className="w-full max-w-[280px] flex flex-col justify-between py-1 mx-auto sm:mx-0 border-dashed">
+      <div>
+        <CardHeader className="pb-4 pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Package className="h-5 w-5 text-primary" />
+            <CardTitle className="text-muted-foreground text-lg">{pack.runs} Runs</CardTitle>
+          </div>
+          <div className="flex gap-0.5 items-baseline">
+            <h3 className="text-2xl font-bold">${pack.price}</h3>
+            <span className="text-sm text-muted-foreground ml-2">({pack.pricePerRun}/run)</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            One-time purchase. Runs never expire and can be used anytime.
+          </p>
+        </CardContent>
+      </div>
+      <CardFooter className="mt-2 mb-2">
+        <button
+          onClick={() => onPurchase(pack.slug)}
+          disabled={isLoading}
+          className={cn(
+            "relative inline-flex w-full items-center justify-center rounded-md px-6 py-2.5 text-sm font-medium transition-all cursor-pointer",
+            "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+            "disabled:opacity-70 disabled:cursor-not-allowed",
+            "bg-primary text-primary-foreground hover:bg-primary/90",
+          )}
+        >
+          {isThisPackLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              Buy {pack.runs} Runs
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </>
+          )}
+        </button>
+      </CardFooter>
+    </Card>
+  );
+}
 
 function PricingCard({
   plan,
@@ -225,6 +309,7 @@ function PricingCard({
 function PricingPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<"tunnel" | "pro" | null>(null);
+  const [loadingPack, setLoadingPack] = useState<string | null>(null);
   const { data: session } = authClient.useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -302,6 +387,31 @@ function PricingPageContent() {
     }
   };
 
+  const handleRunPackPurchase = async (slug: "run_pack_50" | "run_pack_100") => {
+    if (!isBillingEnabled) {
+      window.location.href = "/dashboard";
+      return;
+    }
+
+    // Check if user is logged in
+    if (!session?.user) {
+      const redirectUrl = `/pricing?pack=${slug}`;
+      router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingPack(slug);
+    try {
+      await initiateCheckout(slug);
+    } catch (error) {
+      console.error("Run pack purchase failed:", error);
+    } finally {
+      setIsLoading(false);
+      setLoadingPack(null);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-background">
       <LandingHeader />
@@ -314,8 +424,7 @@ function PricingPageContent() {
               Simple, transparent pricing
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Start free, upgrade when you need more. All plans include access to cloud workspaces
-              and local tunnels.
+              Powerful agentic coding with predictable pricing. No surprise bills.
             </p>
           </div>
 
@@ -333,8 +442,32 @@ function PricingPageContent() {
             ))}
           </section>
 
+          {/* Run Packs Section */}
+          <div className="mt-20">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold mb-2">Need more runs?</h2>
+              <p className="text-muted-foreground">
+                Purchase run packs for additional sandbox runs. No subscription required.
+              </p>
+            </div>
+            <section className="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-6">
+              {RUN_PACKS.map((pack) => (
+                <RunPackCard
+                  key={pack.slug}
+                  pack={pack}
+                  onPurchase={handleRunPackPurchase}
+                  isLoading={isLoading}
+                  loadingPack={loadingPack}
+                />
+              ))}
+            </section>
+            <p className="text-center text-sm text-muted-foreground mt-4">
+              Pro subscribers get 100 runs/month included ($0.20/run value). Run packs are great for power users who need more.
+            </p>
+          </div>
+
           {/* Ideal For Section */}
-          <div className="mt-20 grid gap-8 md:grid-cols-2">
+          <div className="mt-20 grid gap-8 md:grid-cols-3">
             <div className="rounded-lg border border-border p-6 bg-card">
               <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                 <Terminal className="h-5 w-5 text-primary" />
@@ -342,7 +475,7 @@ function PricingPageContent() {
               </h3>
               <p className="text-muted-foreground text-sm">
                 Developers who want a reliable <strong>ngrok alternative</strong> with permanent
-                URLs and zero setup overhead. Perfect for webhooks, demos, and local testing.
+                custom URLs. Perfect for webhooks, demos, and local testing.
               </p>
             </div>
             <div className="rounded-lg border border-border p-6 bg-card">
@@ -351,9 +484,18 @@ function PricingPageContent() {
                 Pro is ideal for
               </h3>
               <p className="text-muted-foreground text-sm">
-                Developers who live in the cloud and want{" "}
-                <strong>fast, always-on environments</strong> with full control and branding. Built
-                for professional and freelance workflows.
+                Developers who want <strong>agentic coding superpowers</strong> with unlimited projects,
+                priority queue access, and intelligent agent memory across sessions.
+              </p>
+            </div>
+            <div className="rounded-lg border border-border p-6 bg-card">
+              <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                <Package className="h-5 w-5 text-primary" />
+                Run Packs are ideal for
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                Power users who need more sandbox runs beyond the included amount,
+                or users who want to try agentic coding without a subscription.
               </p>
             </div>
           </div>

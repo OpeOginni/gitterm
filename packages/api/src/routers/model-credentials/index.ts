@@ -28,6 +28,7 @@ export const modelCredentialsRouter = router({
         authType: p.authType,
         plugin: p.plugin,
         hasOAuthConfig: !!p.oauthConfig,
+        isRecommended: p.isRecommended,
       })),
     };
   }),
@@ -44,6 +45,7 @@ export const modelCredentialsRouter = router({
         displayName: m.displayName,
         modelId: m.modelId,
         isFree: m.isFree,
+        isRecommended: m.isRecommended,
         provider: {
           id: m.provider.id,
           name: m.provider.name,
@@ -239,7 +241,7 @@ export const modelCredentialsRouter = router({
       }
     }),
 
-  // ==================== OAuth Device Code Flow ====================
+  // ==================== OAuth Device Code Flow (GitHub Copilot) ====================
 
   /**
    * Initiate OAuth device code flow
@@ -280,12 +282,21 @@ export const modelCredentialsRouter = router({
 
           return {
             success: true,
+            flowType: "device_code" as const,
             verificationUri: deviceCode.verificationUri,
             userCode: deviceCode.userCode,
             deviceCode: deviceCode.deviceCode,
             interval: deviceCode.interval,
             expiresIn: deviceCode.expiresIn,
           };
+        }
+
+        // For codex-auth, we don't support OAuth flow - users should paste auth.json tokens
+        if (provider.plugin === "codex-auth") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "OpenAI Codex requires manual token paste from OpenCode CLI auth.json. Please use the 'Paste auth.json' option.",
+          });
         }
 
         throw new TRPCError({
@@ -303,6 +314,7 @@ export const modelCredentialsRouter = router({
 
   /**
    * Poll for OAuth token (single poll, client should call repeatedly)
+   * Used for device code flow (GitHub Copilot)
    */
   pollOAuth: protectedProcedure
     .input(

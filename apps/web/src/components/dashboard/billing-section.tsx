@@ -23,15 +23,14 @@ import {
   ExternalLink,
   Loader2,
   Sparkles,
-  Terminal,
   ArrowRight,
-  CreditCard,
   Settings,
+  Package,
+  Terminal,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
-import { cn } from "@/lib/utils";
 
 type UserPlan = "free" | "tunnel" | "pro";
 
@@ -52,7 +51,7 @@ interface PlanConfig {
 const PLANS: Record<Exclude<UserPlan, "free">, PlanConfig> = {
   tunnel: {
     name: "Tunnel",
-    description: "Best for local development & exposing services",
+    description: "Custom URL for your local tunnels",
     price: "$5",
     period: "/month",
     icon: <Terminal className="h-5 w-5" />,
@@ -60,30 +59,45 @@ const PLANS: Record<Exclude<UserPlan, "free">, PlanConfig> = {
       "Custom tunnel subdomain (yourname.gitterm.dev)",
       "Secure public access to local services",
       "Ideal for webhooks, demos, and local testing",
-      "Same daily cloud minutes as Free",
+      "10 sandbox runs / month (same as Free)",
     ],
   },
   pro: {
     name: "Pro",
-    description: "Full cloud development - no limits",
-    price: "$15",
+    description: "Full-featured agentic coding platform",
+    price: "$20",
     period: "/month",
     icon: <Sparkles className="h-5 w-5" />,
     popular: true,
     features: [
-      "Unlimited cloud runtime",
-      "Custom subdomain for cloud workspaces",
-      "Multi-region deployments (US, EU, Asia)",
-      "Priority support",
-      "Local tunnels included",
+      "Unlimited projects",
+      "100 sandbox runs / month",
+      "Max 40 min per run",
+      "Bring-your-own inference",
+      "Priority queue",
+      "Agent memory / project context",
+      "Email notifications on run completion",
+      "Custom tunnel subdomain included",
     ],
   },
 };
 
+interface RunPackConfig {
+  runs: number;
+  price: string;
+  pricePerRun: string;
+  slug: "run_pack_50" | "run_pack_100";
+}
+
+const RUN_PACKS: RunPackConfig[] = [
+  { runs: 50, price: "$15", pricePerRun: "$0.30", slug: "run_pack_50" },
+  { runs: 100, price: "$25", pricePerRun: "$0.25", slug: "run_pack_100" },
+];
+
 const PLAN_DESCRIPTIONS: Record<UserPlan, string> = {
-  free: "60 minutes/day of cloud runtime with auto-generated subdomains",
-  tunnel: "Custom subdomain for local development with secure public access",
-  pro: "Unlimited cloud runtime with custom subdomains and multi-region support",
+  free: "10 sandbox runs/month included. Upgrade for more runs and premium features.",
+  tunnel: "Custom tunnel subdomain with 10 sandbox runs/month",
+  pro: "Full agentic coding with 100 runs/month and all premium features",
 };
 
 function PlanCard({
@@ -100,8 +114,6 @@ function PlanCard({
   isLoading: boolean;
 }) {
   const isCurrentPlan = currentPlan === plan;
-  const planOrder: UserPlan[] = ["free", "tunnel", "pro"];
-  const isDowngrade = planOrder.indexOf(currentPlan) > planOrder.indexOf(plan);
 
   return (
     <Card
@@ -143,11 +155,6 @@ function PlanCard({
         {isCurrentPlan ? (
           <Button variant="outline" className="w-full" disabled>
             Current Plan
-          </Button>
-        ) : isDowngrade ? (
-          <Button variant="outline" className="w-full" onClick={() => openCustomerPortal()}>
-            Manage Subscription
-            <ExternalLink className="ml-2 h-4 w-4" />
           </Button>
         ) : (
           <Button className="w-full" onClick={() => onUpgrade(plan)} disabled={isLoading}>
@@ -221,14 +228,12 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
 
   const planConfig = currentPlan !== "free" ? PLANS[currentPlan] : null;
 
-  // For subscribed users, show a more detailed subscription management section
-  if (currentPlan !== "free") {
+  // For paid subscribers (tunnel or pro), show subscription management
+  if (currentPlan === "tunnel" || currentPlan === "pro") {
     return (
-      <div
-        className={cn("grid gap-6", currentPlan === "tunnel" ? "md:grid-cols-2" : "grid-cols-1")}
-      >
+      <div className="space-y-6">
         {/* Active Subscription Card */}
-        <Card className="border-primary/20 flex flex-col">
+        <Card className="border-primary/20">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -250,7 +255,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4 flex-1">
+          <CardContent className="space-y-4">
             <div>
               <p className="text-sm font-medium mb-2">Your plan includes:</p>
               <ul className="space-y-2">
@@ -266,7 +271,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
               </ul>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col sm:flex-row gap-3 border-t pt-6">
+          <CardFooter className="border-t pt-6">
             <Button
               variant="outline"
               onClick={handleOpenPortal}
@@ -284,9 +289,9 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
           </CardFooter>
         </Card>
 
-        {/* Upgrade Option for Tunnel users */}
+        {/* Upgrade to Pro for Tunnel users */}
         {currentPlan === "tunnel" && (
-          <Card className="border-dashed border-primary/30 flex flex-col">
+          <Card className="border-dashed border-primary/30">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -294,28 +299,28 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
                 </div>
                 <div>
                   <CardTitle className="text-lg">Upgrade to Pro</CardTitle>
-                  <CardDescription>$15/month</CardDescription>
+                  <CardDescription>$20/month</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="flex-1">
+            <CardContent>
               <p className="text-sm font-medium mb-2">Everything in Tunnel, plus:</p>
               <ul className="space-y-2">
                 <li className="flex items-start gap-2 text-sm text-muted-foreground">
                   <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>Unlimited cloud runtime</span>
+                  <span>100 sandbox runs / month (10x more)</span>
                 </li>
                 <li className="flex items-start gap-2 text-sm text-muted-foreground">
                   <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>Custom subdomain for cloud workspaces</span>
+                  <span>Priority queue access</span>
                 </li>
                 <li className="flex items-start gap-2 text-sm text-muted-foreground">
                   <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>Multi-region deployments</span>
+                  <span>Agent memory / project context</span>
                 </li>
                 <li className="flex items-start gap-2 text-sm text-muted-foreground">
                   <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>Priority support</span>
+                  <span>Email notifications on run completion</span>
                 </li>
               </ul>
             </CardContent>
@@ -332,6 +337,43 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
             </CardFooter>
           </Card>
         )}
+
+        {/* Run Packs for paid users */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Need more runs?
+            </CardTitle>
+            <CardDescription>
+              {currentPlan === "pro"
+                ? "Your Pro plan includes 100 runs/month. Purchase additional run packs anytime."
+                : "Your Tunnel plan includes 10 runs/month. Purchase additional run packs anytime."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {RUN_PACKS.map((pack) => (
+                <div
+                  key={pack.slug}
+                  className="flex items-center justify-between p-4 rounded-lg border border-dashed"
+                >
+                  <div>
+                    <p className="font-medium">{pack.runs} Runs</p>
+                    <p className="text-sm text-muted-foreground">
+                      {pack.price} ({pack.pricePerRun}/run)
+                    </p>
+                  </div>
+                  <Link href="/pricing">
+                    <Button size="sm" variant="outline">
+                      Buy
+                    </Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -340,7 +382,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
   return (
     <div className="space-y-6">
       {/* Current Plan Display */}
-      <Card className="mb-4 border-border">
+      <Card className="border-border">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -354,18 +396,53 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Upgrade your plan to unlock more features and remove usage limits.
+            You have 10 free runs/month. Subscribe to Pro for 100 runs/month and premium features.
           </p>
         </CardContent>
         <CardFooter className="flex gap-3">
           <Link href={"/pricing" as Route}>
             <Button variant="default" className="gap-2">
               <Sparkles className="h-4 w-4" />
-              View Upgrade Options
+              View Pricing
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
         </CardFooter>
+      </Card>
+
+      {/* Run Packs for Free Users */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            Need more runs?
+          </CardTitle>
+          <CardDescription>
+            Purchase run packs for additional runs beyond your 10 free monthly runs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {RUN_PACKS.map((pack) => (
+              <div
+                key={pack.slug}
+                className="flex items-center justify-between p-4 rounded-lg border border-dashed"
+              >
+                <div>
+                  <p className="font-medium">{pack.runs} Runs</p>
+                  <p className="text-sm text-muted-foreground">
+                    {pack.price} ({pack.pricePerRun}/run)
+                  </p>
+                </div>
+                <Link href="/pricing">
+                  <Button size="sm" variant="outline">
+                    Buy
+                  </Button>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </CardContent>
       </Card>
     </div>
   );

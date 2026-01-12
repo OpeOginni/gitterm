@@ -64,6 +64,8 @@ const baseSchema = z
     POLAR_ENVIRONMENT: polarEnvironment,
     POLAR_TUNNEL_PRODUCT_ID: optional,
     POLAR_PRO_PRODUCT_ID: optional,
+    POLAR_RUN_PACK_50_PRODUCT_ID: optional,
+    POLAR_RUN_PACK_100_PRODUCT_ID: optional,
 
     // Railway
     RAILWAY_API_URL: optional,

@@ -7,11 +7,10 @@ import { auth } from "@gitterm/auth";
 import { DeviceCodeService } from "@gitterm/api/service/tunnel/device-code";
 import { AgentAuthService } from "@gitterm/api/service/tunnel/agent-auth";
 import { getGitHubAppService } from "@gitterm/api/service/github";
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import type { AppRouter } from "@gitterm/api/routers/index";
 
 function getPublicOriginFromRequest(req: Request): string {
   // Prefer proxy headers (Caddy / reverse proxies)

@@ -38,9 +38,18 @@ async function setupAuth(
   // The sandbox runs as root, so the path is /root/.local/share/opencode/auth.json
   const authJsonPath = "/root/.local/share/opencode/auth.json";
   
+  // Map provider names to their auth.json key
+  // Both openai and openai-codex (Codex subscription) should use "openai" as the key
+  // since only one can be used in a sandbox at a time
+  const providerKeyMap: Record<string, string> = {
+    "openai": "openai",
+    "openai-codex": "openai",
+  };
+  const authJsonKey = providerKeyMap[credential.providerName] ?? credential.providerName;
+  
   // Build the auth.json content
   const authJson: Record<string, unknown> = {};
-  authJson[credential.providerName] = {
+  authJson[authJsonKey] = {
     type: "oauth",
     refresh: credential.refresh,
     access: credential.access,
@@ -53,7 +62,7 @@ async function setupAuth(
     
     // Write the auth.json file
     await sandbox.writeFile(authJsonPath, JSON.stringify(authJson, null, 2));
-    console.log(`OAuth auth.json written for provider ${credential.providerName}`);
+    console.log(`OAuth auth.json written with key "${authJsonKey}" for provider ${credential.providerName}`);
     return { success: true };
   } catch (error) {
     console.error(`Failed to write auth.json:`, error);

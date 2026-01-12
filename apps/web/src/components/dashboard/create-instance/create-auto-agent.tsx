@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
@@ -39,6 +39,7 @@ interface Model {
   displayName: string;
   modelId: string; // External model ID (e.g., "claude-opus-4")
   isFree: boolean;
+  isRecommended: boolean;
   provider: Provider;
 }
 
@@ -46,7 +47,13 @@ interface Provider {
   id: string;
   name: string;
   displayName: string;
+  isRecommended?: boolean;
 }
+
+// Helper to get provider logo path
+const getProviderLogo = (providerName: string): string => {
+  return `/${providerName}.svg`;
+};
 
 export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
   // Fetch providers and models from the database
@@ -74,21 +81,43 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [selectedModelId, setSelectedModelId] = useState<string>("");
 
+  // Get the best default provider (prefer recommended, specifically Zen first)
+  const getDefaultProvider = useCallback(() => {
+    if (providers.length === 0) return undefined;
+    const zenProvider = providers.find((p) => p.name === "opencode-zen");
+    if (zenProvider) return zenProvider;
+    const recommended = providers.find((p) => p.isRecommended);
+    if (recommended) return recommended;
+    return providers[0];
+  }, [providers]);
+
+  // Get the best default model for a provider (prefer recommended)
+  const getDefaultModelForProvider = useCallback((providerId: string) => {
+    const providerModels = allModels.filter((m) => m.provider.id === providerId);
+    if (providerModels.length === 0) return undefined;
+    const recommended = providerModels.find((m) => m.isRecommended);
+    if (recommended) return recommended;
+    return providerModels[0];
+  }, [allModels]);
+
   // Set default provider/model when data loads
   useEffect(() => {
     if (providers.length > 0 && !selectedProviderId) {
-      setSelectedProviderId(providers[0].id);
+      const defaultProvider = getDefaultProvider();
+      if (defaultProvider) {
+        setSelectedProviderId(defaultProvider.id);
+      }
     }
-  }, [providers, selectedProviderId]);
+  }, [providers, selectedProviderId, getDefaultProvider]);
 
   useEffect(() => {
     if (selectedProviderId && allModels.length > 0 && !selectedModelId) {
-      const providerModels = allModels.filter((m) => m.provider.id === selectedProviderId);
-      if (providerModels.length > 0) {
-        setSelectedModelId(providerModels[0].id);
+      const defaultModel = getDefaultModelForProvider(selectedProviderId);
+      if (defaultModel) {
+        setSelectedModelId(defaultModel.id);
       }
     }
-  }, [selectedProviderId, allModels, selectedModelId]);
+  }, [selectedProviderId, allModels, selectedModelId, getDefaultModelForProvider]);
 
   // Data fetching
   const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
@@ -165,10 +194,10 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
 
   const handleProviderChange = (providerId: string) => {
     setSelectedProviderId(providerId);
-    // Select first model for the new provider
-    const providerModels = allModels.filter((m) => m.provider.id === providerId);
-    if (providerModels.length > 0) {
-      setSelectedModelId(providerModels[0].id);
+    // Select best model for the new provider (prefer recommended)
+    const defaultModel = getDefaultModelForProvider(providerId);
+    if (defaultModel) {
+      setSelectedModelId(defaultModel.id);
     } else {
       setSelectedModelId("");
     }
@@ -412,9 +441,32 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
                 )}
               </SelectTrigger>
               <SelectContent>
-                {providers.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.displayName}
+                {/* Sort providers: recommended first, then alphabetically */}
+                {[...providers]
+                  .sort((a, b) => {
+                    if (a.isRecommended && !b.isRecommended) return -1;
+                    if (!a.isRecommended && b.isRecommended) return 1;
+                    return a.displayName.localeCompare(b.displayName);
+                  })
+                  .map((p) => (
+                  <SelectItem 
+                    key={p.id} 
+                    value={p.id}
+                    className=""
+                  >
+                    <div className="flex items-center gap-2">
+                      <Image
+                        src={getProviderLogo(p.name)}
+                        alt={p.displayName}
+                        width={16}
+                        height={16}
+                        className="h-4 w-4"
+                      />
+                      {p.displayName}
+                      {p.isRecommended && (
+                        <span className="text-xs text-muted-foreground">Recommended</span>
+                      )}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -438,14 +490,26 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
                 )}
               </SelectTrigger>
               <SelectContent>
-                {availableModels.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
+                {/* Sort models: recommended first, then alphabetically */}
+                {[...availableModels]
+                  .sort((a, b) => {
+                    if (a.isRecommended && !b.isRecommended) return -1;
+                    if (!a.isRecommended && b.isRecommended) return 1;
+                    return a.displayName.localeCompare(b.displayName);
+                  })
+                  .map((m) => (
+                  <SelectItem 
+                    key={m.id} 
+                    value={m.id}
+                    className=""
+                  >
                     <div className="flex items-center gap-2">
                       {m.displayName}
+                      {m.isRecommended && (
+                        <span className="text-xs text-muted-foreground">Recommended</span>
+                      )}
                       {m.isFree && (
-                        <span className="text-xs bg-green-500/20 text-green-600 px-1.5 py-0.5 rounded">
-                          Free
-                        </span>
+                        <span className="text-xs text-muted-foreground">Free</span>
                       )}
                     </div>
                   </SelectItem>

@@ -111,9 +111,9 @@ export const shouldNotifyDiscord = (): boolean => features.discordNotifications;
 /**
  * Available user plans
  *
- * - free: Basic access, limited cloud hosting minutes, no subdomain
- * - tunnel: Tunnel subdomain only, same cloud limits as free
- * - pro: Full access with subdomain and unlimited cloud hosting
+ * - free: Basic access, 10 sandbox runs/month
+ * - tunnel: Custom tunnel subdomain, 10 sandbox runs/month
+ * - pro: Full access with 100 runs/month and premium features
  */
 export type UserPlan = "free" | "tunnel" | "pro";
 
@@ -121,12 +121,7 @@ export type UserPlan = "free" | "tunnel" | "pro";
  * Plan features available for gating
  */
 export type PlanFeature =
-  | "customTunnelSubdomain" // Custom subdomain for local workspaces
-  | "customCloudSubdomain" // Custom subdomain for cloud-hosted workspaces
-  | "cloudHosting" // Access to cloud-hosted workspaces
-  | "unlimitedCloudMinutes" // No daily limit on cloud usage
-  | "multiRegion" // Deploy to multiple regions
-  | "prioritySupport"; // Priority support channel
+  | "customTunnelSubdomain" // Custom subdomain for local tunnels
 
 // ============================================================================
 // Plan Feature Matrix
@@ -138,27 +133,31 @@ export type PlanFeature =
  * | Feature              | Free  | Tunnel | Pro   |
  * |----------------------|-------|--------|-------|
  * | customTunnelSubdomain| No    | Yes    | Yes   |
- * | customCloudSubdomain | No    | No    | Yes   |
- * | cloudHosting         | Yes   | Yes    | Yes   |
- * | unlimitedCloudMinutes| No    | No     | Yes   |
- * | multiRegion          | No    | No     | Yes   |
- * | prioritySupport      | No    | No     | No    |
+ * | agenticCoding        | Yes   | Yes    | Yes   |
+ * | priorityQueue        | No    | No     | Yes   |
+ * | agentMemory          | No    | No     | Yes   |
+ * | emailNotifications   | No    | No     | Yes   |
+ * | unlimitedProjects    | No    | No     | Yes   |
  */
 const PLAN_FEATURE_MATRIX: Record<PlanFeature, Record<UserPlan, boolean>> = {
   customTunnelSubdomain: { free: false, tunnel: true, pro: true },
-  customCloudSubdomain: { free: false, tunnel: false, pro: true },
-  cloudHosting: { free: true, tunnel: true, pro: true },
-  unlimitedCloudMinutes: { free: false, tunnel: false, pro: true },
-  multiRegion: { free: false, tunnel: false, pro: true },
-  prioritySupport: { free: false, tunnel: false, pro: false },
 };
 
 /**
- * Daily cloud hosting minute quotas by plan
+ * Monthly sandbox run quotas by plan
+ */
+const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
+  free: 10,
+  tunnel: 10, // Same as free - tunnel is for custom subdomain
+  pro: 100,
+};
+
+/**
+ * Daily cloud hosting minute quotas by plan (legacy, kept for compatibility)
  */
 const DAILY_MINUTE_QUOTAS: Record<UserPlan, number> = {
   free: 60, // 1 hour
-  tunnel: 60, // Same as free - tunnel plan is for local dev
+  tunnel: 60, // Same as free
   pro: Infinity,
 };
 
@@ -199,29 +198,42 @@ export const getDailyMinuteQuotaAsync = async (plan: UserPlan): Promise<number> 
     return Infinity;
   }
 
-  // Free and tunnel tiers use configurable quota from database
+  // Free tier uses configurable quota from database
   return getFreeTierDailyMinutes();
+};
+
+/**
+ * Get monthly run quota for a plan
+ * In self-hosted mode, returns Infinity (unlimited)
+ */
+export const getMonthlyRunQuota = (plan: UserPlan): number => {
+  if (isSelfHosted()) return Infinity;
+
+  return MONTHLY_RUN_QUOTAS[plan] ?? MONTHLY_RUN_QUOTAS.free;
 };
 
 /**
  * Check if a plan can use custom tunnel subdomains
  */
-export const canUseCustomTunnelSubdomain = (plan: UserPlan): boolean => {
-  return planHasFeature(plan, "customTunnelSubdomain");
+export const canUseCustomTunnelSubdomain = (plan: UserPlan | string): boolean => {
+  if (isSelfHosted()) return true;
+  return plan === "tunnel" || plan === "pro";
 };
 
 /**
  * Check if a plan can use custom cloud subdomains
  */
-export const canUseCustomCloudSubdomain = (plan: UserPlan): boolean => {
-  return planHasFeature(plan, "customCloudSubdomain");
+export const canUseCustomCloudSubdomain = (plan: UserPlan | string): boolean => {
+  if (isSelfHosted()) return true;
+  return plan === "pro";
 };
 
 /**
  * Check if a plan has unlimited cloud minutes
  */
-export const hasUnlimitedCloudMinutes = (plan: UserPlan): boolean => {
-  return planHasFeature(plan, "unlimitedCloudMinutes");
+export const hasUnlimitedCloudMinutes = (plan: UserPlan | string): boolean => {
+  if (isSelfHosted()) return true;
+  return plan === "pro";
 };
 
 /**
@@ -237,15 +249,15 @@ export const getPlanInfo = (
   const planInfo: Record<UserPlan, ReturnType<typeof getPlanInfo>> = {
     free: {
       name: "Free",
-      description: "Basic access with limited cloud hosting",
+      description: "10 sandbox runs/month to try agentic coding",
     },
     tunnel: {
       name: "Tunnel",
-      description: "Custom subdomain for local development",
+      description: "Custom tunnel subdomain with 10 runs/month",
     },
     pro: {
       name: "Pro",
-      description: "Full access with unlimited cloud hosting",
+      description: "100 runs/month with premium features",
       badge: "popular",
     },
   };

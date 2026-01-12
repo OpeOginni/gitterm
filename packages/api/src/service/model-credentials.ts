@@ -21,6 +21,7 @@ import {
   EncryptionService,
 } from "./encryption";
 import { GitHubCopilotOAuthService } from "./oauth/github-copilot";
+import { OpenAICodexOAuthService } from "./oauth/openai-codex";
 
 // Types for credential operations
 export interface StoreApiKeyOptions {
@@ -488,6 +489,35 @@ export class ModelCredentialsService {
       await this.logAudit(credentialId, userId, "refreshed", decrypted.credential.type);
 
       return newToken.token;
+    }
+
+    if (decrypted.plugin === "codex-auth") {
+      const newTokens = await OpenAICodexOAuthService.refreshToken(oauthCred.refresh);
+
+      // Update stored credential - Codex returns new refresh token too
+      const updatedCredential: OAuthCredential = {
+        type: "oauth",
+        refresh: newTokens.refreshToken,
+        access: newTokens.accessToken,
+        expires: newTokens.expiresAt,
+        // Codex stores accountId separately in the credential
+        accountId: newTokens.accountId,
+      };
+
+      const encryptedCredential = this.encryption.encryptCredential(updatedCredential);
+
+      await db
+        .update(userModelCredential)
+        .set({
+          encryptedCredential,
+          oauthExpiresAt: new Date(newTokens.expiresAt),
+          updatedAt: new Date(),
+        })
+        .where(eq(userModelCredential.id, credentialId));
+
+      await this.logAudit(credentialId, userId, "refreshed", decrypted.credential.type);
+
+      return newTokens.accessToken;
     }
 
     throw new Error(`OAuth refresh not supported for provider: ${decrypted.providerName} (plugin: ${decrypted.plugin})`);

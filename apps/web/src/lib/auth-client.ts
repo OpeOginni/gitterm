@@ -51,21 +51,27 @@ export const authClient = isBillingEnabled ? createBillingAuthClient() : createS
 // ============================================================================
 
 /**
- * Initiate checkout for a subscription plan
+ * Checkout slug types
+ */
+type CheckoutSlug = "pro" | "tunnel" | "run_pack_50" | "run_pack_100";
+
+/**
+ * Initiate checkout for a subscription plan or run pack
  * Redirects to Polar checkout page
  *
- * @param slug - Product slug ("tunnel", "pro")
+ * @param slug - Product slug ("pro", "tunnel", "run_pack_50", "run_pack_100")
  *
  * @example
  * await initiateCheckout("pro");
+ * await initiateCheckout("run_pack_50");
  */
-export async function initiateCheckout(slug: "tunnel" | "pro") {
+export async function initiateCheckout(slug: CheckoutSlug) {
   if (!isBillingEnabled) {
     console.warn("[auth-client] Billing is not enabled. Checkout unavailable.");
     return;
   }
 
-  // Store the selected plan in sessionStorage so the success page can display it
+  // Store the selected plan/pack in sessionStorage so the success page can display it
   // This is needed because the webhook may not have updated the user's plan yet
   if (typeof window !== "undefined") {
     sessionStorage.setItem("checkout_plan", slug);

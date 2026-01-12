@@ -168,7 +168,7 @@ export interface ApiKeyCredential {
 }
 
 /**
- * OAuth credential format (for GitHub Copilot, etc.)
+ * OAuth credential format (for GitHub Copilot, OpenAI Codex, etc.)
  */
 export interface OAuthCredential {
   type: "oauth";
@@ -176,6 +176,7 @@ export interface OAuthCredential {
   access?: string; // Short-lived access token (Copilot API token)
   expires?: number; // Expiry timestamp in milliseconds
   enterpriseUrl?: string; // For GitHub Enterprise
+  accountId?: string; // For OpenAI Codex (ChatGPT account ID for organization subscriptions)
 }
 
 // Singleton instance
