@@ -42,7 +42,7 @@
 	}
 
 	# Main proxy handler
-	route {
+	handle {
 		# Forward auth to API server (validates workspace exists and user has access)
 		# The API returns HTML error pages directly for non-2xx responses
 		forward_auth {$SERVER_URL} {
