@@ -8,12 +8,13 @@ import {
   type AgentLoopRunStatus,
   userLoopRunQuota,
 } from "@gitterm/db/schema/agent-loop";
-import { modelProvider, model } from "@gitterm/db/schema/model-credentials";
 import { gitIntegration } from "@gitterm/db/schema/integrations";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { AGENT_LOOP_RUN_TIMEOUT_MS } from "../../config/agent-loop";
 import { TRPCError } from "@trpc/server";
 import { getAgentLoopService } from "../../service/agent-loop";
+import { deductRunFromQuota, refundRunToQuota } from "../../service/run-quota";
+import { getModelConfig, getCredentialForRun } from "../../service/agent-loop-helpers";
 import { MONTHLY_RUN_QUOTAS } from "../../config";
 import { addMonths } from "date-fns";
 
@@ -532,48 +533,6 @@ export const agentLoopRouter = router({
         });
       }
 
-      const existingQuota = await db.query.userLoopRunQuota.findFirst({
-        where: eq(userLoopRunQuota.userId, userId),
-      });
-
-      if (!existingQuota) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "No quota found for user",
-        });
-      }
-
-      if (existingQuota.monthlyRuns + existingQuota.extraRuns < 1) {
-        const runNumber = loop.totalRuns + 1;
-
-        const [haltedRun] = await db
-        .insert(agentLoopRun)
-        .values({
-          loopId: input.loopId,
-          runNumber,
-          status: "halted",
-          triggerType: "automated",
-          modelProviderId: loop.modelProviderId,
-          modelId: loop.modelId,
-        })
-        .returning();
-
-        if (!haltedRun) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to create halted run",
-          });
-        }
-
-        return {
-          success: true,
-          run: haltedRun,
-          runId: haltedRun.id,
-          sandboxId: null,
-          message: `Run #${runNumber} halted due to quota exhaustion`,
-        }
-      }
-
       // Check if there's already a running/pending run
       const [existingRun] = await db
         .select()
@@ -595,60 +554,10 @@ export const agentLoopRouter = router({
         });
       }
 
-      // Resolve model provider and model names from the loop's stored UUIDs
-      const [providerRecord] = await db
-        .select()
-        .from(modelProvider)
-        .where(eq(modelProvider.id, loop.modelProviderId));
+      // Get model config
+      const { providerRecord, modelRecord } = await getModelConfig(loop);
 
-      const [modelRecord] = await db
-        .select()
-        .from(model)
-        .where(eq(model.id, loop.modelId));
-
-      if (!providerRecord || !modelRecord) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Model provider or model not found for this loop",
-        });
-      }
-
-      // Get credential for the run - auto-find by provider name
-      const { getModelCredentialsService } = await import("../../service/model-credentials");
-      const credService = getModelCredentialsService();
-      let credential: import("../../providers/compute").SandboxCredential = {
-        type: "api_key",
-        apiKey: "", // Default empty for free models
-      };
-      
-      // Check if model is free (no credential needed)
-      if (!modelRecord.isFree) {
-        const decryptedCred = await credService.getUserCredentialForProvider(userId, providerRecord.name);
-        
-        if (!decryptedCred) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `No API key configured for ${providerRecord.displayName}. Please add one in Settings > Integrations.`,
-          });
-        }
-
-        // Convert to SandboxCredential format
-        if (decryptedCred.credential.type === "api_key") {
-          credential = {
-            type: "api_key",
-            apiKey: decryptedCred.credential.apiKey,
-          };
-        } else {
-          // OAuth - ensure we have fresh tokens
-          const refreshedCred = await credService.getCredentialForRun(decryptedCred.id, userId, {
-            loopId: input.loopId,
-            runId: "pending",
-          });
-          credential = refreshedCred;
-        }
-      }
-
-      // Create new run
+      // Create new run first
       const runNumber = loop.totalRuns + 1;
       const [newRun] = await db
         .insert(agentLoopRun)
@@ -669,14 +578,28 @@ export const agentLoopRouter = router({
         });
       }
 
-      // Update loop run count
-      await db
-        .update(agentLoop)
-        .set({
-          totalRuns: loop.totalRuns + 1,
-          lastRunId: newRun.id,
-        })
-        .where(eq(agentLoop.id, input.loopId));
+      // Deduct run from user quota and record event
+      // For manual runs, throw error on failure (don't halt)
+      try {
+        await deductRunFromQuota(userId, input.loopId, newRun.id, {
+          haltOnExhaustion: false, // Throw error instead of halting
+          allowMissingQuota: false,
+        });
+      } catch (error) {
+        // If quota deduction fails, delete the run and rethrow the error
+        await db.delete(agentLoopRun).where(eq(agentLoopRun.id, newRun.id));
+        throw error;
+      }
+
+      // Get credential for the run
+      const credential = await getCredentialForRun(
+        userId,
+        input.loopId,
+        newRun.id,
+        loop,
+        providerRecord,
+        modelRecord,
+      );
 
       // Execute the run immediately
       const service = getAgentLoopService();
@@ -690,6 +613,14 @@ export const agentLoopRouter = router({
       });
 
       if (!result.success) {
+        // Refund the run since it failed to start
+        try {
+          await refundRunToQuota(userId, input.loopId, newRun.id);
+        } catch (error) {
+          // Log but don't fail - the run is already marked as failed
+          console.error("Failed to refund run quota", error);
+        }
+
         // Mark run as failed instead of leaving it as zombie pending
         await db
           .update(agentLoopRun)
@@ -700,7 +631,7 @@ export const agentLoopRouter = router({
           })
           .where(eq(agentLoopRun.id, newRun.id));
 
-        // Update loop's failed count
+        // Update loop's failed count (but don't increment totalRuns since run failed)
         await db
           .update(agentLoop)
           .set({
@@ -713,6 +644,15 @@ export const agentLoopRouter = router({
           message: result.error || "Failed to start run",
         });
       }
+
+      // Update loop run count after successful start
+      await db
+        .update(agentLoop)
+        .set({
+          totalRuns: loop.totalRuns + 1,
+          lastRunId: newRun.id,
+        })
+        .where(eq(agentLoop.id, input.loopId));
 
       return {
         success: true,
@@ -753,25 +693,7 @@ export const agentLoopRouter = router({
         });
       }
 
-      const existingQuota = await db.query.userLoopRunQuota.findFirst({
-        where: eq(userLoopRunQuota.userId, userId),
-      });
-
-      if (!existingQuota) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "No quota found for user",
-        });
-      }
-
-      if (existingQuota.monthlyRuns + existingQuota.extraRuns < 1) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Not enough runs available. Please upgrade your plan or purchase a run pack.",
-        });
-      }
-
-      // Only allow restarting stalled runs (running for longer than the timeout)
+      // Only allow restarting stalled runs (running for longer than the timeout) or halted runs
       const isStalled = (existingRun.status === "running" || existingRun.status === "pending") && 
         existingRun.startedAt.getTime() < Date.now() - AGENT_LOOP_RUN_TIMEOUT_MS;
 
@@ -784,58 +706,25 @@ export const agentLoopRouter = router({
         });
       }
 
-      // Resolve model provider and model names from UUIDs
-      const [providerRecord] = await db
-        .select()
-        .from(modelProvider)
-        .where(eq(modelProvider.id, loop.modelProviderId));
-
-      const [modelRecord] = await db
-        .select()
-        .from(model)
-        .where(eq(model.id, loop.modelId));
-
-      if (!providerRecord || !modelRecord) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Model provider or model not found",
+      // For halted runs, we need to check and deduct quota before restarting
+      // For stalled runs, quota was already deducted when they were created
+      if (isHalted) {
+        await deductRunFromQuota(userId, input.loopId, input.runId, {
+          haltOnExhaustion: false, // Throw error instead of halting (since we're restarting)
+          allowMissingQuota: false,
         });
       }
 
-      // Get credential for the run - auto-find by provider name
-      const { getModelCredentialsService } = await import("../../service/model-credentials");
-      const credService = getModelCredentialsService();
-      let credential: import("../../providers/compute").SandboxCredential = {
-        type: "api_key",
-        apiKey: "", // Default empty for free models
-      };
-      
-      // Check if model is free (no credential needed)
-      if (!modelRecord.isFree) {
-        const decryptedCred = await credService.getUserCredentialForProvider(userId, providerRecord.name);
-        
-        if (!decryptedCred) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `No API key configured for ${providerRecord.displayName}. Please add one in Settings > Integrations.`,
-          });
-        }
-
-        // Convert to SandboxCredential format
-        if (decryptedCred.credential.type === "api_key") {
-          credential = {
-            type: "api_key",
-            apiKey: decryptedCred.credential.apiKey,
-          };
-        } else {
-          // OAuth - ensure we have fresh tokens
-          const refreshedCred = await credService.getCredentialForRun(decryptedCred.id, userId, {
-            loopId: input.loopId,
-            runId: input.runId,
-          });
-          credential = refreshedCred;
-        }
-      }
+      // Get model config and credential
+      const { providerRecord, modelRecord } = await getModelConfig(loop);
+      const credential = await getCredentialForRun(
+        userId,
+        input.loopId,
+        input.runId,
+        loop,
+        providerRecord,
+        modelRecord,
+      );
 
       const service = getAgentLoopService();
       const result = await service.startRunAsync({
@@ -848,6 +737,16 @@ export const agentLoopRouter = router({
       });
 
       if (!result.success) {
+        // If restart failed and this was a halted run, refund the quota
+        if (isHalted) {
+          try {
+            await refundRunToQuota(userId, input.loopId, input.runId);
+          } catch (error) {
+            // Log but don't fail - the run restart already failed
+            console.error("Failed to refund quota after restart failure", error);
+          }
+        }
+        
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: result.error || "Failed to restart run",

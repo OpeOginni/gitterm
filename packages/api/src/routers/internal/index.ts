@@ -9,7 +9,6 @@ import {
 } from "@gitterm/db/schema/workspace";
 import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/integrations";
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
-import { modelProvider, model } from "@gitterm/db/schema/model-credentials";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
@@ -25,7 +24,8 @@ import { logger } from "../../utils/logger";
 import { railwayWebhookSchema } from "../railway/webhook";
 import { agentLoopWebhookSchema } from "../agent-loop/webhook";
 import { getAgentLoopService } from "../../service/agent-loop";
-import { getModelCredentialsService } from "../../service/model-credentials";
+import { deductRunFromQuota, refundRunToQuota } from "../../service/run-quota";
+import { getModelConfig, getCredentialForRun } from "../../service/agent-loop-helpers";
 
 /**
  * Internal router for service-to-service communication
@@ -891,39 +891,56 @@ export const internalRouter = router({
             };
           }
 
-          // Resolve model provider and model names from UUIDs for the service
-          const [providerRecord] = await db
-            .select()
-            .from(modelProvider)
-            .where(eq(modelProvider.id, run.modelProviderId));
+          // Deduct run from user quota and record event
+          // For automated runs, we halt on exhaustion instead of throwing
+          const quotaResult = await deductRunFromQuota(loop.userId, loop.id, newRun.id, {
+            haltOnExhaustion: true,
+            allowMissingQuota: false,
+          });
 
-          const [modelRecord] = await db
-            .select()
-            .from(model)
-            .where(eq(model.id, run.modelId));
+          // If quota deduction failed or run should be halted, mark it and return
+          if (!quotaResult.success) {
+            if (quotaResult.halted) {
+              await db
+                .update(agentLoopRun)
+                .set({
+                  status: "halted",
+                  completedAt: new Date(),
+                  errorMessage: quotaResult.errorMessage || "Run halted due to quota/payment issue",
+                })
+                .where(eq(agentLoopRun.id, newRun.id));
 
-          if (!providerRecord || !modelRecord) {
-            logger.error("Model provider or model not found", {
-              action: "model_lookup_failed",
-              loopId: loop.id,
+              logger.warn("Automated run halted due to quota issue", {
+                action: "automated_run_halted",
+                userId: loop.userId,
+                loopId: loop.id,
+                runId: newRun.id,
+              });
+
+              return {
+                success: false,
+                message: quotaResult.errorMessage || "Run halted due to quota/payment issue",
+              };
+            }
+            // If not halted but failed, throw (shouldn't happen with haltOnExhaustion=true)
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: quotaResult.errorMessage || "Failed to deduct quota",
             });
-
-            return {
-              success: false,
-              message: "Model provider or model not found",
-            };
           }
 
-          // Get the credential for this automated run
-          const credService = getModelCredentialsService();
-          let credential: import("../../providers/compute").SandboxCredential = {
-            type: "api_key",
-            apiKey: "", // Default empty for free models
-          };
+          // Get model config and credential
+          let providerRecord, modelRecord, credential;
+          try {
+            const modelConfig = await getModelConfig({
+              modelProviderId: run.modelProviderId,
+              modelId: run.modelId,
+            });
+            providerRecord = modelConfig.providerRecord;
+            modelRecord = modelConfig.modelRecord;
 
-          // Only require credential for non-free models
-          if (!modelRecord.isFree) {
-            if (!loop.credentialId) {
+            // Check if credential is required for automated runs
+            if (!modelRecord.isFree && !loop.credentialId) {
               logger.error("No credential configured for automated run", {
                 action: "credential_missing",
                 loopId: loop.id,
@@ -945,11 +962,26 @@ export const internalRouter = router({
               };
             }
 
-            credential = await credService.getCredentialForRun(
-              loop.credentialId,
+            credential = await getCredentialForRun(
               loop.userId,
-              { loopId: loop.id, runId: newRun.id },
+              loop.id,
+              newRun.id,
+              loop,
+              providerRecord,
+              modelRecord,
             );
+          } catch (error) {
+            logger.error("Failed to get model config or credential", {
+              action: "model_config_failed",
+              loopId: loop.id,
+              runId: newRun.id,
+              error: error instanceof Error ? error.message : "Unknown error",
+            });
+
+            return {
+              success: false,
+              message: error instanceof TRPCError ? error.message : "Failed to get model configuration",
+            };
           }
 
           const service = getAgentLoopService();
@@ -963,12 +995,26 @@ export const internalRouter = router({
           });
 
           if (!startResult.success) {
+            // Refund quota since run failed to start
+            try {
+              await refundRunToQuota(loop.userId, loop.id, newRun.id);
+            } catch (error) {
+              logger.error("Failed to refund quota after automated run start failure", {
+                action: "automated_run_refund_failed",
+                userId: loop.userId,
+                loopId: loop.id,
+                runId: newRun.id,
+                error: error instanceof Error ? error.message : "Unknown error",
+              });
+            }
+
             throw new TRPCError({
               code: "INTERNAL_SERVER_ERROR",
               message: startResult.error || "Failed to start run",
             });
           }
 
+          // Update loop run count after successful start
           await db
             .update(agentLoop)
             .set({

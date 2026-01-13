@@ -21,6 +21,8 @@ import {
   AlertCircle,
   RefreshCw,
   RotateCcw,
+  AlertTriangle,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -190,6 +192,9 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
   // Find any stalled run
   const stalledRun = runs.find((run: AgentLoopRun) => isRunStuck(run));
 
+  // Find any halted run
+  const haltedRun = runs.find((run: AgentLoopRun) => run.status === "halted");
+
   const getRunStatusBadge = (status: RunStatus) => {
     switch (status) {
       case "running":
@@ -224,6 +229,13 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
         return (
           <Badge variant="outline" className="text-muted-foreground">
             Cancelled
+          </Badge>
+        );
+      case "halted":
+        return (
+          <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20">
+            <AlertTriangle className="mr-1 h-3 w-3" />
+            Halted
           </Badge>
         );
       default:
@@ -291,6 +303,22 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
                 <RotateCcw className="h-4 w-4" />
               )}
               Restart Stalled #{stalledRun.runNumber}
+            </Button>
+          )}
+          {haltedRun && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 text-amber-500 border-amber-500/50 hover:bg-amber-500/10"
+              disabled={restartRunMutation.isPending}
+              onClick={() => restartRunMutation.mutate({ loopId, runId: haltedRun.id })}
+            >
+              {restartRunMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              Resume Run #{haltedRun.runNumber}
             </Button>
           )}
           {loop.status === "active" && (
@@ -388,6 +416,51 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Halted Run Alert */}
+      {haltedRun && (
+        <Card className="bg-amber-500/10 border-amber-500/30">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0">
+                <div className="rounded-full bg-amber-500/20 p-2">
+                  <Wallet className="h-5 w-5 text-amber-500" />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-amber-500 mb-1">
+                  Run #{haltedRun.runNumber} is Halted
+                </h3>
+                <p className="text-sm text-muted-foreground mb-3">
+                  {haltedRun.errorMessage || "This run was halted due to insufficient runs in your account."}
+                </p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Once you have available runs, you can resume this run to continue from where it stopped.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2 text-amber-500 border-amber-500/50 hover:bg-amber-500/10"
+                  disabled={restartRunMutation.isPending}
+                  onClick={() => restartRunMutation.mutate({ loopId, runId: haltedRun.id })}
+                >
+                  {restartRunMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4" />
+                      Resume Run #{haltedRun.runNumber}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-5">
@@ -516,12 +589,32 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
                           <span className="font-mono text-xs">{run.commitSha.substring(0, 7)}</span>
                         </Link>
                       ) : run.errorMessage ? (
-                        <span
-                          className="text-xs text-destructive truncate max-w-[200px] block"
-                          title={run.errorMessage}
-                        >
-                          {run.errorMessage}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`text-xs truncate max-w-[200px] block ${
+                              run.status === "halted" ? "text-amber-500" : "text-destructive"
+                            }`}
+                            title={run.errorMessage}
+                          >
+                            {run.errorMessage}
+                          </span>
+                          {run.status === "halted" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 text-xs px-2 text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 w-fit"
+                              disabled={restartRunMutation.isPending}
+                              onClick={() => restartRunMutation.mutate({ loopId, runId: run.id })}
+                            >
+                              {restartRunMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              ) : (
+                                <Play className="h-3 w-3 mr-1" />
+                              )}
+                              Resume
+                            </Button>
+                          )}
+                        </div>
                       ) : (
                         "-"
                       )}
