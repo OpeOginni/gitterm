@@ -525,7 +525,7 @@ export function ModelCredentialsSection() {
                         <SelectItem 
                           key={provider.id} 
                           value={provider.id}
-                          className=""
+                          className={provider.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}                  
                         >
                           <div className="flex items-center gap-2">
                             <Image
@@ -795,7 +795,9 @@ export function ModelCredentialsSection() {
                 key={credential.id}
                 className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
                   credential.isActive
-                    ? "border-border/50 bg-secondary/20 hover:bg-secondary/30"
+                    ? isRecommended 
+                      ? "border-l-2 border-l-primary border-border/50 bg-secondary/20 hover:bg-secondary/30"
+                      : "border-border/50 bg-secondary/20 hover:bg-secondary/30"
                     : "border-border/30 bg-muted/20 opacity-60"
                 }`}
               >

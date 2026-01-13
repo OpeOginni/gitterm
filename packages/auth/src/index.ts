@@ -144,7 +144,32 @@ const recordUserLoopRunEvent = async (userId: string, runsAdded: number, refund:
         const [userCurrentRunPlan] = await tx.select().from(agentLoopSchema.userLoopRunQuota).where(eq(agentLoopSchema.userLoopRunQuota.userId, userId));
 
         if(!userCurrentRunPlan) {
-          throw new Error("User run plan not found");
+
+          if(refund) {
+            return;
+          }
+
+          const [user] = await tx.select().from(schema.user).where(eq(schema.user.id, userId));
+
+          if(!user) {
+            throw new Error("User not found");
+          }
+
+          await tx.insert(agentLoopSchema.userLoopRunQuota).values({
+            userId,
+            plan: user.plan,
+            monthlyRuns: MONTHLY_RUN_QUOTAS[user.plan as UserPlan],
+            extraRuns: runsAdded,
+            nextMonthlyResetAt: addMonths(new Date(), 1),
+          });
+
+          await tx.update(agentLoopSchema.userLoopRunQuota)
+          .set({
+            extraRuns: runsAdded,
+          })
+          .where(eq(agentLoopSchema.userLoopRunQuota.userId, userId));
+
+          return;
         }
 
         const newExtraRunsRaw = refund ? userCurrentRunPlan.extraRuns - runsAdded : userCurrentRunPlan.extraRuns + runsAdded;
@@ -180,19 +205,33 @@ const createUserLoopRunQuota = async (userId: string, plan: UserPlan): Promise<v
 
 const updateUserLoopRunQuota = async (userId: string, plan: UserPlan, billingPeriodEnd: Date): Promise<void> => {
   try {
-    await db.insert(agentLoopSchema.userLoopRunQuota).values({
-      userId,
-      plan: plan,
-      monthlyRuns: MONTHLY_RUN_QUOTAS[plan],
-      nextMonthlyResetAt: billingPeriodEnd,
-    }).onConflictDoUpdate({
-      target: [agentLoopSchema.userLoopRunQuota.userId],
-      set: {
+    // Check if quota exists
+    const [existingQuota] = await db
+      .select()
+      .from(agentLoopSchema.userLoopRunQuota)
+      .where(eq(agentLoopSchema.userLoopRunQuota.userId, userId));
+
+    if (existingQuota) {
+      // Update existing quota
+      await db
+        .update(agentLoopSchema.userLoopRunQuota)
+        .set({
+          plan: plan,
+          monthlyRuns: MONTHLY_RUN_QUOTAS[plan],
+          nextMonthlyResetAt: billingPeriodEnd,
+          updatedAt: new Date(),
+        })
+        .where(eq(agentLoopSchema.userLoopRunQuota.userId, userId));
+    } else {
+      // Create new quota for existing user
+      await db.insert(agentLoopSchema.userLoopRunQuota).values({
+        userId,
         plan: plan,
         monthlyRuns: MONTHLY_RUN_QUOTAS[plan],
+        extraRuns: 0,
         nextMonthlyResetAt: billingPeriodEnd,
-      },
-    });
+      });
+    }
   } catch (error) {
     console.error(`[polar] Failed to update user ${userId} run quota monthly:`, error);
     throw error;

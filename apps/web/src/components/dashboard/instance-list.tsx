@@ -314,7 +314,10 @@ function InstanceCard({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/50 transition-colors">
+                  {isLocal ? 
+                  <Terminal className="h-6 w-6 transition-colors text-primary" /> : 
                   <Box className="h-6 w-6 transition-colors text-primary" />
+                  }
                 </div>
                 <div className="flex flex-col min-w-0">
                   <CardTitle className="text-sm font-semibold truncate">
@@ -369,8 +372,8 @@ function InstanceCard({
                 <Globe className="h-3.5 w-3.5 shrink-0 text-primary/60" />
                 <button
                   onClick={() => {
-                    if (workspaceDisplayUrl) {
-                      navigator.clipboard.writeText(workspaceDisplayUrl);
+                    if (workspaceUrl) {
+                      navigator.clipboard.writeText(workspaceUrl);
                       toast.success("Domain copied!");
                     }
                   }}

@@ -6,6 +6,7 @@ import {
   agentLoopRun,
   type AgentLoopStatus,
   type AgentLoopRunStatus,
+  userLoopRunQuota,
 } from "@gitterm/db/schema/agent-loop";
 import { modelProvider, model } from "@gitterm/db/schema/model-credentials";
 import { gitIntegration } from "@gitterm/db/schema/integrations";
@@ -13,6 +14,8 @@ import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { AGENT_LOOP_RUN_TIMEOUT_MS } from "../../config/agent-loop";
 import { TRPCError } from "@trpc/server";
 import { getAgentLoopService } from "../../service/agent-loop";
+import { MONTHLY_RUN_QUOTAS } from "../../config";
+import { addMonths } from "date-fns";
 
 export const agentLoopCreateSchema = z.object({
   gitIntegrationId: z.uuid(),
@@ -61,6 +64,57 @@ export const agentLoopRouter = router({
         code: "NOT_FOUND",
         message: "No sandbox provider configured. Please contact support.",
       });
+    }
+
+    const existingQuota = await db.query.userLoopRunQuota.findFirst({
+      where: eq(userLoopRunQuota.userId, userId),
+    });
+
+    if (!existingQuota) {
+      const plan = ctx.session.user.plan ?? "free";
+      const [newQuota] = await db.insert(userLoopRunQuota).values({
+        userId,
+        plan: plan,
+        monthlyRuns: MONTHLY_RUN_QUOTAS[plan],
+        extraRuns: 0,
+        nextMonthlyResetAt: addMonths(new Date(), 1),
+      })
+      .returning();
+      if(!newQuota) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create user loop run quota",
+        });
+      }
+
+      if(newQuota.monthlyRuns < input.maxRuns) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Not enough runs available. Please lower your max runs or upgrade your plan.",
+        });
+      }
+    } else {
+      // Reset monthly runs if the billing period has ended
+      if(existingQuota.nextMonthlyResetAt < new Date()) {
+        const [updatedQuota] = await db.update(userLoopRunQuota).set({
+          monthlyRuns: MONTHLY_RUN_QUOTAS[ctx.session.user.plan ?? "free"],
+          nextMonthlyResetAt: addMonths(new Date(), 1),
+        }).where(eq(userLoopRunQuota.userId, userId)).returning();
+        if(!updatedQuota) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to update user loop run quota",
+          });
+        }
+      }
+
+      // Check if the user has enough runs available
+      if(existingQuota.monthlyRuns + existingQuota.extraRuns < input.maxRuns) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Not enough runs available. Please lower your max runs or upgrade your plan.",
+        });
+      }
     }
 
     // Create the loop
@@ -478,6 +532,48 @@ export const agentLoopRouter = router({
         });
       }
 
+      const existingQuota = await db.query.userLoopRunQuota.findFirst({
+        where: eq(userLoopRunQuota.userId, userId),
+      });
+
+      if (!existingQuota) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No quota found for user",
+        });
+      }
+
+      if (existingQuota.monthlyRuns + existingQuota.extraRuns < 1) {
+        const runNumber = loop.totalRuns + 1;
+
+        const [haltedRun] = await db
+        .insert(agentLoopRun)
+        .values({
+          loopId: input.loopId,
+          runNumber,
+          status: "halted",
+          triggerType: "automated",
+          modelProviderId: loop.modelProviderId,
+          modelId: loop.modelId,
+        })
+        .returning();
+
+        if (!haltedRun) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create halted run",
+          });
+        }
+
+        return {
+          success: true,
+          run: haltedRun,
+          runId: haltedRun.id,
+          sandboxId: null,
+          message: `Run #${runNumber} halted due to quota exhaustion`,
+        }
+      }
+
       // Check if there's already a running/pending run
       const [existingRun] = await db
         .select()
@@ -657,14 +753,34 @@ export const agentLoopRouter = router({
         });
       }
 
+      const existingQuota = await db.query.userLoopRunQuota.findFirst({
+        where: eq(userLoopRunQuota.userId, userId),
+      });
+
+      if (!existingQuota) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No quota found for user",
+        });
+      }
+
+      if (existingQuota.monthlyRuns + existingQuota.extraRuns < 1) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Not enough runs available. Please upgrade your plan or purchase a run pack.",
+        });
+      }
+
       // Only allow restarting stalled runs (running for longer than the timeout)
       const isStalled = (existingRun.status === "running" || existingRun.status === "pending") && 
         existingRun.startedAt.getTime() < Date.now() - AGENT_LOOP_RUN_TIMEOUT_MS;
-      
-      if (!isStalled) {
+
+      const isHalted = existingRun.status === "halted";
+
+      if (!isStalled && !isHalted) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Only stalled runs (running/pending for too long) can be restarted",
+          message: `Only stalled runs (running/pending for too long) or halted runs can be restarted. Current run status: ${existingRun.status}`,
         });
       }
 
@@ -926,4 +1042,29 @@ export const agentLoopRouter = router({
         },
       };
     }),
+
+    getUsage: protectedProcedure.query(async ({ ctx }) => {
+      const userId = ctx.session.user.id;
+
+      const usage = await db.query.userLoopRunQuota.findFirst({
+        where: eq(userLoopRunQuota.userId, userId),
+      });
+
+      if (!usage) {
+        return {
+          success: true,
+          usage: {
+            extraRuns: 0,
+            monthlyRuns: MONTHLY_RUN_QUOTAS[ctx.session.user.plan ?? "free"],
+          },
+        };
+      }
+
+      return {
+        success: true,
+        usage,
+      };
+    }),
+
+
 });

@@ -1,9 +1,586 @@
 {
-  "id": "729711d4-dadf-4eb0-8ce1-d0c8e7be0645",
-  "prevId": "c4c951d0-f926-4be6-b3a6-8ed7706d6c6f",
+  "id": "df3cb6ee-4b5a-413d-9ab9-3a837e7638c1",
+  "prevId": "69c0f060-8a0a-489c-98ba-1aa4ed1e788b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.agent_loop": {
+      "name": "agent_loop",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "git_integration_id": {
+          "name": "git_integration_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sandbox_provider_id": {
+          "name": "sandbox_provider_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "repository_owner": {
+          "name": "repository_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "repository_name": {
+          "name": "repository_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "branch": {
+          "name": "branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plan_file_path": {
+          "name": "plan_file_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "progress_file_path": {
+          "name": "progress_file_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prompt": {
+          "name": "prompt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model_provider_id": {
+          "name": "model_provider_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_id": {
+          "name": "model_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "automation_enabled": {
+          "name": "automation_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "status": {
+          "name": "status",
+          "type": "agent_loop_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "total_runs": {
+          "name": "total_runs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "successful_runs": {
+          "name": "successful_runs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "failed_runs": {
+          "name": "failed_runs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "max_runs": {
+          "name": "max_runs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 20
+        },
+        "last_run_id": {
+          "name": "last_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_run_at": {
+          "name": "last_run_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "agent_loop_user_id_user_id_fk": {
+          "name": "agent_loop_user_id_user_id_fk",
+          "tableFrom": "agent_loop",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_loop_git_integration_id_git_integration_id_fk": {
+          "name": "agent_loop_git_integration_id_git_integration_id_fk",
+          "tableFrom": "agent_loop",
+          "tableTo": "git_integration",
+          "columnsFrom": [
+            "git_integration_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "agent_loop_sandbox_provider_id_cloud_provider_id_fk": {
+          "name": "agent_loop_sandbox_provider_id_cloud_provider_id_fk",
+          "tableFrom": "agent_loop",
+          "tableTo": "cloud_provider",
+          "columnsFrom": [
+            "sandbox_provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_loop_model_provider_id_model_provider_id_fk": {
+          "name": "agent_loop_model_provider_id_model_provider_id_fk",
+          "tableFrom": "agent_loop",
+          "tableTo": "model_provider",
+          "columnsFrom": [
+            "model_provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "agent_loop_model_id_model_id_fk": {
+          "name": "agent_loop_model_id_model_id_fk",
+          "tableFrom": "agent_loop",
+          "tableTo": "model",
+          "columnsFrom": [
+            "model_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "agent_loop_credential_id_user_model_credential_id_fk": {
+          "name": "agent_loop_credential_id_user_model_credential_id_fk",
+          "tableFrom": "agent_loop",
+          "tableTo": "user_model_credential",
+          "columnsFrom": [
+            "credential_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.agent_loop_run": {
+      "name": "agent_loop_run",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "loop_id": {
+          "name": "loop_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_number": {
+          "name": "run_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "agent_loop_run_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "trigger_type": {
+          "name": "trigger_type",
+          "type": "agent_loop_run_trigger_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_provider_id": {
+          "name": "model_provider_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_id": {
+          "name": "model_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sandbox_id": {
+          "name": "sandbox_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commit_sha": {
+          "name": "commit_sha",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commit_message": {
+          "name": "commit_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "agent_loop_run_loop_id_agent_loop_id_fk": {
+          "name": "agent_loop_run_loop_id_agent_loop_id_fk",
+          "tableFrom": "agent_loop_run",
+          "tableTo": "agent_loop",
+          "columnsFrom": [
+            "loop_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_loop_run_model_provider_id_model_provider_id_fk": {
+          "name": "agent_loop_run_model_provider_id_model_provider_id_fk",
+          "tableFrom": "agent_loop_run",
+          "tableTo": "model_provider",
+          "columnsFrom": [
+            "model_provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "agent_loop_run_model_id_model_id_fk": {
+          "name": "agent_loop_run_model_id_model_id_fk",
+          "tableFrom": "agent_loop_run",
+          "tableTo": "model",
+          "columnsFrom": [
+            "model_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_loop_run_event": {
+      "name": "user_loop_run_event",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "runs_used": {
+          "name": "runs_used",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "runs_added": {
+          "name": "runs_added",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "loop_id": {
+          "name": "loop_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_loop_run_event_user_id_user_id_fk": {
+          "name": "user_loop_run_event_user_id_user_id_fk",
+          "tableFrom": "user_loop_run_event",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_loop_run_event_loop_id_agent_loop_id_fk": {
+          "name": "user_loop_run_event_loop_id_agent_loop_id_fk",
+          "tableFrom": "user_loop_run_event",
+          "tableTo": "agent_loop",
+          "columnsFrom": [
+            "loop_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "user_loop_run_event_run_id_agent_loop_run_id_fk": {
+          "name": "user_loop_run_event_run_id_agent_loop_run_id_fk",
+          "tableFrom": "user_loop_run_event",
+          "tableTo": "agent_loop_run",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_loop_run_quota": {
+      "name": "user_loop_run_quota",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plan": {
+          "name": "plan",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "monthly_runs": {
+          "name": "monthly_runs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "extra_runs": {
+          "name": "extra_runs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "next_monthly_reset_at": {
+          "name": "next_monthly_reset_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_loop_run_quota_user_id_user_id_fk": {
+          "name": "user_loop_run_quota_user_id_user_id_fk",
+          "tableFrom": "user_loop_run_quota",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_loop_run_quota_user_id_unique": {
+          "name": "user_loop_run_quota_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.account": {
       "name": "account",
       "schema": "",
@@ -93,8 +670,12 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -164,8 +745,12 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -175,7 +760,9 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": ["token"]
+          "columns": [
+            "token"
+          ]
         }
       },
       "policies": {},
@@ -298,7 +885,9 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": ["email"]
+          "columns": [
+            "email"
+          ]
         }
       },
       "policies": {},
@@ -407,7 +996,9 @@
         "agent_type_name_unique": {
           "name": "agent_type_name_unique",
           "nullsNotDistinct": false,
-          "columns": ["name"]
+          "columns": [
+            "name"
+          ]
         }
       },
       "policies": {},
@@ -474,8 +1065,12 @@
           "name": "cloud_account_user_id_user_id_fk",
           "tableFrom": "cloud_account",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -483,8 +1078,12 @@
           "name": "cloud_account_provider_id_cloud_provider_id_fk",
           "tableFrom": "cloud_account",
           "tableTo": "cloud_provider",
-          "columnsFrom": ["provider_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -519,6 +1118,13 @@
           "notNull": true,
           "default": true
         },
+        "is_sandbox": {
+          "name": "is_sandbox",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -541,7 +1147,9 @@
         "cloud_provider_name_unique": {
           "name": "cloud_provider_name_unique",
           "nullsNotDistinct": false,
-          "columns": ["name"]
+          "columns": [
+            "name"
+          ]
         }
       },
       "policies": {},
@@ -605,8 +1213,12 @@
           "name": "image_agent_type_id_agent_type_id_fk",
           "tableFrom": "image",
           "tableTo": "agent_type",
-          "columnsFrom": ["agent_type_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agent_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -616,7 +1228,9 @@
         "image_name_unique": {
           "name": "image_name_unique",
           "nullsNotDistinct": false,
-          "columns": ["name"]
+          "columns": [
+            "name"
+          ]
         }
       },
       "policies": {},
@@ -686,8 +1300,12 @@
           "name": "region_cloud_provider_id_cloud_provider_id_fk",
           "tableFrom": "region",
           "tableTo": "cloud_provider",
-          "columnsFrom": ["cloud_provider_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "cloud_provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -697,7 +1315,9 @@
         "region_external_region_identifier_unique": {
           "name": "region_external_region_identifier_unique",
           "nullsNotDistinct": false,
-          "columns": ["external_region_identifier"]
+          "columns": [
+            "external_region_identifier"
+          ]
         }
       },
       "policies": {},
@@ -754,8 +1374,12 @@
           "name": "agent_config_user_id_user_id_fk",
           "tableFrom": "agent_config",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -763,8 +1387,12 @@
           "name": "agent_config_agent_type_id_agent_type_id_fk",
           "tableFrom": "agent_config",
           "tableTo": "agent_type",
-          "columnsFrom": ["agent_type_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agent_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -825,8 +1453,12 @@
           "name": "agent_internal_subagents_agent_config_id_agent_config_id_fk",
           "tableFrom": "agent_internal_subagents",
           "tableTo": "agent_config",
-          "columnsFrom": ["agent_config_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agent_config_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -887,8 +1519,12 @@
           "name": "agent_skills_agent_config_id_agent_config_id_fk",
           "tableFrom": "agent_skills",
           "tableTo": "agent_config",
-          "columnsFrom": ["agent_config_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agent_config_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -941,8 +1577,12 @@
           "name": "feedback_user_id_user_id_fk",
           "tableFrom": "feedback",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1023,8 +1663,12 @@
           "name": "git_integration_user_id_user_id_fk",
           "tableFrom": "git_integration",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1115,8 +1759,12 @@
           "name": "github_app_installation_user_id_user_id_fk",
           "tableFrom": "github_app_installation",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1126,7 +1774,9 @@
         "github_app_installation_installation_id_unique": {
           "name": "github_app_installation_installation_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["installation_id"]
+          "columns": [
+            "installation_id"
+          ]
         }
       },
       "policies": {},
@@ -1246,8 +1896,12 @@
           "name": "workspace_git_config_user_id_user_id_fk",
           "tableFrom": "workspace_git_config",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1255,8 +1909,12 @@
           "name": "workspace_git_config_git_integration_id_git_integration_id_fk",
           "tableFrom": "workspace_git_config",
           "tableTo": "git_integration",
-          "columnsFrom": ["git_integration_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "git_integration_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1266,7 +1924,374 @@
         "workspace_git_config_workspace_id_unique": {
           "name": "workspace_git_config_workspace_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["workspace_id"]
+          "columns": [
+            "workspace_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.model": {
+      "name": "model",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_id": {
+          "name": "model_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_free": {
+          "name": "is_free",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_enabled": {
+          "name": "is_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "is_recommended": {
+          "name": "is_recommended",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "model_provider_id_model_provider_id_fk": {
+          "name": "model_provider_id_model_provider_id_fk",
+          "tableFrom": "model",
+          "tableTo": "model_provider",
+          "columnsFrom": [
+            "provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "model_provider_id_name": {
+          "name": "model_provider_id_name",
+          "nullsNotDistinct": false,
+          "columns": [
+            "provider_id",
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.model_credential_audit": {
+      "name": "model_credential_audit",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_hash": {
+          "name": "key_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "context": {
+          "name": "context",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "model_credential_audit_credential_id_user_model_credential_id_fk": {
+          "name": "model_credential_audit_credential_id_user_model_credential_id_fk",
+          "tableFrom": "model_credential_audit",
+          "tableTo": "user_model_credential",
+          "columnsFrom": [
+            "credential_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.model_provider": {
+      "name": "model_provider",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "auth_type": {
+          "name": "auth_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "oauth_config": {
+          "name": "oauth_config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "plugin": {
+          "name": "plugin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_enabled": {
+          "name": "is_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "is_recommended": {
+          "name": "is_recommended",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "model_provider_name_unique": {
+          "name": "model_provider_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_model_credential": {
+      "name": "user_model_credential",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encrypted_credential": {
+          "name": "encrypted_credential",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_hash": {
+          "name": "key_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "oauth_expires_at": {
+          "name": "oauth_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_model_credential_user_id_user_id_fk": {
+          "name": "user_model_credential_user_id_user_id_fk",
+          "tableFrom": "user_model_credential",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_model_credential_provider_id_model_provider_id_fk": {
+          "name": "user_model_credential_provider_id_model_provider_id_fk",
+          "tableFrom": "user_model_credential",
+          "tableTo": "model_provider",
+          "columnsFrom": [
+            "provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_model_credential_user_provider_label": {
+          "name": "user_model_credential_user_provider_label",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "provider_id",
+            "label"
+          ]
         }
       },
       "policies": {},
@@ -1329,8 +2354,12 @@
           "name": "workspace_config_user_id_user_id_fk",
           "tableFrom": "workspace_config",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1338,8 +2367,12 @@
           "name": "workspace_config_agent_type_id_agent_type_id_fk",
           "tableFrom": "workspace_config",
           "tableTo": "agent_type",
-          "columnsFrom": ["agent_type_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agent_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1401,8 +2434,12 @@
           "name": "daily_usage_user_id_user_id_fk",
           "tableFrom": "daily_usage",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1475,8 +2512,12 @@
           "name": "usage_session_workspace_id_workspace_id_fk",
           "tableFrom": "usage_session",
           "tableTo": "workspace",
-          "columnsFrom": ["workspace_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1484,8 +2525,12 @@
           "name": "usage_session_user_id_user_id_fk",
           "tableFrom": "usage_session",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1564,8 +2609,12 @@
           "name": "volume_workspace_id_workspace_id_fk",
           "tableFrom": "volume",
           "tableTo": "workspace",
-          "columnsFrom": ["workspace_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1573,8 +2622,12 @@
           "name": "volume_user_id_user_id_fk",
           "tableFrom": "volume",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1582,8 +2635,12 @@
           "name": "volume_cloud_provider_id_cloud_provider_id_fk",
           "tableFrom": "volume",
           "tableTo": "cloud_provider",
-          "columnsFrom": ["cloud_provider_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "cloud_provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1591,8 +2648,12 @@
           "name": "volume_region_id_region_id_fk",
           "tableFrom": "volume",
           "tableTo": "region",
-          "columnsFrom": ["region_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "region_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1674,8 +2735,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "backend_url": {
-          "name": "backend_url",
+        "upstream_url": {
+          "name": "upstream_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1701,16 +2762,16 @@
           "notNull": true,
           "default": false
         },
-        "tunnel_type": {
-          "name": "tunnel_type",
-          "type": "workspace_tunnel_type",
+        "hosting_type": {
+          "name": "hosting_type",
+          "type": "workspace_hosting_type",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
           "default": "'cloud'"
         },
-        "tunnel_name": {
-          "name": "tunnel_name",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1782,8 +2843,12 @@
           "name": "workspace_git_integration_id_git_integration_id_fk",
           "tableFrom": "workspace",
           "tableTo": "git_integration",
-          "columnsFrom": ["git_integration_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "git_integration_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1791,8 +2856,12 @@
           "name": "workspace_user_id_user_id_fk",
           "tableFrom": "workspace",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1800,8 +2869,12 @@
           "name": "workspace_image_id_image_id_fk",
           "tableFrom": "workspace",
           "tableTo": "image",
-          "columnsFrom": ["image_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "image_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1809,8 +2882,12 @@
           "name": "workspace_cloud_provider_id_cloud_provider_id_fk",
           "tableFrom": "workspace",
           "tableTo": "cloud_provider",
-          "columnsFrom": ["cloud_provider_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "cloud_provider_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1818,8 +2895,12 @@
           "name": "workspace_region_id_region_id_fk",
           "tableFrom": "workspace",
           "tableTo": "region",
-          "columnsFrom": ["region_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "region_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1880,8 +2961,12 @@
           "name": "workspace_environment_variables_user_id_user_id_fk",
           "tableFrom": "workspace_environment_variables",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1889,8 +2974,12 @@
           "name": "workspace_environment_variables_agent_type_id_agent_type_id_fk",
           "tableFrom": "workspace_environment_variables",
           "tableTo": "agent_type",
-          "columnsFrom": ["agent_type_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agent_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1903,40 +2992,100 @@
     }
   },
   "enums": {
+    "public.agent_loop_run_status": {
+      "name": "agent_loop_run_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "halted"
+      ]
+    },
+    "public.agent_loop_run_trigger_type": {
+      "name": "agent_loop_run_trigger_type",
+      "schema": "public",
+      "values": [
+        "manual",
+        "automated"
+      ]
+    },
+    "public.agent_loop_status": {
+      "name": "agent_loop_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "paused",
+        "completed",
+        "archived"
+      ]
+    },
     "public.user_plan": {
       "name": "user_plan",
       "schema": "public",
-      "values": ["free", "tunnel", "pro", "enterprise"]
+      "values": [
+        "free",
+        "tunnel",
+        "pro",
+        "enterprise"
+      ]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": ["user", "admin"]
+      "values": [
+        "user",
+        "admin"
+      ]
     },
     "public.git_provider": {
       "name": "git_provider",
       "schema": "public",
-      "values": ["github", "gitlab", "bitbucket"]
+      "values": [
+        "github",
+        "gitlab",
+        "bitbucket"
+      ]
     },
     "public.instance_status": {
       "name": "instance_status",
       "schema": "public",
-      "values": ["pending", "running", "stopped", "terminated"]
+      "values": [
+        "pending",
+        "running",
+        "stopped",
+        "terminated"
+      ]
     },
     "public.session_stop_source": {
       "name": "session_stop_source",
       "schema": "public",
-      "values": ["manual", "idle", "quota_exhausted", "error"]
+      "values": [
+        "manual",
+        "idle",
+        "quota_exhausted",
+        "error"
+      ]
+    },
+    "public.workspace_hosting_type": {
+      "name": "workspace_hosting_type",
+      "schema": "public",
+      "values": [
+        "cloud",
+        "local"
+      ]
     },
     "public.workspace_status": {
       "name": "workspace_status",
       "schema": "public",
-      "values": ["pending", "running", "stopped", "terminated"]
-    },
-    "public.workspace_tunnel_type": {
-      "name": "workspace_tunnel_type",
-      "schema": "public",
-      "values": ["cloud", "local"]
+      "values": [
+        "pending",
+        "running",
+        "stopped",
+        "terminated"
+      ]
     }
   },
   "schemas": {},

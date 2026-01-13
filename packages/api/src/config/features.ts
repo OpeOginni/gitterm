@@ -146,7 +146,7 @@ const PLAN_FEATURE_MATRIX: Record<PlanFeature, Record<UserPlan, boolean>> = {
 /**
  * Monthly sandbox run quotas by plan
  */
-const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
+export const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
   free: 10,
   tunnel: 10, // Same as free - tunnel is for custom subdomain
   pro: 100,

@@ -4,6 +4,7 @@ export default tool({
   description: "Call this tool AFTER you have committed your changes. It fetches the commit details and notifies the server. If you failed to complete the feature, call with success=false and provide an error message.",
   args: {
     success: tool.schema.boolean().describe("Whether you successfully implemented and committed the feature"),
+    isListComplete: tool.schema.boolean().default(false).describe("Whether you have completed the WHOLE list of features"),
     error: tool.schema.string().optional().describe("If success=false, describe what went wrong"),
   },
   async execute(args, context) {
@@ -46,6 +47,7 @@ export default tool({
         commitSha,
         commitMessage,
         error: errorMessage,
+        isListComplete: args.isListComplete,
       }),
     });
     

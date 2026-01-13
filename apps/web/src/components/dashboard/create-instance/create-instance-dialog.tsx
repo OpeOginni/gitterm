@@ -16,7 +16,7 @@ import { WorkspaceTypeSelector } from "./workspace-type-selector";
 import { CliCommandDisplay } from "./cli-command-display";
 import { CreateCloudInstance } from "./create-cloud-instance";
 import { CreateLocalInstance } from "./create-local-instance";
-import { CreateAutoAgent } from "./create-auto-agent";
+import { CreateAgentLoop } from "./create-agent-loop";
 import type { WorkspaceType, CreateInstanceResult } from "./types";
 
 const DIALOG_DESCRIPTIONS: Record<WorkspaceType, string> = {
@@ -100,7 +100,7 @@ export function CreateInstanceDialog() {
             )}
 
             {workspaceType === "ralph-wiggum" && (
-              <CreateAutoAgent onSuccess={handleSuccess} onCancel={handleCancel} />
+              <CreateAgentLoop onSuccess={handleSuccess} onCancel={handleCancel} />
             )}
           </>
         )}

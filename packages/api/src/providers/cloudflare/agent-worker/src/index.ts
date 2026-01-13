@@ -210,6 +210,7 @@ STEP 3 - COMMIT AND PUSH:
 
 STEP 4 - CALL agent-callback:
 - If you successfully committed and pushed, call agent-callback with success=true
+- If you have completed the entire list of features in the plan file, call agent-callback with success=true and isListComplete=true
 - If something went wrong, call agent-callback with success=false and describe the error
 
 The agent-callback tool will automatically verify your commit. You do NOT need to provide the commit SHA or message - the tool fetches these automatically.

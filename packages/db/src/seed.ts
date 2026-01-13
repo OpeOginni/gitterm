@@ -1,5 +1,6 @@
 import { db, eq } from "./index";
 import { agentType, cloudProvider, image, region } from "./schema/cloud";
+import { modelProvider, model } from "./schema/model-credentials";
 
 /**
  * Seed data definitions
@@ -64,6 +65,217 @@ const seedRegions = [
     location: "Local Machine",
     externalRegionIdentifier: "local",
     providerName: "Local",
+  },
+];
+
+// =========================================================================
+// Model Providers and Models Seed Data
+// =========================================================================
+
+const seedModelProviders = [
+  {
+    name: "anthropic",
+    displayName: "Anthropic",
+    authType: "api_key",
+    plugin: null,
+    oauthConfig: null,
+  },
+  {
+    name: "openai",
+    displayName: "OpenAI",
+    authType: "api_key",
+    plugin: null,
+    oauthConfig: null,
+  },
+  {
+    name: "google",
+    displayName: "Google AI",
+    authType: "api_key",
+    plugin: null,
+    oauthConfig: null,
+  },
+  {
+    name: "opencode-zen",
+    displayName: "OpenCode Zen",
+    authType: "api_key",
+    plugin: null,
+    oauthConfig: null,
+    isRecommended: true,
+  },
+  {
+    name: "github-copilot",
+    displayName: "GitHub Copilot",
+    authType: "oauth",
+    plugin: "copilot-auth",
+    oauthConfig: {
+      clientId: "Iv1.b507a08c87ecfe98",
+      deviceCodeUrl: "https://github.com/login/device/code",
+      accessTokenUrl: "https://github.com/login/oauth/access_token",
+      copilotTokenUrl: "https://api.github.com/copilot_internal/v2/token",
+    },
+  },
+  {
+    name: "openai-codex",
+    displayName: "ChatGPT Pro/Plus (Codex)",
+    authType: "oauth",
+    plugin: "codex-auth",
+    isRecommended: true,
+  },
+  {
+    name: "zai-coding-plan",
+    displayName: "Zai Coding Plan",
+    authType: "api_key",
+    plugin: null,
+    oauthConfig: null,
+  }
+];
+
+const seedModels = [
+  // Anthropic models
+  {
+    providerName: "anthropic",
+    name: "claude-sonnet-4-5",
+    displayName: "Claude Sonnet 4.5",
+    modelId: "anthropic/claude-sonnet-4-5",
+    isRecommended: true,
+  },
+  {
+    providerName: "anthropic",
+    name: "claude-opus-4-5",
+    displayName: "Claude Opus 4.5",
+    modelId: "anthropic/claude-opus-4-5",
+  },
+  // OpenAI models
+  {
+    providerName: "openai",
+    name: "gpt-4o",
+    displayName: "GPT-4o",
+    modelId: "openai/gpt-4o",
+  },
+  {
+    providerName: "openai",
+    name: "gpt-5.1-codex",
+    displayName: "GPT-5.1 Codex",
+    modelId: "openai/gpt-5.1-codex",
+  },
+  {
+    providerName: "openai",
+    name: "gpt-5.2",
+    displayName: "GPT-5.2",
+    modelId: "openai/gpt-5.2",
+  },
+  {
+    providerName: "openai",
+    name: "gpt-5.2-pro",
+    displayName: "GPT-5.2 Pro",
+    modelId: "openai/gpt-5.2-pro",
+  },
+  // Google AI models
+  {
+    providerName: "google",
+    name: "gemini-3-pro-preview",
+    displayName: "Gemini 3 Pro Preview",
+    modelId: "google/gemini-3-pro-preview",
+  },
+  // GitHub Copilot models
+  {
+    providerName: "github-copilot",
+    name: "claude-sonnet-4.5",
+    displayName: "Claude Sonnet 4.5",
+    modelId: "github-copilot/claude-sonnet-4.5",
+    isRecommended: true,
+  },
+  {
+    providerName: "github-copilot",
+    name: "claude-opus-4.5",
+    displayName: "Claude Opus 4.5",
+    modelId: "github-copilot/claude-opus-4.5",
+    isRecommended: true,
+  },
+  {
+    providerName: "github-copilot",
+    name: "gpt-5.1-codex",
+    displayName: "GPT-5.1 Codex",
+    modelId: "github-copilot/gpt-5.1-codex",
+  },
+  {
+    providerName: "github-copilot",
+    name: "gpt-5.2",
+    displayName: "GPT-5.2",
+    modelId: "github-copilot/gpt-5.2",
+  },
+  {
+    providerName: "github-copilot",
+    name: "gemini-3-pro-preview",
+    displayName: "Gemini 3 Pro Preview",
+    modelId: "github-copilot/gemini-3-pro-preview",
+  },
+  // OpenCode models
+  {
+    providerName: "opencode-zen",
+    name: "glm-4.7-free",
+    displayName: "GLM 4.7 Free",
+    modelId: "opencode/glm-4.7-free",
+    isFree: true,
+    isRecommended: true,
+  },
+  {
+    providerName: "opencode-zen",
+    name: "gpt-5.1-codex",
+    displayName: "GPT-5.1 Codex",
+    modelId: "opencode/gpt-5.1-codex",
+  },
+  {
+    providerName: "opencode-zen",
+    name: "gpt-5.2",
+    displayName: "GPT-5.2",
+    modelId: "opencode/gpt-5.2",
+  },
+  {
+    providerName: "opencode-zen",
+    name: "gemini-3-pro",
+    displayName: "Gemini 3 Pro",
+    modelId: "opencode/gemini-3-pro",
+  },
+  {
+    providerName: "opencode-zen",
+    name: "claude-opus-4-5",
+    displayName: "Claude Opus 4.5",
+    modelId: "opencode/claude-opus-4-5",
+    isRecommended: true,
+  },
+  // OpenAI Codex models (ChatGPT Pro/Plus subscription)
+  {
+    providerName: "openai-codex",
+    name: "gpt-5.1-codex-max",
+    displayName: "GPT-5.1 Codex Max",
+    modelId: "openai-codex/gpt-5.1-codex-max",
+    isRecommended: true,
+  },
+  {
+    providerName: "openai-codex",
+    name: "gpt-5.1-codex-mini",
+    displayName: "GPT-5.1 Codex Mini",
+    modelId: "openai-codex/gpt-5.1-codex-mini",
+  },
+  {
+    providerName: "openai-codex",
+    name: "gpt-5.2",
+    displayName: "GPT-5.2",
+    modelId: "openai-codex/gpt-5.2",
+  },
+  {
+    providerName: "openai-codex",
+    name: "gpt-5.2-codex",
+    displayName: "GPT-5.2 Codex",
+    modelId: "openai-codex/gpt-5.2-codex",
+  },
+  // zai-coding-plan
+  {
+    providerName: "zai-coding-plan",
+    name: "glm-4.7",
+    displayName: "GLM 4.7",
+    modelId: "zai-coding-plan/glm-4.7",
   },
 ];
 
@@ -185,6 +397,70 @@ export async function seedDatabase(): Promise<void> {
         isEnabled: true,
       });
       console.log(`[seed]   Created region "${reg.name}"`);
+    }
+  }
+
+  // =========================================================================
+  // Seed Model Providers
+  // =========================================================================
+  console.log("[seed] Seeding model providers...");
+  const modelProviderMap = new Map<string, string>(); // name -> id
+
+  for (const provider of seedModelProviders) {
+    const existing = await db.query.modelProvider.findFirst({
+      where: eq(modelProvider.name, provider.name),
+    });
+
+    if (existing) {
+      console.log(`[seed]   Model provider "${provider.name}" already exists`);
+      modelProviderMap.set(provider.name, existing.id);
+    } else {
+      const [created] = await db
+        .insert(modelProvider)
+        .values({
+          name: provider.name,
+          displayName: provider.displayName,
+          authType: provider.authType,
+          plugin: provider.plugin,
+          oauthConfig: provider.oauthConfig,
+          isEnabled: true,
+          isRecommended: provider.isRecommended ?? false,
+        })
+        .returning();
+      console.log(`[seed]   Created model provider "${provider.name}"`);
+      modelProviderMap.set(provider.name, created!.id);
+    }
+  }
+
+  // =========================================================================
+  // Seed Models
+  // =========================================================================
+  console.log("[seed] Seeding models...");
+
+  for (const m of seedModels) {
+    const providerId = modelProviderMap.get(m.providerName);
+    if (!providerId) {
+      console.log(`[seed]   Skipping model "${m.name}" - provider not found`);
+      continue;
+    }
+
+    const existing = await db.query.model.findFirst({
+      where: eq(model.modelId, m.modelId),
+    });
+
+    if (existing) {
+      console.log(`[seed]   Model "${m.modelId}" already exists`);
+    } else {
+      await db.insert(model).values({
+        providerId,
+        name: m.name,
+        displayName: m.displayName,
+        modelId: m.modelId,
+        isFree: m.isFree ?? false,
+        isEnabled: true,
+        isRecommended: m.isRecommended ?? false,
+      });
+      console.log(`[seed]   Created model "${m.modelId}"`);
     }
   }
 

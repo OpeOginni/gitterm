@@ -22,6 +22,13 @@
       "when": 1767635610452,
       "tag": "0002_late_joseph",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1768264681236,
+      "tag": "0003_white_naoko",
+      "breakpoints": true
     }
   ]
 }

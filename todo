@@ -2,5 +2,6 @@
 - Checking of github/gitlab url before passed to api.
 - Config Configuration
 - Onboarding on UI, letting users connect to the APP, then create instances
+- Implement server auth (https://github.com/anomalyco/opencode/commit/f0912ee838e72b4bedd567d0110fa840820ddf18)
 
 https://github.com/coder/ghostty-web

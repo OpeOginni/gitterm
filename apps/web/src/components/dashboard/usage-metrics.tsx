@@ -6,16 +6,19 @@ import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/utils/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Clock, Infinity as InfinityIcon, TrendingUp, Zap } from "lucide-react";
+import { Clock, Infinity as InfinityIcon, Zap, Repeat } from "lucide-react";
 
 export function UsageMetrics() {
   const { data, isLoading } = useQuery(trpc.workspace.getDailyUsage.queryOptions());
 
-  if (isLoading) {
+  const { data: loopUsageData, isLoading: isLoadingLoopUsage } = useQuery(trpc.agentLoop.getUsage.queryOptions());
+
+  if (isLoading || isLoadingLoopUsage) {
     return null;
   }
 
   const usage = data || { minutesUsed: 0, minutesRemaining: 60, dailyLimit: 60 };
+  const loopUsage = loopUsageData?.usage || { extraRuns: 0, monthlyRuns: 10 };
 
   // Check if we're in unlimited mode (self-hosted or paid plan)
   // Infinity becomes null when serialized to JSON
@@ -76,11 +79,11 @@ export function UsageMetrics() {
       accent: false,
     },
     {
-      title: "Usage",
-      value: `${Math.round(usagePercent)}%`,
-      subtitle: "Quota used",
-      icon: TrendingUp,
-      warning: usagePercent > 80,
+      title: "Runs Remaining",
+      value: `${loopUsage.extraRuns + loopUsage.monthlyRuns} runs`,
+      subtitle: `Available`,
+      icon: Repeat,
+      accent: false,
     },
   ];
 
@@ -102,18 +105,14 @@ export function UsageMetrics() {
                   className={`p-2 rounded-lg transition-colors ${
                     metric.accent
                       ? "bg-accent/10 group-hover:bg-accent/20"
-                      : metric.warning
-                        ? "bg-destructive/10"
-                        : "bg-secondary/50"
+                      : "bg-secondary/50"
                   }`}
                 >
                   <Icon
                     className={`h-4 w-4 ${
                       metric.accent
                         ? "text-accent"
-                        : metric.warning
-                          ? "text-destructive"
-                          : "text-muted-foreground"
+                        : "text-muted-foreground"
                     }`}
                   />
                 </div>
@@ -121,7 +120,7 @@ export function UsageMetrics() {
               <CardContent>
                 <div
                   className={`text-2xl font-semibold ${
-                    metric.accent ? "text-primary" : metric.warning ? "text-destructive" : ""
+                    metric.accent ? "text-primary" : ""
                   }`}
                 >
                   {metric.value}

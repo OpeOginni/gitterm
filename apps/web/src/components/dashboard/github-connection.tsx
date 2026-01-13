@@ -18,6 +18,7 @@ import {
   Shield,
   RefreshCw,
   Loader2,
+  Bot
 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -263,6 +264,7 @@ export function GitHubConnection() {
                   { icon: GitBranch, text: "Commit and push changes from workspaces" },
                   { icon: GitFork, text: "Fork repositories with one click" },
                   { icon: Zap, text: "Automatic token refresh (no manual setup)" },
+                  { icon: Bot, text: "Connection to automated agent loops" },
                 ].map((feature, i) => (
                   <div
                     key={i}
@@ -276,7 +278,7 @@ export function GitHubConnection() {
             </div>
 
             <Button
-              className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleConnect}
               disabled={isConnecting}
             >

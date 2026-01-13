@@ -28,7 +28,7 @@ import {
   type CreateInstanceResult,
 } from "./types";
 
-interface CreateAutoAgentProps {
+interface CreateAgentLoopProps {
   onSuccess: (result: CreateInstanceResult) => void;
   onCancel: () => void;
 }
@@ -55,7 +55,7 @@ const getProviderLogo = (providerName: string): string => {
   return `/${providerName}.svg`;
 };
 
-export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
+export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   // Fetch providers and models from the database
   const { data: providersData, isLoading: isLoadingProviders } = useQuery(
     trpc.modelCredentials.listProviders.queryOptions()
@@ -65,6 +65,9 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
   );
   const { data: credentialsData } = useQuery(
     trpc.modelCredentials.listMyCredentials.queryOptions()
+  );
+  const { data: quotaData } = useQuery(
+    trpc.agentLoop.getUsage.queryOptions()
   );
 
   const providers = (providersData?.providers ?? []) as Provider[];
@@ -452,8 +455,7 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
                   <SelectItem 
                     key={p.id} 
                     value={p.id}
-                    className=""
-                  >
+                    className={p.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}                  >
                     <div className="flex items-center gap-2">
                       <Image
                         src={getProviderLogo(p.name)}
@@ -501,15 +503,14 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
                   <SelectItem 
                     key={m.id} 
                     value={m.id}
-                    className=""
-                  >
+                    className={m.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}                  >
                     <div className="flex items-center gap-2">
                       {m.displayName}
                       {m.isRecommended && (
                         <span className="text-xs text-muted-foreground">Recommended</span>
                       )}
                       {m.isFree && (
-                        <span className="text-xs text-muted-foreground">Free</span>
+                        <span className="text-xs text-primary ml-2 opacity-80">(Free)</span>
                       )}
                     </div>
                   </SelectItem>
@@ -558,20 +559,27 @@ export function CreateAutoAgent({ onSuccess, onCancel }: CreateAutoAgentProps) {
         {/* Iterations (automatic mode only) */}
         {runMode === "automatic" && (
           <div className="grid gap-2">
-            <Label htmlFor="iterations" className="text-sm font-medium">
-              Number of Iterations
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="iterations" className="text-sm font-medium">
+                Number of Iterations
+              </Label>
+              <span className="text-xs text-primary font-semibold bg-accent px-2 py-0.5 rounded-md ml-2">
+                {typeof quotaData?.usage?.monthlyRuns === "number" && typeof quotaData?.usage?.extraRuns === "number"
+                  ? `Runs Left: ${quotaData.usage.monthlyRuns + quotaData.usage.extraRuns}`
+                  : "Runs Left: -"}
+              </span>
+            </div>
             <Input
               id="iterations"
               type="number"
               min={1}
-              max={100}
+              max={Math.max(1, (quotaData?.usage?.monthlyRuns ?? 100) + (quotaData?.usage?.extraRuns ?? 0))}
               value={iterations}
               onChange={(e) => setIterations(Math.max(1, parseInt(e.target.value) || 1))}
               className="bg-secondary/30 border-border/50 focus:border-accent"
             />
             <p className="text-xs text-muted-foreground">
-              How many times the agent will run automatically (1-100)
+              Set how many times the agent will run automatically.
             </p>
           </div>
         )}

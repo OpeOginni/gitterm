@@ -60,40 +60,41 @@ export function AgentLoopList() {
   return (
     <div className="space-y-6">
       <Tabs value={statusFilter} onValueChange={handleTabChange}>
-        <TabsList className="bg-secondary/50 flex justify-start gap-2 p-2 rounded-lg shadow-sm">
+        <TabsList className="inline-flex h-10 items-center gap-1 rounded-lg bg-muted/30 p-1 backdrop-blur-sm border border-border/40">
           <TabsTrigger
             value="all"
-            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
           >
             All
           </TabsTrigger>
           <TabsTrigger
             value="active"
-            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-green-100 data-[state=active]:text-green-700 data-[state=active]:shadow"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:text-foreground data-[state=active]:bg-emerald-500/15 data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm"
           >
+            <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Active
           </TabsTrigger>
           <TabsTrigger
             value="paused"
-            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-800 data-[state=active]:shadow"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:text-foreground data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400 data-[state=active]:shadow-sm"
           >
             Paused
           </TabsTrigger>
           <TabsTrigger
             value="completed"
-            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-green-200 data-[state=active]:text-green-900 data-[state=active]:shadow"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:text-foreground data-[state=active]:bg-sky-500/15 data-[state=active]:text-sky-400 data-[state=active]:shadow-sm"
           >
             Completed
           </TabsTrigger>
           <TabsTrigger
             value="archived"
-            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors data-[state=active]:bg-muted data-[state=active]:text-muted-foreground data-[state=active]:shadow"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:text-foreground data-[state=active]:bg-zinc-500/15 data-[state=active]:text-zinc-400 data-[state=active]:shadow-sm"
           >
             Archived
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value={statusFilter} className="mt-6">
+        <TabsContent value={statusFilter} className="mt-5">
           {loops.length === 0 ? (
             <div className="flex h-48 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30 p-8 text-center">
               <p className="text-sm text-muted-foreground">

@@ -816,6 +816,20 @@ export const internalRouter = router({
           })
           .where(eq(agentLoopRun.id, input.runId));
 
+        if (input.isListComplete) {
+          await db
+            .update(agentLoop)
+            .set({
+              status: "completed" as const,
+            })
+            .where(eq(agentLoop.id, loop.id));
+            
+          return {
+            success: true,
+            message: "Run completed, loop is complete",
+          };
+        }
+
         // Update loop counters
 
         // Check if this is the last iteration

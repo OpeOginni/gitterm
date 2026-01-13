@@ -15,4 +15,4 @@ export type AgentLoopRun = AgentLoopWithRuns["runs"][number];
 
 // Status types
 export type LoopStatus = "active" | "paused" | "completed" | "archived";
-export type RunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+export type RunStatus = "pending" | "running" | "completed" | "failed" | "cancelled" | "halted";

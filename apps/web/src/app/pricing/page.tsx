@@ -466,53 +466,19 @@ function PricingPageContent() {
             </p>
           </div>
 
-          {/* Ideal For Section */}
-          <div className="mt-20 grid gap-8 md:grid-cols-3">
-            <div className="rounded-lg border border-border p-6 bg-card">
-              <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                <Terminal className="h-5 w-5 text-primary" />
-                Tunnel is ideal for
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                Developers who want a reliable <strong>ngrok alternative</strong> with permanent
-                custom URLs. Perfect for webhooks, demos, and local testing.
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-6 bg-card">
-              <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                <Zap className="h-5 w-5 text-primary" />
-                Pro is ideal for
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                Developers who want <strong>agentic coding superpowers</strong> with unlimited projects,
-                priority queue access, and intelligent agent memory across sessions.
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-6 bg-card">
-              <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                <Package className="h-5 w-5 text-primary" />
-                Run Packs are ideal for
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                Power users who need more sandbox runs beyond the included amount,
-                or users who want to try agentic coding without a subscription.
-              </p>
-            </div>
-          </div>
-
           {/* FAQ or Additional Info */}
           <div className="mt-20 text-center">
             <h2 className="text-2xl font-bold mb-4">Questions?</h2>
             <p className="text-muted-foreground mb-6">
-              Need help choosing the right plan? Check out our docs or reach out.
+              Need help choosing the right plan? Reach out on Twitter.
             </p>
             <div className="flex justify-center gap-4 flex-wrap">
               <Link
-                href="https://github.com/OpeOginni/gitterm"
+                href="https://twitter.com/BrightOginni"
                 target="_blank"
                 className="inline-flex items-center justify-center rounded-md border border-input bg-background px-6 py-2.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
               >
-                View on GitHub
+                Reach out on Twitter
                 <ExternalLink className="ml-2 h-4 w-4" />
               </Link>
               <Link
