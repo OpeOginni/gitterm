@@ -821,6 +821,11 @@ export const internalRouter = router({
             .update(agentLoop)
             .set({
               status: "completed" as const,
+              successfulRuns: sql`${agentLoop.successfulRuns} + 1`,
+              // Use GREATEST to ensure we don't decrease totalRuns if a later run already exists
+              lastRunId: input.runId,
+              lastRunAt: now,
+              updatedAt: now,
             })
             .where(eq(agentLoop.id, loop.id));
             
@@ -839,7 +844,7 @@ export const internalRouter = router({
         await db
           .update(agentLoop)
           .set({
-            successfulRuns: loop.successfulRuns + 1,
+            successfulRuns: sql`${agentLoop.successfulRuns} + 1`,
             lastRunId: input.runId,
             lastRunAt: now,
             updatedAt: now,

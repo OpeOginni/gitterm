@@ -11,7 +11,7 @@ import { modelProvider, model } from "./schema/model-credentials";
  * - Never delete or modify existing items
  */
 
-const seedCloudProviders = [{ name: "Railway" }, { name: "AWS" }, { name: "Local" }];
+const seedCloudProviders = [{ name: "Railway" }, { name: "AWS" }, { name: "Local" }, { name: "Cloudflare", isSandbox: true }];
 
 const seedAgentTypes = [
   { name: "OpenCode", serverOnly: false },
@@ -306,6 +306,7 @@ export async function seedDatabase(): Promise<void> {
         .values({
           name: provider.name,
           isEnabled: true,
+          isSandbox: provider.isSandbox ?? false,
         })
         .returning();
       console.log(`[seed]   Created provider "${provider.name}"`);
