@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { TerminalDemo } from "@/components/landing/terminal-demo";
 import Link from "next/link";
 
@@ -41,20 +41,20 @@ export function HeroSection() {
               <Link href="/dashboard">
                 <Button
                   size="lg"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="bg-primary/80 text-primary-foreground hover:bg-primary/70"
                 >
                   Start Building
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="https://github.com/OpeOginni/gitterm" target="_blank">
+              <Link href="https://x.com/BrightOginni/status/2011107736176763131" target="_blank">
                 <Button
                   size="lg"
                   variant="outline"
                   className="border-border text-foreground hover:bg-secondary bg-transparent"
                 >
-                  Source Code
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowUpRight className="mr-2 h-4 w-4 border-primary text-primary" />
+                  Agentic Loops Demo
                 </Button>
               </Link>
             </div>
