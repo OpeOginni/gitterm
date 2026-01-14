@@ -1,6 +1,6 @@
 import z from "zod";
 import { protectedProcedure, router } from "../../index";
-import { db, eq, and, desc, asc } from "@gitterm/db";
+import { db, eq, and, desc, asc, sql } from "@gitterm/db";
 import {
   agentLoop,
   agentLoopRun,
@@ -162,11 +162,13 @@ export const agentLoopRouter = router({
       const userId = ctx.session.user.id;
       const { status = "all", limit = 20, offset = 0 } = input ?? {};
 
+      const whereCondition =
+        status === "all"
+          ? eq(agentLoop.userId, userId)
+          : and(eq(agentLoop.userId, userId), eq(agentLoop.status, status as AgentLoopStatus));
+
       const loops = await db.query.agentLoop.findMany({
-        where:
-          status === "all"
-            ? eq(agentLoop.userId, userId)
-            : and(eq(agentLoop.userId, userId), eq(agentLoop.status, status as AgentLoopStatus)),
+        where: whereCondition,
         with: {
           gitIntegration: true,
           sandboxProvider: true,
@@ -178,24 +180,22 @@ export const agentLoopRouter = router({
         offset,
       });
 
-      // Get total count
-      const allLoops = await db
-        .select({ id: agentLoop.id })
+      // Get total count using efficient COUNT query
+      const [countResult] = await db
+        .select({ count: sql<number>`count(*)` })
         .from(agentLoop)
-        .where(
-          status === "all"
-            ? eq(agentLoop.userId, userId)
-            : and(eq(agentLoop.userId, userId), eq(agentLoop.status, status as AgentLoopStatus)),
-        );
+        .where(whereCondition);
+
+      const total = Number(countResult?.count ?? 0);
 
       return {
         success: true,
         loops,
         pagination: {
-          total: allLoops.length,
+          total,
           limit,
           offset,
-          hasMore: offset + loops.length < allLoops.length,
+          hasMore: offset + loops.length < total,
         },
       };
     }),

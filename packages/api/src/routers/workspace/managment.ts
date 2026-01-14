@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import z from "zod";
 import { protectedProcedure, workspaceAuthProcedure, router } from "../../index";
-import { db, eq, and, asc, or, ne, SQL } from "@gitterm/db";
+import { db, eq, and, asc, or, ne, SQL, sql } from "@gitterm/db";
 import {
   agentWorkspaceConfig,
   workspaceEnvironmentVariables,
@@ -251,18 +251,13 @@ export const workspaceRouter = router({
                   ),
                 );
 
-        // Get total count for pagination
+        // Get total count using efficient COUNT query
         const [countResult] = await db
-          .select({ count: workspace.id })
+          .select({ count: sql<number>`count(*)` })
           .from(workspace)
           .where(statusCondition);
-
-        // Count actual rows (drizzle returns undefined for count on empty)
-        const totalWorkspaces = await db
-          .select({ id: workspace.id })
-          .from(workspace)
-          .where(statusCondition);
-        const total = totalWorkspaces.length;
+        
+        const total = Number(countResult?.count ?? 0);
 
         // Fetch paginated workspaces
         const workspaces = await db.query.workspace.findMany({

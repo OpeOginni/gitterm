@@ -9,7 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, GitBranch } from "lucide-react";
 
 export function UsageHistory() {
-  const { data, isLoading } = useQuery(trpc.workspace.listWorkspaces.queryOptions());
+  const { data, isLoading } = useQuery(
+    trpc.workspace.listWorkspaces.queryOptions({
+      status: "all",
+      limit: 100,
+      offset: 0,
+    })
+  );
 
   if (isLoading) {
     return null;

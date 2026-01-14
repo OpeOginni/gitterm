@@ -37,10 +37,6 @@ export function GitHubConnection() {
   } = useQuery(trpc.github.getInstallationStatus.queryOptions());
   const disconnectMutation = useMutation(trpc.github.disconnectApp.mutationOptions());
 
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
   const handleConnect = () => {
     setIsConnecting(true);
     // Use window.location.origin to get the base URL (e.g., http://localhost:8888)
