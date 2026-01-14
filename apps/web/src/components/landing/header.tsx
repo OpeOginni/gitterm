@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { Route } from "next";
 import { Button } from "@/components/ui/button";
-import { Terminal } from "lucide-react";
+import { Star, Terminal } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { isBillingEnabled } from "@gitterm/env/web";
 
 export function LandingHeader() {
   const { data: session } = authClient.useSession();
   const showPricing = isBillingEnabled();
+  const pathname = usePathname();
+  const isHomePage = pathname === "/";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
@@ -43,6 +46,18 @@ export function LandingHeader() {
         </nav>
 
         <div className="flex items-center gap-3">
+          {isHomePage && (
+            <Link href="https://github.com/OpeOginni/gitterm" target="_blank" className="group/github">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border text-foreground hover:bg-secondary bg-transparent"
+              >
+                <Star className="mr-1.5 h-3.5 w-3.5 group-hover/github:text-yellow-500" />
+                Star on GitHub
+              </Button>
+            </Link>
+          )}
           {session ? (
             <Link href="/dashboard">
               <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">

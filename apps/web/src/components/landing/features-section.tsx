@@ -1,4 +1,4 @@
-import { Cloud, Globe, Lock, Save, Zap } from "lucide-react";
+import { Cloud, Globe, Lock, Save, Zap, Repeat } from "lucide-react";
 import { GitHub } from "../logos/Github";
 
 const features = [
@@ -12,6 +12,12 @@ const features = [
     title: "Local Tunnels",
     description:
       "Expose your local OpenCode server with a shareable gitterm.dev URL. No port forwarding needed.",
+  },
+  {
+    icon: Repeat,
+    title: "Agentic Loops",
+    description:
+      "Create autonomous coding loops that execute tasks across multiple runs, read plan files, make changes, and commit progress automatically.",
   },
   {
     icon: GitHub,
@@ -40,7 +46,7 @@ export function FeaturesSection() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 rounded-lg overflow-hidden">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 rounded-lg overflow-hidden">
           {features.map((feature) => (
             <div
               key={feature.title}
