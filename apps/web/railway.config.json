@@ -15,7 +15,7 @@
     ]
   },
   "deploy": {
-    "startCommand": "cd apps/web && bun run start",
+    "startCommand": "cd apps/web && npm run start",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 100,
     "restartPolicyType": "never"
