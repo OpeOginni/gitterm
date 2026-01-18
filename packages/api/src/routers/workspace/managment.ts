@@ -57,6 +57,10 @@ function isSubdomainReserved(subdomain: string): boolean {
   return RESERVED_SUBDOMAINS.includes(subdomain.toLowerCase());
 }
 
+function normalizeRepoUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "").replace(/\.git\/?$/i, "");
+}
+
 export const workspaceRouter = router({
   listUserInstallations: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
@@ -747,10 +751,10 @@ export const workspaceRouter = router({
 
       // Validate that the provided repo is publicly clonable using `git ls-remote`
       if (input.repo) {
-        const repoUrl = input.repo.endsWith(".git") ? input.repo : `${input.repo}.git`;
+        input.repo = normalizeRepoUrl(input.repo);
 
         // Only support HTTPS URLs for now; `.git` suffix is added later if missing
-        if (!/^https:\/\/.+$/i.test(repoUrl)) {
+        if (!/^https:\/\/.+$/i.test(input.repo)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Repository URL must be a valid HTTPS Git URL",
