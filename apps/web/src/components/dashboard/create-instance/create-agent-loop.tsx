@@ -58,17 +58,15 @@ const getProviderLogo = (providerName: string): string => {
 export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   // Fetch providers and models from the database
   const { data: providersData, isLoading: isLoadingProviders } = useQuery(
-    trpc.modelCredentials.listProviders.queryOptions()
+    trpc.modelCredentials.listProviders.queryOptions(),
   );
   const { data: modelsData, isLoading: isLoadingModels } = useQuery(
-    trpc.modelCredentials.listModels.queryOptions()
+    trpc.modelCredentials.listModels.queryOptions(),
   );
   const { data: credentialsData } = useQuery(
-    trpc.modelCredentials.listMyCredentials.queryOptions()
+    trpc.modelCredentials.listMyCredentials.queryOptions(),
   );
-  const { data: quotaData } = useQuery(
-    trpc.agentLoop.getUsage.queryOptions()
-  );
+  const { data: quotaData } = useQuery(trpc.agentLoop.getUsage.queryOptions());
 
   const providers = (providersData?.providers ?? []) as Provider[];
   const allModels = (modelsData?.models ?? []) as Model[];
@@ -95,13 +93,16 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   }, [providers]);
 
   // Get the best default model for a provider (prefer recommended)
-  const getDefaultModelForProvider = useCallback((providerId: string) => {
-    const providerModels = allModels.filter((m) => m.provider.id === providerId);
-    if (providerModels.length === 0) return undefined;
-    const recommended = providerModels.find((m) => m.isRecommended);
-    if (recommended) return recommended;
-    return providerModels[0];
-  }, [allModels]);
+  const getDefaultModelForProvider = useCallback(
+    (providerId: string) => {
+      const providerModels = allModels.filter((m) => m.provider.id === providerId);
+      if (providerModels.length === 0) return undefined;
+      const recommended = providerModels.find((m) => m.isRecommended);
+      if (recommended) return recommended;
+      return providerModels[0];
+    },
+    [allModels],
+  );
 
   // Set default provider/model when data loads
   useEffect(() => {
@@ -161,12 +162,12 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   // Computed values
   const availableModels = useMemo(
     () => allModels.filter((m) => m.provider.id === selectedProviderId),
-    [allModels, selectedProviderId]
+    [allModels, selectedProviderId],
   );
 
   const selectedProvider = providers.find((p) => p.id === selectedProviderId);
   const selectedModel = allModels.find((m) => m.id === selectedModelId);
-  
+
   // Find credential for selected provider
   const credentialForProvider = useMemo(() => {
     if (!selectedProviderId || !credentialsData?.credentials) return null;
@@ -233,7 +234,16 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
     );
     const hasValidIterations = runMode === "manual" || (iterations >= 1 && iterations <= 100);
     return hasRequiredFields && hasValidIterations;
-  }, [selectedInstallationId, repository, branch, planFile, selectedProviderId, selectedModelId, runMode, iterations]);
+  }, [
+    selectedInstallationId,
+    repository,
+    branch,
+    planFile,
+    selectedProviderId,
+    selectedModelId,
+    runMode,
+    iterations,
+  ]);
 
   const isSubmitting = createAgentLoopMutation.isPending;
 
@@ -428,8 +438,8 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-2">
             <Label className="text-sm font-medium">AI Provider</Label>
-            <Select 
-              value={selectedProviderId} 
+            <Select
+              value={selectedProviderId}
               onValueChange={handleProviderChange}
               disabled={isLoadingProviders}
             >
@@ -452,25 +462,26 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
                     return a.displayName.localeCompare(b.displayName);
                   })
                   .map((p) => (
-                  <SelectItem 
-                    key={p.id} 
-                    value={p.id}
-                    className={p.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}                  >
-                    <div className="flex items-center gap-2">
-                      <Image
-                        src={getProviderLogo(p.name)}
-                        alt={p.displayName}
-                        width={16}
-                        height={16}
-                        className="h-4 w-4"
-                      />
-                      {p.displayName}
-                      {p.isRecommended && (
-                        <span className="text-xs text-muted-foreground">Recommended</span>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
+                    <SelectItem
+                      key={p.id}
+                      value={p.id}
+                      className={p.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Image
+                          src={getProviderLogo(p.name)}
+                          alt={p.displayName}
+                          width={16}
+                          height={16}
+                          className="h-4 w-4"
+                        />
+                        {p.displayName}
+                        {p.isRecommended && (
+                          <span className="text-xs text-muted-foreground">Recommended</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -500,21 +511,22 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
                     return a.displayName.localeCompare(b.displayName);
                   })
                   .map((m) => (
-                  <SelectItem 
-                    key={m.id} 
-                    value={m.id}
-                    className={m.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}                  >
-                    <div className="flex items-center gap-2">
-                      {m.displayName}
-                      {m.isRecommended && (
-                        <span className="text-xs text-muted-foreground">Recommended</span>
-                      )}
-                      {m.isFree && (
-                        <span className="text-xs text-primary ml-2 opacity-80">(Free)</span>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
+                    <SelectItem
+                      key={m.id}
+                      value={m.id}
+                      className={m.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}
+                    >
+                      <div className="flex items-center gap-2">
+                        {m.displayName}
+                        {m.isRecommended && (
+                          <span className="text-xs text-muted-foreground">Recommended</span>
+                        )}
+                        {m.isFree && (
+                          <span className="text-xs text-primary ml-2 opacity-80">(Free)</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -564,7 +576,8 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
                 Number of Iterations
               </Label>
               <span className="text-xs text-primary font-semibold bg-accent px-2 py-0.5 rounded-md ml-2">
-                {typeof quotaData?.usage?.monthlyRuns === "number" && typeof quotaData?.usage?.extraRuns === "number"
+                {typeof quotaData?.usage?.monthlyRuns === "number" &&
+                typeof quotaData?.usage?.extraRuns === "number"
                   ? `Runs Left: ${quotaData.usage.monthlyRuns + quotaData.usage.extraRuns}`
                   : "Runs Left: -"}
               </span>
@@ -573,7 +586,10 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
               id="iterations"
               type="number"
               min={1}
-              max={Math.max(1, (quotaData?.usage?.monthlyRuns ?? 100) + (quotaData?.usage?.extraRuns ?? 0))}
+              max={Math.max(
+                1,
+                (quotaData?.usage?.monthlyRuns ?? 100) + (quotaData?.usage?.extraRuns ?? 0),
+              )}
               value={iterations}
               onChange={(e) => setIterations(Math.max(1, parseInt(e.target.value) || 1))}
               className="bg-secondary/30 border-border/50 focus:border-accent"

@@ -84,7 +84,7 @@ const baseSchema = z
 
     // Tunnel
     TUNNEL_JWT_SECRET: optional,
-    AGENT_JWT_SECRET: optional,
+    CLI_JWT_SECRET: optional,
     WORKSPACE_JWT_SECRET: optional,
 
     // Encryption (for storing API keys/credentials)

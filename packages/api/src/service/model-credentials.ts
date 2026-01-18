@@ -520,7 +520,9 @@ export class ModelCredentialsService {
       return newTokens.accessToken;
     }
 
-    throw new Error(`OAuth refresh not supported for provider: ${decrypted.providerName} (plugin: ${decrypted.plugin})`);
+    throw new Error(
+      `OAuth refresh not supported for provider: ${decrypted.providerName} (plugin: ${decrypted.plugin})`,
+    );
   }
 
   // ==================== Runtime Credential Access ====================
@@ -561,7 +563,7 @@ export class ModelCredentialsService {
     // Re-fetch the credential after refresh to get updated tokens
     await this.refreshOAuthTokenIfNeeded(credentialId, userId);
     const refreshedCred = await this.getCredential(credentialId, userId);
-    
+
     if (!refreshedCred || refreshedCred.credential.type !== "oauth") {
       throw new Error("Failed to get refreshed OAuth credential");
     }

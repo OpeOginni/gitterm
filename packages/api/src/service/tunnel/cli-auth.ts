@@ -1,23 +1,23 @@
-import { agentJWT } from "./agent-jwt";
+import { cliJWT } from "./cli-jwt";
 import { tunnelJWT } from "./tunnel-jwt";
 import { DeviceCodeRepository } from "@gitterm/redis";
 import { db, eq } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 
-export class AgentAuthService {
+export class CLIAutheService {
   private deviceRepo = new DeviceCodeRepository();
 
-  async exchangeDeviceCode(deviceCode: string): Promise<{ agentToken: string } | null> {
+  async exchangeDeviceCode(deviceCode: string): Promise<{ cliToken: string } | null> {
     const consumed = await this.deviceRepo.consumeApprovedDeviceCode(deviceCode);
     if (!consumed) return null;
-    return { agentToken: agentJWT.generateToken({ userId: consumed.userId }) };
+    return { cliToken: cliJWT.generateToken({ userId: consumed.userId }) };
   }
 
-  async mintTunnelToken(params: { agentToken: string; workspaceId: string }) {
+  async mintTunnelToken(params: { cliToken: string; workspaceId: string }) {
     let payload: { userId: string };
     try {
-      payload = agentJWT.verifyToken(params.agentToken);
+      payload = cliJWT.verifyToken(params.cliToken);
     } catch {
       throw new Error("Unauthorized");
     }
@@ -56,14 +56,14 @@ export class AgentAuthService {
   }
 
   async updateWorkspacePorts(params: {
-    agentToken: string;
+    cliToken: string;
     workspaceId: string;
     localPort: number;
     exposedPorts: Record<string, { port: number; description?: string }>;
   }) {
     let payload: { userId: string };
     try {
-      payload = agentJWT.verifyToken(params.agentToken);
+      payload = cliJWT.verifyToken(params.cliToken);
     } catch {
       throw new Error("Unauthorized");
     }

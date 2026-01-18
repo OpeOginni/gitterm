@@ -1,0 +1,49 @@
+{
+  "name": "gitterm",
+  "version": "0.0.1",
+  "description": "Complete suit of gitterm tools in one CLI",
+  "keywords": [
+    "gitterm",
+    "localtunnel",
+    "opencode",
+    "sync",
+    "tunnel"
+  ],
+  "homepage": "https://gitterm.dev",
+  "license": "MIT",
+  "author": "Opeyemi Oginni",
+  "bin": {
+    "gitterm": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev:local": "bun --hot src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "prepublishOnly": "bun run build",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@opencode-ai/sdk": "^1.1.24",
+    "@types/yargs": "^17.0.35",
+    "chalk": "^5.6.2",
+    "drizzle-orm": "catalog:",
+    "xdg-basedir": "^5.1.0",
+    "yargs": "^18.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@gitterm/config": "workspace:*",
+    "@types/bun": "^1.2.6",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

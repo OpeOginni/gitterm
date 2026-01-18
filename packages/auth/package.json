@@ -18,7 +18,7 @@
     "better-auth": "catalog:",
     "discord.js": "^14.25.1",
     "dotenv": "catalog:",
-    "drizzle-orm": "^0.44.2",
+    "drizzle-orm": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

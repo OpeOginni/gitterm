@@ -260,7 +260,7 @@ export const workspaceRouter = router({
           .select({ count: sql<number>`count(*)` })
           .from(workspace)
           .where(statusCondition);
-        
+
         const total = Number(countResult?.count ?? 0);
 
         // Fetch paginated workspaces

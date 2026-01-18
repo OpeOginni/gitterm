@@ -59,7 +59,7 @@ export function CredentialSelector({
   showLabel = true,
 }: CredentialSelectorProps) {
   const { data: credentialsData, isLoading } = useQuery(
-    trpc.modelCredentials.listMyCredentials.queryOptions()
+    trpc.modelCredentials.listMyCredentials.queryOptions(),
   );
 
   const allCredentials = (credentialsData?.credentials ?? []) as Credential[];
@@ -70,7 +70,7 @@ export function CredentialSelector({
   // Memoize filtered credentials to avoid unnecessary recalculations
   const providerCredentials = useMemo(
     () => allCredentials.filter((c) => c.providerName === providerName && c.isActive),
-    [allCredentials, providerName]
+    [allCredentials, providerName],
   );
 
   const hasStoredCredentials = providerCredentials.length > 0;
@@ -185,7 +185,7 @@ export function CredentialSelector({
  */
 export function hasCredentialSelected(
   credentialId: string | undefined,
-  requiresCredential: boolean
+  requiresCredential: boolean,
 ): boolean {
   if (!requiresCredential) return true;
   return !!credentialId;

@@ -314,10 +314,11 @@ function InstanceCard({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/50 transition-colors">
-                  {isLocal ? 
-                  <Terminal className="h-6 w-6 transition-colors text-primary" /> : 
-                  <Box className="h-6 w-6 transition-colors text-primary" />
-                  }
+                  {isLocal ? (
+                    <Terminal className="h-6 w-6 transition-colors text-primary" />
+                  ) : (
+                    <Box className="h-6 w-6 transition-colors text-primary" />
+                  )}
                 </div>
                 <div className="flex flex-col min-w-0">
                   <CardTitle className="text-sm font-semibold truncate">

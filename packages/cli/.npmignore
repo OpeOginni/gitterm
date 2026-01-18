@@ -1,0 +1,25 @@
+# Source files (we publish compiled dist/)
+src/
+
+# Config files
+tsconfig.json
+.env
+.env.*
+.env.example
+
+# Dev files
+*.test.ts
+*.spec.ts
+__tests__/
+coverage/
+
+# Build artifacts we don't need
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

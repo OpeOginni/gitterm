@@ -4,7 +4,7 @@ import { protectedProcedure, publicProcedure, router } from "../index";
 import { db, eq } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { tunnelJWT } from "../service/tunnel/tunnel-jwt";
-import { agentJWT } from "../service/tunnel/agent-jwt";
+import { cliJWT } from "../service/tunnel/cli-jwt";
 
 export const tunnelRouter = router({
   mintToken: protectedProcedure
@@ -60,17 +60,17 @@ export const tunnelRouter = router({
     }),
 
   // Mint a tunnel token using an agent access token (device-code flow).
-  mintTokenWithAgentToken: publicProcedure
+  mintTokenWithCliToken: publicProcedure
     .input(
       z.object({
         workspaceId: z.string().min(1),
-        agentToken: z.string().min(1),
+        cliToken: z.string().min(1),
       }),
     )
     .mutation(async ({ input }) => {
       let payload: { userId: string };
       try {
-        payload = agentJWT.verifyToken(input.agentToken);
+        payload = cliJWT.verifyToken(input.cliToken);
       } catch (error) {
         throw new TRPCError({
           code: "UNAUTHORIZED",

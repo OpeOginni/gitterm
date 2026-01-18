@@ -120,8 +120,7 @@ export type UserPlan = "free" | "tunnel" | "pro";
 /**
  * Plan features available for gating
  */
-export type PlanFeature =
-  | "customTunnelSubdomain" // Custom subdomain for local tunnels
+export type PlanFeature = "customTunnelSubdomain"; // Custom subdomain for local tunnels
 
 // ============================================================================
 // Plan Feature Matrix

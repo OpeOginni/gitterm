@@ -126,11 +126,11 @@ export function ModelCredentialsSection() {
 
   // Queries
   const { data: providersData, isLoading: isLoadingProviders } = useQuery(
-    trpc.modelCredentials.listProviders.queryOptions()
+    trpc.modelCredentials.listProviders.queryOptions(),
   );
 
   const { data: credentialsData, isLoading: isLoadingCredentials } = useQuery(
-    trpc.modelCredentials.listMyCredentials.queryOptions()
+    trpc.modelCredentials.listMyCredentials.queryOptions(),
   );
 
   const providers = (providersData?.providers ?? []) as Provider[];
@@ -184,10 +184,10 @@ export function ModelCredentialsSection() {
     }
     try {
       const parsed = JSON.parse(authJsonInput) as AuthJson;
-      
+
       // Look for openai key (could be "openai" or the tokens directly)
       let entry: AuthJsonEntry | undefined;
-      
+
       if (parsed.openai && parsed.openai.type === "oauth") {
         entry = parsed.openai;
       } else if ((parsed as unknown as AuthJsonEntry).type === "oauth") {
@@ -227,7 +227,7 @@ export function ModelCredentialsSection() {
       onError: (error) => {
         toast.error(`Failed to save API key: ${error.message}`);
       },
-    })
+    }),
   );
 
   const storeOAuthTokensMutation = useMutation(
@@ -240,7 +240,7 @@ export function ModelCredentialsSection() {
       onError: (error) => {
         toast.error(`Failed to save tokens: ${error.message}`);
       },
-    })
+    }),
   );
 
   const initiateOAuthMutation = useMutation(
@@ -262,7 +262,7 @@ export function ModelCredentialsSection() {
         toast.error(`Failed to start OAuth: ${error.message}`);
         setOauthStep("idle");
       },
-    })
+    }),
   );
 
   const pollOAuthMutation = useMutation(
@@ -277,24 +277,30 @@ export function ModelCredentialsSection() {
           });
         } else if (data.status === "pending") {
           // Keep polling
-          setTimeout(() => {
-            if (deviceCode) {
-              pollOAuthMutation.mutate({
-                deviceCode: deviceCode.deviceCode,
-                providerName: selectedProvider?.name ?? "",
-              });
-            }
-          }, (deviceCode?.interval ?? 5) * 1000);
+          setTimeout(
+            () => {
+              if (deviceCode) {
+                pollOAuthMutation.mutate({
+                  deviceCode: deviceCode.deviceCode,
+                  providerName: selectedProvider?.name ?? "",
+                });
+              }
+            },
+            (deviceCode?.interval ?? 5) * 1000,
+          );
         } else if (data.status === "slow_down") {
           // Slow down polling
-          setTimeout(() => {
-            if (deviceCode) {
-              pollOAuthMutation.mutate({
-                deviceCode: deviceCode.deviceCode,
-                providerName: selectedProvider?.name ?? "",
-              });
-            }
-          }, ((deviceCode?.interval ?? 5) + 5) * 1000);
+          setTimeout(
+            () => {
+              if (deviceCode) {
+                pollOAuthMutation.mutate({
+                  deviceCode: deviceCode.deviceCode,
+                  providerName: selectedProvider?.name ?? "",
+                });
+              }
+            },
+            ((deviceCode?.interval ?? 5) + 5) * 1000,
+          );
         } else {
           const errorMsg = "error" in data ? data.error : "Unknown error";
           toast.error(`OAuth failed: ${errorMsg}`);
@@ -306,7 +312,7 @@ export function ModelCredentialsSection() {
         toast.error(`OAuth polling failed: ${error.message}`);
         setOauthStep("idle");
       },
-    })
+    }),
   );
 
   const completeOAuthMutation = useMutation(
@@ -320,7 +326,7 @@ export function ModelCredentialsSection() {
         toast.error(`Failed to complete OAuth: ${error.message}`);
         setOauthStep("idle");
       },
-    })
+    }),
   );
 
   const revokeCredentialMutation = useMutation(
@@ -332,7 +338,7 @@ export function ModelCredentialsSection() {
       onError: (error) => {
         toast.error(`Failed to revoke: ${error.message}`);
       },
-    })
+    }),
   );
 
   const deleteCredentialMutation = useMutation(
@@ -346,7 +352,7 @@ export function ModelCredentialsSection() {
       onError: (error) => {
         toast.error(`Failed to delete: ${error.message}`);
       },
-    })
+    }),
   );
 
   const handleSubmitApiKey = () => {
@@ -367,13 +373,15 @@ export function ModelCredentialsSection() {
     });
   };
 
-  const parseAndValidateAuthJson = (input: string): { refresh: string; access?: string; expires?: number } | null => {
+  const parseAndValidateAuthJson = (
+    input: string,
+  ): { refresh: string; access?: string; expires?: number } | null => {
     try {
       const parsed = JSON.parse(input) as AuthJson;
-      
+
       // Look for openai key (could be "openai" or the tokens directly)
       let entry: AuthJsonEntry | undefined;
-      
+
       if (parsed.openai && parsed.openai.type === "oauth") {
         entry = parsed.openai;
       } else if ((parsed as unknown as AuthJsonEntry).type === "oauth") {
@@ -382,7 +390,9 @@ export function ModelCredentialsSection() {
       }
 
       if (!entry) {
-        setAuthJsonError("Could not find OpenAI OAuth tokens. Make sure you copy the auth.json content from ~/.local/share/opencode/auth.json");
+        setAuthJsonError(
+          "Could not find OpenAI OAuth tokens. Make sure you copy the auth.json content from ~/.local/share/opencode/auth.json",
+        );
         return null;
       }
 
@@ -435,7 +445,7 @@ export function ModelCredentialsSection() {
     }
 
     setOauthStep("polling");
-    
+
     initiateOAuthMutation.mutate({
       providerName: selectedProvider.name,
     });
@@ -522,29 +532,33 @@ export function ModelCredentialsSection() {
                           return a.displayName.localeCompare(b.displayName);
                         })
                         .map((provider) => (
-                        <SelectItem 
-                          key={provider.id} 
-                          value={provider.id}
-                          className={provider.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}                  
-                        >
-                          <div className="flex items-center gap-2">
-                            <Image
-                              src={getProviderLogo(provider.name)}
-                              alt={provider.displayName}
-                              width={16}
-                              height={16}
-                              className="h-4 w-4"
-                            />
-                            {provider.displayName}
-                            {provider.isRecommended && (
-                              <span className="text-xs text-muted-foreground">Recommended</span>
-                            )}
-                            {provider.authType === "oauth" && (
-                              <span className="text-xs text-muted-foreground/70">OAuth</span>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
+                          <SelectItem
+                            key={provider.id}
+                            value={provider.id}
+                            className={
+                              provider.isRecommended
+                                ? "border-l-2 border-l-primary rounded-none"
+                                : ""
+                            }
+                          >
+                            <div className="flex items-center gap-2">
+                              <Image
+                                src={getProviderLogo(provider.name)}
+                                alt={provider.displayName}
+                                width={16}
+                                height={16}
+                                className="h-4 w-4"
+                              />
+                              {provider.displayName}
+                              {provider.isRecommended && (
+                                <span className="text-xs text-muted-foreground">Recommended</span>
+                              )}
+                              {provider.authType === "oauth" && (
+                                <span className="text-xs text-muted-foreground/70">OAuth</span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -595,14 +609,19 @@ export function ModelCredentialsSection() {
                           Paste tokens from OpenCode CLI
                         </p>
                         <p className="text-xs text-blue-600 dark:text-blue-400">
-                          1. Run <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">opencode auth login</code> and authenticate with OpenAI (ChatGPT Pro/Plus)
+                          1. Run{" "}
+                          <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">
+                            opencode auth login
+                          </code>{" "}
+                          and authenticate with OpenAI (ChatGPT Pro/Plus)
                         </p>
                         <p className="text-xs text-blue-600 dark:text-blue-400">
-                          2. Copy contents of <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">~/.local/share/opencode/auth.json</code>
+                          2. Copy contents of{" "}
+                          <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">
+                            ~/.local/share/opencode/auth.json
+                          </code>
                         </p>
-                        <p className="text-xs text-blue-600 dark:text-blue-400">
-                          3. Paste below
-                        </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">3. Paste below</p>
                       </div>
                     </div>
 
@@ -644,7 +663,8 @@ export function ModelCredentialsSection() {
                     <div className="flex items-start gap-2 text-xs text-muted-foreground p-3 rounded-lg bg-muted/50">
                       <Shield className="h-4 w-4 shrink-0 mt-0.5 text-green-500" />
                       <p>
-                        Your tokens are encrypted at rest and will be automatically refreshed when needed.
+                        Your tokens are encrypted at rest and will be automatically refreshed when
+                        needed.
                       </p>
                     </div>
                   </div>
@@ -658,7 +678,10 @@ export function ModelCredentialsSection() {
                         <p className="text-sm text-center text-muted-foreground">
                           Click below to connect your GitHub account for Copilot access.
                         </p>
-                        <Button onClick={handleStartOAuth} disabled={initiateOAuthMutation.isPending}>
+                        <Button
+                          onClick={handleStartOAuth}
+                          disabled={initiateOAuthMutation.isPending}
+                        >
                           {initiateOAuthMutation.isPending ? (
                             <>
                               <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -782,94 +805,94 @@ export function ModelCredentialsSection() {
           <div className="text-center py-8 text-muted-foreground">
             <Key className="h-10 w-10 mx-auto mb-3 opacity-50" />
             <p className="text-sm">No credentials saved</p>
-            <p className="text-xs mt-1">
-              Add your first credential to enable automated agent runs
-            </p>
+            <p className="text-xs mt-1">Add your first credential to enable automated agent runs</p>
           </div>
         ) : (
           <div className="space-y-3">
             {credentials.map((credential) => {
               const isRecommended = isProviderRecommended(credential.providerName, providers);
               return (
-              <div
-                key={credential.id}
-                className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                  credential.isActive
-                    ? isRecommended 
-                      ? "border-l-2 border-l-primary border-border/50 bg-secondary/20 hover:bg-secondary/30"
-                      : "border-border/50 bg-secondary/20 hover:bg-secondary/30"
-                    : "border-border/30 bg-muted/20 opacity-60"
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                    <Image
-                      src={getProviderLogo(credential.providerName)}
-                      alt={credential.providerDisplayName}
-                      width={20}
-                      height={20}
-                      className="h-5 w-5"
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{credential.providerDisplayName}</p>
-                      {isRecommended && credential.isActive && (
-                        <span className="text-xs text-muted-foreground">Recommended</span>
-                      )}
-                      {credential.label && (
-                        <Badge variant="outline" className="text-xs">
-                          {credential.label}
-                        </Badge>
-                      )}
-                      {!credential.isActive && (
-                        <Badge variant="destructive" className="text-xs">
-                          Revoked
-                        </Badge>
-                      )}
-                      {credential.authType === "oauth" && (
-                        <span className="text-xs text-muted-foreground/70">OAuth</span>
-                      )}
+                <div
+                  key={credential.id}
+                  className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                    credential.isActive
+                      ? isRecommended
+                        ? "border-l-2 border-l-primary border-border/50 bg-secondary/20 hover:bg-secondary/30"
+                        : "border-border/50 bg-secondary/20 hover:bg-secondary/30"
+                      : "border-border/30 bg-muted/20 opacity-60"
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                      <Image
+                        src={getProviderLogo(credential.providerName)}
+                        alt={credential.providerDisplayName}
+                        width={20}
+                        height={20}
+                        className="h-5 w-5"
+                      />
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="font-mono">...{credential.keyHash.slice(-8)}</span>
-                      {credential.lastUsedAt && (
-                        <span>
-                          Last used{" "}
-                          {new Date(credential.lastUsedAt).toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </span>
-                      )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{credential.providerDisplayName}</p>
+                        {isRecommended && credential.isActive && (
+                          <span className="text-xs text-muted-foreground">Recommended</span>
+                        )}
+                        {credential.label && (
+                          <Badge variant="outline" className="text-xs">
+                            {credential.label}
+                          </Badge>
+                        )}
+                        {!credential.isActive && (
+                          <Badge variant="destructive" className="text-xs">
+                            Revoked
+                          </Badge>
+                        )}
+                        {credential.authType === "oauth" && (
+                          <span className="text-xs text-muted-foreground/70">OAuth</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="font-mono">...{credential.keyHash.slice(-8)}</span>
+                        {credential.lastUsedAt && (
+                          <span>
+                            Last used{" "}
+                            {new Date(credential.lastUsedAt).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {credential.isActive && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {credential.isActive && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            revokeCredentialMutation.mutate({ credentialId: credential.id })
+                          }
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Revoke
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
-                        onClick={() => revokeCredentialMutation.mutate({ credentialId: credential.id })}
+                        onClick={() => handleDeleteClick(credential.id)}
+                        className="text-red-600 focus:text-red-600"
                       >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Revoke
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onClick={() => handleDeleteClick(credential.id)}
-                      className="text-red-600 focus:text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               );
             })}
           </div>

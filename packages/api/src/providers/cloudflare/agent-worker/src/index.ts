@@ -4,7 +4,6 @@ import { OpencodeClient, type BadRequestError, type NotFoundError } from "@openc
 import type { SandboxConfig, SandboxCredential } from "../../../compute";
 
 export { Sandbox } from "@cloudflare/sandbox";
-
 /**
  * Set up authentication for the AI provider.
  * For API keys, use the SDK auth.set method.
@@ -37,16 +36,16 @@ async function setupAuth(
   // OAuth auth - write auth.json file
   // The sandbox runs as root, so the path is /root/.local/share/opencode/auth.json
   const authJsonPath = "/root/.local/share/opencode/auth.json";
-  
+
   // Map provider names to their auth.json key
   // Both openai and openai-codex (Codex subscription) should use "openai" as the key
   // since only one can be used in a sandbox at a time
   const providerKeyMap: Record<string, string> = {
-    "openai": "openai",
+    openai: "openai",
     "openai-codex": "openai",
   };
   const authJsonKey = providerKeyMap[credential.providerName] ?? credential.providerName;
-  
+
   // Build the auth.json content
   const authJson: Record<string, unknown> = {};
   authJson[authJsonKey] = {
@@ -59,10 +58,12 @@ async function setupAuth(
   try {
     // Ensure the directory exists using the sandbox API
     await sandbox.mkdir("/root/.local/share/opencode", { recursive: true });
-    
+
     // Write the auth.json file
     await sandbox.writeFile(authJsonPath, JSON.stringify(authJson, null, 2));
-    console.log(`OAuth auth.json written with key "${authJsonKey}" for provider ${credential.providerName}`);
+    console.log(
+      `OAuth auth.json written with key "${authJsonKey}" for provider ${credential.providerName}`,
+    );
     return { success: true };
   } catch (error) {
     console.error(`Failed to write auth.json:`, error);
@@ -155,7 +156,7 @@ fi
   // Set up authentication based on credential type
   console.log(`Setting auth for provider ${providerId}...`);
   const authResult = await setupAuth(sandbox, client as OpencodeClient, providerId, credential);
-  
+
   if (!authResult.success) {
     return {
       success: false,
@@ -289,7 +290,6 @@ export default {
     });
 
     try {
-
       await sandbox.setEnvVars({
         AGENT_CALLBACK_URL: config.callbackUrl,
         AGENT_CALLBACK_SECRET: config.callbackSecret,
@@ -297,16 +297,16 @@ export default {
         SANDBOX_ID: config.userSandboxId,
       });
 
-      const result = await executeAgentRun(
-        config,
-        sandbox,
-      );
+      const result = await executeAgentRun(config, sandbox);
 
       if (result.error) {
-        return Response.json({
-          success: false,
-          error: result.error,
-        }, { status: 500 });
+        return Response.json(
+          {
+            success: false,
+            error: result.error,
+          },
+          { status: 500 },
+        );
       }
 
       return Response.json({
@@ -314,7 +314,6 @@ export default {
         message: "Run completed",
         result,
       });
-
     } catch (error) {
       console.error("Failed to execute agent run:", error);
 

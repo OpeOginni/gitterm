@@ -1,21 +1,16 @@
-#!/usr/bin/env node
 import { z } from "zod";
-import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 import chalk from "chalk";
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
+import { loadConfig, saveConfig, loginViaDeviceCode } from "./auth.js";
+import type { BodyInit } from "bun";
 
 // Default production URLs (hosted gitterm.dev)
 const DEFAULT_WS_URL = "wss://tunnel.gitterm.dev/tunnel/connect";
-const DEFAULT_SERVER_URL = "https://api.gitterm.dev";
 const DEFAULT_BASE_DOMAIN = "gitterm.dev";
 
 /**
  * Construct a workspace URL from subdomain
  */
-function getWorkspaceUrl(
+export function getWorkspaceUrl(
   subdomain: string,
   cfg?: { routingMode?: "path" | "subdomain"; baseDomain?: string; serverUrl?: string },
 ): string {
@@ -36,7 +31,7 @@ function getWorkspaceUrl(
 /**
  * Construct a service URL (for exposed ports)
  */
-function getServiceUrl(
+export function getServiceUrl(
   mainSubdomain: string,
   serviceName: string,
   cfg?: { routingMode?: "path" | "subdomain"; baseDomain?: string; serverUrl?: string },
@@ -56,7 +51,7 @@ function getServiceUrl(
   return `${protocol}://${serviceName}-${mainSubdomain}.${baseDomain}`;
 }
 
-const frameSchema = z.object({
+export const frameSchema = z.object({
   type: z.enum(["auth", "open", "close", "ping", "pong", "request", "response", "data", "error"]),
   id: z.string(),
   method: z.string().optional(),
@@ -73,7 +68,7 @@ const frameSchema = z.object({
   timestamp: z.number().optional(),
 });
 
-type Frame = z.infer<typeof frameSchema>;
+export type Frame = z.infer<typeof frameSchema>;
 
 function base64ToBytes(data: string): Uint8Array {
   return new Uint8Array(Buffer.from(data, "base64"));
@@ -91,126 +86,14 @@ function headersToRecord(headers: Headers): Record<string, string> {
   return out;
 }
 
-type AgentConfig = {
-  serverUrl: string;
-  cliToken: string;
-  createdAt: number;
-};
-
-function getConfigPath(): string {
-  return join(homedir(), ".config", "gitterm", "agent.json");
-}
-
-async function ensureConfigDir() {
-  const configPath = getConfigPath();
-  await mkdir(dirname(configPath), { recursive: true });
-}
-
-async function loadConfig(): Promise<AgentConfig | null> {
-  const path = getConfigPath();
-  try {
-    const text = await readFile(path, "utf-8");
-    const parsed = JSON.parse(text) as AgentConfig;
-    if (!parsed.cliToken || !parsed.serverUrl) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-async function saveConfig(config: AgentConfig) {
-  await ensureConfigDir();
-  await writeFile(getConfigPath(), JSON.stringify(config, null, 2), "utf-8");
-}
-
-async function deleteConfig() {
-  const path = getConfigPath();
-  try {
-    await unlink(path);
-  } catch {
-    // ignore if file doesn't exist
-  }
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-type DeviceCodeResponse = {
-  deviceCode: string;
-  userCode: string;
-  verificationUri: string;
-  intervalSeconds: number;
-  expiresInSeconds: number;
-};
-
-async function loginViaDeviceCode(serverUrl: string): Promise<{ cliToken: string }> {
-  const codeRes = await fetch(new URL("/api/device/code", serverUrl), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ clientName: "@opeoginni/gitterm-agent" }),
-  });
-  if (!codeRes.ok) throw new Error(`Failed to start device login: ${codeRes.status}`);
-
-  const codeJson = (await codeRes.json()) as DeviceCodeResponse;
-
-  console.log("To sign in, visit:");
-  console.log(`  ${codeJson.verificationUri}`);
-  console.log("And enter code:");
-  console.log(`  ${codeJson.userCode}`);
-
-  const deadline = Date.now() + codeJson.expiresInSeconds * 1000;
-  while (Date.now() < deadline) {
-    const tokenRes = await fetch(new URL("/api/device/token", serverUrl), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ deviceCode: codeJson.deviceCode }),
-    });
-
-    if (tokenRes.ok) {
-      const tokenJson = (await tokenRes.json()) as { accessToken: string };
-      return { cliToken: tokenJson.accessToken };
-    }
-
-    // 428 = authorization_pending
-    if (tokenRes.status !== 428) {
-      const errText = await tokenRes.text().catch(() => "");
-      throw new Error(`Login failed: ${tokenRes.status} ${errText}`);
-    }
-
-    await sleep(Math.max(1, codeJson.intervalSeconds) * 1000);
-  }
-
-  throw new Error("Device code expired; try again.");
-}
-
-type LoginArgs = {
-  serverUrl: string;
-};
-
-async function runLogin(args: LoginArgs) {
-  console.log(`Logging in to gitterm...`);
-
-  const { cliToken } = await loginViaDeviceCode(args.serverUrl);
-  await saveConfig({ serverUrl: args.serverUrl, cliToken, createdAt: Date.now() });
-  console.log("Logged in successfully!");
-  process.exit(0);
-}
-
-async function runLogout() {
-  await deleteConfig();
-  console.log("Logged out successfully. Credentials cleared.");
-  process.exit(0);
-}
-
-type AgentConnectConfig = {
+export type AgentConnectConfig = {
   serverUrl: string;
   wsUrl: string;
   routingMode: "path" | "subdomain";
   baseDomain: string;
 };
 
-async function mintTunnelToken(params: {
+export async function mintTunnelToken(params: {
   serverUrl: string;
   cliToken: string;
   workspaceId: string;
@@ -246,7 +129,7 @@ async function mintTunnelToken(params: {
   return json;
 }
 
-async function updateWorkspacePorts(params: {
+export async function updateWorkspacePorts(params: {
   serverUrl: string;
   cliToken: string;
   workspaceId: string;
@@ -292,7 +175,7 @@ function prompt(question: string): Promise<string> {
   });
 }
 
-type ConnectArgs = {
+export type TunnelArgs = {
   workspaceId: string;
   port?: number;
   wsUrl?: string;
@@ -301,7 +184,7 @@ type ConnectArgs = {
   expose?: string[];
 };
 
-function parseExposeArgs(exposeArgs: string[] | undefined): Record<string, number> {
+export function parseExposeArgs(exposeArgs: string[] | undefined): Record<string, number> {
   const exposed: Record<string, number> = {};
   if (!exposeArgs) return exposed;
 
@@ -315,7 +198,7 @@ function parseExposeArgs(exposeArgs: string[] | undefined): Record<string, numbe
   return exposed;
 }
 
-async function runConnect(args: ConnectArgs) {
+export async function runTunnel(args: TunnelArgs) {
   const targetBase = "http://localhost";
 
   let token = args.token;
@@ -669,101 +552,3 @@ async function runConnect(args: ConnectArgs) {
 
   process.exit(0);
 }
-
-// CLI setup with yargs
-yargs(hideBin(process.argv))
-  .scriptName("gitterm-agent")
-  .usage("$0 <command> [options]")
-  .command(
-    "login",
-    "Sign in via device-code flow",
-    (yargs) => {
-      return yargs.option("server-url", {
-        alias: "s",
-        type: "string",
-        description: "Server base URL",
-        default: DEFAULT_SERVER_URL,
-      });
-    },
-    async (argv) => {
-      try {
-        await runLogin({ serverUrl: argv.serverUrl });
-      } catch (err) {
-        console.error(err instanceof Error ? err.message : err);
-        process.exit(1);
-      }
-    },
-  )
-  .command(
-    "logout",
-    "Clear saved credentials",
-    () => {},
-    async () => {
-      try {
-        await runLogout();
-      } catch (err) {
-        console.error(err instanceof Error ? err.message : err);
-        process.exit(1);
-      }
-    },
-  )
-  .command(
-    "connect",
-    "Connect a local port to your workspace",
-    (yargs) => {
-      return yargs
-        .option("workspace-id", {
-          alias: "w",
-          type: "string",
-          description: "Workspace ID",
-          demandOption: true,
-        })
-        .option("port", {
-          alias: "p",
-          type: "number",
-          description: "Local port to expose",
-        })
-        .option("ws-url", {
-          type: "string",
-          description: "Tunnel-proxy WebSocket URL",
-        })
-        .option("server-url", {
-          alias: "s",
-          type: "string",
-          description: "Server base URL",
-          default: DEFAULT_SERVER_URL,
-        })
-        .option("token", {
-          alias: "t",
-          type: "string",
-          description: "Tunnel JWT (overrides saved login)",
-        })
-        .option("expose", {
-          alias: "e",
-          type: "array",
-          string: true,
-          description: "Expose additional service port (name=port)",
-        });
-    },
-    async (argv) => {
-      try {
-        await runConnect({
-          workspaceId: argv.workspaceId,
-          port: argv.port,
-          wsUrl: argv.wsUrl,
-          serverUrl: argv.serverUrl,
-          token: argv.token,
-          expose: argv.expose,
-        });
-      } catch (err) {
-        console.error(err instanceof Error ? err.message : err);
-        process.exit(1);
-      }
-    },
-  )
-  .demandCommand(1, "Please specify a command")
-  .help()
-  .alias("help", "h")
-  .version(false)
-  .strict()
-  .parse();

@@ -40,7 +40,6 @@ const schema = z.object({
   POLAR_RUN_PACK_50_PRODUCT_ID: optional,
   POLAR_RUN_PACK_100_PRODUCT_ID: optional,
 
-
   ENABLE_BILLING: boolWithDefault(false),
 });
 

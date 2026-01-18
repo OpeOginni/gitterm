@@ -11,7 +11,12 @@ import { modelProvider, model } from "./schema/model-credentials";
  * - Never delete or modify existing items
  */
 
-const seedCloudProviders = [{ name: "Railway" }, { name: "AWS" }, { name: "Local" }, { name: "Cloudflare", isSandbox: true }];
+const seedCloudProviders = [
+  { name: "Railway" },
+  { name: "AWS" },
+  { name: "Local" },
+  { name: "Cloudflare", isSandbox: true },
+];
 
 const seedAgentTypes = [
   { name: "OpenCode", serverOnly: false },
@@ -127,7 +132,7 @@ const seedModelProviders = [
     authType: "api_key",
     plugin: null,
     oauthConfig: null,
-  }
+  },
 ];
 
 const seedModels = [

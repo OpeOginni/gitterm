@@ -325,7 +325,11 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
               </ul>
             </CardContent>
             <CardFooter className="border-t pt-6">
-              <Button onClick={() => handleUpgrade("pro")} disabled={isLoading} className="w-full bg-primary/70 text-primary-foreground hover:bg-primary/75">
+              <Button
+                onClick={() => handleUpgrade("pro")}
+                disabled={isLoading}
+                className="w-full bg-primary/70 text-primary-foreground hover:bg-primary/75"
+              >
                 {isLoading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (

@@ -47,7 +47,11 @@ export function LandingHeader() {
 
         <div className="flex items-center gap-3">
           {isHomePage && (
-            <Link href="https://github.com/OpeOginni/gitterm" target="_blank" className="group/github">
+            <Link
+              href="https://github.com/OpeOginni/gitterm"
+              target="_blank"
+              className="group/github"
+            >
               <Button
                 variant="outline"
                 size="sm"

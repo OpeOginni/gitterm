@@ -98,11 +98,11 @@ export class AgentLoopService {
     // - pending runs can always be started
     // - running runs can be restarted if they're stalled (exceeded timeout)
     const isPending = run.status === "pending";
-    const isStalled = run.status === "running" && 
-      run.startedAt.getTime() < Date.now() - AGENT_LOOP_RUN_TIMEOUT_MS;
+    const isStalled =
+      run.status === "running" && run.startedAt.getTime() < Date.now() - AGENT_LOOP_RUN_TIMEOUT_MS;
 
     const isHalted = run.status === "halted";
-    
+
     if (!isPending && !isStalled && !isHalted) {
       return {
         success: false,

@@ -278,7 +278,9 @@ export const modelCredentialsRouter = router({
       try {
         // Use the provider's plugin to determine which OAuth service to use
         if (provider.plugin === "copilot-auth") {
-          const deviceCode = await GitHubCopilotOAuthService.initiateDeviceCode(input.enterpriseUrl);
+          const deviceCode = await GitHubCopilotOAuthService.initiateDeviceCode(
+            input.enterpriseUrl,
+          );
 
           return {
             success: true,
@@ -295,7 +297,8 @@ export const modelCredentialsRouter = router({
         if (provider.plugin === "codex-auth") {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "OpenAI Codex requires manual token paste from OpenCode CLI auth.json. Please use the 'Paste auth.json' option.",
+            message:
+              "OpenAI Codex requires manual token paste from OpenCode CLI auth.json. Please use the 'Paste auth.json' option.",
           });
         }
 

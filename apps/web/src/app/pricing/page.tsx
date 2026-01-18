@@ -11,7 +11,15 @@ import {
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
-import { CheckCircle2, Terminal, Zap, ExternalLink, ArrowRight, Loader2, Package } from "lucide-react";
+import {
+  CheckCircle2,
+  Terminal,
+  Zap,
+  ExternalLink,
+  ArrowRight,
+  Loader2,
+  Package,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
@@ -79,7 +87,7 @@ const PLAN_TIERS: PlanTier[] = [
       "100 sandbox runs / month",
       "Max 40 min per run",
       "Custom tunnel subdomain included",
-      "Built for professional workflows"
+      "Built for professional workflows",
     ],
     popular: true,
     actionLabel: "Go Pro",
@@ -462,7 +470,8 @@ function PricingPageContent() {
               ))}
             </section>
             <p className="text-center text-sm text-muted-foreground mt-4">
-              Pro subscribers get 100 runs/month included ($0.20/run value). Run packs are great for power users who need more.
+              Pro subscribers get 100 runs/month included ($0.20/run value). Run packs are great for
+              power users who need more.
             </p>
           </div>
 

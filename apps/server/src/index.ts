@@ -5,7 +5,7 @@ import { createContext } from "@gitterm/api/context";
 import { appRouter, proxyResolverRouter } from "@gitterm/api/routers/index";
 import { auth } from "@gitterm/auth";
 import { DeviceCodeService } from "@gitterm/api/service/tunnel/device-code";
-import { AgentAuthService } from "@gitterm/api/service/tunnel/agent-auth";
+import { CLIAutheService } from "@gitterm/api/service/tunnel/cli-auth";
 import { getGitHubAppService } from "@gitterm/api/service/github";
 
 import { Hono } from "hono";
@@ -47,7 +47,7 @@ function toTunnelWsUrl(origin: string): string {
 
 const app = new Hono();
 const deviceCodeService = new DeviceCodeService();
-const agentAuthService = new AgentAuthService();
+const agentAuthService = new CLIAutheService();
 
 app.use(logger());
 app.use(
@@ -146,7 +146,7 @@ app.post("/api/device/token", async (c) => {
   if (!result) return c.json({ error: "authorization_pending" }, 428);
 
   return c.json({
-    accessToken: result.agentToken,
+    accessToken: result.cliToken,
     tokenType: "Bearer",
     expiresInSeconds: 30 * 24 * 60 * 60,
   });
@@ -164,7 +164,7 @@ app.post("/api/agent/tunnel-token", async (c) => {
 
   try {
     const result = await agentAuthService.mintTunnelToken({
-      agentToken: token,
+      cliToken: token,
       workspaceId: body.workspaceId,
     });
     const publicOrigin = getPublicOriginFromRequest(c.req.raw);
@@ -207,7 +207,7 @@ app.post("/api/agent/workspace-ports", async (c) => {
 
   try {
     const result = await agentAuthService.updateWorkspacePorts({
-      agentToken: token,
+      cliToken: token,
       workspaceId: body.workspaceId,
       localPort: body.localPort,
       exposedPorts: body.exposedPorts ?? {},

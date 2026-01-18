@@ -1,11 +1,11 @@
 /**
  * Agent Loop Configuration Constants
- * 
+ *
  * These values are used across the agent loop system:
  * - Sandbox sleepAfter timeout (in agent-worker/src/index.ts - must be updated manually there)
  * - UI to determine if a run is stuck/dead
  * - Any timeout-related logic
- * 
+ *
  * NOTE: The Cloudflare agent-worker cannot import this file directly.
  * If you change AGENT_LOOP_RUN_TIMEOUT_MINUTES, also update the sleepAfter
  * value in packages/api/src/providers/cloudflare/agent-worker/src/index.ts

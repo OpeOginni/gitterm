@@ -73,22 +73,24 @@ export const agentLoopRouter = router({
 
     if (!existingQuota) {
       const plan = ctx.session.user.plan ?? "free";
-      const [newQuota] = await db.insert(userLoopRunQuota).values({
-        userId,
-        plan: plan,
-        monthlyRuns: MONTHLY_RUN_QUOTAS[plan],
-        extraRuns: 0,
-        nextMonthlyResetAt: addMonths(new Date(), 1),
-      })
-      .returning();
-      if(!newQuota) {
+      const [newQuota] = await db
+        .insert(userLoopRunQuota)
+        .values({
+          userId,
+          plan: plan,
+          monthlyRuns: MONTHLY_RUN_QUOTAS[plan],
+          extraRuns: 0,
+          nextMonthlyResetAt: addMonths(new Date(), 1),
+        })
+        .returning();
+      if (!newQuota) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create user loop run quota",
         });
       }
 
-      if(newQuota.monthlyRuns < input.maxRuns) {
+      if (newQuota.monthlyRuns < input.maxRuns) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Not enough runs available. Please lower your max runs or upgrade your plan.",
@@ -96,12 +98,16 @@ export const agentLoopRouter = router({
       }
     } else {
       // Reset monthly runs if the billing period has ended
-      if(existingQuota.nextMonthlyResetAt < new Date()) {
-        const [updatedQuota] = await db.update(userLoopRunQuota).set({
-          monthlyRuns: MONTHLY_RUN_QUOTAS[ctx.session.user.plan ?? "free"],
-          nextMonthlyResetAt: addMonths(new Date(), 1),
-        }).where(eq(userLoopRunQuota.userId, userId)).returning();
-        if(!updatedQuota) {
+      if (existingQuota.nextMonthlyResetAt < new Date()) {
+        const [updatedQuota] = await db
+          .update(userLoopRunQuota)
+          .set({
+            monthlyRuns: MONTHLY_RUN_QUOTAS[ctx.session.user.plan ?? "free"],
+            nextMonthlyResetAt: addMonths(new Date(), 1),
+          })
+          .where(eq(userLoopRunQuota.userId, userId))
+          .returning();
+        if (!updatedQuota) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to update user loop run quota",
@@ -110,7 +116,7 @@ export const agentLoopRouter = router({
       }
 
       // Check if the user has enough runs available
-      if(existingQuota.monthlyRuns + existingQuota.extraRuns < input.maxRuns) {
+      if (existingQuota.monthlyRuns + existingQuota.extraRuns < input.maxRuns) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Not enough runs available. Please lower your max runs or upgrade your plan.",
@@ -442,9 +448,7 @@ export const agentLoopRouter = router({
       }
 
       // Delete the loop (runs are cascade deleted automatically)
-      await db
-        .delete(agentLoop)
-        .where(eq(agentLoop.id, input.loopId));
+      await db.delete(agentLoop).where(eq(agentLoop.id, input.loopId));
 
       return {
         success: true,
@@ -493,9 +497,11 @@ export const agentLoopRouter = router({
    * Automatically finds the user's credential for the loop's provider.
    */
   startRun: protectedProcedure
-    .input(z.object({ 
-      loopId: z.uuid(),
-    }))
+    .input(
+      z.object({
+        loopId: z.uuid(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
 
@@ -694,7 +700,8 @@ export const agentLoopRouter = router({
       }
 
       // Only allow restarting stalled runs (running for longer than the timeout) or halted runs
-      const isStalled = (existingRun.status === "running" || existingRun.status === "pending") && 
+      const isStalled =
+        (existingRun.status === "running" || existingRun.status === "pending") &&
         existingRun.startedAt.getTime() < Date.now() - AGENT_LOOP_RUN_TIMEOUT_MS;
 
       const isHalted = existingRun.status === "halted";
@@ -746,7 +753,7 @@ export const agentLoopRouter = router({
             console.error("Failed to refund quota after restart failure", error);
           }
         }
-        
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: result.error || "Failed to restart run",
@@ -942,28 +949,26 @@ export const agentLoopRouter = router({
       };
     }),
 
-    getUsage: protectedProcedure.query(async ({ ctx }) => {
-      const userId = ctx.session.user.id;
+  getUsage: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
 
-      const usage = await db.query.userLoopRunQuota.findFirst({
-        where: eq(userLoopRunQuota.userId, userId),
-      });
+    const usage = await db.query.userLoopRunQuota.findFirst({
+      where: eq(userLoopRunQuota.userId, userId),
+    });
 
-      if (!usage) {
-        return {
-          success: true,
-          usage: {
-            extraRuns: 0,
-            monthlyRuns: MONTHLY_RUN_QUOTAS[ctx.session.user.plan ?? "free"],
-          },
-        };
-      }
-
+    if (!usage) {
       return {
         success: true,
-        usage,
+        usage: {
+          extraRuns: 0,
+          monthlyRuns: MONTHLY_RUN_QUOTAS[ctx.session.user.plan ?? "free"],
+        },
       };
-    }),
+    }
 
-
+    return {
+      success: true,
+      usage,
+    };
+  }),
 });

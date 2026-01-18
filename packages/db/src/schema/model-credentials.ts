@@ -41,9 +41,7 @@ export const model = pgTable(
     isRecommended: boolean("is_recommended").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [
-    unique('model_provider_id_name').on(table.providerId, table.name),
-  ],
+  (table) => [unique("model_provider_id_name").on(table.providerId, table.name)],
 );
 
 /**
@@ -86,7 +84,11 @@ export const userModelCredential = pgTable(
   },
   (table) => [
     // One credential per provider+label per user
-    unique('user_model_credential_user_provider_label').on(table.userId, table.providerId, table.label),
+    unique("user_model_credential_user_provider_label").on(
+      table.userId,
+      table.providerId,
+      table.label,
+    ),
   ],
 );
 
