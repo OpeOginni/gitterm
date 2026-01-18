@@ -5,3 +5,7 @@
 - Implement server auth (https://github.com/anomalyco/opencode/commit/f0912ee838e72b4bedd567d0110fa840820ddf18)
 
 https://github.com/coder/ghostty-web
+
+- Implement endpoints to call upload of manifest and git snapshots - DONE
+- Implement DB table to store these - DONE
+- Implement how Workspaces will be able to import these session data and snapshots + files

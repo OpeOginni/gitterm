@@ -78,6 +78,11 @@ const baseSchema = z
     // Cloudflare
     CLOUDFLARE_WORKER_URL: optional,
     CLOUDFLARE_CALLBACK_SECRET: optional,
+    CLOUDFLARE_ACCOUNT_ID: optional,
+    CLOUDFLARE_ACCESS_KEY_ID: optional,
+    CLOUDFLARE_SECRET_ACCESS_KEY: optional,
+    CLOUDFLARE_BUCKET_NAME: optional,
+
 
     // Listener (for internal callbacks)
     LISTENER_URL: optional,
