@@ -18,8 +18,9 @@ const connectionManager = new ConnectionManager();
  * Extract workspace subdomain from request
  *
  * Supports two routing modes:
- * - Subdomain: Extract from Host header (ws-abc123.gitterm.dev -> ws-abc123)
+ * - Subdomain: Extract from Host header (abc123.gitterm.dev -> abc123)
  * - Path: Extract from URL path (/ws/abc123/... -> abc123) or X-Subdomain header
+ * - Port-based: Extract from URL path (/ws/123-abc123/... -> abc123)
  *
  * Priority:
  * 1. X-Subdomain header (set by Caddy forward_auth)

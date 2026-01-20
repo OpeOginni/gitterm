@@ -12,6 +12,18 @@ query Service($id: String!) {
   }
 }
 
+query GetPrivateNetworkEndpoint($environmentId: String!, $privateNetworkId: String!, $serviceId: String!) {
+  privateNetworkEndpoint(environmentId: $environmentId, privateNetworkId: $privateNetworkId, serviceId: $serviceId) {
+    dnsName
+  }
+}
+
+query GetProjectPrivateNetworkId($environmentId: String!) {
+  privateNetworks(environmentId: $environmentId) {
+    publicId
+  }
+}
+
 # ============================================================================
 # Mutations
 # ============================================================================
@@ -114,6 +126,7 @@ mutation ServiceDomainCreate($environmentId: String!, $serviceId: String!, $targ
   serviceDomainCreate(
     input: { environmentId: $environmentId, targetPort: $targetPort, serviceId: $serviceId }
   ) {
+    id
     domain
   }
 }

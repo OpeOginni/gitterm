@@ -57,7 +57,7 @@ app.use(
       if (!origin) return null;
 
       // Allow main web app domain (app.gitterm.dev or gitterm.dev)
-      // But NOT workspace subdomains (ws-123.gitterm.dev) - those go through proxy
+      // But NOT workspace subdomains (123.gitterm.dev) - those go through proxy
       const allowedOrigins = [`https://${env.BASE_DOMAIN}`, `http://${env.BASE_DOMAIN}`];
 
       if (origin.includes("localhost")) return origin;

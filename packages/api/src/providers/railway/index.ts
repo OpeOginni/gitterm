@@ -75,6 +75,7 @@ export class RailwayProvider implements ComputeProvider {
       });
 
     let publicDomain = "";
+    let privateDomain = "";
 
     if (PUBLIC_RAILWAY_DOMAINS) {
       const { serviceDomainCreate } = await railway
@@ -89,14 +90,42 @@ export class RailwayProvider implements ComputeProvider {
           throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
         });
 
-      publicDomain = serviceDomainCreate.domain;
+      publicDomain = `https://${serviceDomainCreate.domain}`;
+    } else {
+      const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId: ENVIRONMENT_ID })
+        .catch(async (error) => {
+          console.error("Railway API Error (GetProjectPrivateNetworkId):", error);
+          await railway.ServiceDelete({ id: serviceCreate.id });
+          throw new Error(`Railway API Error (GetProjectPrivateNetworkId): ${error.message}`);
+        });
+
+        if (!privateNetworks || privateNetworks.length === 0 || !privateNetworks[0]) {
+          await railway.ServiceDelete({ id: serviceCreate.id });
+          throw new Error("No private network found");
+        }
+
+        const privateNetworkId = privateNetworks[0].publicId;
+
+      const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId: ENVIRONMENT_ID, privateNetworkId: privateNetworkId, serviceId: serviceCreate.id })
+        .catch(async (error) => {
+          console.error("Railway API Error (GetPrivateNetworkEndpoint):", error);
+          await railway.ServiceDelete({ id: serviceCreate.id });
+          throw new Error(`Railway API Error (GetPrivateNetworkEndpoint): ${error.message}`);
+        });
+
+        privateDomain = privateNetworkEndpoint?.dnsName ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:7681` : `http://${config.subdomain}.railway.internal:7681`;
     }
 
+
+    console.log("publicDomain", publicDomain);
+    console.log("privateDomain", privateDomain);
+
     const upstreamUrl = PUBLIC_RAILWAY_DOMAINS
-      ? `https://${publicDomain}`
-      : `http://${config.subdomain}.railway.internal:7681`;
+      ? publicDomain
+      : privateDomain;
+
     const domain = PUBLIC_RAILWAY_DOMAINS
-      ? `https://${publicDomain}`
+      ? publicDomain
       : ROUTING_MODE === "path"
         ? BASE_DOMAIN.includes("localhost")
           ? `http://${BASE_DOMAIN}/ws/${config.subdomain}`
@@ -291,6 +320,59 @@ export class RailwayProvider implements ComputeProvider {
     // For now, assume running if the service exists
     // The actual status is tracked in our DB via webhooks
     return { status: "running" };
+  }
+
+  async createOrGetExposedPortDomain(externalServiceId: string, port: number): Promise<{ domain: string, externalPortDomainId?: string }> {
+    if (!ENVIRONMENT_ID) {
+      throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
+    }
+
+    if (PUBLIC_RAILWAY_DOMAINS) {
+      const { serviceDomainCreate } = await railway
+      .ServiceDomainCreate({
+        environmentId: ENVIRONMENT_ID,
+        serviceId: externalServiceId,
+        targetPort: port,
+      })
+      .catch(async (error) => {
+        console.error("Railway API Error (ServiceDomainCreate):", error);
+        throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
+      });
+
+      return { domain: `https://${serviceDomainCreate.domain}`, externalPortDomainId: serviceDomainCreate.id };
+    }
+
+    const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId: ENVIRONMENT_ID })
+      .catch(async (error) => {
+        console.error("Railway API Error (GetProjectPrivateNetworkId):", error);
+        throw new Error(`Railway API Error (GetProjectPrivateNetworkId): ${error.message}`);
+      });
+
+    if (!privateNetworks || privateNetworks.length === 0 || !privateNetworks[0]) {
+      throw new Error("No private network found");
+    }
+
+    const privateNetworkId = privateNetworks[0].publicId;
+
+    const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId: ENVIRONMENT_ID, privateNetworkId: privateNetworkId, serviceId: externalServiceId })
+      .catch(async (error) => {
+        console.error("Railway API Error (GetPrivateNetworkEndpoint):", error);
+        throw new Error(`Railway API Error (GetPrivateNetworkEndpoint): ${error.message}`);
+      });
+
+
+    const domain = privateNetworkEndpoint?.dnsName ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:${port}` : `http://${externalServiceId}.railway.internal:${port}`;
+
+    return { domain };
+  }
+
+  async removeExposedPortDomain(externalServiceDomainId: string): Promise<void> {
+    if (PUBLIC_RAILWAY_DOMAINS) {
+      await railway.ServiceDomainDelete({ serviceDomainId: externalServiceDomainId }).catch((error) => {
+        console.error("Railway API Error (ServiceDomainDelete):", error);
+        throw new Error(`Railway API Error (ServiceDomainDelete): ${error.message}`);
+      });
+    }
   }
 }
 

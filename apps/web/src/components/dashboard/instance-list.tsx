@@ -23,6 +23,9 @@ import {
   Server,
   ChevronLeft,
   ChevronRight,
+  EthernetPort,
+  X,
+  Plus,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
@@ -151,6 +154,9 @@ function InstanceCard({
   providers: CloudProvider[];
 }) {
   const [showConnectDialog, setShowConnectDialog] = useState(false);
+  const [showOpenPortDialog, setShowOpenPortDialog] = useState(false);
+  const [openPortForm, setOpenPortForm] = useState({ name: "", port: "" });
+  const [closingPort, setClosingPort] = useState<number | null>(null);
 
   const deleteServiceMutation = useMutation(
     trpc.workspace.deleteWorkspace.mutationOptions({
@@ -185,6 +191,33 @@ function InstanceCard({
       onError: (error) => {
         toast.error(`Failed to restart workspace: ${error.message}`);
       },
+    }),
+  );
+
+  const openWorkspacePortMutation = useMutation(
+    trpc.workspace.openWorkspacePort.mutationOptions({
+      onSuccess: () => {
+        toast.success("Port opened successfully");
+        queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
+        setShowOpenPortDialog(false);
+        setOpenPortForm({ name: "", port: "" });
+      },
+      onError: (error) => {
+        toast.error(`Failed to open port: ${error.message}`);
+      },
+    }),
+  );
+
+  const closeWorkspacePortMutation = useMutation(
+    trpc.workspace.closeWorkspacePort.mutationOptions({
+      onSuccess: () => {
+        toast.success("Port closed");
+        queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
+      },
+      onError: (error) => {
+        toast.error(`Failed to close port: ${error.message}`);
+      },
+      onSettled: () => setClosingPort(null),
     }),
   );
 
@@ -308,6 +341,84 @@ function InstanceCard({
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={showOpenPortDialog}
+        onOpenChange={(open) => {
+          setShowOpenPortDialog(open);
+          if (!open) setOpenPortForm({ name: "", port: "" });
+        }}
+      >
+        <DialogContent className="sm:max-w-[425px] border-border/50 bg-card">
+          <DialogHeader>
+            <DialogTitle>Open workspace port</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Expose a port from this workspace. Enter a short name and the port number.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const p = parseInt(openPortForm.port, 10);
+              if (isNaN(p) || p < 1 || p > 65535) {
+                toast.error("Port must be between 1 and 65535");
+                return;
+              }
+              openWorkspacePortMutation.mutate({
+                workspaceId: workspace.id,
+                port: p,
+                description: openPortForm.name.trim() || undefined,
+              });
+            }}
+          >
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="port-name">Name</Label>
+                <Input
+                  id="port-name"
+                  value={openPortForm.name}
+                  onChange={(e) => setOpenPortForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Opencode, API"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="port-num">Port</Label>
+                <Input
+                  id="port-num"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={openPortForm.port}
+                  onChange={(e) => setOpenPortForm((f) => ({ ...f, port: e.target.value }))}
+                  placeholder="e.g. 7681"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowOpenPortDialog(false)}
+                className="border-border/50"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={openWorkspacePortMutation.isPending}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {openWorkspacePortMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Open port"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <Card className="group overflow-hidden border-primary/10 bg-card/50 backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 flex flex-col">
         <CardHeader className="pb-3 px-5 pt-5">
           <div className="flex flex-col gap-3">
@@ -383,6 +494,66 @@ function InstanceCard({
                 >
                   {workspaceDisplayUrl}
                 </button>
+              </div>
+            )}
+            {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
+              (isRunning && !isLocal)) && (
+              <div className="flex items-start gap-2 mt-0.5 min-w-0">
+                <EthernetPort className="h-3.5 w-3.5 shrink-0 mt-px" />
+                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                  {workspace.exposedPorts &&
+                    Object.entries(workspace.exposedPorts).map(([port, exposedPort]) => {
+                      const portNum = parseInt(port, 10);
+                      const isClosing = closingPort === portNum;
+                      return (
+                        <div
+                          key={port}
+                          className="flex items-center gap-1.5 min-w-0"
+                        >
+                          <span className="text-xs truncate min-w-0">
+                            {`${exposedPort.name ?? "Port"} -> :${port}`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClosingPort(portNum);
+                              closeWorkspacePortMutation.mutate({
+                                workspaceId: workspace.id,
+                                port: portNum,
+                              });
+                            }}
+                            disabled={isClosing}
+                            className="shrink-0 p-0.5 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
+                            aria-label={`Remove port ${port}`}
+                          >
+                            {isClosing ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <X className="h-3 w-3" />
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  {isRunning && !isLocal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowOpenPortDialog(true);
+                        setOpenPortForm({ name: "", port: "" });
+                      }}
+                      className={`inline-flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-primary transition-colors w-fit focus:outline-none focus:ring-1 focus:ring-ring focus:ring-offset-0 rounded ${
+                        workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0
+                          ? "mt-0.5"
+                          : ""
+                      }`}
+                      aria-label="Open port"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Open port
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

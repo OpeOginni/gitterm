@@ -70,7 +70,7 @@ export const workspace = pgTable("workspace", {
   reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
   localPort: integer("local_port"), // primary local port for hostingType=local
   exposedPorts: jsonb("exposed_ports").$type<
-    Record<string, { port: number; description?: string }>
+    Record<string, { port: number; name?: string; upstreamUrl?: string; externalPortDomainId?: string }>
   >(),
   tunnelConnectedAt: timestamp("tunnel_connected_at"),
   tunnelLastPingAt: timestamp("tunnel_last_ping_at"),

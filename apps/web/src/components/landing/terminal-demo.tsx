@@ -236,7 +236,7 @@ function CloudProvisionDemo() {
               </div>
               <div className="flex items-center gap-2 pl-4">
                 <span className="text-muted-foreground">→</span>
-                <span className="text-green-500 font-medium">https://ws-abc123.gitterm.dev</span>
+                <span className="text-green-500 font-medium">https://abc123.gitterm.dev</span>
               </div>
             </div>
           )}

@@ -119,7 +119,6 @@
 
 			# Modify CSP header to allow data URIs for WebAssembly
 			header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
-	
 
 			transport http {
 				compression off
@@ -153,7 +152,6 @@
 
 				# Modify CSP header to allow data URIs for WebAssembly
 				header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
-		
 
 				transport http {
 					tls

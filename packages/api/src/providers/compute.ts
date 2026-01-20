@@ -79,6 +79,16 @@ export interface ComputeProvider {
    * Get current status of a workspace
    */
   getStatus(externalId: string): Promise<WorkspaceStatusResult>;
+
+  /**
+   * Create or get a domain for an exposed port
+   */
+  createOrGetExposedPortDomain(externalServiceId: string, port: number): Promise<{ domain: string, externalPortDomainId?: string }>;
+
+  /**
+   * Remove a domain for an exposed port
+   */
+  removeExposedPortDomain(externalServiceDomainId: string): Promise<void>;
 }
 
 /**

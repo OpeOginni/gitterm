@@ -42,7 +42,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [userAgentTypeId, setUserAgentTypeId] = useState<string | null>(null);
   const [userCloudProviderId, setUserCloudProviderId] = useState<string | null>(null);
   const [userRegionId, setUserRegionId] = useState<string | null>(null);
-  const [userGitInstallationId, setUserGitInstallationId] = useState<string>("none");
+  const [userGitIntegrationId, setuserGitIntegrationId] = useState<string>("none");
   const [persistent, setPersistent] = useState(true);
 
   // Data fetching
@@ -115,13 +115,13 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: selectedCloudProviderId,
       regionId: selectedRegion,
-      gitInstallationId: userGitInstallationId === "none" ? undefined : userGitInstallationId,
+      gitIntegrationId: userGitIntegrationId === "none" ? undefined : userGitIntegrationId,
       persistent,
       subdomain: subdomain || undefined,
     });
   };
 
-  const installations = installationsData?.installations;
+  const integrations = installationsData?.installations;
 
   return (
     <>
@@ -305,16 +305,16 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               </Link>
             </Label>
             <Select
-              value={userGitInstallationId}
-              onValueChange={setUserGitInstallationId}
-              disabled={installations && installations.length === 0}
+              value={userGitIntegrationId}
+              onValueChange={setuserGitIntegrationId}
+              disabled={integrations && integrations.length === 0}
             >
               <SelectTrigger className="bg-secondary/30 border-border/50">
                 <SelectValue
                   placeholder={
-                    installations && installations.length > 0
-                      ? "Select git installation"
-                      : "No git installations found"
+                    integrations && integrations.length > 0
+                      ? "Select git integration"
+                      : "No git integrations found"
                   }
                 />
               </SelectTrigger>
@@ -322,7 +322,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 <SelectItem value="none">
                   <div className="flex items-center">None</div>
                 </SelectItem>
-                {installations?.map((installation) => (
+                {integrations?.map((installation) => (
                   <SelectItem
                     key={installation.git_integration.id}
                     value={installation.git_integration.id}
