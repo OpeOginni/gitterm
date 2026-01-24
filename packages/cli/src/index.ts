@@ -3,7 +3,6 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { runTunnel } from "./cmd/tunnel.js";
 import { loginViaDeviceCode, saveConfig, deleteConfig } from "./cmd/auth.js";
-import { sync } from "./cmd/sync.js";
 
 // Default production URLs (hosted gitterm.dev)
 const DEFAULT_SERVER_URL = "https://api.gitterm.dev";
@@ -112,26 +111,6 @@ yargs(hideBin(process.argv))
           token: argv.token,
           expose: argv.expose,
         });
-      } catch (err) {
-        console.error(err instanceof Error ? err.message : err);
-        process.exit(1);
-      }
-    },
-  )
-  .command(
-    "sync",
-    "Sync a project to your workspace",
-    (yargs) => {
-      return yargs.option("server", {
-        alias: "s",
-        type: "string",
-        description: "Server base URL",
-        default: DEFAULT_SERVER_URL,
-      });
-    },
-    async (argv) => {
-      try {
-        await sync(argv.server);
       } catch (err) {
         console.error(err instanceof Error ? err.message : err);
         process.exit(1);

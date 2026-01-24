@@ -266,6 +266,7 @@
     "packages/db": {
       "name": "@gitterm/db",
       "dependencies": {
+        "@gitterm/schema": "workspace:*",
         "dotenv": "catalog:",
         "drizzle-orm": "catalog:",
         "pg": "^8.14.1",

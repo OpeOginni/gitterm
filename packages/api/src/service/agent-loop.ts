@@ -151,7 +151,7 @@ export class AgentLoopService {
 
       // Build callback URL - uses API_URL (server) for the webhook
       const listenerUrl = env.LISTENER_URL || env.BASE_URL;
-      const callbackSecret = env.CLOUDFLARE_CALLBACK_SECRET;
+      const callbackSecret = (await cloudflareSandboxProvider.getConfig())?.callbackSecret;
 
       if (!listenerUrl || !callbackSecret) {
         throw new Error(

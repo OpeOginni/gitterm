@@ -45,6 +45,7 @@ export enum ActiveFeatureFlag {
   LoginWithRailway = 'LOGIN_WITH_RAILWAY',
   MagicConfig = 'MAGIC_CONFIG',
   PostgresHa = 'POSTGRES_HA',
+  PostgresMetrics = 'POSTGRES_METRICS',
   PriorityBoarding = 'PRIORITY_BOARDING',
   RawSqlQueries = 'RAW_SQL_QUERIES'
 }
@@ -59,6 +60,7 @@ export enum ActivePlatformFlag {
   CtrdImageStoreRollout = 'CTRD_IMAGE_STORE_ROLLOUT',
   DemoPercentageRollout = 'DEMO_PERCENTAGE_ROLLOUT',
   EnableRawSqlQueries = 'ENABLE_RAW_SQL_QUERIES',
+  LwwCanvasRollout = 'LWW_CANVAS_ROLLOUT',
   ScylladbRoutingEnabled = 'SCYLLADB_ROUTING_ENABLED',
   ServiceinstanceDataloaderForStaticUrl = 'SERVICEINSTANCE_DATALOADER_FOR_STATIC_URL',
   SplitUsageQueries = 'SPLIT_USAGE_QUERIES',
@@ -227,6 +229,18 @@ export enum CdnProvider {
   Unrecognized = 'UNRECOGNIZED'
 }
 
+/** The type of error that occurred during certificate issuance */
+export enum CertificateErrorType {
+  CertificateErrorTypeAuthorizationFailed = 'CERTIFICATE_ERROR_TYPE_AUTHORIZATION_FAILED',
+  CertificateErrorTypeDnsValidation = 'CERTIFICATE_ERROR_TYPE_DNS_VALIDATION',
+  CertificateErrorTypeInternal = 'CERTIFICATE_ERROR_TYPE_INTERNAL',
+  CertificateErrorTypeKeyGeneration = 'CERTIFICATE_ERROR_TYPE_KEY_GENERATION',
+  CertificateErrorTypeOrderCreation = 'CERTIFICATE_ERROR_TYPE_ORDER_CREATION',
+  CertificateErrorTypeRateLimit = 'CERTIFICATE_ERROR_TYPE_RATE_LIMIT',
+  CertificateErrorTypeUnspecified = 'CERTIFICATE_ERROR_TYPE_UNSPECIFIED',
+  Unrecognized = 'UNRECOGNIZED'
+}
+
 export type CertificatePublicData = {
   __typename?: 'CertificatePublicData';
   domainNames: Array<Scalars['String']['output']>;
@@ -344,6 +358,12 @@ export type CustomDomainCreateInput = {
 export type CustomDomainStatus = {
   __typename?: 'CustomDomainStatus';
   cdnProvider?: Maybe<CdnProvider>;
+  /** Human-readable error message when certificate issuance fails */
+  certificateErrorMessage?: Maybe<Scalars['String']['output']>;
+  /** Structured error type for programmatic handling */
+  certificateErrorType?: Maybe<CertificateErrorType>;
+  /** Whether the certificate issuance can be retried */
+  certificateRetryable?: Maybe<Scalars['Boolean']['output']>;
   certificateStatus: CertificateStatus;
   certificateStatusDetailed?: Maybe<CertificateStatusDetailed>;
   certificates?: Maybe<Array<CertificatePublicData>>;
@@ -698,6 +718,12 @@ export type DomainAvailable = {
 export type DomainWithStatus = {
   __typename?: 'DomainWithStatus';
   cdnProvider?: Maybe<CdnProvider>;
+  /** Human-readable error message when certificate issuance fails */
+  certificateErrorMessage?: Maybe<Scalars['String']['output']>;
+  /** Structured error type for programmatic handling */
+  certificateErrorType?: Maybe<CertificateErrorType>;
+  /** Whether the certificate issuance can be retried */
+  certificateRetryable?: Maybe<Scalars['Boolean']['output']>;
   certificateStatus: CertificateStatus;
   certificateStatusDetailed?: Maybe<CertificateStatusDetailed>;
   certificates?: Maybe<Array<CertificatePublicData>>;
@@ -2768,6 +2794,7 @@ export enum PlatformFeatureFlag {
   CtrdImageStoreRollout = 'CTRD_IMAGE_STORE_ROLLOUT',
   DemoPercentageRollout = 'DEMO_PERCENTAGE_ROLLOUT',
   EnableRawSqlQueries = 'ENABLE_RAW_SQL_QUERIES',
+  LwwCanvasRollout = 'LWW_CANVAS_ROLLOUT',
   ScylladbRoutingEnabled = 'SCYLLADB_ROUTING_ENABLED',
   ServiceinstanceDataloaderForStaticUrl = 'SERVICEINSTANCE_DATALOADER_FOR_STATIC_URL',
   SplitUsageQueries = 'SPLIT_USAGE_QUERIES',
@@ -4663,6 +4690,8 @@ export type Service = Node & {
   /** @deprecated Use environment.deployments for properly scoped access control */
   deployments: ServiceDeploymentsConnection;
   featureFlags: Array<ActiveServiceFeatureFlag>;
+  /** Whether this service has hidden registry credentials from a template. When true, the credentials are stored in the template and used during deployment. */
+  hasHiddenRegistryCredentialsFromTemplate: Scalars['Boolean']['output'];
   icon?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];

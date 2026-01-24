@@ -1,5 +1,6 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "../routers/index";
+import env from "@gitterm/env/listener";
 
 /**
  * Create an internal tRPC client for service-to-service communication
@@ -37,8 +38,8 @@ export function getInternalClient() {
     // Lazy load to avoid issues when env is not available
     try {
       // Dynamic import would be better but causes issues with tRPC types
-      const serverUrl = process.env.SERVER_URL || "http://localhost:3000";
-      const apiKey = process.env.INTERNAL_API_KEY || "";
+      const serverUrl = env.SERVER_URL || "http://localhost:3000";
+      const apiKey = env.INTERNAL_API_KEY || "";
       _internalClient = createInternalClient(serverUrl, apiKey);
     } catch {
       throw new Error("Failed to create internal client - SERVER_URL or INTERNAL_API_KEY not set");

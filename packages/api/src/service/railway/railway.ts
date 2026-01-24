@@ -1,8 +1,7 @@
 import "dotenv/config";
 import { getSdk } from "./graphql/generated/railway";
-import env from "@gitterm/env/server";
-
-const RAILWAY_API_URL = env.RAILWAY_API_URL;
+import { getProviderConfigService } from "../provider-config";
+import type { RailwayConfig } from "../../providers/railway";
 
 // ============================================================================
 // GraphQL Request Function
@@ -28,19 +27,19 @@ class RailwayAPIError extends Error {
   }
 }
 
-function createRequester(token?: string) {
-  const apiToken = token ?? env.RAILWAY_API_TOKEN;
+function createRequester(url: string, token?: string) {
+  const apiToken = token
 
   return async <R, V>(doc: string, variables?: V): Promise<R> => {
     if (!apiToken) {
-      throw new RailwayAPIError("RAILWAY_API_TOKEN is not set");
+      throw new RailwayAPIError("Railway API Token is not set");
     }
 
-    if (!RAILWAY_API_URL) {
-      throw new RailwayAPIError("RAILWAY_API_URL is not set");
+    if (!url) {
+      throw new RailwayAPIError("Railway API URL is not set");
     }
 
-    const response = await fetch(RAILWAY_API_URL, {
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -79,13 +78,26 @@ function createRequester(token?: string) {
 // Railway Client Factory
 // ============================================================================
 
-export function createRailwayClient(token?: string) {
-  const requester = createRequester(token);
+export type RailwayClient = ReturnType<typeof getSdk>;
+
+let railwayClient: RailwayClient | null = null;
+
+export async function createRailwayClient(): Promise<RailwayClient | null> {
+  const dbConfig = await getProviderConfigService().getProviderConfigForUse("railway") as RailwayConfig | null;
+  if (!dbConfig) {
+    return null;
+  }
+  const requester = createRequester(dbConfig.apiUrl, dbConfig.apiToken);
   return getSdk(requester);
 }
 
-// Default client instance using env token
-export const railway = createRailwayClient();
+export async function getRailwayClient(): Promise<RailwayClient | null> {
+  if (railwayClient) {
+    return railwayClient;
+  }
+  railwayClient = await createRailwayClient();
+  return railwayClient;
+}
 
 // Re-export types for convenience
 export * from "./graphql/generated/railway";

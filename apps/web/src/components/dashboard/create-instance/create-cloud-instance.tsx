@@ -109,9 +109,12 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       return;
     }
 
+    const normalizedRepoUrl = repoUrl
+      .replace(/\.git$/, "");
+
     await createWorkspace({
       name: repoUrl.split("/").pop() || "new-workspace",
-      repo: repoUrl,
+      repo: normalizedRepoUrl,
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: selectedCloudProviderId,
       regionId: selectedRegion,
@@ -275,7 +278,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             >
               <SelectTrigger className="bg-secondary/30 border-border/50">
                 <SelectValue
-                  placeholder={availableRegions.length > 0 ? "Select region" : "Coming soon"}
+                  placeholder={availableRegions.length > 0 ? "Select region" : "No regions available"}
                 />
               </SelectTrigger>
               <SelectContent>
@@ -289,7 +292,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   <SelectItem value="no-regions" disabled>
                     <div className="flex items-center">
                       <AlertCircle className="mr-2 h-4 w-4" />
-                      Coming soon
+                      No regions available
                     </div>
                   </SelectItem>
                 )}

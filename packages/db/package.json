@@ -21,6 +21,7 @@
     "db:seed": "bun run ./src/seed-cli.ts"
   },
   "dependencies": {
+    "@gitterm/schema": "workspace:*",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "pg": "^8.14.1",

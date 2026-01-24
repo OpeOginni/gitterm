@@ -602,6 +602,44 @@ export const internalRouter = router({
         return { updated: updatedWorkspaces };
       }
 
+      if (input.type === "Deployment.failed" && input.details?.serviceId) {
+        const serviceId = input.details.serviceId;
+
+        const [railwayProvider] = await db
+          .select()
+          .from(cloudProvider)
+          .where(eq(cloudProvider.name, "Railway"));
+
+        if (!railwayProvider) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Railway provider not found in database",
+          });
+        }
+
+        const updatedWorkspaces = await db
+          .update(workspace)
+          .set({
+            status: "stopped",
+            updatedAt: new Date(input.timestamp),
+          })
+          .where(
+            and(
+              eq(workspace.cloudProviderId, railwayProvider.id),
+              eq(workspace.externalInstanceId, serviceId),
+            ),
+          )
+          .returning({
+            id: workspace.id,
+            status: workspace.status,
+            updatedAt: workspace.updatedAt,
+            userId: workspace.userId,
+            workspaceDomain: workspace.domain,
+          });
+
+        return { updated: updatedWorkspaces };
+      }
+
       return { updated: [] };
     }),
 

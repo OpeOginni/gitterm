@@ -31,6 +31,7 @@ import {
   canUseCustomTunnelSubdomain,
   type UserPlan,
 } from "../../config/features";
+import { getProviderConfigService } from "../../service/provider-config";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -782,6 +783,28 @@ export const workspaceRouter = router({
             code: "BAD_REQUEST",
             message: "Selected cloud provider is not available",
           });
+        }
+
+        const providerConfigService = getProviderConfigService();
+
+        if (cloudProviderRecord.name.toLowerCase() !== "local") {
+          if (!cloudProviderRecord.providerConfigId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Selected cloud provider is missing configuration",
+            });
+          }
+
+          const providerConfig = await providerConfigService.getProviderConfigById(
+            cloudProviderRecord.providerConfigId,
+          );
+
+          if (!providerConfig || !providerConfig.isEnabled) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Selected cloud provider is not configured",
+            });
+          }
         }
 
         // Determine if this is a local workspace

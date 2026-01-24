@@ -1,4 +1,4 @@
-import { railway } from "../../service/railway/railway";
+import { getRailwayClient, type RailwayClient } from "../../service/railway/railway";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -8,30 +8,67 @@ import type {
   WorkspaceStatusResult,
 } from "../compute";
 import env from "@gitterm/env/server";
+import { getProviderConfigService } from "../../service/provider-config";
 
-const PROJECT_ID = env.RAILWAY_PROJECT_ID;
-const ENVIRONMENT_ID = env.RAILWAY_ENVIRONMENT_ID;
 const BASE_DOMAIN = env.BASE_DOMAIN;
-const RAILWAY_DEFAULT_REGION = env.RAILWAY_DEFAULT_REGION;
-const PUBLIC_RAILWAY_DOMAINS = env.PUBLIC_RAILWAY_DOMAINS;
 const ROUTING_MODE = env.ROUTING_MODE;
+
+export interface RailwayConfig {
+  apiUrl: string;
+  apiToken: string;
+  projectId: string;
+  environmentId: string;
+  defaultRegion?: string;
+  publicRailwayDomains: boolean;
+}
 
 export class RailwayProvider implements ComputeProvider {
   readonly name = "railway";
+  private config: RailwayConfig | null = null;
 
-  async createWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
-    if (!PROJECT_ID) {
-      throw new Error("RAILWAY_PROJECT_ID is not set");
+  async getConfig(): Promise<RailwayConfig> {
+    if (this.config) {
+      return this.config;
     }
 
-    if (!ENVIRONMENT_ID) {
-      throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
+    const dbConfig = await getProviderConfigService().getProviderConfigForUse("railway");
+    if (!dbConfig) {
+      console.error("Railway provider is not configured.");
+      throw new Error(
+        "Railway provider is not configured. Please configure it in the admin panel."
+      );
+    }
+    this.config = dbConfig as RailwayConfig;
+    return this.config;
+  }
+
+  private async getClient(): Promise<RailwayClient> {
+    const railway = await getRailwayClient();
+    if (!railway) {
+      throw new Error(
+        "Railway provider is not configured. Please configure it in the admin panel."
+      );
+    }
+    return railway;
+  }
+
+  async createWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
+    const railwayConfig = await this.getConfig();
+    const railway = await this.getClient();
+    const { projectId, environmentId, defaultRegion, publicRailwayDomains } = railwayConfig;
+
+    if (!projectId) {
+      throw new Error("Railway project ID is not configured");
+    }
+
+    if (!environmentId) {
+      throw new Error("Railway environment ID is not configured");
     }
 
     const { serviceCreate } = await railway
       .ServiceCreate({
         input: {
-          projectId: PROJECT_ID,
+          projectId,
           name: config.subdomain,
           variables: config.environmentVariables,
         },
@@ -41,17 +78,18 @@ export class RailwayProvider implements ComputeProvider {
         throw new Error(`Railway API Error (ServiceCreate): ${error.message}`);
       });
 
+    const defaultRegionValue = defaultRegion || "us-east4-eqdc4a";
     const multiRegionConfig =
-      RAILWAY_DEFAULT_REGION === config.regionIdentifier
-        ? { [RAILWAY_DEFAULT_REGION]: { numReplicas: 1 } }
+      defaultRegionValue === config.regionIdentifier
+        ? { [defaultRegionValue]: { numReplicas:1 } }
         : {
-            [RAILWAY_DEFAULT_REGION]: null,
+            [defaultRegionValue]: null,
             [config.regionIdentifier]: { numReplicas: 1 },
           };
 
     await railway
       .serviceInstanceUpdate({
-        environmentId: ENVIRONMENT_ID,
+        environmentId,
         serviceId: serviceCreate.id,
         image: config.imageId,
         multiRegionConfig: multiRegionConfig,
@@ -64,7 +102,7 @@ export class RailwayProvider implements ComputeProvider {
 
     await railway
       .serviceInstanceDeploy({
-        environmentId: ENVIRONMENT_ID,
+        environmentId,
         serviceId: serviceCreate.id,
         latestCommit: true,
       })
@@ -77,10 +115,10 @@ export class RailwayProvider implements ComputeProvider {
     let publicDomain = "";
     let privateDomain = "";
 
-    if (PUBLIC_RAILWAY_DOMAINS) {
+    if (publicRailwayDomains) {
       const { serviceDomainCreate } = await railway
         .ServiceDomainCreate({
-          environmentId: ENVIRONMENT_ID,
+          environmentId,
           serviceId: serviceCreate.id,
           targetPort: 7681,
         })
@@ -92,7 +130,7 @@ export class RailwayProvider implements ComputeProvider {
 
       publicDomain = `https://${serviceDomainCreate.domain}`;
     } else {
-      const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId: ENVIRONMENT_ID })
+      const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId })
         .catch(async (error) => {
           console.error("Railway API Error (GetProjectPrivateNetworkId):", error);
           await railway.ServiceDelete({ id: serviceCreate.id });
@@ -106,7 +144,7 @@ export class RailwayProvider implements ComputeProvider {
 
         const privateNetworkId = privateNetworks[0].publicId;
 
-      const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId: ENVIRONMENT_ID, privateNetworkId: privateNetworkId, serviceId: serviceCreate.id })
+      const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId, privateNetworkId: privateNetworkId, serviceId: serviceCreate.id })
         .catch(async (error) => {
           console.error("Railway API Error (GetPrivateNetworkEndpoint):", error);
           await railway.ServiceDelete({ id: serviceCreate.id });
@@ -116,15 +154,14 @@ export class RailwayProvider implements ComputeProvider {
         privateDomain = privateNetworkEndpoint?.dnsName ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:7681` : `http://${config.subdomain}.railway.internal:7681`;
     }
 
-
     console.log("publicDomain", publicDomain);
     console.log("privateDomain", privateDomain);
 
-    const upstreamUrl = PUBLIC_RAILWAY_DOMAINS
+    const upstreamUrl = publicRailwayDomains
       ? publicDomain
       : privateDomain;
 
-    const domain = PUBLIC_RAILWAY_DOMAINS
+    const domain = publicRailwayDomains
       ? publicDomain
       : ROUTING_MODE === "path"
         ? BASE_DOMAIN.includes("localhost")
@@ -145,18 +182,26 @@ export class RailwayProvider implements ComputeProvider {
   async createPersistentWorkspace(
     config: PersistentWorkspaceConfig,
   ): Promise<PersistentWorkspaceInfo> {
-    if (!PROJECT_ID) {
-      throw new Error("RAILWAY_PROJECT_ID is not set");
+    const railwayConfig = await this.getConfig();
+    const railway = await this.getClient();
+    const { projectId, environmentId, defaultRegion, publicRailwayDomains } = railwayConfig;
+
+    if (!projectId) {
+      throw new Error("Railway project ID is not configured");
     }
 
-    if (!ENVIRONMENT_ID) {
-      throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
+    if (!environmentId) {
+      throw new Error("Railway environment ID is not configured");
+    }
+
+    if (!defaultRegion) {
+      throw new Error("Railway default region is not configured");
     }
 
     const { serviceCreate } = await railway
       .ServiceCreate({
         input: {
-          projectId: PROJECT_ID,
+          projectId: projectId,
           name: config.subdomain,
           variables: config.environmentVariables,
         },
@@ -167,16 +212,16 @@ export class RailwayProvider implements ComputeProvider {
       });
 
     const multiRegionConfig =
-      RAILWAY_DEFAULT_REGION === config.regionIdentifier
-        ? { [RAILWAY_DEFAULT_REGION]: { numReplicas: 1 } }
+      defaultRegion === config.regionIdentifier
+        ? { [defaultRegion]: { numReplicas: 1 } }
         : {
-            [RAILWAY_DEFAULT_REGION]: null,
+            [defaultRegion]: null,
             [config.regionIdentifier]: { numReplicas: 1 },
           };
 
     await railway
       .serviceInstanceUpdate({
-        environmentId: ENVIRONMENT_ID,
+        environmentId: environmentId,
         serviceId: serviceCreate.id,
         image: config.imageId,
         multiRegionConfig: multiRegionConfig,
@@ -189,8 +234,8 @@ export class RailwayProvider implements ComputeProvider {
 
     const { volumeCreate } = await railway
       .VolumeCreate({
-        projectId: PROJECT_ID,
-        environmentId: ENVIRONMENT_ID,
+        projectId: projectId,
+        environmentId: environmentId,
         serviceId: serviceCreate.id,
         mountPath: "/workspace",
         region: config.regionIdentifier,
@@ -203,7 +248,7 @@ export class RailwayProvider implements ComputeProvider {
 
     await railway
       .serviceInstanceDeploy({
-        environmentId: ENVIRONMENT_ID,
+        environmentId: environmentId,
         serviceId: serviceCreate.id,
         latestCommit: true,
       })
@@ -214,12 +259,12 @@ export class RailwayProvider implements ComputeProvider {
       });
 
     let publicDomain = "";
+    let privateDomain = "";
 
-    console.log("PUBLIC_RAILWAY_DOMAINS", PUBLIC_RAILWAY_DOMAINS);
-    if (PUBLIC_RAILWAY_DOMAINS) {
+    if (publicRailwayDomains) {
       const { serviceDomainCreate } = await railway
         .ServiceDomainCreate({
-          environmentId: ENVIRONMENT_ID,
+          environmentId: environmentId,
           serviceId: serviceCreate.id,
           targetPort: 7681,
         })
@@ -229,15 +274,42 @@ export class RailwayProvider implements ComputeProvider {
           throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
         });
 
-      publicDomain = serviceDomainCreate.domain;
-    }
-    console.log("publicDomain", publicDomain);
+      publicDomain = `https://${serviceDomainCreate.domain}`;
+    } else {
+      const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId: environmentId })
+        .catch(async (error) => {
+          console.error("Railway API Error (GetProjectPrivateNetworkId):", error);
+          await railway.ServiceDelete({ id: serviceCreate.id });
+          throw new Error(`Railway API Error (GetProjectPrivateNetworkId): ${error.message}`);
+        });
 
-    const upstreamUrl = PUBLIC_RAILWAY_DOMAINS
-      ? `https://${publicDomain}`
-      : `http://${config.subdomain}.railway.internal:7681`;
-    const domain = PUBLIC_RAILWAY_DOMAINS
-      ? `https://${publicDomain}`
+        if (!privateNetworks || privateNetworks.length === 0 || !privateNetworks[0]) {
+          await railway.ServiceDelete({ id: serviceCreate.id });
+          throw new Error("No private network found");
+        }
+
+        const privateNetworkId = privateNetworks[0].publicId;
+
+      const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId: environmentId, privateNetworkId: privateNetworkId, serviceId: serviceCreate.id })
+        .catch(async (error) => {
+          console.error("Railway API Error (GetPrivateNetworkEndpoint):", error);
+          await railway.ServiceDelete({ id: serviceCreate.id });
+          throw new Error(`Railway API Error (GetPrivateNetworkEndpoint): ${error.message}`);
+        });
+
+        privateDomain = privateNetworkEndpoint?.dnsName ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:7681` : `http://${config.subdomain}.railway.internal:7681`;
+    }
+
+
+    console.log("publicDomain", publicDomain);
+    console.log("privateDomain", privateDomain);
+
+    const upstreamUrl = publicRailwayDomains
+      ? publicDomain
+      : privateDomain;
+
+    const domain = publicRailwayDomains
+      ? publicDomain
       : ROUTING_MODE === "path"
         ? BASE_DOMAIN.includes("localhost")
           ? `http://${BASE_DOMAIN}/ws/${config.subdomain}`
@@ -261,8 +333,12 @@ export class RailwayProvider implements ComputeProvider {
     regionIdentifier: string,
     externalRunningDeploymentId?: string,
   ): Promise<void> {
-    if (!ENVIRONMENT_ID) {
-      throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
+    const railwayConfig = await this.getConfig();
+    const railway = await this.getClient();
+    const { environmentId } = railwayConfig;
+
+    if (!environmentId) {
+      throw new Error("Railway environment ID is not configured");
     }
 
     if (!externalRunningDeploymentId) {
@@ -280,8 +356,12 @@ export class RailwayProvider implements ComputeProvider {
     regionIdentifier: string,
     externalRunningDeploymentId?: string,
   ): Promise<void> {
-    if (!ENVIRONMENT_ID) {
-      throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
+    const railwayConfig = await this.getConfig();
+    const railway = await this.getClient();
+    const { environmentId } = railwayConfig;
+
+    if (!environmentId) {
+      throw new Error("Railway environment ID is not configured");
     }
 
     if (!externalRunningDeploymentId) {
@@ -295,6 +375,7 @@ export class RailwayProvider implements ComputeProvider {
   }
 
   async terminateWorkspace(externalServiceId: string, externalVolumeId?: string): Promise<void> {
+    const railway = await this.getClient();
     await railway.ServiceDelete({ id: externalServiceId }).catch((error) => {
       console.error("Railway API Error (ServiceDelete):", error);
       throw new Error(`Railway API Error (ServiceDelete): ${error.message}`);
@@ -309,6 +390,7 @@ export class RailwayProvider implements ComputeProvider {
   }
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
+    const railway = await this.getClient();
     const result = await railway.Service({ id: externalId });
 
     // Railway doesn't have a direct status field, so we infer from service existence
@@ -323,14 +405,18 @@ export class RailwayProvider implements ComputeProvider {
   }
 
   async createOrGetExposedPortDomain(externalServiceId: string, port: number): Promise<{ domain: string, externalPortDomainId?: string }> {
-    if (!ENVIRONMENT_ID) {
-      throw new Error("RAILWAY_ENVIRONMENT_ID is not set");
+    const railwayConfig = await this.getConfig();
+    const railway = await this.getClient();
+    const { environmentId, publicRailwayDomains } = railwayConfig;
+
+    if (!environmentId) {
+      throw new Error("Railway environment ID is not configured");
     }
 
-    if (PUBLIC_RAILWAY_DOMAINS) {
+    if (publicRailwayDomains) {
       const { serviceDomainCreate } = await railway
       .ServiceDomainCreate({
-        environmentId: ENVIRONMENT_ID,
+        environmentId: environmentId,
         serviceId: externalServiceId,
         targetPort: port,
       })
@@ -342,7 +428,7 @@ export class RailwayProvider implements ComputeProvider {
       return { domain: `https://${serviceDomainCreate.domain}`, externalPortDomainId: serviceDomainCreate.id };
     }
 
-    const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId: ENVIRONMENT_ID })
+    const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId: environmentId })
       .catch(async (error) => {
         console.error("Railway API Error (GetProjectPrivateNetworkId):", error);
         throw new Error(`Railway API Error (GetProjectPrivateNetworkId): ${error.message}`);
@@ -354,7 +440,7 @@ export class RailwayProvider implements ComputeProvider {
 
     const privateNetworkId = privateNetworks[0].publicId;
 
-    const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId: ENVIRONMENT_ID, privateNetworkId: privateNetworkId, serviceId: externalServiceId })
+    const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId: environmentId, privateNetworkId: privateNetworkId, serviceId: externalServiceId })
       .catch(async (error) => {
         console.error("Railway API Error (GetPrivateNetworkEndpoint):", error);
         throw new Error(`Railway API Error (GetPrivateNetworkEndpoint): ${error.message}`);
@@ -367,7 +453,9 @@ export class RailwayProvider implements ComputeProvider {
   }
 
   async removeExposedPortDomain(externalServiceDomainId: string): Promise<void> {
-    if (PUBLIC_RAILWAY_DOMAINS) {
+    const railwayConfig = await this.getConfig();
+    const railway = await this.getClient();
+    if (railwayConfig) {
       await railway.ServiceDomainDelete({ serviceDomainId: externalServiceDomainId }).catch((error) => {
         console.error("Railway API Error (ServiceDomainDelete):", error);
         throw new Error(`Railway API Error (ServiceDomainDelete): ${error.message}`);

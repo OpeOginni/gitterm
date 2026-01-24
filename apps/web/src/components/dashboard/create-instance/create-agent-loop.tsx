@@ -52,6 +52,7 @@ interface Provider {
 
 // Helper to get provider logo path
 const getProviderLogo = (providerName: string): string => {
+  console.log("providerName", providerName);
   return `/${providerName}.svg`;
 };
 
@@ -81,6 +82,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   const [iterations, setIterations] = useState(5);
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const [selectedSandboxProviderId, setSelectedSandboxProviderId] = useState<string>("");
 
   // Get the best default provider (prefer recommended, specifically Zen first)
   const getDefaultProvider = useCallback(() => {
@@ -114,6 +116,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
     }
   }, [providers, selectedProviderId, getDefaultProvider]);
 
+
   useEffect(() => {
     if (selectedProviderId && allModels.length > 0 && !selectedModelId) {
       const defaultModel = getDefaultModelForProvider(selectedProviderId);
@@ -141,6 +144,14 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   }, [selectedInstallationId, installations]);
 
   const providerInstallationId = currentInstallation?.git_integration.providerInstallationId;
+  const sandboxProviders = cloudProvidersData?.cloudProviders ?? [];
+  console.log("sandboxProviders", sandboxProviders);
+
+  useEffect(() => {
+    if (sandboxProviders.length > 0 && !selectedSandboxProviderId) {
+      setSelectedSandboxProviderId(sandboxProviders[0]?.id ?? "");
+    }
+  }, [sandboxProviders, selectedSandboxProviderId]);
 
   // Fetch repos and branches
   const { data: reposData, isLoading: isLoadingRepos } = useQuery({
@@ -229,6 +240,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
       repository &&
       branch &&
       planFile &&
+      selectedSandboxProviderId &&
       selectedProviderId &&
       selectedModelId
     );
@@ -239,6 +251,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
     repository,
     branch,
     planFile,
+    selectedSandboxProviderId,
     selectedProviderId,
     selectedModelId,
     runMode,
@@ -264,20 +277,18 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
       toast.error("Please select a plan file.");
       return;
     }
+    if (!selectedSandboxProviderId) {
+      toast.error("Please select a sandbox provider.");
+      return;
+    }
     if (!selectedProviderId || !selectedModelId) {
       toast.error("Please select a provider and model.");
       return;
     }
 
-    const sandboxProvider = cloudProvidersData?.cloudProviders[0];
-    if (!sandboxProvider) {
-      toast.error("No sandbox provider available. Please try again later.");
-      return;
-    }
-
     await createAgentLoopMutation.mutateAsync({
       gitIntegrationId: selectedInstallationId,
-      sandboxProviderId: sandboxProvider.id,
+      sandboxProviderId: selectedSandboxProviderId,
       repositoryOwner: repository.owner,
       repositoryName: repository.name,
       branch,
@@ -292,35 +303,35 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   };
 
   // No installations - show connect prompt
-  if (!hasInstallations) {
-    return (
-      <>
-        <div className="flex flex-col items-center justify-center py-8 px-4 rounded-lg bg-secondary/30 border border-border/50 my-4">
-          <AlertCircle className="h-8 w-8 text-muted-foreground mb-3" />
-          <p className="text-sm font-medium text-center mb-2">GitHub Integration Required</p>
-          <p className="text-xs text-muted-foreground text-center mb-4">
-            Connect your GitHub account to use Ralph Agent.
-          </p>
-          <Link
-            href="/dashboard/integrations"
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
-          >
-            Connect GitHub
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={onCancel}
-            className="border-border/50 hover:bg-secondary/50"
-          >
-            Cancel
-          </Button>
-        </DialogFooter>
-      </>
-    );
-  }
+  // if (!hasInstallations) {
+  //   return (
+  //     <>
+  //       <div className="flex flex-col items-center justify-center py-8 px-4 rounded-lg bg-secondary/30 border border-border/50 my-4">
+  //         <AlertCircle className="h-8 w-8 text-muted-foreground mb-3" />
+  //         <p className="text-sm font-medium text-center mb-2">GitHub Integration Required</p>
+  //         <p className="text-xs text-muted-foreground text-center mb-4">
+  //           Connect your GitHub account to use Ralph Agent.
+  //         </p>
+  //         <Link
+  //           href="/dashboard/integrations"
+  //           className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
+  //         >
+  //           Connect GitHub
+  //           <ArrowUpRight className="h-3.5 w-3.5" />
+  //         </Link>
+  //       </div>
+  //       <DialogFooter>
+  //         <Button
+  //           variant="outline"
+  //           onClick={onCancel}
+  //           className="border-border/50 hover:bg-secondary/50"
+  //         >
+  //           Cancel
+  //         </Button>
+  //       </DialogFooter>
+  //     </>
+  //   );
+  // }
 
   return (
     <>
@@ -534,6 +545,49 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
         <p className="text-xs text-muted-foreground -mt-2">
           API keys are managed in Settings. You'll need to add one before starting runs.
         </p>
+
+        {/* Sandbox Provider */}
+        <div className="grid gap-2">
+          <Label className="text-sm font-medium">Sandbox Provider</Label>
+          <Select
+            value={selectedSandboxProviderId}
+            onValueChange={setSelectedSandboxProviderId}
+            disabled={sandboxProviders.length === 0}
+          >
+            <SelectTrigger className="bg-secondary/30 border-border/50">
+              <SelectValue
+                placeholder={
+                  sandboxProviders.length > 0 ? "Select sandbox provider" : "No sandbox provider"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {sandboxProviders.length > 0 ? (
+                sandboxProviders.map((provider) => (
+                  <SelectItem key={provider.id} value={provider.id}>
+                    <div className="flex items-center">
+                      <Image
+                        src={getProviderLogo(provider.name)}
+                        alt={provider.name}
+                        width={16}
+                        height={16}
+                        className="mr-2 h-4 w-4"
+                      />
+                      {provider.name}
+                    </div>
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="no-sandbox" disabled>
+                  No sandbox providers found
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Choose the sandbox environment to run this agent loop.
+          </p>
+        </div>
 
         {/* Run Mode */}
         <div className="grid gap-2">
