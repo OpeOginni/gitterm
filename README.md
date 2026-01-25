@@ -1,24 +1,20 @@
-# GitTerm
+![GitTerm Dashboard](./media/dashboard.png)
 
-Run AI coding agents your way. Connect agents running in the cloud or tunnel your local development setup through secure URLs.
-
-Currently supports: **OpenCode**.
-
-> **Note:** This README covers self-hosting GitTerm. For the managed service, visit [gitterm.dev](https://gitterm.dev).
+Run Opencode instances your way. Supports multiple cloud providers, and agentic coding paradigms such as agent loops.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 ## What is GitTerm?
 
-GitTerm gives you flexible ways to run AI coding agents:
+GitTerm gives you flexible ways to run Opencode instances:
 
-1. **Cloud Workspaces** - Spin up cloud-based environments where your agent runs remotely. Access via browser or API.
+1. **Cloud Workspaces** - Spin up cloud-based environments where opencode runs remotely. Access securely via browser or API.
+    - **Opencode TUI (TTYD)**: use TUI on the web
+    - **Opencode Server**: Get a url that can be attached on any machine with Opencode or Opencode Desktop app
 
-2. **Local Tunnels** - Run your agent locally, then expose it through a secure tunnel.
+2. **Local Tunnels** - Run Opencode on your local machine, then expose it through a secure tunnel, providing you a url to connect to the running Opencode Server. Also allowing you to open other port connections to test out your developments with secure public URLs.
 
-Both modes work with supported agents (currently OpenCode). Cloud workspaces handle heavy computation remotely, while local tunnels give you full control over your local setup, from any location. Both ways are secured meaning no unauthenticated access to your workspaces.
-
-![GitTerm Dashboard](./media/dashboard.png)
+3. **Agentic Coding Loops** - Providing a PRD document and a branch for Opencode to run wild and make commits and implement features on a loop, without having to hold its hand all through the way.
 
 ## Self-Hosting Guide
 
@@ -27,123 +23,71 @@ Both modes work with supported agents (currently OpenCode). Cloud workspaces han
 The fastest way to deploy your own GitTerm instance:
 
 1. Click the **Deploy on Railway** button above
-2. Configure the required environment variables as prompted (ADMIN_EMAIL, ADMIN_PASSWORD, etc.)
-3. Add your custom domain to the proxy service
+2. Configure the required environment variables as prompted (ADMIN_EMAIL, ADMIN_PASSWORD)
+3. If you'd like subdomain division of workspaces give your `Caddy Proxy` a wildcard domain `*.your-domain.com`.
+4. Setup Configurations for providers in the admin panel.
 
-Caddy handles all routing through a single domain.
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Caddy Proxy                                │
-│        (Path-based: /ws/{workspace-id}/ → workspaces)          │
-└──────────────┬────────────────────────────┬─────────────────────┘
-               │                            │
-               ▼                            ▼
-┌──────────────────────────┐   ┌──────────────────────────────────┐
-│   Cloud Agent Runtime    │   │         Tunnel Proxy             │
-│  (agent runs in cloud)   │   │   (WebSocket multiplexing)       │
-│                          │   │                                  │
-│  e.g., OpenCode via      │   │   tunnels local agents           │
-│  browser or API access   │   │   to the internet                │
-└──────────────────────────┘   └──────────────┬───────────────────┘
-                                              │
-                                              ▼
-                               ┌──────────────────────────────────┐
-                               │      gitterm-agent (CLI)         │
-                               │   (connects local agents)        │
-                               └──────────────────────────────────┘
-```
-
-**How it works:**
-
-- **Cloud Workspaces**: Agent runs in a Railway container, accessible via browser/API
-- **Local Tunnels**: Agent runs on your machine, connected via `gitterm-agent` CLI
+Caddy handles all routing of workspaces through a single domain.
 
 **Self-hosted URL format:**
 
-```
-# All workspaces use /ws/ path routing
+```bash
+# Workspaces can use `/ws/` path routing or `ws-1234.your-domain.com `subdomain routing
 https://your-domain.com/ws/{workspace-id}/
+https://ws1234.your-domain.com
 ```
+
+> **Note on Workspace routing:**  
+> Path-based routing is useful if you don't have your own domain. However, it may cause issues for developed frontends that rely on relative paths (for example, asset serving), since relative paths often don't work well when served under a path as the root but do work reliably with subdomains.
 
 ### Required Services
 
-| Service      | Purpose                       | Recommended Platform |
-| ------------ | ----------------------------- | -------------------- |
-| PostgreSQL   | Database                      | Railway Postgres     |
-| Redis        | Caching, pub/sub              | Railway Redis        |
-| server       | Main API                      | Railway              |
-| web          | Frontend (dashboard, auth UI) | Railway              |
-| tunnel-proxy | WebSocket tunnel server       | Railway              |
-| proxy        | Caddy reverse proxy           | Railway              |
-| listener     | Webhooks (GitHub, Railway)    | Railway              |
-| worker       | Background jobs               | Railway              |
+| Service      | Purpose                       |
+| ------------ | ----------------------------- |
+| PostgreSQL   | Database                      |
+| Redis        | Caching, pub/sub              |
+| server       | Main API                      |
+| web          | Frontend (dashboard, auth UI) |
+| tunnel-proxy | WebSocket tunnel server       |
+| proxy        | Caddy reverse proxy           |
+| listener     | Webhooks (GitHub, Railway)    |
+| worker       | Background jobs               |
 
-All services route through Caddy on a single domain.
 
 ### Worker Cron Jobs
 
-GitTerm has two background workers that run as cron jobs:
+GitTerm has two background workers that run as cron jobs, only one is needed when self hosting:
 
-| Worker          | Schedule                            | Purpose                                   |
+| Worker          | Recommended Schedule                | Purpose                                   |
 | --------------- | ----------------------------------- | ----------------------------------------- |
 | **idle-reaper** | Every 10 minutes (`*/10 * * * *`)   | Stops idle workspaces and enforces quotas |
-| **daily-reset** | Daily at midnight UTC (`0 0 * * *`) | Logs daily usage statistics               |
 
-**On Railway:** These workers are configured with their respective `railway.json` files. Make sure to:
 
-1. Deploy the worker service with `railway.config.json` for idle-reaper (runs every 10 min)
-2. Deploy the worker service with `railway.daily-reset.json` for daily-reset (runs once daily)
-
-**Locally:** You can run workers manually:
-
-```bash
-# Run idle reaper once (for testing)
-cd apps/worker && bun run dist/idle-reaper.mjs
-
-# Run daily reset once (for testing)
-cd apps/worker && bun run dist/daily-reset.mjs
-```
+**On Railway:** This worker can be adjusted on the dashboard
 
 ### Local Tunnels (for agents running locally)
 
-Connect your local agent setup to the internet through a secure tunnel:
+1. **Create a workspace** with `tunnelType: "local"` via the dashboard
+2. **Run the Opencode Server** on your machine using `opencode serve`
+3. **Login to the CLI** specifying the url of your self hosted Gitterm server.
+4. **CLI connects** to the tunnel-proxy via WebSocket
+5. **Incoming requests** to your tunnel URL are routed to the `tunnel-proxy` service
+6. **Tunnel-proxy multiplexes** the request over WebSocket to your local agent
+7. **CLI forwards** the request to your local server and streams the response back
 
 ```bash
 # Install the agent CLI
-npm install -g @opeoginni/gitterm-agent
+npm install -g gitterm
 
 # Login (device code flow)
-npx @opeoginni/gitterm-agent login -s https://your-api-domain.com
+npx gitterm login -s https://your-api-domain.com
 
 # Create a workspace with tunnelType="local" in the dashboard
 # Then connect your local server
-npx @opeoginni/gitterm-agent connect --workspace-id "workspace-id" --port 3000
-```
-
-**URL Format:**
-
-```
-# Your tunnel URL (self-hosted, path-based)
-https://your-domain.com/ws/workspace-id/
-
-# Managed service (subdomain)
-https://workspace-id.gitterm.dev/
+npx gitterm connect --workspace-id "workspace-id" --port 3000
 ```
 
 Your local agent is now accessible through the tunnel URL.
-
-### How Local Tunnels Work
-
-1. **Create a workspace** with `tunnelType: "local"` via the dashboard
-2. **Run the agent** on your machine where your coding agent is running
-3. **Agent authenticates** via device code flow and gets a tunnel JWT
-4. **Agent connects** to the tunnel-proxy via WebSocket
-5. **Incoming requests** to your tunnel URL are routed to the tunnel-proxy
-6. **Tunnel-proxy multiplexes** the request over WebSocket to your local agent
-7. **Agent forwards** the request to your local server and streams the response back
 
 ## Development Setup
 
@@ -187,8 +131,8 @@ bun turbo redis:start
 ### 4. Set Up Database
 
 ```bash
-# Push schema to database
-bun run db:push
+# Migrate schema to database
+bun run db:migrate
 ```
 
 ### 5. Run Development Servers
@@ -203,11 +147,15 @@ bun run dev --filter=server
 bun run dev --filter=tunnel-proxy
 ```
 
-| Service      | URL                   |
-| ------------ | --------------------- |
-| Web App      | http://localhost:3001 |
-| API Server   | http://localhost:3000 |
-| Tunnel Proxy | http://localhost:9000 |
+| Service      | URL                            |
+| ------------ | -------------------------------|
+| Web App      | http://localhost:8888          |
+| API Server   | http://localhost:8888/api      |
+| Tunnel Proxy | http://localhost:8888/tunnel   |
+| Listener     | http://localhost:8888/listener |
+| Workspaces   | http://localhost:8888/ws/{id}  |
+
+We make use of Caddy to streamline the whole services each connected to the 9000 port by some path
 
 ## Project Structure
 
@@ -222,12 +170,13 @@ gitterm/
 │   └── worker/           # Background jobs (cleanup, daily reset)
 │
 ├── packages/
-│   ├── agent/            # CLI tool (@opeoginni/gitterm-agent)
+│   ├── cli/              # CLI tool ([gitterm](https://www.npmjs.com/package/gitterm))
 │   ├── api/              # Shared API logic, routers, services
 │   ├── auth/             # Authentication (Better Auth)
 │   ├── db/               # Database schema & migrations (Drizzle + Postgres)
-│   ├── redis/            # Redis repositories (tunnels, rate limiting)
-│   └── schema/           # Shared Zod schemas
+│   ├── redis/            # Redis repositories (tunnels, and cli auth)
+│   ├── schema/           # Shared Zod schemas
+│   └── env/              # configure environment variables for services
 ```
 
 ## Tech Stack
