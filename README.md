@@ -217,5 +217,5 @@ See [LICENSE](LICENSE) for the full text.
 
 - [Website](https://gitterm.dev) - Managed service
 - [OpenCode](https://opencode.ai) - AI coding agent
-- [Agent NPM Package](https://www.npmjs.com/package/@opeoginni/gitterm-agent)
+- [CLI NPM Package](https://www.npmjs.com/package/gitterm)
 - [GitHub](https://github.com/OpeOginni/gitterm)

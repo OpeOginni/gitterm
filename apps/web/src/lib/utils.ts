@@ -128,7 +128,7 @@ export function getAgentConnectCommand(
   workspaceId: string,
   opts?: { currentOrigin?: string },
 ): string {
-  const base = `npx @opeoginni/gitterm-agent connect --workspace-id ${workspaceId}`;
+  const base = `npx gitterm tunnel --w ${workspaceId}`;
 
   if (isHostedGittermDomain()) return base;
 

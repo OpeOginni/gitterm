@@ -313,6 +313,52 @@ export const internalRouter = router({
 
       return { success: true };
     }),
+
+  // Mark a workspace as pending (for tunnel-proxy on disconnect)
+  markWorkspacePendingInternal: internalProcedure
+    .input(z.object({ workspaceId: z.string() }))
+    .mutation(async ({ input }) => {
+      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
+
+      if (!ws) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      if (ws.status === "terminated") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Cannot move terminated workspace to pending",
+        });
+      }
+
+      if (ws.hostingType !== "local" && (ws.status === "running" || ws.status === "pending")) {
+        await closeUsageSession(input.workspaceId, "manual");
+      }
+
+      const now = new Date();
+      await db
+        .update(workspace)
+        .set({
+          status: "pending",
+          stoppedAt: null,
+          lastActiveAt: now,
+          updatedAt: now,
+        })
+        .where(eq(workspace.id, input.workspaceId));
+
+      WORKSPACE_EVENTS.emitStatus({
+        workspaceId: input.workspaceId,
+        status: "pending",
+        updatedAt: now,
+        userId: ws.userId,
+        workspaceDomain: ws.domain,
+      });
+
+      return { success: true };
+    }),
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
     const longTermInactiveWorkspaces = await db
       .select()

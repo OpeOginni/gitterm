@@ -1,7 +1,6 @@
 import { z } from "zod";
 import chalk from "chalk";
 import { loadConfig, saveConfig, loginViaDeviceCode } from "./auth.js";
-import type { BodyInit } from "bun";
 
 // Default production URLs (hosted gitterm.dev)
 const DEFAULT_WS_URL = "wss://tunnel.gitterm.dev/tunnel/connect";
@@ -229,7 +228,7 @@ export async function runTunnel(args: TunnelArgs) {
     }
 
     if (!args.port) {
-      const portInput = await prompt("Enter the local port to expose (e.g. 4096): ");
+      const portInput = await prompt("Enter the port your Opencode server is running on (e.g. 4096): ");
       const parsedPort = Number.parseInt(portInput, 10);
       if (!Number.isFinite(parsedPort) || parsedPort <= 0) {
         throw new Error("Invalid port number");
@@ -271,26 +270,158 @@ export async function runTunnel(args: TunnelArgs) {
     port?: number;
   };
 
-  const pendingRequestBodies = new Map<string, Uint8Array[]>();
-  const pendingRequestMeta = new Map<string, PendingRequestMeta>();
+  type PendingRequest = {
+    meta: PendingRequestMeta;
+    bodyStream: ReadableStream<Uint8Array> | null;
+    bodyController?: ReadableStreamDefaultController<Uint8Array>;
+    bufferedChunks: Uint8Array[];
+    bodyClosed: boolean;
+    started: boolean;
+    abortController: AbortController;
+    ignoreBody: boolean;
+  };
+
+  const pendingRequests = new Map<string, PendingRequest>();
   const activeRequests = new Map<string, AbortController>();
 
-  function mergeBody(id: string): Uint8Array {
-    const parts = pendingRequestBodies.get(id) ?? [];
-    pendingRequestBodies.delete(id);
-    if (parts.length === 0) return new Uint8Array();
-    const total = parts.reduce((sum, p) => sum + p.byteLength, 0);
-    const merged = new Uint8Array(total);
-    let off = 0;
-    for (const p of parts) {
-      merged.set(p, off);
-      off += p.byteLength;
-    }
-    return merged;
+  function createBodyStream(pending: PendingRequest) {
+    return new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        pending.bodyController = controller;
+        if (pending.bufferedChunks.length > 0) {
+          for (const chunk of pending.bufferedChunks) {
+            controller.enqueue(chunk);
+          }
+          pending.bufferedChunks = [];
+        }
+        if (pending.bodyClosed) controller.close();
+      },
+      cancel: () => {
+        pending.abortController.abort();
+      },
+    });
   }
 
   const effectiveWsUrl = args.wsUrl ?? connectCfg?.wsUrl ?? DEFAULT_WS_URL;
   const ws = new WebSocket(effectiveWsUrl);
+
+  async function startUpstreamRequest(id: string, pending: PendingRequest) {
+    if (pending.started) return;
+    pending.started = true;
+
+    const meta = pending.meta;
+    const abortController = pending.abortController;
+    activeRequests.set(id, abortController);
+
+    try {
+      const base = new URL(targetBase.replace(/\/$/, "") + "/");
+      base.hostname = "localhost";
+      base.port = String(meta.port ?? primaryPort);
+
+      const url = new URL(meta.path.replace(/^\//, ""), base);
+
+      const headers = new Headers(meta.headers);
+      headers.delete("host");
+      headers.delete("content-length");
+      headers.delete("connection");
+      headers.delete("keep-alive");
+      headers.delete("proxy-authenticate");
+      headers.delete("proxy-authorization");
+      headers.delete("te");
+      headers.delete("trailers");
+      headers.delete("transfer-encoding");
+      headers.delete("upgrade");
+
+      const upstream = await fetch(url, {
+        method: meta.method,
+        headers,
+        body: pending.ignoreBody ? undefined : pending.bodyStream ?? undefined,
+        redirect: "manual",
+        signal: abortController.signal,
+      });
+
+      ws.send(
+        JSON.stringify({
+          type: "response",
+          id,
+          statusCode: upstream.status,
+          headers: headersToRecord(upstream.headers),
+          timestamp: Date.now(),
+        } satisfies Frame),
+      );
+
+      if (!upstream.body) {
+        activeRequests.delete(id);
+        ws.send(
+          JSON.stringify({
+            type: "data",
+            id,
+            final: true,
+            timestamp: Date.now(),
+          } satisfies Frame),
+        );
+        return;
+      }
+
+      const reader = upstream.body.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+
+          ws.send(
+            JSON.stringify({
+              type: "data",
+              id,
+              data: bytesToBase64(value),
+              final: false,
+              timestamp: Date.now(),
+            } satisfies Frame),
+          );
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      activeRequests.delete(id);
+      ws.send(
+        JSON.stringify({
+          type: "data",
+          id,
+          final: true,
+          timestamp: Date.now(),
+        } satisfies Frame),
+      );
+    } catch (error) {
+      activeRequests.delete(id);
+
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+
+      ws.send(
+        JSON.stringify({
+          type: "response",
+          id,
+          statusCode: 502,
+          headers: { "content-type": "application/json" },
+          timestamp: Date.now(),
+        } satisfies Frame),
+      );
+      ws.send(
+        JSON.stringify({
+          type: "data",
+          id,
+          data: bytesToBase64(
+            new TextEncoder().encode(JSON.stringify({ error: "upstream_error" })),
+          ),
+          final: true,
+          timestamp: Date.now(),
+        } satisfies Frame),
+      );
+    }
+  }
 
   ws.addEventListener("open", () => {
     console.log("Establishing secure tunnel for workspace...");
@@ -366,152 +497,71 @@ export async function runTunnel(args: TunnelArgs) {
         controller.abort();
         activeRequests.delete(frame.id);
       }
-      pendingRequestBodies.delete(frame.id);
-      pendingRequestMeta.delete(frame.id);
+      const pending = pendingRequests.get(frame.id);
+      if (pending?.bodyController) {
+        try {
+          pending.bodyController.close();
+        } catch {
+          // ignore
+        }
+      }
+      pendingRequests.delete(frame.id);
       return;
     }
 
     if (frame.type === "request") {
-      pendingRequestBodies.set(frame.id, []);
-      pendingRequestMeta.set(frame.id, {
+      const meta = {
         method: (frame.method ?? "GET").toUpperCase(),
         path: frame.path ?? "/",
         headers: frame.headers ?? {},
         port: frame.port,
-      });
+      } satisfies PendingRequestMeta;
+
+      const ignoreBody = meta.method === "GET" || meta.method === "HEAD";
+      const pending: PendingRequest = {
+        meta,
+        bodyStream: null,
+        bufferedChunks: [],
+        bodyClosed: false,
+        started: false,
+        abortController: new AbortController(),
+        ignoreBody,
+      };
+
+      pending.bodyStream = ignoreBody ? null : createBodyStream(pending);
+      pendingRequests.set(frame.id, pending);
+      void startUpstreamRequest(frame.id, pending);
       return;
     }
 
     if (frame.type === "data") {
-      const chunks = pendingRequestBodies.get(frame.id);
-      if (!chunks) {
+      const pending = pendingRequests.get(frame.id);
+      if (!pending) return;
+      if (pending.ignoreBody) {
+        if (frame.final) pendingRequests.delete(frame.id);
         return;
       }
-      if (frame.data) chunks.push(base64ToBytes(frame.data));
+
+      if (frame.data) {
+        const chunk = base64ToBytes(frame.data);
+        if (pending.bodyController) {
+          pending.bodyController.enqueue(chunk);
+        } else {
+          pending.bufferedChunks.push(chunk);
+        }
+      }
+
       if (!frame.final) return;
 
-      // Create abort controller for this request
-      const abortController = new AbortController();
-      activeRequests.set(frame.id, abortController);
-
-      const meta = pendingRequestMeta.get(frame.id);
-      if (!meta) return;
-      pendingRequestMeta.delete(frame.id);
-
-      try {
-        const reqBody = mergeBody(frame.id);
-
-        const base = new URL(targetBase.replace(/\/$/, "") + "/");
-        base.hostname = "localhost";
-        base.port = String(meta.port ?? primaryPort);
-
-        const url = new URL(meta.path.replace(/^\//, ""), base);
-
-        const headers = new Headers(meta.headers);
-        // Remove hop-by-hop headers that shouldn't be forwarded
-        // Node's undici fetch rejects these headers
-        headers.delete("host");
-        headers.delete("content-length");
-        headers.delete("connection");
-        headers.delete("keep-alive");
-        headers.delete("proxy-authenticate");
-        headers.delete("proxy-authorization");
-        headers.delete("te");
-        headers.delete("trailers");
-        headers.delete("transfer-encoding");
-        headers.delete("upgrade");
-
-        const upstream = await fetch(url, {
-          method: meta.method,
-          headers,
-          body: reqBody.byteLength > 0 ? (reqBody as unknown as BodyInit) : undefined,
-          redirect: "manual",
-          signal: abortController.signal,
-        });
-
-        ws.send(
-          JSON.stringify({
-            type: "response",
-            id: frame.id,
-            statusCode: upstream.status,
-            headers: headersToRecord(upstream.headers),
-            timestamp: Date.now(),
-          } satisfies Frame),
-        );
-
-        if (!upstream.body) {
-          activeRequests.delete(frame.id);
-          ws.send(
-            JSON.stringify({
-              type: "data",
-              id: frame.id,
-              final: true,
-              timestamp: Date.now(),
-            } satisfies Frame),
-          );
-          return;
-        }
-
-        const reader = upstream.body.getReader();
+      pending.bodyClosed = true;
+      if (pending.bodyController) {
         try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (!value) continue;
-
-            ws.send(
-              JSON.stringify({
-                type: "data",
-                id: frame.id,
-                data: bytesToBase64(value),
-                final: false,
-                timestamp: Date.now(),
-              } satisfies Frame),
-            );
-          }
-        } finally {
-          reader.releaseLock();
+          pending.bodyController.close();
+        } catch {
+          // ignore
         }
-
-        activeRequests.delete(frame.id);
-        ws.send(
-          JSON.stringify({
-            type: "data",
-            id: frame.id,
-            final: true,
-            timestamp: Date.now(),
-          } satisfies Frame),
-        );
-      } catch (error) {
-        activeRequests.delete(frame.id);
-        pendingRequestBodies.delete(frame.id);
-
-        // Don't send error response if request was aborted (client disconnected)
-        if (error instanceof Error && error.name === "AbortError") {
-          return;
-        }
-
-        ws.send(
-          JSON.stringify({
-            type: "response",
-            id: frame.id,
-            statusCode: 502,
-            headers: { "content-type": "application/json" },
-            timestamp: Date.now(),
-          } satisfies Frame),
-        );
-        ws.send(
-          JSON.stringify({
-            type: "data",
-            id: frame.id,
-            data: bytesToBase64(
-              new TextEncoder().encode(JSON.stringify({ error: "upstream_error" })),
-            ),
-            final: true,
-            timestamp: Date.now(),
-          } satisfies Frame),
-        );
       }
+      pendingRequests.delete(frame.id);
     }
   });
 
@@ -538,8 +588,7 @@ export async function runTunnel(args: TunnelArgs) {
   activeRequests.clear();
 
   // Clean up pending requests
-  pendingRequestBodies.clear();
-  pendingRequestMeta.clear();
+  pendingRequests.clear();
 
   try {
     ws.close();

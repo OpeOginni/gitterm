@@ -27,7 +27,7 @@ export function Footer() {
               </Link>
             )}
             <Link
-              href="https://www.npmjs.com/package/@opeoginni/gitterm-agent"
+              href="https://www.npmjs.com/package/gitterm"
               target="_blank"
               className="hover:text-foreground transition-colors"
             >

@@ -835,7 +835,7 @@ export const workspaceRouter = router({
             ),
           );
 
-        if (fetchedUser.email !== "brightoginni123@gmail.com" && runningWorkspaces.length >= 1) {
+        if (fetchedUser.email !== "brightoginni123@gmail.com" && runningWorkspaces.length >= 5) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message:
@@ -1238,7 +1238,7 @@ export const workspaceRouter = router({
         let command: string | undefined;
         if (isLocal) {
           // The agent CLI will use getTunnelUrl() to determine the correct tunnel endpoint
-          command = `npx @opeoginni/gitterm-agent connect --workspace-id ${workspaceId}`;
+          command = `npx gitterm connect --workspace-id ${workspaceId}`;
         }
 
         // Format Discord notification with all workspace details
@@ -1257,7 +1257,6 @@ export const workspaceRouter = router({
           `**User Info:**`,
           `• Name: \`${fetchedUser.name || "N/A"}\``,
           `• Email: \`${fetchedUser.email}\``,
-          `• User ID: \`${userId}\``,
           ``,
           `**Configuration:**`,
           `• Agent Type: \`${agentTypeRecord.name}\``,

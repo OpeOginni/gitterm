@@ -17,7 +17,7 @@ export interface ConnectedAgent {
   connectedAt: number;
   lastSeenAt: number;
   mux: Multiplexer;
-  idleTimer?: ReturnType<typeof setInterval>;
+  heartbeatTimer?: ReturnType<typeof setInterval>;
 }
 
 export class ConnectionManager {
@@ -25,7 +25,7 @@ export class ConnectionManager {
   private connections = new Map<string, ConnectedAgent>();
 
   private idleTimeoutMs = 90_000;
-  private pingIntervalMs = 25_000;
+  private heartbeatIntervalMs = 25_000;
 
   get(subdomain: string): ConnectedAgent | undefined {
     return this.connections.get(subdomain);
@@ -66,7 +66,7 @@ export class ConnectionManager {
       mux: new Multiplexer(),
     };
 
-    agent.idleTimer = setInterval(() => {
+    agent.heartbeatTimer = setInterval(() => {
       const current = this.connections.get(params.subdomain);
       if (!current) return;
 
@@ -86,7 +86,7 @@ export class ConnectionManager {
         // ignore
       }
       this.unregister(params.subdomain).catch(() => undefined);
-    }, this.pingIntervalMs);
+    }, this.heartbeatIntervalMs);
 
     this.connections.set(params.subdomain, agent);
 
@@ -103,16 +103,16 @@ export class ConnectionManager {
   async unregister(subdomain: string) {
     const agent = this.connections.get(subdomain);
     if (agent) {
-      if (agent.idleTimer) clearInterval(agent.idleTimer);
+      if (agent.heartbeatTimer) clearInterval(agent.heartbeatTimer);
       agent.mux.rejectAll(new Error("tunnel disconnected"));
 
-      // Terminate the workspace (marks as terminated and closes usage session)
+      // Mark workspace as pending so user can reconnect
       try {
-        await internalClient.internal.terminateWorkspaceInternal.mutate({
+        await internalClient.internal.markWorkspacePendingInternal.mutate({
           workspaceId: agent.workspaceId,
         });
       } catch (error) {
-        console.error(`Failed to terminate workspace on disconnect: ${error}`);
+        console.error(`Failed to mark workspace pending on disconnect: ${error}`);
       }
     }
     this.connections.delete(subdomain);

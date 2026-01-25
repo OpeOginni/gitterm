@@ -303,35 +303,35 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   };
 
   // No installations - show connect prompt
-  // if (!hasInstallations) {
-  //   return (
-  //     <>
-  //       <div className="flex flex-col items-center justify-center py-8 px-4 rounded-lg bg-secondary/30 border border-border/50 my-4">
-  //         <AlertCircle className="h-8 w-8 text-muted-foreground mb-3" />
-  //         <p className="text-sm font-medium text-center mb-2">GitHub Integration Required</p>
-  //         <p className="text-xs text-muted-foreground text-center mb-4">
-  //           Connect your GitHub account to use Ralph Agent.
-  //         </p>
-  //         <Link
-  //           href="/dashboard/integrations"
-  //           className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
-  //         >
-  //           Connect GitHub
-  //           <ArrowUpRight className="h-3.5 w-3.5" />
-  //         </Link>
-  //       </div>
-  //       <DialogFooter>
-  //         <Button
-  //           variant="outline"
-  //           onClick={onCancel}
-  //           className="border-border/50 hover:bg-secondary/50"
-  //         >
-  //           Cancel
-  //         </Button>
-  //       </DialogFooter>
-  //     </>
-  //   );
-  // }
+  if (!hasInstallations) {
+    return (
+      <>
+        <div className="flex flex-col items-center justify-center py-8 px-4 rounded-lg bg-secondary/30 border border-border/50 my-4">
+          <AlertCircle className="h-8 w-8 text-muted-foreground mb-3" />
+          <p className="text-sm font-medium text-center mb-2">GitHub Integration Required</p>
+          <p className="text-xs text-muted-foreground text-center mb-4">
+            Connect your GitHub account to use Ralph Agent.
+          </p>
+          <Link
+            href="/dashboard/integrations"
+            className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
+          >
+            Connect GitHub
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            className="border-border/50 hover:bg-secondary/50"
+          >
+            Cancel
+          </Button>
+        </DialogFooter>
+      </>
+    );
+  }
 
   return (
     <>
