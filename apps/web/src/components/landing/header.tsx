@@ -45,20 +45,16 @@ export function LandingHeader() {
           )}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {isHomePage && (
-            <Link
-              href="https://github.com/OpeOginni/gitterm"
-              target="_blank"
-              className="group/github"
-            >
+            <Link href="https://github.com/OpeOginni/gitterm" target="_blank" className="group/github" title="Star on GitHub">
               <Button
                 variant="outline"
                 size="sm"
-                className="border-border text-foreground hover:bg-secondary bg-transparent"
+                className="border-border text-foreground hover:bg-secondary bg-transparent px-2 sm:px-3"
               >
-                <Star className="mr-1.5 h-3.5 w-3.5 group-hover/github:text-yellow-500" />
-                Star on GitHub
+                <Star className="h-3.5 w-3.5 shrink-0 sm:mr-1.5 group-hover/github:text-yellow-500" />
+                <span className="hidden sm:inline">Star on GitHub</span>
               </Button>
             </Link>
           )}
