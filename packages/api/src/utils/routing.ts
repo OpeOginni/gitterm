@@ -107,7 +107,6 @@ export function getWorkspaceUrlWithPath(subdomain: string, path: string): string
  * Supports both routing modes:
  * - Subdomain: Extract from Host header (abc123.gitterm.dev -> abc123)
  * - Path: Extract from URL path (/ws/abc123/... -> abc123) or X-Subdomain header
- * - Port-based: Extract from URL path (/ws/123-abc123/... -> abc123)
  *
  * @param host - The Host header value
  * @param path - The request path (optional, for path-based routing)

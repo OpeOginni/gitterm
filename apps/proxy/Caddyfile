@@ -15,9 +15,8 @@
 # Used by Dockerfile.managed for Railway managed deployment.
 #
 # Subdomain Format Support:
-# - ws-<uuid>.gitterm.dev      : Cloud & Local workspaces (auto-generated)
-# - <custom-name>.gitterm.dev  : Paid tier custom subdomains
-# - Reserved (blocked):         api, tunnel, www, admin, etc.
+# - <port>-<subdomain>.gitterm.dev : Workspace port routing (auto-generated)
+# - Reserved (blocked):             api, tunnel, www, admin, etc.
 #
 # Environment Variables:
 # - SERVER_URL       -> API server URL (e.g., server.railway.internal:8080)

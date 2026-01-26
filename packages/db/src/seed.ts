@@ -23,7 +23,6 @@ const seedCloudProviders = [
 const seedAgentTypes = [
   { name: "OpenCode", serverOnly: false },
   { name: "OpenCode Server", serverOnly: true },
-  { name: "OpenCode Web", serverOnly: false },
 ];
 
 const seedImages = [
