@@ -207,7 +207,7 @@
 	# - cloud: Railway container URL
 	# ============================================
 	@subdomain_mode_ws {
-		host_regexp portsub ^(\d+)-([a-z0-9-]+)\.{$BASE_DOMAIN}$
+		header_regexp portsub Host ^(\d+)-([a-z0-9-]+)\.{$BASE_DOMAIN}$
 		expression {env.ROUTING_MODE} == "subdomain"
 	}
 	handle @subdomain_mode_ws {
