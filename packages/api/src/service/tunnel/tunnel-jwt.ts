@@ -10,7 +10,7 @@ export interface TunnelTokenPayload {
   subdomain: string;
   scope: string[];
   // Server-issued allowlist for what this agent may expose.
-  // `"root"` refers to the primary subdomain (e.g. `ws-123.gitterm.dev`).
+  // `"root"` refers to the primary subdomain (e.g. `123.gitterm.dev`).
   exposedPorts?: Record<string, number>;
   iat: number;
   exp: number;

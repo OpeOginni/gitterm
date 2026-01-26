@@ -1,6 +1,8 @@
 import { db, eq } from "./index";
 import { agentType, cloudProvider, image, region } from "./schema/cloud";
 import { modelProvider, model } from "./schema/model-credentials";
+import { providerType, providerConfigField } from "./schema/provider-config";
+import { PROVIDER_DEFINITIONS } from "@gitterm/schema/provider-registry";
 
 /**
  * Seed data definitions
@@ -11,7 +13,12 @@ import { modelProvider, model } from "./schema/model-credentials";
  * - Never delete or modify existing items
  */
 
-const seedCloudProviders = [{ name: "Railway" }, { name: "AWS" }, { name: "Local" }, { name: "Cloudflare", isSandbox: true }];
+const seedCloudProviders = [
+  { name: "Railway", isEnabled: false },
+  { name: "AWS", isEnabled: false },
+  { name: "Local", isEnabled: false },
+  { name: "Cloudflare", isEnabled: false, isSandbox: true },
+];
 
 const seedAgentTypes = [
   { name: "OpenCode", serverOnly: false },
@@ -32,6 +39,8 @@ const seedImages = [
     agentTypeName: "OpenCode Web",
   },
 ];
+
+const seedProviderTypes = PROVIDER_DEFINITIONS;
 
 const seedRegions = [
   // Railway regions
@@ -127,7 +136,7 @@ const seedModelProviders = [
     authType: "api_key",
     plugin: null,
     oauthConfig: null,
-  }
+  },
 ];
 
 const seedModels = [
@@ -462,6 +471,54 @@ export async function seedDatabase(): Promise<void> {
         isRecommended: m.isRecommended ?? false,
       });
       console.log(`[seed]   Created model "${m.modelId}"`);
+    }
+  }
+
+  // =========================================================================
+  // Seed Provider Types
+  // =========================================================================
+  console.log("[seed] Seeding provider types...");
+  const providerTypeMap = new Map<string, string>(); // name -> id
+
+  for (const provider of Object.values(seedProviderTypes)) {
+    const existing = await db.query.providerType.findFirst({
+      where: eq(providerType.name, provider.name),
+    });
+
+    if (existing) {
+      console.log(`[seed]   Provider type "${provider.name}" already exists`);
+      providerTypeMap.set(provider.name, existing.id);
+    } else {
+      const [created] = await db
+        .insert(providerType)
+        .values({
+          name: provider.name,
+          displayName: provider.displayName,
+          category: provider.category,
+          configSchema: provider.configSchema,
+          isEnabled: true,
+          isBuiltIn: true,
+        })
+        .returning();
+      console.log(`[seed]   Created provider type "${provider.name}"`);
+      providerTypeMap.set(provider.name, created!.id);
+
+      // Seed config fields for this provider type
+      for (const field of provider.fields) {
+        await db.insert(providerConfigField).values({
+          providerTypeId: created!.id,
+          fieldName: field.fieldName,
+          fieldLabel: field.fieldLabel,
+          fieldType: field.fieldType,
+          isRequired: field.isRequired,
+          isEncrypted: field.isEncrypted,
+          defaultValue: field.defaultValue,
+          options: field.options ?? null,
+          validationRules: field.validationRules ?? null,
+          sortOrder: field.sortOrder,
+        });
+      }
+      console.log(`[seed]   Created ${provider.fields.length} config fields for "${provider.name}"`);
     }
   }
 

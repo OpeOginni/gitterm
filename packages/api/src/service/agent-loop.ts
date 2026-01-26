@@ -98,11 +98,11 @@ export class AgentLoopService {
     // - pending runs can always be started
     // - running runs can be restarted if they're stalled (exceeded timeout)
     const isPending = run.status === "pending";
-    const isStalled = run.status === "running" && 
-      run.startedAt.getTime() < Date.now() - AGENT_LOOP_RUN_TIMEOUT_MS;
+    const isStalled =
+      run.status === "running" && run.startedAt.getTime() < Date.now() - AGENT_LOOP_RUN_TIMEOUT_MS;
 
     const isHalted = run.status === "halted";
-    
+
     if (!isPending && !isStalled && !isHalted) {
       return {
         success: false,
@@ -151,7 +151,7 @@ export class AgentLoopService {
 
       // Build callback URL - uses API_URL (server) for the webhook
       const listenerUrl = env.LISTENER_URL || env.BASE_URL;
-      const callbackSecret = env.CLOUDFLARE_CALLBACK_SECRET;
+      const callbackSecret = (await cloudflareSandboxProvider.getConfig())?.callbackSecret;
 
       if (!listenerUrl || !callbackSecret) {
         throw new Error(

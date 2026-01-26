@@ -11,7 +11,9 @@ import { Clock, Infinity as InfinityIcon, Zap, Repeat } from "lucide-react";
 export function UsageMetrics() {
   const { data, isLoading } = useQuery(trpc.workspace.getDailyUsage.queryOptions());
 
-  const { data: loopUsageData, isLoading: isLoadingLoopUsage } = useQuery(trpc.agentLoop.getUsage.queryOptions());
+  const { data: loopUsageData, isLoading: isLoadingLoopUsage } = useQuery(
+    trpc.agentLoop.getUsage.queryOptions(),
+  );
 
   if (isLoading || isLoadingLoopUsage) {
     return null;
@@ -103,26 +105,16 @@ export function UsageMetrics() {
                 </CardTitle>
                 <div
                   className={`p-2 rounded-lg transition-colors ${
-                    metric.accent
-                      ? "bg-accent/10 group-hover:bg-accent/20"
-                      : "bg-secondary/50"
+                    metric.accent ? "bg-accent/10 group-hover:bg-accent/20" : "bg-secondary/50"
                   }`}
                 >
                   <Icon
-                    className={`h-4 w-4 ${
-                      metric.accent
-                        ? "text-accent"
-                        : "text-muted-foreground"
-                    }`}
+                    className={`h-4 w-4 ${metric.accent ? "text-accent" : "text-muted-foreground"}`}
                   />
                 </div>
               </CardHeader>
               <CardContent>
-                <div
-                  className={`text-2xl font-semibold ${
-                    metric.accent ? "text-primary" : ""
-                  }`}
-                >
+                <div className={`text-2xl font-semibold ${metric.accent ? "text-primary" : ""}`}>
                   {metric.value}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">{metric.subtitle}</p>

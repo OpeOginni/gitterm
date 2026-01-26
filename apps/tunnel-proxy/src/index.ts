@@ -18,8 +18,9 @@ const connectionManager = new ConnectionManager();
  * Extract workspace subdomain from request
  *
  * Supports two routing modes:
- * - Subdomain: Extract from Host header (ws-abc123.gitterm.dev -> ws-abc123)
+ * - Subdomain: Extract from Host header (abc123.gitterm.dev -> abc123)
  * - Path: Extract from URL path (/ws/abc123/... -> abc123) or X-Subdomain header
+ * - Port-based: Extract from URL path (/ws/123-abc123/... -> abc123)
  *
  * Priority:
  * 1. X-Subdomain header (set by Caddy forward_auth)
@@ -276,22 +277,21 @@ app.all("/*", async (c) => {
       return c.notFound();
     }
 
-    // Determine routing mode from header or env
-    const routingMode = c.req.header("x-routing-mode") || env.ROUTING_MODE;
+    const activeRoutingMode = c.req.header("x-routing-mode") || env.ROUTING_MODE;
 
     // Extract workspace subdomain (works for both routing modes)
-    const fullSubdomain = extractSubdomain(c);
+    const requestedSubdomain = extractSubdomain(c);
 
-    if (!fullSubdomain) {
+    if (!requestedSubdomain) {
       return c.text("Bad Request", 400);
     }
 
     // Optional header from Caddy forward_auth; helps prevent Host spoofing.
-    const expectedBase = c.req.header("x-subdomain") || "";
+    const expectedBaseSubdomain = c.req.header("x-subdomain") || "";
 
     // Resolve which port is being requested (primary or service mapping).
-    const targetPort = await tunnelRepo.getServicePort(fullSubdomain);
-    if (!targetPort) {
+    const servicePort = await tunnelRepo.getServicePort(requestedSubdomain);
+    if (!servicePort) {
       return new Response(OFFLINE_HTML, {
         status: 503,
         headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -299,14 +299,15 @@ app.all("/*", async (c) => {
     }
 
     // Resolve agent by base subdomain (service subdomains may contain dashes).
-    const baseSubdomain = (await tunnelRepo.getServiceBase(fullSubdomain)) ?? fullSubdomain;
+    const workspaceSubdomain =
+      (await tunnelRepo.getServiceBase(requestedSubdomain)) ?? requestedSubdomain;
 
     // If auth layer already resolved a workspace subdomain, enforce it.
-    if (expectedBase && expectedBase !== baseSubdomain) {
+    if (expectedBaseSubdomain && expectedBaseSubdomain !== workspaceSubdomain) {
       return c.text("Bad Request", 400);
     }
 
-    const agent = connectionManager.get(baseSubdomain);
+    const agent = connectionManager.get(workspaceSubdomain);
     if (!agent) {
       return new Response(OFFLINE_HTML, {
         status: 503,
@@ -320,12 +321,12 @@ app.all("/*", async (c) => {
     // Strip /ws/{subdomain} prefix for path-based routing
     // So the agent receives the actual path the user intended
     const rawPath = c.req.path + (url.search || "");
-    const requestPath = stripWorkspacePrefix(rawPath, routingMode);
+    const requestPath = stripWorkspacePrefix(rawPath, activeRoutingMode);
 
     // SSE deduplication: cancel any existing SSE connection for this subdomain+path
     let sseKey: string | undefined;
     if (agent.mux.shouldDedupeSSE(c.req.path)) {
-      sseKey = `${baseSubdomain}:${c.req.path}`;
+      sseKey = `${workspaceSubdomain}:${c.req.path}`;
       const cancelledId = agent.mux.cancelExistingSSE(sseKey);
       if (cancelledId) {
         // Send close frame to agent for the old request
@@ -349,9 +350,11 @@ app.all("/*", async (c) => {
       method: c.req.method,
       path: requestPath,
       headers: Object.fromEntries(c.req.raw.headers.entries()),
-      port: targetPort,
+      port: servicePort,
       serviceName:
-        fullSubdomain === baseSubdomain ? undefined : fullSubdomain.slice(baseSubdomain.length + 1),
+        requestedSubdomain === workspaceSubdomain
+          ? undefined
+          : requestedSubdomain.slice(workspaceSubdomain.length + 1),
       timestamp: Date.now(),
     };
 
@@ -494,32 +497,7 @@ app.all("/*", async (c) => {
         return new Response(readable, { status: res.status, headers });
       }
 
-      // For path-based routing, inject <base> tag into HTML responses
-      // so relative URLs (like /assets/...) resolve to /ws/{subdomain}/assets/...
-      if (routingMode === "path" && contentType.includes("text/html")) {
-        const html = await res.text();
-        const baseTag = `<base href="/ws/${baseSubdomain}/">`;
-
-        // Inject <base> tag after <head> or at the start of the document
-        let modifiedHtml: string;
-        if (html.includes("<head>")) {
-          modifiedHtml = html.replace("<head>", `<head>${baseTag}`);
-        } else if (html.includes("<HEAD>")) {
-          modifiedHtml = html.replace("<HEAD>", `<HEAD>${baseTag}`);
-        } else if (html.includes("<html>") || html.includes("<HTML>")) {
-          modifiedHtml = html.replace(/<html>/i, `<html><head>${baseTag}</head>`);
-        } else {
-          // Prepend base tag for documents without proper HTML structure
-          modifiedHtml = baseTag + html;
-        }
-
-        const headers = new Headers(res.headers);
-        headers.set("content-length", String(new TextEncoder().encode(modifiedHtml).length));
-
-        return new Response(modifiedHtml, { status: res.status, headers });
-      }
-
-      return res;
+        return res;
     } catch (error) {
       console.error("[TUNNEL-PROXY] Request error:", {
         requestId,
@@ -566,6 +544,10 @@ console.log(
       : "subdomain (<subdomain>.<base-domain>)"
   }`,
 );
+
+if (env.ROUTING_MODE === "path") {
+  console.warn("[TUNNEL-PROXY] Path routing is not recommended. Prefer subdomains.");
+}
 
 Bun.serve({
   port,

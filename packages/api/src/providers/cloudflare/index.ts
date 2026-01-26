@@ -1,5 +1,6 @@
 import env from "@gitterm/env/server";
 import type { StartSandboxRunConfig } from "../compute";
+import { getProviderConfigService } from "../../service/provider-config";
 
 /**
  * Response from the Cloudflare sandbox worker
@@ -17,6 +18,11 @@ export interface SandboxErrorResponse {
   error: string;
   success: false;
   message: string;
+}
+
+interface CloudflareConfig {
+  workerUrl: string;
+  callbackSecret: string;
 }
 
 /**
@@ -50,17 +56,36 @@ export interface SandboxRunResult {
  */
 export class CloudflareSandboxProvider {
   readonly name = "cloudflare";
-  private workerUrl: string;
+  private config: CloudflareConfig | null = null;
 
-  constructor() {
-    this.workerUrl = env.CLOUDFLARE_WORKER_URL || "";
+  async getConfig(): Promise<CloudflareConfig | null> {
+    if (this.config) {
+      return this.config;
+    }
+
+    try {
+      const dbConfig = await getProviderConfigService().getProviderConfigForUse("cloudflare");
+      if (!dbConfig) {
+        return null;
+      }
+      this.config = dbConfig as CloudflareConfig;
+      return this.config;
+    } catch (error) {
+      console.warn(
+        "[CloudflareProvider] Failed to load config from database, falling back to env vars:",
+        error
+      );
+      return null;
+    }
   }
+
 
   /**
    * Check if the Cloudflare sandbox is configured
    */
-  isConfigured(): boolean {
-    return !!this.workerUrl;
+  async isConfigured(): Promise<boolean> {
+    const cloudflareConfig = await this.getConfig();
+    return !!cloudflareConfig?.workerUrl;
   }
 
   /**
@@ -74,11 +99,13 @@ export class CloudflareSandboxProvider {
    * and returns the result (original behavior).
    */
   async startRun(config: StartSandboxRunConfig): Promise<SandboxRunResult> {
-    if (!this.isConfigured()) {
+    const cloudflareConfig = await this.getConfig();
+
+    if (!cloudflareConfig?.workerUrl) {
       return {
         success: false,
         sandboxId: config.sandboxId,
-        error: "Cloudflare sandbox is not configured. Set CLOUDFLARE_WORKER_URL.",
+        error: "Cloudflare sandbox is not configured. Set cloudflare worker url in admin portal.",
       };
     }
 
@@ -101,7 +128,7 @@ export class CloudflareSandboxProvider {
     };
 
     try {
-      fetch(this.workerUrl, {
+      fetch(cloudflareConfig.workerUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

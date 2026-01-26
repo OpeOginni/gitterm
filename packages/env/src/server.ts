@@ -67,24 +67,12 @@ const baseSchema = z
     POLAR_RUN_PACK_50_PRODUCT_ID: optional,
     POLAR_RUN_PACK_100_PRODUCT_ID: optional,
 
-    // Railway
-    RAILWAY_API_URL: optional,
-    RAILWAY_API_TOKEN: optional,
-    RAILWAY_PROJECT_ID: optional,
-    RAILWAY_ENVIRONMENT_ID: optional,
-    RAILWAY_DEFAULT_REGION: z.string().default("us-east4-eqdc4a"),
-    PUBLIC_RAILWAY_DOMAINS: boolWithDefault(false),
-
-    // Cloudflare
-    CLOUDFLARE_WORKER_URL: optional,
-    CLOUDFLARE_CALLBACK_SECRET: optional,
-
     // Listener (for internal callbacks)
     LISTENER_URL: optional,
 
     // Tunnel
     TUNNEL_JWT_SECRET: optional,
-    AGENT_JWT_SECRET: optional,
+    CLI_JWT_SECRET: optional,
     WORKSPACE_JWT_SECRET: optional,
 
     // Encryption (for storing API keys/credentials)

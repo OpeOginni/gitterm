@@ -1,0 +1,10 @@
+{
+  "extends": "@gitterm/config/tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "noEmit": true,
+    "types": ["bun"],
+    "moduleResolution": "nodenext"
+  },
+  "include": ["src"]
+}

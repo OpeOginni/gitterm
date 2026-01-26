@@ -313,6 +313,52 @@ export const internalRouter = router({
 
       return { success: true };
     }),
+
+  // Mark a workspace as pending (for tunnel-proxy on disconnect)
+  markWorkspacePendingInternal: internalProcedure
+    .input(z.object({ workspaceId: z.string() }))
+    .mutation(async ({ input }) => {
+      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
+
+      if (!ws) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      if (ws.status === "terminated") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Cannot move terminated workspace to pending",
+        });
+      }
+
+      if (ws.hostingType !== "local" && (ws.status === "running" || ws.status === "pending")) {
+        await closeUsageSession(input.workspaceId, "manual");
+      }
+
+      const now = new Date();
+      await db
+        .update(workspace)
+        .set({
+          status: "pending",
+          stoppedAt: null,
+          lastActiveAt: now,
+          updatedAt: now,
+        })
+        .where(eq(workspace.id, input.workspaceId));
+
+      WORKSPACE_EVENTS.emitStatus({
+        workspaceId: input.workspaceId,
+        status: "pending",
+        updatedAt: now,
+        userId: ws.userId,
+        workspaceDomain: ws.domain,
+      });
+
+      return { success: true };
+    }),
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
     const longTermInactiveWorkspaces = await db
       .select()
@@ -602,6 +648,44 @@ export const internalRouter = router({
         return { updated: updatedWorkspaces };
       }
 
+      if (input.type === "Deployment.failed" && input.details?.serviceId) {
+        const serviceId = input.details.serviceId;
+
+        const [railwayProvider] = await db
+          .select()
+          .from(cloudProvider)
+          .where(eq(cloudProvider.name, "Railway"));
+
+        if (!railwayProvider) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Railway provider not found in database",
+          });
+        }
+
+        const updatedWorkspaces = await db
+          .update(workspace)
+          .set({
+            status: "stopped",
+            updatedAt: new Date(input.timestamp),
+          })
+          .where(
+            and(
+              eq(workspace.cloudProviderId, railwayProvider.id),
+              eq(workspace.externalInstanceId, serviceId),
+            ),
+          )
+          .returning({
+            id: workspace.id,
+            status: workspace.status,
+            updatedAt: workspace.updatedAt,
+            userId: workspace.userId,
+            workspaceDomain: workspace.domain,
+          });
+
+        return { updated: updatedWorkspaces };
+      }
+
       return { updated: [] };
     }),
 
@@ -758,330 +842,331 @@ export const internalRouter = router({
   processAgentLoopCallback: internalProcedure
     .input(agentLoopWebhookSchema)
     .mutation(async ({ input }) => {
-
-      try{
-
-      console.log("Processing agent loop callback", {
-        action: "agent_loop_callback",
-        input: input,
-      });
-
-      // Get the run with its loop
-      const run = await db.query.agentLoopRun.findFirst({
-        where: eq(agentLoopRun.id, input.runId),
-        with: {
-          loop: true,
-        },
-      });
-
-      if (!run) {
-        logger.warn("Agent loop callback: run not found", {
-          action: "agent_loop_callback_not_found",
-          runId: input.runId,
+      try {
+        console.log("Processing agent loop callback", {
+          action: "agent_loop_callback",
+          input: input,
         });
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Run not found",
+
+        // Get the run with its loop
+        const run = await db.query.agentLoopRun.findFirst({
+          where: eq(agentLoopRun.id, input.runId),
+          with: {
+            loop: true,
+          },
         });
-      }
 
-      // Check if run is in a state that can be updated
-      if (run.status !== "running" && run.status !== "pending") {
-        logger.warn("Agent loop callback: run already completed", {
-          action: "agent_loop_callback_already_done",
-          runId: input.runId,
-          status: run.status,
-        });
-        return {
-          success: true,
-          message: "Run already completed, callback ignored",
-        };
-      }
+        if (!run) {
+          logger.warn("Agent loop callback: run not found", {
+            action: "agent_loop_callback_not_found",
+            runId: input.runId,
+          });
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Run not found",
+          });
+        }
 
-      const loop = run.loop;
-      const now = new Date();
-      const durationSeconds = Math.round((now.getTime() - run.startedAt.getTime()) / 1000);
+        // Check if run is in a state that can be updated
+        if (run.status !== "running" && run.status !== "pending") {
+          logger.warn("Agent loop callback: run already completed", {
+            action: "agent_loop_callback_already_done",
+            runId: input.runId,
+            status: run.status,
+          });
+          return {
+            success: true,
+            message: "Run already completed, callback ignored",
+          };
+        }
 
-      if (input.success) {
-        // Update run as completed
-        await db
-          .update(agentLoopRun)
-          .set({
-            status: "completed",
-            completedAt: now,
-            durationSeconds,
-            sandboxId: input.sandboxId,
-            commitSha: input.commitSha,
-            commitMessage: input.commitMessage,
-          })
-          .where(eq(agentLoopRun.id, input.runId));
+        const loop = run.loop;
+        const now = new Date();
+        const durationSeconds = Math.round((now.getTime() - run.startedAt.getTime()) / 1000);
 
-        if (input.isListComplete) {
+        if (input.success) {
+          // Update run as completed
+          await db
+            .update(agentLoopRun)
+            .set({
+              status: "completed",
+              completedAt: now,
+              durationSeconds,
+              sandboxId: input.sandboxId,
+              commitSha: input.commitSha,
+              commitMessage: input.commitMessage,
+            })
+            .where(eq(agentLoopRun.id, input.runId));
+
+          if (input.isListComplete) {
+            await db
+              .update(agentLoop)
+              .set({
+                status: "completed" as const,
+                successfulRuns: sql`${agentLoop.successfulRuns} + 1`,
+                // Use GREATEST to ensure we don't decrease totalRuns if a later run already exists
+                lastRunId: input.runId,
+                lastRunAt: now,
+                updatedAt: now,
+              })
+              .where(eq(agentLoop.id, loop.id));
+
+            return {
+              success: true,
+              message: "Run completed, loop is complete",
+            };
+          }
+
+          // Update loop counters
+
+          // Check if this is the last iteration
+          // Use run.runNumber instead of loop.totalRuns to handle restart scenarios correctly
+          const isLastIteration = run.runNumber >= loop.maxRuns;
+
           await db
             .update(agentLoop)
             .set({
-              status: "completed" as const,
               successfulRuns: sql`${agentLoop.successfulRuns} + 1`,
-              // Use GREATEST to ensure we don't decrease totalRuns if a later run already exists
+              lastRunId: input.runId,
+              lastRunAt: now,
+              updatedAt: now,
+              // Mark loop as completed if agent says so
+              ...(isLastIteration ? { status: "completed" as const } : {}),
+            })
+            .where(eq(agentLoop.id, loop.id));
+
+          logger.info("Agent loop run completed successfully", {
+            action: "agent_loop_run_complete",
+            loopId: loop.id,
+            runId: input.runId,
+            runNumber: run.runNumber,
+            commitSha: input.commitSha,
+            durationSeconds,
+          });
+
+          // Trigger next run if automation is enabled and not complete
+          if (loop.automationEnabled && !isLastIteration) {
+            // Create next pending run with the same AI config as the completed run
+            const nextRunNumber = run.runNumber + 1; // Next run after the completing one
+            const [newRun] = await db
+              .insert(agentLoopRun)
+              .values({
+                loopId: loop.id,
+                runNumber: nextRunNumber,
+                status: "pending",
+                triggerType: "automated",
+                modelProviderId: run.modelProviderId,
+                modelId: run.modelId,
+              })
+              .returning();
+
+            if (!newRun) {
+              logger.error("Failed to create next automated run", {
+                action: "automated_run_creation_failed",
+                loopId: loop.id,
+                runNumber: nextRunNumber,
+              });
+
+              return {
+                success: false,
+                message: "Failed to create next automated run",
+              };
+            }
+
+            // Deduct run from user quota and record event
+            // For automated runs, we halt on exhaustion instead of throwing
+            const quotaResult = await deductRunFromQuota(loop.userId, loop.id, newRun.id, {
+              haltOnExhaustion: true,
+              allowMissingQuota: false,
+            });
+
+            // If quota deduction failed or run should be halted, mark it and return
+            if (!quotaResult.success) {
+              if (quotaResult.halted) {
+                await db
+                  .update(agentLoopRun)
+                  .set({
+                    status: "halted",
+                    completedAt: new Date(),
+                    errorMessage:
+                      quotaResult.errorMessage || "Run halted due to quota/payment issue",
+                  })
+                  .where(eq(agentLoopRun.id, newRun.id));
+
+                logger.warn("Automated run halted due to quota issue", {
+                  action: "automated_run_halted",
+                  userId: loop.userId,
+                  loopId: loop.id,
+                  runId: newRun.id,
+                });
+
+                return {
+                  success: false,
+                  message: quotaResult.errorMessage || "Run halted due to quota/payment issue",
+                };
+              }
+              // If not halted but failed, throw (shouldn't happen with haltOnExhaustion=true)
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: quotaResult.errorMessage || "Failed to deduct quota",
+              });
+            }
+
+            // Get model config and credential
+            let providerRecord, modelRecord, credential;
+            try {
+              const modelConfig = await getModelConfig({
+                modelProviderId: run.modelProviderId,
+                modelId: run.modelId,
+              });
+              providerRecord = modelConfig.providerRecord;
+              modelRecord = modelConfig.modelRecord;
+
+              // Check if credential is required for automated runs
+              if (!modelRecord.isFree && !loop.credentialId) {
+                logger.error("No credential configured for automated run", {
+                  action: "credential_missing",
+                  loopId: loop.id,
+                });
+
+                // Mark the run as failed so it doesn't stay pending forever
+                await db
+                  .update(agentLoopRun)
+                  .set({
+                    status: "failed",
+                    completedAt: new Date(),
+                    errorMessage:
+                      "No API key configured for this loop. Please update the loop settings or recreate it.",
+                  })
+                  .where(eq(agentLoopRun.id, newRun.id));
+
+                return {
+                  success: false,
+                  message: "No credential configured for automated run",
+                };
+              }
+
+              credential = await getCredentialForRun(
+                loop.userId,
+                loop.id,
+                newRun.id,
+                loop,
+                providerRecord,
+                modelRecord,
+              );
+            } catch (error) {
+              logger.error("Failed to get model config or credential", {
+                action: "model_config_failed",
+                loopId: loop.id,
+                runId: newRun.id,
+                error: error instanceof Error ? error.message : "Unknown error",
+              });
+
+              return {
+                success: false,
+                message:
+                  error instanceof TRPCError ? error.message : "Failed to get model configuration",
+              };
+            }
+
+            const service = getAgentLoopService();
+            const startResult = await service.startRunAsync({
+              loopId: loop.id,
+              runId: newRun.id,
+              provider: providerRecord.name,
+              modelId: modelRecord.modelId,
+              credential,
+              prompt: loop.prompt || undefined,
+            });
+
+            if (!startResult.success) {
+              // Refund quota since run failed to start
+              try {
+                await refundRunToQuota(loop.userId, loop.id, newRun.id);
+              } catch (error) {
+                logger.error("Failed to refund quota after automated run start failure", {
+                  action: "automated_run_refund_failed",
+                  userId: loop.userId,
+                  loopId: loop.id,
+                  runId: newRun.id,
+                  error: error instanceof Error ? error.message : "Unknown error",
+                });
+              }
+
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: startResult.error || "Failed to start run",
+              });
+            }
+
+            // Update loop run count after successful start
+            await db
+              .update(agentLoop)
+              .set({
+                totalRuns: nextRunNumber, // Use the new run number directly
+                lastRunId: newRun.id,
+              })
+              .where(eq(agentLoop.id, loop.id));
+
+            logger.info("Created next automated run", {
+              action: "automated_run_created",
+              loopId: loop.id,
+              runId: newRun?.id,
+              runNumber: nextRunNumber,
+            });
+
+            return {
+              success: true,
+              message: "Run completed, next run created",
+              nextRunId: newRun?.id,
+            };
+          }
+
+          return {
+            success: true,
+            message: "Run completed, plan is complete",
+          };
+        } else {
+          // Update run as failed
+          await db
+            .update(agentLoopRun)
+            .set({
+              status: "failed",
+              completedAt: now,
+              durationSeconds,
+              sandboxId: input.sandboxId,
+              errorMessage: input.error,
+            })
+            .where(eq(agentLoopRun.id, input.runId));
+
+          // Update loop counters
+          // Note: totalRuns was already incremented when the run was created, so don't increment again
+          await db
+            .update(agentLoop)
+            .set({
+              failedRuns: loop.failedRuns + 1,
               lastRunId: input.runId,
               lastRunAt: now,
               updatedAt: now,
             })
             .where(eq(agentLoop.id, loop.id));
-            
-          return {
-            success: true,
-            message: "Run completed, loop is complete",
-          };
-        }
 
-        // Update loop counters
-
-        // Check if this is the last iteration
-        // Use run.runNumber instead of loop.totalRuns to handle restart scenarios correctly
-        const isLastIteration = run.runNumber >= loop.maxRuns;
-
-        await db
-          .update(agentLoop)
-          .set({
-            successfulRuns: sql`${agentLoop.successfulRuns} + 1`,
-            lastRunId: input.runId,
-            lastRunAt: now,
-            updatedAt: now,
-            // Mark loop as completed if agent says so
-            ...(isLastIteration ? { status: "completed" as const } : {}),
-          })
-          .where(eq(agentLoop.id, loop.id));
-
-        logger.info("Agent loop run completed successfully", {
-          action: "agent_loop_run_complete",
-          loopId: loop.id,
-          runId: input.runId,
-          runNumber: run.runNumber,
-          commitSha: input.commitSha,
-          durationSeconds,
-        });
-
-        // Trigger next run if automation is enabled and not complete
-        if (loop.automationEnabled && !isLastIteration) {
-          // Create next pending run with the same AI config as the completed run
-          const nextRunNumber = run.runNumber + 1; // Next run after the completing one
-          const [newRun] = await db
-            .insert(agentLoopRun)
-            .values({
-              loopId: loop.id,
-              runNumber: nextRunNumber,
-              status: "pending",
-              triggerType: "automated",
-              modelProviderId: run.modelProviderId,
-              modelId: run.modelId,
-            })
-            .returning();
-
-          if (!newRun) {
-            logger.error("Failed to create next automated run", {
-              action: "automated_run_creation_failed",
-              loopId: loop.id,
-              runNumber: nextRunNumber,
-            });
-
-            return {
-              success: false,
-              message: "Failed to create next automated run",
-            };
-          }
-
-          // Deduct run from user quota and record event
-          // For automated runs, we halt on exhaustion instead of throwing
-          const quotaResult = await deductRunFromQuota(loop.userId, loop.id, newRun.id, {
-            haltOnExhaustion: true,
-            allowMissingQuota: false,
-          });
-
-          // If quota deduction failed or run should be halted, mark it and return
-          if (!quotaResult.success) {
-            if (quotaResult.halted) {
-              await db
-                .update(agentLoopRun)
-                .set({
-                  status: "halted",
-                  completedAt: new Date(),
-                  errorMessage: quotaResult.errorMessage || "Run halted due to quota/payment issue",
-                })
-                .where(eq(agentLoopRun.id, newRun.id));
-
-              logger.warn("Automated run halted due to quota issue", {
-                action: "automated_run_halted",
-                userId: loop.userId,
-                loopId: loop.id,
-                runId: newRun.id,
-              });
-
-              return {
-                success: false,
-                message: quotaResult.errorMessage || "Run halted due to quota/payment issue",
-              };
-            }
-            // If not halted but failed, throw (shouldn't happen with haltOnExhaustion=true)
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message: quotaResult.errorMessage || "Failed to deduct quota",
-            });
-          }
-
-          // Get model config and credential
-          let providerRecord, modelRecord, credential;
-          try {
-            const modelConfig = await getModelConfig({
-              modelProviderId: run.modelProviderId,
-              modelId: run.modelId,
-            });
-            providerRecord = modelConfig.providerRecord;
-            modelRecord = modelConfig.modelRecord;
-
-            // Check if credential is required for automated runs
-            if (!modelRecord.isFree && !loop.credentialId) {
-              logger.error("No credential configured for automated run", {
-                action: "credential_missing",
-                loopId: loop.id,
-              });
-
-              // Mark the run as failed so it doesn't stay pending forever
-              await db
-                .update(agentLoopRun)
-                .set({
-                  status: "failed",
-                  completedAt: new Date(),
-                  errorMessage: "No API key configured for this loop. Please update the loop settings or recreate it.",
-                })
-                .where(eq(agentLoopRun.id, newRun.id));
-
-              return {
-                success: false,
-                message: "No credential configured for automated run",
-              };
-            }
-
-            credential = await getCredentialForRun(
-              loop.userId,
-              loop.id,
-              newRun.id,
-              loop,
-              providerRecord,
-              modelRecord,
-            );
-          } catch (error) {
-            logger.error("Failed to get model config or credential", {
-              action: "model_config_failed",
-              loopId: loop.id,
-              runId: newRun.id,
-              error: error instanceof Error ? error.message : "Unknown error",
-            });
-
-            return {
-              success: false,
-              message: error instanceof TRPCError ? error.message : "Failed to get model configuration",
-            };
-          }
-
-          const service = getAgentLoopService();
-          const startResult = await service.startRunAsync({
+          logger.error("Agent loop run failed", {
+            action: "agent_loop_run_failed",
             loopId: loop.id,
-            runId: newRun.id,
-            provider: providerRecord.name,
-            modelId: modelRecord.modelId,
-            credential,
-            prompt: loop.prompt || undefined,
+            runId: input.runId,
+            runNumber: run.runNumber,
+            error: input.error,
           });
 
-          if (!startResult.success) {
-            // Refund quota since run failed to start
-            try {
-              await refundRunToQuota(loop.userId, loop.id, newRun.id);
-            } catch (error) {
-              logger.error("Failed to refund quota after automated run start failure", {
-                action: "automated_run_refund_failed",
-                userId: loop.userId,
-                loopId: loop.id,
-                runId: newRun.id,
-                error: error instanceof Error ? error.message : "Unknown error",
-              });
-            }
-
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message: startResult.error || "Failed to start run",
-            });
-          }
-
-          // Update loop run count after successful start
-          await db
-            .update(agentLoop)
-            .set({
-              totalRuns: nextRunNumber, // Use the new run number directly
-              lastRunId: newRun.id,
-            })
-            .where(eq(agentLoop.id, loop.id));
-
-          logger.info("Created next automated run", {
-            action: "automated_run_created",
-            loopId: loop.id,
-            runId: newRun?.id,
-            runNumber: nextRunNumber,
-          });
+          // TODO: Send email notification about failure
 
           return {
             success: true,
-            message: "Run completed, next run created",
-            nextRunId: newRun?.id,
+            message: "Run failure recorded",
           };
         }
-
-        return {
-          success: true,
-          message: "Run completed, plan is complete",
-        };
-      } else {
-        // Update run as failed
-        await db
-          .update(agentLoopRun)
-          .set({
-            status: "failed",
-            completedAt: now,
-            durationSeconds,
-            sandboxId: input.sandboxId,
-            errorMessage: input.error,
-          })
-          .where(eq(agentLoopRun.id, input.runId));
-
-        // Update loop counters
-        // Note: totalRuns was already incremented when the run was created, so don't increment again
-        await db
-          .update(agentLoop)
-          .set({
-            failedRuns: loop.failedRuns + 1,
-            lastRunId: input.runId,
-            lastRunAt: now,
-            updatedAt: now,
-          })
-          .where(eq(agentLoop.id, loop.id));
-
-        logger.error("Agent loop run failed", {
-          action: "agent_loop_run_failed",
-          loopId: loop.id,
-          runId: input.runId,
-          runNumber: run.runNumber,
-          error: input.error,
-        });
-
-        // TODO: Send email notification about failure
-
-        return {
-          success: true,
-          message: "Run failure recorded",
-        };
-      } 
-    } catch (error) {
+      } catch (error) {
         logger.error("Failed to process agent loop callback", {
           action: "agent_loop_callback_failed",
           runId: input.runId,

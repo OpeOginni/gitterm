@@ -5,7 +5,7 @@
  * Supports both subdomain-based and path-based routing modes.
  *
  * Routing Modes:
- * - subdomain: ws-abc123.gitterm.dev (requires wildcard DNS)
+ * - subdomain: abc123.gitterm.dev (requires wildcard DNS)
  * - path: gitterm.dev/ws/abc123 (no wildcard DNS required)
  */
 
@@ -72,8 +72,8 @@ export function getWorkspaceDomain(subdomain: string): string {
 /**
  * Construct a workspace URL given its subdomain
  *
- * In subdomain mode: https://ws-abc123.gitterm.dev
- * In path mode: https://gitterm.dev/ws/ws-abc123
+ * In subdomain mode: https://abc123.gitterm.dev
+ * In path mode: https://gitterm.dev/ws/abc123
  */
 export function getWorkspaceUrl(subdomain: string): string {
   const isLocalhost =
@@ -92,8 +92,8 @@ export function getWorkspaceUrl(subdomain: string): string {
 /**
  * Construct a workspace URL with a specific path
  *
- * In subdomain mode: https://ws-abc123.gitterm.dev/api/status
- * In path mode: https://gitterm.dev/ws/ws-abc123/api/status
+ * In subdomain mode: https://abc123.gitterm.dev/api/status
+ * In path mode: https://gitterm.dev/ws/abc123/api/status
  */
 export function getWorkspaceUrlWithPath(subdomain: string, path: string): string {
   const baseUrl = getWorkspaceUrl(subdomain);
@@ -105,8 +105,9 @@ export function getWorkspaceUrlWithPath(subdomain: string, path: string): string
  * Extract workspace subdomain from request context
  *
  * Supports both routing modes:
- * - Subdomain: Extract from Host header (ws-abc123.gitterm.dev -> ws-abc123)
+ * - Subdomain: Extract from Host header (abc123.gitterm.dev -> abc123)
  * - Path: Extract from URL path (/ws/abc123/... -> abc123) or X-Subdomain header
+ * - Port-based: Extract from URL path (/ws/123-abc123/... -> abc123)
  *
  * @param host - The Host header value
  * @param path - The request path (optional, for path-based routing)

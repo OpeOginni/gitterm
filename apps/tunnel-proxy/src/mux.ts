@@ -11,7 +11,7 @@ export interface PendingStreamResponse {
 }
 
 // SSE endpoints that should be deduplicated (only one connection allowed at a time)
-const SSE_DEDUPE_PATHS = ["/global/event"];
+const SSE_DEDUPE_PATHS = ["/global/event", "/event"];
 
 function isSSEDedupePath(path: string): boolean {
   // Check if path matches any SSE dedupe pattern (ignoring query string)

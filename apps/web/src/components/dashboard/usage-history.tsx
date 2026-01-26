@@ -14,7 +14,7 @@ export function UsageHistory() {
       status: "all",
       limit: 100,
       offset: 0,
-    })
+    }),
   );
 
   if (isLoading) {

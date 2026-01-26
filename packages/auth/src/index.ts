@@ -54,13 +54,17 @@ const PRODUCT_TO_PLAN: Record<string, UserPlan> = {
  * Maps Polar product IDs to run pack names (for one-time purchases)
  */
 const PRODUCT_TO_PLAN_RUN_PACK: Record<string, "run_pack_50" | "run_pack_100" | null> = {
-  ...(env.POLAR_RUN_PACK_50_PRODUCT_ID ? { [env.POLAR_RUN_PACK_50_PRODUCT_ID]: "run_pack_50" as const } : {}),
-  ...(env.POLAR_RUN_PACK_100_PRODUCT_ID ? { [env.POLAR_RUN_PACK_100_PRODUCT_ID]: "run_pack_100" as const } : {}),
+  ...(env.POLAR_RUN_PACK_50_PRODUCT_ID
+    ? { [env.POLAR_RUN_PACK_50_PRODUCT_ID]: "run_pack_50" as const }
+    : {}),
+  ...(env.POLAR_RUN_PACK_100_PRODUCT_ID
+    ? { [env.POLAR_RUN_PACK_100_PRODUCT_ID]: "run_pack_100" as const }
+    : {}),
 };
 
 const RUN_PACK_TO_RUNS_MAP: Record<"run_pack_50" | "run_pack_100", number> = {
-  "run_pack_50": 50,
-  "run_pack_100": 100,
+  run_pack_50: 50,
+  run_pack_100: 100,
 };
 
 const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
@@ -131,57 +135,64 @@ const updateUserPlan = async (userId: string, plan: UserPlan): Promise<void> => 
   }
 };
 
-const recordUserLoopRunEvent = async (userId: string, runsAdded: number, refund: boolean = false): Promise<void> => {
+const recordUserLoopRunEvent = async (
+  userId: string,
+  runsAdded: number,
+  refund: boolean = false,
+): Promise<void> => {
   try {
-
     await db.transaction(async (tx) => {
-      await tx.insert(agentLoopSchema.userLoopRunEvent)
-        .values({
-          userId,
-          runsAdded: runsAdded,
-        });
+      await tx.insert(agentLoopSchema.userLoopRunEvent).values({
+        userId,
+        runsAdded: runsAdded,
+      });
 
-        const [userCurrentRunPlan] = await tx.select().from(agentLoopSchema.userLoopRunQuota).where(eq(agentLoopSchema.userLoopRunQuota.userId, userId));
+      const [userCurrentRunPlan] = await tx
+        .select()
+        .from(agentLoopSchema.userLoopRunQuota)
+        .where(eq(agentLoopSchema.userLoopRunQuota.userId, userId));
 
-        if(!userCurrentRunPlan) {
-
-          if(refund) {
-            return;
-          }
-
-          const [user] = await tx.select().from(schema.user).where(eq(schema.user.id, userId));
-
-          if(!user) {
-            throw new Error("User not found");
-          }
-
-          await tx.insert(agentLoopSchema.userLoopRunQuota).values({
-            userId,
-            plan: user.plan,
-            monthlyRuns: MONTHLY_RUN_QUOTAS[user.plan as UserPlan],
-            extraRuns: runsAdded,
-            nextMonthlyResetAt: addMonths(new Date(), 1),
-          });
-
-          await tx.update(agentLoopSchema.userLoopRunQuota)
-          .set({
-            extraRuns: runsAdded,
-          })
-          .where(eq(agentLoopSchema.userLoopRunQuota.userId, userId));
-
+      if (!userCurrentRunPlan) {
+        if (refund) {
           return;
         }
 
-        const newExtraRunsRaw = refund ? userCurrentRunPlan.extraRuns - runsAdded : userCurrentRunPlan.extraRuns + runsAdded;
-        const newExtraRuns = Math.max(newExtraRunsRaw, 0);
+        const [user] = await tx.select().from(schema.user).where(eq(schema.user.id, userId));
 
-        await tx.update(agentLoopSchema.userLoopRunQuota)
+        if (!user) {
+          throw new Error("User not found");
+        }
+
+        await tx.insert(agentLoopSchema.userLoopRunQuota).values({
+          userId,
+          plan: user.plan,
+          monthlyRuns: MONTHLY_RUN_QUOTAS[user.plan as UserPlan],
+          extraRuns: runsAdded,
+          nextMonthlyResetAt: addMonths(new Date(), 1),
+        });
+
+        await tx
+          .update(agentLoopSchema.userLoopRunQuota)
           .set({
-            extraRuns: newExtraRuns,
+            extraRuns: runsAdded,
           })
           .where(eq(agentLoopSchema.userLoopRunQuota.userId, userId));
+
+        return;
+      }
+
+      const newExtraRunsRaw = refund
+        ? userCurrentRunPlan.extraRuns - runsAdded
+        : userCurrentRunPlan.extraRuns + runsAdded;
+      const newExtraRuns = Math.max(newExtraRunsRaw, 0);
+
+      await tx
+        .update(agentLoopSchema.userLoopRunQuota)
+        .set({
+          extraRuns: newExtraRuns,
+        })
+        .where(eq(agentLoopSchema.userLoopRunQuota.userId, userId));
     });
-    
   } catch (error) {
     console.error(`[polar] Failed to update user ${userId} run plan:`, error);
     throw error;
@@ -196,14 +207,18 @@ const createUserLoopRunQuota = async (userId: string, plan: UserPlan): Promise<v
       monthlyRuns: MONTHLY_RUN_QUOTAS[plan],
       extraRuns: 0,
       nextMonthlyResetAt: addMonths(new Date(), 1),
-    })
+    });
   } catch (error) {
     console.error(`[polar] Failed to create user ${userId} run quota:`, error);
     throw error;
   }
 };
 
-const updateUserLoopRunQuota = async (userId: string, plan: UserPlan, billingPeriodEnd: Date): Promise<void> => {
+const updateUserLoopRunQuota = async (
+  userId: string,
+  plan: UserPlan,
+  billingPeriodEnd: Date,
+): Promise<void> => {
   try {
     // Check if quota exists
     const [existingQuota] = await db
@@ -301,9 +316,9 @@ export const auth = betterAuth({
       create: {
         after: async (user, ctx) => {
           await createUserLoopRunQuota(user.id, "free");
-        }
-      }
-    }
+        },
+      },
+    },
   },
   plugins: [
     // Polar billing plugin (only if enabled)
@@ -343,8 +358,10 @@ export const auth = betterAuth({
 
                         await updateUserPlan(userId, plan);
 
-                        if(plan === "pro") {
-                          const billingEnd = payload.data.currentPeriodEnd ? new Date(payload.data.currentPeriodEnd) : addMonths(new Date(), 1);
+                        if (plan === "pro") {
+                          const billingEnd = payload.data.currentPeriodEnd
+                            ? new Date(payload.data.currentPeriodEnd)
+                            : addMonths(new Date(), 1);
                           await updateUserLoopRunQuota(userId, plan, billingEnd);
                         }
                       },
@@ -364,11 +381,13 @@ export const auth = betterAuth({
                           return;
                         }
 
-                        console.log(`[polar] Subscription revoked: user=${userId} - downgrading to free`);
-                        
+                        console.log(
+                          `[polar] Subscription revoked: user=${userId} - downgrading to free`,
+                        );
+
                         // Access has ended - downgrade to free plan
                         await updateUserPlan(userId, "free");
-                        
+
                         // Update run quota to free plan
                         // Set next reset to 1 month from now (since period has ended)
                         const billingEnd = addMonths(new Date(), 1);
@@ -386,17 +405,17 @@ export const auth = betterAuth({
                         if (!productId) {
                           console.warn("[polar] Order paid but no productId");
                           return;
-                        } 
+                        }
 
                         const plan = getRunPackFromProductId(productId);
 
-                        if(!plan) {
+                        if (!plan) {
                           return;
                         }
 
                         const runs = RUN_PACK_TO_RUNS_MAP[plan];
 
-                        if(!runs) {
+                        if (!runs) {
                           return;
                         }
 
@@ -418,18 +437,18 @@ export const auth = betterAuth({
 
                         const plan = getRunPackFromProductId(productId);
 
-                        if(!plan) {
+                        if (!plan) {
                           return;
                         }
 
                         const runs = RUN_PACK_TO_RUNS_MAP[plan];
 
-                        if(!runs) {
+                        if (!runs) {
                           return;
                         }
 
                         await recordUserLoopRunEvent(userId, runs, true);
-                      }
+                      },
                     }),
                   ]
                 : []),

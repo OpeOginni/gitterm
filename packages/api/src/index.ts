@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context } from "./context";
 import { workspaceJWT } from "./service/workspace-jwt";
 import env from "@gitterm/env/server";
+import { cliJWT } from "./service/tunnel/cli-jwt";
 
 // Internal service API key for service-to-service communication
 const INTERNAL_API_KEY = env.INTERNAL_API_KEY;
@@ -175,6 +176,34 @@ export const workspaceAuthProcedure = t.procedure.use(({ ctx, next }) => {
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: error instanceof Error ? error.message : "Invalid workspace token",
+    });
+  }
+});
+
+
+export const cliAuthProcedure = t.procedure.use(({ ctx, next }) => {
+  const token = ctx.bearerToken;
+
+  if (!token) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "CLI authentication token required",
+    });
+  }
+
+  try {
+    const payload = cliJWT.verifyToken(token);
+
+    return next({
+      ctx: {
+        ...ctx,
+        cliAuth: payload,
+      },
+    });
+  } catch (error) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: error instanceof Error ? error.message : "Invalid CLI token",
     });
   }
 });

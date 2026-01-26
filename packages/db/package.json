@@ -21,15 +21,16 @@
     "db:seed": "bun run ./src/seed-cli.ts"
   },
   "dependencies": {
+    "@gitterm/schema": "workspace:*",
     "dotenv": "catalog:",
-    "drizzle-orm": "^0.44.2",
+    "drizzle-orm": "catalog:",
     "pg": "^8.14.1",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@gitterm/config": "workspace:*",
     "@types/pg": "^8.11.11",
-    "drizzle-kit": "^0.31.2"
+    "drizzle-kit": "catalog:"
   },
   "peerDependencies": {
     "typescript": "^5"

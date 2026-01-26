@@ -99,6 +99,83 @@ export class GitHubAppService {
     });
   }
 
+
+  /**
+   * Check if a repository is valid, exists, and can be cloned.
+   * - valid: URL parses as a GitHub repo
+   * - exists: repo exists on GitHub (we got 200 or 403)
+   * - canClone: we can reach it (public, or with the user's integration we have access)
+   *
+   * @param repositoryUrl - HTTPS or SSH GitHub URL
+   * @param options - If provided, use the user's GitHub App integration to check access (for private repos)
+   */
+  async checkIfValidRepository(
+    repositoryUrl: string,
+    options?: { userId: string; gitIntegrationId: string },
+  ): Promise<{ valid: boolean; exists: boolean; canClone: boolean }> {
+    const parsed = this.parseRepoUrl(repositoryUrl);
+    if (!parsed) {
+      return { valid: false, exists: false, canClone: false };
+    }
+    const { owner, repo } = parsed;
+
+    if(!options?.userId || !options?.gitIntegrationId) {
+      // Try unauthenticated (public repos)
+      const anonOctokit = new Octokit();
+      try {
+        await anonOctokit.repos.get({ owner, repo });
+        return { valid: true, exists: true, canClone: true };
+      } catch (e: unknown) {
+          logger.warn(`checkIfValidRepository: unauthenticated request failed for ${owner}/${repo}`, {
+            action: "check_if_valid_repo",
+          });
+          return { valid: true, exists: false, canClone: false };
+        // 404: not found or private — try with user's integration if provided
+      }
+    }
+
+    const [integration] = await db
+    .select()
+    .from(gitIntegration)
+    .where(
+      and(
+        eq(gitIntegration.id, options.gitIntegrationId),
+        eq(gitIntegration.userId, options.userId),
+        eq(gitIntegration.provider, "github"),
+      ),
+    )
+    .limit(1);
+
+
+    if (!integration) {
+      return { valid: true, exists: false, canClone: false };
+    }
+
+    const installation = await this.getUserInstallation(options.userId, integration.providerInstallationId);
+
+    if (!installation) {
+      return { valid: true, exists: false, canClone: false };
+    }
+
+    try {
+      const { token } = await this.getUserToServerToken(installation.installationId);
+      const userOctokit = new Octokit({ auth: token });
+      await userOctokit.repos.get({ owner, repo });
+      return { valid: true, exists: true, canClone: true };
+    } catch (e: unknown) {
+      if (isNotFoundError(e)) {
+        return { valid: true, exists: false, canClone: false };
+      }
+      if (e && typeof e === "object" && "status" in e && (e as { status: number }).status === 403) {
+        return { valid: true, exists: true, canClone: false };
+      }
+      logger.error(`checkIfValidRepository: auth request failed for ${owner}/${repo}`, {
+        action: "check_if_valid_repo",
+      }, e as Error);
+      return { valid: true, exists: false, canClone: false };
+    }
+  }
+
   /**
    * Get a user-to-server access token for a specific installation
    * This token is short-lived (1 hour) and scoped to the installation's permissions

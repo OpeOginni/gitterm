@@ -13,10 +13,7 @@ export async function getModelConfig(loop: { modelProviderId: string; modelId: s
     .from(modelProvider)
     .where(eq(modelProvider.id, loop.modelProviderId));
 
-  const [modelRecord] = await db
-    .select()
-    .from(model)
-    .where(eq(model.id, loop.modelId));
+  const [modelRecord] = await db.select().from(model).where(eq(model.id, loop.modelId));
 
   if (!providerRecord || !modelRecord) {
     throw new TRPCError({
@@ -41,7 +38,7 @@ export async function getCredentialForRun(
   modelRecord: { isFree: boolean },
 ): Promise<SandboxCredential> {
   const credService = getModelCredentialsService();
-  
+
   let credential: SandboxCredential = {
     type: "api_key",
     apiKey: "", // Default empty for free models
@@ -52,15 +49,17 @@ export async function getCredentialForRun(
     if (loop.credentialId) {
       // Automated run - use loop's stored credential
       // getCredentialForRun already returns CredentialForRun (SandboxCredential format)
-      credential = await credService.getCredentialForRun(
-        loop.credentialId,
-        userId,
-        { loopId, runId },
-      );
+      credential = await credService.getCredentialForRun(loop.credentialId, userId, {
+        loopId,
+        runId,
+      });
     } else {
       // Manual run - find user's credential for provider
       // getUserCredentialForProvider returns DecryptedCredential (has .credential property)
-      const decryptedCred = await credService.getUserCredentialForProvider(userId, providerRecord.name);
+      const decryptedCred = await credService.getUserCredentialForProvider(
+        userId,
+        providerRecord.name,
+      );
 
       if (!decryptedCred) {
         throw new TRPCError({
@@ -78,11 +77,10 @@ export async function getCredentialForRun(
       } else {
         // OAuth - ensure we have fresh tokens by calling getCredentialForRun
         // This converts DecryptedCredential to CredentialForRun (SandboxCredential)
-        credential = await credService.getCredentialForRun(
-          decryptedCred.id,
-          userId,
-          { loopId, runId },
-        );
+        credential = await credService.getCredentialForRun(decryptedCred.id, userId, {
+          loopId,
+          runId,
+        });
       }
     }
   }

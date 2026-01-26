@@ -29,7 +29,7 @@ class LocalProvider implements ComputeProvider {
     const externalServiceId = `local-${config.workspaceId}`;
 
     // Domain is constructed from subdomain using routing utils
-    // Returns subdomain.baseDomain (e.g., ws-abc123.gitterm.dev)
+    // Returns subdomain.baseDomain (e.g., abc123.gitterm.dev)
     const domain = getWorkspaceDomain(config.subdomain);
 
     return {
@@ -79,6 +79,18 @@ class LocalProvider implements ComputeProvider {
     return {
       status: "stopped",
     };
+  }
+
+  async createOrGetExposedPortDomain(externalServiceId: string, port: number): Promise<{ domain: string, externalPortDomainId?: string }> {
+    // Local workspaces don't support exposed ports yet
+    // This could be implemented in the future to use local directories
+    throw new Error("Exposed ports are not supported for local workspaces");
+  }
+
+  async removeExposedPortDomain(externalServiceDomainId: string): Promise<void> {
+    // Local workspaces don't support exposed ports yet
+    // This could be implemented in the future to use local directories
+    throw new Error("Exposed ports are not supported for local workspaces");
   }
 }
 

@@ -25,7 +25,7 @@ interface RunNextIterationDialogProps {
 export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIterationDialogProps) {
   // Fetch credentials to check if user has one for the loop's provider
   const { data: credentialsData, isLoading: credentialsLoading } = useQuery(
-    trpc.modelCredentials.listMyCredentials.queryOptions()
+    trpc.modelCredentials.listMyCredentials.queryOptions(),
   );
 
   const credentials = credentialsData?.credentials ?? [];
@@ -33,9 +33,7 @@ export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIter
   // Find the credential for this loop's provider
   const credentialForProvider = useMemo(() => {
     if (!loop.modelProvider?.name) return null;
-    return credentials.find(
-      (c) => c.providerName === loop.modelProvider?.name && c.isActive
-    );
+    return credentials.find((c) => c.providerName === loop.modelProvider?.name && c.isActive);
   }, [credentials, loop.modelProvider?.name]);
 
   const hasValidCredential = !!credentialForProvider;
@@ -56,7 +54,7 @@ export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIter
         console.error(error);
         toast.error(`Failed to start run: ${error.message}`);
       },
-    })
+    }),
   );
 
   const handleSubmit = async () => {
@@ -116,11 +114,13 @@ export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIter
 
           {/* Credential Status */}
           {!isFreeModel && (
-            <div className={`rounded-lg p-3 text-sm ${
-              hasValidCredential 
-                ? "bg-green-500/10 border border-green-500/20" 
-                : "bg-destructive/10 border border-destructive/20"
-            }`}>
+            <div
+              className={`rounded-lg p-3 text-sm ${
+                hasValidCredential
+                  ? "bg-green-500/10 border border-green-500/20"
+                  : "bg-destructive/10 border border-destructive/20"
+              }`}
+            >
               {credentialsLoading ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />

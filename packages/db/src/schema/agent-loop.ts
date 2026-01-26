@@ -145,14 +145,15 @@ export const agentLoopRun = pgTable("agent_loop_run", {
 export const userLoopRunQuota = pgTable("user_loop_run_quota", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id")
-    .notNull().unique()
+    .notNull()
+    .unique()
     .references(() => user.id, { onDelete: "cascade" }),
   plan: text("plan").notNull(),
   monthlyRuns: integer("monthly_runs").notNull().default(0),
   extraRuns: integer("extra_runs").notNull().default(0),
   nextMonthlyResetAt: timestamp("next_monthly_reset_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow()
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const userLoopRunEvent = pgTable("user_loop_run_event", {

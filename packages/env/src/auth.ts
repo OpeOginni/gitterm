@@ -40,7 +40,6 @@ const schema = z.object({
   POLAR_RUN_PACK_50_PRODUCT_ID: optional,
   POLAR_RUN_PACK_100_PRODUCT_ID: optional,
 
-
   ENABLE_BILLING: boolWithDefault(false),
 });
 
@@ -51,7 +50,7 @@ export default env;
 
 export const isManaged = () => env.DEPLOYMENT_MODE === "managed";
 export const isProduction = () =>
-  env.NODE_ENV === "production" || env.RAILWAY_ENVIRONMENT === "production";
+  env.NODE_ENV === "production";
 export const isBillingEnabled = () =>
   (env.ENABLE_BILLING || isManaged()) && !!env.POLAR_ACCESS_TOKEN;
 export const isGitHubAuthEnabled = () => !!env.GITHUB_CLIENT_ID;

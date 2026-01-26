@@ -93,7 +93,7 @@ function headersToRecord(headers: Headers): Record<string, string> {
 
 type AgentConfig = {
   serverUrl: string;
-  agentToken: string;
+  cliToken: string;
   createdAt: number;
 };
 
@@ -111,7 +111,7 @@ async function loadConfig(): Promise<AgentConfig | null> {
   try {
     const text = await readFile(path, "utf-8");
     const parsed = JSON.parse(text) as AgentConfig;
-    if (!parsed.agentToken || !parsed.serverUrl) return null;
+    if (!parsed.cliToken || !parsed.serverUrl) return null;
     return parsed;
   } catch {
     return null;
@@ -144,7 +144,7 @@ type DeviceCodeResponse = {
   expiresInSeconds: number;
 };
 
-async function loginViaDeviceCode(serverUrl: string): Promise<{ agentToken: string }> {
+async function loginViaDeviceCode(serverUrl: string): Promise<{ cliToken: string }> {
   const codeRes = await fetch(new URL("/api/device/code", serverUrl), {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -169,7 +169,7 @@ async function loginViaDeviceCode(serverUrl: string): Promise<{ agentToken: stri
 
     if (tokenRes.ok) {
       const tokenJson = (await tokenRes.json()) as { accessToken: string };
-      return { agentToken: tokenJson.accessToken };
+      return { cliToken: tokenJson.accessToken };
     }
 
     // 428 = authorization_pending
@@ -191,8 +191,8 @@ type LoginArgs = {
 async function runLogin(args: LoginArgs) {
   console.log(`Logging in to gitterm...`);
 
-  const { agentToken } = await loginViaDeviceCode(args.serverUrl);
-  await saveConfig({ serverUrl: args.serverUrl, agentToken, createdAt: Date.now() });
+  const { cliToken } = await loginViaDeviceCode(args.serverUrl);
+  await saveConfig({ serverUrl: args.serverUrl, cliToken, createdAt: Date.now() });
   console.log("Logged in successfully!");
   process.exit(0);
 }
@@ -212,14 +212,14 @@ type AgentConnectConfig = {
 
 async function mintTunnelToken(params: {
   serverUrl: string;
-  agentToken: string;
+  cliToken: string;
   workspaceId: string;
 }) {
   const res = await fetch(new URL("/api/agent/tunnel-token", params.serverUrl), {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${params.agentToken}`,
+      authorization: `Bearer ${params.cliToken}`,
     },
     body: JSON.stringify({ workspaceId: params.workspaceId }),
   });
@@ -230,10 +230,10 @@ async function mintTunnelToken(params: {
       const refreshed = await loginViaDeviceCode(params.serverUrl);
       await saveConfig({
         serverUrl: params.serverUrl,
-        agentToken: refreshed.agentToken,
+        cliToken: refreshed.cliToken,
         createdAt: Date.now(),
       });
-      return await mintTunnelToken({ ...params, agentToken: refreshed.agentToken });
+      return await mintTunnelToken({ ...params, cliToken: refreshed.cliToken });
     }
     throw new Error(`Failed to mint tunnel token: ${res.status} ${text}`);
   }
@@ -248,7 +248,7 @@ async function mintTunnelToken(params: {
 
 async function updateWorkspacePorts(params: {
   serverUrl: string;
-  agentToken: string;
+  cliToken: string;
   workspaceId: string;
   localPort: number;
   exposedPorts: Record<string, { port: number; description?: string }>;
@@ -257,7 +257,7 @@ async function updateWorkspacePorts(params: {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${params.agentToken}`,
+      authorization: `Bearer ${params.cliToken}`,
     },
     body: JSON.stringify({
       workspaceId: params.workspaceId,
@@ -272,10 +272,10 @@ async function updateWorkspacePorts(params: {
       const refreshed = await loginViaDeviceCode(params.serverUrl);
       await saveConfig({
         serverUrl: params.serverUrl,
-        agentToken: refreshed.agentToken,
+        cliToken: refreshed.cliToken,
         createdAt: Date.now(),
       });
-      return await updateWorkspacePorts({ ...params, agentToken: refreshed.agentToken });
+      return await updateWorkspacePorts({ ...params, cliToken: refreshed.cliToken });
     }
     throw new Error(`Failed to update workspace ports: ${res.status} ${text}`);
   }
@@ -333,14 +333,14 @@ async function runConnect(args: ConnectArgs) {
     const targetServerUrl = new URL(effectiveServerUrl).origin;
     const isDifferentServer = savedServerUrl && savedServerUrl !== targetServerUrl;
 
-    if (!config?.agentToken || isDifferentServer) {
+    if (!config?.cliToken || isDifferentServer) {
       if (isDifferentServer) {
         console.log(`Switching to ${targetServerUrl}. Starting login...`);
       } else {
         console.log("No saved credentials found. Starting login...");
       }
-      const { agentToken } = await loginViaDeviceCode(effectiveServerUrl);
-      config = { serverUrl: effectiveServerUrl, agentToken, createdAt: Date.now() };
+      const { cliToken } = await loginViaDeviceCode(effectiveServerUrl);
+      config = { serverUrl: effectiveServerUrl, cliToken, createdAt: Date.now() };
       await saveConfig(config);
       console.log("Logged in successfully!\n");
     }
@@ -357,7 +357,7 @@ async function runConnect(args: ConnectArgs) {
 
       await updateWorkspacePorts({
         serverUrl: effectiveServerUrl,
-        agentToken: config.agentToken,
+        cliToken: config.cliToken,
         workspaceId: args.workspaceId,
         localPort: primaryPort,
         exposedPorts,
@@ -368,7 +368,7 @@ async function runConnect(args: ConnectArgs) {
 
     const minted = await mintTunnelToken({
       serverUrl: effectiveServerUrl,
-      agentToken: config.agentToken,
+      cliToken: config.cliToken,
       workspaceId: args.workspaceId,
     });
     token = minted.token;

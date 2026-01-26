@@ -7,7 +7,6 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -19,7 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Globe, MapPin } from "lucide-react";
+import { Plus, Globe, KeyRound } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import type { Route } from "next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +30,11 @@ export default function ProvidersPage() {
   const { data: session, isPending: isSessionPending } = authClient.useSession();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  const { data: providers, isLoading } = useQuery({
+    queryKey: ["admin", "providers"],
+    queryFn: () => trpcClient.admin.infrastructure.listProviders.query(),
+  });
 
   useEffect(() => {
     if (!isSessionPending) {
@@ -45,20 +49,8 @@ export default function ProvidersPage() {
       }
     }
   }, [session?.user, isSessionPending]);
-  const [isCreateRegionOpen, setIsCreateRegionOpen] = useState(false);
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+
   const [newProviderName, setNewProviderName] = useState("");
-  const [newRegion, setNewRegion] = useState({
-    name: "",
-    location: "",
-    externalRegionIdentifier: "",
-  });
-
-  const { data: providers, isLoading } = useQuery({
-    queryKey: ["admin", "providers"],
-    queryFn: () => trpcClient.admin.infrastructure.listProviders.query(),
-  });
-
   const createProvider = useMutation({
     mutationFn: (name: string) => trpcClient.admin.infrastructure.createProvider.mutate({ name }),
     onSuccess: () => {
@@ -66,43 +58,6 @@ export default function ProvidersPage() {
       setIsCreateOpen(false);
       setNewProviderName("");
       toast.success("Provider created");
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
-  const toggleProvider = useMutation({
-    mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) =>
-      trpcClient.admin.infrastructure.toggleProvider.mutate({ id, isEnabled }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-      toast.success(`Provider ${data.isEnabled ? "enabled" : "disabled"}`);
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
-  const createRegion = useMutation({
-    mutationFn: (params: {
-      cloudProviderId: string;
-      name: string;
-      location: string;
-      externalRegionIdentifier: string;
-    }) => trpcClient.admin.infrastructure.createRegion.mutate(params),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-      setIsCreateRegionOpen(false);
-      setSelectedProviderId(null);
-      setNewRegion({ name: "", location: "", externalRegionIdentifier: "" });
-      toast.success("Region created");
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
-  const toggleRegion = useMutation({
-    mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) =>
-      trpcClient.admin.infrastructure.toggleRegion.mutate({ id, isEnabled }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-      toast.success(`Region ${data.isEnabled ? "enabled" : "disabled"}`);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -177,97 +132,62 @@ export default function ProvidersPage() {
             ))}
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {providers?.map((provider) => (
-              <div key={provider.id} className={!provider.isEnabled ? "opacity-60" : ""}>
-                {/* Provider Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Globe className="h-5 w-5 text-muted-foreground" />
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{provider.name}</h3>
-                      {!provider.isEnabled && (
-                        <Badge variant="secondary" className="text-xs">
-                          Disabled
-                        </Badge>
-                      )}
+              <Link
+                key={provider.id}
+                href={`/admin/providers/${provider.id}` as Route}
+                className={`group block rounded-xl border border-border/70 bg-background/40 p-5 shadow-sm transition-all hover:border-primary/50 hover:bg-background/70 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40`}
+              >
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1 rounded-md bg-muted/40 p-2 transition-colors group-hover:bg-muted/60">
+                      <Globe className="h-5 w-5 text-muted-foreground/70" />
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {provider.regions.filter((r) => r.isEnabled).length} of{" "}
-                      {provider.regions.length} region{provider.regions.length !== 1 ? "s" : ""}{" "}
-                      enabled
-                    </p>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-foreground/90">{provider.name}</h3>
+                        {!provider.isEnabled && (
+                          <Badge variant="secondary" className="text-xs">
+                            Disabled
+                          </Badge>
+                        )}
+                        {!provider.providerConfig && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs text-amber-500 border-amber-200/70 bg-amber-500/10"
+                          >
+                            Missing Config
+                          </Badge>
+                        )}
+                        {provider.providerConfig && !provider.providerConfig.isEnabled && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-border/70 text-muted-foreground"
+                          >
+                            Config Disabled
+                          </Badge>
+                        )}
+                        {provider.providerConfig && provider.providerConfig.isEnabled && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-emerald-500/50 text-emerald-500 bg-emerald-500/10"
+                          >
+                            Configured
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground/80">
+                        {provider.regions.length} region{provider.regions.length !== 1 ? "s" : ""}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedProviderId(provider.id);
-                        setIsCreateRegionOpen(true);
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Region
-                    </Button>
-                    <div className="flex items-center gap-2">
-                      <Label
-                        htmlFor={`provider-${provider.id}`}
-                        className="text-sm text-muted-foreground"
-                      >
-                        {provider.isEnabled ? "Enabled" : "Disabled"}
-                      </Label>
-                      <Switch
-                        id={`provider-${provider.id}`}
-                        checked={provider.isEnabled}
-                        onCheckedChange={(checked) =>
-                          toggleProvider.mutate({ id: provider.id, isEnabled: checked })
-                        }
-                      />
-                    </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground/80 group-hover:text-foreground/80">
+                    <KeyRound className="h-4 w-4" />
+                    <span>Provider Settings</span>
                   </div>
                 </div>
-
-                {/* Regions List */}
-                {provider.regions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground pl-8">No regions configured yet.</p>
-                ) : (
-                  <div className="space-y-1 pl-8">
-                    {provider.regions.map((region) => (
-                      <div
-                        key={region.id}
-                        className={`flex items-center justify-between py-3 px-4 rounded-lg hover:bg-muted/40 transition-colors group ${!region.isEnabled ? "opacity-60" : ""}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{region.name}</span>
-                            {!region.isEnabled && (
-                              <Badge variant="secondary" className="text-xs">
-                                Disabled
-                              </Badge>
-                            )}
-                            <span className="text-muted-foreground">-</span>
-                            <span className="text-sm text-muted-foreground">{region.location}</span>
-                            <code className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded">
-                              {region.externalRegionIdentifier}
-                            </code>
-                          </div>
-                        </div>
-                        <Switch
-                          checked={region.isEnabled}
-                          onCheckedChange={(checked) =>
-                            toggleRegion.mutate({ id: region.id, isEnabled: checked })
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Divider between providers */}
-                <div className="mt-6 border-b border-border/30" />
-              </div>
+              </Link>
             ))}
 
             {providers?.length === 0 && (
@@ -278,69 +198,6 @@ export default function ProvidersPage() {
           </div>
         )}
       </div>
-
-      {/* Create Region Dialog */}
-      <Dialog open={isCreateRegionOpen} onOpenChange={setIsCreateRegionOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Region</DialogTitle>
-            <DialogDescription>Add a new region to this cloud provider.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="region-name">Region Name</Label>
-              <Input
-                id="region-name"
-                value={newRegion.name}
-                onChange={(e) => setNewRegion({ ...newRegion, name: e.target.value })}
-                placeholder="e.g., US West"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={newRegion.location}
-                onChange={(e) => setNewRegion({ ...newRegion, location: e.target.value })}
-                placeholder="e.g., California"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="external-id">External Identifier</Label>
-              <Input
-                id="external-id"
-                value={newRegion.externalRegionIdentifier}
-                onChange={(e) =>
-                  setNewRegion({ ...newRegion, externalRegionIdentifier: e.target.value })
-                }
-                placeholder="e.g., us-west-2"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateRegionOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() =>
-                selectedProviderId &&
-                createRegion.mutate({
-                  cloudProviderId: selectedProviderId,
-                  ...newRegion,
-                })
-              }
-              disabled={
-                !newRegion.name ||
-                !newRegion.location ||
-                !newRegion.externalRegionIdentifier ||
-                createRegion.isPending
-              }
-            >
-              {createRegion.isPending ? "Creating..." : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </DashboardShell>
   );
 }

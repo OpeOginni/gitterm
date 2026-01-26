@@ -2,6 +2,7 @@ import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { relations } from "drizzle-orm";
 import { volume, workspace } from "./workspace";
+import { providerConfig } from "./provider-config";
 
 export const cloudAccount = pgTable("cloud_account", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -21,8 +22,9 @@ export const cloudAccount = pgTable("cloud_account", {
 export const cloudProvider = pgTable("cloud_provider", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
+  providerConfigId: uuid("provider_config_id").references(() => providerConfig.id, { onDelete: "set null" }),
   isEnabled: boolean("is_enabled").notNull().default(true),
-  isSandbox: boolean("is_sandbox").notNull().default(false), // true for Cloudflare, false for AWS/Railway
+  isSandbox: boolean("is_sandbox").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -72,7 +74,11 @@ export const cloudAccountRelations = relations(cloudAccount, ({ one }) => ({
   }),
 }));
 
-export const cloudProviderRelations = relations(cloudProvider, ({ many }) => ({
+export const cloudProviderRelations = relations(cloudProvider, ({ one, many }) => ({
+  providerConfig: one(providerConfig, {
+    fields: [cloudProvider.providerConfigId],
+    references: [providerConfig.id],
+  }),
   regions: many(region),
   cloudAccounts: many(cloudAccount),
   volumes: many(volume),

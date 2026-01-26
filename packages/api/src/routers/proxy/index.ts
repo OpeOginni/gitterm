@@ -284,7 +284,7 @@ export const proxyResolverRouter = async (c: Context) => {
     const routingMode = c.req.header("X-Routing-Mode") || env.ROUTING_MODE;
     const host = c.req.header("Host") || "";
 
-    const subdomain = extractWorkspaceSubdomain(host, originalUri, {
+    let subdomain = extractWorkspaceSubdomain(host, originalUri, {
       "x-subdomain": c.req.header("X-Subdomain"),
       "x-routing-mode": routingMode,
     });
@@ -301,6 +301,11 @@ export const proxyResolverRouter = async (c: Context) => {
       return htmlError(c, "unavailable", 400);
     }
 
+    const extractedPort = subdomain?.includes("-") ? subdomain.split("-")[0] : null;
+    if (extractedPort) {
+      subdomain = subdomain?.replace(`${extractedPort}-`, "");
+    }
+
     // Get session from cookies
     const session = await auth.api.getSession({
       headers: c.req.raw.headers,
@@ -308,6 +313,7 @@ export const proxyResolverRouter = async (c: Context) => {
 
     // Check workspace - only match active (running) workspaces
     // Subdomain is not unique, so we must filter by status to get the correct one
+
     const [ws] = await db
       .select()
       .from(workspace)
@@ -319,6 +325,15 @@ export const proxyResolverRouter = async (c: Context) => {
       return htmlError(c, "unavailable", 404);
     }
 
+
+    let portUpstream: string | null = null;
+    if (extractedPort) {
+      portUpstream = ws.exposedPorts?.[extractedPort]?.upstreamUrl ?? null;
+      if (!portUpstream) {
+        console.log("[PROXY-RESOLVE] Port upstream URL not found for extracted port:", extractedPort);
+        return htmlError(c, "unavailable", 404);
+      }
+    }
     console.log("[PROXY-RESOLVE] Workspace found:", {
       id: ws.id,
       subdomain: ws.subdomain,
@@ -370,59 +385,70 @@ export const proxyResolverRouter = async (c: Context) => {
       if (!ws.upstreamUrl) {
         return htmlError(c, "error", 500);
       }
-      const upstreamUrl = new URL(ws.upstreamUrl);
-      const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
+      let upstreamUrl = new URL(ws.upstreamUrl);
+      let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
 
-      console.log('[PROXY-RESOLVE] Server-only workspace response:', {
+      if (extractedPort && portUpstream) {
+        // portUpstream validated above (404 if null)
+        const portUrl = new URL(portUpstream);
+        port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
+        upstreamUrl = portUrl;
+      }
+
+      console.log("[PROXY-RESOLVE] Server-only workspace response:", {
         "X-Upstream-URL": ws.upstreamUrl,
         "X-Container-Host": upstreamUrl.hostname,
         "X-Container-Port": port,
-        "X-Container-Protocol": upstreamUrl.protocol.replace(':', ''),
+        "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
       });
 
-		  return c.text('OK', 200, {
-            'X-Upstream-URL': ws.upstreamUrl,
-			'X-Container-Host': upstreamUrl.hostname,
-            'X-Container-Port': port,
-			'X-Container-Protocol': upstreamUrl.protocol.replace(':', ''),
-      'X-Hosting-Type': "cloud",
-		  });
-		}
-	
-		// Validate auth for non-server-only
-		if (!session) {
-		  return htmlError(c, 'unavailable', 401);
-		}
-	
-		if (ws.userId !== session.user?.id) {
-		  return htmlError(c, 'unavailable', 403);
-		}
-	
-		if (!ws.upstreamUrl) {
-		  return htmlError(c, 'error', 500);
-		}
-	
-        const upstreamUrl = new URL(ws.upstreamUrl);
-		const port = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
-		
-		console.log('[PROXY-RESOLVE] Cloud workspace routing:', {
-			upstreamUrl: ws.upstreamUrl,
-			containerHost: upstreamUrl.hostname,
-			containerPort: port,
-			protocol: upstreamUrl.protocol,
-		});
-		
-		return c.text('OK', 200, {
-          'X-Upstream-URL': ws.upstreamUrl,
-		  'X-Container-Host': upstreamUrl.hostname,
-          'X-Container-Port': port,
-		  'X-Container-Protocol': upstreamUrl.protocol.replace(':', ''),
-		  'X-User-ID': session.user.id,
-		  'X-Hosting-Type': ws.hostingType,
-		});
-		
-	  } catch (error) {
-		console.error('Auth resolve error:', error);
-		return htmlError(c, 'error', 500);
-	  }
-}
+      return c.text("OK", 200, {
+        "X-Upstream-URL": upstreamUrl.toString(),
+        "X-Container-Host": upstreamUrl.hostname,
+        "X-Container-Port": port,
+        "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+        "X-Hosting-Type": "cloud",
+      });
+    }
+
+    // Validate auth for non-server-only
+    if (!session) {
+      return htmlError(c, "unavailable", 401);
+    }
+
+    if (ws.userId !== session.user?.id) {
+      return htmlError(c, "unavailable", 403);
+    }
+
+    if (!ws.upstreamUrl) {
+      return htmlError(c, "error", 500);
+    }
+
+    let upstreamUrl = new URL(ws.upstreamUrl);
+    let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
+    if (extractedPort && portUpstream) {
+      const portUrl = new URL(portUpstream);
+      port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
+      upstreamUrl = portUrl;
+    }
+
+    console.log("[PROXY-RESOLVE] Cloud workspace routing:", {
+      upstreamUrl: ws.upstreamUrl,
+      containerHost: upstreamUrl.hostname,
+      containerPort: port,
+      protocol: upstreamUrl.protocol,
+    });
+
+    return c.text("OK", 200, {
+      "X-Upstream-URL": upstreamUrl.toString(),
+      "X-Container-Host": upstreamUrl.hostname,
+      "X-Container-Port": port,
+      "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+      "X-User-ID": session.user.id,
+      "X-Hosting-Type": ws.hostingType,
+    });
+  } catch (error) {
+    console.error("Auth resolve error:", error);
+    return htmlError(c, "error", 500);
+  }
+};

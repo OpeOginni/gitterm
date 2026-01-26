@@ -4,8 +4,8 @@ import { defineConfig } from "drizzle-kit";
 
 // Load from server .env in development only if file exists and DATABASE_URL is not already set
 if (!process.env.DATABASE_URL) {
-  // const envPath = "../../apps/server/.env.development.local";
-  const envPath = "../../apps/server/.env";
+  const envPath = "../../apps/server/.env.development.local";
+  // const envPath = "../../apps/server/.env";
   if (existsSync(envPath)) {
     dotenv.config({ path: envPath });
   }
@@ -15,7 +15,6 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is required");
 }
 
-console.log("DATABASE_URL", process.env.DATABASE_URL);
 export default defineConfig({
   schema: "./src/schema",
   out: "./src/migrations",

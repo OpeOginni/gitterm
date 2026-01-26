@@ -1,7 +1,7 @@
 /**
  * Infrastructure Admin Router
  *
- * Manages cloud providers, regions, agent types, and images.
+ * Manages cloud providers, regions, agent types, images, and provider configurations.
  */
 
 import { z } from "zod";
@@ -17,6 +17,9 @@ import {
   type NewAgentType,
   type NewImage,
 } from "@gitterm/db/schema/cloud";
+import { getProviderConfigService } from "../../service/provider-config";
+import { getAllProviderDefinitions } from "@gitterm/schema/provider-registry";
+import { providerType } from "@gitterm/db/schema/provider-config";
 
 // ============================================================================
 // Input Schemas
@@ -29,7 +32,7 @@ const createCloudProviderSchema = z.object({
 const updateCloudProviderSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1, "Provider name is required").optional(),
-  isEnabled: z.boolean().optional(),
+  providerConfigId: z.uuid().nullable().optional(),
 });
 
 const createRegionSchema = z.object({
@@ -73,6 +76,22 @@ const updateImageSchema = z.object({
   isEnabled: z.boolean().optional(),
 });
 
+const createProviderConfigSchema = z.object({
+  providerTypeId: z.uuid(),
+  name: z.string().min(1, "Provider config name is required"),
+  config: z.record(z.any(), z.any()),
+  isDefault: z.boolean().default(false),
+  priority: z.number().default(0),
+});
+
+const updateProviderConfigSchema = z.object({
+  id: z.uuid(),
+  name: z.string().min(1).optional(),
+  config: z.record(z.any(), z.any()).optional(),
+  isDefault: z.boolean().optional(),
+  priority: z.number().optional(),
+});
+
 // ============================================================================
 // Router
 // ============================================================================
@@ -89,7 +108,17 @@ export const infrastructureRouter = router({
       },
       orderBy: (provider, { asc }) => [asc(provider.name)],
     });
-    return providers;
+
+    const service = getProviderConfigService();
+
+    return await Promise.all(
+      providers.map(async (provider) => ({
+        ...provider,
+        providerConfig: provider.providerConfigId
+          ? await service.getProviderConfigById(provider.providerConfigId)
+          : null,
+      })),
+    );
   }),
 
   getProvider: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
@@ -104,7 +133,14 @@ export const infrastructureRouter = router({
       throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
     }
 
-    return provider;
+    const service = getProviderConfigService();
+
+    return {
+      ...provider,
+      providerConfig: provider.providerConfigId
+        ? await service.getProviderConfigById(provider.providerConfigId)
+        : null,
+    };
   }),
 
   createProvider: adminProcedure.input(createCloudProviderSchema).mutation(async ({ input }) => {
@@ -112,6 +148,7 @@ export const infrastructureRouter = router({
       .insert(cloudProvider)
       .values({
         name: input.name,
+        isEnabled: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       } as NewCloudProvider)
@@ -127,6 +164,7 @@ export const infrastructureRouter = router({
       .update(cloudProvider)
       .set({
         ...updates,
+        ...(updates.providerConfigId === null ? { isEnabled: false } : {}),
         updatedAt: new Date(),
       })
       .where(eq(cloudProvider.id, id))
@@ -142,6 +180,43 @@ export const infrastructureRouter = router({
   toggleProvider: adminProcedure
     .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
     .mutation(async ({ input }) => {
+      const existingProvider = await db.query.cloudProvider.findFirst({
+        where: eq(cloudProvider.id, input.id),
+      });
+
+      if (!existingProvider) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
+      }
+
+      if (input.isEnabled && existingProvider.name.toLowerCase() !== "local") {
+        if (!existingProvider.providerConfigId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Provider configuration is missing. Configure it before enabling.",
+          });
+        }
+
+        const providerConfigService = getProviderConfigService();
+        const config = await providerConfigService.getProviderConfigById(
+          existingProvider.providerConfigId,
+        );
+
+        if (!config || !config.isEnabled) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Provider configuration is disabled or local provider. Enable it before enabling the provider.",
+          });
+        }
+
+        const missingFields = await providerConfigService.getMissingRequiredFields(config);
+        if (missingFields.length > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Provider configuration is incomplete. Missing: ${missingFields.join(", ")}.`,
+          });
+        }
+      }
+
       const [updated] = await db
         .update(cloudProvider)
         .set({
@@ -426,4 +501,79 @@ export const infrastructureRouter = router({
 
       return updated;
     }),
+
+  // ========================================================================
+  // Provider Configuration
+  // ========================================================================
+
+  listProviderTypes: adminProcedure.query(async () => {
+    const providerTypes = await db.query.providerType.findMany({
+      orderBy: (pt, { asc }) => [asc(pt.displayName)],
+    });
+    return providerTypes;
+  }),
+
+  getProviderType: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
+    const fetchedProviderType = await db.query.providerType.findFirst({
+      where: eq(providerType.id, input.id),
+      with: {
+        configFields: true,
+      },
+    });
+
+    if (!fetchedProviderType) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Provider type not found" });
+    }
+
+    return fetchedProviderType;
+  }),
+
+  listProviderConfigs: adminProcedure.query(async () => {
+    const service = getProviderConfigService();
+    return await service.getAllProviderConfigs();
+  }),
+
+  getProviderConfig: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
+    const service = getProviderConfigService();
+    const config = await service.getProviderConfigById(input.id);
+
+    if (!config) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Provider config not found" });
+    }
+
+    return config;
+  }),
+
+  createProviderConfig: adminProcedure.input(createProviderConfigSchema).mutation(async ({ input }) => {
+    const service = getProviderConfigService();
+    return await service.createProviderConfig(input);
+  }),
+
+  updateProviderConfig: adminProcedure.input(updateProviderConfigSchema).mutation(async ({ input }) => {
+    const service = getProviderConfigService();
+    const { id, ...updates } = input;
+    return await service.updateProviderConfig(id, updates);
+  }),
+
+  deleteProviderConfig: adminProcedure.input(z.object({ id: z.uuid() })).mutation(async ({ input }) => {
+    const service = getProviderConfigService();
+    await service.deleteProviderConfig(input.id);
+    return { success: true };
+  }),
+
+  toggleProviderConfig: adminProcedure
+    .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const service = getProviderConfigService();
+      return await service.toggleProviderConfig(input.id, input.isEnabled);
+    }),
+
+  getProviderConfigFields: adminProcedure.input(z.object({ providerTypeId: z.uuid() })).query(async ({ input }) => {
+    const service = getProviderConfigService();
+    return await service.getProviderConfigFields(input.providerTypeId);
+  }),
+
+  getProviderDefinitions: adminProcedure.query(async () => {
+    return getAllProviderDefinitions();
+  }),
 });

@@ -52,8 +52,8 @@ export function HowItWorksSection() {
               </p>
             </div>
             <div className="font-mono text-sm bg-background rounded-lg px-4 py-3 border border-border">
-              <span className="text-primary">$</span> npx @opeoginni/gitterm-agent connect
-              --workspace-id "ws_abc123" --port 3000
+              <span className="text-primary">$</span> npx gitterm tunnel
+              --w abc1234 --port 4096
             </div>
           </div>
         </div>

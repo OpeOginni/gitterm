@@ -31,6 +31,7 @@ import {
   canUseCustomTunnelSubdomain,
   type UserPlan,
 } from "../../config/features";
+import { getProviderConfigService } from "../../service/provider-config";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -260,7 +261,7 @@ export const workspaceRouter = router({
           .select({ count: sql<number>`count(*)` })
           .from(workspace)
           .where(statusCondition);
-        
+
         const total = Number(countResult?.count ?? 0);
 
         // Fetch paginated workspaces
@@ -725,7 +726,7 @@ export const workspaceRouter = router({
         agentTypeId: z.string(),
         cloudProviderId: z.string(),
         regionId: z.string(),
-        gitInstallationId: z.string().optional(),
+        gitIntegrationId: z.string().optional(),
         persistent: z.boolean(),
       }),
     )
@@ -761,32 +762,7 @@ export const workspaceRouter = router({
           });
         }
 
-        // try {
-        //   const proc = Bun.spawn(
-        //     ["git", "ls-remote", repoUrl],
-        //     {
-        //       env: {
-        //         ...process.env,
-        //         GIT_TERMINAL_PROMPT: "0",
-        //       },
-        //       timeout: 4000,
-        //     }
-        //   );
-        //   const exitCode = await proc.exited;
-        //   if (exitCode !== 0) {
-        //     throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
-        //   }
-        // } catch (err: any) {
-        //   console.error("Failed to validate repository URL with git ls-remote", {
-        //     repoUrl,
-        //     error: err,
-        //   });
-        //   throw new TRPCError({ code: "BAD_REQUEST", message: "Repository URL is not publicly accessible or does not exist" });
-        // }
       }
-
-      // if (fetchedUser && !fetchedUser.allowTrial)
-      //   throw new TRPCError({ code: "FORBIDDEN", message: "Reachout for Access" });
 
       try {
         // Get cloud provider info first to determine if local
@@ -807,6 +783,28 @@ export const workspaceRouter = router({
             code: "BAD_REQUEST",
             message: "Selected cloud provider is not available",
           });
+        }
+
+        const providerConfigService = getProviderConfigService();
+
+        if (cloudProviderRecord.name.toLowerCase() !== "local") {
+          if (!cloudProviderRecord.providerConfigId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Selected cloud provider is missing configuration",
+            });
+          }
+
+          const providerConfig = await providerConfigService.getProviderConfigById(
+            cloudProviderRecord.providerConfigId,
+          );
+
+          if (!providerConfig || !providerConfig.isEnabled) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Selected cloud provider is not configured",
+            });
+          }
         }
 
         // Determine if this is a local workspace
@@ -837,7 +835,7 @@ export const workspaceRouter = router({
             ),
           );
 
-        if (fetchedUser.email !== "brightoginni123@gmail.com" && runningWorkspaces.length >= 1) {
+        if (fetchedUser.email !== "brightoginni123@gmail.com" && runningWorkspaces.length >= 5) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message:
@@ -946,13 +944,13 @@ export const workspaceRouter = router({
         let githubAppToken: string | undefined;
         let githubAppTokenExpiry: string | undefined;
 
-        if (input.gitInstallationId) {
+        if (input.gitIntegrationId) {
           const [gitIntegrationRecord] = await db
             .select()
             .from(gitIntegration)
             .where(
               and(
-                eq(gitIntegration.id, input.gitInstallationId),
+                eq(gitIntegration.id, input.gitIntegrationId),
                 eq(gitIntegration.userId, userId),
               ),
             );
@@ -988,6 +986,29 @@ export const workspaceRouter = router({
               // Continue without token - user can still use workspace without git operations
             }
           }
+        }
+
+        if(input.repo) {
+          const options = input.gitIntegrationId ? { userId: userId, gitIntegrationId: input.gitIntegrationId } : undefined;
+          const repoValidation = await getGitHubAppService().checkIfValidRepository(input.repo, options);
+
+          if(!repoValidation.valid) 
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Invalid repository URL",
+            });
+          
+          if(!repoValidation.exists) 
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Can't access repository, check URL or github integration",
+            });
+
+          if(!repoValidation.canClone)
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Can't clone repository, check github integration",
+            });
         }
 
         // Parse repo URL to get owner/name (only for cloud workspaces)
@@ -1047,7 +1068,7 @@ export const workspaceRouter = router({
           subdomain = input.subdomain;
         } else {
           // No custom subdomain provided - generate one automatically
-          // Format: ws-{first2sections} e.g., ws-abc12345-def67890
+          // Format: {first2sections} e.g., abc12345-def67890
           let attempts = 0;
           do {
             if (attempts > 10) {
@@ -1058,7 +1079,7 @@ export const workspaceRouter = router({
             }
             const uuid = randomUUID();
             const uuidParts = uuid.split("-");
-            subdomain = `ws-${uuidParts[0]}`;
+            subdomain = `${uuidParts[0]}`;
             attempts++;
 
             // Check if generated subdomain is reserved (unlikely but possible)
@@ -1155,10 +1176,10 @@ export const workspaceRouter = router({
             userId,
             imageId: imageRecord.id,
             cloudProviderId: input.cloudProviderId,
-            gitIntegrationId: input.gitInstallationId || null,
+            gitIntegrationId: input.gitIntegrationId ?? null,
             persistent: input.persistent,
             regionId: input.regionId,
-            repositoryUrl: input.repo || null,
+            repositoryUrl: input.repo ?? null,
             domain,
             subdomain,
             serverOnly: agentTypeRecord.serverOnly,
@@ -1217,7 +1238,7 @@ export const workspaceRouter = router({
         let command: string | undefined;
         if (isLocal) {
           // The agent CLI will use getTunnelUrl() to determine the correct tunnel endpoint
-          command = `npx @opeoginni/gitterm-agent connect --workspace-id ${workspaceId}`;
+          command = `npx gitterm connect --workspace-id ${workspaceId}`;
         }
 
         // Format Discord notification with all workspace details
@@ -1236,7 +1257,6 @@ export const workspaceRouter = router({
           `**User Info:**`,
           `• Name: \`${fetchedUser.name || "N/A"}\``,
           `• Email: \`${fetchedUser.email}\``,
-          `• User ID: \`${userId}\``,
           ``,
           `**Configuration:**`,
           `• Agent Type: \`${agentTypeRecord.name}\``,
@@ -1560,6 +1580,99 @@ export const workspaceRouter = router({
       return {
         workspace: updatedWorkspace,
         success: true,
+      };
+    }),
+
+  openWorkspacePort: protectedProcedure
+    .input(z.object({ workspaceId: z.string(), port: z.number(), description: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      if (!userId) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+      }
+
+      const fetchedWorkspace = await db.query.workspace.findFirst({
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId))
+      });
+
+      if (!fetchedWorkspace) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      }
+
+      const [provider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, fetchedWorkspace.cloudProviderId));
+
+      if (!provider) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Cloud provider not found" });
+      }
+
+      const computeProvider = await getProviderByCloudProviderId(provider.name);
+
+      const { domain, externalPortDomainId } = await computeProvider.createOrGetExposedPortDomain(fetchedWorkspace.externalInstanceId, input.port);
+
+      await db.update(workspace).set({
+        exposedPorts: {
+          ...(fetchedWorkspace.exposedPorts ?? {}),
+          [input.port]: {
+            port: input.port,
+            description: input.description,
+            upstreamUrl: domain,
+            externalPortDomainId,
+          },
+        }
+      }).where(eq(workspace.id, input.workspaceId));
+
+      return {
+        success: true,
+        message: "Workspace port opened successfully",
+      };
+    }),
+
+  closeWorkspacePort: protectedProcedure
+    .input(z.object({ workspaceId: z.string(), port: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      if (!userId) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+      }
+
+      const fetchedWorkspace = await db.query.workspace.findFirst({
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId))
+      });
+
+      if (!fetchedWorkspace) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      }
+
+      const externalPortDomainId = fetchedWorkspace.exposedPorts?.[input.port]?.externalPortDomainId;
+      if (externalPortDomainId) {
+        const [provider] = await db
+          .select()
+          .from(cloudProvider)
+          .where(eq(cloudProvider.id, fetchedWorkspace.cloudProviderId));
+
+        if (!provider) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Cloud provider not found" });
+        }
+
+        const computeProvider = await getProviderByCloudProviderId(provider.name);
+        await computeProvider.removeExposedPortDomain(externalPortDomainId);
+      }
+      
+      await db.update(workspace).set({
+        exposedPorts: {
+          ...(fetchedWorkspace.exposedPorts ?? {}),
+          [input.port]: undefined,
+        }
+      }).where(eq(workspace.id, input.workspaceId));
+
+      return {
+        success: true,
+        message: "Workspace port closed successfully",
       };
     }),
 });

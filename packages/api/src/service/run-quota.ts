@@ -59,8 +59,9 @@ export async function deductRunFromQuota(
       // Check if user has enough runs
       const availableRuns = quota.monthlyRuns + quota.extraRuns;
       if (availableRuns < 1) {
-        const errorMessage = "Not enough runs available. Please purchase more runs or upgrade your plan.";
-        
+        const errorMessage =
+          "Not enough runs available. Please purchase more runs or upgrade your plan.";
+
         if (haltOnExhaustion) {
           logger.warn("User quota exhausted when deducting run", {
             action: "quota_deduction_exhausted",
@@ -74,7 +75,7 @@ export async function deductRunFromQuota(
             errorMessage,
           };
         }
-        
+
         throw new TRPCError({
           code: "FORBIDDEN",
           message: errorMessage,

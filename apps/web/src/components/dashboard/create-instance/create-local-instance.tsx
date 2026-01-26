@@ -6,7 +6,7 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,6 +93,29 @@ export function CreateLocalInstance({ onSuccess, onCancel }: CreateLocalInstance
       persistent: false,
     });
   };
+
+  if(!localProvidersData?.cloudProviders[0]?.isEnabled) {
+    return (
+      <>
+        <div className="flex flex-col items-center justify-center py-8 px-4 rounded-lg bg-secondary/30 border border-border/50 my-4">
+          <AlertCircle className="h-8 w-8 text-muted-foreground mb-3" />
+          <p className="text-sm font-medium text-center mb-2">Local Tunnel Not Enabled</p>
+          <p className="text-xs text-muted-foreground text-center mb-4">
+            Reach out to an administrator to enable local tunnels.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            className="border-border/50 hover:bg-secondary/50"
+          >
+            Cancel
+          </Button>
+        </DialogFooter>
+      </>
+    );
+  }
 
   return (
     <>

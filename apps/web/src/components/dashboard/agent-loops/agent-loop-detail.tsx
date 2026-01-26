@@ -178,7 +178,10 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
   );
   const canStartRun = loop.status === "active" && loop.totalRuns < loop.maxRuns && !hasOngoingRun;
   const isLoading =
-    pauseMutation.isPending || resumeMutation.isPending || archiveMutation.isPending || deleteMutation.isPending;
+    pauseMutation.isPending ||
+    resumeMutation.isPending ||
+    archiveMutation.isPending ||
+    deleteMutation.isPending;
 
   // Check if a run is stuck (running/pending for longer than the timeout)
   const isRunStuck = (run: AgentLoopRun): boolean => {
@@ -432,10 +435,12 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
                   Run #{haltedRun.runNumber} is Halted
                 </h3>
                 <p className="text-sm text-muted-foreground mb-3">
-                  {haltedRun.errorMessage || "This run was halted due to insufficient runs in your account."}
+                  {haltedRun.errorMessage ||
+                    "This run was halted due to insufficient runs in your account."}
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Once you have available runs, you can resume this run to continue from where it stopped.
+                  Once you have available runs, you can resume this run to continue from where it
+                  stopped.
                 </p>
                 <Button
                   size="sm"
@@ -562,7 +567,9 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
                   <TableRow key={run.id}>
                     <TableCell className="font-mono">{run.runNumber}</TableCell>
                     <TableCell>{getRunStatusBadge(run.status)}</TableCell>
-                    <TableCell className="font-mono text-xs">{run.model?.displayName || "-"}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {run.model?.displayName || "-"}
+                    </TableCell>
                     <TableCell className="text-sm">
                       {run.startedAt
                         ? formatDistanceToNow(new Date(run.startedAt), { addSuffix: true })

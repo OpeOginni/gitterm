@@ -13,7 +13,9 @@
       "dotenv": "^17.2.2",
       "zod": "^4.1.11",
       "typescript": "^5.8.2",
-      "@trpc/client": "^11.8.1"
+      "@trpc/client": "^11.8.1",
+      "drizzle-orm": "^0.45.1",
+      "drizzle-kit": "^0.31.8"
     }
   },
   "type": "module",
@@ -51,6 +53,8 @@
     "@trpc/server": "^11.8.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.2",
+    "drizzle-kit": "^0.31.8",
+    "drizzle-orm": "^0.45.1",
     "zod": "^4.3.5"
   },
   "devDependencies": {
