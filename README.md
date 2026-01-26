@@ -25,7 +25,25 @@ The fastest way to deploy your own GitTerm instance:
 1. Click the **Deploy on Railway** button above
 2. Configure the required environment variables as prompted (ADMIN_EMAIL, ADMIN_PASSWORD)
 3. If you'd like subdomain division of workspaces give your `Caddy Proxy` a wildcard domain `*.your-domain.com`.
-4. Setup Configurations for providers in the admin panel.
+4. Configure provider credentials in the admin panel (required for workspaces).
+
+Provider configuration is driven by `packages/schema/src/provider-registry.ts`. Admins must add the required fields for each provider before users can create workspaces. Current providers include Railway, AWS, and Cloudflare Sandbox, with more cloud and sandbox providers coming soon.
+
+### Provider Configuration (Admin Panel)
+
+Set these per provider in the admin panel:
+
+- **Railway**
+  - Required: API URL, API Token, Project ID, Environment ID
+  - Optional: Default Region, Public Railway Domains
+
+- **Cloudflare Sandbox**
+  - Required: Worker URL, Callback Secret
+  - Deploy the worker with Wrangler using `packages/api/src/providers/cloudflare/agent-worker/src/index.ts`
+  ```bash
+  cd packages/api 
+  bun run wrangler:deploy
+  ```
 
 Caddy handles all routing of workspaces through a single domain.
 
