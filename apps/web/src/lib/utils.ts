@@ -32,6 +32,17 @@ export function getWorkspaceUrl(subdomain: string): string {
 }
 
 /**
+ * Construct a workspace open port URL from subdomain and port
+ */
+export function getWorkspaceOpenPortUrl(subdomain: string, port: number): string {
+  const protocol = getProtocolForBaseDomain(env.NEXT_PUBLIC_BASE_DOMAIN);
+  if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
+    return `${protocol}://${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${port}-${subdomain}`;
+  }
+  return `${protocol}://${port}-${subdomain}.${env.NEXT_PUBLIC_BASE_DOMAIN}`;
+}
+
+/**
  * Construct the opencode attach command
  */
 export function getAttachCommand(subdomain: string, agentName: string): string {

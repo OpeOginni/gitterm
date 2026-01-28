@@ -46,7 +46,9 @@ import {
   getAttachCommand,
   getWorkspaceDisplayUrl,
   getAgentConnectCommand,
+  getWorkspaceOpenPortUrl,
 } from "@/lib/utils";
+import Link from "next/link";
 
 const ITEMS_PER_PAGE = 6;
 
@@ -293,6 +295,8 @@ function InstanceCard({
     ? getWorkspaceDisplayUrl(workspace.subdomain)
     : null;
 
+  const portUrl = (port: number) => workspace.subdomain ? getWorkspaceOpenPortUrl(workspace.subdomain, port) : null;
+
   return (
     <>
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
@@ -510,8 +514,17 @@ function InstanceCard({
                           key={port}
                           className="flex items-center gap-1.5 min-w-0"
                         >
-                          <span className="text-xs truncate min-w-0">
-                            {`${exposedPort.name ?? "Port"} -> :${port}`}
+                          <span className="flex items-center gap-1 text-xs min-w-0 truncate">
+                            <Link
+                              href={portUrl(portNum) ?? "#" as any}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-muted px-1.5 py-0.5 rounded font-mono text-primary/90 border border-border hover:bg-primary/10 transition-colors"
+                              title={`Open :${port} in browser`}
+                            >
+                              :{port}
+                            </Link>
+                            <span className="text-muted-foreground">{exposedPort.name ? `(${exposedPort.name})` : "(Port)"}</span>
                           </span>
                           <button
                             type="button"
