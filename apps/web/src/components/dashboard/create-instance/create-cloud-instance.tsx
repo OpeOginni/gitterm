@@ -6,7 +6,7 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertCircle, ArrowUpRight, Loader2, Plus, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Info, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -265,6 +265,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               )}
             </Select>
           </div>
+
         </div>
 
         {/* Region & Git Setup */}
@@ -360,6 +361,20 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               </Label>
               <p className="text-xs text-muted-foreground">
                 Keep your files and data between sessions. Disable for ephemeral workspaces.
+              </p>
+            </div>
+          </div>
+
+          <div className="col-span-2">
+            <div className="flex items-start justify-center gap-2 rounded-md border border-border/40 bg-secondary/20 px-2 py-1.5 text-xs text-muted-foreground">
+              <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+              <p>
+                Providers will auto-auth on instance creation via your set credentials. Missing credentials? Add them once
+                in{" "}
+                <Link href={"/dashboard/settings" as Route} className="text-primary hover:underline">
+                  Settings
+                </Link>
+                .
               </p>
             </div>
           </div>
