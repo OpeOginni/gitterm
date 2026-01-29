@@ -22,7 +22,7 @@ import type { WorkspaceType, CreateInstanceResult } from "./types";
 const DIALOG_DESCRIPTIONS: Record<WorkspaceType, string> = {
   cloud: "Deploy a new development workspace from a GitHub repository.",
   local: "Create a local tunnel to expose your local development server.",
-  "ralph-wiggum": "Create an autonomous agent that executes tasks from your plan file.",
+  "agentic-loops": "Create an autonomous agent that executes tasks from your plan file.",
 };
 
 export function CreateInstanceDialog() {
@@ -77,7 +77,7 @@ export function CreateInstanceDialog() {
           <Plus className="h-4 w-4" /> New Instance
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[600px] border-border/50 bg-card max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-lg sm:text-xl">Create New Instance</DialogTitle>
           <DialogDescription className="text-muted-foreground">
@@ -99,7 +99,7 @@ export function CreateInstanceDialog() {
               <CreateLocalInstance onSuccess={handleSuccess} onCancel={handleCancel} />
             )}
 
-            {workspaceType === "ralph-wiggum" && (
+            {workspaceType === "agentic-loops" && (
               <CreateAgentLoop onSuccess={handleSuccess} onCancel={handleCancel} />
             )}
           </>

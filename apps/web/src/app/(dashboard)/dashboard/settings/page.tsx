@@ -1,6 +1,6 @@
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { DeleteAccountSection } from "@/components/dashboard/delete-account";
-import { BillingSection } from "@/components/dashboard/billing-section";
+import { BillingSection, RunPacksSection } from "@/components/dashboard/billing-section";
 import { AgentConfigSection } from "@/components/dashboard/agent-config-section";
 import { ModelCredentialsSection } from "@/components/dashboard/model-credentials-section";
 import { authClient } from "@/lib/auth-client";
@@ -30,6 +30,7 @@ export default async function SettingsPage() {
         <BillingSection currentPlan={currentPlan} />
         <ModelCredentialsSection />
         <AgentConfigSection />
+        <RunPacksSection currentPlan={currentPlan} />
         <DeleteAccountSection />
       </div>
     </DashboardShell>

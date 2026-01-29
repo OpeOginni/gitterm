@@ -20,11 +20,10 @@ export function CliCommandDisplay({ command, onDone }: CliCommandDisplayProps) {
           <Input
             value={command}
             readOnly
-            className="font-mono text-sm bg-secondary/50 border-border/50"
+            className="font-mono text-sm bg-secondary/50"
           />
           <Button
             variant="outline"
-            className="border-border/50 hover:bg-secondary/50"
             onClick={() => {
               navigator.clipboard.writeText(command);
               toast.success("Copied to clipboard");

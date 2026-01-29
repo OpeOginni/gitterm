@@ -72,7 +72,7 @@ export function GitHubConnection() {
 
   if (isLoading) {
     return (
-      <Card className="border-border/50 bg-card/50">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Github className="h-5 w-5" />
@@ -96,7 +96,7 @@ export function GitHubConnection() {
   const isSuspended = installation?.suspended ?? false;
 
   return (
-    <Card className="border-border/50 bg-card/50 overflow-hidden">
+    <Card className="overflow-hidden">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-3 text-lg">

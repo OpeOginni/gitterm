@@ -1,4 +1,4 @@
-export type WorkspaceType = "cloud" | "local" | "ralph-wiggum";
+export type WorkspaceType = "cloud" | "local" | "agentic-loops";
 
 // Result types for form submissions
 export type CreateInstanceResult =
@@ -64,7 +64,7 @@ export interface RepoFile {
 
 export type RunMode = "automatic" | "manual";
 
-// Model Provider types for Ralph Wiggum
+// Model Provider types for Agentic Loops
 export interface ModelOption {
   id: string;
   name: string;
@@ -138,7 +138,7 @@ export function getFullModelId(providerId: string, modelId: string): string {
   return `${providerId}/${modelId}`;
 }
 
-export interface RalphWiggumConfig {
+export interface AgenticLoopConfig {
   installationId: string;
   repository: Repository | null;
   branch: string;

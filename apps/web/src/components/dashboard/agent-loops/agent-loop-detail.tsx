@@ -469,7 +469,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-5">
-        <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
+        <Card className="border-primary/10 hover:border-primary/20 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Runs</CardTitle>
           </CardHeader>
@@ -479,7 +479,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
+        <Card className="border-primary/10 hover:border-primary/20 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Successful</CardTitle>
           </CardHeader>
@@ -487,7 +487,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
             <div className="text-2xl font-bold text-green-500">{loop.successfulRuns}</div>
           </CardContent>
         </Card>
-        <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
+        <Card className="border-primary/10 hover:border-primary/20 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Failed</CardTitle>
           </CardHeader>
@@ -495,7 +495,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
             <div className="text-2xl font-bold text-destructive">{loop.failedRuns}</div>
           </CardContent>
         </Card>
-        <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
+        <Card className="border-primary/10 hover:border-primary/20 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Plan File</CardTitle>
           </CardHeader>
@@ -512,7 +512,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
             </Link>
           </CardContent>
         </Card>
-        <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
+        <Card className="border-primary/10 hover:border-primary/20 transition-colors">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Progress File
@@ -538,7 +538,7 @@ export function AgentLoopDetail({ loopId }: AgentLoopDetailProps) {
       </div>
 
       {/* Run History */}
-      <Card className="bg-card/50 border-primary/10 hover:border-primary/20 transition-colors">
+      <Card className="border-primary/10 hover:border-primary/20 transition-colors">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Repeat className="h-5 w-5" />

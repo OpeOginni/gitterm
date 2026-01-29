@@ -74,7 +74,7 @@ export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIter
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[450px] border-border/50 bg-card">
+      <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2">
             <Play className="h-5 w-5 text-primary" />

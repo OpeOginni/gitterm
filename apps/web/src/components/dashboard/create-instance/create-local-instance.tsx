@@ -108,7 +108,7 @@ export function CreateLocalInstance({ onSuccess, onCancel }: CreateLocalInstance
           <Button
             variant="outline"
             onClick={onCancel}
-            className="w-full border-border/50 hover:bg-secondary/50 sm:w-auto"
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -130,7 +130,6 @@ export function CreateLocalInstance({ onSuccess, onCancel }: CreateLocalInstance
             placeholder="my-app"
             value={subdomain}
             onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-            className="bg-secondary/30 border-border/50 focus:border-accent"
             disabled={!subdomainPermissions?.canUseCustomTunnelSubdomain}
           />
           <p className="text-xs text-muted-foreground">
@@ -168,7 +167,6 @@ export function CreateLocalInstance({ onSuccess, onCancel }: CreateLocalInstance
             placeholder="My Local App"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="bg-secondary/30 border-border/50 focus:border-accent"
           />
         </div>
 
@@ -176,7 +174,7 @@ export function CreateLocalInstance({ onSuccess, onCancel }: CreateLocalInstance
         <div className="grid gap-2">
           <Label className="text-sm font-medium">Agent Type</Label>
           <Select value={selectedAgentTypeId} onValueChange={setUserAgentTypeId}>
-            <SelectTrigger className="bg-secondary/30 border-border/50">
+            <SelectTrigger>
               <SelectValue placeholder="Select agent" />
             </SelectTrigger>
             {isLoadingAgentTypes ? (
@@ -221,7 +219,7 @@ export function CreateLocalInstance({ onSuccess, onCancel }: CreateLocalInstance
           variant="outline"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="w-full border-border/50 hover:bg-secondary/50 sm:w-auto"
+          className="w-full sm:w-auto"
         >
           Cancel
         </Button>

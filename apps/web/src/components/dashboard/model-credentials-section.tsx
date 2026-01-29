@@ -500,7 +500,7 @@ export function ModelCredentialsSection() {
                 Add Credential
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto border-border/50 bg-card">
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
@@ -520,7 +520,7 @@ export function ModelCredentialsSection() {
                     onValueChange={setSelectedProviderId}
                     disabled={oauthStep !== "idle"}
                   >
-                    <SelectTrigger className="bg-secondary/30 border-border/50">
+                    <SelectTrigger>
                       <SelectValue placeholder="Select provider" />
                     </SelectTrigger>
                     <SelectContent>
@@ -570,7 +570,6 @@ export function ModelCredentialsSection() {
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
                     placeholder="e.g., Work account, Personal, etc."
-                    className="bg-secondary/30 border-border/50"
                     disabled={oauthStep !== "idle"}
                   />
                 </div>
@@ -587,7 +586,7 @@ export function ModelCredentialsSection() {
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       placeholder="Enter your API key"
-                      className="bg-secondary/30 border-border/50 font-mono"
+                      className="font-mono"
                     />
                     <div className="flex items-start gap-2 text-xs text-muted-foreground p-3 rounded-lg bg-muted/50">
                       <Shield className="h-4 w-4 shrink-0 mt-0.5 text-green-500" />

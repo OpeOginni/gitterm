@@ -300,7 +300,7 @@ function InstanceCard({
   return (
     <>
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
-        <DialogContent className="sm:max-w-[525px] border-border/50 bg-card">
+        <DialogContent className="sm:max-w-[525px]">
           <DialogHeader>
             <DialogTitle className="text-xl">Connect to Local Instance</DialogTitle>
             <DialogDescription className="text-muted-foreground">
@@ -314,11 +314,10 @@ function InstanceCard({
                 <Input
                   value={connectCommand || ""}
                   readOnly
-                  className="font-mono text-sm bg-secondary/50 border-border/50"
+                  className="font-mono text-sm bg-secondary/50"
                 />
                 <Button
                   variant="outline"
-                  className="border-border/50 hover:bg-secondary/50"
                   onClick={() => {
                     if (connectCommand) {
                       navigator.clipboard.writeText(connectCommand);
@@ -353,7 +352,7 @@ function InstanceCard({
           if (!open) setOpenPortForm({ name: "", port: "" });
         }}
       >
-        <DialogContent className="sm:max-w-[425px] border-border/50 bg-card">
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Open workspace port</DialogTitle>
             <DialogDescription className="text-muted-foreground">
@@ -423,7 +422,7 @@ function InstanceCard({
         </DialogContent>
       </Dialog>
 
-      <Card className="group overflow-hidden border-primary/10 bg-card/50 backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 flex flex-col">
+      <Card className="group overflow-hidden border-primary/10 backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 flex flex-col">
         <CardHeader className="pb-3 px-5 pt-5">
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
@@ -650,7 +649,7 @@ function InstanceCard({
             <Button
               variant="outline"
               size="sm"
-              className="h-9 px-3 text-xs border-border/50 hover:bg-secondary/50"
+              className="h-9 px-3 text-xs"
               disabled={stopWorkspaceMutation.isPending}
               onClick={() => stopWorkspaceMutation.mutate({ workspaceId: workspace.id })}
             >

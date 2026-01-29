@@ -36,7 +36,7 @@ export function UsageMetrics() {
   if (isUnlimited) {
     return (
       <div className="grid gap-5 md:grid-cols-2">
-        <Card className="border-border/50 bg-card/50 overflow-hidden group hover:border-accent/30 transition-colors">
+        <Card className="overflow-hidden group hover:border-accent/30 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Usage Today</CardTitle>
             <div className="p-2 rounded-lg bg-secondary/50">
@@ -49,7 +49,7 @@ export function UsageMetrics() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-card/50 overflow-hidden group hover:border-accent/30 transition-colors">
+        <Card className="overflow-hidden group hover:border-accent/30 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Quota</CardTitle>
             <div className="p-2 rounded-lg bg-accent/10 group-hover:bg-accent/20">
@@ -95,10 +95,7 @@ export function UsageMetrics() {
         {metrics.map((metric) => {
           const Icon = metric.icon;
           return (
-            <Card
-              key={metric.title}
-              className="border-border/50 bg-card/50 overflow-hidden group hover:border-accent/30 transition-colors"
-            >
+            <Card key={metric.title} className="overflow-hidden group hover:border-accent/30 transition-colors">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {metric.title}
@@ -124,7 +121,7 @@ export function UsageMetrics() {
         })}
       </div>
 
-      <Card className="border-border/50 bg-card/50">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base">Daily Quota Progress</CardTitle>
         </CardHeader>

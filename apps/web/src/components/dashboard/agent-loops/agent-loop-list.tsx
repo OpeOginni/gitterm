@@ -51,7 +51,7 @@ export function AgentLoopList() {
         </div>
         <h3 className="mt-5 text-lg font-medium">No agent loops yet</h3>
         <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-          Create a Ralph Wiggum instance to start autonomous coding tasks from your plan files.
+          Create a Agentic Loop instance to start autonomous coding tasks from your plan files.
         </p>
       </div>
     );

@@ -139,7 +139,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             placeholder="https://github.com/username/repo"
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
-            className="bg-secondary/30 border-border/50 focus:border-accent"
           />
         </div>
 
@@ -153,7 +152,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             placeholder="my-workspace"
             value={subdomain}
             onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-            className="bg-secondary/30 border-border/50 focus:border-accent"
             disabled={!subdomainPermissions?.canUseCustomCloudSubdomain}
           />
           <p className="text-xs text-muted-foreground">
@@ -190,7 +188,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           <div className="grid gap-2">
             <Label className="text-sm font-medium">Agent Type</Label>
             <Select value={selectedAgentTypeId} onValueChange={setUserAgentTypeId}>
-              <SelectTrigger className="bg-secondary/30 border-border/50">
+              <SelectTrigger>
                 <SelectValue placeholder="Select agent" />
               </SelectTrigger>
               {isLoadingAgentTypes ? (
@@ -229,7 +227,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           <div className="grid gap-2">
             <Label className="text-sm font-medium">Cloud Provider</Label>
             <Select value={selectedCloudProviderId} onValueChange={handleCloudProviderChange}>
-              <SelectTrigger className="bg-secondary/30 border-border/50">
+              <SelectTrigger>
                 <SelectValue placeholder="Select cloud" />
               </SelectTrigger>
               {isLoadingCloudProviders ? (
@@ -277,7 +275,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               onValueChange={setUserRegionId}
               disabled={availableRegions.length === 0}
             >
-              <SelectTrigger className="bg-secondary/30 border-border/50">
+              <SelectTrigger>
                 <SelectValue
                   placeholder={availableRegions.length > 0 ? "Select region" : "No regions available"}
                 />
@@ -313,7 +311,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               onValueChange={setuserGitIntegrationId}
               disabled={integrations && integrations.length === 0}
             >
-              <SelectTrigger className="bg-secondary/30 border-border/50">
+              <SelectTrigger>
                 <SelectValue
                   placeholder={
                     integrations && integrations.length > 0
@@ -386,7 +384,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           variant="outline"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="w-full border-border/50 hover:bg-secondary/50 sm:w-auto"
+          className="w-full sm:w-auto"
         >
           Cancel
         </Button>

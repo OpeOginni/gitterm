@@ -222,7 +222,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   const createAgentLoopMutation = useMutation(
     trpc.agentLoop.createLoop.mutationOptions({
       onSuccess: () => {
-        toast.success("Ralph Agent created! Go to Agent Loops to start your first run.");
+        toast.success("Agentic Loop created! Go to Agent Loops to start your first run.");
         queryClient.invalidateQueries(trpc.agentLoop.listLoops.queryOptions());
         onSuccess({ type: "agent-loop" });
       },
@@ -310,7 +310,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
           <AlertCircle className="h-8 w-8 text-muted-foreground mb-3" />
           <p className="text-sm font-medium text-center mb-2">GitHub Integration Required</p>
           <p className="text-xs text-muted-foreground text-center mb-4">
-            Connect your GitHub account to use Ralph Agent.
+            Connect your GitHub account to use Agentic Loops.
           </p>
           <Link
             href="/dashboard/integrations"
@@ -324,7 +324,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
           <Button
             variant="outline"
             onClick={onCancel}
-            className="w-full border-border/50 hover:bg-secondary/50 sm:w-auto"
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -345,7 +345,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
             </Link>
           </Label>
           <Select value={selectedInstallationId} onValueChange={handleInstallationChange}>
-            <SelectTrigger className="bg-secondary/30 border-border/50">
+            <SelectTrigger>
               <SelectValue placeholder="Select GitHub account" />
             </SelectTrigger>
             <SelectContent>
@@ -388,7 +388,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
             onValueChange={handleBranchChange}
             disabled={!repository || isLoadingBranches}
           >
-            <SelectTrigger className="bg-secondary/30 border-border/50">
+            <SelectTrigger>
               {isLoadingBranches ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -449,16 +449,16 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="grid gap-2">
             <Label className="text-sm font-medium">AI Provider</Label>
-            <Select
-              value={selectedProviderId}
-              onValueChange={handleProviderChange}
-              disabled={isLoadingProviders}
-            >
-              <SelectTrigger className="bg-secondary/30 border-border/50">
-                {isLoadingProviders ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Loading...</span>
+          <Select
+            value={selectedProviderId}
+            onValueChange={handleProviderChange}
+            disabled={isLoadingProviders}
+          >
+            <SelectTrigger>
+              {isLoadingProviders ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading...</span>
                   </div>
                 ) : (
                   <SelectValue placeholder="Select provider" />
@@ -498,16 +498,16 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
           </div>
           <div className="grid gap-2">
             <Label className="text-sm font-medium">Model</Label>
-            <Select
-              value={selectedModelId}
-              onValueChange={setSelectedModelId}
-              disabled={!selectedProviderId || availableModels.length === 0 || isLoadingModels}
-            >
-              <SelectTrigger className="bg-secondary/30 border-border/50">
-                {isLoadingModels ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Loading...</span>
+          <Select
+            value={selectedModelId}
+            onValueChange={setSelectedModelId}
+            disabled={!selectedProviderId || availableModels.length === 0 || isLoadingModels}
+          >
+            <SelectTrigger>
+              {isLoadingModels ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading...</span>
                   </div>
                 ) : (
                   <SelectValue placeholder="Select model" />
@@ -554,7 +554,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
             onValueChange={setSelectedSandboxProviderId}
             disabled={sandboxProviders.length === 0}
           >
-            <SelectTrigger className="bg-secondary/30 border-border/50">
+            <SelectTrigger>
               <SelectValue
                 placeholder={
                   sandboxProviders.length > 0 ? "Select sandbox provider" : "No sandbox provider"
@@ -646,7 +646,6 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
               )}
               value={iterations}
               onChange={(e) => setIterations(Math.max(1, parseInt(e.target.value) || 1))}
-              className="bg-secondary/30 border-border/50 focus:border-accent"
             />
             <p className="text-xs text-muted-foreground">
               Set how many times the agent will run automatically.
@@ -660,7 +659,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
           variant="outline"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="w-full border-border/50 hover:bg-secondary/50 sm:w-auto"
+          className="w-full sm:w-auto"
         >
           Cancel
         </Button>
@@ -677,7 +676,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
           ) : (
             <>
               <Plus className="h-4 w-4" />
-              Create Ralph Agent
+              Create Agentic Loop
             </>
           )}
         </Button>

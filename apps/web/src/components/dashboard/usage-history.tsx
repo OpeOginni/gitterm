@@ -80,7 +80,7 @@ export function UsageHistory() {
   };
 
   return (
-    <Card className="border-border/50 bg-card/50">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base">Workspace History</CardTitle>
       </CardHeader>

@@ -31,9 +31,9 @@ const workspaceOptions: WorkspaceOption[] = [
     icon: null, // Will use Terminal icon
   },
   {
-    type: "ralph-wiggum",
-    label: "Ralph Wiggum",
-    description: "Autonomous agent",
+    type: "agentic-loops",
+    label: "Agentic Loops",
+    description: "Autonomous Loops",
     icon: null, // Will use custom SVG
   },
 ];
@@ -47,7 +47,7 @@ export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelector
         return <Cloud className={iconClass} />;
       case "local":
         return <Terminal className={iconClass} />;
-      case "ralph-wiggum":
+      case "agentic-loops":
         return (
           <Image
             src="/ralph-wiggum.svg"

@@ -57,7 +57,7 @@ export function FeedbackForm() {
         </Button>
       </DialogTrigger>
       {showThankYou ? (
-        <DialogContent className="border-border/50 bg-accent">
+        <DialogContent className="bg-accent">
           <div className="flex flex-col gap-4">
             <h1 className="text-2xl font-bold">Thank you for your feedback!</h1>
             <p className="text-sm text-muted-foreground">
@@ -76,7 +76,7 @@ export function FeedbackForm() {
           </DialogFooter>
         </DialogContent>
       ) : (
-        <DialogContent className="border-border/50 bg-accent">
+        <DialogContent className="bg-accent">
           <form className="space-y-4" onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>Feedback</DialogTitle>

@@ -12,7 +12,7 @@ import { authClient } from "@/lib/auth-client";
 
 function GitHubConnectionSkeleton() {
   return (
-    <Card className="border-border/50 bg-card/50">
+    <Card>
       <CardHeader>
         <Skeleton className="h-6 w-48 mb-2" />
         <Skeleton className="h-4 w-96" />

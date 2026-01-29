@@ -342,42 +342,6 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
           </Card>
         )}
 
-        {/* Run Packs for paid users */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Need more runs?
-            </CardTitle>
-            <CardDescription>
-              {currentPlan === "pro"
-                ? "Your Pro plan includes 100 runs/month. Purchase additional run packs anytime."
-                : "Your Tunnel plan includes 10 runs/month. Purchase additional run packs anytime."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {RUN_PACKS.map((pack) => (
-                <div
-                  key={pack.slug}
-                  className="flex items-center justify-between p-4 rounded-lg border border-dashed"
-                >
-                  <div>
-                    <p className="font-medium">{pack.runs} Runs</p>
-                    <p className="text-sm text-muted-foreground">
-                      {pack.price} ({pack.pricePerRun}/run)
-                    </p>
-                  </div>
-                  <Link href="/pricing">
-                    <Button size="sm" variant="outline">
-                      Buy
-                    </Button>
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
     );
   }
@@ -414,41 +378,47 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
         </CardFooter>
       </Card>
 
-      {/* Run Packs for Free Users */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Need more runs?
-          </CardTitle>
-          <CardDescription>
-            Purchase run packs for additional runs beyond your 10 free monthly runs.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {RUN_PACKS.map((pack) => (
-              <div
-                key={pack.slug}
-                className="flex items-center justify-between p-4 rounded-lg border border-dashed"
-              >
-                <div>
-                  <p className="font-medium">{pack.runs} Runs</p>
-                  <p className="text-sm text-muted-foreground">
-                    {pack.price} ({pack.pricePerRun}/run)
-                  </p>
-                </div>
-                <Link href="/pricing">
-                  <Button size="sm" variant="outline">
-                    Buy
-                  </Button>
-                </Link>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
+  );
+}
+
+export function RunPacksSection({ currentPlan }: BillingSectionProps) {
+  const description =
+    currentPlan === "pro"
+      ? "Your Pro plan includes 100 runs/month. Purchase additional run packs anytime."
+      : currentPlan === "tunnel"
+        ? "Your Tunnel plan includes 10 runs/month. Purchase additional run packs anytime."
+        : "Purchase run packs for additional runs beyond your 10 free monthly runs.";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          Need more runs?
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {RUN_PACKS.map((pack) => (
+            <div key={pack.slug} className="flex items-center justify-between p-4 rounded-lg border border-dashed">
+              <div>
+                <p className="font-medium">{pack.runs} Runs</p>
+                <p className="text-sm text-muted-foreground">
+                  {pack.price} ({pack.pricePerRun}/run)
+                </p>
+              </div>
+              <Link href="/pricing">
+                <Button size="sm" variant="outline" className="border-white/80 text-white hover:bg-white/10">
+                  Buy
+                </Button>
+              </Link>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

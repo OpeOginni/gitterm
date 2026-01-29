@@ -311,7 +311,6 @@ export function AgentConfigSection() {
                     value={formData.name}
                     onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g., My MCP Setup, TypeScript Project, etc."
-                    className="bg-secondary/30 border-border/50"
                   />
                   <p className="text-xs text-muted-foreground">
                     Give your configuration a memorable name
@@ -328,7 +327,7 @@ export function AgentConfigSection() {
                     }
                     disabled={isEditing}
                   >
-                    <SelectTrigger className="bg-secondary/30 border-border/50">
+                    <SelectTrigger>
                       <SelectValue placeholder="Select agent type" />
                     </SelectTrigger>
                     <SelectContent>
