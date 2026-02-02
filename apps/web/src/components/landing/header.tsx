@@ -24,13 +24,13 @@ export function LandingHeader() {
 
         <nav className="hidden items-center gap-8 md:flex">
           <Link
-            href="#features"
+            href="/#features"
             className="text-sm text-muted-foreground transition-colors hover:text-primary"
           >
             Features
           </Link>
           <Link
-            href="#how-it-works"
+            href="/#how-it-works"
             className="text-sm text-muted-foreground transition-colors hover:text-primary"
           >
             How it Works
