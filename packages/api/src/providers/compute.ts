@@ -174,3 +174,18 @@ export interface SandboxConfig {
   /** Run ID for callback identification */
   runId: string;
 }
+
+export interface CloudSessionSpawnConfig {
+  gittermCloudSessionId: string;
+  baseCommitSha: string;
+  repoOwner: string;
+  repoName: string;
+  branch: string;
+  gitAuthToken: string;
+  providerName: string;
+  credential: SandboxCredential;
+}
+
+export interface CloudSessionDestroyConfig {
+  gittermCloudSessionId: string;
+}

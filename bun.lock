@@ -182,7 +182,7 @@
       "dependencies": {
         "@aws-sdk/client-ec2": "^3.938.0",
         "@aws-sdk/client-sts": "^3.936.0",
-        "@cloudflare/sandbox": "^0.6.10",
+        "@cloudflare/sandbox": "^0.7.1",
         "@cloudflare/workers-types": "^4.20260107.1",
         "@daytonaio/sdk": "^0.129.0",
         "@gitterm/auth": "workspace:*",
@@ -240,7 +240,7 @@
     },
     "packages/cli": {
       "name": "gitterm",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "bin": {
         "gitterm": "./dist/index.js",
       },
@@ -254,7 +254,6 @@
         "zod": "^3.23.0",
       },
       "devDependencies": {
-        "@gitterm/config": "workspace:*",
         "@types/bun": "^1.2.6",
         "typescript": "^5.0.0",
       },
@@ -535,7 +534,7 @@
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.4.1", "", { "dependencies": { "mime": "^3.0.0" } }, "sha512-Nu8ahitGFFJztxUml9oD/DLb7Z28C8cd8F46IVQ7y5Btz575pvMY8AqZsXkX7Gds29eCKdMgIHjIvzskHgPSFg=="],
 
-    "@cloudflare/sandbox": ["@cloudflare/sandbox@0.6.10", "", { "dependencies": { "@cloudflare/containers": "^0.0.30" }, "peerDependencies": { "@openai/agents": "^0.3.3", "@opencode-ai/sdk": "^1.0.137" }, "optionalPeers": ["@openai/agents", "@opencode-ai/sdk"] }, "sha512-rQygMktW45IPay8u326Eg5iAnuRAkROK3R2HjsN3xBqiqneNSYwdww+xxa0PuY+gkC/5ykzaCtXhE1LpOFhM+w=="],
+    "@cloudflare/sandbox": ["@cloudflare/sandbox@0.7.1", "", { "dependencies": { "@cloudflare/containers": "^0.0.30" }, "peerDependencies": { "@openai/agents": "^0.3.3", "@opencode-ai/sdk": "^1.0.137", "@xterm/xterm": ">=5.0.0" }, "optionalPeers": ["@openai/agents", "@opencode-ai/sdk", "@xterm/xterm"] }, "sha512-suDuYa+/rLmvaTqRwETsRO7gyN7XGAfxy+Y/UmCCQJzPL5FHBojV5NUw7xwe6mIznSscz2uk1iPHrF7sCecCBA=="],
 
     "@cloudflare/unenv-preset": ["@cloudflare/unenv-preset@2.8.0", "", { "peerDependencies": { "unenv": "2.0.0-rc.24", "workerd": "^1.20251202.0" }, "optionalPeers": ["workerd"] }, "sha512-oIAu6EdQ4zJuPwwKr9odIEqd8AV96z1aqi3RBEA4iKaJ+Vd3fvuI6m5EDC7/QCv+oaPIhy1SkYBYxmD09N+oZg=="],
 
