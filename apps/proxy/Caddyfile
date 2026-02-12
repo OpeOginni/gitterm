@@ -33,7 +33,7 @@
 
 	# Block reserved subdomains at the Caddy level (defense in depth)
 	# These should already be blocked at workspace creation, but this provides an extra layer
-	@reserved_subdomain header_regexp subdomain Host ^(api|tunnel)\.gitterm\.dev$
+	@reserved_subdomain header_regexp subdomain Host ^(api|cloud|tunnel)\.gitterm\.dev$
 	handle @reserved_subdomain {
 		root * /srv/errors
 		rewrite * /unavailable.html
