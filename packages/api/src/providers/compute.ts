@@ -3,6 +3,8 @@
  * Implementations exist for Railway, AWS, Azure, etc.
  */
 
+import type { Session, Part, Message } from "@opencode-ai/sdk"
+
 export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
 
 export interface WorkspaceConfig {
@@ -175,6 +177,14 @@ export interface SandboxConfig {
   runId: string;
 }
 
+export interface OpenCodeSessionExport {
+  info: Session,
+  messages: {
+      info: Message,
+      parts: Part[]
+    }[]
+}
+
 export interface CloudSessionSpawnConfig {
   gittermCloudSessionId: string;
   baseCommitSha: string;
@@ -184,6 +194,7 @@ export interface CloudSessionSpawnConfig {
   gitAuthToken: string;
   providerName: string;
   credential: SandboxCredential;
+  existingSessionExport?: OpenCodeSessionExport;
 }
 
 export interface CloudSessionDestroyConfig {

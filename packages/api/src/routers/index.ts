@@ -15,6 +15,7 @@ import { adminRouter } from "./admin";
 import { agentLoopRouter } from "./agent-loop";
 import { agentLoopWebhookRouter } from "./agent-loop/webhook";
 import { modelCredentialsRouter } from "./model-credentials";
+import { cloudSessionRouter } from "./cloud-session";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -37,6 +38,7 @@ export const appRouter = router({
   agentLoop: agentLoopRouter,
   modelCredentials: modelCredentialsRouter,
   workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
+  cloudSessions: cloudSessionRouter
 });
 export type AppRouter = typeof appRouter;
 

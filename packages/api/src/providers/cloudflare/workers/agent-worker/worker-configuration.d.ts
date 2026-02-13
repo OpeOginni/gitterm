@@ -3,7 +3,7 @@
 // Runtime types generated with workerd@1.20260107.1 2025-10-13 nodejs_compat
 declare namespace Cloudflare {
   interface GlobalProps {
-    mainModule: typeof import("./src/providers/cloudflare/agent-worker/src/index");
+    mainModule: typeof import("./src/index");
     durableNamespaces: "Sandbox";
   }
   interface Env {
@@ -11,7 +11,7 @@ declare namespace Cloudflare {
     SANDBOX_LOG_LEVEL: "debug";
     SANDBOX_LOG_FORMAT: "json";
     Sandbox: DurableObjectNamespace<
-      import("./src/providers/cloudflare/agent-worker/src/index").Sandbox
+      import("./src/index").Sandbox
     >;
   }
 }

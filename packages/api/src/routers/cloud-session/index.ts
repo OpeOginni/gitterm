@@ -1,27 +1,27 @@
 import z from "zod";
-import { protectedProcedure, router } from "../..";
+import { cliAuthProcedure, protectedProcedure, router } from "../..";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and } from "@gitterm/db";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { cloudSession } from "@gitterm/db/schema/cloud-sessions";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
-import { getGitHubAppService } from "../github";
+import { getGitHubAppService } from "../../service/github";
 import env from "@gitterm/env/server";
-import { getModelCredentialsService } from "../model-credentials";
+import { getModelCredentialsService } from "../../service/model-credentials";
 import { modelProvider } from "@gitterm/db/schema/model-credentials";
-import type { CloudSessionDestroyConfig, CloudSessionSpawnConfig, SandboxCredential } from "../../providers";
+import type { CloudSessionDestroyConfig, CloudSessionSpawnConfig, OpenCodeSessionExport, SandboxCredential } from "../../providers";
 
 export const cloudSessionCreateSchema = z.object({
-  sandboxProviderId: z.uuid(),
   remoteRepoOwner: z.string(),
   remoteRepoName: z.string(),
   remoteBranch: z.string(),
   baseCommitSha: z.string(),
-  providerId: z.uuid(),
+  providerId: z.string(),
 });
 
 export const cloudSessionSpawnSchema = z.object({
   opencodeSessionId: z.string(),
+  existingSessionExport: z.any()
 });
 
 export const cloudSessionDestroySchema = z.object({
@@ -29,16 +29,17 @@ export const cloudSessionDestroySchema = z.object({
 });
 
 export const cloudSessionRouter = router({
-  create: protectedProcedure.input(cloudSessionCreateSchema).mutation(async ({ input, ctx }) => {
-    const userId = ctx.session.user.id;
+  create: cliAuthProcedure.input(cloudSessionCreateSchema).mutation(async ({ input, ctx }) => {
+    const userId = ctx.cliAuth.userId;
     if (!userId) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
     }
+    console.log(userId)
 
     const [sandboxProvider] = await db
       .select()
       .from(cloudProvider)
-      .where(eq(cloudProvider.id, input.sandboxProviderId));
+      .where(eq(cloudProvider.name, "Cloudflare"));
 
     if (!sandboxProvider || sandboxProvider.isSandbox !== true) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Sandbox provider not found" });
@@ -51,6 +52,7 @@ export const cloudSessionRouter = router({
     const userGithubIntegration = userGitIntegrations[0];
 
     if (!userGithubIntegration) {
+      console.log("BAD_REQUEST")
       throw new TRPCError({ code: "BAD_REQUEST", message: "Setup Github Integration" });
     }
 
@@ -71,7 +73,7 @@ export const cloudSessionRouter = router({
     const [modelProviderData] = await db
       .select()
       .from(modelProvider)
-      .where(eq(modelProvider.id, input.providerId));
+      .where(eq(modelProvider.name, input.providerId));
 
     if (!modelProviderData) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Model provider not found" });
@@ -103,7 +105,7 @@ export const cloudSessionRouter = router({
       .insert(cloudSession)
       .values({
         userId,
-        sandboxProviderId: input.sandboxProviderId,
+        sandboxProviderId: sandboxProvider.id,
         modelProviderId: modelProviderData.id,
         remoteRepoOwner: input.remoteRepoOwner,
         remoteRepoName: input.remoteRepoName,
@@ -127,18 +129,20 @@ export const cloudSessionRouter = router({
       credential,
     };
 
-    const SPAWN_CLOUD_SESSION_WORKER_URL = "https://cloud-session-worker.mock/spawn";
+    const SPAWN_CLOUD_SESSION_WORKER_URL = "https://cloud.gitterm.dev";
 
     const response = await fetch(SPAWN_CLOUD_SESSION_WORKER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.INTERNAL_API_KEY}`,
+        Authorization: `Bearer test`,
       },
       body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
+      const body = await response.json()
+      console.log(body)
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to spawn cloud session",
@@ -161,12 +165,14 @@ export const cloudSessionRouter = router({
     await db
       .update(cloudSession)
       .set({
-        sandboxId: createdSession.id,
         opencodeSessionId: responseBody.result.sessionId ?? null,
         serverUrl: responseBody.result.exposedServerUrl,
         updatedAt: new Date(),
       })
       .where(eq(cloudSession.id, createdSession.id));
+
+      console.log("cloudSessionId", createdSession.id)
+      console.log("cloudSessioserverUrlnId", responseBody.result.exposedServerUrl)
 
     return {
       cloudSessionId: createdSession.id,
@@ -259,6 +265,7 @@ export const cloudSessionRouter = router({
       gitAuthToken: tokenData.token,
       providerName: modelProviderData.name,
       credential,
+      existingSessionExport: input.existingSessionExport as OpenCodeSessionExport
     };
 
     const SPAWN_CLOUD_SESSION_WORKER_URL = "https://cloud-session-worker.mock/spawn";
@@ -295,7 +302,6 @@ export const cloudSessionRouter = router({
     await db
       .update(cloudSession)
       .set({
-        sandboxId: existingSession.id,
         opencodeSessionId: responseBody.result.sessionId ?? existingSession.opencodeSessionId,
         serverUrl: responseBody.result.exposedServerUrl,
         updatedAt: new Date(),

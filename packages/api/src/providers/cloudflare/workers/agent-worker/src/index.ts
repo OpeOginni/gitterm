@@ -1,7 +1,7 @@
 import { getSandbox, Sandbox } from "@cloudflare/sandbox";
 import { createOpencode } from "@cloudflare/sandbox/opencode";
 import { OpencodeClient, type BadRequestError, type NotFoundError } from "@opencode-ai/sdk";
-import type { SandboxConfig, SandboxCredential } from "../../../compute";
+import type { SandboxConfig, SandboxCredential } from "../../../../compute";
 
 export { Sandbox } from "@cloudflare/sandbox";
 /**

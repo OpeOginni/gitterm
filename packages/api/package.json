@@ -41,10 +41,12 @@
   },
   "scripts": {
     "codegen": "graphql-codegen --config codegen.ts",
-    "wrangler:deploy": "wrangler deploy",
-    "wrangler:dev": "wrangler dev",
-    "wrangler:start": "wrangler dev",
-    "wrangler:cf-typegen": "wrangler types"
+    "wrangler:agent-worker:deploy": "cd ./src/providers/cloudflare/workers/agent-worker && wrangler deploy",
+    "wrangler:agent-worker:dev": "cd ./src/providers/cloudflare/workers/agent-worker && wrangler dev",
+    "wrangler:agent-worker:cf-typegen": "cd ./src/providers/cloudflare/workers/agent-worker && wrangler types",
+    "wrangler:manage-cloud-sessions:deploy": "cd ./src/providers/cloudflare/workers/manage-cloud-sessions && wrangler deploy",
+    "wrangler:manage-cloud-sessions:dev": "cd ./src/providers/cloudflare/workers/manage-cloud-sessions && wrangler dev",
+    "wrangler:manage-cloud-sessions:cf-typegen": "cd ./src/providers/cloudflare/workers/manage-cloud-sessions && wrangler types"
   },
   "dependencies": {
     "@aws-sdk/client-ec2": "^3.938.0",

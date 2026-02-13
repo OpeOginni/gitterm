@@ -3,9 +3,9 @@
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
+  "$schema": "../../../../../node_modules/wrangler/config-schema.json",
   "name": "gitterm",
-  "main": "src/providers/cloudflare/agent-worker/src/index.ts",
+  "main": "src/index.ts",
   "compatibility_date": "2025-10-13",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
@@ -14,7 +14,7 @@
   "containers": [
     {
       "class_name": "Sandbox",
-      "image": "./src/providers/cloudflare/agent-worker/Dockerfile",
+      "image": "./Dockerfile",
       "instance_type": "standard-1",
     },
   ],
