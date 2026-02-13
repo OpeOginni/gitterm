@@ -122,14 +122,26 @@ async function spawnCloudSession(
     };
   }
 
-  if(config.existingSessionExport){
-    await (client as OpencodeClient).session.import({ directory: `/root/workspace/${repoName}`, sessionExport: config.existingSessionExport})
+  if (config.existingSessionExport) {
+    const repoDir = `/root/workspace/${repoName}`;
+    const sessionExportPath = `${repoDir}/.opencode-session-import.json`;
+
+    try {
+      config.existingSessionExport.info.directory = repoDir
+      await sandbox.writeFile(
+        sessionExportPath,
+        JSON.stringify(config.existingSessionExport, null, 2),
+      );
+      await sandbox.exec(`cd ${repoDir} && opencode import .opencode-session-import.json`);
+    } finally {
+      await sandbox.deleteFile(sessionExportPath);
+    }
 
     return {
-        success: true,
-        sessionId: config.existingSessionExport.info.id,
-        exposedServerUrl: exposed.url,
-      };
+      success: true,
+      sessionId: config.existingSessionExport.info.id,
+      exposedServerUrl: exposed.url,
+    };
   }
 
   const session = await (client as OpencodeClient).session.create({

@@ -12,6 +12,7 @@ import { modelProvider } from "@gitterm/db/schema/model-credentials";
 import type { CloudSessionDestroyConfig, CloudSessionSpawnConfig, OpenCodeSessionExport, SandboxCredential } from "../../providers";
 
 export const cloudSessionCreateSchema = z.object({
+  localSessionId: z.string(),
   remoteRepoOwner: z.string(),
   remoteRepoName: z.string(),
   remoteBranch: z.string(),
@@ -21,7 +22,7 @@ export const cloudSessionCreateSchema = z.object({
 
 export const cloudSessionSpawnSchema = z.object({
   opencodeSessionId: z.string(),
-  existingSessionExport: z.any()
+  existingSessionExport: z.record(z.any(), z.any())
 });
 
 export const cloudSessionDestroySchema = z.object({
@@ -165,7 +166,7 @@ export const cloudSessionRouter = router({
     await db
       .update(cloudSession)
       .set({
-        opencodeSessionId: responseBody.result.sessionId ?? null,
+        opencodeSessionId: input.localSessionId,
         serverUrl: responseBody.result.exposedServerUrl,
         updatedAt: new Date(),
       })
@@ -181,8 +182,8 @@ export const cloudSessionRouter = router({
     };
   }),
 
-  spawn: protectedProcedure.input(cloudSessionSpawnSchema).mutation(async ({ input, ctx }) => {
-    const userId = ctx.session.user.id;
+  spawn: cliAuthProcedure.input(cloudSessionSpawnSchema).mutation(async ({ input, ctx }) => {
+    const userId = ctx.cliAuth.userId;
     if (!userId) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
     }
@@ -268,23 +269,26 @@ export const cloudSessionRouter = router({
       existingSessionExport: input.existingSessionExport as OpenCodeSessionExport
     };
 
-    const SPAWN_CLOUD_SESSION_WORKER_URL = "https://cloud-session-worker.mock/spawn";
+    const SPAWN_CLOUD_SESSION_WORKER_URL = "https://cloud.gitterm.dev";
 
     const response = await fetch(SPAWN_CLOUD_SESSION_WORKER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.INTERNAL_API_KEY}`,
+        Authorization: `Bearer test`,
       },
       body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
+      const body = await response.json()
+      console.log(body)
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to spawn cloud session",
       });
     }
+
 
     const responseBody = (await response.json()) as {
       success: boolean;
@@ -308,6 +312,9 @@ export const cloudSessionRouter = router({
       })
       .where(eq(cloudSession.id, existingSession.id));
 
+      console.log("cloudSessionId", existingSession.id)
+      console.log("cloudSessioserverUrlnId", responseBody.result.exposedServerUrl)
+ 
     return {
       cloudSessionId: existingSession.id,
       serverUrl: responseBody.result.exposedServerUrl,
