@@ -9,7 +9,12 @@ import { getGitHubAppService } from "../../service/github";
 import env from "@gitterm/env/server";
 import { getModelCredentialsService } from "../../service/model-credentials";
 import { modelProvider } from "@gitterm/db/schema/model-credentials";
-import type { CloudSessionDestroyConfig, CloudSessionSpawnConfig, OpenCodeSessionExport, SandboxCredential } from "../../providers";
+import type {
+  CloudSessionDestroyConfig,
+  CloudSessionSpawnConfig,
+  OpenCodeSessionExport,
+  SandboxCredential,
+} from "../../providers";
 
 export const cloudSessionCreateSchema = z.object({
   localSessionId: z.string(),
@@ -22,12 +27,47 @@ export const cloudSessionCreateSchema = z.object({
 
 export const cloudSessionSpawnSchema = z.object({
   opencodeSessionId: z.string(),
-  existingSessionExport: z.record(z.any(), z.any())
+  existingSessionExport: z.record(z.any(), z.any()),
 });
 
 export const cloudSessionDestroySchema = z.object({
   opencodeSessionId: z.string(),
 });
+
+type WorkerResponse<T> = {
+  success: boolean;
+  message?: string;
+  error?: string;
+  result?: T;
+};
+
+type SpawnWorkerResult = { sessionId?: string; exposedServerUrl?: string };
+type DestroyWorkerResult = { patches: { apply: string | null; } };
+
+async function requireWorkerResponse<T>(response: Response, fallbackMessage: string) {
+  let body: WorkerResponse<T> | null = null;
+  try {
+    body = (await response.json()) as WorkerResponse<T>;
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: body?.error ?? fallbackMessage,
+    });
+  }
+
+  if (!body?.success) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: body?.error ?? fallbackMessage,
+    });
+  }
+
+  return body;
+}
 
 export const cloudSessionRouter = router({
   create: cliAuthProcedure.input(cloudSessionCreateSchema).mutation(async ({ input, ctx }) => {
@@ -35,7 +75,6 @@ export const cloudSessionRouter = router({
     if (!userId) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
     }
-    console.log(userId)
 
     const [sandboxProvider] = await db
       .select()
@@ -53,7 +92,6 @@ export const cloudSessionRouter = router({
     const userGithubIntegration = userGitIntegrations[0];
 
     if (!userGithubIntegration) {
-      console.log("BAD_REQUEST")
       throw new TRPCError({ code: "BAD_REQUEST", message: "Setup Github Integration" });
     }
 
@@ -141,39 +179,38 @@ export const cloudSessionRouter = router({
       body: JSON.stringify(requestBody),
     });
 
-    if (!response.ok) {
-      const body = await response.json()
-      console.log(body)
+    const responseBody = await requireWorkerResponse<SpawnWorkerResult>(
+      response,
+      "Failed to spawn cloud session",
+    );
+
+    if (!responseBody.result?.exposedServerUrl) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to spawn cloud session",
+        message: "Cloud session worker failed",
       });
     }
 
-    const responseBody = (await response.json()) as {
-      success: boolean;
-      error?: string;
-      result?: { sessionId?: string; exposedServerUrl?: string };
-    };
+    console.log(input)
+    console.log(responseBody)
+    console.log("createdSession.id", createdSession.id)
 
-    if (!responseBody.success || !responseBody.result?.exposedServerUrl) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: responseBody.error ?? "Cloud session worker failed",
-      });
-    }
-
-    await db
+    const [updatedSession] = await db
       .update(cloudSession)
       .set({
         opencodeSessionId: input.localSessionId,
         serverUrl: responseBody.result.exposedServerUrl,
         updatedAt: new Date(),
       })
-      .where(eq(cloudSession.id, createdSession.id));
+      .where(eq(cloudSession.id, createdSession.id))
+      .returning();
 
-      console.log("cloudSessionId", createdSession.id)
-      console.log("cloudSessioserverUrlnId", responseBody.result.exposedServerUrl)
+    if (!updatedSession) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to update cloud session",
+      });
+    }
 
     return {
       cloudSessionId: createdSession.id,
@@ -266,7 +303,7 @@ export const cloudSessionRouter = router({
       gitAuthToken: tokenData.token,
       providerName: modelProviderData.name,
       credential,
-      existingSessionExport: input.existingSessionExport as OpenCodeSessionExport
+      existingSessionExport: input.existingSessionExport as OpenCodeSessionExport,
     };
 
     const SPAWN_CLOUD_SESSION_WORKER_URL = "https://cloud.gitterm.dev";
@@ -280,26 +317,15 @@ export const cloudSessionRouter = router({
       body: JSON.stringify(requestBody),
     });
 
-    if (!response.ok) {
-      const body = await response.json()
-      console.log(body)
+    const responseBody = await requireWorkerResponse<SpawnWorkerResult>(
+      response,
+      "Failed to spawn cloud session",
+    );
+
+    if (!responseBody.result?.exposedServerUrl) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to spawn cloud session",
-      });
-    }
-
-
-    const responseBody = (await response.json()) as {
-      success: boolean;
-      error?: string;
-      result?: { sessionId?: string; exposedServerUrl?: string };
-    };
-
-    if (!responseBody.success || !responseBody.result?.exposedServerUrl) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: responseBody.error ?? "Cloud session worker failed",
+        message: "Cloud session worker failed",
       });
     }
 
@@ -312,9 +338,6 @@ export const cloudSessionRouter = router({
       })
       .where(eq(cloudSession.id, existingSession.id));
 
-      console.log("cloudSessionId", existingSession.id)
-      console.log("cloudSessioserverUrlnId", responseBody.result.exposedServerUrl)
- 
     return {
       cloudSessionId: existingSession.id,
       serverUrl: responseBody.result.exposedServerUrl,
@@ -344,9 +367,11 @@ export const cloudSessionRouter = router({
 
     const requestBody: CloudSessionDestroyConfig = {
       gittermCloudSessionId: existingSession.id,
+      baseCommitSha: existingSession.baseCommitSha,
+      repoName: existingSession.remoteRepoName
     };
 
-    const DESTROY_CLOUD_SESSION_WORKER_URL = "https://cloud-session-worker.mock/destroy";
+    const DESTROY_CLOUD_SESSION_WORKER_URL = "https://cloud.gitterm.dev/destroy";
 
     const response = await fetch(DESTROY_CLOUD_SESSION_WORKER_URL, {
       method: "POST",
@@ -357,22 +382,84 @@ export const cloudSessionRouter = router({
       body: JSON.stringify(requestBody),
     });
 
-    if (!response.ok) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to destroy cloud session",
-      });
-    }
+    const responseBody = await requireWorkerResponse<DestroyWorkerResult>(
+      response,
+      "Failed to destroy cloud session",
+    );
+
 
     await db
       .update(cloudSession)
       .set({
-        opencodeSessionId: null,
         serverUrl: null,
         updatedAt: new Date(),
       })
       .where(eq(cloudSession.id, existingSession.id));
 
-    return { success: true };
+    return {
+      success: true,
+        patches: {
+          apply: responseBody.result?.patches.apply ?? null,
+        },
+    };
+  }),
+
+  destroyCLI: cliAuthProcedure.input(cloudSessionDestroySchema).mutation(async ({ input, ctx }) => {
+    const userId = ctx.cliAuth.userId;
+    if (!userId) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+    }
+
+    const [existingSession] = await db
+      .select()
+      .from(cloudSession)
+      .where(
+        and(
+          eq(cloudSession.opencodeSessionId, input.opencodeSessionId),
+          eq(cloudSession.userId, userId),
+        ),
+      );
+
+    if (!existingSession) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Cloud session not found" });
+    }
+
+    const requestBody: CloudSessionDestroyConfig = {
+      gittermCloudSessionId: existingSession.id,
+      baseCommitSha: existingSession.baseCommitSha,
+      repoName: existingSession.remoteRepoName
+    };
+
+    const DESTROY_CLOUD_SESSION_WORKER_URL = "https://cloud.gitterm.dev/destroy";
+
+    const response = await fetch(DESTROY_CLOUD_SESSION_WORKER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.INTERNAL_API_KEY}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseBody = await requireWorkerResponse<DestroyWorkerResult>(
+      response,
+      "Failed to destroy cloud session",
+    );
+
+
+    await db
+      .update(cloudSession)
+      .set({
+        serverUrl: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(cloudSession.id, existingSession.id));
+
+    return {
+      success: true,
+        patches: {
+          apply: responseBody.result?.patches.apply ?? null,
+        },
+    };
   }),
 });

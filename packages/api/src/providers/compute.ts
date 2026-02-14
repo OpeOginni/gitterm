@@ -199,4 +199,6 @@ export interface CloudSessionSpawnConfig {
 
 export interface CloudSessionDestroyConfig {
   gittermCloudSessionId: string;
+  baseCommitSha: string;
+  repoName: string;
 }

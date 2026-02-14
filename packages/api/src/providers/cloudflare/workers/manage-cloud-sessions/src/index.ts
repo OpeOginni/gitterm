@@ -12,6 +12,26 @@ interface Env {
   INTERNAL_API_KEY: string;
 }
 
+type ApiResponse<T> = {
+  success: boolean;
+  message?: string;
+  error?: string;
+  result?: T;
+};
+
+function ok<T>(result?: T, message?: string): Response {
+  const body: ApiResponse<T> = { success: true };
+  if (message) body.message = message;
+  if (result !== undefined) body.result = result;
+  return Response.json(body);
+}
+
+function fail(status: number, error: string, message?: string): Response {
+  const body: ApiResponse<never> = { success: false, error };
+  if (message) body.message = message;
+  return Response.json(body, { status });
+}
+
 async function setupAuth(
   sandbox: Sandbox<unknown>,
   client: OpencodeClient,
@@ -89,12 +109,13 @@ async function spawnCloudSession(
   } = config;
 
   const repoPath = `${repoOwner}/${repoName}`;
+  const repoDir = `/root/workspace/${repoName}`;
   const EXPOSED_OPENCODE_SERVER_PORT = 4096;
 
   const repoUrl = `https://x-access-token:${gitAuthToken}@github.com/${repoPath}.git`;
   const checkoutResult = await sandbox.gitCheckout(repoUrl, {
     branch: branch,
-    targetDir: `/root/workspace/${repoName}`,
+    targetDir: repoDir,
   });
 
   if (!checkoutResult.success) {
@@ -107,7 +128,7 @@ async function spawnCloudSession(
   }
 
   const { client, server } = await createOpencode(sandbox, {
-    directory: `/root/workspace/${repoName}`,
+    directory: repoDir,
     port: EXPOSED_OPENCODE_SERVER_PORT,
   });
 
@@ -123,11 +144,10 @@ async function spawnCloudSession(
   }
 
   if (config.existingSessionExport) {
-    const repoDir = `/root/workspace/${repoName}`;
     const sessionExportPath = `${repoDir}/.opencode-session-import.json`;
 
     try {
-      config.existingSessionExport.info.directory = repoDir
+      config.existingSessionExport.info.directory = repoDir;
       await sandbox.writeFile(
         sessionExportPath,
         JSON.stringify(config.existingSessionExport, null, 2),
@@ -145,7 +165,7 @@ async function spawnCloudSession(
   }
 
   const session = await (client as OpencodeClient).session.create({
-    query: { directory: `/root/workspace/${repoName}` },
+    query: { directory: repoDir },
   });
 
   if (session.error) {
@@ -167,40 +187,60 @@ async function spawnCloudSession(
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-
     const proxyResponse = await proxyToSandbox(request, env);
     if (proxyResponse) return proxyResponse;
-    
+
     const { hostname, pathname } = new URL(request.url);
 
-    if(request.method === "POST" && pathname === "/destroy") {
-        const config = await request.json<CloudSessionDestroyConfig>();
+    if (request.method === "POST" && pathname === "/destroy") {
+      const config = await request.json<CloudSessionDestroyConfig>();
 
-        const sandbox = getSandbox(env.Sandbox, config.gittermCloudSessionId);
-        
-        try {
-            await sandbox.exec('git commit -m "Session Prompt Commit"')
-    
-            await sandbox.exec(`git diff $BASE_COMMIT_SHA > /persist/cloud-sessions/${config.gittermCloudSessionId}/apply.patch`)
-            await sandbox.exec(`git diff $BASE_COMMIT_SHA --reverse > /persist/cloud-sessions/${config.gittermCloudSessionId}/revert.patch`)
-      
-            await sandbox.destroy();
-    
-            return Response.json({
-                success: true,
-                message: "Cloud session destroyed",
-            });
-        } catch (error) {
-          console.error("Failed to destroy cloud session:", error);
-    
-          return Response.json(
-            {
-              success: false,
-              error: error instanceof Error ? error.message : "Unknown error",
+      const sandbox = getSandbox(env.Sandbox, config.gittermCloudSessionId);
+
+      try {
+        await sandbox.setEnvVars({
+          CLOUD_SESSION_ID: config.gittermCloudSessionId,
+          BASE_COMMIT_SHA: config.baseCommitSha,
+        });
+
+        const repoDir = `/root/workspace/${config.repoName}`
+
+        const applyPatchPath = `/persist/patch/apply.patch`;
+
+        console.log("Destroy: repo-path.txt", repoDir);
+
+        await sandbox.mkdir("/persist/patch", { recursive: true })
+
+        await sandbox.exec(
+          `repoDir="${repoDir}"
+           git -C "$repoDir" add -A
+           git -C "$repoDir" diff --cached "$BASE_COMMIT_SHA" > "${applyPatchPath}"`,
+        );
+
+        const applyPatchResult = await sandbox.readFile(applyPatchPath);
+        const applyPatchRaw =
+          typeof applyPatchResult === "string" ? applyPatchResult : applyPatchResult.content;
+        const applyPatch = applyPatchRaw.trim() ? applyPatchRaw : null;
+
+        await sandbox.destroy();
+
+        return ok(
+          {
+            patches: {
+              apply: applyPatch || null,
             },
-            { status: 500 },
-          );
-        } 
+          },
+          "Cloud session destroyed",
+        );
+      } catch (error) {
+        console.error("Failed to destroy cloud session:", error);
+
+        return fail(
+          500,
+          error instanceof Error ? error.message : "Unknown error",
+          "Failed to destroy cloud session",
+        );
+      }
     }
 
     const authorization = request.headers.get("Authorization");
@@ -209,27 +249,17 @@ export default {
       : undefined;
 
     if (!authorization || !token || token !== env.INTERNAL_API_KEY) {
-      return Response.json(
-        {
-          error: "Unauthorized",
-          success: false,
-          message: "Unauthorized",
-        },
-        { status: 401 },
-      );
+      return fail(401, "Unauthorized", "Unauthorized");
     }
 
     const config = await request.json<CloudSessionSpawnConfig>();
 
     const sandbox = getSandbox(env.Sandbox, config.gittermCloudSessionId);
-    if(!sandbox.envVars["AWS_ACCESS_KEY_ID"] || !sandbox.envVars["AWS_SECRET_ACCESS_KEY"]) {
-      return Response.json(
-        {
-          error: "AWS credentials are missing from the sandbox environment variables.",
-          success: false,
-          message: "Internal Server Error: AWS credentials not found in sandbox.",
-        },
-        { status: 500 },
+    if (!sandbox.envVars["AWS_ACCESS_KEY_ID"] || !sandbox.envVars["AWS_SECRET_ACCESS_KEY"]) {
+      return fail(
+        500,
+        "AWS credentials are missing from the sandbox environment variables.",
+        "Internal Server Error: AWS credentials not found in sandbox.",
       );
     }
 
@@ -237,41 +267,22 @@ export default {
       await sandbox.setEnvVars({
         CLOUD_SESSION_ID: config.gittermCloudSessionId,
         BASE_COMMIT_SHA: config.baseCommitSha,
-        AWS_ACCESS_KEY_ID: env.AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY: env.AWS_SECRET_ACCESS_KEY
       });
 
-      await sandbox.mountBucket('opencode-cloud-sessions', '/persist', {
-        endpoint: 'https://dea3902b0808872213b16655005fac5b.r2.cloudflarestorage.com',
-        prefix: `/cloud-sessions/${config.gittermCloudSessionId}/`,
-      });
-      
       const result = await spawnCloudSession(config, sandbox, hostname);
 
       if (result.error) {
-        return Response.json(
-          {
-            success: false,
-            error: result.error,
-          },
-          { status: 500 },
-        );
+        return fail(500, result.error, "Failed to create cloud session");
       }
 
-      return Response.json({
-        success: true,
-        message: "Cloud session created",
-        result,
-      });
+      return ok(result, "Cloud session created");
     } catch (error) {
       console.error("Failed to execute agent run:", error);
 
-      return Response.json(
-        {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        },
-        { status: 500 },
+      return fail(
+        500,
+        error instanceof Error ? error.message : "Unknown error",
+        "Failed to create cloud session",
       );
     }
   },
