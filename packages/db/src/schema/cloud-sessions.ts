@@ -12,7 +12,6 @@ export const cloudSession = pgTable("cloud_session", {
     remoteRepoOwner: text("remote_repo_owner").notNull(),
     remoteRepoName: text("remote_repo_name").notNull(),
     remoteBranch: text("remote_branch").notNull(),
-    sandboxId: text("sandbox_id"),
     opencodeSessionId: text("opencode_session_id"),
     serverUrl: text("server_url"),
     baseCommitSha: text("base_commit_sha").notNull(),
