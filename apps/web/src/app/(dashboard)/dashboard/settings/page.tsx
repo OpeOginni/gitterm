@@ -7,7 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
-type UserPlan = "free" | "tunnel" | "pro";
+type UserPlan = "free" | "pro";
 
 export default async function SettingsPage() {
   const session = await authClient.getSession({

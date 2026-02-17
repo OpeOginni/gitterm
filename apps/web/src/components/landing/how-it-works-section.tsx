@@ -51,30 +51,6 @@ export function HowItWorksSection() {
             ))}
           </div>
         </div>
-
-        {/* Local Tunnel Alternative */}
-        <div className="mt-16 rounded-2xl border border-border bg-secondary/70 p-8">
-          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <p className="inline-flex items-center rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Local tunnel
-                </p>
-                <p className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-amber-200">
-                  Beta
-                </p>
-              </div>
-              <h3 className="mb-2 text-xl font-semibold text-foreground">Prefer to run locally?</h3>
-              <p className="max-w-xl text-muted-foreground">
-                Use our CLI to tunnel your local dev server. Get a public gitterm.dev URL without
-                deploying anything.
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm">
-              <span className="text-primary">$</span> npx gitterm tunnel --w abc1234 --port 4096
-            </div>
-          </div>
-        </div>
       </div>
     </section>
   );

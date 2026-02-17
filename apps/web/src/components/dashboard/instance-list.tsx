@@ -45,7 +45,6 @@ import {
   getWorkspaceUrl,
   getAttachCommand,
   getWorkspaceDisplayUrl,
-  getAgentConnectCommand,
   getWorkspaceOpenPortUrl,
 } from "@/lib/utils";
 import Link from "next/link";
@@ -273,21 +272,9 @@ function InstanceCard({
   const isStopped = workspace.status === "stopped";
   const isPending = workspace.status === "pending";
 
-  // Check if this is a tunnel workspace (runs on user's local machine)
-  const isLocal =
-    providers.find((p) => p.id === workspace.cloudProviderId)?.name.toLowerCase() === "local";
-  const isLocalPending = isPending && isLocal;
-
-  // Generate the connect command for tunnel workspaces only
-  // Pending tunnel workspaces need the gitterm connect command
-  // Running tunnel workspaces can use opencode attach
-  const connectCommand = isLocal
-    ? isPending
-      ? getAgentConnectCommand(workspace.id)
-      : workspace.subdomain
+  const connectCommand =  workspace.subdomain
         ? getAttachCommand(workspace.subdomain, workspace.image.agentType.name)
         : null
-    : null;
 
   // Get the workspace URL for linking
   const workspaceUrl = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
@@ -299,52 +286,6 @@ function InstanceCard({
 
   return (
     <>
-      <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Connect to Local Instance</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Run this command to connect your local server to this tunnel.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-3">
-              <Label className="text-sm font-medium">Run this command to connect:</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={connectCommand || ""}
-                  readOnly
-                  className="font-mono text-sm bg-secondary/50"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (connectCommand) {
-                      navigator.clipboard.writeText(connectCommand);
-                      toast.success("Copied to clipboard");
-                    }
-                  }}
-                >
-                  Copy
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Once connected, your local server will be available at{" "}
-                <span className="font-mono text-foreground">{workspaceDisplayUrl}</span>
-              </p>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={() => setShowConnectDialog(false)}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Done
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <Dialog
         open={showOpenPortDialog}
         onOpenChange={(open) => {
@@ -428,11 +369,7 @@ function InstanceCard({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/50 transition-colors">
-                  {isLocal ? (
-                    <Terminal className="h-6 w-6 transition-colors text-primary" />
-                  ) : (
                     <Box className="h-6 w-6 transition-colors text-primary" />
-                  )}
                 </div>
                 <div className="flex flex-col min-w-0">
                   <CardTitle className="text-sm font-semibold truncate">
@@ -500,7 +437,7 @@ function InstanceCard({
               </div>
             )}
             {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
-              (isRunning && !isLocal)) && (
+              isRunning) && (
               <div className="flex items-start gap-2 mt-0.5 min-w-0">
                 <EthernetPort className="h-3.5 w-3.5 shrink-0 mt-px" />
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -547,7 +484,7 @@ function InstanceCard({
                         </div>
                       );
                     })}
-                  {isRunning && !isLocal && (
+                  {isRunning && (
                     <button
                       type="button"
                       onClick={() => {
@@ -571,19 +508,9 @@ function InstanceCard({
           </div>
         </CardContent>
         <CardFooter className="flex gap-2 bg-secondary/30 p-4 border-t border-border/50">
-          {isLocalPending && (
-            <Button
-              size="sm"
-              className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
-              onClick={() => setShowConnectDialog(true)}
-            >
-              <Terminal className="h-3.5 w-3.5" />
-              View Connect Command
-            </Button>
-          )}
           {isRunning &&
             workspaceUrl &&
-            (isLocal || workspace.serverOnly ? (
+            (workspace.serverOnly ? (
               <div className="flex gap-2 flex-1">
                 <Button
                   size="sm"
@@ -645,7 +572,7 @@ function InstanceCard({
             </Button>
           )}
 
-          {(isPending || isRunning) && !isLocalPending && (
+          {(isPending || isRunning) && (
             <Button
               variant="outline"
               size="sm"

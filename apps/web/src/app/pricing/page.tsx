@@ -25,11 +25,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
 
-type UserPlan = "free" | "tunnel" | "pro";
+type UserPlan = "free" | "pro";
 
 interface PlanTier {
   name: string;
-  slug?: "tunnel" | "pro";
+  slug?: "pro";
   price?: number;
   description: string;
   features: string[];
@@ -64,20 +64,6 @@ const PLAN_TIERS: PlanTier[] = [
     actionLabel: "Get Started",
   },
   {
-    name: "Tunnel",
-    slug: "tunnel",
-    price: 5,
-    description: "Custom URL for your local tunnels",
-    features: [
-      "Custom tunnel subdomain (yourname.gitterm.dev)",
-      "Secure public access to local services",
-      "Ideal for webhooks, demos, and local testing",
-      "Same daily runtime limit as Free",
-      "10 sandbox runs / month (same as Free)",
-    ],
-    actionLabel: "Get Tunnel",
-  },
-  {
     name: "Pro",
     slug: "pro",
     price: 20,
@@ -86,7 +72,6 @@ const PLAN_TIERS: PlanTier[] = [
       "Unlimited loop projects and cloud workspaces",
       "100 sandbox runs / month",
       "Max 40 min per run",
-      "Custom tunnel subdomain included",
       "Built for professional workflows",
     ],
     popular: true,
@@ -200,9 +185,9 @@ function PricingCard({
 }: {
   plan: PlanTier;
   currentPlan?: UserPlan;
-  onUpgrade: (slug: "tunnel" | "pro") => void;
+  onUpgrade: (slug: "pro") => void;
   isLoading: boolean;
-  loadingPlan?: "tunnel" | "pro" | null;
+  loadingPlan?: "pro" | null;
 }) {
   const isCurrentPlan = plan.slug && currentPlan === plan.slug;
   const isFreeCurrentPlan = plan.name === "Free" && currentPlan === "free";
@@ -316,7 +301,7 @@ function PricingCard({
 
 function PricingPageContent() {
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingPlan, setLoadingPlan] = useState<"tunnel" | "pro" | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<"pro" | null>(null);
   const [loadingPack, setLoadingPack] = useState<string | null>(null);
   const { data: session } = authClient.useSession();
   const router = useRouter();
@@ -335,7 +320,7 @@ function PricingPageContent() {
     const planParam = searchParams.get("plan");
     if (
       planParam &&
-      (planParam === "tunnel" || planParam === "pro") &&
+      (planParam === "pro") &&
       session?.user &&
       !isLoading
     ) {
@@ -367,7 +352,7 @@ function PricingPageContent() {
 
   const currentPlan = ((session?.user as any)?.plan as UserPlan) || "free";
 
-  const handleUpgrade = async (slug: "tunnel" | "pro") => {
+  const handleUpgrade = async (slug: "pro") => {
     if (!isBillingEnabled) {
       // If billing is not enabled but pricing is shown, redirect to dashboard
       window.location.href = "/dashboard";

@@ -1,7 +1,7 @@
 import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "../index";
-import { cliJWT } from "../service/tunnel/cli-jwt";
+import { cliJWT } from "../service/cli/cli-jwt";
 import { db, eq } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
 

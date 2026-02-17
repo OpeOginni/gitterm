@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Cloud, Terminal } from "lucide-react";
+import { Cloud } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import type { WorkspaceType } from "./types";
 
@@ -25,12 +25,6 @@ const workspaceOptions: WorkspaceOption[] = [
     icon: null, // Will use Cloud icon
   },
   {
-    type: "local",
-    label: "Local Tunnel",
-    description: "Expose local server",
-    icon: null, // Will use Terminal icon
-  },
-  {
     type: "agentic-loops",
     label: "Agentic Loops",
     description: "Autonomous Loops",
@@ -45,8 +39,6 @@ export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelector
     switch (option.type) {
       case "cloud":
         return <Cloud className={iconClass} />;
-      case "local":
-        return <Terminal className={iconClass} />;
       case "agentic-loops":
         return (
           <Image
@@ -65,7 +57,7 @@ export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelector
   return (
     <div className="grid gap-2">
       <Label className="text-sm font-medium">Workspace Type</Label>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {workspaceOptions.map((option) => {
           const isSelected = value === option.type;
           return (

@@ -15,7 +15,7 @@ export class CLIJWTService {
   static generateToken(params: { userId: string; scopes?: string[] }): string {
     const payload: Omit<CLITokenPayload, "iat" | "exp"> = {
       userId: params.userId,
-      scope: params.scopes ?? ["tunnel:sync:*"],
+      scope: params.scopes ?? ["gitterm:*"],
     };
 
     return jwt.sign(payload, CLI_JWT_SECRET, {
@@ -35,7 +35,7 @@ export class CLIJWTService {
   }
 
   static hasScope(payload: CLITokenPayload, requiredScope: string): boolean {
-    if (payload.scope.includes("tunnel:sync:*")) return true;
+    if (payload.scope.includes("gitterm:*")) return true;
     return payload.scope.includes(requiredScope);
   }
 }

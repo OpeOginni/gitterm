@@ -31,7 +31,7 @@ import { Skeleton } from "../ui/skeleton";
 import { PlanBadge } from "./billing-section";
 import type { Route } from "next";
 
-type UserPlan = "free" | "tunnel" | "pro";
+type UserPlan = "free" | "pro";
 
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },

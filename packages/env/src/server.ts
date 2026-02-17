@@ -38,8 +38,6 @@ const baseSchema = z
     BETTER_AUTH_URL: optional,
     BETTER_AUTH_SECRET: optional, // Required but handled by auth package
     API_URL: optional,
-    TUNNEL_URL: optional,
-    TUNNEL_PUBLIC_URL: optional,
 
     // Database & Redis
     DATABASE_URL: optional, // Required but may be set elsewhere
@@ -62,7 +60,6 @@ const baseSchema = z
     POLAR_ACCESS_TOKEN: optional,
     POLAR_WEBHOOK_SECRET: optional,
     POLAR_ENVIRONMENT: polarEnvironment,
-    POLAR_TUNNEL_PRODUCT_ID: optional,
     POLAR_PRO_PRODUCT_ID: optional,
     POLAR_RUN_PACK_50_PRODUCT_ID: optional,
     POLAR_RUN_PACK_100_PRODUCT_ID: optional,
@@ -71,7 +68,6 @@ const baseSchema = z
     LISTENER_URL: optional,
 
     // Tunnel
-    TUNNEL_JWT_SECRET: optional,
     CLI_JWT_SECRET: optional,
     WORKSPACE_JWT_SECRET: optional,
 
@@ -89,7 +85,6 @@ const baseSchema = z
     ENABLE_QUOTA_ENFORCEMENT: boolWithDefault(false),
     ENABLE_IDLE_REAPING: boolWithDefault(true),
     ENABLE_USAGE_METERING: boolWithDefault(false),
-    ENABLE_LOCAL_TUNNELS: boolWithDefault(true),
     ENABLE_EMAIL_AUTH: boolWithDefault(true),
     ENABLE_GITHUB_AUTH: boolWithDefault(false),
     // ... keep the z.object({ ... }) as-is ...
@@ -109,12 +104,6 @@ const baseSchema = z
         errors.push({
           path: "POLAR_WEBHOOK_SECRET",
           message: "POLAR_WEBHOOK_SECRET is required in managed mode",
-        });
-      }
-      if (!data.POLAR_TUNNEL_PRODUCT_ID) {
-        errors.push({
-          path: "POLAR_TUNNEL_PRODUCT_ID",
-          message: "POLAR_TUNNEL_PRODUCT_ID is required in managed mode",
         });
       }
       if (!data.POLAR_PRO_PRODUCT_ID) {

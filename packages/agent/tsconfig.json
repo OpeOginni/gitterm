@@ -1,8 +1,0 @@
-{
-  "extends": "@gitterm/config/tsconfig.base.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "types": ["bun"]
-  },
-  "include": ["src"]
-}

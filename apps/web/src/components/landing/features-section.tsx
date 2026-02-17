@@ -8,12 +8,6 @@ const features = [
     description: "Spin up OpenCode, and other AI coding agents instantly on Railway or AWS.",
   },
   {
-    icon: Globe,
-    title: "Local Tunnels",
-    description:
-      "Expose your local OpenCode server with a shareable gitterm.dev URL. No port forwarding needed.",
-  },
-  {
     icon: Repeat,
     title: "Agentic Loops",
     description:

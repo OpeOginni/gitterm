@@ -15,13 +15,11 @@ import { useWorkspaceStatusWatcher } from "@/components/workspace-status-watcher
 import { WorkspaceTypeSelector } from "./workspace-type-selector";
 import { CliCommandDisplay } from "./cli-command-display";
 import { CreateCloudInstance } from "./create-cloud-instance";
-import { CreateLocalInstance } from "./create-local-instance";
 import { CreateAgentLoop } from "./create-agent-loop";
 import type { WorkspaceType, CreateInstanceResult } from "./types";
 
 const DIALOG_DESCRIPTIONS: Record<WorkspaceType, string> = {
   cloud: "Deploy a new development workspace from a GitHub repository.",
-  local: "Create a local tunnel to expose your local development server.",
   "agentic-loops": "Create an autonomous agent that executes tasks from your plan file.",
 };
 
@@ -36,9 +34,6 @@ export function CreateInstanceDialog() {
   const handleSuccess = useCallback(
     (result: CreateInstanceResult) => {
       switch (result.type) {
-        case "tunnel":
-          setCliCommand(result.command);
-          break;
         case "workspace":
           watchWorkspaceStatus({
             workspaceId: result.workspaceId,
@@ -93,10 +88,6 @@ export function CreateInstanceDialog() {
 
             {workspaceType === "cloud" && (
               <CreateCloudInstance onSuccess={handleSuccess} onCancel={handleCancel} />
-            )}
-
-            {workspaceType === "local" && (
-              <CreateLocalInstance onSuccess={handleSuccess} onCancel={handleCancel} />
             )}
 
             {workspaceType === "agentic-loops" && (

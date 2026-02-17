@@ -83,7 +83,6 @@ function CheckoutSuccessContent() {
                   className={cn(
                     "font-semibold capitalize",
                     userPlan === "pro" && "text-primary",
-                    userPlan === "tunnel" && "text-foreground",
                   )}
                 >
                   {isPending && !checkoutPlan ? "Loading..." : planName}
@@ -106,12 +105,6 @@ function CheckoutSuccessContent() {
                 <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
                 <span>Your plan benefits are now active</span>
               </li>
-              {userPlan === "tunnel" && (
-                <li className="flex items-start gap-3 text-sm text-muted-foreground">
-                  <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                  <span>Create local tunnels with custom subdomains</span>
-                </li>
-              )}
               {userPlan === "pro" && (
                 <>
                   <li className="flex items-start gap-3 text-sm text-muted-foreground">

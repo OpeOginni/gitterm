@@ -28,7 +28,6 @@ import { sendAdminMessage } from "../../utils/discord";
 import { getWorkspaceDomain } from "../../utils/routing";
 import {
   canUseCustomCloudSubdomain,
-  canUseCustomTunnelSubdomain,
   type UserPlan,
 } from "../../config/features";
 import { getProviderConfigService } from "../../service/provider-config";
@@ -38,7 +37,6 @@ import { getModelCredentialsService } from "../../service/model-credentials";
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
   "api",
-  "tunnel",
   "www",
   "app",
   "admin",
@@ -105,7 +103,6 @@ export const workspaceRouter = router({
     }
 
     return {
-      canUseCustomTunnelSubdomain: canUseCustomTunnelSubdomain(userPlan as UserPlan),
       canUseCustomCloudSubdomain: canUseCustomCloudSubdomain(userPlan as UserPlan),
       userPlan,
     };
@@ -1047,21 +1044,11 @@ export const workspaceRouter = router({
             });
           }
 
-          // Check plan-based permissions for custom subdomains
-          if (isLocal) {
-            if (!canUseCustomTunnelSubdomain(userPlan)) {
-              throw new TRPCError({
-                code: "FORBIDDEN",
-                message: "Custom tunnel subdomains require a Tunnel or Pro plan.",
-              });
-            }
-          } else {
             if (!canUseCustomCloudSubdomain(userPlan)) {
               throw new TRPCError({
                 code: "FORBIDDEN",
                 message: "Custom cloud subdomains require a Pro plan.",
               });
-            }
           }
 
           // Check uniqueness - only among running/pending workspaces
@@ -1118,7 +1105,7 @@ export const workspaceRouter = router({
         const workspaceAuthToken = workspaceJWT.generateToken(
           workspaceId,
           userId,
-          ["git:*", "git:fork", "git:refresh"], // All git scopes
+          ["port:*"], // All git scopes
         );
 
         // API endpoint for workspace operations
@@ -1282,13 +1269,6 @@ export const workspaceRouter = router({
           workspaceDomain: domain,
         });
 
-        // For tunnel workspaces, generate connection command
-        let command: string | undefined;
-        if (isLocal) {
-          // The agent CLI will use getTunnelUrl() to determine the correct tunnel endpoint
-          command = `npx gitterm connect --workspace-id ${workspaceId}`;
-        }
-
         // Format Discord notification with all workspace details
         const workspaceDetails = [
           `🚀 **New Workspace Created**`,
@@ -1330,7 +1310,6 @@ export const workspaceRouter = router({
           message: "Workspace created successfully",
           workspace: newWorkspace,
           volume: newVolume,
-          command, // Only set for local workspaces
         };
       } catch (error) {
         console.error("createWorkspace failed:", error);

@@ -24,7 +24,6 @@
 # - /api/*          -> API server
 # - /api/trpc/*     -> API server tRPC (strip /api prefix)
 # - /listener/*     -> Listener (SSE/tRPC)
-# - /tunnel/*       -> Tunnel-proxy (agent WebSocket connections)
 # - /ws/{subdomain}/* -> Workspace traffic (path-based routing)
 #
 # URL Structure (ROUTING_MODE=subdomain):
@@ -34,7 +33,6 @@
 # - WEB_URL         -> e.g., web.railway.internal:8080 or public URL
 # - SERVER_URL      -> e.g., server.railway.internal:8080 or public URL  
 # - LISTENER_URL    -> e.g., listener.railway.internal:8080 or public URL
-# - TUNNEL_PROXY_URL -> e.g., tunnel.railway.internal:8080 or public URL
 # - INTERNAL_API_KEY -> Shared key for internal API calls
 # - ROUTING_MODE    -> path | subdomain
 # - BASE_DOMAIN     -> e.g., gitterm.dev
@@ -50,7 +48,7 @@
 	}
 
 	# Block reserved subdomains at the Caddy level (defense in depth)
-	@reserved_subdomain header_regexp subdomain Host ^(api|tunnel)\.{$BASE_DOMAIN}$|^\d+-(api|tunnel)\.{$BASE_DOMAIN}$
+	@reserved_subdomain header_regexp subdomain Host ^(api|cloud)\.{$BASE_DOMAIN}$|^\d+-(api|cloud)\.{$BASE_DOMAIN}$
 	handle @reserved_subdomain {
 		root * /srv/errors
 		rewrite * /unavailable.html
@@ -60,7 +58,7 @@
 	# Debug endpoint - shows env var values (remove in production)
 	handle /debug {
 		header Content-Type application/json
-		respond `{"WEB_URL":"{$WEB_URL}","SERVER_URL":"{$SERVER_URL}","LISTENER_URL":"{$LISTENER_URL}","TUNNEL_PROXY_URL":"{$TUNNEL_PROXY_URL}"}` 200
+		respond `{"WEB_URL":"{$WEB_URL}","SERVER_URL":"{$SERVER_URL}","LISTENER_URL":"{$LISTENER_URL}"}` 200
 	}
 
 	# ============================================
@@ -95,20 +93,8 @@
 	}
 
 	# ============================================
-	# Tunnel-proxy WebSocket: /tunnel/* -> TUNNEL_PROXY_URL
-	# For agent connections only (not workspace traffic)
-	# ============================================
-	handle /tunnel/* {
-		reverse_proxy {$TUNNEL_PROXY_URL} {
-			header_up Upgrade {header.Upgrade}
-			header_up Connection {header.Connection}
-		}
-	}
-
-	# ============================================
 	# PATH-BASED WORKSPACE ROUTING (ROUTING_MODE=path): /ws/{subdomain}/*
 	# Routes workspace traffic based on hosting type:
-	# - local: tunnel-proxy (TUNNEL_PROXY_URL)
 	# - cloud: Railway container URL (with path prefix stripped)
 	# ============================================
 	@path_mode_ws {
@@ -130,38 +116,6 @@
 			header_up X-Original-Method {method}
 			header_up X-Forwarded-For {remote_ip}
 			header_up X-Routing-Mode path
-		}
-
-		# Local workspaces: route to tunnel-proxy (keep full path)
-		@local_workspace header X-Hosting-Type local
-		reverse_proxy @local_workspace {$TUNNEL_PROXY_URL} {
-			header_up Upgrade {header.Upgrade}
-			header_up Connection {header.Connection}
-			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
-			header_up Host {host}
-			header_up X-Real-IP {remote_ip}
-			header_up X-Forwarded-For {remote_ip}
-			header_up X-User-Agent {header.User-Agent}
-			header_up Cookie {header.Cookie}
-			header_up X-Subdomain {header.X-Subdomain}
-			header_up X-Hosting-Type {header.X-Hosting-Type}
-			header_up X-Routing-Mode path
-
-			# Modify CSP header to allow data URIs for WebAssembly
-			header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
-			
-
-			transport http {
-				compression off
-				dial_timeout 10s
-				response_header_timeout 0
-				expect_continue_timeout 0
-				keepalive 2m
-				keepalive_idle_conns 10
-			}
 		}
 
 		# Cloud workspaces: strip /ws/{subdomain} prefix and proxy to container
@@ -203,7 +157,6 @@
 	# ============================================
 	# SUBDOMAIN WORKSPACE ROUTING (ROUTING_MODE=subdomain): <port>-<subdomain>.<BASE_DOMAIN>
 	# Routes workspace traffic based on hosting type:
-	# - local: tunnel-proxy (TUNNEL_PROXY_URL)
 	# - cloud: Railway container URL
 	# ============================================
 	@subdomain_mode_ws {
@@ -227,36 +180,6 @@
 			header_up X-Original-Method {method}
 			header_up X-Forwarded-For {remote_ip}
 			header_up X-Routing-Mode subdomain
-		}
-
-		# Local workspaces: route to tunnel-proxy
-		@local_workspace header X-Hosting-Type local
-		reverse_proxy @local_workspace {$TUNNEL_PROXY_URL} {
-			header_up Upgrade {header.Upgrade}
-			header_up Connection {header.Connection}
-			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
-			header_up Host {host}
-			header_up X-Real-IP {remote_ip}
-			header_up X-Forwarded-For {remote_ip}
-			header_up X-User-Agent {header.User-Agent}
-			header_up Cookie {header.Cookie}
-			header_up X-Subdomain {header.X-Subdomain}
-			header_up X-Hosting-Type {header.X-Hosting-Type}
-			header_up X-Routing-Mode subdomain
-
-			header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
-
-			transport http {
-				compression off
-				dial_timeout 10s
-				response_header_timeout 0
-				expect_continue_timeout 0
-				keepalive 2m
-				keepalive_idle_conns 10
-			}
 		}
 
 		# Cloud workspaces: route to container
