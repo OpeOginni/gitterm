@@ -32,12 +32,6 @@ export const metadata: Metadata = {
         height: 630,
         alt: "GitTerm — Cloud workspaces for OpenCode",
       },
-      {
-        url: "/og-card/og-card.png",
-        width: 1200,
-        height: 630,
-        alt: "GitTerm — Cloud workspaces for OpenCode",
-      },
     ],
     locale: "en_US",
     type: "website",
