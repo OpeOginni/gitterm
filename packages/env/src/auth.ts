@@ -35,7 +35,6 @@ const schema = z.object({
   POLAR_ACCESS_TOKEN: optional,
   POLAR_WEBHOOK_SECRET: optional,
   POLAR_ENVIRONMENT: polarEnvironment,
-  POLAR_TUNNEL_PRODUCT_ID: optional,
   POLAR_PRO_PRODUCT_ID: optional,
   POLAR_RUN_PACK_50_PRODUCT_ID: optional,
   POLAR_RUN_PACK_100_PRODUCT_ID: optional,

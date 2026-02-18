@@ -18,7 +18,6 @@
 # - /*              -> Web app (Next.js) - DEFAULT
 # - /api/*          -> API server
 # - /listener/*     -> Listener (SSE/tRPC)
-# - /tunnel/*       -> Tunnel-proxy (agent WebSocket connections)
 # - /ws/{subdomain}/* -> Workspace traffic (path-based routing)
 #
 # Backend Ports (local dev):
@@ -26,7 +25,6 @@
 # - 3000: Server (API)
 # - 3001: Web (Next.js)
 # - 3003: Listener (SSE)
-# - 9000: Tunnel-proxy (agent connections + workspace traffic)
 #
 # Prerequisites:
 # - Install Caddy: brew install caddy (macOS) or see https://caddyserver.com/docs/install
@@ -65,21 +63,8 @@
 	}
 
 	# ============================================
-	# Tunnel-proxy WebSocket: /tunnel/* -> localhost:9000
-	# For agent connections only (not workspace traffic)
-	# ============================================
-	handle /tunnel/* {
-		reverse_proxy localhost:9000 {
-			# WebSocket support
-			header_up Upgrade {header.Upgrade}
-			header_up Connection {header.Connection}
-		}
-	}
-
-	# ============================================
 	# PATH-BASED WORKSPACE ROUTING: /ws/{subdomain}/*
 	# Routes workspace traffic based on hosting type:
-	# - local: tunnel-proxy (localhost:9000)
 	# - cloud: Railway public URL (with path prefix stripped)
 	# ============================================
 	handle /ws/* {
@@ -97,37 +82,6 @@
 			header_up X-Original-Method {method}
 			header_up X-Forwarded-For {remote_ip}
 			header_up X-Routing-Mode path
-		}
-
-		# Local workspaces: route to tunnel-proxy (keep full path)
-		@local_workspace header X-Hosting-Type local
-		reverse_proxy @local_workspace localhost:9000 {
-			header_up Upgrade {header.Upgrade}
-			header_up Connection {header.Connection}
-			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
-			header_up Host {host}
-			header_up X-Real-IP {remote_ip}
-			header_up X-Forwarded-For {remote_ip}
-			header_up X-User-Agent {header.User-Agent}
-			header_up Cookie {header.Cookie}
-			header_up X-Subdomain {header.X-Subdomain}
-			header_up X-Hosting-Type {header.X-Hosting-Type}
-			header_up X-Routing-Mode path
-
-			# Modify CSP header to allow data URIs for WebAssembly
-			header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
-
-			transport http {
-				compression off
-				dial_timeout 10s
-				response_header_timeout 0
-				expect_continue_timeout 0
-				keepalive 2m
-				keepalive_idle_conns 10
-			}
 		}
 
 		# Cloud workspaces: strip /ws/{subdomain} prefix and proxy to Railway

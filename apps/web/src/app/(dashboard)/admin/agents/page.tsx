@@ -98,7 +98,7 @@ export default function AgentTypesPage() {
           </Button>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Agent Type
               </Button>
@@ -149,7 +149,7 @@ export default function AgentTypesPage() {
         </div>
       </DashboardHeader>
 
-      <div className="pt-8 space-y-6">
+      <div className="pt-2 space-y-6">
         {isLoading ? (
           <div className="space-y-2">
             {[...Array(3)].map((_, i) => (
@@ -157,35 +157,44 @@ export default function AgentTypesPage() {
             ))}
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
             {agentTypes?.map((agent) => (
               <div
                 key={agent.id}
-                className={`flex items-center justify-between py-4 px-4 rounded-lg hover:bg-muted/40 transition-colors group ${!agent.isEnabled ? "opacity-60" : ""}`}
+                className={`flex items-center justify-between p-4 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02] ${!agent.isEnabled ? "opacity-60" : ""}`}
               >
                 <div className="flex items-center gap-4">
-                  <div className="p-2 rounded-md bg-muted/50">
-                    <Server className="h-5 w-5 text-muted-foreground" />
+                  <div className="rounded-xl bg-white/[0.04] p-2.5">
+                    <Server className="h-5 w-5 text-white/40" />
                   </div>
                   <div>
                     <div className="flex items-center gap-3">
-                      <span className="font-medium">{agent.name}</span>
+                      <span className="font-medium text-white/90">{agent.name}</span>
                       {!agent.isEnabled && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge
+                          variant="outline"
+                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                        >
                           Disabled
                         </Badge>
                       )}
                       {agent.serverOnly ? (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge
+                          variant="outline"
+                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                        >
                           Server Only
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge
+                          variant="outline"
+                          className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs"
+                        >
                           Terminal
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-xs text-white/25 mt-0.5">
                       Created {new Date(agent.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -200,7 +209,7 @@ export default function AgentTypesPage() {
             ))}
 
             {agentTypes?.length === 0 && (
-              <div className="py-12 text-center text-muted-foreground">
+              <div className="py-12 text-center text-white/30">
                 No agent types configured yet. Add one to get started.
               </div>
             )}

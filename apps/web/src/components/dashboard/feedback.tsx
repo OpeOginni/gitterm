@@ -12,7 +12,7 @@ import {
   DialogFooter,
 } from "../ui/dialog";
 import { Textarea } from "../ui/textarea";
-import { trpc, trpcClient } from "@/utils/trpc";
+import { trpc } from "@/utils/trpc";
 import { useMutation } from "@tanstack/react-query";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
@@ -49,23 +49,23 @@ export function FeedbackForm() {
       <DialogTrigger asChild>
         <Button
           type="button"
-          variant="default"
           size="icon"
-          className="size-10 rounded-full shadow-lg hover:shadow-xl transition-shadow bg-primary text-primary-foreground hover:bg-primary/90"
+          className="size-10 rounded-full bg-primary text-primary-foreground shadow-lg transition-shadow hover:bg-primary/85 hover:shadow-xl"
         >
-          <MessageCircleMoreIcon className="size-6" />
+          <MessageCircleMoreIcon className="size-5" />
         </Button>
       </DialogTrigger>
       {showThankYou ? (
-        <DialogContent className="bg-accent">
+        <DialogContent>
           <div className="flex flex-col gap-4">
-            <h1 className="text-2xl font-bold">Thank you for your feedback!</h1>
-            <p className="text-sm text-muted-foreground">
-              We appreciate your feedback and will use it to improve our product.
+            <h1 className="text-xl font-bold text-white">Thank you!</h1>
+            <p className="text-sm text-white/40">
+              We appreciate your feedback and will use it to improve GitTerm.
             </p>
           </div>
           <DialogFooter>
             <Button
+              className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
               onClick={() => {
                 setShowThankYou(false);
                 setOpen(false);
@@ -76,12 +76,13 @@ export function FeedbackForm() {
           </DialogFooter>
         </DialogContent>
       ) : (
-        <DialogContent className="bg-accent">
+        <DialogContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <DialogHeader>
-              <DialogTitle>Feedback</DialogTitle>
-
-              <DialogDescription>Share your thoughts and suggestions with us.</DialogDescription>
+              <DialogTitle className="text-white">Feedback</DialogTitle>
+              <DialogDescription className="text-white/40">
+                Share your thoughts and suggestions with us.
+              </DialogDescription>
             </DialogHeader>
 
             <div className="flex flex-col gap-4">
@@ -89,13 +90,20 @@ export function FeedbackForm() {
                 ref={textareaRef}
                 name="feedback"
                 placeholder="What do you think about the product?"
-                className="bg-secondary/50 border-border/50 shadow-none"
               />
             </div>
 
             <DialogFooter>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : "Submit Feedback"}
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+              >
+                {isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  "Submit Feedback"
+                )}
               </Button>
             </DialogFooter>
           </form>

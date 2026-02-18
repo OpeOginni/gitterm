@@ -13,7 +13,7 @@ import {
   CONFIG_DESCRIPTIONS,
   type SystemConfigKey,
   clearConfigCache,
-} from "../../service/system-config";
+} from "../../service/config/system-config";
 
 // ============================================================================
 // Input Schemas

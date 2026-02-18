@@ -16,7 +16,7 @@
 
 import env from "@gitterm/env/server";
 import { isSelfHosted, isManaged } from "./deployment";
-import { getFreeTierDailyMinutes } from "../service/system-config";
+import { getFreeTierDailyMinutes } from "../service/config/system-config";
 
 /**
  * Feature flags configuration
@@ -54,12 +54,6 @@ export const features = {
    * Only in managed mode when Discord is configured (no env flag - internal only)
    */
   discordNotifications: isManaged() && !!env.DISCORD_TOKEN,
-
-  /**
-   * Enable local tunnels (like ngrok)
-   * Enabled by default in both modes
-   */
-  localTunnels: env.ENABLE_LOCAL_TUNNELS,
 
   /**
    * Enable GitHub OAuth provider
@@ -112,42 +106,21 @@ export const shouldNotifyDiscord = (): boolean => features.discordNotifications;
  * Available user plans
  *
  * - free: Basic access, 10 sandbox runs/month
- * - tunnel: Custom tunnel subdomain, 10 sandbox runs/month
  * - pro: Full access with 100 runs/month and premium features
  */
-export type UserPlan = "free" | "tunnel" | "pro";
+export type UserPlan = "free" | "pro";
 
-/**
- * Plan features available for gating
- */
-export type PlanFeature = "customTunnelSubdomain"; // Custom subdomain for local tunnels
 
 // ============================================================================
 // Plan Feature Matrix
 // ============================================================================
 
-/**
- * Feature availability matrix by plan
- *
- * | Feature              | Free  | Tunnel | Pro   |
- * |----------------------|-------|--------|-------|
- * | customTunnelSubdomain| No    | Yes    | Yes   |
- * | agenticCoding        | Yes   | Yes    | Yes   |
- * | priorityQueue        | No    | No     | Yes   |
- * | agentMemory          | No    | No     | Yes   |
- * | emailNotifications   | No    | No     | Yes   |
- * | unlimitedProjects    | No    | No     | Yes   |
- */
-const PLAN_FEATURE_MATRIX: Record<PlanFeature, Record<UserPlan, boolean>> = {
-  customTunnelSubdomain: { free: false, tunnel: true, pro: true },
-};
 
 /**
  * Monthly sandbox run quotas by plan
  */
 export const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
   free: 10,
-  tunnel: 10, // Same as free - tunnel is for custom subdomain
   pro: 100,
 };
 
@@ -156,23 +129,12 @@ export const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
  */
 const DAILY_MINUTE_QUOTAS: Record<UserPlan, number> = {
   free: 60, // 1 hour
-  tunnel: 60, // Same as free
   pro: Infinity,
 };
 
 // ============================================================================
 // Plan Guard Functions
 // ============================================================================
-
-/**
- * Check if a user plan has access to a feature
- * Used for plan-based feature gating in managed mode
- */
-export const planHasFeature = (plan: UserPlan, feature: PlanFeature): boolean => {
-  if (isSelfHosted()) return true;
-
-  return PLAN_FEATURE_MATRIX[feature]?.[plan] ?? false;
-};
 
 /**
  * Get daily minute quota for a plan
@@ -212,14 +174,6 @@ export const getMonthlyRunQuota = (plan: UserPlan): number => {
 };
 
 /**
- * Check if a plan can use custom tunnel subdomains
- */
-export const canUseCustomTunnelSubdomain = (plan: UserPlan | string): boolean => {
-  if (isSelfHosted()) return true;
-  return plan === "tunnel" || plan === "pro";
-};
-
-/**
  * Check if a plan can use custom cloud subdomains
  */
 export const canUseCustomCloudSubdomain = (plan: UserPlan | string): boolean => {
@@ -249,10 +203,6 @@ export const getPlanInfo = (
     free: {
       name: "Free",
       description: "10 sandbox runs/month to try agentic coding",
-    },
-    tunnel: {
-      name: "Tunnel",
-      description: "Custom tunnel subdomain with 10 runs/month",
     },
     pro: {
       name: "Pro",

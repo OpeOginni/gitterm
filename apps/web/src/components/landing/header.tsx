@@ -15,51 +15,64 @@ export function LandingHeader() {
   const isHomePage = pathname === "/";
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-          <Terminal className="h-6 w-6 text-primary" />
-          <span className="text-lg font-semibold text-foreground">GitTerm</span>
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
+      <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between px-6">
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 transition-opacity hover:opacity-70"
+        >
+          <Terminal className="h-5 w-5 text-primary" />
+          <span className="font-mono text-sm font-bold tracking-wider uppercase text-white/90">
+            GitTerm
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
           <Link
             href="/#features"
-            className="text-sm text-muted-foreground transition-colors hover:text-primary"
+            className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
           >
             Features
           </Link>
           <Link
             href="/#how-it-works"
-            className="text-sm text-muted-foreground transition-colors hover:text-primary"
+            className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
           >
-            How it Works
+            How it works
           </Link>
           {showPricing && (
             <Link
               href={"/pricing" as Route}
-              className="text-sm text-muted-foreground transition-colors hover:text-primary"
+              className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
             >
               Pricing
             </Link>
           )}
         </nav>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2.5">
           {isHomePage && (
-            <Link href="https://github.com/OpeOginni/gitterm" target="_blank" className="group/github" title="Star on GitHub">
+            <Link
+              href="https://github.com/OpeOginni/gitterm"
+              target="_blank"
+              title="Star on GitHub"
+            >
               <Button
                 variant="outline"
                 size="sm"
-                className="border border-border text-foreground bg-transparent px-2 sm:px-3 transition-colors hover:border-yellow-400 border-2">
-                <Star className="h-3.5 w-3.5 shrink-0 sm:mr-1.5 text-yellow-500" />
-                <span className="hidden sm:inline">Star on GitHub</span>
+                className="h-8 border-white/[0.08] bg-transparent px-2.5 text-white/50 transition-colors hover:border-white/20 hover:text-white/80 sm:px-3"
+              >
+                <Star className="h-3.5 w-3.5 shrink-0 text-primary sm:mr-1.5" />
+                <span className="hidden font-mono text-xs sm:inline">Star</span>
               </Button>
             </Link>
           )}
           {session ? (
             <Link href="/dashboard">
-              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Button
+                size="sm"
+                className="h-8 bg-primary px-4 font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+              >
                 Dashboard
               </Button>
             </Link>
@@ -69,7 +82,7 @@ export function LandingHeader() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-muted-foreground hover:text-foreground"
+                  className="h-8 font-mono text-xs text-white/50 hover:text-white/80"
                 >
                   Log in
                 </Button>
@@ -77,7 +90,7 @@ export function LandingHeader() {
               <Link href="/dashboard">
                 <Button
                   size="sm"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                  className="h-8 bg-primary px-4 font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
                 >
                   Get Started
                 </Button>

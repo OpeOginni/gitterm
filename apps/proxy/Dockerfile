@@ -7,14 +7,12 @@
 # - /*              -> Web app (Next.js) - DEFAULT
 # - /api/*          -> API server
 # - /listener/*     -> Listener (SSE/tRPC)
-# - /tunnel/*       -> Tunnel-proxy (agent WebSocket connections)
 # - /ws/{subdomain}/* -> Workspace traffic (path-based routing)
 #
 # Environment Variables:
 # - WEB_URL         -> e.g., web.railway.internal:8080
 # - SERVER_URL      -> e.g., server.railway.internal:8080
 # - LISTENER_URL    -> e.g., listener.railway.internal:8080
-# - TUNNEL_PROXY_URL -> e.g., tunnel.railway.internal:8080
 # - INTERNAL_API_KEY -> Shared key for internal API calls
 # =============================================================================
 

@@ -1,10 +1,8 @@
 import type { ComputeProvider } from "./compute";
 import { railwayProvider } from "./railway";
-import { localProvider } from "./local";
 
 export * from "./compute";
 export { railwayProvider } from "./railway";
-export { localProvider } from "./local";
 
 /**
  * All available provider implementations
@@ -13,7 +11,6 @@ export { localProvider } from "./local";
  */
 const availableProviders: Record<string, ComputeProvider> = {
   railway: railwayProvider,
-  local: localProvider,
   // Future providers:
   // docker: dockerProvider,
   // kubernetes: kubernetesProvider,
@@ -34,14 +31,6 @@ export function getProvider(name: string): ComputeProvider {
   }
 
   return provider;
-}
-
-/**
- * Get the default compute provider (local)
- * Used as fallback for tunnel-only workspaces
- */
-export function getDefaultProvider(): ComputeProvider {
-  return localProvider;
 }
 
 /**

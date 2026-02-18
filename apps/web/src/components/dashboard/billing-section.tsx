@@ -32,7 +32,7 @@ import {
 import Link from "next/link";
 import type { Route } from "next";
 
-type UserPlan = "free" | "tunnel" | "pro";
+type UserPlan = "free" | "pro";
 
 interface BillingSectionProps {
   currentPlan: UserPlan;
@@ -49,19 +49,6 @@ interface PlanConfig {
 }
 
 const PLANS: Record<Exclude<UserPlan, "free">, PlanConfig> = {
-  tunnel: {
-    name: "Tunnel",
-    description: "Custom URL for your local tunnels",
-    price: "$5",
-    period: "/month",
-    icon: <Terminal className="h-5 w-5" />,
-    features: [
-      "Custom tunnel subdomain (yourname.gitterm.dev)",
-      "Secure public access to local services",
-      "Ideal for webhooks, demos, and local testing",
-      "10 sandbox runs / month (same as Free)",
-    ],
-  },
   pro: {
     name: "Pro",
     description: "Full-featured agentic coding platform",
@@ -77,7 +64,6 @@ const PLANS: Record<Exclude<UserPlan, "free">, PlanConfig> = {
       "Priority queue",
       "Agent memory / project context",
       "Email notifications on run completion",
-      "Custom tunnel subdomain included",
     ],
   },
 };
@@ -96,7 +82,6 @@ const RUN_PACKS: RunPackConfig[] = [
 
 const PLAN_DESCRIPTIONS: Record<UserPlan, string> = {
   free: "10 sandbox runs/month included. Upgrade for more runs and premium features.",
-  tunnel: "Custom tunnel subdomain with 10 sandbox runs/month",
   pro: "Full agentic coding with 100 runs/month and all premium features",
 };
 
@@ -228,8 +213,8 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
 
   const planConfig = currentPlan !== "free" ? PLANS[currentPlan] : null;
 
-  // For paid subscribers (tunnel or pro), show subscription management
-  if (currentPlan === "tunnel" || currentPlan === "pro") {
+  // For paid subscribers, show subscription management
+  if (currentPlan === "pro") {
     return (
       <div className="space-y-6">
         {/* Active Subscription Card */}
@@ -288,60 +273,6 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
             </Button>
           </CardFooter>
         </Card>
-
-        {/* Upgrade to Pro for Tunnel users */}
-        {currentPlan === "tunnel" && (
-          <Card className="border-dashed border-primary/30">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Zap className="h-5 w-5" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Upgrade to Pro</CardTitle>
-                  <CardDescription>$20/month</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm font-medium mb-2">Everything in Tunnel, plus:</p>
-              <ul className="space-y-2">
-                <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>100 sandbox runs / month (10x more)</span>
-                </li>
-                <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>Priority queue access</span>
-                </li>
-                <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>Agent memory / project context</span>
-                </li>
-                <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span>Email notifications on run completion</span>
-                </li>
-              </ul>
-            </CardContent>
-            <CardFooter className="border-t pt-6">
-              <Button
-                onClick={() => handleUpgrade("pro")}
-                disabled={isLoading}
-                className="w-full bg-primary/70 text-primary-foreground hover:bg-primary/75"
-              >
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="mr-2 h-4 w-4" />
-                )}
-                Upgrade to Pro
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </CardFooter>
-          </Card>
-        )}
-
       </div>
     );
   }
@@ -386,8 +317,6 @@ export function RunPacksSection({ currentPlan }: BillingSectionProps) {
   const description =
     currentPlan === "pro"
       ? "Your Pro plan includes 100 runs/month. Purchase additional run packs anytime."
-      : currentPlan === "tunnel"
-        ? "Your Tunnel plan includes 10 runs/month. Purchase additional run packs anytime."
         : "Purchase run packs for additional runs beyond your 10 free monthly runs.";
 
   return (
@@ -433,12 +362,14 @@ export function PlanBadge({ plan }: { plan: UserPlan }) {
 
   const variants: Record<UserPlan, "default" | "secondary" | "outline"> = {
     free: "secondary",
-    tunnel: "outline",
     pro: "default",
   };
 
   return (
-    <Badge variant={variants[plan]} className="capitalize text-xs">
+    <Badge
+      variant={variants[plan]}
+      className={`capitalize text-xs ${plan === "pro" ? "border-primary/30 bg-primary/10 text-primary" : ""}`}
+    >
       {plan}
     </Badge>
   );

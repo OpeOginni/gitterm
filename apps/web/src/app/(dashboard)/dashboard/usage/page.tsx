@@ -9,23 +9,21 @@ import { headers } from "next/headers";
 
 function MetricsSkeleton() {
   return (
-    <div className="grid gap-5 md:grid-cols-3">
-      {[...Array(3)].map((_, i) => (
-        <Skeleton key={i} className="h-32 bg-secondary/30" />
+    <div className="grid gap-4 md:grid-cols-3">
+      {Array.from({ length: 3 }, (_, i) => (
+        <Skeleton key={i} className="h-28 rounded-2xl bg-white/[0.04]" />
       ))}
     </div>
   );
 }
 
 function HistorySkeleton() {
-  return <Skeleton className="h-96 bg-secondary/30" />;
+  return <Skeleton className="h-80 rounded-2xl bg-white/[0.04]" />;
 }
 
 export default async function UsagePage() {
   const session = await authClient.getSession({
-    fetchOptions: {
-      headers: await headers(),
-    },
+    fetchOptions: { headers: await headers() },
   });
 
   if (!session.data?.user) {
@@ -34,12 +32,14 @@ export default async function UsagePage() {
 
   return (
     <DashboardShell>
-      <DashboardHeader heading="Usage & Billing" text="Monitor your workspace usage and quota." />
-      <div className="pt-8 grid gap-8">
+      <DashboardHeader
+        heading="Usage & Billing"
+        text="Monitor your workspace usage and quota."
+      />
+      <div className="mx-auto max-w-4xl space-y-6 pt-2">
         <Suspense fallback={<MetricsSkeleton />}>
           <UsageMetrics />
         </Suspense>
-
         <Suspense fallback={<HistorySkeleton />}>
           <UsageHistory />
         </Suspense>

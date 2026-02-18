@@ -1,9 +1,8 @@
-export type WorkspaceType = "cloud" | "local" | "agentic-loops";
+export type WorkspaceType = "cloud" | "agentic-loops";
 
 // Result types for form submissions
 export type CreateInstanceResult =
   | { type: "workspace"; workspaceId: string; userId: string }
-  | { type: "tunnel"; command: string }
   | { type: "agent-loop" };
 
 export interface CreateInstanceFormProps {
@@ -37,7 +36,6 @@ export interface GitInstallation {
 }
 
 export interface SubdomainPermissions {
-  canUseCustomTunnelSubdomain: boolean;
   canUseCustomCloudSubdomain: boolean;
 }
 

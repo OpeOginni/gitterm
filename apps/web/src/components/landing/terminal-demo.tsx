@@ -1,112 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cloud, Monitor, Terminal, Box, Globe, Loader2, Check, Server } from "lucide-react";
-
-const localCommands = [
-  { prompt: "$ npx gitterm login", delay: 100 },
-  { output: "Logging in to gitterm...", delay: 800 },
-  { output: "Logged in successfully!", delay: 600 },
-  {
-    prompt: "$ npx gitterm tunnel --w abc1234 --port 4096",
-    delay: 1200,
-  },
-  { output: "Establishing secure tunnel for workspace...", delay: 700 },
-  { output: "Connected! Your local workspace is now live at:", delay: 500 },
-  { output: "https://my-app.gitterm.dev", delay: 400, color: "border-green-500/50" },
-];
+import { Terminal, Box, Globe, Loader2, Check, Server } from "lucide-react";
 
 export function TerminalDemo() {
-  const [mode, setMode] = useState<"cloud" | "local">("cloud");
-
   return (
     <div className="flex flex-col gap-4">
-      {/* Mode Switcher */}
-      <div className="flex items-center justify-center">
-        <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-secondary border border-border">
-          <button
-            onClick={() => setMode("cloud")}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-              mode === "cloud"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Cloud className="h-3.5 w-3.5" />
-            Cloud
-          </button>
-          <button
-            onClick={() => setMode("local")}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-              mode === "local"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Monitor className="h-3.5 w-3.5" />
-            Local
-          </button>
-        </div>
-      </div>
-
       {/* Demo Content */}
       <div className="relative min-h-[320px]">
-        {mode === "local" ? <LocalTerminalDemo /> : <CloudProvisionDemo />}
-      </div>
-    </div>
-  );
-}
-
-function LocalTerminalDemo() {
-  const [lines, setLines] = useState<string[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    setLines([]);
-    setCurrentIndex(0);
-  }, []);
-
-  useEffect(() => {
-    if (currentIndex < localCommands.length) {
-      const timer = setTimeout(() => {
-        const cmd = localCommands[currentIndex];
-        setLines((prev) => [...prev, cmd.prompt || cmd.output || ""]);
-        setCurrentIndex((prev) => prev + 1);
-      }, localCommands[currentIndex]?.delay || 500);
-      return () => clearTimeout(timer);
-    } else {
-      const resetTimer = setTimeout(() => {
-        setLines([]);
-        setCurrentIndex(0);
-      }, 3000);
-      return () => clearTimeout(resetTimer);
-    }
-  }, [currentIndex]);
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
-      <div className="flex items-center gap-2 border-b border-border bg-secondary px-4 py-3">
-        <div className="h-3 w-3 rounded-full bg-red-500/80" />
-        <div className="h-3 w-3 rounded-full bg-yellow-500/80" />
-        <div className="h-3 w-3 rounded-full bg-green-500/80" />
-        <span className="ml-3 text-xs text-muted-foreground font-mono">gitterm CLI — zsh</span>
-      </div>
-      <div className="p-4 font-mono text-sm min-h-[260px]">
-        {lines.map((line, i) => (
-          <div
-            key={i}
-            className={`${
-              line.startsWith("$")
-                ? "text-primary"
-                : line.startsWith("https://")
-                  ? "text-green-500 font-semibold"
-                  : "text-muted-foreground"
-            }`}
-          >
-            {line}
-          </div>
-        ))}
-        <span className="inline-block h-4 w-2 bg-foreground animate-pulse" />
+        <CloudProvisionDemo />
       </div>
     </div>
   );

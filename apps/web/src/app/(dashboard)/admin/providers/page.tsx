@@ -85,7 +85,7 @@ export default function ProvidersPage() {
           </Button>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Provider
               </Button>
@@ -124,7 +124,7 @@ export default function ProvidersPage() {
         </div>
       </DashboardHeader>
 
-      <div className="pt-8 space-y-8">
+      <div className="pt-2 space-y-8">
         {isLoading ? (
           <div className="space-y-6">
             {[...Array(2)].map((_, i) => (
@@ -132,30 +132,33 @@ export default function ProvidersPage() {
             ))}
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {providers?.map((provider) => (
               <Link
                 key={provider.id}
                 href={`/admin/providers/${provider.id}` as Route}
-                className={`group block rounded-xl border border-border/70 bg-background/40 p-5 shadow-sm transition-all hover:border-primary/50 hover:bg-background/70 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40`}
+                className="group block rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-start gap-3">
-                    <div className="mt-1 rounded-md bg-muted/40 p-2 transition-colors group-hover:bg-muted/60">
-                      <Globe className="h-5 w-5 text-muted-foreground/70" />
+                    <div className="mt-1 rounded-xl bg-white/[0.04] p-2.5 transition-colors">
+                      <Globe className="h-5 w-5 text-white/40" />
                     </div>
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-foreground/90">{provider.name}</h3>
+                        <h3 className="font-semibold text-white/90">{provider.name}</h3>
                         {!provider.isEnabled && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge
+                            variant="outline"
+                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                          >
                             Disabled
                           </Badge>
                         )}
                         {!provider.providerConfig && (
                           <Badge
                             variant="outline"
-                            className="text-xs text-amber-500 border-amber-200/70 bg-amber-500/10"
+                            className="border-amber-500/20 bg-amber-500/10 text-amber-400 text-xs"
                           >
                             Missing Config
                           </Badge>
@@ -163,7 +166,7 @@ export default function ProvidersPage() {
                         {provider.providerConfig && !provider.providerConfig.isEnabled && (
                           <Badge
                             variant="outline"
-                            className="text-xs border-border/70 text-muted-foreground"
+                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
                           >
                             Config Disabled
                           </Badge>
@@ -171,18 +174,18 @@ export default function ProvidersPage() {
                         {provider.providerConfig && provider.providerConfig.isEnabled && (
                           <Badge
                             variant="outline"
-                            className="text-xs border-emerald-500/50 text-emerald-500 bg-emerald-500/10"
+                            className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs"
                           >
                             Configured
                           </Badge>
                         )}
                       </div>
-                      <div className="text-sm text-muted-foreground/80">
+                      <div className="text-sm text-white/30">
                         {provider.regions.length} region{provider.regions.length !== 1 ? "s" : ""}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground/80 group-hover:text-foreground/80">
+                  <div className="flex items-center gap-2 text-sm text-white/30 group-hover:text-white/60">
                     <KeyRound className="h-4 w-4" />
                     <span>Provider Settings</span>
                   </div>
@@ -191,7 +194,7 @@ export default function ProvidersPage() {
             ))}
 
             {providers?.length === 0 && (
-              <div className="py-12 text-center text-muted-foreground">
+              <div className="py-12 text-center text-white/30">
                 No cloud providers configured yet. Run the seed script to add defaults.
               </div>
             )}

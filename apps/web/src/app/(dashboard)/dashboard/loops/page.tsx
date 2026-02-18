@@ -11,19 +11,20 @@ function AgentLoopListSkeleton() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <Skeleton className="h-10 w-32" />
-        <Skeleton className="h-10 w-32" />
-        <Skeleton className="h-10 w-32" />
-        <Skeleton className="h-10 w-32" />
-        <Skeleton className="h-10 w-32" />
+        {Array.from({ length: 5 }, (_, i) => (
+          <Skeleton key={i} className="h-9 w-24 rounded-lg bg-white/[0.04]" />
+        ))}
       </div>
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="rounded-lg border border-border/50 bg-card/50 p-6">
-            <Skeleton className="h-6 w-32 mb-4" />
-            <Skeleton className="h-4 w-full mb-2" />
-            <Skeleton className="h-4 w-3/4 mb-4" />
-            <Skeleton className="h-9 w-full" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div
+            key={i}
+            className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5"
+          >
+            <Skeleton className="mb-4 h-5 w-28 bg-white/[0.04]" />
+            <Skeleton className="mb-2 h-4 w-full bg-white/[0.04]" />
+            <Skeleton className="mb-4 h-4 w-3/4 bg-white/[0.04]" />
+            <Skeleton className="h-9 w-full bg-white/[0.04]" />
           </div>
         ))}
       </div>
@@ -33,9 +34,7 @@ function AgentLoopListSkeleton() {
 
 export default async function AgentLoopsPage() {
   const session = await authClient.getSession({
-    fetchOptions: {
-      headers: await headers(),
-    },
+    fetchOptions: { headers: await headers() },
   });
 
   if (!session.data?.user) {
@@ -50,11 +49,9 @@ export default async function AgentLoopsPage() {
       >
         <CreateInstanceDialog />
       </DashboardHeader>
-      <div className="grid gap-8 pt-8">
-        <Suspense fallback={<AgentLoopListSkeleton />}>
-          <AgentLoopList />
-        </Suspense>
-      </div>
+      <Suspense fallback={<AgentLoopListSkeleton />}>
+        <AgentLoopList />
+      </Suspense>
     </DashboardShell>
   );
 }

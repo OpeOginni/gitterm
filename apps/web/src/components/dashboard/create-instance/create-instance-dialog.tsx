@@ -15,13 +15,11 @@ import { useWorkspaceStatusWatcher } from "@/components/workspace-status-watcher
 import { WorkspaceTypeSelector } from "./workspace-type-selector";
 import { CliCommandDisplay } from "./cli-command-display";
 import { CreateCloudInstance } from "./create-cloud-instance";
-import { CreateLocalInstance } from "./create-local-instance";
 import { CreateAgentLoop } from "./create-agent-loop";
 import type { WorkspaceType, CreateInstanceResult } from "./types";
 
 const DIALOG_DESCRIPTIONS: Record<WorkspaceType, string> = {
   cloud: "Deploy a new development workspace from a GitHub repository.",
-  local: "Create a local tunnel to expose your local development server.",
   "agentic-loops": "Create an autonomous agent that executes tasks from your plan file.",
 };
 
@@ -36,9 +34,6 @@ export function CreateInstanceDialog() {
   const handleSuccess = useCallback(
     (result: CreateInstanceResult) => {
       switch (result.type) {
-        case "tunnel":
-          setCliCommand(result.command);
-          break;
         case "workspace":
           watchWorkspaceStatus({
             workspaceId: result.workspaceId,
@@ -73,14 +68,14 @@ export function CreateInstanceDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button className="gap-2 bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85">
           <Plus className="h-4 w-4" /> New Instance
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto p-5 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg sm:text-xl">Create New Instance</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle className="text-lg font-bold text-white sm:text-xl">Create New Instance</DialogTitle>
+          <DialogDescription className="text-white/40">
             {DIALOG_DESCRIPTIONS[workspaceType]}
           </DialogDescription>
         </DialogHeader>
@@ -93,10 +88,6 @@ export function CreateInstanceDialog() {
 
             {workspaceType === "cloud" && (
               <CreateCloudInstance onSuccess={handleSuccess} onCancel={handleCancel} />
-            )}
-
-            {workspaceType === "local" && (
-              <CreateLocalInstance onSuccess={handleSuccess} onCancel={handleCancel} />
             )}
 
             {workspaceType === "agentic-loops" && (

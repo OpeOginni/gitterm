@@ -12,17 +12,13 @@ import { authClient } from "@/lib/auth-client";
 
 function GitHubConnectionSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-6 w-48 mb-2" />
-        <Skeleton className="h-4 w-96" />
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center justify-center py-8">
-          <Skeleton className="h-6 w-6" />
-        </div>
-      </CardContent>
-    </Card>
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+      <Skeleton className="mb-2 h-5 w-40 bg-white/[0.04]" />
+      <Skeleton className="h-4 w-72 bg-white/[0.04]" />
+      <div className="mt-6 flex items-center justify-center py-4">
+        <Skeleton className="h-6 w-6 bg-white/[0.04]" />
+      </div>
+    </div>
   );
 }
 
@@ -45,65 +41,48 @@ function BitbucketIcon({ className }: { className?: string }) {
 function ComingSoonCards() {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Card className="border-dashed border-border/40 bg-card/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <GitlabIcon className="h-4 w-4 text-muted-foreground" />
-            GitLab
-            <Badge
-              variant="outline"
-              className="ml-auto text-xs border-border/50 text-muted-foreground"
-            >
+      {[
+        {
+          icon: GitlabIcon,
+          name: "GitLab",
+          description: "Connect GitLab for repository access and CI/CD",
+          features: ["Private repository access", "Full CI/CD integration"],
+        },
+        {
+          icon: BitbucketIcon,
+          name: "Bitbucket",
+          description: "Connect Bitbucket for repository management",
+          features: ["Private repository access", "Jira integration support"],
+        },
+      ].map((item) => (
+        <div
+          key={item.name}
+          className="rounded-2xl border border-dashed border-white/[0.06] bg-white/[0.01] p-6"
+        >
+          <div className="mb-3 flex items-center gap-2">
+            <item.icon className="h-4 w-4 text-white/30" />
+            <span className="text-sm font-medium text-white/50">
+              {item.name}
+            </span>
+            <span className="ml-auto rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/30">
               Soon
-            </Badge>
-          </CardTitle>
-          <CardDescription className="text-sm">
-            Connect GitLab for repository access and CI/CD
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Lock className="h-3.5 w-3.5" />
-              <span>Private repository access</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <GitBranch className="h-3.5 w-3.5" />
-              <span>Full CI/CD integration</span>
-            </div>
+            </span>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-dashed border-border/40 bg-card/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <BitbucketIcon className="h-4 w-4 text-muted-foreground" />
-            Bitbucket
-            <Badge
-              variant="outline"
-              className="ml-auto text-xs border-border/50 text-muted-foreground"
-            >
-              Soon
-            </Badge>
-          </CardTitle>
-          <CardDescription className="text-sm">
-            Connect Bitbucket for repository management
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Lock className="h-3.5 w-3.5" />
-              <span>Private repository access</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <GitBranch className="h-3.5 w-3.5" />
-              <span>Jira integration support</span>
-            </div>
+          <p className="mb-4 text-sm text-white/30">{item.description}</p>
+          <div className="space-y-2 text-sm text-white/25">
+            {item.features.map((feat) => (
+              <div key={feat} className="flex items-center gap-2">
+                {feat.includes("CI/CD") || feat.includes("Jira") ? (
+                  <GitBranch className="h-3.5 w-3.5" />
+                ) : (
+                  <Lock className="h-3.5 w-3.5" />
+                )}
+                <span>{feat}</span>
+              </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      ))}
     </div>
   );
 }
@@ -121,31 +100,30 @@ export default async function IntegrationsPage() {
     <DashboardShell>
       <DashboardHeader
         heading="Integrations"
-        text="Connect external services to enhance your workspace capabilities."
+        text="Connect external services to enhance your workspaces."
         className="mx-auto max-w-4xl"
       />
-      <div className="pt-8">
-        <div className="grid gap-8 mx-auto max-w-4xl">
-          {/* Client component for handling URL params and showing toasts */}
-          <Suspense fallback={null}>
-            <IntegrationCallbackHandler />
+      <div className="mx-auto max-w-4xl space-y-6 pt-2">
+        <Suspense fallback={null}>
+          <IntegrationCallbackHandler />
+        </Suspense>
+
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-medium text-white/90">Available</h2>
+            <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] text-primary">
+              1
+            </span>
+          </div>
+          <Suspense fallback={<GitHubConnectionSkeleton />}>
+            <GitHubConnection />
           </Suspense>
+        </section>
 
-          <section className="space-y-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-medium">Available</h2>
-              <Badge className="bg-primary/10 text-primary border-primary/20 text-xs">1</Badge>
-            </div>
-            <Suspense fallback={<GitHubConnectionSkeleton />}>
-              <GitHubConnection />
-            </Suspense>
-          </section>
-
-          <section className="space-y-4">
-            <h2 className="text-lg font-medium">Coming Soon</h2>
-            <ComingSoonCards />
-          </section>
-        </div>
+        <section className="space-y-4">
+          <h2 className="text-lg font-medium text-white/90">Coming Soon</h2>
+          <ComingSoonCards />
+        </section>
       </div>
     </DashboardShell>
   );

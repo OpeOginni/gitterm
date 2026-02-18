@@ -10,8 +10,8 @@ interface DashboardShellProps {
 export function DashboardShell({ children, className }: DashboardShellProps) {
   return (
     <>
-      <div className={`flex-1 space-y-8 p-6 md:p-8 lg:p-10 ${className}`}>
-        <div className="mx-auto max-w-7xl">{children}</div>
+      <div className={cn("flex-1 p-6 md:p-8 lg:p-10", className)}>
+        <div className="mx-auto max-w-7xl space-y-8">{children}</div>
       </div>
       <div className="fixed bottom-6 right-6 z-50">
         <FeedbackForm />
@@ -34,15 +34,17 @@ export function DashboardHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-4 border-b border-white/[0.06] pb-6 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
     >
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl text-balance">
+      <div className="space-y-1.5">
+        <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl text-balance">
           {heading}
         </h1>
-        {text && <p className="text-muted-foreground text-sm md:text-base">{text}</p>}
+        {text ? (
+          <p className="text-sm text-white/40 md:text-base">{text}</p>
+        ) : null}
       </div>
       {children}
     </div>

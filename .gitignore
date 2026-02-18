@@ -50,7 +50,8 @@ tmp
 temp
 
 # Workspace
-/.docker
+# /.docker
 /.github-app
 
-# SSL certificates
+# Opencode
+.opencode

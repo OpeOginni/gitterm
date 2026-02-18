@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<title>GitTerm OG Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    background: #09090b;
+    font-family: "DM Sans", sans-serif;
+    color: #fff;
+    position: relative;
+  }
+
+  /* Dot grid texture */
+  body::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 28px 28px;
+    z-index: 0;
+  }
+
+  /* Subtle ambient glow */
+  .glow-1 {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    top: -180px;
+    right: -100px;
+    background: radial-gradient(closest-side, rgba(200,164,78,0.07), transparent);
+    border-radius: 50%;
+    z-index: 0;
+  }
+  .glow-2 {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    bottom: -120px;
+    left: -80px;
+    background: radial-gradient(closest-side, rgba(200,164,78,0.04), transparent);
+    border-radius: 50%;
+    z-index: 0;
+  }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: auto 1fr auto;
+    padding: 56px 64px;
+    gap: 0;
+  }
+
+  /* ─── Top bar (full width) ─── */
+  .top {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .brand-icon {
+    width: 28px;
+    height: 28px;
+    color: #c8a44e;
+  }
+
+  .brand-name {
+    font-family: "Space Mono", monospace;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.85);
+    text-transform: uppercase;
+  }
+
+  /* ─── Left: headline + sub ─── */
+  .content {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 18px;
+    padding-right: 32px;
+  }
+
+  .headline {
+    font-size: 52px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+
+  .headline em {
+    font-style: normal;
+    color: #c8a44e;
+  }
+
+  .opencode-inline {
+    display: inline-block;
+    width: 44px;
+    height: 44px;
+    vertical-align: -4px;
+    margin-right: 4px;
+    opacity: 0.9;
+  }
+
+  .sub {
+    font-size: 18px;
+    line-height: 1.55;
+    color: rgba(255,255,255,0.4);
+    max-width: 520px;
+  }
+
+  /* ─── Right: provider panel ─── */
+  .providers-panel {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    border-left: 1px solid rgba(255,255,255,0.06);
+    padding-left: 40px;
+  }
+
+  .providers-label {
+    font-family: "Space Mono", monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.25);
+  }
+
+  .providers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+  }
+
+  .provider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.02);
+  }
+
+  .provider-row img {
+    width: 22px;
+    height: 22px;
+    opacity: 0.8;
+  }
+
+  .provider-row span {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.7);
+  }
+
+  .providers-more {
+    font-family: "Space Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.2);
+  }
+
+  /* ─── Bottom bar (full width) ─── */
+  .bottom {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .chips {
+    display: flex;
+    gap: 10px;
+  }
+
+  .chip {
+    font-family: "Space Mono", monospace;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.28);
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+    padding: 6px 14px;
+    border-radius: 999px;
+  }
+
+  .url {
+    font-family: "Space Mono", monospace;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.3);
+  }
+
+  .url strong {
+    color: #c8a44e;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+
+  <div class="card">
+    <!-- Top bar -->
+    <div class="top">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 17 10 11 4 5" />
+          <line x1="12" y1="19" x2="20" y2="19" />
+        </svg>
+        <span class="brand-name">GitTerm</span>
+      </div>
+    </div>
+
+    <!-- Left: headline -->
+    <div class="content">
+      <h1 class="headline">
+        Cloud workspaces for<br><em><img src="/opencode.svg" alt="OpenCode" class="opencode-inline" /> OpenCode.</em>
+      </h1>
+      <p class="sub">
+        Launch OpenCode in seconds. Secure, stateful workspaces accessible from any device.
+      </p>
+    </div>
+
+    <!-- Right: deploy on -->
+    <div class="providers-panel">
+      <span class="providers-label">Deploy on</span>
+      <div class="providers-list">
+        <div class="provider-row">
+          <img src="/railway.svg" alt="Railway" />
+          <span>Railway</span>
+        </div>
+        <div class="provider-row">
+          <img src="/cloudflare.svg" alt="Cloudflare" />
+          <span>Cloudflare</span>
+        </div>
+        <div class="provider-row">
+          <img src="/EC2.svg" alt="AWS EC2" />
+          <span>AWS EC2</span>
+        </div>
+      </div>
+      <span class="providers-more">+ more coming soon</span>
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="bottom">
+      <div class="chips">
+        <span class="chip">Cloud in seconds</span>
+        <span class="chip">Persistent state</span>
+        <span class="chip">Agentic loops</span>
+      </div>
+      <span class="url"><strong>gitterm</strong>.dev</span>
+    </div>
+  </div>
+</body>
+</html>

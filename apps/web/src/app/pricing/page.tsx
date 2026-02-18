@@ -1,20 +1,11 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
 import {
-  CheckCircle2,
+  Check,
   Terminal,
-  Zap,
   ExternalLink,
   ArrowRight,
   Loader2,
@@ -25,11 +16,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
 
-type UserPlan = "free" | "tunnel" | "pro";
+type UserPlan = "free" | "pro";
 
 interface PlanTier {
   name: string;
-  slug?: "tunnel" | "pro";
+  slug?: "pro";
   price?: number;
   description: string;
   features: string[];
@@ -64,20 +55,6 @@ const PLAN_TIERS: PlanTier[] = [
     actionLabel: "Get Started",
   },
   {
-    name: "Tunnel",
-    slug: "tunnel",
-    price: 5,
-    description: "Custom URL for your local tunnels",
-    features: [
-      "Custom tunnel subdomain (yourname.gitterm.dev)",
-      "Secure public access to local services",
-      "Ideal for webhooks, demos, and local testing",
-      "Same daily runtime limit as Free",
-      "10 sandbox runs / month (same as Free)",
-    ],
-    actionLabel: "Get Tunnel",
-  },
-  {
     name: "Pro",
     slug: "pro",
     price: 20,
@@ -86,7 +63,6 @@ const PLAN_TIERS: PlanTier[] = [
       "Unlimited loop projects and cloud workspaces",
       "100 sandbox runs / month",
       "Max 40 min per run",
-      "Custom tunnel subdomain included",
       "Built for professional workflows",
     ],
     popular: true,
@@ -124,72 +100,18 @@ const RUN_PACKS: RunPack[] = [
   },
 ];
 
-const CheckItem = ({ text }: { text: string }) => (
-  <div className="flex gap-2">
-    <CheckCircle2 size={18} className="my-auto text-green-500 shrink-0" />
-    <p className="pt-0.5 text-muted-foreground text-sm">{text}</p>
-  </div>
-);
+/* ─── Feature check item ──────────────────────────────────── */
 
-function RunPackCard({
-  pack,
-  onPurchase,
-  isLoading,
-  loadingPack,
-}: {
-  pack: RunPack;
-  onPurchase: (slug: "run_pack_50" | "run_pack_100") => void;
-  isLoading: boolean;
-  loadingPack?: string | null;
-}) {
-  const isThisPackLoading = isLoading && loadingPack === pack.slug;
-
+function FeatureItem({ text }: { text: string }) {
   return (
-    <Card className="w-full max-w-[280px] flex flex-col justify-between py-1 mx-auto sm:mx-0 border-dashed">
-      <div>
-        <CardHeader className="pb-4 pt-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Package className="h-5 w-5 text-primary" />
-            <CardTitle className="text-muted-foreground text-lg">{pack.runs} Runs</CardTitle>
-          </div>
-          <div className="flex gap-0.5 items-baseline">
-            <h3 className="text-2xl font-bold">${pack.price}</h3>
-            <span className="text-sm text-muted-foreground ml-2">({pack.pricePerRun}/run)</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            One-time purchase. Runs never expire and can be used anytime.
-          </p>
-        </CardContent>
-      </div>
-      <CardFooter className="mt-2 mb-2">
-        <button
-          onClick={() => onPurchase(pack.slug)}
-          disabled={isLoading}
-          className={cn(
-            "relative inline-flex w-full items-center justify-center rounded-md px-6 py-2.5 text-sm font-medium transition-all cursor-pointer",
-            "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-            "disabled:opacity-70 disabled:cursor-not-allowed",
-            "bg-primary text-primary-foreground hover:bg-primary/90",
-          )}
-        >
-          {isThisPackLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            <>
-              Buy {pack.runs} Runs
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </>
-          )}
-        </button>
-      </CardFooter>
-    </Card>
+    <div className="flex items-start gap-2.5">
+      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+      <span className="text-sm leading-relaxed text-white/50">{text}</span>
+    </div>
   );
 }
+
+/* ─── Plan card ────────────────────────────────────────────── */
 
 function PricingCard({
   plan,
@@ -200,73 +122,76 @@ function PricingCard({
 }: {
   plan: PlanTier;
   currentPlan?: UserPlan;
-  onUpgrade: (slug: "tunnel" | "pro") => void;
+  onUpgrade: (slug: "pro") => void;
   isLoading: boolean;
-  loadingPlan?: "tunnel" | "pro" | null;
+  loadingPlan?: "pro" | null;
 }) {
   const isCurrentPlan = plan.slug && currentPlan === plan.slug;
   const isFreeCurrentPlan = plan.name === "Free" && currentPlan === "free";
   const isThisPlanLoading = isLoading && loadingPlan === plan.slug;
 
   return (
-    <Card
+    <div
       className={cn(
-        "w-full max-w-[320px] flex flex-col justify-between py-1 mx-auto sm:mx-0",
-        plan.popular && "border-primary shadow-lg shadow-primary/20",
-        plan.exclusive &&
-          "animate-background-shine bg-background dark:bg-[linear-gradient(110deg,#000103,45%,#1e2631,55%,#000103)] bg-[length:200%_100%] transition-colors border-muted-foreground/30",
+        "relative flex w-full max-w-[360px] flex-col justify-between rounded-2xl border p-6 transition-colors",
+        plan.popular
+          ? "border-primary/30 bg-primary/[0.04]"
+          : "border-white/[0.06] bg-white/[0.02]",
       )}
     >
+      {/* Header */}
       <div>
-        <CardHeader className="pb-8 pt-4">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-muted-foreground text-lg">{plan.name}</CardTitle>
-            {plan.popular && (
-              <div className="px-2.5 rounded-xl h-fit text-xs py-1 font-medium bg-gradient-to-r from-orange-400 to-rose-400 text-black">
-                Most Popular
-              </div>
-            )}
-            {plan.exclusive && (
-              <div className="px-2.5 rounded-xl h-fit text-xs py-1 font-medium bg-muted text-foreground">
-                Open Source
-              </div>
-            )}
-          </div>
-          <div className="flex gap-0.5 items-baseline">
-            <h3 className="text-3xl font-bold">
-              {plan.price !== undefined ? `$${plan.price}` : "Free"}
-            </h3>
-            {plan.price !== undefined && plan.price > 0 && (
-              <span className="flex flex-col justify-end text-sm text-muted-foreground mb-1">
-                /month
-              </span>
-            )}
-          </div>
-          <CardDescription className="pt-1.5 min-h-12">{plan.description}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
+        <div className="mb-5 flex items-center justify-between">
+          <span className="font-mono text-xs uppercase tracking-[0.2em] text-white/40">
+            {plan.name}
+          </span>
+          {plan.popular && (
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
+              Popular
+            </span>
+          )}
+          {plan.exclusive && (
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/40">
+              Open Source
+            </span>
+          )}
+        </div>
+
+        {/* Price */}
+        <div className="mb-2 flex items-baseline gap-1">
+          <span className="text-4xl font-bold text-white">
+            {plan.price !== undefined ? `$${plan.price}` : "Free"}
+          </span>
+          {plan.price !== undefined && plan.price > 0 && (
+            <span className="text-sm text-white/30">/month</span>
+          )}
+        </div>
+
+        <p className="mb-6 min-h-[40px] text-sm leading-relaxed text-white/40">
+          {plan.description}
+        </p>
+
+        {/* Features */}
+        <div className="flex flex-col gap-3">
           {plan.features.map((feature) => (
-            <CheckItem key={feature} text={feature} />
+            <FeatureItem key={feature} text={feature} />
           ))}
-        </CardContent>
+        </div>
       </div>
-      <CardFooter className="mt-2 mb-2">
+
+      {/* Action */}
+      <div className="mt-8">
         {plan.isSelfHost ? (
           <Link
             href="https://railway.com/template/gitterm?referralCode=o9MFOP"
             target="_blank"
-            className={cn(
-              "relative inline-flex w-full items-center justify-center rounded-md px-6 py-2.5 text-sm font-medium transition-colors",
-              "bg-foreground text-background hover:bg-foreground/90",
-              "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-            )}
+            className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
           >
-            <div className="absolute -inset-0.5 -z-10 rounded-lg bg-gradient-to-b from-muted to-primary/50 opacity-75 blur" />
             {plan.actionLabel}
             <ExternalLink className="ml-2 h-4 w-4" />
           </Link>
         ) : isCurrentPlan || isFreeCurrentPlan ? (
-          <span className="inline-flex w-full items-center justify-center rounded-md border border-input bg-background px-6 py-2.5 text-sm font-medium text-muted-foreground">
+          <span className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.06] px-6 py-2.5 font-mono text-sm text-white/30">
             Current Plan
           </span>
         ) : plan.slug ? (
@@ -274,17 +199,14 @@ function PricingCard({
             onClick={() => onUpgrade(plan.slug!)}
             disabled={isLoading}
             className={cn(
-              "relative inline-flex w-full items-center justify-center rounded-md px-6 py-2.5 text-sm font-medium transition-all cursor-pointer",
-              "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-              "disabled:opacity-70 disabled:cursor-not-allowed",
+              "inline-flex w-full cursor-pointer items-center justify-center rounded-lg px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-wider transition-all",
+              "focus:outline-none focus:ring-2 focus:ring-gold/50 focus:ring-offset-2 focus:ring-offset-[#09090b]",
+              "disabled:cursor-not-allowed disabled:opacity-70",
               plan.popular
-                ? "bg-foreground text-background hover:bg-foreground/90"
-                : "bg-primary text-primary-foreground hover:bg-primary/90",
+                ? "bg-primary text-primary-foreground hover:bg-primary/85"
+                : "bg-white/90 text-primary-foreground hover:bg-white/80",
             )}
           >
-            {plan.popular && (
-              <div className="absolute -inset-0.5 -z-10 rounded-lg bg-gradient-to-b from-[#c7d2fe] to-[#8678f9] opacity-75 blur" />
-            )}
             {isThisPlanLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -300,56 +222,110 @@ function PricingCard({
         ) : (
           <Link
             href="/dashboard"
-            className={cn(
-              "inline-flex w-full items-center justify-center rounded-md border border-input bg-background px-6 py-2.5 text-sm font-medium",
-              "hover:bg-accent hover:text-accent-foreground transition-colors",
-            )}
+            className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
           >
             {plan.actionLabel}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
         )}
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 }
 
+/* ─── Run pack card ────────────────────────────────────────── */
+
+function RunPackCard({
+  pack,
+  onPurchase,
+  isLoading,
+  loadingPack,
+}: {
+  pack: RunPack;
+  onPurchase: (slug: "run_pack_50" | "run_pack_100") => void;
+  isLoading: boolean;
+  loadingPack?: string | null;
+}) {
+  const isThisPackLoading = isLoading && loadingPack === pack.slug;
+
+  return (
+    <div className="flex w-full max-w-[280px] flex-col justify-between rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] p-6">
+      <div>
+        <div className="mb-4 flex items-center gap-2">
+          <Package className="h-4 w-4 text-primary" />
+          <span className="font-mono text-xs uppercase tracking-[0.2em] text-white/40">
+            {pack.runs} Runs
+          </span>
+        </div>
+        <div className="mb-1 flex items-baseline gap-1.5">
+          <span className="text-3xl font-bold text-white">${pack.price}</span>
+          <span className="text-xs text-white/30">({pack.pricePerRun}/run)</span>
+        </div>
+        <p className="mt-3 text-sm leading-relaxed text-white/40">
+          One-time purchase. Runs never expire.
+        </p>
+      </div>
+      <div className="mt-6">
+        <button
+          onClick={() => onPurchase(pack.slug)}
+          disabled={isLoading}
+          className={cn(
+            "inline-flex w-full cursor-pointer items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm font-medium text-white/70 transition-colors",
+            "hover:border-white/20 hover:text-white",
+            "focus:outline-none focus:ring-2 focus:ring-gold/50 focus:ring-offset-2 focus:ring-offset-[#09090b]",
+            "disabled:cursor-not-allowed disabled:opacity-70",
+          )}
+        >
+          {isThisPackLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              Buy {pack.runs} Runs
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Page content ─────────────────────────────────────────── */
+
 function PricingPageContent() {
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingPlan, setLoadingPlan] = useState<"tunnel" | "pro" | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<"pro" | null>(null);
   const [loadingPack, setLoadingPack] = useState<string | null>(null);
   const { data: session } = authClient.useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pricingEnabled = isBillingEnabled;
 
-  // Redirect if pricing is disabled
   useEffect(() => {
     if (!pricingEnabled) {
       router.replace("/");
     }
   }, [pricingEnabled, router]);
 
-  // Auto-trigger checkout if user returns from login with a plan parameter
   useEffect(() => {
     const planParam = searchParams.get("plan");
     if (
       planParam &&
-      (planParam === "tunnel" || planParam === "pro") &&
+      planParam === "pro" &&
       session?.user &&
       !isLoading
     ) {
-      // User is logged in and has a plan parameter, trigger checkout
       const triggerCheckout = async () => {
         setIsLoading(true);
         setLoadingPlan(planParam);
         try {
           await initiateCheckout(planParam);
-          // Remove plan param from URL after initiating checkout
           router.replace("/pricing");
         } catch (error) {
           console.error("Checkout failed:", error);
-          // Remove plan param even on error
           router.replace("/pricing");
         } finally {
           setIsLoading(false);
@@ -360,29 +336,24 @@ function PricingPageContent() {
     }
   }, [searchParams, session?.user, router, isLoading]);
 
-  // Don't render if pricing is disabled
   if (!pricingEnabled) {
     return null;
   }
 
   const currentPlan = ((session?.user as any)?.plan as UserPlan) || "free";
 
-  const handleUpgrade = async (slug: "tunnel" | "pro") => {
+  const handleUpgrade = async (slug: "pro") => {
     if (!isBillingEnabled) {
-      // If billing is not enabled but pricing is shown, redirect to dashboard
       window.location.href = "/dashboard";
       return;
     }
 
-    // Check if user is logged in
     if (!session?.user) {
-      // Redirect to login with plan parameter in redirect URL
       const redirectUrl = `/pricing?plan=${slug}`;
       router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
       return;
     }
 
-    // User is logged in, proceed with checkout
     setIsLoading(true);
     setLoadingPlan(slug);
     try {
@@ -401,7 +372,6 @@ function PricingPageContent() {
       return;
     }
 
-    // Check if user is logged in
     if (!session?.user) {
       const redirectUrl = `/pricing?pack=${slug}`;
       router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
@@ -421,23 +391,26 @@ function PricingPageContent() {
   };
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-[#09090b] text-white dark landing-grid">
       <LandingHeader />
 
-      <section className="pt-32 pb-20 md:pt-40 md:pb-32">
-        <div className="mx-auto max-w-6xl px-6">
+      <section className="pt-36 pb-24 md:pt-44 md:pb-32">
+        <div className="mx-auto max-w-[1120px] px-6">
           {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground md:text-5xl mb-4">
-              Simple, transparent pricing
+          <div className="mb-16 text-center">
+            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
+              Pricing
+            </p>
+            <h1 className="mb-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
+              Simple, transparent pricing.
             </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            <p className="mx-auto max-w-lg text-base text-white/50 sm:text-lg">
               Powerful agentic coding with predictable pricing. No surprise bills.
             </p>
           </div>
 
-          {/* Pricing Cards */}
-          <section className="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-8">
+          {/* Plan cards */}
+          <div className="flex flex-col items-center justify-center gap-5 sm:flex-row sm:items-stretch">
             {PLAN_TIERS.map((plan) => (
               <PricingCard
                 key={plan.name}
@@ -448,17 +421,23 @@ function PricingPageContent() {
                 loadingPlan={loadingPlan}
               />
             ))}
-          </section>
+          </div>
 
-          {/* Run Packs Section */}
-          <div className="mt-20">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold mb-2">Need more runs?</h2>
-              <p className="text-muted-foreground">
-                Purchase run packs for additional sandbox runs. No subscription required.
+          {/* Run packs */}
+          <div className="mt-24 border-t border-white/[0.06] pt-16">
+            <div className="mb-10 text-center">
+              <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
+                Add-ons
+              </p>
+              <h2 className="mb-2 text-2xl font-bold text-white">
+                Need more runs?
+              </h2>
+              <p className="text-sm text-white/40">
+                One-time packs. No subscription required.
               </p>
             </div>
-            <section className="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-6">
+
+            <div className="flex flex-col items-center justify-center gap-5 sm:flex-row">
               {RUN_PACKS.map((pack) => (
                 <RunPackCard
                   key={pack.slug}
@@ -468,31 +447,32 @@ function PricingPageContent() {
                   loadingPack={loadingPack}
                 />
               ))}
-            </section>
-            <p className="text-center text-sm text-muted-foreground mt-4">
-              Pro subscribers get 100 runs/month included ($0.20/run value). Run packs are great for
-              power users who need more.
+            </div>
+
+            <p className="mt-6 text-center text-xs text-white/30">
+              Pro subscribers get 100 runs/month included ($0.20/run value). Run
+              packs are great for power users who need more.
             </p>
           </div>
 
-          {/* FAQ or Additional Info */}
-          <div className="mt-20 text-center">
-            <h2 className="text-2xl font-bold mb-4">Questions?</h2>
-            <p className="text-muted-foreground mb-6">
+          {/* Questions */}
+          <div className="mt-24 border-t border-white/[0.06] pt-16 text-center">
+            <h2 className="mb-3 text-2xl font-bold text-white">Questions?</h2>
+            <p className="mb-8 text-sm text-white/40">
               Need help choosing the right plan? Reach out on Twitter.
             </p>
-            <div className="flex justify-center gap-4 flex-wrap">
+            <div className="flex flex-wrap justify-center gap-3">
               <Link
                 href="https://twitter.com/BrightOginni"
                 target="_blank"
-                className="inline-flex items-center justify-center rounded-md border border-input bg-background px-6 py-2.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+                className="inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm text-white/60 transition-colors hover:border-white/20 hover:text-white"
               >
                 Reach out on Twitter
                 <ExternalLink className="ml-2 h-4 w-4" />
               </Link>
               <Link
                 href="/dashboard"
-                className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-6 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors"
+                className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/85"
               >
                 Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -511,7 +491,7 @@ export default function PricingPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex min-h-screen items-center justify-center bg-[#09090b]">
           <Terminal className="h-8 w-8 animate-pulse text-primary" />
         </div>
       }

@@ -342,44 +342,6 @@ export const proxyResolverRouter = async (c: Context) => {
       userId: ws.userId,
     });
 
-    // Local tunnel workspaces: route via tunnel-proxy
-    if (ws.hostingType === "local") {
-      // Server-only local tunnel workspaces skip auth (for API servers, etc.)
-      if (ws.serverOnly) {
-        console.log("[PROXY-RESOLVE] Local tunnel workspace (server-only) - skipping auth:", {
-          subdomain: ws.subdomain,
-          workspaceId: ws.id,
-        });
-        return c.text("OK", 200, {
-          "X-Hosting-Type": "local",
-          "X-Workspace-ID": ws.id,
-          "X-Subdomain": ws.subdomain ?? "",
-        });
-      }
-
-      // Non-server-only tunnel workspaces require auth
-      if (!session) {
-        console.log("[PROXY-RESOLVE] Tunnel workspace requires auth - no session");
-        return htmlError(c, "unavailable", 401);
-      }
-      if (ws.userId !== session.user?.id) {
-        console.log("[PROXY-RESOLVE] Tunnel workspace - user mismatch");
-        return htmlError(c, "unavailable", 403);
-      }
-
-      console.log("[PROXY-RESOLVE] Tunnel workspace authorized:", {
-        subdomain: ws.subdomain,
-        workspaceId: ws.id,
-        userId: session.user.id,
-      });
-      return c.text("OK", 200, {
-        "X-Hosting-Type": "local",
-        "X-Workspace-ID": ws.id,
-        "X-User-ID": session.user.id,
-        "X-Subdomain": ws.subdomain ?? "",
-      });
-    }
-
     // Server-only workspaces skip auth
     if (ws.serverOnly) {
       if (!ws.upstreamUrl) {

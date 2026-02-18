@@ -24,8 +24,8 @@ import { logger } from "../../utils/logger";
 import { railwayWebhookSchema } from "../railway/webhook";
 import { agentLoopWebhookSchema } from "../agent-loop/webhook";
 import { getAgentLoopService } from "../../service/agent-loop";
-import { deductRunFromQuota, refundRunToQuota } from "../../service/run-quota";
-import { getModelConfig, getCredentialForRun } from "../../service/agent-loop-helpers";
+import { deductRunFromQuota, refundRunToQuota } from "../../service/quotas/run-quota";
+import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/helpers";
 
 /**
  * Internal router for service-to-service communication
@@ -253,112 +253,7 @@ export const internalRouter = router({
       return { success: true, durationMinutes };
     }),
 
-  // Terminate a workspace (for tunnel-proxy on disconnect)
-  terminateWorkspaceInternal: internalProcedure
-    .input(z.object({ workspaceId: z.string() }))
-    .mutation(async ({ input }) => {
-      // Get workspace with related data
-      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
 
-      if (!ws) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Workspace not found",
-        });
-      }
-
-      // Close usage session if workspace was running (only for cloud workspaces)
-      if (ws.hostingType !== "local" && (ws.status === "running" || ws.status === "pending")) {
-        await closeUsageSession(input.workspaceId, "manual");
-      }
-
-      // Get cloud provider
-      const [provider] = await db
-        .select()
-        .from(cloudProvider)
-        .where(eq(cloudProvider.id, ws.cloudProviderId));
-
-      if (!provider) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Cloud provider not found",
-        });
-      }
-
-      // Get compute provider and terminate the workspace
-      // For local workspaces, this is a no-op
-      const computeProvider = await getProviderByCloudProviderId(provider.name);
-      await computeProvider.terminateWorkspace(ws.externalInstanceId);
-
-      // Update workspace status
-      const now = new Date();
-      await db
-        .update(workspace)
-        .set({
-          status: "terminated",
-          stoppedAt: now,
-          terminatedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(workspace.id, input.workspaceId));
-
-      // Emit status event
-      WORKSPACE_EVENTS.emitStatus({
-        workspaceId: input.workspaceId,
-        status: "terminated",
-        updatedAt: now,
-        userId: ws.userId,
-        workspaceDomain: ws.domain,
-      });
-
-      return { success: true };
-    }),
-
-  // Mark a workspace as pending (for tunnel-proxy on disconnect)
-  markWorkspacePendingInternal: internalProcedure
-    .input(z.object({ workspaceId: z.string() }))
-    .mutation(async ({ input }) => {
-      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
-
-      if (!ws) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Workspace not found",
-        });
-      }
-
-      if (ws.status === "terminated") {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "Cannot move terminated workspace to pending",
-        });
-      }
-
-      if (ws.hostingType !== "local" && (ws.status === "running" || ws.status === "pending")) {
-        await closeUsageSession(input.workspaceId, "manual");
-      }
-
-      const now = new Date();
-      await db
-        .update(workspace)
-        .set({
-          status: "pending",
-          stoppedAt: null,
-          lastActiveAt: now,
-          updatedAt: now,
-        })
-        .where(eq(workspace.id, input.workspaceId));
-
-      WORKSPACE_EVENTS.emitStatus({
-        workspaceId: input.workspaceId,
-        status: "pending",
-        updatedAt: now,
-        userId: ws.userId,
-        workspaceDomain: ws.domain,
-      });
-
-      return { success: true };
-    }),
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
     const longTermInactiveWorkspaces = await db
       .select()

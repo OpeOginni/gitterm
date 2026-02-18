@@ -120,18 +120,22 @@ export default function SettingsPage() {
           <Button asChild variant="outline">
             <Link href={"/admin" as Route}>Back to Admin</Link>
           </Button>
-          <Button onClick={handleSave} disabled={!hasChanges || updateSettings.isPending}>
+          <Button
+            onClick={handleSave}
+            disabled={!hasChanges || updateSettings.isPending}
+            className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+          >
             <Save className="h-4 w-4 mr-2" />
             {updateSettings.isPending ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </DashboardHeader>
 
-      <div className="pt-8 space-y-6">
+      <div className="pt-2 space-y-6">
         {isLoading ? (
           <div className="space-y-4">
             {[...Array(2)].map((_, i) => (
-              <div key={i} className="p-6 border rounded-lg space-y-3">
+              <div key={i} className="rounded-2xl border border-border bg-card p-6 space-y-3">
                 <Skeleton className="h-5 w-32" />
                 <Skeleton className="h-4 w-64" />
                 <Skeleton className="h-10 w-32" />
@@ -141,16 +145,16 @@ export default function SettingsPage() {
         ) : (
           <div className="space-y-4">
             {data?.settings.map((setting: SettingValue) => (
-              <div key={setting.key} className="p-6 border rounded-lg space-y-4">
+              <div key={setting.key} className="rounded-2xl border border-border bg-card p-6 space-y-4">
                 <div className="flex items-start gap-4">
-                  <div className="p-2 rounded-md bg-muted/50">
-                    <Settings className="h-5 w-5 text-muted-foreground" />
+                  <div className="rounded-xl bg-white/[0.04] p-2.5">
+                    <Settings className="h-5 w-5 text-white/40" />
                   </div>
                   <div className="flex-1 space-y-1">
-                    <Label htmlFor={setting.key} className="text-base font-medium">
+                    <Label htmlFor={setting.key} className="text-base font-medium text-white/90">
                       {setting.label}
                     </Label>
-                    <p className="text-sm text-muted-foreground">{setting.description}</p>
+                    <p className="text-sm text-white/40">{setting.description}</p>
                   </div>
                 </div>
 
@@ -164,10 +168,10 @@ export default function SettingsPage() {
                     onChange={(e) => handleValueChange(setting.key, e.target.value)}
                     className="w-32"
                   />
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-sm text-white/40">
                     {setting.key === "idle_timeout_minutes" ? "minutes" : "minutes per day"}
                   </span>
-                  <span className="text-xs text-muted-foreground ml-auto">
+                  <span className="text-xs text-white/25 ml-auto">
                     Range: {setting.min} - {setting.max}
                   </span>
                 </div>
@@ -175,11 +179,15 @@ export default function SettingsPage() {
             ))}
 
             {hasChanges && (
-              <div className="flex items-center justify-end gap-2 pt-4 border-t">
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/[0.06]">
                 <Button variant="outline" onClick={handleReset}>
                   Reset
                 </Button>
-                <Button onClick={handleSave} disabled={updateSettings.isPending}>
+                <Button
+                  onClick={handleSave}
+                  disabled={updateSettings.isPending}
+                  className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+                >
                   <Save className="h-4 w-4 mr-2" />
                   {updateSettings.isPending ? "Saving..." : "Save Changes"}
                 </Button>

@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { queryClient, trpc } from "@/utils/trpc";
 import {
   CheckCircle2,
@@ -39,8 +37,6 @@ export function GitHubConnection() {
 
   const handleConnect = () => {
     setIsConnecting(true);
-    // Use window.location.origin to get the base URL (e.g., http://localhost:8888)
-    // The callback route is at /api/github/callback on the backend server (routed via Caddy)
     const redirectUrl = `${env.NEXT_PUBLIC_AUTH_URL}/api/github/callback`;
     window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
   };
@@ -50,7 +46,7 @@ export function GitHubConnection() {
     try {
       await refetch();
       toast.success("Installation status refreshed");
-    } catch (error) {
+    } catch {
       toast.error("Failed to refresh status");
     } finally {
       setIsRefreshing(false);
@@ -61,33 +57,28 @@ export function GitHubConnection() {
     try {
       await disconnectMutation.mutateAsync();
       toast.success("GitHub App disconnect requested. Changes will take effect shortly.");
-
       await queryClient.invalidateQueries({
         queryKey: trpc.github.getInstallationStatus.queryKey(),
       });
-    } catch (error) {
+    } catch {
       toast.error("Failed to disconnect GitHub App");
     }
   };
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Github className="h-5 w-5" />
-            GitHub Integration
-          </CardTitle>
-          <CardDescription>
-            Connect your GitHub account to enable git operations in workspaces
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+        <div className="flex items-center gap-3 mb-2">
+          <Github className="h-5 w-5 text-white/40" />
+          <span className="text-lg font-semibold text-white/80">GitHub Integration</span>
+        </div>
+        <p className="text-sm text-white/30 mb-6">
+          Connect your GitHub account to enable git operations in workspaces
+        </p>
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-white/20" />
+        </div>
+      </div>
     );
   }
 
@@ -96,53 +87,55 @@ export function GitHubConnection() {
   const isSuspended = installation?.suspended ?? false;
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader>
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+      {/* Header */}
+      <div className="px-6 pt-6 pb-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-3 text-lg">
-            <Github className="h-5 w-5" />
-            GitHub Integration
+          <div className="flex items-center gap-3">
+            <Github className="h-5 w-5 text-white/50" />
+            <span className="text-lg font-semibold text-white/90">GitHub Integration</span>
             {isConnected && (
-              <Badge className="bg-accent/10 text-green-500 border-green-500/20">
-                <CheckCircle2 className="h-3 w-3 mr-1 text-green-500" />
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+                <CheckCircle2 className="h-3 w-3" />
                 Connected
-              </Badge>
+              </span>
             )}
-          </CardTitle>
+          </div>
           {isConnected && (
-            <Button
-              variant="ghost"
-              size="icon"
+            <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="h-8 w-8 hover:bg-secondary/50"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/[0.04] hover:text-white/60"
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            </Button>
+            </button>
           )}
         </div>
-        <CardDescription>
+        <p className="mt-1.5 text-sm text-white/35">
           Connect your GitHub account to enable git operations (clone, commit, push, fork) in your
           workspaces
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+        </p>
+      </div>
+
+      {/* Content */}
+      <div className="space-y-5 px-6 pb-6">
         {isConnected && installation ? (
           <>
-            <div className="p-4 rounded-lg bg-secondary/30 border border-border/50">
+            {/* Installation info */}
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
               <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="p-2.5 rounded-lg bg-accent/10 ring-1 ring-accent/20">
-                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                <div className="flex items-start gap-3.5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold">@{installation.accountLogin}</p>
-                      <Badge variant="outline" className="text-xs border-border/50">
+                      <p className="font-semibold text-white/90">@{installation.accountLogin}</p>
+                      <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/30">
                         {installation.accountType}
-                      </Badge>
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2 text-sm text-white/40">
                       <Shield className="h-3.5 w-3.5" />
                       <span>
                         {installation.repositorySelection === "all"
@@ -151,7 +144,7 @@ export function GitHubConnection() {
                       </span>
                     </div>
                     {installation.installedAt && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-white/25">
                         Connected{" "}
                         {new Date(installation.installedAt).toLocaleDateString("en-US", {
                           month: "short",
@@ -163,21 +156,22 @@ export function GitHubConnection() {
                   </div>
                 </div>
                 {isSuspended && (
-                  <Badge variant="destructive" className="ml-2">
-                    <AlertCircle className="h-3 w-3 mr-1" />
+                  <span className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-400">
+                    <AlertCircle className="h-3 w-3" />
                     Suspended
-                  </Badge>
+                  </span>
                 )}
               </div>
             </div>
 
+            {/* Suspended warning */}
             {isSuspended && (
-              <div className="p-4 border border-red-500/30 rounded-lg bg-red-500/5">
+              <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-4">
                 <div className="flex gap-3">
-                  <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
                   <div className="space-y-1">
-                    <p className="font-medium text-sm">Installation Suspended</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm font-medium text-red-300">Installation Suspended</p>
+                    <p className="text-sm text-white/40">
                       Your GitHub App installation has been suspended. Git operations will not work
                       until you resolve this on GitHub.
                     </p>
@@ -186,6 +180,7 @@ export function GitHubConnection() {
               </div>
             )}
 
+            {/* Feature grid */}
             <div className="grid grid-cols-2 gap-3">
               {[
                 { icon: Lock, label: "Secure Access", desc: "No personal tokens needed" },
@@ -195,31 +190,31 @@ export function GitHubConnection() {
               ].map((feature) => (
                 <div
                   key={feature.label}
-                  className="p-3 rounded-lg border border-border/50 bg-secondary/20 hover:border-accent/30 transition-colors"
+                  className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5 transition-colors hover:border-white/[0.1]"
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    <feature.icon className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{feature.label}</span>
+                  <div className="mb-1 flex items-center gap-2">
+                    <feature.icon className="h-4 w-4 text-white/30" />
+                    <span className="text-sm font-medium text-white/70">{feature.label}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{feature.desc}</p>
+                  <p className="text-xs text-white/30">{feature.desc}</p>
                 </div>
               ))}
             </div>
 
-            <div className="flex gap-3 pt-2">
+            {/* Actions */}
+            <div className="flex gap-3 pt-1">
               <Button
-                onClick={() => window.open(`https://github.com/settings/installations`, "_blank")}
+                onClick={() => window.open("https://github.com/settings/installations", "_blank")}
                 variant="outline"
-                className="flex-1 border-border/60 bg-accent hover:bg-accent/50 hover:border-accent/60 hover:text-accent-foreground transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98]"
+                className="flex-1 border-white/[0.08] bg-transparent text-white/60 hover:border-white/[0.15] hover:bg-white/[0.04] hover:text-white/80"
               >
-                <ExternalLink className="h-4 w-4 mr-2" />
+                <ExternalLink className="mr-2 h-4 w-4" />
                 Manage on GitHub
               </Button>
               <Button
                 onClick={handleDisconnect}
                 disabled={disconnectMutation.isPending}
-                variant="destructive"
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700 transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-red-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600 disabled:hover:shadow-sm"
+                className="flex-1 border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
               >
                 {disconnectMutation.isPending ? (
                   <>
@@ -228,7 +223,7 @@ export function GitHubConnection() {
                   </>
                 ) : (
                   <>
-                    <XCircle className="h-4 w-4 mr-2" />
+                    <XCircle className="mr-2 h-4 w-4" />
                     Disconnect
                   </>
                 )}
@@ -237,14 +232,15 @@ export function GitHubConnection() {
           </>
         ) : (
           <>
-            <div className="p-8 border border-dashed border-border/60 rounded-lg text-center bg-secondary/20">
+            {/* Empty state */}
+            <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-8 text-center">
               <div className="flex flex-col items-center gap-4">
-                <div className="p-4 rounded-full bg-secondary/50 ring-1 ring-border/50">
-                  <Github className="h-8 w-8 text-muted-foreground" />
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03]">
+                  <Github className="h-7 w-7 text-white/30" />
                 </div>
                 <div>
-                  <p className="font-semibold text-base mb-1">No GitHub Connection</p>
-                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                  <p className="text-base font-semibold text-white/80">No GitHub Connection</p>
+                  <p className="mx-auto mt-1 max-w-sm text-sm text-white/35">
                     Connect your GitHub account to unlock git operations and repository management
                     in your workspaces
                   </p>
@@ -252,29 +248,31 @@ export function GitHubConnection() {
               </div>
             </div>
 
-            <div className="space-y-3">
-              <p className="text-sm font-medium">What you'll get:</p>
-              <div className="grid gap-1">
-                {[
-                  { icon: Lock, text: "Clone private repositories securely" },
-                  { icon: GitBranch, text: "Commit and push changes from workspaces" },
-                  { icon: GitFork, text: "Fork repositories with one click" },
-                  { icon: Zap, text: "Automatic token refresh (no manual setup)" },
-                  { icon: Bot, text: "Connection to automated agent loops" },
-                ].map((feature, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/5 transition-colors group"
-                  >
-                    <feature.icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                    <span className="text-sm">{feature.text}</span>
-                  </div>
-                ))}
-              </div>
+            {/* Feature list */}
+            <div className="space-y-1">
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.25em] text-white/25">
+                What you'll get
+              </p>
+              {[
+                { icon: Lock, text: "Clone private repositories securely" },
+                { icon: GitBranch, text: "Commit and push changes from workspaces" },
+                { icon: GitFork, text: "Fork repositories with one click" },
+                { icon: Zap, text: "Automatic token refresh (no manual setup)" },
+                { icon: Bot, text: "Connection to automated agent loops" },
+              ].map((feature, i) => (
+                <div
+                  key={i}
+                  className="group flex items-center gap-3 rounded-lg p-2.5 transition-colors hover:bg-white/[0.03]"
+                >
+                  <feature.icon className="h-4 w-4 text-white/25 transition-colors group-hover:text-primary" />
+                  <span className="text-sm text-white/55">{feature.text}</span>
+                </div>
+              ))}
             </div>
 
+            {/* Connect button */}
             <Button
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              className="w-full bg-primary font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
               onClick={handleConnect}
               disabled={isConnecting}
             >
@@ -291,13 +289,13 @@ export function GitHubConnection() {
               )}
             </Button>
 
-            <p className="text-xs text-center text-muted-foreground">
+            <p className="text-center text-xs text-white/25">
               You'll be redirected to GitHub to install the app. You can choose which repositories
               to grant access to.
             </p>
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
