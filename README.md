@@ -1,4 +1,4 @@
-![GitTerm Dashboard](./media/dashboard.png)
+![GitTerm](./apps/web/public/og-card/og-card.png)
 
 Run Opencode instances your way. Supports multiple cloud providers, and agentic coding paradigms such as agent loops.
 
@@ -8,13 +8,11 @@ Run Opencode instances your way. Supports multiple cloud providers, and agentic 
 
 GitTerm gives you flexible ways to run Opencode instances:
 
-1. **Cloud Workspaces** - Spin up cloud-based environments where opencode runs remotely. Access securely via browser or API.
+1. **Cloud Workspaces** - Spin up cloud-based environments where Opencode runs remotely. Access securely via browser or API.
     - **Opencode TUI (TTYD)**: use TUI on the web
     - **Opencode Server**: Get a url that can be attached on any machine with Opencode or Opencode Desktop app
 
-2. **Local Tunnels** - Run Opencode on your local machine, then expose it through a secure tunnel, providing you a url to connect to the running Opencode Server. Also allowing you to open other port connections to test out your developments with secure public URLs.
-
-3. **Agentic Coding Loops** - Providing a PRD document and a branch for Opencode to run wild and make commits and implement features on a loop, without having to hold its hand all through the way.
+2. **Agentic Coding Loops** - Provide a PRD and a branch for Opencode to run in a loop and ship commits without hand-holding.
 
 ## Self-Hosting Guide
 
@@ -62,16 +60,15 @@ https://ws1234.your-domain.com
 
 ### Required Services
 
-| Service      | Purpose                       |
-| ------------ | ----------------------------- |
-| PostgreSQL   | Database                      |
-| Redis        | Caching, pub/sub              |
-| server       | Main API                      |
-| web          | Frontend (dashboard, auth UI) |
-| tunnel-proxy | WebSocket tunnel server       |
-| proxy        | Caddy reverse proxy           |
-| listener     | Webhooks (GitHub, Railway)    |
-| worker       | Background jobs               |
+| Service    | Purpose                       |
+| ---------- | ----------------------------- |
+| PostgreSQL | Database                      |
+| Redis      | Caching, pub/sub              |
+| server     | Main API                      |
+| web        | Frontend (dashboard, auth UI) |
+| proxy      | Caddy reverse proxy           |
+| listener   | Webhooks (GitHub, Railway)    |
+| worker     | Background jobs               |
 
 
 ### Worker Cron Jobs
@@ -85,97 +82,9 @@ GitTerm has two background workers that run as cron jobs, only one is needed whe
 
 **On Railway:** This worker can be adjusted on the dashboard
 
-### Local Tunnels (for agents running locally)
-
-1. **Create a workspace** with `tunnelType: "local"` via the dashboard
-2. **Run the Opencode Server** on your machine using `opencode serve`
-3. **Login to the CLI** specifying the url of your self hosted Gitterm server.
-4. **CLI connects** to the tunnel-proxy via WebSocket
-5. **Incoming requests** to your tunnel URL are routed to the `tunnel-proxy` service
-6. **Tunnel-proxy multiplexes** the request over WebSocket to your local agent
-7. **CLI forwards** the request to your local server and streams the response back
-
-```bash
-# Install the agent CLI
-npm install -g gitterm
-
-# Login (device code flow)
-npx gitterm login -s https://your-api-domain.com
-
-# Create a workspace with tunnelType="local" in the dashboard
-# Then connect your local server
-npx gitterm connect --workspace-id "workspace-id" --port 3000
-```
-
-Your local agent is now accessible through the tunnel URL.
-
 ## Development Setup
 
-For contributors who want to run GitTerm locally.
-
-### Prerequisites
-
-- [Bun](https://bun.sh) (v1.0+)
-- [Docker](https://docker.com) (for local Postgres & Redis)
-- Node.js 18+ (for some tooling)
-
-### 1. Clone and Install
-
-```bash
-git clone https://github.com/OpeOginni/gitterm.git
-cd gitterm
-bun install
-```
-
-### 2. Set Up Environment Variables
-
-```bash
-# Apps
-cp apps/server/.env.example apps/server/.env
-cp apps/web/.env.example apps/web/.env
-cp apps/tunnel-proxy/.env.example apps/tunnel-proxy/.env
-cp apps/listener/.env.example apps/listener/.env
-cp apps/worker/.env.example apps/worker/.env
-```
-
-### 3. Start Local Services
-
-```bash
-# Start Postgres
-bun turbo db:start
-
-# Start Redis
-bun turbo redis:start
-```
-
-### 4. Set Up Database
-
-```bash
-# Migrate schema to database
-bun run db:migrate
-```
-
-### 5. Run Development Servers
-
-```bash
-# Run all services
-bun run dev
-
-# Or run specific apps
-bun run dev --filter=web
-bun run dev --filter=server
-bun run dev --filter=tunnel-proxy
-```
-
-| Service      | URL                            |
-| ------------ | -------------------------------|
-| Web App      | http://localhost:8888          |
-| API Server   | http://localhost:8888/api      |
-| Tunnel Proxy | http://localhost:8888/tunnel   |
-| Listener     | http://localhost:8888/listener |
-| Workspaces   | http://localhost:8888/ws/{id}  |
-
-We make use of Caddy to streamline the whole services each connected to the 9000 port by some path
+See `CONTRIBUTING.md` for local setup, service URLs, and contribution guidelines.
 
 ## Project Structure
 
@@ -185,7 +94,6 @@ gitterm/
 │   ├── web/              # Next.js frontend (dashboard, auth UI)
 │   ├── server/           # Main API server (Hono + tRPC)
 │   ├── listener/         # Webhook listener (GitHub, Railway events)
-│   ├── tunnel-proxy/     # WebSocket tunnel proxy for local tunnels
 │   ├── proxy/        # Caddy configuration for routing
 │   └── worker/           # Background jobs (cleanup, daily reset)
 │
@@ -225,7 +133,7 @@ bun run db:migrate    # Run migrations
 
 ## Contributing
 
-Contributions are welcome! Please read the development setup section above.
+Contributions are welcome! Please read `CONTRIBUTING.md`.
 
 ## License
 
