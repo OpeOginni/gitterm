@@ -22,7 +22,7 @@ import {
 import { getProviderByCloudProviderId, type PersistentWorkspaceInfo } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { getGitHubAppService, isGitHubAppConfigured, parseGitHubRepoUrl } from "../../service/github";
-import { workspaceJWT } from "../../service/workspace-jwt";
+import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { sendAdminMessage } from "../../utils/discord";
 import { getWorkspaceDomain } from "../../utils/routing";
@@ -30,9 +30,9 @@ import {
   canUseCustomCloudSubdomain,
   type UserPlan,
 } from "../../config/features";
-import { getProviderConfigService } from "../../service/provider-config";
+import { getProviderConfigService } from "../../service/config/provider-config";
 import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-credentials";
-import { getModelCredentialsService } from "../../service/model-credentials";
+import { getModelCredentialsService } from "../../service/credentials/model-credentials";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [

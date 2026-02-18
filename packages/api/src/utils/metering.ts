@@ -8,7 +8,7 @@ import {
 import { logger } from "./logger";
 import { shouldEnforceQuota, shouldMeterUsage, getDailyMinuteQuotaAsync } from "../config/features";
 import { isSelfHosted } from "../config/deployment";
-import { getIdleTimeoutMinutes, getFreeTierDailyMinutes } from "../service/system-config";
+import { getIdleTimeoutMinutes, getFreeTierDailyMinutes } from "../service/config/system-config";
 
 // Legacy constants - kept for backwards compatibility but should use getters below
 // These are now the DEFAULT values; actual values come from database

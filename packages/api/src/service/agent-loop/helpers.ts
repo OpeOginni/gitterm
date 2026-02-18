@@ -1,8 +1,8 @@
 import { db, eq } from "@gitterm/db";
 import { modelProvider, model } from "@gitterm/db/schema/model-credentials";
 import { TRPCError } from "@trpc/server";
-import type { SandboxCredential } from "../providers/compute";
-import { getModelCredentialsService } from "./model-credentials";
+import type { SandboxCredential } from "../../providers/compute";
+import { getModelCredentialsService } from "../credentials/model-credentials";
 
 /**
  * Get model provider and model records from loop

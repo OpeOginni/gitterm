@@ -1,4 +1,4 @@
-import { getRailwayClient, type RailwayClient } from "../../service/railway/railway";
+import { getRailwayClient, type RailwayClient } from "./client";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -8,19 +8,12 @@ import type {
   WorkspaceStatusResult,
 } from "../compute";
 import env from "@gitterm/env/server";
-import { getProviderConfigService } from "../../service/provider-config";
+import { getProviderConfigService } from "../../service/config/provider-config";
+import type { RailwayConfig } from "./types";
+export type { RailwayConfig } from "./types";
 
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
-
-export interface RailwayConfig {
-  apiUrl: string;
-  apiToken: string;
-  projectId: string;
-  environmentId: string;
-  defaultRegion?: string;
-  publicRailwayDomains: boolean;
-}
 
 export class RailwayProvider implements ComputeProvider {
   readonly name = "railway";

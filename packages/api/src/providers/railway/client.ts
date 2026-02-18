@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { getSdk } from "./graphql/generated/railway";
-import { getProviderConfigService } from "../provider-config";
-import type { RailwayConfig } from "../../providers/railway";
+import { getProviderConfigService } from "../../service/config/provider-config";
+import type { RailwayConfig } from "./types";
 
 // ============================================================================
 // GraphQL Request Function

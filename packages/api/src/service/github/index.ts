@@ -6,7 +6,7 @@ import {
   gitIntegration,
   workspaceGitConfig,
 } from "@gitterm/db/schema/integrations";
-import { logger } from "../utils/logger";
+import { logger } from "../../utils/logger";
 import env from "@gitterm/env/server";
 
 /**

@@ -1,7 +1,7 @@
 import { db, eq } from "@gitterm/db";
 import { userLoopRunQuota, userLoopRunEvent } from "@gitterm/db/schema/agent-loop";
 import { TRPCError } from "@trpc/server";
-import { logger } from "../utils/logger";
+import { logger } from "../../utils/logger";
 
 export interface DeductRunResult {
   success: boolean;

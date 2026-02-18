@@ -19,7 +19,7 @@ import {
   type ApiKeyCredential,
   type OAuthCredential,
   EncryptionService,
-} from "./encryption";
+} from "../encryption";
 import { GitHubCopilotOAuthService } from "./oauth/github-copilot";
 import { OpenAICodexOAuthService } from "./oauth/openai-codex";
 

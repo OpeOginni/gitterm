@@ -16,7 +16,7 @@
 
 import env from "@gitterm/env/server";
 import { isSelfHosted, isManaged } from "./deployment";
-import { getFreeTierDailyMinutes } from "../service/system-config";
+import { getFreeTierDailyMinutes } from "../service/config/system-config";
 
 /**
  * Feature flags configuration

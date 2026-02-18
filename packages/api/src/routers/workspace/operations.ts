@@ -5,7 +5,7 @@ import { workspace } from "@gitterm/db/schema/workspace";
 import { gitIntegration, workspaceGitConfig } from "@gitterm/db/schema/integrations";
 import { TRPCError } from "@trpc/server";
 import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
-import { workspaceJWT } from "../../service/workspace-jwt";
+import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { logger } from "../../utils/logger";
 
 /**

@@ -24,8 +24,8 @@ import { logger } from "../../utils/logger";
 import { railwayWebhookSchema } from "../railway/webhook";
 import { agentLoopWebhookSchema } from "../agent-loop/webhook";
 import { getAgentLoopService } from "../../service/agent-loop";
-import { deductRunFromQuota, refundRunToQuota } from "../../service/run-quota";
-import { getModelConfig, getCredentialForRun } from "../../service/agent-loop-helpers";
+import { deductRunFromQuota, refundRunToQuota } from "../../service/quotas/run-quota";
+import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/helpers";
 
 /**
  * Internal router for service-to-service communication

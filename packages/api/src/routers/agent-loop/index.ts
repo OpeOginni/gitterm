@@ -13,8 +13,8 @@ import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { AGENT_LOOP_RUN_TIMEOUT_MS } from "../../config/agent-loop";
 import { TRPCError } from "@trpc/server";
 import { getAgentLoopService } from "../../service/agent-loop";
-import { deductRunFromQuota, refundRunToQuota } from "../../service/run-quota";
-import { getModelConfig, getCredentialForRun } from "../../service/agent-loop-helpers";
+import { deductRunFromQuota, refundRunToQuota } from "../../service/quotas/run-quota";
+import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/helpers";
 import { MONTHLY_RUN_QUOTAS } from "../../config";
 import { addMonths } from "date-fns";
 

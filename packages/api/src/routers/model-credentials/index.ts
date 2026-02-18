@@ -7,8 +7,8 @@
 import z from "zod";
 import { protectedProcedure, publicProcedure, router } from "../..";
 import { TRPCError } from "@trpc/server";
-import { getModelCredentialsService } from "../../service/model-credentials";
-import { GitHubCopilotOAuthService } from "../../service/oauth/github-copilot";
+import { getModelCredentialsService } from "../../service/credentials/model-credentials";
+import { GitHubCopilotOAuthService } from "../../service/credentials/oauth/github-copilot";
 
 const credentialsService = getModelCredentialsService();
 

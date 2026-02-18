@@ -1,5 +1,5 @@
 import { db, eq, and } from "@gitterm/db";
-import { getEncryptionService } from "./encryption";
+import { getEncryptionService } from "../encryption";
 import { providerType, providerConfig } from "@gitterm/db/schema/provider-config";
 import { cloudProvider } from "@gitterm/db/schema/cloud"
 
