@@ -1,7 +1,13 @@
 FROM oven/bun:1-slim
 # FROM ghcr.io/anomalyco/opencode:latest
 
-RUN apt-get update && apt-get install -y --no-install-recommends git bash curl ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    bash \
+    curl \
+    ca-certificates \
+    nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
