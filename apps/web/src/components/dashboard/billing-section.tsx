@@ -366,7 +366,10 @@ export function PlanBadge({ plan }: { plan: UserPlan }) {
   };
 
   return (
-    <Badge variant={variants[plan]} className="capitalize text-xs">
+    <Badge
+      variant={variants[plan]}
+      className={`capitalize text-xs ${plan === "pro" ? "border-primary/30 bg-primary/10 text-primary" : ""}`}
+    >
       {plan}
     </Badge>
   );

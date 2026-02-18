@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { Cloud } from "lucide-react";
-import { Label } from "@/components/ui/label";
 import type { WorkspaceType } from "./types";
 
 interface WorkspaceTypeSelectorProps {
@@ -14,7 +13,6 @@ interface WorkspaceOption {
   type: WorkspaceType;
   label: string;
   description: string;
-  icon: React.ReactNode;
 }
 
 const workspaceOptions: WorkspaceOption[] = [
@@ -22,41 +20,20 @@ const workspaceOptions: WorkspaceOption[] = [
     type: "cloud",
     label: "Cloud Instance",
     description: "Remote workspace",
-    icon: null, // Will use Cloud icon
   },
   {
     type: "agentic-loops",
     label: "Agentic Loops",
     description: "Autonomous Loops",
-    icon: null, // Will use custom SVG
   },
 ];
 
 export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelectorProps) {
-  const renderIcon = (option: WorkspaceOption, isSelected: boolean) => {
-    const iconClass = `h-5 w-5 ${isSelected ? "text-primary" : "text-muted-foreground"}`;
-
-    switch (option.type) {
-      case "cloud":
-        return <Cloud className={iconClass} />;
-      case "agentic-loops":
-        return (
-          <Image
-            src="/ralph-wiggum.svg"
-            alt="Ralph Wiggum"
-            width={20}
-            height={20}
-            className={`h-5 w-5 ${isSelected ? "opacity-100" : "opacity-60"}`}
-          />
-        );
-      default:
-        return <Cloud className={iconClass} />;
-    }
-  };
-
   return (
     <div className="grid gap-2">
-      <Label className="text-sm font-medium">Workspace Type</Label>
+      <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30">
+        Workspace Type
+      </span>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {workspaceOptions.map((option) => {
           const isSelected = value === option.type;
@@ -65,18 +42,32 @@ export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelector
               key={option.type}
               type="button"
               onClick={() => onChange(option.type)}
-              className={`flex items-start gap-3 p-4 rounded-lg border transition-all sm:items-center ${
+              className={`flex items-center gap-3 rounded-xl border p-4 transition-all ${
                 isSelected
-                  ? "border-accent bg-primary/10"
-                  : "border-border/50 hover:border-border hover:bg-secondary"
+                  ? "border-primary/30 bg-primary/[0.06]"
+                  : "border-border hover:border-white/[0.12] hover:bg-white/[0.03]"
               }`}
             >
-              {renderIcon(option, isSelected)}
+              {option.type === "cloud" ? (
+                <Cloud
+                  className={`h-5 w-5 ${isSelected ? "text-primary" : "text-white/30"}`}
+                />
+              ) : (
+                <Image
+                  src="/ralph-wiggum.svg"
+                  alt="Ralph Wiggum"
+                  width={20}
+                  height={20}
+                  className={`h-5 w-5 ${isSelected ? "opacity-100" : "opacity-40"}`}
+                />
+              )}
               <div className="text-left">
-                <p className={`text-sm font-medium ${isSelected ? "text-foreground" : ""}`}>
+                <p
+                  className={`text-sm font-medium ${isSelected ? "text-white" : "text-white/60"}`}
+                >
                   {option.label}
                 </p>
-                <p className="text-xs text-muted-foreground">{option.description}</p>
+                <p className="text-xs text-white/30">{option.description}</p>
               </div>
             </button>
           );

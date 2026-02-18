@@ -53,4 +53,5 @@ temp
 /.docker
 /.github-app
 
-# SSL certificates
+# Opencode
+.opencode

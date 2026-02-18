@@ -1,70 +1,135 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
-import { TerminalDemo } from "@/components/landing/terminal-demo";
+import { ArrowRight, ArrowUpRight, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
+const modelProviders = [
+  { src: "/openai.svg", label: "OpenAI" },
+  { src: "/anthropic.svg", label: "Anthropic" },
+  { src: "/opencode-zen.svg", label: "Zen" },
+  { src: "/github-copilot.svg", label: "Copilot" },
+];
+
+const infraProviders = [
+  { src: "/railway.svg", label: "Railway" },
+  { src: "/cloudflare.svg", label: "Cloudflare" },
+  { src: "/EC2.svg", label: "AWS EC2" },
+];
+
 export function HeroSection() {
   return (
-    <section className="relative overflow-hidden pt-32 pb-20 md:pt-40 md:pb-32">
-      {/* Glow effect */}
-      <div className="absolute left-1/2 top-0 -z-10 -translate-x-1/2 h-[400px] w-[600px] rounded-full bg-primary/10 blur-[120px]" />
+    <section className="relative overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32">
+      <div className="mx-auto max-w-[1120px] px-6">
+        {/* Eyebrow */}
+        <div className="mb-6 flex justify-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-white/40">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+            Cloud workspaces for OpenCode
+          </span>
+        </div>
 
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="grid gap-12 lg:grid-cols-2 lg:gap-8 items-center">
-          <div className="flex flex-col gap-6">
-            <div className="inline-flex w-fit items-center gap-3 rounded-full border border-border bg-secondary/60 px-4 py-2 text-sm text-muted-foreground">
-              <Image src="/opencode.svg" alt="OpenCode" width={18} height={22} className="h-5 w-auto" />
-              <span className="font-semibold text-foreground">OpenCode</span>
-              <span className="text-muted-foreground">powered workspaces</span>
-            </div>
+        {/* Headline */}
+        <h1 className="mx-auto max-w-4xl text-center text-[clamp(2.25rem,5vw,4.5rem)] font-bold leading-[1.08] tracking-tight text-white">
+          Run OpenCode{" "}
+          <span className="text-primary">anywhere.</span>
+        </h1>
 
-            <h1 className="text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl text-balance">
-              Remote workspaces for
-              <br />
-              <span className="text-muted-foreground">AI coding agents.</span>
-            </h1>
+        {/* Sub */}
+        <p className="mx-auto mt-6 max-w-xl text-center text-base leading-relaxed text-white/50 sm:text-lg">
+          Launch cloud-hosted{" "}
+          <Link
+            href="https://opencode.ai/"
+            target="_blank"
+            className="text-white/70 underline decoration-white/20 underline-offset-4 transition-colors hover:text-white hover:decoration-white/50"
+          >
+            OpenCode
+          </Link>{" "}
+          workspaces in seconds. Persistent state, agentic loops, and zero config.
+        </p>
 
-            <p className="max-w-lg text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Launch cloud-hosted{" "}
-              <Link
-                href={"https://opencode.ai/"}
-                target="_blank"
-                className="font-bold text-primary underline"
-              >
-                OpenCode
-              </Link>{" "}
-              in seconds, or tunnel your local environment through secure, shareable URLs.
-              <br />
-              Keep stateful workspaces and ship from any device, anywhere.
+        {/* CTA row */}
+        <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <Link href="/dashboard">
+            <Button
+              size="lg"
+              className="h-12 bg-primary px-8 font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+            >
+              Start Building
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+          <Link
+            href="https://x.com/BrightOginni/status/2011107736176763131"
+            target="_blank"
+          >
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-12 border-white/[0.08] bg-transparent px-6 font-mono text-sm uppercase tracking-wider text-white/60 hover:border-white/20 hover:text-white/90"
+            >
+              <ArrowUpRight className="mr-2 h-4 w-4" />
+              Watch Demo
+            </Button>
+          </Link>
+        </div>
+
+        {/* Logo bands */}
+        <div className="mx-auto mt-20 max-w-3xl">
+          {/* Model providers */}
+          <div className="border-t border-white/[0.06] pt-8">
+            <p className="mb-5 text-center font-mono text-[11px] uppercase tracking-[0.25em] text-white/30">
+              Model providers
             </p>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Link href="/dashboard">
-                <Button
-                  size="lg"
-                  className="bg-primary/80 text-primary-foreground hover:bg-primary/70"
+            <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+              {modelProviders.map((p) => (
+                <div
+                  key={p.label}
+                  className="flex items-center gap-2.5 text-white/50 transition-colors hover:text-white/80"
                 >
-                  Start Building
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="https://x.com/BrightOginni/status/2011107736176763131" target="_blank">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="border-border text-foreground hover:bg-secondary bg-transparent"
-                >
-                  <ArrowUpRight className="mr-2 h-4 w-4 border-primary text-primary" />
-                  Agentic Loops Demo
-                </Button>
-              </Link>
+                  <Image
+                    src={p.src}
+                    alt={p.label}
+                    width={24}
+                    height={24}
+                    className="h-6 w-6 opacity-70"
+                  />
+                  <span className="text-sm font-medium">{p.label}</span>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="relative">
-            <TerminalDemo />
+          {/* Infra */}
+          <div className="mt-8 border-t border-white/[0.06] pt-8">
+            <p className="mb-5 text-center font-mono text-[11px] uppercase tracking-[0.25em] text-white/30">
+              Deploy on
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+              {infraProviders.map((i) => (
+                <div
+                  key={i.label}
+                  className="flex items-center gap-2.5 text-white/50 transition-colors hover:text-white/80"
+                >
+                  <Image
+                    src={i.src}
+                    alt={i.label}
+                    width={24}
+                    height={24}
+                    className="h-6 w-6 opacity-70"
+                  />
+                  <span className="text-sm font-medium">{i.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
+        </div>
+
+        {/* Scroll hint */}
+        <div className="mt-16 flex flex-col items-center gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-white/20">
+            Scroll
+          </span>
+          <ChevronDown className="h-4 w-4 animate-bounce text-white/20" />
         </div>
       </div>
     </section>

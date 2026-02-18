@@ -68,14 +68,14 @@ export function CreateInstanceDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button className="gap-2 bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85">
           <Plus className="h-4 w-4" /> New Instance
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto p-5 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg sm:text-xl">Create New Instance</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle className="text-lg font-bold text-white sm:text-xl">Create New Instance</DialogTitle>
+          <DialogDescription className="text-white/40">
             {DIALOG_DESCRIPTIONS[workspaceType]}
           </DialogDescription>
         </DialogHeader>
