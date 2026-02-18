@@ -15,7 +15,7 @@ export function LandingHeader() {
   const isHomePage = pathname === "/";
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/6 bg-[#09090b]/80 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between px-6">
         <Link
           href="/"
@@ -60,10 +60,10 @@ export function LandingHeader() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 border-white/[0.08] bg-transparent px-2.5 text-white/50 transition-colors hover:border-white/20 hover:text-white/80 sm:px-3"
+                className="h-8 border-white/8 bg-transparent px-2.5 text-white/50 transition-colors hover:border-primary hover:text-white/80 sm:px-3"
               >
                 <Star className="h-3.5 w-3.5 shrink-0 text-primary sm:mr-1.5" />
-                <span className="hidden font-mono text-xs sm:inline">Star</span>
+                <span className="hidden font-mono text-xs sm:inline">Star on Github</span>
               </Button>
             </Link>
           )}
