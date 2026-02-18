@@ -40,6 +40,7 @@ export default async function DashboardPage() {
         heading="Workspaces"
         text="Create and manage your remote development environments."
       >
+        
         <CreateInstanceDialog />
       </DashboardHeader>
       <Suspense fallback={<InstanceListSkeleton />}>

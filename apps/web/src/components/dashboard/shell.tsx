@@ -10,8 +10,8 @@ interface DashboardShellProps {
 export function DashboardShell({ children, className }: DashboardShellProps) {
   return (
     <>
-      <div className={cn("flex-1 space-y-6 p-6 md:p-8 lg:p-10", className)}>
-        <div className="mx-auto max-w-7xl">{children}</div>
+      <div className={cn("flex-1 p-6 md:p-8 lg:p-10", className)}>
+        <div className="mx-auto max-w-7xl space-y-8">{children}</div>
       </div>
       <div className="fixed bottom-6 right-6 z-50">
         <FeedbackForm />

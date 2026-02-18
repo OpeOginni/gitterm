@@ -4,9 +4,13 @@ import { trpcServer } from "@hono/trpc-server";
 import { createContext } from "@gitterm/api/context";
 import { appRouter, proxyResolverRouter } from "@gitterm/api/routers/index";
 import { auth } from "@gitterm/auth";
-import { DeviceCodeService } from "@gitterm/api/service/cli/device-code";
-import { CLIAutheService } from "@gitterm/api/service/cli/cli-auth";
+import { DeviceCodeService } from "@gitterm/api/service/auth/cli/device-code";
+import { CLIAutheService } from "@gitterm/api/service/auth/cli/cli-auth";
 import { getGitHubAppService } from "@gitterm/api/service/github";
+import { workspaceJWT } from "@gitterm/api/service/auth/workspace-jwt";
+import { updateLastActive, hasRemainingQuota } from "@gitterm/api/utils/metering";
+import { db, eq } from "@gitterm/db";
+import { workspace } from "@gitterm/db/schema/workspace";
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -117,6 +121,55 @@ app.post("/api/device/token", async (c) => {
     tokenType: "Bearer",
     expiresInSeconds: 30 * 24 * 60 * 60,
   });
+});
+
+app.post("/api/internal/workspace-heartbeat", async (c) => {
+  const authHeader = c.req.header("Authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+
+  if (!token) {
+    return c.json({ success: false, error: "missing_token" }, 401);
+  }
+
+  let payload;
+  try {
+    payload = workspaceJWT.verifyToken(token);
+  } catch (error) {
+    return c.json(
+      { success: false, error: error instanceof Error ? error.message : "invalid_token" },
+      401,
+    );
+  }
+
+  const body = (await c.req.json().catch(() => ({}))) as { workspaceId?: string };
+  const workspaceId = body.workspaceId || payload.workspaceId;
+
+  if (workspaceId !== payload.workspaceId) {
+    return c.json({ success: false, error: "workspace_mismatch" }, 403);
+  }
+
+  const [existingWorkspace] = await db
+    .select()
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId));
+
+  if (!existingWorkspace) {
+    return c.json({ success: false, error: "workspace_not_found" }, 404);
+  }
+
+  if (existingWorkspace.userId !== payload.userId) {
+    return c.json({ success: false, error: "workspace_ownership_mismatch" }, 403);
+  }
+
+  const hasQuota = await hasRemainingQuota(existingWorkspace.userId);
+
+  if (!hasQuota) {
+    return c.json({ success: true, action: "shutdown", reason: "quota_exhausted" });
+  }
+
+  await updateLastActive(workspaceId);
+
+  return c.json({ success: true, action: "continue", reason: null });
 });
 
 app.use(
