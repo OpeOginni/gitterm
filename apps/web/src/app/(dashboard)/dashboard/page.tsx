@@ -9,13 +9,16 @@ import { headers } from "next/headers";
 
 function InstanceListSkeleton() {
   return (
-    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-      {[...Array(6)].map((_, i) => (
-        <div key={i} className="rounded-lg border border-border/50 bg-card/50 p-6">
-          <Skeleton className="h-6 w-32 mb-4" />
-          <Skeleton className="h-4 w-full mb-2" />
-          <Skeleton className="h-4 w-3/4 mb-4" />
-          <Skeleton className="h-9 w-full" />
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div
+          key={i}
+          className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5"
+        >
+          <Skeleton className="mb-4 h-5 w-28 bg-white/[0.04]" />
+          <Skeleton className="mb-2 h-4 w-full bg-white/[0.04]" />
+          <Skeleton className="mb-4 h-4 w-3/4 bg-white/[0.04]" />
+          <Skeleton className="h-9 w-full bg-white/[0.04]" />
         </div>
       ))}
     </div>
@@ -24,9 +27,7 @@ function InstanceListSkeleton() {
 
 export default async function DashboardPage() {
   const session = await authClient.getSession({
-    fetchOptions: {
-      headers: await headers(),
-    },
+    fetchOptions: { headers: await headers() },
   });
 
   if (!session.data?.user) {
@@ -39,13 +40,12 @@ export default async function DashboardPage() {
         heading="Workspaces"
         text="Create and manage your remote development environments."
       >
+        
         <CreateInstanceDialog />
       </DashboardHeader>
-      <div className="grid gap-8 pt-8">
-        <Suspense fallback={<InstanceListSkeleton />}>
-          <InstanceList />
-        </Suspense>
-      </div>
+      <Suspense fallback={<InstanceListSkeleton />}>
+        <InstanceList />
+      </Suspense>
     </DashboardShell>
   );
 }

@@ -38,7 +38,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
 
-type UserPlan = "free" | "tunnel" | "pro";
+type UserPlan = "free" | "pro";
 type UserRole = "user" | "admin";
 
 interface CreateUserForm {
@@ -158,22 +158,25 @@ export default function UsersPage() {
     <DashboardShell>
       <DashboardHeader heading="User Management" text="View and manage all users in the system.">
         <div className="flex items-center gap-2">
+          <Button asChild variant="outline">
+            <Link href={"/admin" as Route}>Back to Admin</Link>
+          </Button>
           {canCreateUsers && (
-            <Button onClick={() => setShowCreateDialog(true)}>
+            <Button
+              onClick={() => setShowCreateDialog(true)}
+              className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add User
             </Button>
           )}
-          <Button asChild variant="outline">
-            <Link href={"/admin" as Route}>Back to Admin</Link>
-          </Button>
         </div>
       </DashboardHeader>
 
-      <div className="pt-8 space-y-6">
+      <div className="pt-2 space-y-6">
         {/* Search */}
         <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
           <Input
             placeholder="Search users..."
             value={search}
@@ -194,112 +197,113 @@ export default function UsersPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    <th className="h-10 px-0 text-left align-middle text-sm font-medium text-muted-foreground">
-                      User
-                    </th>
-                    <th className="h-10 px-4 text-left align-middle text-sm font-medium text-muted-foreground">
-                      Plan
-                    </th>
-                    <th className="h-10 px-4 text-left align-middle text-sm font-medium text-muted-foreground">
-                      Role
-                    </th>
-                    <th className="h-10 px-4 text-left align-middle text-sm font-medium text-muted-foreground">
-                      Created
-                    </th>
-                    <th className="h-10 px-0 text-right align-middle text-sm font-medium text-muted-foreground">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data?.users.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="border-b border-border/30 hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="py-4 pr-4">
-                        <div>
-                          <div className="font-medium">{user.name}</div>
-                          <div className="text-sm text-muted-foreground">{user.email}</div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <Select
-                          value={(user as any).plan || "free"}
-                          onValueChange={(value: UserPlan) => {
-                            updateUser.mutate({ id: user.id, plan: value });
-                          }}
-                        >
-                          <SelectTrigger className="w-28 h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="free">Free</SelectItem>
-                            <SelectItem value="tunnel">Tunnel</SelectItem>
-                            <SelectItem value="pro">Pro</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-4 py-4">
-                        <Select
-                          value={(user as any).role || "user"}
-                          onValueChange={(value: UserRole) => {
-                            updateUser.mutate({ id: user.id, role: value });
-                          }}
-                        >
-                          <SelectTrigger className="w-24 h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">
-                              <div className="flex items-center gap-2">
-                                <UserIcon className="h-3 w-3" />
-                                User
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="admin">
-                              <div className="flex items-center gap-2">
-                                <Shield className="h-3 w-3" />
-                                Admin
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-muted-foreground">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="py-4 pl-4 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleteUserId(user.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/[0.06]">
+                      <th className="h-10 px-6 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                        User
+                      </th>
+                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                        Plan
+                      </th>
+                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                        Role
+                      </th>
+                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                        Created
+                      </th>
+                      <th className="h-10 px-6 text-right align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                        Actions
+                      </th>
                     </tr>
-                  ))}
-                  {data?.users.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-muted-foreground">
-                        No users found
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data?.users.map((user) => (
+                      <tr
+                        key={user.id}
+                        className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.02]"
+                      >
+                        <td className="py-4 px-6">
+                          <div>
+                            <div className="font-medium text-white/90">{user.name}</div>
+                            <div className="text-sm text-white/40">{user.email}</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <Select
+                            value={(user as any).plan || "free"}
+                            onValueChange={(value: UserPlan) => {
+                              updateUser.mutate({ id: user.id, plan: value });
+                            }}
+                          >
+                            <SelectTrigger className="w-28 h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="free">Free</SelectItem>
+                              <SelectItem value="pro">Pro</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-4 py-4">
+                          <Select
+                            value={(user as any).role || "user"}
+                            onValueChange={(value: UserRole) => {
+                              updateUser.mutate({ id: user.id, role: value });
+                            }}
+                          >
+                            <SelectTrigger className="w-32 h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user">
+                                <div className="flex items-center gap-2">
+                                  <UserIcon className="h-3 w-3" />
+                                  User
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="admin">
+                                <div className="flex items-center gap-2">
+                                  <Shield className="h-3 w-3" />
+                                  Admin
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-white/30">
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-white/30 hover:text-destructive"
+                            onClick={() => setDeleteUserId(user.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {data?.users.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-white/30">
+                          No users found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 border-t border-border/30">
-                <div className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between pt-4 border-t border-white/[0.06]">
+                <div className="text-sm text-white/30">
                   Showing {page * limit + 1} to {Math.min((page + 1) * limit, data?.total ?? 0)} of{" "}
                   {data?.total ?? 0}
                 </div>
@@ -415,7 +419,6 @@ export default function UsersPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="free">Free</SelectItem>
-                      <SelectItem value="tunnel">Tunnel</SelectItem>
                       <SelectItem value="pro">Pro</SelectItem>
                     </SelectContent>
                   </Select>

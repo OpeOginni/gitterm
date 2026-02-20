@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  --gt-bg: #09090b;
+  --gt-text: rgba(255, 255, 255, 0.9);
+  --gt-accent: #c8a44e;
+  --gt-border-soft: rgba(255, 255, 255, 0.06);
+  --gt-terminal-bg: #09090b;
+}
+
+html,
+body {
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  background: var(--gt-bg);
+  color: var(--gt-text);
+  font-family: "DM Sans", "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+.workspace-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Brand Bar ────────────────────────────────────────────── */
+
+.brand-bar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  background: var(--gt-bg);
+  border-bottom: 1px solid var(--gt-border-soft);
+  flex-shrink: 0;
+  z-index: 101;
+}
+
+.brand-bar-inner {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--gt-accent);
+}
+
+.brand-name {
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ─── Terminal ─────────────────────────────────────────────── */
+
+#terminal-container {
+  flex: 1;
+  width: auto;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--gt-terminal-bg);
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  overflow: hidden;
+  display: flex;
+  min-height: 0;
+}
+
+.terminal-shell {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+#terminal-container .terminal {
+  height: 100%;
+  width: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  background: var(--gt-terminal-bg);
+}
+
+#terminal-container .xterm-viewport {
+  height: 100%;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  background: var(--gt-terminal-bg);
+  touch-action: pan-y pinch-zoom;
+  overscroll-behavior: contain;
+}
+
+#terminal-container .xterm-screen {
+  touch-action: auto;
+}
+
+#terminal-container .xterm {
+  height: 100%;
+  touch-action: auto;
+}
+
+/* ─── Responsive ───────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .brand-bar {
+    height: 36px;
+    padding: 0 12px;
+  }
+
+  .brand-name {
+    font-size: 10px;
+  }
+}

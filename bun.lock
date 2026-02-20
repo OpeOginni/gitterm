@@ -72,25 +72,6 @@
         "typescript": "catalog:",
       },
     },
-    "apps/tunnel-proxy": {
-      "name": "tunnel-proxy",
-      "dependencies": {
-        "@gitterm/api": "workspace:*",
-        "@gitterm/env": "workspace:*",
-        "@gitterm/redis": "workspace:*",
-        "dotenv": "catalog:",
-        "hono": "catalog:",
-        "jsonwebtoken": "^9.0.2",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "@gitterm/config": "workspace:*",
-        "@types/bun": "^1.2.6",
-        "@types/jsonwebtoken": "^9.0.7",
-        "tsdown": "^0.16.5",
-        "typescript": "catalog:",
-      },
-    },
     "apps/web": {
       "name": "web",
       "version": "0.1.0",
@@ -158,23 +139,6 @@
         "@types/bun": "^1.2.6",
         "tsdown": "^0.16.5",
         "typescript": "catalog:",
-      },
-    },
-    "packages/agent": {
-      "name": "@opeoginni/gitterm-agent",
-      "version": "0.1.13",
-      "bin": {
-        "gitterm-agent": "./dist/index.js",
-      },
-      "dependencies": {
-        "@types/yargs": "^17.0.35",
-        "chalk": "^5.6.2",
-        "yargs": "^18.0.0",
-        "zod": "^3.23.0",
-      },
-      "devDependencies": {
-        "@types/bun": "^1.2.6",
-        "typescript": "^5.0.0",
       },
     },
     "packages/api": {
@@ -971,8 +935,6 @@
     "@opencode-ai/plugin": ["@opencode-ai/plugin@1.1.8", "", { "dependencies": { "@opencode-ai/sdk": "1.1.8", "zod": "4.1.8" } }, "sha512-d+eL4PMZo4hOOxyY1nqSM5iJMPnOxS1F3jLwFv4iuuW4+s0sf9dOU/VqpnuQw0lalH1Pz8N5e+7pHGAFQqk0bg=="],
 
     "@opencode-ai/sdk": ["@opencode-ai/sdk@1.1.25", "", {}, "sha512-mWUX489ArEF2ICg3iZsx2VQaGS3Z2j/dwAJDacao9t7dGDzjOIaacPw2weZ10zld7XmT9V9C0PM/A5lDZ52J+w=="],
-
-    "@opeoginni/gitterm-agent": ["@opeoginni/gitterm-agent@workspace:packages/agent"],
 
     "@oxc-project/types": ["@oxc-project/types@0.99.0", "", {}, "sha512-LLDEhXB7g1m5J+woRSgfKsFPS3LhR9xRhTeIoEBm5WrkwMxn6eZ0Ld0c0K5eHB57ChZX6I3uSmmLjZ8pcjlRcw=="],
 
@@ -2250,8 +2212,6 @@
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
-    "tunnel-proxy": ["tunnel-proxy@workspace:apps/tunnel-proxy"],
-
     "turbo": ["turbo@2.7.2", "", { "optionalDependencies": { "turbo-darwin-64": "2.7.2", "turbo-darwin-arm64": "2.7.2", "turbo-linux-64": "2.7.2", "turbo-linux-arm64": "2.7.2", "turbo-windows-64": "2.7.2", "turbo-windows-arm64": "2.7.2" }, "bin": { "turbo": "bin/turbo" } }, "sha512-5JIA5aYBAJSAhrhbyag1ZuMSgUZnHtI+Sq3H8D3an4fL8PeF+L1yYvbEJg47akP1PFfATMf5ehkqFnxfkmuwZQ=="],
 
     "turbo-darwin-64": ["turbo-darwin-64@2.7.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-dxY3X6ezcT5vm3coK6VGixbrhplbQMwgNsCsvZamS/+/6JiebqW9DKt4NwpgYXhDY2HdH00I7FWs3wkVuan4rA=="],
@@ -2471,8 +2431,6 @@
     "@opencode-ai/plugin/@opencode-ai/sdk": ["@opencode-ai/sdk@1.1.8", "", {}, "sha512-N/02945tafTFN1FjlGCWO++dErtNyWaYOdARPifuL4nSsxTk2XtqZ2naZ28rj8kekjYR8JX1MA5upNEqwztOZA=="],
 
     "@opencode-ai/plugin/zod": ["zod@4.1.8", "", {}, "sha512-5R1P+WwQqmmMIEACyzSvo4JXHY5WiAFHRMg+zBZKgKS+Q1viRa0C1hmUKtHltoIFKtIdki3pRxkmpP74jnNYHQ=="],
-
-    "@opeoginni/gitterm-agent/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
     "@polar-sh/checkout/@polar-sh/sdk": ["@polar-sh/sdk@0.39.1", "", { "dependencies": { "standardwebhooks": "^1.0.0", "zod": "^3.25.76" } }, "sha512-PSWnp2EX+guVxtLyUwk2hCgsV/FTOXf+nI33xXwAGHyakACEmJOIeHMxlja++t4YVHf+5GZouT9iYE1yxnmIjQ=="],
 

@@ -20,8 +20,14 @@
     "./providers": {
       "default": "./src/providers/index.ts"
     },
+    "./providers/compute": {
+      "default": "./src/providers/compute.ts"
+    },
     "./providers/*": {
-      "default": "./src/providers/*.ts"
+      "default": "./src/providers/*/index.ts"
+    },
+    "./providers/*/*": {
+      "default": "./src/providers/*/*.ts"
     },
     "./utils/*": {
       "default": "./src/utils/*.ts"
@@ -29,8 +35,29 @@
     "./events/*": {
       "default": "./src/events/*.ts"
     },
+    "./service/encryption": {
+      "default": "./src/service/encryption.ts"
+    },
+    "./service/auth/cli/device-code": {
+      "types": "./src/service/auth/cli/device-code.ts",
+      "default": "./src/service/auth/cli/device-code.ts"
+    },
+    "./service/auth/cli/cli-auth": {
+      "types": "./src/service/auth/cli/cli-auth.ts",
+      "default": "./src/service/auth/cli/cli-auth.ts"
+    },
+    "./service/auth/workspace-jwt": {
+      "types": "./src/service/auth/workspace-jwt.ts",
+      "default": "./src/service/auth/workspace-jwt.ts"
+    },
     "./service/*": {
-      "default": "./src/service/*.ts"
+      "default": "./src/service/*/index.ts"
+    },
+    "./service/*/*": {
+      "default": "./src/service/*/*.ts"
+    },
+    "./service/*/*/*": {
+      "default": "./src/service/*/*/*.ts"
     },
     "./client": {
       "default": "./src/client/index.ts"

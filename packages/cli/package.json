@@ -4,10 +4,8 @@
   "description": "Complete suit of gitterm tools in one CLI",
   "keywords": [
     "gitterm",
-    "localtunnel",
     "opencode",
-    "sync",
-    "tunnel"
+    "sync"
   ],
   "homepage": "https://gitterm.dev",
   "license": "MIT",

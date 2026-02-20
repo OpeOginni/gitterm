@@ -278,7 +278,7 @@ export default function ProviderSettingsPage() {
               {field.fieldLabel}
               {field.isRequired && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+            {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
           </div>
           <Input
             id={field.fieldName}
@@ -302,7 +302,7 @@ export default function ProviderSettingsPage() {
               {field.fieldLabel}
               {field.isRequired && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+            {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
           </div>
           <Switch
             id={field.fieldName}
@@ -323,7 +323,7 @@ export default function ProviderSettingsPage() {
               {field.fieldLabel}
               {field.isRequired && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+            {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
           </div>
           <Select
             value={value}
@@ -353,7 +353,7 @@ export default function ProviderSettingsPage() {
             {field.fieldLabel}
             {field.isRequired && <span className="text-destructive">*</span>}
           </Label>
-          {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+          {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
         </div>
         <Input
           id={field.fieldName}
@@ -389,13 +389,17 @@ export default function ProviderSettingsPage() {
           <Button asChild variant="outline">
             <Link href={"/admin/providers" as Route}>Back to Providers</Link>
           </Button>
-          <Button onClick={handleSaveSettings} disabled={!selectedProviderTypeId || isSavingConfig}>
+          <Button
+            onClick={handleSaveSettings}
+            disabled={!selectedProviderTypeId || isSavingConfig}
+            className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+          >
             {isSavingConfig ? "Saving..." : "Save Settings"}
           </Button>
         </div>
       </DashboardHeader>
 
-      <div className="pt-8 space-y-6">
+      <div className="pt-2 space-y-6">
         {isLoadingProvider ? (
           <div className="space-y-4">
             <Skeleton className="h-32 w-full" />
@@ -404,16 +408,17 @@ export default function ProviderSettingsPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="rounded-xl border border-border/60 bg-muted/20 p-5 shadow-sm">
+            {/* Provider Section */}
+            <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Provider</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm font-medium text-white/90">Provider</p>
+                  <p className="text-xs text-white/40">
                     Update the display name and enablement for this provider.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Label className="text-sm text-muted-foreground">Enabled</Label>
+                  <Label className="text-sm text-white/40">Enabled</Label>
                   <Switch checked={provider?.isEnabled} onCheckedChange={handleToggleProvider} />
                 </div>
               </div>
@@ -434,18 +439,19 @@ export default function ProviderSettingsPage() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-border/60 bg-muted/20 p-5 shadow-sm">
+            {/* Credentials & Config Section */}
+            <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Credentials & Config</p>
+                  <p className="text-sm font-medium text-white/90">Credentials & Config</p>
                   <p
                     className={cn(
-                      "text-xs text-muted-foreground",
+                      "text-xs",
                       provider?.providerConfig
                         ? provider.providerConfig.isEnabled
-                          ? "text-green-500"
-                          : "text-gray-600"
-                        : "text-yellow-400"
+                          ? "text-emerald-400"
+                          : "text-white/30"
+                        : "text-amber-400"
                     )}
                   >
                     {provider?.providerConfig
@@ -458,7 +464,7 @@ export default function ProviderSettingsPage() {
               </div>
 
               {!selectedProviderTypeId && (
-                <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/30 p-4 text-sm text-muted-foreground">
+                <div className="mt-4 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-4 text-sm text-white/40">
                   No provider definition found for this entry. Make sure the provider name matches a
                   registered provider type.
                 </div>
@@ -494,15 +500,16 @@ export default function ProviderSettingsPage() {
               )}
             </div>
 
-            <div className="rounded-xl border border-border/60 bg-muted/20 p-5 shadow-sm">
+            {/* Regions Section */}
+            <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Regions</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm font-medium text-white/90">Regions</p>
+                  <p className="text-xs text-white/40">
                     Enable, disable, or add regions for this provider.
                   </p>
                 </div>
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs">
                   {provider?.regions?.length ?? 0} total
                 </Badge>
               </div>
@@ -512,22 +519,27 @@ export default function ProviderSettingsPage() {
                   provider.regions.map((region: any) => (
                     <div
                       key={region.id}
-                      className={`flex items-center justify-between rounded-lg border border-border/60 bg-background/60 px-3 py-2 ${
+                      className={`flex items-center justify-between rounded-xl border border-border bg-white/[0.02] px-4 py-3 ${
                         !region.isEnabled ? "opacity-60" : ""
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <div className="rounded-xl bg-white/[0.04] p-2">
+                          <MapPin className="h-4 w-4 text-white/40" />
+                        </div>
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{region.name}</span>
+                            <span className="text-sm font-medium text-white/90">{region.name}</span>
                             {!region.isEnabled && (
-                              <Badge variant="secondary" className="text-xs">
+                              <Badge
+                                variant="outline"
+                                className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                              >
                                 Disabled
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-white/30">
                             {region.location} • {region.externalRegionIdentifier}
                           </p>
                         </div>
@@ -541,12 +553,12 @@ export default function ProviderSettingsPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No regions configured yet.</p>
+                  <p className="py-12 text-center text-white/30">No regions configured yet.</p>
                 )}
               </div>
 
-              <div className="mt-5 rounded-lg border border-dashed border-border/70 bg-muted/30 p-4">
-                <p className="text-sm font-medium">Add Region</p>
+              <div className="mt-5 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-5">
+                <p className="text-sm font-medium text-white/90">Add Region</p>
                 <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="region-name">Region Name</Label>

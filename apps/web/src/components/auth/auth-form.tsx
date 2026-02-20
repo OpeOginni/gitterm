@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { Loader2 } from "lucide-react";
 import { isEmailAuthEnabled, isGitHubAuthEnabled } from "@gitterm/env/web";
@@ -62,12 +61,11 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
     });
   };
 
-  // If no auth methods are enabled, show error
   if (!emailAuthEnabled && !githubAuthEnabled) {
     return (
-      <div className="flex flex-col items-center space-y-4 w-full max-w-sm">
-        <p className="text-center text-sm text-destructive">
-          No authentication methods are enabled. Please contact the administrator.
+      <div className="flex flex-col items-center space-y-4">
+        <p className="text-center text-sm text-red-400/80">
+          No authentication methods are enabled. Contact the administrator.
         </p>
       </div>
     );
@@ -75,7 +73,7 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
 
   return (
     <div className="flex flex-col items-center space-y-4">
-      {/* GitHub Login (if enabled) */}
+      {/* GitHub Login */}
       {githubAuthEnabled && (
         <>
           <Button
@@ -83,12 +81,16 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
             onClick={handleGitHubAuth}
             disabled={isPending}
             size="lg"
-            className="w-full max-w-sm bg-foreground text-background hover:bg-foreground/90 border border-border"
+            className="w-full bg-white text-primary-foreground hover:bg-white/90"
           >
             {isPending ? (
-              <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+              <Loader2 className="mr-3 h-5 w-5 animate-spin" />
             ) : (
-              <svg viewBox="0 0 1024 1024" fill="none" className="w-5 h-5 mr-3">
+              <svg
+                viewBox="0 0 1024 1024"
+                fill="none"
+                className="mr-3 h-5 w-5"
+              >
                 <path
                   fillRule="evenodd"
                   clipRule="evenodd"
@@ -101,21 +103,28 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
             {isPending ? "Loading..." : "Continue with GitHub"}
           </Button>
           {emailAuthEnabled && (
-            <div className="flex w-full max-w-sm items-center gap-4 py-2">
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground">or</span>
-              <div className="h-px flex-1 bg-border" />
+            <div className="flex w-full items-center gap-4 py-1">
+              <div className="h-px flex-1 bg-white/[0.06]" />
+              <span className="font-mono text-[10px] uppercase tracking-widest text-white/25">
+                or
+              </span>
+              <div className="h-px flex-1 bg-white/[0.06]" />
             </div>
           )}
         </>
       )}
 
-      {/* Email Form (if enabled) */}
+      {/* Email Form */}
       {emailAuthEnabled && (
         <>
-          <form onSubmit={handleEmailAuth} className="w-full max-w-sm space-y-4">
+          <form onSubmit={handleEmailAuth} className="w-full space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <label
+                htmlFor="email"
+                className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30"
+              >
+                Email
+              </label>
               <Input
                 id="email"
                 type="email"
@@ -124,10 +133,16 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isSubmitting}
+                className="border-white/[0.08] bg-white/[0.02] text-white placeholder:text-white/20"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <label
+                htmlFor="password"
+                className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30"
+              >
+                Password
+              </label>
               <Input
                 id="password"
                 type="password"
@@ -137,36 +152,51 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
                 required
                 minLength={8}
                 disabled={isSubmitting}
+                className="border-white/[0.08] bg-white/[0.02] text-white placeholder:text-white/20"
               />
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <p className="text-sm text-red-400/80">{error}</p>
+            )}
 
-            <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : null}
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full bg-primary font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : null}
               Sign In
             </Button>
           </form>
 
-          <button type="button" className="text-sm text-muted-foreground hover:text-foreground">
+          <button
+            type="button"
+            className="text-xs text-white/30 hover:text-white/50"
+          >
             Want to sign up? Contact the administrator.
           </button>
         </>
       )}
 
-      {/* Footer divider and info */}
-      <div className="flex w-full max-w-sm items-center gap-4 py-2">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs text-muted-foreground">Secure authentication</span>
-        <div className="h-px flex-1 bg-border" />
+      {/* Footer */}
+      <div className="flex w-full items-center gap-4 py-1">
+        <div className="h-px flex-1 bg-white/[0.06]" />
+        <span className="font-mono text-[10px] uppercase tracking-widest text-white/20">
+          Secure auth
+        </span>
+        <div className="h-px flex-1 bg-white/[0.06]" />
       </div>
 
-      <p className="text-center text-sm text-muted-foreground max-w-sm">
+      <p className="text-center text-xs text-white/25">
         {githubAuthEnabled && emailAuthEnabled
           ? "Sign in with GitHub or email to access your account."
           : githubAuthEnabled
             ? "We use GitHub for authentication."
-            : "Sign in with your email and password to access your account."}
+            : "Sign in with your email and password."}
       </p>
     </div>
   );

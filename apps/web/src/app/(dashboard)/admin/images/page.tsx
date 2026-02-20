@@ -109,7 +109,7 @@ export default function ImagesPage() {
           </Button>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Image
               </Button>
@@ -137,7 +137,7 @@ export default function ImagesPage() {
                     onChange={(e) => setNewImage({ ...newImage, imageId: e.target.value })}
                     placeholder="e.g., opeoginni/gitterm-opencode:latest"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-white/40">
                     Full Docker image reference including registry and tag
                   </p>
                 </div>
@@ -181,7 +181,7 @@ export default function ImagesPage() {
         </div>
       </DashboardHeader>
 
-      <div className="pt-8 space-y-6">
+      <div className="pt-2 space-y-6">
         {isLoading ? (
           <div className="space-y-2">
             {[...Array(3)].map((_, i) => (
@@ -189,34 +189,43 @@ export default function ImagesPage() {
             ))}
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
             {images?.map((image) => (
               <div
                 key={image.id}
-                className={`flex items-center justify-between py-4 px-4 rounded-lg hover:bg-muted/40 transition-colors group ${!image.isEnabled ? "opacity-60" : ""}`}
+                className={`flex items-center justify-between p-4 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02] ${!image.isEnabled ? "opacity-60" : ""}`}
               >
                 <div className="flex items-center gap-4">
-                  <div className="p-2 rounded-md bg-muted/50">
-                    <Container className="h-5 w-5 text-muted-foreground" />
+                  <div className="rounded-xl bg-white/[0.04] p-2.5">
+                    <Container className="h-5 w-5 text-white/40" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-3">
-                      <span className="font-medium">{image.name}</span>
+                      <span className="font-medium text-white/90">{image.name}</span>
                       {!image.isEnabled && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge
+                          variant="outline"
+                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                        >
                           Disabled
                         </Badge>
                       )}
-                      <Badge variant="outline" className="text-xs">
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs"
+                      >
                         {image.agentType.name}
                       </Badge>
                       {image.agentType.serverOnly && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge
+                          variant="outline"
+                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                        >
                           Server Only
                         </Badge>
                       )}
                     </div>
-                    <code className="text-xs text-muted-foreground mt-0.5 block truncate max-w-md">
+                    <code className="font-mono text-xs text-white/25 mt-0.5 block truncate max-w-md">
                       {image.imageId}
                     </code>
                   </div>
@@ -231,7 +240,7 @@ export default function ImagesPage() {
             ))}
 
             {images?.length === 0 && (
-              <div className="py-12 text-center text-muted-foreground">
+              <div className="py-12 text-center text-white/30">
                 No images configured yet. Add one to get started.
               </div>
             )}

@@ -1,79 +1,60 @@
 const steps = [
   {
     number: "01",
-    title: "Login to GitTerm",
-    description: "Sign in with your GitHub account.",
+    title: "Sign in",
+    description: "Authenticate with GitHub. Your dashboard is ready in seconds.",
   },
   {
     number: "02",
     title: "Create a workspace",
-    description: "Choose your type of workspace Cloud or Local we handle the rest.",
+    description:
+      "Pick a model provider, choose your infra, and connect a repo.",
   },
   {
     number: "03",
-    title: "Start coding",
+    title: "Ship",
     description:
-      "Access your workspace instantly in the browser or attach to your OpenCode Client.",
+      "OpenCode runs in the cloud with persistent state. Resume from any device.",
   },
 ];
 
 export function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="border-t border-border py-20 md:py-32">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="mb-16 text-center">
-          <p className="mb-3 inline-flex items-center rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+    <section id="how-it-works" className="border-t border-white/[0.06] py-24 md:py-32">
+      <div className="mx-auto max-w-[1120px] px-6">
+        <div className="mb-14 text-center">
+          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
             How it works
           </p>
-          <h2 className="mb-4 text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            Launch an OpenCode workspace in minutes
+          <h2 className="mx-auto max-w-lg text-3xl font-bold tracking-tight text-white md:text-4xl">
+            Three steps to a running workspace.
           </h2>
-          <p className="mx-auto max-w-lg text-lg text-muted-foreground">
-            Create a cloud or local setup without Docker or config files. We handle the infra so
-            you can focus on shipping.
-          </p>
         </div>
 
-        <div className="relative">
-          <div className="absolute left-8 right-8 top-7 hidden h-px bg-border md:block" />
-          <div className="grid gap-6 md:grid-cols-3">
-            {steps.map((step) => (
-              <div
-                key={step.number}
-                className="group relative z-10 rounded-2xl border border-border bg-background/70 p-6 shadow-sm backdrop-blur transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg"
-              >
-                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full border border-border bg-secondary font-mono text-lg font-semibold text-primary">
-                  {step.number}
-                </div>
-                <h3 className="mb-2 text-xl font-semibold text-foreground">{step.title}</h3>
-                <p className="text-muted-foreground leading-relaxed">{step.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {steps.map((step, idx) => (
+            <div
+              key={step.number}
+              className="relative rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 transition-colors hover:border-white/[0.12] hover:bg-white/[0.04]"
+            >
+              {/* Step number */}
+              <span className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-primary/10 font-mono text-sm font-bold text-primary">
+                {step.number}
+              </span>
 
-        {/* Local Tunnel Alternative */}
-        <div className="mt-16 rounded-2xl border border-border bg-secondary/70 p-8">
-          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <p className="inline-flex items-center rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Local tunnel
-                </p>
-                <p className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-amber-200">
-                  Beta
-                </p>
-              </div>
-              <h3 className="mb-2 text-xl font-semibold text-foreground">Prefer to run locally?</h3>
-              <p className="max-w-xl text-muted-foreground">
-                Use our CLI to tunnel your local dev server. Get a public gitterm.dev URL without
-                deploying anything.
+              {/* Connector line between cards (desktop only) */}
+              {idx < steps.length - 1 && (
+                <div className="pointer-events-none absolute right-0 top-1/2 hidden h-px w-4 -translate-y-1/2 translate-x-full bg-white/[0.06] md:block" />
+              )}
+
+              <h3 className="mb-2 text-lg font-semibold text-white/90">
+                {step.title}
+              </h3>
+              <p className="text-sm leading-relaxed text-white/45">
+                {step.description}
               </p>
             </div>
-            <div className="rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm">
-              <span className="text-primary">$</span> npx gitterm tunnel --w abc1234 --port 4096
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>

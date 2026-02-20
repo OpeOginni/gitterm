@@ -167,51 +167,6 @@ jobs:
           cache-from: type=gha,scope=listener
           cache-to: type=gha,mode=max,scope=listener
 
-  # Build Tunnel Proxy
-  build-tunnel-proxy:
-    needs: version-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set image name (lowercase)
-        id: image
-        run: |
-          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
-          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Build and push tunnel-proxy
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./apps/tunnel-proxy/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ steps.image.outputs.prefix }}-tunnel-proxy:latest
-            ${{ steps.image.outputs.prefix }}-tunnel-proxy:v${{ needs.version-release.outputs.version }}
-            ${{ steps.image.outputs.prefix }}-tunnel-proxy:${{ steps.image.outputs.short }}
-          cache-from: type=gha,scope=tunnel-proxy
-          cache-to: type=gha,mode=max,scope=tunnel-proxy
-
   # Build Idle Reaper Worker
   build-idle-reaper-worker:
     needs: version-release

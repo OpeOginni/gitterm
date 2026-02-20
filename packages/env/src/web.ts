@@ -18,7 +18,6 @@ const schema = z.object({
   NEXT_PUBLIC_SERVER_URL: optional,
   NEXT_PUBLIC_AUTH_URL: optional,
   NEXT_PUBLIC_LISTENER_URL: optional,
-  NEXT_PUBLIC_TUNNEL_URL: optional,
   NEXT_PUBLIC_GITHUB_APP_NAME: optional,
 });
 
@@ -38,7 +37,6 @@ const rawEnv: Record<string, string | undefined> = {
   NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL,
   NEXT_PUBLIC_AUTH_URL: process.env.NEXT_PUBLIC_AUTH_URL,
   NEXT_PUBLIC_LISTENER_URL: process.env.NEXT_PUBLIC_LISTENER_URL,
-  NEXT_PUBLIC_TUNNEL_URL: process.env.NEXT_PUBLIC_TUNNEL_URL,
   NEXT_PUBLIC_GITHUB_APP_NAME: process.env.NEXT_PUBLIC_GITHUB_APP_NAME,
 };
 

@@ -7,7 +7,7 @@ import env from "@gitterm/env/web";
 // which has server-side database dependencies
 type AuthAdditionalFields = {
   user: {
-    plan: "free" | "tunnel" | "pro";
+    plan: "free" | "pro";
     role: "user" | "admin";
   };
 };
@@ -53,13 +53,13 @@ export const authClient = isBillingEnabled ? createBillingAuthClient() : createS
 /**
  * Checkout slug types
  */
-type CheckoutSlug = "pro" | "tunnel" | "run_pack_50" | "run_pack_100";
+type CheckoutSlug = "pro"| "run_pack_50" | "run_pack_100";
 
 /**
  * Initiate checkout for a subscription plan or run pack
  * Redirects to Polar checkout page
  *
- * @param slug - Product slug ("pro", "tunnel", "run_pack_50", "run_pack_100")
+ * @param slug - Product slug ("pro", "run_pack_50", "run_pack_100")
  *
  * @example
  * await initiateCheckout("pro");

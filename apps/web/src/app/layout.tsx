@@ -15,8 +15,34 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gitterm",
-  description: "Deploy remote development environments in seconds.",
+  title: "GitTerm — Cloud workspaces for OpenCode",
+  description:
+    "Launch OpenCode in seconds. Secure, stateful workspaces accessible from any device.",
+  metadataBase: new URL("https://gitterm.dev"),
+  openGraph: {
+    title: "GitTerm — Cloud workspaces for OpenCode",
+    description:
+      "Launch OpenCode in seconds. Secure, stateful workspaces accessible from any device.",
+    url: "https://gitterm.dev",
+    siteName: "GitTerm",
+    images: [
+      {
+        url: "/og-card/og-card-reduced.jpg",
+        width: 1200,
+        height: 630,
+        alt: "GitTerm — Cloud workspaces for OpenCode",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "GitTerm — Cloud workspaces for OpenCode",
+    description:
+      "Launch OpenCode in seconds. Secure, stateful workspaces accessible from any device.",
+    images: ["/og-card/og-card.png"],
+  },
   manifest: "/favicon_io/site.webmanifest",
   icons: {
     icon: [

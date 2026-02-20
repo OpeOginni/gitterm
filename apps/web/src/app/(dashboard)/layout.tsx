@@ -3,9 +3,9 @@ import { DashboardNav } from "../../components/dashboard/nav";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#09090b] text-white dark landing-grid">
       <DashboardNav />
-      <main className="pt-16">{children}</main>
+      <main className="pt-14">{children}</main>
     </div>
   );
 }

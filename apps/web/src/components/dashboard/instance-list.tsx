@@ -1,9 +1,7 @@
 "use client";
 
 import { trpc, queryClient } from "@/utils/trpc";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Loader2,
   ExternalLink,
@@ -45,7 +43,6 @@ import {
   getWorkspaceUrl,
   getAttachCommand,
   getWorkspaceDisplayUrl,
-  getAgentConnectCommand,
   getWorkspaceOpenPortUrl,
 } from "@/lib/utils";
 import Link from "next/link";
@@ -85,12 +82,12 @@ export function InstanceList() {
 
   if (workspaces.length === 0 && page === 0) {
     return (
-      <div className="flex h-72 flex-col items-center justify-center rounded-xl border-primary/50 border-dashed border bg-card/30 p-8 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 ring-1 ring-accent/20">
-          <Terminal className="h-7 w-7 text-primary" />
+      <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.01] p-8 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03]">
+          <Terminal className="h-7 w-7 text-white/30" />
         </div>
-        <h3 className="mt-5 text-lg font-medium">No active workspaces</h3>
-        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        <h3 className="mt-5 text-lg font-medium text-white/80">No active workspaces</h3>
+        <p className="mt-2 max-w-sm text-sm text-white/35">
           Create a new workspace to get started with your remote development environment.
         </p>
       </div>
@@ -107,8 +104,8 @@ export function InstanceList() {
 
       {/* Pagination */}
       {pagination && totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4 border-t border-border/30">
-          <p className="text-sm text-muted-foreground">
+        <div className="flex items-center justify-between pt-4 border-t border-white/[0.06]">
+          <p className="text-sm text-white/30">
             Showing {pagination.offset + 1} to{" "}
             {Math.min(pagination.offset + workspaces.length, pagination.total)} of{" "}
             {pagination.total} workspaces
@@ -123,7 +120,7 @@ export function InstanceList() {
               <ChevronLeft className="h-4 w-4 mr-1" />
               Previous
             </Button>
-            <span className="text-sm text-muted-foreground px-2">
+            <span className="text-sm text-white/30 px-2">
               Page {page + 1} of {totalPages}
             </span>
             <Button
@@ -227,24 +224,36 @@ function InstanceCard({
     switch (status) {
       case "running":
         return (
-          <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
-            <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-[oklch(0.7_0.15_160)] animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Running
-          </Badge>
+          </span>
         );
       case "pending":
         return (
-          <Badge variant="secondary">
-            <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/50">
+            <Loader2 className="h-3 w-3 animate-spin" />
             Pending
-          </Badge>
+          </span>
         );
       case "stopped":
-        return <Badge variant="secondary">Stopped</Badge>;
+        return (
+          <span className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/40">
+            Stopped
+          </span>
+        );
       case "terminated":
-        return <Badge variant="destructive">Terminated</Badge>;
+        return (
+          <span className="inline-flex items-center rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-0.5 text-[11px] font-medium text-red-400">
+            Terminated
+          </span>
+        );
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return (
+          <span className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/40">
+            {status}
+          </span>
+        );
     }
   };
 
@@ -273,21 +282,9 @@ function InstanceCard({
   const isStopped = workspace.status === "stopped";
   const isPending = workspace.status === "pending";
 
-  // Check if this is a tunnel workspace (runs on user's local machine)
-  const isLocal =
-    providers.find((p) => p.id === workspace.cloudProviderId)?.name.toLowerCase() === "local";
-  const isLocalPending = isPending && isLocal;
-
-  // Generate the connect command for tunnel workspaces only
-  // Pending tunnel workspaces need the gitterm connect command
-  // Running tunnel workspaces can use opencode attach
-  const connectCommand = isLocal
-    ? isPending
-      ? getAgentConnectCommand(workspace.id)
-      : workspace.subdomain
+  const connectCommand =  workspace.subdomain
         ? getAttachCommand(workspace.subdomain, workspace.image.agentType.name)
         : null
-    : null;
 
   // Get the workspace URL for linking
   const workspaceUrl = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
@@ -299,52 +296,6 @@ function InstanceCard({
 
   return (
     <>
-      <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Connect to Local Instance</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Run this command to connect your local server to this tunnel.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-3">
-              <Label className="text-sm font-medium">Run this command to connect:</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={connectCommand || ""}
-                  readOnly
-                  className="font-mono text-sm bg-secondary/50"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (connectCommand) {
-                      navigator.clipboard.writeText(connectCommand);
-                      toast.success("Copied to clipboard");
-                    }
-                  }}
-                >
-                  Copy
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Once connected, your local server will be available at{" "}
-                <span className="font-mono text-foreground">{workspaceDisplayUrl}</span>
-              </p>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={() => setShowConnectDialog(false)}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Done
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <Dialog
         open={showOpenPortDialog}
         onOpenChange={(open) => {
@@ -422,23 +373,19 @@ function InstanceCard({
         </DialogContent>
       </Dialog>
 
-      <Card className="group overflow-hidden border-primary/10 backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 flex flex-col">
-        <CardHeader className="pb-3 px-5 pt-5">
+      <div className="group flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-card transition-all hover:border-white/[0.12]">
+        <div className="px-5 pt-5 pb-3">
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/50 transition-colors">
-                  {isLocal ? (
-                    <Terminal className="h-6 w-6 transition-colors text-primary" />
-                  ) : (
-                    <Box className="h-6 w-6 transition-colors text-primary" />
-                  )}
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.04]">
+                    <Box className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <CardTitle className="text-sm font-semibold truncate">
+                  <span className="text-sm font-semibold text-white/90 truncate">
                     {workspace.name || workspace.subdomain}
-                  </CardTitle>
-                  <span className="text-xs text-muted-foreground truncate">
+                  </span>
+                  <span className="text-xs text-white/30 truncate">
                     {workspace.image.agentType.name}
                   </span>
                 </div>
@@ -446,7 +393,7 @@ function InstanceCard({
               {getStatusBadge(workspace.status)}
             </div>
             {getRepoName() && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0 ml-12">
+              <div className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12">
                 <GitBranch className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate font-mono" title={workspace.repositoryUrl || ""}>
                   {getRepoName()}
@@ -454,9 +401,9 @@ function InstanceCard({
               </div>
             )}
           </div>
-        </CardHeader>
-        <CardContent className="pb-4 px-5 flex-1">
-          <div className="grid gap-2.5 text-xs text-muted-foreground ml-12">
+        </div>
+        <div className="pb-4 px-5 flex-1">
+          <div className="grid gap-2.5 text-xs text-white/35 pl-12">
             <div className="flex items-center gap-2">
               <MapPin className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
@@ -500,7 +447,7 @@ function InstanceCard({
               </div>
             )}
             {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
-              (isRunning && !isLocal)) && (
+              isRunning) && (
               <div className="flex items-start gap-2 mt-0.5 min-w-0">
                 <EthernetPort className="h-3.5 w-3.5 shrink-0 mt-px" />
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -547,7 +494,7 @@ function InstanceCard({
                         </div>
                       );
                     })}
-                  {isRunning && !isLocal && (
+                  {isRunning && (
                     <button
                       type="button"
                       onClick={() => {
@@ -569,21 +516,11 @@ function InstanceCard({
               </div>
             )}
           </div>
-        </CardContent>
-        <CardFooter className="flex gap-2 bg-secondary/30 p-4 border-t border-border/50">
-          {isLocalPending && (
-            <Button
-              size="sm"
-              className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
-              onClick={() => setShowConnectDialog(true)}
-            >
-              <Terminal className="h-3.5 w-3.5" />
-              View Connect Command
-            </Button>
-          )}
+        </div>
+        <div className="flex gap-2 border-t border-white/[0.06] p-4">
           {isRunning &&
             workspaceUrl &&
-            (isLocal || workspace.serverOnly ? (
+            (workspace.serverOnly ? (
               <div className="flex gap-2 flex-1">
                 <Button
                   size="sm"
@@ -645,7 +582,7 @@ function InstanceCard({
             </Button>
           )}
 
-          {(isPending || isRunning) && !isLocalPending && (
+          {(isPending || isRunning) && (
             <Button
               variant="outline"
               size="sm"
@@ -674,8 +611,8 @@ function InstanceCard({
               <Trash2 className="h-4 w-4" />
             )}
           </Button>
-        </CardFooter>
-      </Card>
+        </div>
+      </div>
     </>
   );
 }

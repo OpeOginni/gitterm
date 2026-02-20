@@ -7,7 +7,6 @@ import { workspaceOperationsRouter } from "./workspace/operations";
 import { internalRouter } from "./internal";
 import { githubRouter } from "./github/github";
 import { proxyResolverRouter } from "./proxy";
-import { tunnelRouter } from "./tunnel";
 import { agentRouter } from "./agent";
 import { userRouter } from "./user/user";
 import { deviceRouter } from "./device";
@@ -31,7 +30,6 @@ export const appRouter = router({
   workspace: workspaceRouter,
   internal: internalRouter,
   github: githubRouter,
-  tunnel: tunnelRouter,
   agent: agentRouter,
   device: deviceRouter,
   admin: adminRouter,

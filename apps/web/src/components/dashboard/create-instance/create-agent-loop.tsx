@@ -445,102 +445,100 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
           </>
         )}
 
-        {/* AI Provider & Model */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium">AI Provider</Label>
+        {/* AI Provider */}
+        <div className="grid gap-2">
+          <Label className="text-sm font-medium">AI Provider</Label>
           <Select
             value={selectedProviderId}
             onValueChange={handleProviderChange}
             disabled={isLoadingProviders}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               {isLoadingProviders ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Loading...</span>
-                  </div>
-                ) : (
-                  <SelectValue placeholder="Select provider" />
-                )}
-              </SelectTrigger>
-              <SelectContent>
-                {/* Sort providers: recommended first, then alphabetically */}
-                {[...providers]
-                  .sort((a, b) => {
-                    if (a.isRecommended && !b.isRecommended) return -1;
-                    if (!a.isRecommended && b.isRecommended) return 1;
-                    return a.displayName.localeCompare(b.displayName);
-                  })
-                  .map((p) => (
-                    <SelectItem
-                      key={p.id}
-                      value={p.id}
-                      className={p.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Image
-                          src={getProviderLogo(p.name)}
-                          alt={p.displayName}
-                          width={16}
-                          height={16}
-                          className="h-4 w-4"
-                        />
-                        {p.displayName}
-                        {p.isRecommended && (
-                          <span className="text-xs text-muted-foreground">Recommended</span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium">Model</Label>
+                </div>
+              ) : (
+                <SelectValue placeholder="Select provider" />
+              )}
+            </SelectTrigger>
+            <SelectContent>
+              {[...providers]
+                .sort((a, b) => {
+                  if (a.isRecommended && !b.isRecommended) return -1;
+                  if (!a.isRecommended && b.isRecommended) return 1;
+                  return a.displayName.localeCompare(b.displayName);
+                })
+                .map((p) => (
+                  <SelectItem
+                    key={p.id}
+                    value={p.id}
+                    className={p.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Image
+                        src={getProviderLogo(p.name)}
+                        alt={p.displayName}
+                        width={16}
+                        height={16}
+                        className="h-4 w-4"
+                      />
+                      {p.displayName}
+                      {p.isRecommended && (
+                        <span className="text-xs text-muted-foreground">Recommended</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Model */}
+        <div className="grid gap-2">
+          <Label className="text-sm font-medium">Model</Label>
           <Select
             value={selectedModelId}
             onValueChange={setSelectedModelId}
             disabled={!selectedProviderId || availableModels.length === 0 || isLoadingModels}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               {isLoadingModels ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Loading...</span>
-                  </div>
-                ) : (
-                  <SelectValue placeholder="Select model" />
-                )}
-              </SelectTrigger>
-              <SelectContent>
-                {/* Sort models: recommended first, then alphabetically */}
-                {[...availableModels]
-                  .sort((a, b) => {
-                    if (a.isRecommended && !b.isRecommended) return -1;
-                    if (!a.isRecommended && b.isRecommended) return 1;
-                    return a.displayName.localeCompare(b.displayName);
-                  })
-                  .map((m) => (
-                    <SelectItem
-                      key={m.id}
-                      value={m.id}
-                      className={m.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}
-                    >
-                      <div className="flex items-center gap-2">
-                        {m.displayName}
-                        {m.isRecommended && (
-                          <span className="text-xs text-muted-foreground">Recommended</span>
-                        )}
-                        {m.isFree && (
-                          <span className="text-xs text-primary ml-2 opacity-80">(Free)</span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
+                </div>
+              ) : (
+                <SelectValue placeholder="Select model" />
+              )}
+            </SelectTrigger>
+            <SelectContent>
+              {[...availableModels]
+                .sort((a, b) => {
+                  if (a.isRecommended && !b.isRecommended) return -1;
+                  if (!a.isRecommended && b.isRecommended) return 1;
+                  return a.displayName.localeCompare(b.displayName);
+                })
+                .map((m) => (
+                  <SelectItem
+                    key={m.id}
+                    value={m.id}
+                    className={m.isRecommended ? "border-l-2 border-l-primary rounded-none" : ""}
+                  >
+                    <div className="flex items-center gap-2">
+                      {m.displayName}
+                      {m.isRecommended && (
+                        <span className="text-xs text-muted-foreground">Recommended</span>
+                      )}
+                      {m.isFree && (
+                        <span className="text-xs text-primary ml-2 opacity-80">(Free)</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
           API keys are managed in Settings. You'll need to add one before starting runs.

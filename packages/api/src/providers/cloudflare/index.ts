@@ -1,6 +1,6 @@
 import env from "@gitterm/env/server";
 import type { StartSandboxRunConfig } from "../compute";
-import { getProviderConfigService } from "../../service/provider-config";
+import { getProviderConfigService } from "../../service/config/provider-config";
 
 /**
  * Response from the Cloudflare sandbox worker

@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { runTunnel } from "./cmd/tunnel.js";
 import { loginViaDeviceCode, saveConfig, deleteConfig } from "./cmd/auth.js";
 
 // Default production URLs (hosted gitterm.dev)
@@ -57,60 +56,6 @@ yargs(hideBin(process.argv))
     async () => {
       try {
         await runLogout();
-      } catch (err) {
-        console.error(err instanceof Error ? err.message : err);
-        process.exit(1);
-      }
-    },
-  )
-  .command(
-    "tunnel",
-    "Connect a local port to your workspace",
-    (yargs) => {
-      return yargs
-        .option("workspace-id", {
-          alias: "w",
-          type: "string",
-          description: "Workspace ID",
-          demandOption: true,
-        })
-        .option("port", {
-          alias: "p",
-          type: "number",
-          description: "Local port to expose",
-        })
-        .option("ws-url", {
-          type: "string",
-          description: "Tunnel-proxy WebSocket URL",
-        })
-        .option("server-url", {
-          alias: "s",
-          type: "string",
-          description: "Server base URL",
-          default: DEFAULT_SERVER_URL,
-        })
-        .option("token", {
-          alias: "t",
-          type: "string",
-          description: "Tunnel JWT (overrides saved login)",
-        })
-        .option("expose", {
-          alias: "e",
-          type: "array",
-          string: true,
-          description: "Expose additional service port (name=port)",
-        });
-    },
-    async (argv) => {
-      try {
-        await runTunnel({
-          workspaceId: argv.workspaceId,
-          port: argv.port,
-          wsUrl: argv.wsUrl,
-          serverUrl: argv.serverUrl,
-          token: argv.token,
-          expose: argv.expose,
-        });
       } catch (err) {
         console.error(err instanceof Error ? err.message : err);
         process.exit(1);

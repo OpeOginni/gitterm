@@ -17,7 +17,7 @@ import {
   type NewAgentType,
   type NewImage,
 } from "@gitterm/db/schema/cloud";
-import { getProviderConfigService } from "../../service/provider-config";
+import { getProviderConfigService } from "../../service/config/provider-config";
 import { getAllProviderDefinitions } from "@gitterm/schema";
 import { providerType } from "@gitterm/db/schema/provider-config";
 

@@ -16,11 +16,10 @@
 #
 # Subdomain Format Support:
 # - <port>-<subdomain>.gitterm.dev : Workspace port routing (auto-generated)
-# - Reserved (blocked):             api, tunnel, www, admin, etc.
+# - Reserved (blocked):             api, www, admin, etc.
 #
 # Environment Variables:
 # - SERVER_URL       -> API server URL (e.g., server.railway.internal:8080)
-# - TUNNEL_PROXY_URL -> Tunnel proxy URL (e.g., tunnel.railway.internal:8080)
 # - INTERNAL_API_KEY -> Shared key for internal API calls
 
 # Listen on port 80 for all requests
@@ -33,7 +32,7 @@
 
 	# Block reserved subdomains at the Caddy level (defense in depth)
 	# These should already be blocked at workspace creation, but this provides an extra layer
-	@reserved_subdomain header_regexp subdomain Host ^(api|tunnel)\.gitterm\.dev$
+	@reserved_subdomain header_regexp subdomain Host ^(api|cloud)\.gitterm\.dev$
 	handle @reserved_subdomain {
 		root * /srv/errors
 		rewrite * /unavailable.html
@@ -61,48 +60,8 @@
 			header_up X-Routing-Mode subdomain
 		}
 
-		# Define matchers
-		@local_workspace {
-			header X-Hosting-Type local
-		}
 		@cloud_workspace {
 			header X-Hosting-Type cloud
-		}
-
-		# Local workspaces: route to tunnel-proxy (MUST be first!)
-		# Tunnel-proxy returns HTML error pages directly
-		reverse_proxy @local_workspace {$TUNNEL_PROXY_URL} {
-			# WebSocket support
-			header_up Upgrade {header.Upgrade}
-			header_up Connection {header.Connection}
-			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
-
-			# Standard proxy headers
-			header_up Host {host}
-			header_up X-Real-IP {remote_ip}
-			header_up X-Forwarded-For {remote_ip}
-			header_up X-User-Agent {header.User-Agent}
-			header_up Cookie {header.Cookie}
-			header_up X-Subdomain {header.X-Subdomain}
-			header_up X-Hosting-Type {header.X-Hosting-Type}
-			header_up X-Routing-Mode subdomain
-
-			# Modify CSP header to allow data URIs for WebAssembly
-			header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
-
-			transport http {
-				compression off
-				dial_timeout 10s
-				response_header_timeout 0
-				expect_continue_timeout 0
-				keepalive 2m
-				keepalive_idle_conns 10
-				read_buffer 32768
-				write_buffer 32768
-			}
 		}
 
 		# Cloud workspaces: route to containers using dynamic host/port from headers

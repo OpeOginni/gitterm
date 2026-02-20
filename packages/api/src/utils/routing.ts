@@ -44,14 +44,6 @@ export function getApiUrl(): string {
 }
 
 /**
- * Get tunnel proxy URL for agent connections
- */
-export function getTunnelUrl(): string {
-  if (env.TUNNEL_URL) return env.TUNNEL_URL;
-  return `wss://tunnel.${env.BASE_DOMAIN}`;
-}
-
-/**
  * Construct full domain string for a workspace
  * This is stored in database for subdomain-based access
  *
