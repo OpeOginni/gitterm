@@ -35,7 +35,7 @@ export function MirrorLocalSection() {
           </div>
 
           {/* Right -- config card */}
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+          <div className="min-w-0 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
             <div className="flex items-center justify-between">
               <span className="font-mono text-sm font-semibold text-white/80">
                 opencode.json
@@ -45,7 +45,7 @@ export function MirrorLocalSection() {
               </span>
             </div>
 
-            <pre className="mt-5 overflow-x-auto rounded-xl border border-white/[0.06] bg-[#09090b] p-5 font-mono text-xs leading-relaxed text-white/50 sm:text-sm">
+            <pre className="mt-5 max-w-full overflow-x-auto rounded-xl border border-white/[0.06] bg-[#09090b] p-5 font-mono text-xs leading-relaxed text-white/50 sm:text-sm">
               <code>{`{
   "$schema": "https://opencode.ai/config.json",
   "theme": "tokyonight",
