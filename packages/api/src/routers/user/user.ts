@@ -14,6 +14,7 @@ import { sendAdminMessage } from "../../utils/discord";
 import { closeUsageSession } from "../../utils/metering";
 import { getProviderByCloudProviderId } from "../../providers";
 import { validateAgentConfig } from "@gitterm/schema";
+import { polarClient, isBillingEnabled } from "@gitterm/auth";
 
 export const userRouter = router({
   deleteUser: protectedProcedure.mutation(async ({ ctx }) => {
@@ -91,6 +92,24 @@ export const userRouter = router({
           await closeUsageSession(session.workspaceId, "manual");
         } catch (error) {
           console.error(`Error closing usage session ${session.id}:`, error);
+        }
+      }
+
+      if (isBillingEnabled && polarClient) {
+        try {
+          await polarClient.customers.deleteExternal({ externalId: userId });
+          console.log(`[polar] Deleted customer for user ${userId}`);
+        } catch (error) {
+          const statusCode =
+            typeof error === "object" && error !== null && "statusCode" in error
+              ? Number((error as { statusCode?: number }).statusCode)
+              : undefined;
+
+          if (statusCode === 404) {
+            console.warn(`[polar] No customer found for user ${userId}, skipping delete`);
+          } else {
+            throw error;
+          }
         }
       }
 
