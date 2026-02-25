@@ -71,9 +71,14 @@ function toDisposable(f: () => void): IDisposable {
     return { dispose: f };
 }
 
-function addEventListener(target: EventTarget, type: string, listener: EventListener): IDisposable {
-    target.addEventListener(type, listener);
-    return toDisposable(() => target.removeEventListener(type, listener));
+function addEventListener(
+    target: EventTarget,
+    type: string,
+    listener: EventListener,
+    options?: AddEventListenerOptions
+): IDisposable {
+    target.addEventListener(type, listener, options);
+    return toDisposable(() => target.removeEventListener(type, listener, options));
 }
 
 export class Xterm {
@@ -103,6 +108,8 @@ export class Xterm {
     private closeOnDisconnect = false;
 
     private writeFunc = (data: ArrayBuffer) => this.writeData(new Uint8Array(data));
+
+    private _touchScrollCleanup?: () => void;
 
     constructor(
         private options: XtermOptions,
@@ -167,6 +174,7 @@ export class Xterm {
 
         terminal.open(parent);
         fitAddon.fit();
+        this.initTouchScrolling();
 
         // Use ResizeObserver to automatically fit terminal when container size changes
         // This handles cases like the git header appearing/disappearing
@@ -175,6 +183,136 @@ export class Xterm {
         });
         resizeObserver.observe(parent);
         this.register(toDisposable(() => resizeObserver.disconnect()));
+    }
+
+    @bind
+    private initTouchScrolling() {
+        const termEl = this.terminal.element;
+        const screenEl = termEl?.querySelector('.xterm-screen') as HTMLElement | null;
+        if (!termEl || !screenEl) return;
+
+        this._touchScrollCleanup?.();
+
+        const viewport = termEl.querySelector('.xterm-viewport') as HTMLElement | null;
+
+        let active = false;
+        let lastY = 0;
+        let accumDelta = 0;
+
+        // Compute line height from the screen element and terminal rows
+        const getLineHeight = (): number => {
+            if (screenEl && this.terminal.rows > 0) {
+                return screenEl.clientHeight / this.terminal.rows;
+            }
+            return 20;
+        };
+
+        // Get terminal col/row from a touch event's client coordinates
+        const getTouchCell = (touch: Touch): { col: number; row: number } => {
+            const rect = screenEl.getBoundingClientRect();
+            const style = window.getComputedStyle(screenEl);
+            const padLeft = parseInt(style.paddingLeft) || 0;
+            const padTop = parseInt(style.paddingTop) || 0;
+            const x = touch.clientX - rect.left - padLeft;
+            const y = touch.clientY - rect.top - padTop;
+            const lineHeight = getLineHeight();
+            const cellWidth = screenEl.clientWidth / this.terminal.cols;
+            return {
+                col: Math.max(1, Math.min(this.terminal.cols, Math.floor(x / cellWidth) + 1)),
+                row: Math.max(1, Math.min(this.terminal.rows, Math.floor(y / lineHeight) + 1))
+            };
+        };
+
+        // Check if the viewport has scrollback content (scrollHeight > clientHeight).
+        // If yes, we scroll the viewport (normal scrollback mode).
+        // If no (alternate screen buffer / full-screen TUI), we send mouse wheel
+        // escape sequences so the running application receives scroll events.
+        const hasScrollback = (): boolean => {
+            return !!viewport && viewport.scrollHeight > viewport.clientHeight + 1;
+        };
+
+        // Send SGR mouse wheel escape sequence: \x1b[<code;col;rowM
+        // code 64 = wheel up, code 65 = wheel down
+        const sendWheelSequence = (direction: 'up' | 'down', col: number, row: number) => {
+            const code = direction === 'up' ? 64 : 65;
+            const seq = `\x1b[<${code};${col};${row}M`;
+            this.sendData(seq);
+        };
+
+        let startY = 0;
+        let dragging = false;
+        const DRAG_THRESHOLD = 10; // pixels before we consider it a swipe, not a tap
+
+        const onTouchStart = (e: TouchEvent) => {
+            if (e.touches.length !== 1) return;
+            active = true;
+            dragging = false;
+            startY = e.touches[0].clientY;
+            lastY = startY;
+            accumDelta = 0;
+        };
+
+        const onTouchMove = (e: TouchEvent) => {
+            if (!active || e.touches.length !== 1) return;
+
+            const currentY = e.touches[0].clientY;
+
+            // Only start scrolling after exceeding drag threshold
+            // This lets short taps pass through for keyboard focus
+            if (!dragging) {
+                if (Math.abs(currentY - startY) < DRAG_THRESHOLD) return;
+                dragging = true;
+            }
+
+            const deltaY = lastY - currentY; // positive = finger moved up = scroll down
+            lastY = currentY;
+
+            if (deltaY === 0) return;
+
+            if (hasScrollback()) {
+                viewport!.scrollTop += deltaY;
+            } else {
+                accumDelta += deltaY;
+                const lineHeight = getLineHeight();
+                const lines = Math.trunc(accumDelta / lineHeight);
+
+                if (lines !== 0) {
+                    const cell = getTouchCell(e.touches[0]);
+                    const direction = lines > 0 ? 'down' : 'up';
+                    const count = Math.abs(lines);
+                    for (let i = 0; i < count; i++) {
+                        sendWheelSequence(direction, cell.col, cell.row);
+                    }
+                    accumDelta -= lines * lineHeight;
+                }
+            }
+
+            e.preventDefault();
+        };
+
+        const onTouchEnd = () => {
+            active = false;
+            accumDelta = 0;
+        };
+
+        // Attach directly to screenEl — touch-action: none CSS on .xterm-screen
+        // tells the browser not to handle gestures natively on this element.
+        // touchstart is passive so taps still focus the terminal input/keyboard.
+        // touchmove is non-passive so we can preventDefault to stop browser gestures.
+        screenEl.addEventListener('touchstart', onTouchStart, { passive: true });
+        screenEl.addEventListener('touchmove', onTouchMove, { passive: false });
+        screenEl.addEventListener('touchend', onTouchEnd);
+        screenEl.addEventListener('touchcancel', onTouchEnd);
+
+        const cleanup = () => {
+            screenEl.removeEventListener('touchstart', onTouchStart);
+            screenEl.removeEventListener('touchmove', onTouchMove);
+            screenEl.removeEventListener('touchend', onTouchEnd);
+            screenEl.removeEventListener('touchcancel', onTouchEnd);
+        };
+
+        this._touchScrollCleanup = cleanup;
+        this.register(toDisposable(cleanup));
     }
 
     @bind
