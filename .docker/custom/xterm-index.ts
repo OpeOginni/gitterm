@@ -239,12 +239,16 @@ export class Xterm {
             this.sendData(seq);
         };
 
+        let startY = 0;
+        let dragging = false;
+        const DRAG_THRESHOLD = 10; // pixels before we consider it a swipe, not a tap
+
         const onTouchStart = (e: TouchEvent) => {
-            const target = e.target as HTMLElement;
-            if (!termEl.contains(target)) return;
             if (e.touches.length !== 1) return;
             active = true;
-            lastY = e.touches[0].clientY;
+            dragging = false;
+            startY = e.touches[0].clientY;
+            lastY = startY;
             accumDelta = 0;
         };
 
@@ -252,18 +256,22 @@ export class Xterm {
             if (!active || e.touches.length !== 1) return;
 
             const currentY = e.touches[0].clientY;
+
+            // Only start scrolling after exceeding drag threshold
+            // This lets short taps pass through for keyboard focus
+            if (!dragging) {
+                if (Math.abs(currentY - startY) < DRAG_THRESHOLD) return;
+                dragging = true;
+            }
+
             const deltaY = lastY - currentY; // positive = finger moved up = scroll down
             lastY = currentY;
 
             if (deltaY === 0) return;
 
             if (hasScrollback()) {
-                // Normal scrollback mode: adjust viewport scroll position.
-                // xterm v5 listens to viewport's native 'scroll' event.
                 viewport!.scrollTop += deltaY;
             } else {
-                // Alternate screen buffer (full-screen TUI like opencode/vim/tmux):
-                // Accumulate pixel delta and convert to line-based wheel events.
                 accumDelta += deltaY;
                 const lineHeight = getLineHeight();
                 const lines = Math.trunc(accumDelta / lineHeight);
@@ -287,16 +295,20 @@ export class Xterm {
             accumDelta = 0;
         };
 
-        document.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
-        document.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
-        document.addEventListener('touchend', onTouchEnd, { capture: true });
-        document.addEventListener('touchcancel', onTouchEnd, { capture: true });
+        // Attach directly to screenEl — touch-action: none CSS on .xterm-screen
+        // tells the browser not to handle gestures natively on this element.
+        // touchstart is passive so taps still focus the terminal input/keyboard.
+        // touchmove is non-passive so we can preventDefault to stop browser gestures.
+        screenEl.addEventListener('touchstart', onTouchStart, { passive: true });
+        screenEl.addEventListener('touchmove', onTouchMove, { passive: false });
+        screenEl.addEventListener('touchend', onTouchEnd);
+        screenEl.addEventListener('touchcancel', onTouchEnd);
 
         const cleanup = () => {
-            document.removeEventListener('touchstart', onTouchStart, { capture: true });
-            document.removeEventListener('touchmove', onTouchMove, { capture: true });
-            document.removeEventListener('touchend', onTouchEnd, { capture: true });
-            document.removeEventListener('touchcancel', onTouchEnd, { capture: true });
+            screenEl.removeEventListener('touchstart', onTouchStart);
+            screenEl.removeEventListener('touchmove', onTouchMove);
+            screenEl.removeEventListener('touchend', onTouchEnd);
+            screenEl.removeEventListener('touchcancel', onTouchEnd);
         };
 
         this._touchScrollCleanup = cleanup;
