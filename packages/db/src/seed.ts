@@ -476,8 +476,11 @@ export async function seedDatabase(): Promise<void> {
       where: eq(providerType.name, provider.name),
     });
 
+    let providerTypeId: string;
+
     if (existing) {
       console.log(`[seed]   Provider type "${provider.name}" already exists`);
+      providerTypeId = existing.id;
       providerTypeMap.set(provider.name, existing.id);
     } else {
       const [created] = await db
@@ -492,12 +495,22 @@ export async function seedDatabase(): Promise<void> {
         })
         .returning();
       console.log(`[seed]   Created provider type "${provider.name}"`);
+      providerTypeId = created!.id;
       providerTypeMap.set(provider.name, created!.id);
+    }
 
-      // Seed config fields for this provider type
-      for (const field of provider.fields) {
+    const existingFields = await db.query.providerConfigField.findMany({
+      where: eq(providerConfigField.providerTypeId, providerTypeId),
+    });
+    const existingFieldNames = new Set(existingFields.map((field) => field.fieldName));
+    const missingFields = provider.fields.filter(
+      (field) => !existingFieldNames.has(field.fieldName),
+    );
+
+    if (missingFields.length > 0) {
+      for (const field of missingFields) {
         await db.insert(providerConfigField).values({
-          providerTypeId: created!.id,
+          providerTypeId: providerTypeId,
           fieldName: field.fieldName,
           fieldLabel: field.fieldLabel,
           fieldType: field.fieldType,
@@ -509,7 +522,9 @@ export async function seedDatabase(): Promise<void> {
           sortOrder: field.sortOrder,
         });
       }
-      console.log(`[seed]   Created ${provider.fields.length} config fields for "${provider.name}"`);
+      console.log(
+        `[seed]   Added ${missingFields.length} config fields for "${provider.name}"`,
+      );
     }
   }
 

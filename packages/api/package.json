@@ -5,8 +5,11 @@
     ".": {
       "default": "./src/index.ts"
     },
-    "./context": {
-      "default": "./src/context.ts"
+    "./client": {
+      "default": "./src/client/index.ts"
+    },
+    "./client/internal": {
+      "default": "./src/client/internal.ts"
     },
     "./config": {
       "default": "./src/config/index.ts"
@@ -14,14 +17,14 @@
     "./config/*": {
       "default": "./src/config/*.ts"
     },
-    "./routers/*": {
-      "default": "./src/routers/*.ts"
+    "./context": {
+      "default": "./src/context.ts"
+    },
+    "./events/*": {
+      "default": "./src/events/*.ts"
     },
     "./providers": {
       "default": "./src/providers/index.ts"
-    },
-    "./providers/compute": {
-      "default": "./src/providers/compute.ts"
     },
     "./providers/*": {
       "default": "./src/providers/*/index.ts"
@@ -29,26 +32,11 @@
     "./providers/*/*": {
       "default": "./src/providers/*/*.ts"
     },
-    "./utils/*": {
-      "default": "./src/utils/*.ts"
+    "./providers/compute": {
+      "default": "./src/providers/compute.ts"
     },
-    "./events/*": {
-      "default": "./src/events/*.ts"
-    },
-    "./service/encryption": {
-      "default": "./src/service/encryption.ts"
-    },
-    "./service/auth/cli/device-code": {
-      "types": "./src/service/auth/cli/device-code.ts",
-      "default": "./src/service/auth/cli/device-code.ts"
-    },
-    "./service/auth/cli/cli-auth": {
-      "types": "./src/service/auth/cli/cli-auth.ts",
-      "default": "./src/service/auth/cli/cli-auth.ts"
-    },
-    "./service/auth/workspace-jwt": {
-      "types": "./src/service/auth/workspace-jwt.ts",
-      "default": "./src/service/auth/workspace-jwt.ts"
+    "./routers/*": {
+      "default": "./src/routers/*.ts"
     },
     "./service/*": {
       "default": "./src/service/*/index.ts"
@@ -59,22 +47,37 @@
     "./service/*/*/*": {
       "default": "./src/service/*/*/*.ts"
     },
-    "./client": {
-      "default": "./src/client/index.ts"
+    "./service/auth/cli/cli-auth": {
+      "default": "./src/service/auth/cli/cli-auth.ts",
+      "types": "./src/service/auth/cli/cli-auth.ts"
     },
-    "./client/internal": {
-      "default": "./src/client/internal.ts"
+    "./service/auth/cli/device-code": {
+      "default": "./src/service/auth/cli/device-code.ts",
+      "types": "./src/service/auth/cli/device-code.ts"
+    },
+    "./service/auth/workspace-jwt": {
+      "default": "./src/service/auth/workspace-jwt.ts",
+      "types": "./src/service/auth/workspace-jwt.ts"
+    },
+    "./service/encryption": {
+      "default": "./src/service/encryption.ts"
+    },
+    "./utils/*": {
+      "default": "./src/utils/*.ts"
     }
   },
   "scripts": {
     "codegen": "graphql-codegen --config codegen.ts",
+    "wrangler:cf-typegen": "wrangler types",
     "wrangler:deploy": "wrangler deploy",
     "wrangler:dev": "wrangler dev",
-    "wrangler:start": "wrangler dev",
-    "wrangler:cf-typegen": "wrangler types"
+    "wrangler:start": "wrangler dev"
   },
   "dependencies": {
     "@aws-sdk/client-ec2": "^3.938.0",
+    "@aws-sdk/client-ecs": "^3.995.0",
+    "@aws-sdk/client-efs": "^3.995.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.995.0",
     "@aws-sdk/client-sts": "^3.936.0",
     "@cloudflare/sandbox": "^0.6.10",
     "@cloudflare/workers-types": "^4.20260107.1",
@@ -106,6 +109,7 @@
     "@graphql-codegen/typescript": "^5.0.5",
     "@graphql-codegen/typescript-generic-sdk": "^4.0.2",
     "@graphql-codegen/typescript-operations": "^5.0.5",
+    "@types/aws-lambda": "8.10.160",
     "@types/jsonwebtoken": "^9.0.7"
   },
   "peerDependencies": {

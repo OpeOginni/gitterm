@@ -108,6 +108,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       secretAccessKey: z.string().min(1, "Secret access key is required"),
       region: z.string().min(1, "Region is required"),
       accountId: z.string().optional(),
+      publicIngress: z.boolean().optional(),
     }),
     fields: [
       {
@@ -153,6 +154,15 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
           regex: "^\\d{12}$",
         },
         sortOrder: 4,
+      },
+      {
+        fieldName: "publicIngress",
+        fieldLabel: "Public Ingress",
+        fieldType: "boolean",
+        isRequired: false,
+        isEncrypted: false,
+        defaultValue: "false",
+        sortOrder: 5,
       },
     ],
   },

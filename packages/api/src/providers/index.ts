@@ -1,8 +1,10 @@
 import type { ComputeProvider } from "./compute";
 import { railwayProvider } from "./railway";
+import { awsProvider } from "./aws";
 
 export * from "./compute";
 export { railwayProvider } from "./railway";
+export { awsProvider } from "./aws";
 
 /**
  * All available provider implementations
@@ -11,6 +13,7 @@ export { railwayProvider } from "./railway";
  */
 const availableProviders: Record<string, ComputeProvider> = {
   railway: railwayProvider,
+  aws: awsProvider,
   // Future providers:
   // docker: dockerProvider,
   // kubernetes: kubernetesProvider,
