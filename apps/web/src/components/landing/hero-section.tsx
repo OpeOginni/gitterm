@@ -59,7 +59,7 @@ export function HeroSection() {
             </Button>
           </Link>
           <Link
-            href="https://x.com/BrightOginni/status/2011107736176763131"
+            href="https://x.com/BrightOginni/status/2024206364906512436"
             target="_blank"
           >
             <Button
