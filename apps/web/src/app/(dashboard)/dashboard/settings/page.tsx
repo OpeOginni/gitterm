@@ -10,8 +10,13 @@ import { headers } from "next/headers";
 type UserPlan = "free" | "pro";
 
 export default async function SettingsPage() {
+  const requestHeaders = await headers();
+  const cookie = requestHeaders.get("cookie");
+
   const session = await authClient.getSession({
-    fetchOptions: { headers: await headers() },
+    fetchOptions: {
+      headers: cookie ? { cookie } : {},
+    },
   });
 
   if (!session.data?.user) {

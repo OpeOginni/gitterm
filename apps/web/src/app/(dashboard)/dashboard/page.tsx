@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { cookies } from 'next/headers'
 
 function InstanceListSkeleton() {
   return (
@@ -26,11 +27,15 @@ function InstanceListSkeleton() {
 }
 
 export default async function DashboardPage() {
+  const requestHeaders = await headers();
+  const cookie = requestHeaders.get("cookie");
+
   const session = await authClient.getSession({
-    fetchOptions: { headers: await headers() },
+    fetchOptions: {
+      headers: cookie ? { cookie } : {},
+    },
   });
 
-  console.log(session)
   if (!session.data?.user) {
     redirect("/login");
   }

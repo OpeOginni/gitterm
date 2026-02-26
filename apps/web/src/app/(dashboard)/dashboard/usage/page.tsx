@@ -22,8 +22,13 @@ function HistorySkeleton() {
 }
 
 export default async function UsagePage() {
+  const requestHeaders = await headers();
+  const cookie = requestHeaders.get("cookie");
+
   const session = await authClient.getSession({
-    fetchOptions: { headers: await headers() },
+    fetchOptions: {
+      headers: cookie ? { cookie } : {},
+    },
   });
 
   if (!session.data?.user) {
