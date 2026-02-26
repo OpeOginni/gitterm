@@ -37,13 +37,11 @@ const createStandardAuthClient = () =>
  * Note: We use separate client creation and type assertion due to
  * peer dependency version mismatch between better-auth packages
  */
-const createBillingAuthClient = () => {
-  console.log("authBaseUrl", authBaseUrl)
-  return createAuthClient({
+const createBillingAuthClient = () => createAuthClient({
     baseURL: authBaseUrl,
     plugins: [inferAdditionalFields<AuthAdditionalFields>(), polarClient()],
   });
-}
+
 
 
 // Export the appropriate client based on billing status
