@@ -30,6 +30,7 @@ export default async function DashboardPage() {
     fetchOptions: { headers: await headers() },
   });
 
+  console.log(session)
   if (!session.data?.user) {
     redirect("/login");
   }
