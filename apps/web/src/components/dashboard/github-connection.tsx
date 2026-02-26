@@ -37,7 +37,7 @@ export function GitHubConnection() {
 
   const handleConnect = () => {
     setIsConnecting(true);
-    const redirectUrl = `${env.NEXT_PUBLIC_AUTH_URL}/api/github/callback`;
+    const redirectUrl = `${env.NEXT_PUBLIC_SERVER_URL}/api/github/callback`;
     window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
   };
 
