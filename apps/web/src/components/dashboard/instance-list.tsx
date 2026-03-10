@@ -24,6 +24,7 @@ import {
   EthernetPort,
   X,
   Plus,
+  KeyRound,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
@@ -283,7 +284,7 @@ function InstanceCard({
   const isPending = workspace.status === "pending";
 
   const connectCommand = workspace.subdomain
-    ? getAttachCommand(workspace.subdomain, workspace.image.agentType.name)
+    ? getAttachCommand(workspace.subdomain, workspace.image.agentType.name, workspace.serverPassword)
     : null;
 
   // Get the workspace URL for linking
@@ -447,6 +448,30 @@ function InstanceCard({
                 </button>
               </div>
             )}
+            {workspace.serverOnly && workspace.serverPassword && (
+              <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400/60" />
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span className="text-xs font-mono text-white/40 tracking-widest select-none">
+                    {"*".repeat(16)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (workspace.serverPassword) {
+                        navigator.clipboard.writeText(workspace.serverPassword);
+                        toast.success("Password copied to clipboard!");
+                      }
+                    }}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-400/70 bg-amber-400/[0.06] border border-amber-400/[0.1] hover:bg-amber-400/[0.12] hover:text-amber-400 transition-colors cursor-pointer"
+                    title="Copy server password"
+                  >
+                    <Copy className="h-2.5 w-2.5" />
+                    Copy
+                  </button>
+                </div>
+              </div>
+            )}
             {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
               isRunning) && (
               <div className="flex items-start gap-2 mt-0.5 min-w-0">
@@ -530,6 +555,7 @@ function InstanceCard({
                       const command = getAttachCommand(
                         workspace.subdomain,
                         workspace.image.agentType.name,
+                        workspace.serverPassword,
                       );
                       navigator.clipboard.writeText(command);
                       toast.success("Attach command copied to clipboard!");

@@ -28,7 +28,8 @@ import {
 } from "../../service/github";
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
-import { sendAdminMessage } from "../../utils/discord";
+import { sendWorkspaceCreatedNotification } from "../../utils/discord";
+import { generateAndEncryptPassword, decryptWorkspacePassword } from "../../utils/workspace-password";
 import { getWorkspaceDomain } from "../../utils/routing";
 import { canUseCustomCloudSubdomain, type UserPlan } from "../../config/features";
 import { getProviderConfigService } from "../../service/config/provider-config";
@@ -282,9 +283,29 @@ export const workspaceRouter = router({
           offset,
         });
 
+        // Decrypt server passwords for serverOnly workspaces
+        const workspacesWithDecryptedPasswords = workspaces.map((ws) => {
+          if (ws.serverPassword && ws.serverOnly) {
+            try {
+              return {
+                ...ws,
+                serverPassword: decryptWorkspacePassword(ws.serverPassword),
+              };
+            } catch (error) {
+              console.error(`Failed to decrypt password for workspace ${ws.id}:`, error);
+              // Return without password if decryption fails
+              return {
+                ...ws,
+                serverPassword: null,
+              };
+            }
+          }
+          return ws;
+        });
+
         return {
           success: true,
-          workspaces,
+          workspaces: workspacesWithDecryptedPasswords,
           pagination: {
             total,
             limit,
@@ -1186,6 +1207,16 @@ export const workspaceRouter = router({
           JSON.stringify(OPENCODE_CREDENTIALS),
         ).toString("base64");
 
+        // Generate server password for serverOnly workspaces
+        let serverPassword: string | undefined;
+        let encryptedServerPassword: string | undefined;
+
+        if (agentTypeRecord.serverOnly) {
+          const passwordData = generateAndEncryptPassword();
+          serverPassword = passwordData.password;
+          encryptedServerPassword = passwordData.encryptedPassword;
+        }
+
         const DEFAULT_DOCKER_ENV_VARS = {
           REPO_URL: input.repo || undefined,
           OPENCODE_CONFIG_BASE64: agentConfig
@@ -1197,6 +1228,7 @@ export const workspaceRouter = router({
               ).toString("base64")
             : Buffer.from(JSON.stringify(DEFAULT_OPENCODE_CONFIG)).toString("base64"),
           OPENCODE_CREDENTIALS_BASE64: OPENCODE_CREDENTIALS_BASE64,
+          OPENCODE_SERVER_PASSWORD: serverPassword,
           USER_GITHUB_USERNAME: githubUsername,
           GITHUB_APP_TOKEN: githubAppToken,
           GITHUB_APP_TOKEN_EXPIRY: githubAppTokenExpiry,
@@ -1251,6 +1283,7 @@ export const workspaceRouter = router({
             domain,
             subdomain,
             serverOnly: agentTypeRecord.serverOnly,
+            serverPassword: encryptedServerPassword ?? null,
             upstreamUrl: workspaceInfo.upstreamUrl,
             status: "pending",
             hostingType: isLocal ? "local" : "cloud",
@@ -1302,41 +1335,24 @@ export const workspaceRouter = router({
           workspaceDomain: domain,
         });
 
-        // Format Discord notification with all workspace details
-        const workspaceDetails = [
-          `🚀 **New Workspace Created**`,
-          ``,
-          `**Workspace Info:**`,
-          `• Domain: \`${domain}\``,
-          `• Subdomain: \`${subdomain}\``,
-          `• Workspace ID: \`${workspaceId}\``,
-          `• Status: \`${newWorkspace.status}\``,
-          `• Hosting Type: \`${newWorkspace.hostingType}\``,
-          `• Persistent: ${newWorkspace.persistent ? "✅ Yes" : "❌ No"}`,
-          `• Server Only: ${newWorkspace.serverOnly ? "✅ Yes" : "❌ No"}`,
-          ``,
-          `**User Info:**`,
-          `• Name: \`${fetchedUser.name || "N/A"}\``,
-          `• Email: \`${fetchedUser.email}\``,
-          ``,
-          `**Configuration:**`,
-          `• Agent Type: \`${agentTypeRecord.name}\``,
-          `• Cloud Provider: \`${cloudProviderRecord.name}\``,
-          `• Region: \`${regionRecord.name} (${regionRecord.externalRegionIdentifier})\``,
-          ``,
-        ];
-
-        if (input.repo) {
-          workspaceDetails.push(`**Repository:**`, `• URL: \`${input.repo}\``, ``);
-        }
-
-        workspaceDetails.push(
-          `**Timestamps:**`,
-          `• Created: \`${new Date(workspaceInfo.serviceCreatedAt).toISOString()}\``,
-          `• Upstream URL: \`${newWorkspace.upstreamUrl || "N/A"}\``,
-        );
-
-        sendAdminMessage(workspaceDetails.join("\n"));
+        sendWorkspaceCreatedNotification({
+          domain,
+          subdomain,
+          workspaceId,
+          status: newWorkspace.status,
+          hostingType: newWorkspace.hostingType,
+          persistent: newWorkspace.persistent,
+          serverOnly: newWorkspace.serverOnly,
+          userName: fetchedUser.name,
+          userEmail: fetchedUser.email,
+          agentTypeName: agentTypeRecord.name,
+          cloudProviderName: cloudProviderRecord.name,
+          regionName: regionRecord.name,
+          regionExternalIdentifier: regionRecord.externalRegionIdentifier,
+          repoUrl: input.repo,
+          serviceCreatedAt: workspaceInfo.serviceCreatedAt,
+          upstreamUrl: newWorkspace.upstreamUrl,
+        });
 
         return {
           success: true,

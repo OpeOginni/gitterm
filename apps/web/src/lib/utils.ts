@@ -45,18 +45,23 @@ export function getWorkspaceOpenPortUrl(subdomain: string, port: number): string
 /**
  * Construct the opencode attach command
  */
-export function getAttachCommand(subdomain: string, agentName: string): string {
+export function getAttachCommand(
+  subdomain: string,
+  agentName: string,
+  password?: string | null,
+): string {
   const url = getWorkspaceUrl(subdomain);
+  const passwordFlag = password ? ` --password ${password}` : "";
 
   // TODO: Better agent name detection
   if (agentName.toLocaleLowerCase().includes("opencode")) {
-    return `opencode attach ${url}`;
+    return `opencode attach ${url}${passwordFlag}`;
   }
   if (agentName.toLocaleLowerCase().includes("shuvcode")) {
-    return `shuvcode attach ${url}`;
+    return `shuvcode attach ${url}${passwordFlag}`;
   }
 
-  return `opencode attach ${url}`;
+  return `opencode attach ${url}${passwordFlag}`;
 }
 
 /**

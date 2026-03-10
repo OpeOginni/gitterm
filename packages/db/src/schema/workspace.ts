@@ -68,7 +68,6 @@ export const workspace = pgTable("workspace", {
   hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"), // 'cloud' = cloud-hosted, 'local' = local machine via tunnel
   name: text("name"), // Display name for the workspace
   reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
-  localPort: integer("local_port"), // primary local port for hostingType=local
   exposedPorts:
     jsonb("exposed_ports").$type<
       Record<
@@ -76,9 +75,7 @@ export const workspace = pgTable("workspace", {
         { port: number; name?: string; upstreamUrl?: string; externalPortDomainId?: string }
       >
     >(),
-  tunnelConnectedAt: timestamp("tunnel_connected_at"),
-  tunnelLastPingAt: timestamp("tunnel_last_ping_at"),
-
+  serverPassword: text("server_password"),
   startedAt: timestamp("started_at").notNull(),
   stoppedAt: timestamp("stopped_at"),
   terminatedAt: timestamp("terminated_at"),
