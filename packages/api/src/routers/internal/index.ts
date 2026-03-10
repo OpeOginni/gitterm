@@ -162,8 +162,19 @@ export const internalRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      // Get workspace with related data
-      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
+      // Select only required fields to avoid schema drift issues during rolling deploys
+      const [ws] = await db
+        .select({
+          id: workspace.id,
+          externalInstanceId: workspace.externalInstanceId,
+          externalRunningDeploymentId: workspace.externalRunningDeploymentId,
+          userId: workspace.userId,
+          cloudProviderId: workspace.cloudProviderId,
+          regionId: workspace.regionId,
+          domain: workspace.domain,
+        })
+        .from(workspace)
+        .where(eq(workspace.id, input.workspaceId));
 
       if (!ws) {
         throw new TRPCError({
@@ -239,7 +250,18 @@ export const internalRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
+      const [ws] = await db
+        .select({
+          id: workspace.id,
+          externalInstanceId: workspace.externalInstanceId,
+          userId: workspace.userId,
+          cloudProviderId: workspace.cloudProviderId,
+          regionId: workspace.regionId,
+          persistent: workspace.persistent,
+          domain: workspace.domain,
+        })
+        .from(workspace)
+        .where(eq(workspace.id, input.workspaceId));
 
       if (!ws) {
         throw new TRPCError({
@@ -307,7 +329,17 @@ export const internalRouter = router({
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
     const fourDays = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000); // 4 Days ago
     const longTermInactiveWorkspaces = await db
-      .select()
+      .select({
+        id: workspace.id,
+        externalInstanceId: workspace.externalInstanceId,
+        userId: workspace.userId,
+        regionId: workspace.regionId,
+        cloudProviderId: workspace.cloudProviderId,
+        domain: workspace.domain,
+        status: workspace.status,
+        hostingType: workspace.hostingType,
+        lastActiveAt: workspace.lastActiveAt,
+      })
       .from(workspace)
       .where(
         and(
@@ -647,7 +679,16 @@ export const internalRouter = router({
       }),
     )
     .query(async ({ input }) => {
-      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
+      const [ws] = await db
+        .select({
+          id: workspace.id,
+          userId: workspace.userId,
+          status: workspace.status,
+          updatedAt: workspace.updatedAt,
+          domain: workspace.domain,
+        })
+        .from(workspace)
+        .where(eq(workspace.id, input.workspaceId));
 
       if (!ws) {
         throw new TRPCError({
