@@ -62,9 +62,7 @@ export default function DevicePage() {
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
               <Terminal className="h-7 w-7 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
-              Authorize Device
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Authorize Device</h1>
             <p className="mt-2 text-sm text-white/40">
               Enter the code from your terminal to connect this CLI session.
             </p>
@@ -115,8 +113,8 @@ export default function DevicePage() {
           <div className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
             <Shield className="mt-0.5 h-4 w-4 shrink-0 text-white/30" />
             <p className="text-xs leading-relaxed text-white/35">
-              Only approve devices you personally control. This grants access to
-              your GitTerm workspaces.
+              Only approve devices you personally control. This grants access to your GitTerm
+              workspaces.
             </p>
           </div>
         </div>

@@ -99,7 +99,6 @@ export class GitHubAppService {
     });
   }
 
-
   /**
    * Check if a repository is valid, exists, and can be cloned.
    * - valid: URL parses as a GitHub repo
@@ -119,39 +118,41 @@ export class GitHubAppService {
     }
     const { owner, repo } = parsed;
 
-    if(!options?.userId || !options?.gitIntegrationId) {
+    if (!options?.userId || !options?.gitIntegrationId) {
       // Try unauthenticated (public repos)
       const anonOctokit = new Octokit();
       try {
         await anonOctokit.repos.get({ owner, repo });
         return { valid: true, exists: true, canClone: true };
       } catch (e: unknown) {
-          logger.warn(`checkIfValidRepository: unauthenticated request failed for ${owner}/${repo}`, {
-            action: "check_if_valid_repo",
-          });
-          return { valid: true, exists: false, canClone: false };
+        logger.warn(`checkIfValidRepository: unauthenticated request failed for ${owner}/${repo}`, {
+          action: "check_if_valid_repo",
+        });
+        return { valid: true, exists: false, canClone: false };
         // 404: not found or private — try with user's integration if provided
       }
     }
 
     const [integration] = await db
-    .select()
-    .from(gitIntegration)
-    .where(
-      and(
-        eq(gitIntegration.id, options.gitIntegrationId),
-        eq(gitIntegration.userId, options.userId),
-        eq(gitIntegration.provider, "github"),
-      ),
-    )
-    .limit(1);
-
+      .select()
+      .from(gitIntegration)
+      .where(
+        and(
+          eq(gitIntegration.id, options.gitIntegrationId),
+          eq(gitIntegration.userId, options.userId),
+          eq(gitIntegration.provider, "github"),
+        ),
+      )
+      .limit(1);
 
     if (!integration) {
       return { valid: true, exists: false, canClone: false };
     }
 
-    const installation = await this.getUserInstallation(options.userId, integration.providerInstallationId);
+    const installation = await this.getUserInstallation(
+      options.userId,
+      integration.providerInstallationId,
+    );
 
     if (!installation) {
       return { valid: true, exists: false, canClone: false };
@@ -169,9 +170,13 @@ export class GitHubAppService {
       if (e && typeof e === "object" && "status" in e && (e as { status: number }).status === 403) {
         return { valid: true, exists: true, canClone: false };
       }
-      logger.error(`checkIfValidRepository: auth request failed for ${owner}/${repo}`, {
-        action: "check_if_valid_repo",
-      }, e as Error);
+      logger.error(
+        `checkIfValidRepository: auth request failed for ${owner}/${repo}`,
+        {
+          action: "check_if_valid_repo",
+        },
+        e as Error,
+      );
       return { valid: true, exists: false, canClone: false };
     }
   }

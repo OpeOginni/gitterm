@@ -73,12 +73,11 @@ export class CloudflareSandboxProvider {
     } catch (error) {
       console.warn(
         "[CloudflareProvider] Failed to load config from database, falling back to env vars:",
-        error
+        error,
       );
       return null;
     }
   }
-
 
   /**
    * Check if the Cloudflare sandbox is configured

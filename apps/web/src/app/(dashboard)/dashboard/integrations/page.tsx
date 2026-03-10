@@ -61,9 +61,7 @@ function ComingSoonCards() {
         >
           <div className="mb-3 flex items-center gap-2">
             <item.icon className="h-4 w-4 text-white/30" />
-            <span className="text-sm font-medium text-white/50">
-              {item.name}
-            </span>
+            <span className="text-sm font-medium text-white/50">{item.name}</span>
             <span className="ml-auto rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/30">
               Soon
             </span>

@@ -196,7 +196,7 @@ export function getAllProviderDefinitions(): ProviderDefinition[] {
 
 export function validateProviderConfig(
   providerName: string,
-  config: Record<string, any>
+  config: Record<string, any>,
 ): { success: boolean; data?: any; errors?: string[] } {
   const definition = getProviderDefinition(providerName);
   if (!definition) {

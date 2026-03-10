@@ -12,8 +12,16 @@ query Service($id: String!) {
   }
 }
 
-query GetPrivateNetworkEndpoint($environmentId: String!, $privateNetworkId: String!, $serviceId: String!) {
-  privateNetworkEndpoint(environmentId: $environmentId, privateNetworkId: $privateNetworkId, serviceId: $serviceId) {
+query GetPrivateNetworkEndpoint(
+  $environmentId: String!
+  $privateNetworkId: String!
+  $serviceId: String!
+) {
+  privateNetworkEndpoint(
+    environmentId: $environmentId
+    privateNetworkId: $privateNetworkId
+    serviceId: $serviceId
+  ) {
     dnsName
   }
 }

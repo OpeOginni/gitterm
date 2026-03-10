@@ -30,8 +30,7 @@ export function HeroSection() {
 
         {/* Headline */}
         <h1 className="mx-auto max-w-4xl text-center text-[clamp(2.25rem,5vw,4.5rem)] font-bold leading-[1.08] tracking-tight text-white">
-          Run OpenCode{" "}
-          <span className="text-primary">anywhere.</span>
+          Run OpenCode <span className="text-primary">anywhere.</span>
         </h1>
 
         {/* Sub */}
@@ -58,10 +57,7 @@ export function HeroSection() {
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>
-          <Link
-            href="https://x.com/BrightOginni/status/2024206364906512436"
-            target="_blank"
-          >
+          <Link href="https://x.com/BrightOginni/status/2024206364906512436" target="_blank">
             <Button
               size="lg"
               variant="outline"

@@ -49,9 +49,7 @@ export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelector
               }`}
             >
               {option.type === "cloud" ? (
-                <Cloud
-                  className={`h-5 w-5 ${isSelected ? "text-primary" : "text-white/30"}`}
-                />
+                <Cloud className={`h-5 w-5 ${isSelected ? "text-primary" : "text-white/30"}`} />
               ) : (
                 <Image
                   src="/ralph-wiggum.svg"
@@ -62,9 +60,7 @@ export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelector
                 />
               )}
               <div className="text-left">
-                <p
-                  className={`text-sm font-medium ${isSelected ? "text-white" : "text-white/60"}`}
-                >
+                <p className={`text-sm font-medium ${isSelected ? "text-white" : "text-white/60"}`}>
                   {option.label}
                 </p>
                 <p className="text-xs text-white/30">{option.description}</p>

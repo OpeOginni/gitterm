@@ -110,11 +110,9 @@ export const shouldNotifyDiscord = (): boolean => features.discordNotifications;
  */
 export type UserPlan = "free" | "pro";
 
-
 // ============================================================================
 // Plan Feature Matrix
 // ============================================================================
-
 
 /**
  * Monthly sandbox run quotas by plan

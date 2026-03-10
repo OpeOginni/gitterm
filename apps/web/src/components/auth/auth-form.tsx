@@ -86,11 +86,7 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
             {isPending ? (
               <Loader2 className="mr-3 h-5 w-5 animate-spin" />
             ) : (
-              <svg
-                viewBox="0 0 1024 1024"
-                fill="none"
-                className="mr-3 h-5 w-5"
-              >
+              <svg viewBox="0 0 1024 1024" fill="none" className="mr-3 h-5 w-5">
                 <path
                   fillRule="evenodd"
                   clipRule="evenodd"
@@ -156,9 +152,7 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
               />
             </div>
 
-            {error && (
-              <p className="text-sm text-red-400/80">{error}</p>
-            )}
+            {error && <p className="text-sm text-red-400/80">{error}</p>}
 
             <Button
               type="submit"
@@ -166,17 +160,12 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
               className="w-full bg-primary font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
               disabled={isSubmitting}
             >
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : null}
+              {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
               Sign In
             </Button>
           </form>
 
-          <button
-            type="button"
-            className="text-xs text-white/30 hover:text-white/50"
-          >
+          <button type="button" className="text-xs text-white/30 hover:text-white/50">
             Want to sign up? Contact the administrator.
           </button>
         </>

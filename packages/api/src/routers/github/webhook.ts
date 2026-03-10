@@ -13,7 +13,7 @@ function getWebhooks(): Webhooks {
     const secret = env.GITHUB_WEBHOOK_SECRET;
     if (!secret || secret.trim() === "") {
       throw new Error(
-        "GitHub webhooks are not configured. GITHUB_WEBHOOK_SECRET is required but not set."
+        "GitHub webhooks are not configured. GITHUB_WEBHOOK_SECRET is required but not set.",
       );
     }
     webhooksInstance = new Webhooks({

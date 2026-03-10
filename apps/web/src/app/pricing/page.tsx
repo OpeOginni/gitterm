@@ -3,14 +3,7 @@
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
-import {
-  Check,
-  Terminal,
-  ExternalLink,
-  ArrowRight,
-  Loader2,
-  Package,
-} from "lucide-react";
+import { Check, Terminal, ExternalLink, ArrowRight, Loader2, Package } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
@@ -312,12 +305,7 @@ function PricingPageContent() {
 
   useEffect(() => {
     const planParam = searchParams.get("plan");
-    if (
-      planParam &&
-      planParam === "pro" &&
-      session?.user &&
-      !isLoading
-    ) {
+    if (planParam && planParam === "pro" && session?.user && !isLoading) {
       const triggerCheckout = async () => {
         setIsLoading(true);
         setLoadingPlan(planParam);
@@ -429,12 +417,8 @@ function PricingPageContent() {
               <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
                 Add-ons
               </p>
-              <h2 className="mb-2 text-2xl font-bold text-white">
-                Need more runs?
-              </h2>
-              <p className="text-sm text-white/40">
-                One-time packs. No subscription required.
-              </p>
+              <h2 className="mb-2 text-2xl font-bold text-white">Need more runs?</h2>
+              <p className="text-sm text-white/40">One-time packs. No subscription required.</p>
             </div>
 
             <div className="flex flex-col items-center justify-center gap-5 sm:flex-row">
@@ -450,8 +434,8 @@ function PricingPageContent() {
             </div>
 
             <p className="mt-6 text-center text-xs text-white/30">
-              Pro subscribers get 100 runs/month included ($0.20/run value). Run
-              packs are great for power users who need more.
+              Pro subscribers get 100 runs/month included ($0.20/run value). Run packs are great for
+              power users who need more.
             </p>
           </div>
 

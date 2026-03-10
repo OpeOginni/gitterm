@@ -282,9 +282,9 @@ function InstanceCard({
   const isStopped = workspace.status === "stopped";
   const isPending = workspace.status === "pending";
 
-  const connectCommand =  workspace.subdomain
-        ? getAttachCommand(workspace.subdomain, workspace.image.agentType.name)
-        : null
+  const connectCommand = workspace.subdomain
+    ? getAttachCommand(workspace.subdomain, workspace.image.agentType.name)
+    : null;
 
   // Get the workspace URL for linking
   const workspaceUrl = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
@@ -292,7 +292,8 @@ function InstanceCard({
     ? getWorkspaceDisplayUrl(workspace.subdomain)
     : null;
 
-  const portUrl = (port: number) => workspace.subdomain ? getWorkspaceOpenPortUrl(workspace.subdomain, port) : null;
+  const portUrl = (port: number) =>
+    workspace.subdomain ? getWorkspaceOpenPortUrl(workspace.subdomain, port) : null;
 
   return (
     <>
@@ -379,7 +380,7 @@ function InstanceCard({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.04]">
-                    <Box className="h-5 w-5 text-primary" />
+                  <Box className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-semibold text-white/90 truncate">
@@ -456,13 +457,10 @@ function InstanceCard({
                       const portNum = parseInt(port, 10);
                       const isClosing = closingPort === portNum;
                       return (
-                        <div
-                          key={port}
-                          className="flex items-center gap-1.5 min-w-0"
-                        >
+                        <div key={port} className="flex items-center gap-1.5 min-w-0">
                           <span className="flex items-center gap-1 text-xs min-w-0 truncate">
                             <Link
-                              href={portUrl(portNum) ?? "#" as any}
+                              href={portUrl(portNum) ?? ("#" as any)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="bg-muted px-1.5 py-0.5 rounded font-mono text-primary/90 border border-border hover:bg-primary/10 transition-colors"
@@ -470,7 +468,9 @@ function InstanceCard({
                             >
                               :{port}
                             </Link>
-                            <span className="text-muted-foreground">{exposedPort.name ? `(${exposedPort.name})` : "(Port)"}</span>
+                            <span className="text-muted-foreground">
+                              {exposedPort.name ? `(${exposedPort.name})` : "(Port)"}
+                            </span>
                           </span>
                           <button
                             type="button"
@@ -544,11 +544,7 @@ function InstanceCard({
                   className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
                   asChild
                 >
-                  <a
-                    href={workspaceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
+                  <a href={workspaceUrl} target="_blank" rel="noreferrer">
                     <Monitor className="h-3.5 w-3.5" />
                     Desktop App
                   </a>

@@ -17,11 +17,7 @@ export function CliCommandDisplay({ command, onDone }: CliCommandDisplayProps) {
       <div className="grid gap-3">
         <Label className="text-sm font-medium">Run this command to connect:</Label>
         <div className="flex gap-2">
-          <Input
-            value={command}
-            readOnly
-            className="font-mono text-sm bg-secondary/50"
-          />
+          <Input value={command} readOnly className="font-mono text-sm bg-secondary/50" />
           <Button
             variant="outline"
             onClick={() => {

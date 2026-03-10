@@ -28,7 +28,7 @@ export class RailwayProvider implements ComputeProvider {
     if (!dbConfig) {
       console.error("Railway provider is not configured.");
       throw new Error(
-        "Railway provider is not configured. Please configure it in the admin panel."
+        "Railway provider is not configured. Please configure it in the admin panel.",
       );
     }
     this.config = dbConfig as RailwayConfig;
@@ -39,7 +39,7 @@ export class RailwayProvider implements ComputeProvider {
     const railway = await getRailwayClient();
     if (!railway) {
       throw new Error(
-        "Railway provider is not configured. Please configure it in the admin panel."
+        "Railway provider is not configured. Please configure it in the admin panel.",
       );
     }
     return railway;
@@ -74,7 +74,7 @@ export class RailwayProvider implements ComputeProvider {
     const defaultRegionValue = defaultRegion || "us-east4-eqdc4a";
     const multiRegionConfig =
       defaultRegionValue === config.regionIdentifier
-        ? { [defaultRegionValue]: { numReplicas:1 } }
+        ? { [defaultRegionValue]: { numReplicas: 1 } }
         : {
             [defaultRegionValue]: null,
             [config.regionIdentifier]: { numReplicas: 1 },
@@ -123,36 +123,42 @@ export class RailwayProvider implements ComputeProvider {
 
       publicDomain = `https://${serviceDomainCreate.domain}`;
     } else {
-      const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId })
+      const { privateNetworks } = await railway
+        .GetProjectPrivateNetworkId({ environmentId })
         .catch(async (error) => {
           console.error("Railway API Error (GetProjectPrivateNetworkId):", error);
           await railway.ServiceDelete({ id: serviceCreate.id });
           throw new Error(`Railway API Error (GetProjectPrivateNetworkId): ${error.message}`);
         });
 
-        if (!privateNetworks || privateNetworks.length === 0 || !privateNetworks[0]) {
-          await railway.ServiceDelete({ id: serviceCreate.id });
-          throw new Error("No private network found");
-        }
+      if (!privateNetworks || privateNetworks.length === 0 || !privateNetworks[0]) {
+        await railway.ServiceDelete({ id: serviceCreate.id });
+        throw new Error("No private network found");
+      }
 
-        const privateNetworkId = privateNetworks[0].publicId;
+      const privateNetworkId = privateNetworks[0].publicId;
 
-      const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId, privateNetworkId: privateNetworkId, serviceId: serviceCreate.id })
+      const { privateNetworkEndpoint } = await railway
+        .GetPrivateNetworkEndpoint({
+          environmentId,
+          privateNetworkId: privateNetworkId,
+          serviceId: serviceCreate.id,
+        })
         .catch(async (error) => {
           console.error("Railway API Error (GetPrivateNetworkEndpoint):", error);
           await railway.ServiceDelete({ id: serviceCreate.id });
           throw new Error(`Railway API Error (GetPrivateNetworkEndpoint): ${error.message}`);
         });
 
-        privateDomain = privateNetworkEndpoint?.dnsName ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:7681` : `http://${config.subdomain}.railway.internal:7681`;
+      privateDomain = privateNetworkEndpoint?.dnsName
+        ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:7681`
+        : `http://${config.subdomain}.railway.internal:7681`;
     }
 
     console.log("publicDomain", publicDomain);
     console.log("privateDomain", privateDomain);
 
-    const upstreamUrl = publicRailwayDomains
-      ? publicDomain
-      : privateDomain;
+    const upstreamUrl = publicRailwayDomains ? publicDomain : privateDomain;
 
     const domain = publicRailwayDomains
       ? publicDomain
@@ -269,37 +275,42 @@ export class RailwayProvider implements ComputeProvider {
 
       publicDomain = `https://${serviceDomainCreate.domain}`;
     } else {
-      const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId: environmentId })
+      const { privateNetworks } = await railway
+        .GetProjectPrivateNetworkId({ environmentId: environmentId })
         .catch(async (error) => {
           console.error("Railway API Error (GetProjectPrivateNetworkId):", error);
           await railway.ServiceDelete({ id: serviceCreate.id });
           throw new Error(`Railway API Error (GetProjectPrivateNetworkId): ${error.message}`);
         });
 
-        if (!privateNetworks || privateNetworks.length === 0 || !privateNetworks[0]) {
-          await railway.ServiceDelete({ id: serviceCreate.id });
-          throw new Error("No private network found");
-        }
+      if (!privateNetworks || privateNetworks.length === 0 || !privateNetworks[0]) {
+        await railway.ServiceDelete({ id: serviceCreate.id });
+        throw new Error("No private network found");
+      }
 
-        const privateNetworkId = privateNetworks[0].publicId;
+      const privateNetworkId = privateNetworks[0].publicId;
 
-      const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId: environmentId, privateNetworkId: privateNetworkId, serviceId: serviceCreate.id })
+      const { privateNetworkEndpoint } = await railway
+        .GetPrivateNetworkEndpoint({
+          environmentId: environmentId,
+          privateNetworkId: privateNetworkId,
+          serviceId: serviceCreate.id,
+        })
         .catch(async (error) => {
           console.error("Railway API Error (GetPrivateNetworkEndpoint):", error);
           await railway.ServiceDelete({ id: serviceCreate.id });
           throw new Error(`Railway API Error (GetPrivateNetworkEndpoint): ${error.message}`);
         });
 
-        privateDomain = privateNetworkEndpoint?.dnsName ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:7681` : `http://${config.subdomain}.railway.internal:7681`;
+      privateDomain = privateNetworkEndpoint?.dnsName
+        ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:7681`
+        : `http://${config.subdomain}.railway.internal:7681`;
     }
-
 
     console.log("publicDomain", publicDomain);
     console.log("privateDomain", privateDomain);
 
-    const upstreamUrl = publicRailwayDomains
-      ? publicDomain
-      : privateDomain;
+    const upstreamUrl = publicRailwayDomains ? publicDomain : privateDomain;
 
     const domain = publicRailwayDomains
       ? publicDomain
@@ -397,7 +408,10 @@ export class RailwayProvider implements ComputeProvider {
     return { status: "running" };
   }
 
-  async createOrGetExposedPortDomain(externalServiceId: string, port: number): Promise<{ domain: string, externalPortDomainId?: string }> {
+  async createOrGetExposedPortDomain(
+    externalServiceId: string,
+    port: number,
+  ): Promise<{ domain: string; externalPortDomainId?: string }> {
     const railwayConfig = await this.getConfig();
     const railway = await this.getClient();
     const { environmentId, publicRailwayDomains } = railwayConfig;
@@ -408,20 +422,24 @@ export class RailwayProvider implements ComputeProvider {
 
     if (publicRailwayDomains) {
       const { serviceDomainCreate } = await railway
-      .ServiceDomainCreate({
-        environmentId: environmentId,
-        serviceId: externalServiceId,
-        targetPort: port,
-      })
-      .catch(async (error) => {
-        console.error("Railway API Error (ServiceDomainCreate):", error);
-        throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
-      });
+        .ServiceDomainCreate({
+          environmentId: environmentId,
+          serviceId: externalServiceId,
+          targetPort: port,
+        })
+        .catch(async (error) => {
+          console.error("Railway API Error (ServiceDomainCreate):", error);
+          throw new Error(`Railway API Error (ServiceDomainCreate): ${error.message}`);
+        });
 
-      return { domain: `https://${serviceDomainCreate.domain}`, externalPortDomainId: serviceDomainCreate.id };
+      return {
+        domain: `https://${serviceDomainCreate.domain}`,
+        externalPortDomainId: serviceDomainCreate.id,
+      };
     }
 
-    const { privateNetworks } = await railway.GetProjectPrivateNetworkId({ environmentId: environmentId })
+    const { privateNetworks } = await railway
+      .GetProjectPrivateNetworkId({ environmentId: environmentId })
       .catch(async (error) => {
         console.error("Railway API Error (GetProjectPrivateNetworkId):", error);
         throw new Error(`Railway API Error (GetProjectPrivateNetworkId): ${error.message}`);
@@ -433,14 +451,20 @@ export class RailwayProvider implements ComputeProvider {
 
     const privateNetworkId = privateNetworks[0].publicId;
 
-    const { privateNetworkEndpoint } = await railway.GetPrivateNetworkEndpoint({ environmentId: environmentId, privateNetworkId: privateNetworkId, serviceId: externalServiceId })
+    const { privateNetworkEndpoint } = await railway
+      .GetPrivateNetworkEndpoint({
+        environmentId: environmentId,
+        privateNetworkId: privateNetworkId,
+        serviceId: externalServiceId,
+      })
       .catch(async (error) => {
         console.error("Railway API Error (GetPrivateNetworkEndpoint):", error);
         throw new Error(`Railway API Error (GetPrivateNetworkEndpoint): ${error.message}`);
       });
 
-
-    const domain = privateNetworkEndpoint?.dnsName ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:${port}` : `http://${externalServiceId}.railway.internal:${port}`;
+    const domain = privateNetworkEndpoint?.dnsName
+      ? `http://${privateNetworkEndpoint?.dnsName}.railway.internal:${port}`
+      : `http://${externalServiceId}.railway.internal:${port}`;
 
     return { domain };
   }
@@ -449,10 +473,12 @@ export class RailwayProvider implements ComputeProvider {
     const railwayConfig = await this.getConfig();
     const railway = await this.getClient();
     if (railwayConfig) {
-      await railway.ServiceDomainDelete({ serviceDomainId: externalServiceDomainId }).catch((error) => {
-        console.error("Railway API Error (ServiceDomainDelete):", error);
-        throw new Error(`Railway API Error (ServiceDomainDelete): ${error.message}`);
-      });
+      await railway
+        .ServiceDomainDelete({ serviceDomainId: externalServiceDomainId })
+        .catch((error) => {
+          console.error("Railway API Error (ServiceDomainDelete):", error);
+          throw new Error(`Railway API Error (ServiceDomainDelete): ${error.message}`);
+        });
     }
   }
 }

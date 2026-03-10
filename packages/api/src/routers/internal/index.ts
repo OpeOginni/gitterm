@@ -1,11 +1,12 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
-import { db, eq, and, sql, gt, or } from "@gitterm/db";
+import { db, eq, and, sql, gt, lt, or } from "@gitterm/db";
 import {
   workspace,
   usageSession,
   dailyUsage,
   type SessionStopSource,
+  volume,
 } from "@gitterm/db/schema/workspace";
 import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/integrations";
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
@@ -104,26 +105,11 @@ export const internalRouter = router({
         domain: workspace.domain,
       })
       .from(workspace)
-      .where(
-        and(
-          eq(workspace.status, "running"),
-          eq(workspace.hostingType, "cloud"), // Only check cloud workspaces for idle timeout
-          sql`${workspace.lastActiveAt} < ${idleThreshold}`,
-        ),
-      );
+      .where(and(eq(workspace.status, "running"), lt(workspace.lastActiveAt, idleThreshold)));
 
     return idleWorkspaces;
   }),
 
-  // ============================================================================
-  // TRIAL/FREE TIER ENFORCEMENT - Comment out this procedure for paid plans
-  // ============================================================================
-  /**
-   * Get workspaces that belong to users who have exceeded their daily quota
-   * Used by idle-reaper worker to enforce free tier limits
-   *
-   * NOTE: Comment out this entire procedure when moving to paid plans
-   */
   getQuotaExceededWorkspaces: internalProcedure.query(async () => {
     const today = new Date().toISOString().split("T")[0]!;
 
@@ -144,12 +130,7 @@ export const internalRouter = router({
         dailyUsage,
         and(eq(workspace.userId, dailyUsage.userId), eq(dailyUsage.date, today)),
       )
-      .where(
-        and(
-          eq(workspace.status, "running"),
-          eq(workspace.hostingType, "cloud"), // Only check cloud workspaces
-        ),
-      );
+      .where(and(eq(workspace.status, "running")));
 
     // Filter workspaces where user has exceeded quota
     // If no usage record exists (null), they haven't exceeded (0 minutes used)
@@ -171,8 +152,6 @@ export const internalRouter = router({
       domain: ws.domain,
     }));
   }),
-  // END OF TRIAL ENFORCEMENT PROCEDURE
-  // ============================================================================
 
   // Stop a workspace (for worker)
   stopWorkspaceInternal: internalProcedure
@@ -253,8 +232,80 @@ export const internalRouter = router({
       return { success: true, durationMinutes };
     }),
 
+  terminateWorkspaceInternal: internalProcedure
+    .input(
+      z.object({
+        workspaceId: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
 
+      if (!ws) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      // Get cloud provider
+      const [provider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, ws.cloudProviderId));
+
+      if (!provider) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Cloud provider not found",
+        });
+      }
+
+      // Get region
+      const [workspaceRegion] = await db.select().from(region).where(eq(region.id, ws.regionId));
+
+      if (!workspaceRegion) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Region not found",
+        });
+      }
+
+      const [persistedVolume] = ws.persistent
+        ? await db
+            .select()
+            .from(volume)
+            .where(and(eq(volume.workspaceId, ws.id), eq(volume.userId, ws.userId)))
+        : [];
+
+      const computeProvider = await getProviderByCloudProviderId(provider.name);
+
+      await computeProvider.terminateWorkspace(ws.externalInstanceId, persistedVolume?.id);
+
+      // Update workspace status
+      const now = new Date();
+      await db
+        .update(workspace)
+        .set({
+          status: "terminated",
+          terminatedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(workspace.id, input.workspaceId));
+
+      // Emit status event
+      WORKSPACE_EVENTS.emitStatus({
+        workspaceId: input.workspaceId,
+        status: "terminated",
+        updatedAt: now,
+        userId: ws.userId,
+        workspaceDomain: ws.domain,
+      });
+
+      return { success: true };
+    }),
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
+    const fourDays = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000); // 4 Days ago
     const longTermInactiveWorkspaces = await db
       .select()
       .from(workspace)
@@ -262,7 +313,7 @@ export const internalRouter = router({
         and(
           or(eq(workspace.status, "running"), eq(workspace.status, "stopped")),
           eq(workspace.hostingType, "cloud"),
-          sql`${workspace.lastActiveAt} < ${new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)}`, // 4 days ago
+          lt(workspace.lastActiveAt, fourDays), // 4 days ago
         ),
       );
 

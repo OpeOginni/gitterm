@@ -58,7 +58,7 @@ bun run dev --filter=server
 ```
 
 | Service    | URL                            |
-| ---------- | -------------------------------|
+| ---------- | ------------------------------ |
 | Web App    | http://localhost:8888          |
 | API Server | http://localhost:8888/api      |
 | Listener   | http://localhost:8888/listener |

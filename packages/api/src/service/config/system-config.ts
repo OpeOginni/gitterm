@@ -40,7 +40,7 @@ export const CONFIG_DESCRIPTIONS: Record<
     label: "Idle Timeout",
     description: "Minutes of inactivity before a workspace is automatically stopped",
     min: 5,
-    max: 120,
+    max: 120, // 2 hours
   },
   free_tier_daily_minutes: {
     label: "Free Tier Daily Minutes",

@@ -509,7 +509,9 @@ export async function seedDatabase(): Promise<void> {
           sortOrder: field.sortOrder,
         });
       }
-      console.log(`[seed]   Created ${provider.fields.length} config fields for "${provider.name}"`);
+      console.log(
+        `[seed]   Created ${provider.fields.length} config fields for "${provider.name}"`,
+      );
     }
   }
 

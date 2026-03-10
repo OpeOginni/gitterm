@@ -116,7 +116,6 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
     }
   }, [providers, selectedProviderId, getDefaultProvider]);
 
-
   useEffect(() => {
     if (selectedProviderId && allModels.length > 0 && !selectedModelId) {
       const defaultModel = getDefaultModelForProvider(selectedProviderId);
@@ -321,11 +320,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
           </Link>
         </div>
         <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button
-            variant="outline"
-            onClick={onCancel}
-            className="w-full sm:w-auto"
-          >
+          <Button variant="outline" onClick={onCancel} className="w-full sm:w-auto">
             Cancel
           </Button>
         </DialogFooter>

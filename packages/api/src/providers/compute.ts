@@ -83,7 +83,10 @@ export interface ComputeProvider {
   /**
    * Create or get a domain for an exposed port
    */
-  createOrGetExposedPortDomain(externalServiceId: string, port: number): Promise<{ domain: string, externalPortDomainId?: string }>;
+  createOrGetExposedPortDomain(
+    externalServiceId: string,
+    port: number,
+  ): Promise<{ domain: string; externalPortDomainId?: string }>;
 
   /**
    * Remove a domain for an exposed port

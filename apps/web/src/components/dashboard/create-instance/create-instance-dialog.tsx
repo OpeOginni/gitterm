@@ -74,7 +74,9 @@ export function CreateInstanceDialog() {
       </DialogTrigger>
       <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto p-5 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-white sm:text-xl">Create New Instance</DialogTitle>
+          <DialogTitle className="text-lg font-bold text-white sm:text-xl">
+            Create New Instance
+          </DialogTitle>
           <DialogDescription className="text-white/40">
             {DIALOG_DESCRIPTIONS[workspaceType]}
           </DialogDescription>

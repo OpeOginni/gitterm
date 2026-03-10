@@ -9,8 +9,8 @@ Run Opencode instances your way. Supports multiple cloud providers, and agentic 
 GitTerm gives you flexible ways to run Opencode instances:
 
 1. **Cloud Workspaces** - Spin up cloud-based environments where Opencode runs remotely. Access securely via browser or API.
-    - **Opencode TUI (TTYD)**: use TUI on the web
-    - **Opencode Server**: Get a url that can be attached on any machine with Opencode or Opencode Desktop app
+   - **Opencode TUI (TTYD)**: use TUI on the web
+   - **Opencode Server**: Get a url that can be attached on any machine with Opencode or Opencode Desktop app
 
 2. **Agentic Coding Loops** - Provide a PRD and a branch for Opencode to run in a loop and ship commits without hand-holding.
 
@@ -36,12 +36,11 @@ Set these per provider in the admin panel:
   - Optional: Default Region, Public Railway Domains
   - Deployment Webhook: Connect your proxy url to listen to railway webhooks using the link `https://{caddy-proxy-domain}/listener/trpc/railway.handleWebhook`, and make sure to have these events accepted `Deployment Failed`, `Deployment Deploying`, `Deployment Slept`, `Deployment Deployed`.
 
-
 - **Cloudflare Sandbox**
   - Required: Worker URL, Callback Secret
   - Deploy the worker with Wrangler using `packages/api/src/providers/cloudflare/agent-worker/src/index.ts`
   ```bash
-  cd packages/api 
+  cd packages/api
   bun run wrangler:deploy
   ```
 
@@ -70,15 +69,13 @@ https://ws1234.your-domain.com
 | listener   | Webhooks (GitHub, Railway)    |
 | worker     | Background jobs               |
 
-
 ### Worker Cron Jobs
 
 GitTerm has two background workers that run as cron jobs, only one is needed when self hosting:
 
-| Worker          | Recommended Schedule                | Purpose                                   |
-| --------------- | ----------------------------------- | ----------------------------------------- |
-| **idle-reaper** | Every 10 minutes (`*/10 * * * *`)   | Stops idle workspaces and enforces quotas |
-
+| Worker          | Recommended Schedule              | Purpose                                   |
+| --------------- | --------------------------------- | ----------------------------------------- |
+| **idle-reaper** | Every 10 minutes (`*/10 * * * *`) | Stops idle workspaces and enforces quotas |
 
 **On Railway:** This worker can be adjusted on the dashboard
 

@@ -6,16 +6,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { cookies } from 'next/headers'
+import { cookies } from "next/headers";
 
 function InstanceListSkeleton() {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: 6 }, (_, i) => (
-        <div
-          key={i}
-          className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5"
-        >
+        <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
           <Skeleton className="mb-4 h-5 w-28 bg-white/[0.04]" />
           <Skeleton className="mb-2 h-4 w-full bg-white/[0.04]" />
           <Skeleton className="mb-4 h-4 w-3/4 bg-white/[0.04]" />
@@ -46,7 +43,6 @@ export default async function DashboardPage() {
         heading="Workspaces"
         text="Create and manage your remote development environments."
       >
-        
         <CreateInstanceDialog />
       </DashboardHeader>
       <Suspense fallback={<InstanceListSkeleton />}>

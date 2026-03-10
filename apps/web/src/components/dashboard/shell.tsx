@@ -42,9 +42,7 @@ export function DashboardHeader({
         <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl text-balance">
           {heading}
         </h1>
-        {text ? (
-          <p className="text-sm text-white/40 md:text-base">{text}</p>
-        ) : null}
+        {text ? <p className="text-sm text-white/40 md:text-base">{text}</p> : null}
       </div>
       {children}
     </div>

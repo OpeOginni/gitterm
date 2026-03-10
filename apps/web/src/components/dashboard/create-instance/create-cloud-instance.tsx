@@ -109,8 +109,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       return;
     }
 
-    const normalizedRepoUrl = repoUrl
-      .replace(/\.git$/, "");
+    const normalizedRepoUrl = repoUrl.replace(/\.git$/, "");
 
     await createWorkspace({
       name: repoUrl.split("/").pop() || "new-workspace",
@@ -263,7 +262,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               )}
             </Select>
           </div>
-
         </div>
 
         {/* Region & Git Setup */}
@@ -277,7 +275,9 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             >
               <SelectTrigger>
                 <SelectValue
-                  placeholder={availableRegions.length > 0 ? "Select region" : "No regions available"}
+                  placeholder={
+                    availableRegions.length > 0 ? "Select region" : "No regions available"
+                  }
                 />
               </SelectTrigger>
               <SelectContent>
@@ -367,9 +367,12 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             <div className="flex items-start justify-center gap-2 rounded-md border border-border/40 bg-secondary/20 px-2 py-1.5 text-xs text-muted-foreground">
               <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
               <p>
-                Providers will auto-auth on instance creation via your set credentials. Missing credentials? Add them once
-                in{" "}
-                <Link href={"/dashboard/settings" as Route} className="text-primary hover:underline">
+                Providers will auto-auth on instance creation via your set credentials. Missing
+                credentials? Add them once in{" "}
+                <Link
+                  href={"/dashboard/settings" as Route}
+                  className="text-primary hover:underline"
+                >
                   Settings
                 </Link>
                 .

@@ -99,11 +99,7 @@ export function FeedbackForm() {
                 disabled={isPending}
                 className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
               >
-                {isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  "Submit Feedback"
-                )}
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : "Submit Feedback"}
               </Button>
             </DialogFooter>
           </form>

@@ -95,7 +95,10 @@ export function UsageMetrics() {
         {metrics.map((metric) => {
           const Icon = metric.icon;
           return (
-            <Card key={metric.title} className="overflow-hidden group hover:border-accent/30 transition-colors">
+            <Card
+              key={metric.title}
+              className="overflow-hidden group hover:border-accent/30 transition-colors"
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {metric.title}

@@ -40,7 +40,7 @@ function inferBaseUrlOrigin(): string {
 // Plan Types and Product Mapping
 // ============================================================================
 
-type UserPlan = "free"| "pro";
+type UserPlan = "free" | "pro";
 
 /**
  * Maps Polar product IDs to plan names (for subscriptions)

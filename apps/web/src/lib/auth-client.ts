@@ -37,12 +37,11 @@ const createStandardAuthClient = () =>
  * Note: We use separate client creation and type assertion due to
  * peer dependency version mismatch between better-auth packages
  */
-const createBillingAuthClient = () => createAuthClient({
+const createBillingAuthClient = () =>
+  createAuthClient({
     baseURL: authBaseUrl,
     plugins: [inferAdditionalFields<AuthAdditionalFields>(), polarClient()],
   });
-
-
 
 // Export the appropriate client based on billing status
 export const authClient = isBillingEnabled ? createBillingAuthClient() : createStandardAuthClient();
@@ -54,7 +53,7 @@ export const authClient = isBillingEnabled ? createBillingAuthClient() : createS
 /**
  * Checkout slug types
  */
-type CheckoutSlug = "pro"| "run_pack_50" | "run_pack_100";
+type CheckoutSlug = "pro" | "run_pack_50" | "run_pack_100";
 
 /**
  * Initiate checkout for a subscription plan or run pack

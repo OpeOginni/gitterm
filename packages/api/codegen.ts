@@ -3,9 +3,7 @@ import "dotenv/config";
 
 const config: CodegenConfig = {
   schema: {
-    "https://backboard.railway.app/graphql/v2": {
-
-    },
+    "https://backboard.railway.app/graphql/v2": {},
   },
   documents: ["src/**/*.graphql"],
   generates: {

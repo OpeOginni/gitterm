@@ -9,7 +9,6 @@ import { features } from "@gitterm/api/config";
  * 1. Finds workspaces that have been idle beyond the timeout threshold and stops them
  * 2. Finds workspaces belonging to users who have exhausted their quota and stops them
  *
- * Runs as a Railway cron job every 10 minutes.
  *
  * Feature flags (controlled via environment):
  * - ENABLE_IDLE_REAPING: Controls idle workspace reaping (default: true)

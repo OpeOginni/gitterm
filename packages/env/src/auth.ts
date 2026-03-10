@@ -48,8 +48,7 @@ const env = parseEnv(schema);
 export default env;
 
 export const isManaged = () => env.DEPLOYMENT_MODE === "managed";
-export const isProduction = () =>
-  env.NODE_ENV === "production";
+export const isProduction = () => env.NODE_ENV === "production";
 export const isBillingEnabled = () =>
   (env.ENABLE_BILLING || isManaged()) && !!env.POLAR_ACCESS_TOKEN;
 export const isGitHubAuthEnabled = () => !!env.GITHUB_CLIENT_ID;

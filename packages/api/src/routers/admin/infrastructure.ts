@@ -204,7 +204,8 @@ export const infrastructureRouter = router({
         if (!config || !config.isEnabled) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Provider configuration is disabled or local provider. Enable it before enabling the provider.",
+            message:
+              "Provider configuration is disabled or local provider. Enable it before enabling the provider.",
           });
         }
 
@@ -544,22 +545,28 @@ export const infrastructureRouter = router({
     return config;
   }),
 
-  createProviderConfig: adminProcedure.input(createProviderConfigSchema).mutation(async ({ input }) => {
-    const service = getProviderConfigService();
-    return await service.createProviderConfig(input);
-  }),
+  createProviderConfig: adminProcedure
+    .input(createProviderConfigSchema)
+    .mutation(async ({ input }) => {
+      const service = getProviderConfigService();
+      return await service.createProviderConfig(input);
+    }),
 
-  updateProviderConfig: adminProcedure.input(updateProviderConfigSchema).mutation(async ({ input }) => {
-    const service = getProviderConfigService();
-    const { id, ...updates } = input;
-    return await service.updateProviderConfig(id, updates);
-  }),
+  updateProviderConfig: adminProcedure
+    .input(updateProviderConfigSchema)
+    .mutation(async ({ input }) => {
+      const service = getProviderConfigService();
+      const { id, ...updates } = input;
+      return await service.updateProviderConfig(id, updates);
+    }),
 
-  deleteProviderConfig: adminProcedure.input(z.object({ id: z.uuid() })).mutation(async ({ input }) => {
-    const service = getProviderConfigService();
-    await service.deleteProviderConfig(input.id);
-    return { success: true };
-  }),
+  deleteProviderConfig: adminProcedure
+    .input(z.object({ id: z.uuid() }))
+    .mutation(async ({ input }) => {
+      const service = getProviderConfigService();
+      await service.deleteProviderConfig(input.id);
+      return { success: true };
+    }),
 
   toggleProviderConfig: adminProcedure
     .input(z.object({ id: z.uuid(), isEnabled: z.boolean() }))
@@ -568,10 +575,12 @@ export const infrastructureRouter = router({
       return await service.toggleProviderConfig(input.id, input.isEnabled);
     }),
 
-  getProviderConfigFields: adminProcedure.input(z.object({ providerTypeId: z.uuid() })).query(async ({ input }) => {
-    const service = getProviderConfigService();
-    return await service.getProviderConfigFields(input.providerTypeId);
-  }),
+  getProviderConfigFields: adminProcedure
+    .input(z.object({ providerTypeId: z.uuid() }))
+    .query(async ({ input }) => {
+      const service = getProviderConfigService();
+      return await service.getProviderConfigFields(input.providerTypeId);
+    }),
 
   getProviderDefinitions: adminProcedure.query(async () => {
     return getAllProviderDefinitions();

@@ -37,10 +37,7 @@ export default async function UsagePage() {
 
   return (
     <DashboardShell>
-      <DashboardHeader
-        heading="Usage & Billing"
-        text="Monitor your workspace usage and quota."
-      />
+      <DashboardHeader heading="Usage & Billing" text="Monitor your workspace usage and quota." />
       <div className="mx-auto max-w-4xl space-y-6 pt-2">
         <Suspense fallback={<MetricsSkeleton />}>
           <UsageMetrics />

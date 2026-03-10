@@ -180,7 +180,6 @@ export const workspaceAuthProcedure = t.procedure.use(({ ctx, next }) => {
   }
 });
 
-
 export const cliAuthProcedure = t.procedure.use(({ ctx, next }) => {
   const token = ctx.bearerToken;
 

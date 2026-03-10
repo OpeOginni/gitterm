@@ -8,9 +8,7 @@ export const providerType = pgTable("provider_type", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
   displayName: text("display_name").notNull(),
-  category: text("category")
-    .notNull()
-    .$type<typeof providerCategoryEnum[number]>(),
+  category: text("category").notNull().$type<(typeof providerCategoryEnum)[number]>(),
   configSchema: jsonb("config_schema").notNull(),
   isEnabled: boolean("is_enabled").notNull().default(true),
   isBuiltIn: boolean("is_built_in").notNull().default(true),
@@ -40,9 +38,7 @@ export const providerConfigField = pgTable("provider_config_field", {
     .references(() => providerType.id, { onDelete: "cascade" }),
   fieldName: text("field_name").notNull(),
   fieldLabel: text("field_label").notNull(),
-  fieldType: text("field_type")
-    .notNull()
-    .$type<typeof fieldTypeEnum[number]>(),
+  fieldType: text("field_type").notNull().$type<(typeof fieldTypeEnum)[number]>(),
   isRequired: boolean("is_required").notNull().default(true),
   isEncrypted: boolean("is_encrypted").notNull().default(false),
   defaultValue: text("default_value"),

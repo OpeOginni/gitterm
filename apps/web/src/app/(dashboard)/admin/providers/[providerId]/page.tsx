@@ -285,9 +285,7 @@ export default function ProviderSettingsPage() {
             type="password"
             placeholder={field.fieldLabel}
             value={value}
-            onChange={(e) =>
-              setConfigForm({ ...configForm, [field.fieldName]: e.target.value })
-            }
+            onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
             required={field.isRequired}
           />
         </div>
@@ -308,7 +306,7 @@ export default function ProviderSettingsPage() {
             id={field.fieldName}
             checked={value}
             onCheckedChange={(checked) =>
-              setConfigForm({ ...configForm, [field.fieldName]:checked })
+              setConfigForm({ ...configForm, [field.fieldName]: checked })
             }
           />
         </div>
@@ -327,9 +325,7 @@ export default function ProviderSettingsPage() {
           </div>
           <Select
             value={value}
-            onValueChange={(val) =>
-              setConfigForm({ ...configForm, [field.fieldName]: val })
-            }
+            onValueChange={(val) => setConfigForm({ ...configForm, [field.fieldName]: val })}
           >
             <SelectTrigger>
               <SelectValue placeholder={`Select ${field.fieldLabel}`} />
@@ -360,9 +356,7 @@ export default function ProviderSettingsPage() {
           type={field.fieldType === "number" ? "number" : field.fieldType}
           placeholder={field.fieldLabel}
           value={value}
-          onChange={(e) =>
-            setConfigForm({ ...configForm, [field.fieldName]: e.target.value })
-          }
+          onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
           required={field.isRequired}
         />
       </div>
@@ -451,7 +445,7 @@ export default function ProviderSettingsPage() {
                         ? provider.providerConfig.isEnabled
                           ? "text-emerald-400"
                           : "text-white/30"
-                        : "text-amber-400"
+                        : "text-amber-400",
                     )}
                   >
                     {provider?.providerConfig
@@ -480,7 +474,6 @@ export default function ProviderSettingsPage() {
                     placeholder="e.g., Railway Production"
                   />
                 </div>
-
               </div>
 
               {selectedProviderTypeId && isLoadingFields && (
@@ -509,7 +502,10 @@ export default function ProviderSettingsPage() {
                     Enable, disable, or add regions for this provider.
                   </p>
                 </div>
-                <Badge variant="outline" className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs">
+                <Badge
+                  variant="outline"
+                  className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                >
                   {provider?.regions?.length ?? 0} total
                 </Badge>
               </div>

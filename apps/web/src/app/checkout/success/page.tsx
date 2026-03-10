@@ -37,10 +37,7 @@ function CheckoutSuccessContent() {
       {/* Header */}
       <header className="border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 transition-opacity hover:opacity-70"
-          >
+          <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
             <span className="font-mono text-sm font-bold uppercase tracking-wider text-white/90">
               GitTerm
@@ -64,9 +61,7 @@ function CheckoutSuccessContent() {
 
           {/* Message */}
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">
-              Payment successful.
-            </h1>
+            <h1 className="text-3xl font-bold tracking-tight text-white">Payment successful.</h1>
             <p className="mt-2 text-white/50">
               Your account has been upgraded. You're ready to build.
             </p>
@@ -91,9 +86,7 @@ function CheckoutSuccessContent() {
             </div>
             {checkoutId && (
               <div className="mt-4 border-t border-white/[0.06] pt-3">
-                <span className="font-mono text-[10px] text-white/20">
-                  ID: {checkoutId}
-                </span>
+                <span className="font-mono text-[10px] text-white/20">ID: {checkoutId}</span>
               </div>
             )}
           </div>
@@ -106,17 +99,11 @@ function CheckoutSuccessContent() {
             {[
               "Your plan benefits are now active",
               ...(userPlan === "pro"
-                ? [
-                    "Unlimited cloud runtime is enabled",
-                    "Custom subdomains for all workspaces",
-                  ]
+                ? ["Unlimited cloud runtime is enabled", "Custom subdomains for all workspaces"]
                 : []),
               "Manage your subscription anytime from Settings",
             ].map((item) => (
-              <div
-                key={item}
-                className="flex items-start gap-2.5 text-sm text-white/50"
-              >
+              <div key={item} className="flex items-start gap-2.5 text-sm text-white/50">
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 {item}
               </div>

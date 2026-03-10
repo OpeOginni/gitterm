@@ -325,12 +325,14 @@ export const proxyResolverRouter = async (c: Context) => {
       return htmlError(c, "unavailable", 404);
     }
 
-
     let portUpstream: string | null = null;
     if (extractedPort) {
       portUpstream = ws.exposedPorts?.[extractedPort]?.upstreamUrl ?? null;
       if (!portUpstream) {
-        console.log("[PROXY-RESOLVE] Port upstream URL not found for extracted port:", extractedPort);
+        console.log(
+          "[PROXY-RESOLVE] Port upstream URL not found for extracted port:",
+          extractedPort,
+        );
         return htmlError(c, "unavailable", 404);
       }
     }

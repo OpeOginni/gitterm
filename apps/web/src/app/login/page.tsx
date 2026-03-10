@@ -15,10 +15,7 @@ function LoginContent() {
       {/* Minimal header */}
       <header className="border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 transition-opacity hover:opacity-70"
-          >
+          <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
             <span className="font-mono text-sm font-bold uppercase tracking-wider text-white/90">
               GitTerm
@@ -36,9 +33,7 @@ function LoginContent() {
               <Terminal className="h-7 w-7 text-primary" />
             </div>
             <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight text-white">
-                Sign in to GitTerm
-              </h1>
+              <h1 className="text-2xl font-bold tracking-tight text-white">Sign in to GitTerm</h1>
               <p className="mt-2 text-sm text-white/40">
                 Access your workspaces and start shipping.
               </p>

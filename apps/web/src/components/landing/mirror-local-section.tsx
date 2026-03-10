@@ -14,19 +14,15 @@ export function MirrorLocalSection() {
               Your config. Every workspace.
             </h2>
             <p className="mb-8 text-base leading-relaxed text-white/50 sm:text-lg">
-              Add model provider keys in the dashboard, paste your OpenCode config
-              once, and every new workspace starts with the same tools, theme, and
-              permissions.
+              Add model provider keys in the dashboard, paste your OpenCode config once, and every
+              new workspace starts with the same tools, theme, and permissions.
             </p>
             <div className="space-y-4">
               {[
                 "Authenticate model providers with API keys or OAuth",
                 "Paste once -- reuse the same config across all workspaces",
               ].map((item) => (
-                <div
-                  key={item}
-                  className="flex items-start gap-3 text-sm text-white/55"
-                >
+                <div key={item} className="flex items-start gap-3 text-sm text-white/55">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   {item}
                 </div>
@@ -37,9 +33,7 @@ export function MirrorLocalSection() {
           {/* Right -- config card */}
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
             <div className="flex items-center justify-between">
-              <span className="font-mono text-sm font-semibold text-white/80">
-                opencode.json
-              </span>
+              <span className="font-mono text-sm font-semibold text-white/80">opencode.json</span>
               <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-primary">
                 Synced
               </span>
@@ -55,8 +49,6 @@ export function MirrorLocalSection() {
   }
 }`}</code>
             </pre>
-
-
           </div>
         </div>
       </div>

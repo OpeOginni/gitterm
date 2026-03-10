@@ -17,10 +17,7 @@ export function LandingHeader() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/6 bg-[#09090b]/80 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between px-6">
-        <Link
-          href="/"
-          className="flex items-center gap-2.5 transition-opacity hover:opacity-70"
-        >
+        <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
           <Terminal className="h-5 w-5 text-primary" />
           <span className="font-mono text-sm font-bold tracking-wider uppercase text-white/90">
             GitTerm

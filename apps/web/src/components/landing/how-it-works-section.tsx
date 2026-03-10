@@ -7,14 +7,12 @@ const steps = [
   {
     number: "02",
     title: "Create a workspace",
-    description:
-      "Pick a model provider, choose your infra, and connect a repo.",
+    description: "Pick a model provider, choose your infra, and connect a repo.",
   },
   {
     number: "03",
     title: "Ship",
-    description:
-      "OpenCode runs in the cloud with persistent state. Resume from any device.",
+    description: "OpenCode runs in the cloud with persistent state. Resume from any device.",
   },
 ];
 
@@ -47,12 +45,8 @@ export function HowItWorksSection() {
                 <div className="pointer-events-none absolute right-0 top-1/2 hidden h-px w-4 -translate-y-1/2 translate-x-full bg-white/[0.06] md:block" />
               )}
 
-              <h3 className="mb-2 text-lg font-semibold text-white/90">
-                {step.title}
-              </h3>
-              <p className="text-sm leading-relaxed text-white/45">
-                {step.description}
-              </p>
+              <h3 className="mb-2 text-lg font-semibold text-white/90">{step.title}</h3>
+              <p className="text-sm leading-relaxed text-white/45">{step.description}</p>
             </div>
           ))}
         </div>

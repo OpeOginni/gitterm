@@ -9,5 +9,4 @@ export class CLIAutheService {
     if (!consumed) return null;
     return { cliToken: cliJWT.generateToken({ userId: consumed.userId }) };
   }
-
 }

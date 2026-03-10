@@ -22,7 +22,9 @@ export const cloudAccount = pgTable("cloud_account", {
 export const cloudProvider = pgTable("cloud_provider", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
-  providerConfigId: uuid("provider_config_id").references(() => providerConfig.id, { onDelete: "set null" }),
+  providerConfigId: uuid("provider_config_id").references(() => providerConfig.id, {
+    onDelete: "set null",
+  }),
   isEnabled: boolean("is_enabled").notNull().default(true),
   isSandbox: boolean("is_sandbox").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -308,7 +308,6 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
           </Link>
         </CardFooter>
       </Card>
-
     </div>
   );
 }
@@ -317,7 +316,7 @@ export function RunPacksSection({ currentPlan }: BillingSectionProps) {
   const description =
     currentPlan === "pro"
       ? "Your Pro plan includes 100 runs/month. Purchase additional run packs anytime."
-        : "Purchase run packs for additional runs beyond your 10 free monthly runs.";
+      : "Purchase run packs for additional runs beyond your 10 free monthly runs.";
 
   return (
     <Card>
@@ -331,7 +330,10 @@ export function RunPacksSection({ currentPlan }: BillingSectionProps) {
       <CardContent>
         <div className="grid gap-4 sm:grid-cols-2">
           {RUN_PACKS.map((pack) => (
-            <div key={pack.slug} className="flex items-center justify-between p-4 rounded-lg border border-dashed">
+            <div
+              key={pack.slug}
+              className="flex items-center justify-between p-4 rounded-lg border border-dashed"
+            >
               <div>
                 <p className="font-medium">{pack.runs} Runs</p>
                 <p className="text-sm text-muted-foreground">
@@ -339,7 +341,11 @@ export function RunPacksSection({ currentPlan }: BillingSectionProps) {
                 </p>
               </div>
               <Link href="/pricing">
-                <Button size="sm" variant="outline" className="border-white/80 text-white hover:bg-white/10">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-white/80 text-white hover:bg-white/10"
+                >
                   Buy
                 </Button>
               </Link>

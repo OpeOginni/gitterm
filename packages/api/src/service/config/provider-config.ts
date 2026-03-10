@@ -1,7 +1,7 @@
 import { db, eq, and } from "@gitterm/db";
 import { getEncryptionService } from "../encryption";
 import { providerType, providerConfig } from "@gitterm/db/schema/provider-config";
-import { cloudProvider } from "@gitterm/db/schema/cloud"
+import { cloudProvider } from "@gitterm/db/schema/cloud";
 
 import {
   getProviderDefinition,
@@ -70,7 +70,10 @@ class ProviderConfigService {
     if (!fetchedProviderType) return null;
 
     const config = await db.query.providerConfig.findFirst({
-      where: and(eq(providerConfig.providerTypeId, fetchedProviderType.id), eq(providerConfig.isDefault, true)),
+      where: and(
+        eq(providerConfig.providerTypeId, fetchedProviderType.id),
+        eq(providerConfig.isDefault, true),
+      ),
       with: {
         providerType: true,
       },
@@ -99,7 +102,10 @@ class ProviderConfigService {
       throw new Error(`Invalid config: ${validation.errors?.join(", ")}`);
     }
 
-    const { encrypted, metadata } = this.separateConfigFields(fetchedProviderType.name, input.config);
+    const { encrypted, metadata } = this.separateConfigFields(
+      fetchedProviderType.name,
+      input.config,
+    );
 
     const encryptedCredentials = this.encryption.encrypt(JSON.stringify(encrypted));
 
@@ -116,8 +122,8 @@ class ProviderConfigService {
       })
       .returning();
 
-    if(!newConfig) {
-      throw new Error("Issue with creating new config")
+    if (!newConfig) {
+      throw new Error("Issue with creating new config");
     }
 
     const created = await db.query.providerConfig.findFirst({
@@ -134,7 +140,7 @@ class ProviderConfigService {
 
   async updateProviderConfig(
     id: string,
-    updates: Partial<Omit<ProviderConfigInput, "providerTypeId">>
+    updates: Partial<Omit<ProviderConfigInput, "providerTypeId">>,
   ): Promise<DecryptedProviderConfig> {
     const existing = await db.query.providerConfig.findFirst({
       where: eq(providerConfig.id, id),
@@ -158,7 +164,7 @@ class ProviderConfigService {
 
       const { encrypted, metadata } = this.separateConfigFields(
         existing.providerType.name,
-        updates.config
+        updates.config,
       );
       encryptedCredentials = this.encryption.encrypt(JSON.stringify(encrypted));
       configMetadata = metadata;
@@ -176,8 +182,8 @@ class ProviderConfigService {
       .where(eq(providerConfig.id, id))
       .returning();
 
-    if(!updated) {
-      throw new Error("Issue with updating config")
+    if (!updated) {
+      throw new Error("Issue with updating config");
     }
 
     const config = await db.query.providerConfig.findFirst({
@@ -203,8 +209,8 @@ class ProviderConfigService {
       .where(eq(providerConfig.id, id))
       .returning();
 
-    if(!updated) {
-      throw new Error("Issue with toggling config")
+    if (!updated) {
+      throw new Error("Issue with toggling config");
     }
 
     const config = await db.query.providerConfig.findFirst({
@@ -219,7 +225,10 @@ class ProviderConfigService {
     return this.decryptConfig(config);
   }
 
-  private separateConfigFields(providerName: string, config: Record<string, any>): {
+  private separateConfigFields(
+    providerName: string,
+    config: Record<string, any>,
+  ): {
     encrypted: Record<string, any>;
     metadata: Record<string, any>;
   } {
@@ -246,7 +255,7 @@ class ProviderConfigService {
   }
 
   private decryptConfig(
-    config: any & { providerType: { name: string; displayName: string; category: string } }
+    config: any & { providerType: { name: string; displayName: string; category: string } },
   ): DecryptedProviderConfig {
     const credentials = this.encryption.decrypt(config.encryptedCredentials);
     const decryptedConfig = JSON.parse(credentials);
@@ -277,7 +286,7 @@ class ProviderConfigService {
 
   async linkProviderConfigToCloudProvider(
     providerConfigId: string,
-    cloudProviderId: string
+    cloudProviderId: string,
   ): Promise<void> {
     await db
       .update(cloudProvider)
@@ -313,8 +322,8 @@ class ProviderConfigService {
         isRequired: field.isRequired,
         isEncrypted: field.isEncrypted,
         defaultValue: field.defaultValue ?? undefined,
-        options: field.options as any ?? undefined,
-        validationRules: field.validationRules as any ?? undefined,
+        options: (field.options as any) ?? undefined,
+        validationRules: (field.validationRules as any) ?? undefined,
         sortOrder: field.sortOrder,
       }))
       .sort((a, b) => a.sortOrder - b.sortOrder);

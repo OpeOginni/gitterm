@@ -57,15 +57,11 @@ function StatCell({
 }) {
   return (
     <div className="text-center">
-      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30">
-        {label}
-      </p>
+      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30">{label}</p>
       {isLoading ? (
         <Skeleton className="mx-auto mt-1.5 h-8 w-14 bg-white/[0.04]" />
       ) : (
-        <p className="mt-1 text-2xl font-bold tabular-nums text-white">
-          {value}
-        </p>
+        <p className="mt-1 text-2xl font-bold tabular-nums text-white">{value}</p>
       )}
       <p className="text-xs text-white/30">{sub}</p>
     </div>
@@ -93,11 +89,7 @@ export default function AdminPage() {
     queryFn: () => trpcClient.admin.users.stats.query(),
   });
 
-  if (
-    isSessionPending ||
-    !session?.user ||
-    (session.user as any)?.role !== "admin"
-  ) {
+  if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
     return (
       <DashboardShell>
         <div className="flex h-64 items-center justify-center">

@@ -21,15 +21,16 @@ import {
 } from "../../utils/metering";
 import { getProviderByCloudProviderId, type PersistentWorkspaceInfo } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
-import { getGitHubAppService, isGitHubAppConfigured, parseGitHubRepoUrl } from "../../service/github";
+import {
+  getGitHubAppService,
+  isGitHubAppConfigured,
+  parseGitHubRepoUrl,
+} from "../../service/github";
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { sendAdminMessage } from "../../utils/discord";
 import { getWorkspaceDomain } from "../../utils/routing";
-import {
-  canUseCustomCloudSubdomain,
-  type UserPlan,
-} from "../../config/features";
+import { canUseCustomCloudSubdomain, type UserPlan } from "../../config/features";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-credentials";
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
@@ -59,7 +60,10 @@ function isSubdomainReserved(subdomain: string): boolean {
 }
 
 function normalizeRepoUrl(url: string): string {
-  return url.trim().replace(/\/+$/, "").replace(/\.git\/?$/i, "");
+  return url
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\.git\/?$/i, "");
 }
 
 export const workspaceRouter = router({
@@ -760,7 +764,6 @@ export const workspaceRouter = router({
             message: "Repository URL must be a valid HTTPS Git URL",
           });
         }
-
       }
 
       try {
@@ -954,10 +957,7 @@ export const workspaceRouter = router({
             .select()
             .from(gitIntegration)
             .where(
-              and(
-                eq(gitIntegration.id, input.gitIntegrationId),
-                eq(gitIntegration.userId, userId),
-              ),
+              and(eq(gitIntegration.id, input.gitIntegrationId), eq(gitIntegration.userId, userId)),
             );
 
           if (!gitIntegrationRecord) {
@@ -1003,8 +1003,13 @@ export const workspaceRouter = router({
               });
             }
           } else {
-            const options = input.gitIntegrationId ? { userId: userId, gitIntegrationId: input.gitIntegrationId } : undefined;
-            const repoValidation = await getGitHubAppService().checkIfValidRepository(input.repo, options);
+            const options = input.gitIntegrationId
+              ? { userId: userId, gitIntegrationId: input.gitIntegrationId }
+              : undefined;
+            const repoValidation = await getGitHubAppService().checkIfValidRepository(
+              input.repo,
+              options,
+            );
 
             if (!repoValidation.valid)
               throw new TRPCError({
@@ -1044,11 +1049,11 @@ export const workspaceRouter = router({
             });
           }
 
-            if (!canUseCustomCloudSubdomain(userPlan)) {
-              throw new TRPCError({
-                code: "FORBIDDEN",
-                message: "Custom cloud subdomains require a Pro plan.",
-              });
+          if (!canUseCustomCloudSubdomain(userPlan)) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Custom cloud subdomains require a Pro plan.",
+            });
           }
 
           // Check uniqueness - only among running/pending workspaces
@@ -1125,33 +1130,61 @@ export const workspaceRouter = router({
         };
 
         const credService = getModelCredentialsService();
-        const userCredentials = await db.select().from(userModelCredential).where(eq(userModelCredential.userId, userId)).leftJoin(modelProvider, eq(userModelCredential.providerId, modelProvider.id))
+        const userCredentials = await db
+          .select()
+          .from(userModelCredential)
+          .where(eq(userModelCredential.userId, userId))
+          .leftJoin(modelProvider, eq(userModelCredential.providerId, modelProvider.id));
 
-        const credentialsEntries = (await Promise.all(
-          userCredentials.map(async (cred) => {
-            const decryptedCred = await credService.getUserCredentialForProvider(
-              userId,
-              cred.model_provider?.name as string,
-            );
-            if (!decryptedCred) return null;
-        
-            const providerName =
-              decryptedCred.providerName === "openai-codex" ? "openai" : decryptedCred.providerName;
-        
-            return [providerName, {
-              type: decryptedCred.credential.type === "api_key" ? "api" : "oauth",
-              key: decryptedCred.credential.type === "api_key" ? decryptedCred.credential.apiKey : undefined,
-              refresh: decryptedCred.credential.type === "oauth" ? decryptedCred.credential.refresh : undefined,
-              access: decryptedCred.credential.type === "oauth" ? decryptedCred.credential.access : undefined,
-              expires: decryptedCred.credential.type === "oauth" ? decryptedCred.credential.expires : undefined,
-              accountId: decryptedCred.credential.type === "oauth" ? decryptedCred.credential.accountId : undefined,
-            }];
-          })
-        )).filter((entry): entry is [string, any] => entry !== null) // Type guard
+        const credentialsEntries = (
+          await Promise.all(
+            userCredentials.map(async (cred) => {
+              const decryptedCred = await credService.getUserCredentialForProvider(
+                userId,
+                cred.model_provider?.name as string,
+              );
+              if (!decryptedCred) return null;
+
+              const providerName =
+                decryptedCred.providerName === "openai-codex"
+                  ? "openai"
+                  : decryptedCred.providerName;
+
+              return [
+                providerName,
+                {
+                  type: decryptedCred.credential.type === "api_key" ? "api" : "oauth",
+                  key:
+                    decryptedCred.credential.type === "api_key"
+                      ? decryptedCred.credential.apiKey
+                      : undefined,
+                  refresh:
+                    decryptedCred.credential.type === "oauth"
+                      ? decryptedCred.credential.refresh
+                      : undefined,
+                  access:
+                    decryptedCred.credential.type === "oauth"
+                      ? decryptedCred.credential.access
+                      : undefined,
+                  expires:
+                    decryptedCred.credential.type === "oauth"
+                      ? decryptedCred.credential.expires
+                      : undefined,
+                  accountId:
+                    decryptedCred.credential.type === "oauth"
+                      ? decryptedCred.credential.accountId
+                      : undefined,
+                },
+              ];
+            }),
+          )
+        ).filter((entry): entry is [string, any] => entry !== null); // Type guard
 
         const OPENCODE_CREDENTIALS = Object.fromEntries(credentialsEntries);
 
-        const OPENCODE_CREDENTIALS_BASE64 = Buffer.from(JSON.stringify(OPENCODE_CREDENTIALS)).toString("base64");
+        const OPENCODE_CREDENTIALS_BASE64 = Buffer.from(
+          JSON.stringify(OPENCODE_CREDENTIALS),
+        ).toString("base64");
 
         const DEFAULT_DOCKER_ENV_VARS = {
           REPO_URL: input.repo || undefined,
@@ -1620,7 +1653,7 @@ export const workspaceRouter = router({
       }
 
       const fetchedWorkspace = await db.query.workspace.findFirst({
-        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId))
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
       });
 
       if (!fetchedWorkspace) {
@@ -1638,19 +1671,25 @@ export const workspaceRouter = router({
 
       const computeProvider = await getProviderByCloudProviderId(provider.name);
 
-      const { domain, externalPortDomainId } = await computeProvider.createOrGetExposedPortDomain(fetchedWorkspace.externalInstanceId, input.port);
+      const { domain, externalPortDomainId } = await computeProvider.createOrGetExposedPortDomain(
+        fetchedWorkspace.externalInstanceId,
+        input.port,
+      );
 
-      await db.update(workspace).set({
-        exposedPorts: {
-          ...(fetchedWorkspace.exposedPorts ?? {}),
-          [input.port]: {
-            port: input.port,
-            name: input.name,
-            upstreamUrl: domain,
-            externalPortDomainId,
+      await db
+        .update(workspace)
+        .set({
+          exposedPorts: {
+            ...(fetchedWorkspace.exposedPorts ?? {}),
+            [input.port]: {
+              port: input.port,
+              name: input.name,
+              upstreamUrl: domain,
+              externalPortDomainId,
+            },
           },
-        }
-      }).where(eq(workspace.id, input.workspaceId));
+        })
+        .where(eq(workspace.id, input.workspaceId));
 
       return {
         success: true,
@@ -1668,14 +1707,15 @@ export const workspaceRouter = router({
       }
 
       const fetchedWorkspace = await db.query.workspace.findFirst({
-        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId))
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
       });
 
       if (!fetchedWorkspace) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
       }
 
-      const externalPortDomainId = fetchedWorkspace.exposedPorts?.[input.port]?.externalPortDomainId;
+      const externalPortDomainId =
+        fetchedWorkspace.exposedPorts?.[input.port]?.externalPortDomainId;
       if (externalPortDomainId) {
         const [provider] = await db
           .select()
@@ -1683,19 +1723,25 @@ export const workspaceRouter = router({
           .where(eq(cloudProvider.id, fetchedWorkspace.cloudProviderId));
 
         if (!provider) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Cloud provider not found" });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Cloud provider not found",
+          });
         }
 
         const computeProvider = await getProviderByCloudProviderId(provider.name);
         await computeProvider.removeExposedPortDomain(externalPortDomainId);
       }
-      
-      await db.update(workspace).set({
-        exposedPorts: {
-          ...(fetchedWorkspace.exposedPorts ?? {}),
-          [input.port]: undefined,
-        }
-      }).where(eq(workspace.id, input.workspaceId));
+
+      await db
+        .update(workspace)
+        .set({
+          exposedPorts: {
+            ...(fetchedWorkspace.exposedPorts ?? {}),
+            [input.port]: undefined,
+          },
+        })
+        .where(eq(workspace.id, input.workspaceId));
 
       return {
         success: true,

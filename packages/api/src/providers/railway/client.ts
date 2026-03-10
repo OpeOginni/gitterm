@@ -28,7 +28,7 @@ class RailwayAPIError extends Error {
 }
 
 function createRequester(url: string, token?: string) {
-  const apiToken = token
+  const apiToken = token;
 
   return async <R, V>(doc: string, variables?: V): Promise<R> => {
     if (!apiToken) {
@@ -83,7 +83,9 @@ export type RailwayClient = ReturnType<typeof getSdk>;
 let railwayClient: RailwayClient | null = null;
 
 export async function createRailwayClient(): Promise<RailwayClient | null> {
-  const dbConfig = await getProviderConfigService().getProviderConfigForUse("railway") as RailwayConfig | null;
+  const dbConfig = (await getProviderConfigService().getProviderConfigForUse(
+    "railway",
+  )) as RailwayConfig | null;
   if (!dbConfig) {
     return null;
   }

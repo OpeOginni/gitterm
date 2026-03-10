@@ -145,7 +145,10 @@ export default function SettingsPage() {
         ) : (
           <div className="space-y-4">
             {data?.settings.map((setting: SettingValue) => (
-              <div key={setting.key} className="rounded-2xl border border-border bg-card p-6 space-y-4">
+              <div
+                key={setting.key}
+                className="rounded-2xl border border-border bg-card p-6 space-y-4"
+              >
                 <div className="flex items-start gap-4">
                   <div className="rounded-xl bg-white/[0.04] p-2.5">
                     <Settings className="h-5 w-5 text-white/40" />
