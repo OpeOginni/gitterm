@@ -280,7 +280,7 @@ export const internalRouter = router({
 
       const computeProvider = await getProviderByCloudProviderId(provider.name);
 
-      await computeProvider.terminateWorkspace(ws.externalInstanceId, persistedVolume?.id);
+      await computeProvider.terminateWorkspace(ws.externalInstanceId, persistedVolume?.externalVolumeId);
 
       // Update workspace status
       const now = new Date();
