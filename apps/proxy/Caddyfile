@@ -97,8 +97,10 @@
 				write_buffer 32768
 			}
 
-			# Intercept upstream error responses and show nice error pages
-			@unavailable status 401 403 404 503
+			# Intercept upstream error responses and show nice error pages.
+			# Do NOT intercept 401 so browser can show HTTP auth prompt
+			# for server-only workspaces protected by OPENCODE_SERVER_PASSWORD.
+			@unavailable status 403 404 503
 			handle_response @unavailable {
 				root * /srv/errors
 				rewrite * /unavailable.html

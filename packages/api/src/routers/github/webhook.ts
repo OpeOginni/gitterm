@@ -111,8 +111,6 @@ export const githubWebhookRouter = router({
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-
-        console.error("[GitHub Webhook] Failed to process webhook:", error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to process webhook",

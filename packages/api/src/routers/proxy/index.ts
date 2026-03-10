@@ -376,8 +376,9 @@ export const proxyResolverRouter = async (c: Context) => {
     }
 
     // Validate auth for non-server-only
+    // Use 403 here to avoid colliding with upstream Basic Auth 401 challenges.
     if (!session) {
-      return htmlError(c, "unavailable", 401);
+      return htmlError(c, "unavailable", 403);
     }
 
     if (ws.userId !== session.user?.id) {
