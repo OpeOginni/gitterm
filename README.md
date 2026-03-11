@@ -25,6 +25,22 @@ The fastest way to deploy your own GitTerm instance:
 3. If you'd like subdomain division of workspaces give your `Caddy Proxy` a wildcard domain `*.your-domain.com`.
 4. Configure provider credentials in the admin panel (required for workspaces).
 
+### GitHub Integration (Optional)
+
+GitHub integration lets users connect their GitHub account so their GitTerm instances can access allowed repositories (including private repos) and perform git actions like clone, fork, commit, and push.
+
+To enable it, set these env vars on the **server** service:
+
+- `GITHUB_APP_ID`
+- `GITHUB_APP_PRIVATE_KEY`
+
+Set both or neither. If they are missing, GitHub integration is disabled.
+
+GitHub App configuration:
+
+- **Callback URL:** `https://<api-url>/api/github/callback`
+- **Webhook URL:** `https://<listener-service-url>/trpc/github.handleInstallationWebhook`
+
 Provider configuration is driven by `packages/schema/src/provider-registry.ts`. Admins must add the required fields for each provider before users can create workspaces. Current providers include Railway, AWS, and Cloudflare Sandbox, with more cloud and sandbox providers coming soon.
 
 ### Provider Configuration (Admin Panel)

@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)

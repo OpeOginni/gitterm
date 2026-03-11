@@ -35,6 +35,11 @@ import { canUseCustomCloudSubdomain, type UserPlan } from "../../config/features
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-credentials";
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
+import {
+  createDefaultWorkspaceToolingManifest,
+  detectWorkspaceToolingManifestFromPaths,
+  encodeWorkspaceToolingManifestBase64,
+} from "../../utils/workspace-tooling";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -65,6 +70,33 @@ function normalizeRepoUrl(url: string): string {
     .trim()
     .replace(/\/+$/, "")
     .replace(/\.git\/?$/i, "");
+}
+
+async function buildWorkspaceToolingManifestBase64(params: {
+  owner?: string;
+  repo?: string;
+  installationId?: string;
+}): Promise<string> {
+  const fallback = createDefaultWorkspaceToolingManifest(params.owner, params.repo);
+
+  if (!params.owner || !params.repo || !params.installationId) {
+    return encodeWorkspaceToolingManifestBase64(fallback);
+  }
+
+  try {
+    const tree = await getGitHubAppService().getFileTree(
+      params.installationId,
+      params.owner,
+      params.repo,
+    );
+    const filePaths = tree.filter((item) => item.type === "blob").map((item) => item.path);
+    const manifest = detectWorkspaceToolingManifestFromPaths(filePaths, params.owner, params.repo);
+    console.log(manifest)
+    return encodeWorkspaceToolingManifestBase64(manifest);
+  } catch (error) {
+    console.error("Failed to build tooling manifest from repository tree:", error);
+    return encodeWorkspaceToolingManifestBase64(fallback);
+  }
 }
 
 export const workspaceRouter = router({
@@ -963,9 +995,11 @@ export const workspaceRouter = router({
 
         const githubUsername = userRecord?.name;
 
-        // Get GitHub App installation and generate token
+        // Validate git integration / repo access first, then generate token if needed
         let githubAppToken: string | undefined;
         let githubAppTokenExpiry: string | undefined;
+        let githubInstallationId: string | undefined;
+        let selectedGitIntegration: typeof gitIntegration.$inferSelect | undefined;
 
         if (input.gitIntegrationId) {
           if (!isGitHubAppConfigured()) {
@@ -995,23 +1029,7 @@ export const workspaceRouter = router({
               message: "Invalid git provider",
             });
           }
-
-          const installation = await getGitHubAppService().getUserInstallation(
-            userId,
-            gitIntegrationRecord.providerInstallationId,
-          );
-          if (installation && !installation.suspended) {
-            try {
-              const tokenData = await getGitHubAppService().getUserToServerToken(
-                installation.installationId,
-              );
-              githubAppToken = tokenData.token;
-              githubAppTokenExpiry = tokenData.expiresAt;
-            } catch (error) {
-              console.error("Failed to generate GitHub App token:", error);
-              // Continue without token - user can still use workspace without git operations
-            }
-          }
+          selectedGitIntegration = gitIntegrationRecord;
         }
 
         if (input.repo) {
@@ -1024,9 +1042,16 @@ export const workspaceRouter = router({
               });
             }
           } else {
-            const options = input.gitIntegrationId
-              ? { userId: userId, gitIntegrationId: input.gitIntegrationId }
+            const [userExistingGithubAppInstallation] = await db
+              .select()
+              .from(githubAppInstallation)
+              .where(eq(githubAppInstallation.userId, userId))
+              .limit(1);
+
+            const options = selectedGitIntegration
+              ? { userId: userId, gitIntegrationId: selectedGitIntegration.id }
               : undefined;
+
             const repoValidation = await getGitHubAppService().checkIfValidRepository(
               input.repo,
               options,
@@ -1038,17 +1063,50 @@ export const workspaceRouter = router({
                 message: "Invalid repository URL",
               });
 
-            if (!repoValidation.exists)
+            if (!repoValidation.exists) {
+              if (!selectedGitIntegration && userExistingGithubAppInstallation) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message:
+                    "Can't access repository. Configure Repository Access to use private repos (connect one in Integrations if needed).",
+                });
+              }
+
               throw new TRPCError({
                 code: "BAD_REQUEST",
                 message: "Can't access repository, check URL or github integration",
               });
+            }
 
             if (!repoValidation.canClone)
               throw new TRPCError({
                 code: "BAD_REQUEST",
                 message: "Can't clone repository, check github integration",
               });
+          }
+        }
+
+        if (selectedGitIntegration) {
+          const installation = await getGitHubAppService().getUserInstallation(
+            userId,
+            selectedGitIntegration.providerInstallationId,
+          );
+
+          if (installation && !installation.suspended) {
+            const repoName = parseGitHubRepoUrl(input.repo || "")?.repo;
+
+            githubInstallationId = installation.installationId;
+            try {
+              const tokenData = await getGitHubAppService().getUserToServerToken(
+                installation.installationId,
+                repoName ? [repoName] : undefined,
+              );
+              githubAppToken = tokenData.token;
+              githubAppTokenExpiry = tokenData.expiresAt;
+            } catch (error) {
+              console.error("Failed to generate GitHub App token:", error);
+              // Continue without token - user can still use workspace without git operations
+            }
           }
         }
 
@@ -1207,6 +1265,12 @@ export const workspaceRouter = router({
           JSON.stringify(OPENCODE_CREDENTIALS),
         ).toString("base64");
 
+        const WORKSPACE_TOOLING_MANIFEST_BASE64 = await buildWorkspaceToolingManifestBase64({
+          owner: repoInfo?.owner,
+          repo: repoInfo?.repo,
+          installationId: githubInstallationId,
+        });
+
         // Generate server password for serverOnly workspaces
         let serverPassword: string | undefined;
         let encryptedServerPassword: string | undefined;
@@ -1232,6 +1296,7 @@ export const workspaceRouter = router({
           USER_GITHUB_USERNAME: githubUsername,
           GITHUB_APP_TOKEN: githubAppToken,
           GITHUB_APP_TOKEN_EXPIRY: githubAppTokenExpiry,
+          WORKSPACE_TOOLING_MANIFEST_BASE64: WORKSPACE_TOOLING_MANIFEST_BASE64,
           REPO_OWNER: repoInfo?.owner,
           REPO_NAME: repoInfo?.repo,
           WORKSPACE_ID: workspaceId,

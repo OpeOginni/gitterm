@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogFooter } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -264,7 +265,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </div>
         </div>
 
-        {/* Region & Git Setup */}
+        {/* Region & Repository Access */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="grid gap-2">
             <Label className="text-sm font-medium">Region</Label>
@@ -301,7 +302,22 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
           <div className="grid gap-2">
             <Label className="text-sm font-medium flex items-center gap-1">
-              Git Setup
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cursor-help decoration-dotted underline-offset-4 hover:underline">
+                    Repository Access
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  className="max-w-sm border-border/90 bg-popover/95 ring-1 ring-border/70 shadow-xl"
+                >
+                  Select an integration to access private repositories and enable git actions like
+                  commit, push, and fork from your instance.
+                </TooltipContent>
+              </Tooltip>
               <Link href="/dashboard/integrations" className="text-primary hover:text-primary/80">
                 <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
@@ -315,14 +331,14 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 <SelectValue
                   placeholder={
                     integrations && integrations.length > 0
-                      ? "Select git integration"
-                      : "No git integrations found"
+                      ? "Select repository access"
+                      : "No integrations found"
                   }
                 />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">
-                  <div className="flex items-center">None</div>
+                  <div className="flex items-center">None (public repos only)</div>
                 </SelectItem>
                 {integrations?.map((installation) => (
                   <SelectItem

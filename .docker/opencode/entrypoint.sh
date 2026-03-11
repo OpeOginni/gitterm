@@ -136,6 +136,21 @@ fi
 REPO_NAME=$(cat .repo_name)
 REPO_OWNER=$(cat .repo_owner 2>/dev/null || echo "")
 REPO_DIR="/workspace/$REPO_NAME"
+TOOLING_MANIFEST_JSON=""
+TOOLING_MANIFEST_ENABLED=""
+
+if [ -n "$WORKSPACE_TOOLING_MANIFEST_BASE64" ]; then
+    if TOOLING_MANIFEST_JSON=$(printf '%s' "$WORKSPACE_TOOLING_MANIFEST_BASE64" | base64 -d 2>/dev/null); then
+        if printf '%s' "$TOOLING_MANIFEST_JSON" | grep -q '"version":1'; then
+            TOOLING_MANIFEST_ENABLED=1
+            echo "Applying server tooling manifest..."
+        else
+            echo "⚠ Unsupported tooling manifest version - falling back to repo detection"
+        fi
+    else
+        echo "⚠ Invalid tooling manifest payload - falling back to repo detection"
+    fi
+fi
 
 ########################################
 # LANGUAGE TOOLING SETUP
@@ -177,6 +192,10 @@ if [ -d "$REPO_DIR" ]; then
 
     repo_has() {
         find "$REPO_DIR" -maxdepth 4 -type f "$@" -print -quit 2>/dev/null | head -n 1
+    }
+
+    manifest_has_true() {
+        printf '%s' "$TOOLING_MANIFEST_JSON" | grep -q '"'$1'":true'
     }
 
     ensure_bun() {
@@ -300,7 +319,51 @@ if [ -d "$REPO_DIR" ]; then
         JAVA_INSTALLED=1
     }
 
-    if [ ! -f "$TOOLING_MARKER" ]; then
+    if [ -n "$TOOLING_MANIFEST_ENABLED" ]; then
+        if manifest_has_true node; then
+            ensure_node
+        fi
+
+        if manifest_has_true bun; then
+            ensure_bun
+        fi
+
+        if manifest_has_true pnpm; then
+            ensure_node
+            ensure_pnpm
+        fi
+
+        if manifest_has_true yarn; then
+            ensure_node
+            ensure_yarn
+        fi
+
+        if manifest_has_true go; then
+            ensure_go
+        fi
+
+        if manifest_has_true python; then
+            ensure_python
+        fi
+
+        if manifest_has_true dotnet; then
+            ensure_dotnet
+        fi
+
+        if manifest_has_true buildTools; then
+            ensure_build_tools
+        fi
+
+        if manifest_has_true rust; then
+            ensure_rust
+        fi
+
+        if manifest_has_true java; then
+            ensure_java
+        fi
+
+        touch "$TOOLING_MARKER"
+    elif [ ! -f "$TOOLING_MARKER" ]; then
         echo "Checking repository for language tooling needs..."
 
         if [ -n "$(repo_has -name package.json -o -name package-lock.json -o -name npm-shrinkwrap.json -o -name bun.lockb -o -name bun.lock -o -name pnpm-lock.yaml -o -name yarn.lock)" ]; then
