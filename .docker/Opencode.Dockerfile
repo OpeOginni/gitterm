@@ -57,6 +57,7 @@ RUN apt-get update && \
     bash \
     curl \
     nodejs \
+    npm \
     netcat-traditional \
     libjson-c5 \
     libssl3 \

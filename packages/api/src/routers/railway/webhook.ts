@@ -89,7 +89,6 @@ export const railwayWebhookRouter = router({
     } catch (error) {
       if (error instanceof TRPCError) throw error;
 
-      console.error("[listener] Failed to process Railway webhook:", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to process webhook",
