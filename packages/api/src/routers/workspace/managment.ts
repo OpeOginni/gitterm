@@ -19,7 +19,11 @@ import {
   createUsageSession,
   FREE_TIER_DAILY_MINUTES,
 } from "../../utils/metering";
-import { getProviderByCloudProviderId, type PersistentWorkspaceInfo } from "../../providers";
+import {
+  getProviderByCloudProviderId,
+  type PersistentWorkspaceInfo,
+  type WorkspaceEnvironmentVariables,
+} from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
   getGitHubAppService,
@@ -29,7 +33,10 @@ import {
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { sendWorkspaceCreatedNotification } from "../../utils/discord";
-import { generateAndEncryptPassword, decryptWorkspacePassword } from "../../utils/workspace-password";
+import {
+  generateAndEncryptPassword,
+  decryptWorkspacePassword,
+} from "../../utils/workspace-password";
 import { getWorkspaceDomain } from "../../utils/routing";
 import { canUseCustomCloudSubdomain, type UserPlan } from "../../config/features";
 import { getProviderConfigService } from "../../service/config/provider-config";
@@ -91,7 +98,7 @@ async function buildWorkspaceToolingManifestBase64(params: {
     );
     const filePaths = tree.filter((item) => item.type === "blob").map((item) => item.path);
     const manifest = detectWorkspaceToolingManifestFromPaths(filePaths, params.owner, params.repo);
-    console.log(manifest)
+    console.log(manifest);
     return encodeWorkspaceToolingManifestBase64(manifest);
   } catch (error) {
     console.error("Failed to build tooling manifest from repository tree:", error);
@@ -781,7 +788,7 @@ export const workspaceRouter = router({
           .optional(),
         agentTypeId: z.string(),
         cloudProviderId: z.string(),
-        regionId: z.string(),
+        regionId: z.string().optional(),
         gitIntegrationId: z.string().optional(),
         persistent: z.boolean(),
       }),
@@ -907,24 +914,35 @@ export const workspaceRouter = router({
         }
 
         // Get region info
-        const [regionRecord] = await db
-          .select()
-          .from(region)
-          .where(
-            and(eq(region.id, input.regionId), eq(region.cloudProviderId, input.cloudProviderId)),
-          );
+        let regionRecord: typeof region.$inferSelect | undefined;
 
-        if (!regionRecord) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Invalid region for the selected cloud provider",
-          });
+        if (input.regionId && cloudProviderRecord.supportsRegions) {
+          [regionRecord] = await db
+            .select()
+            .from(region)
+            .where(
+              and(eq(region.id, input.regionId), eq(region.cloudProviderId, input.cloudProviderId)),
+            );
+
+          if (!regionRecord) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Invalid region for the selected cloud provider",
+            });
+          }
+
+          if (!regionRecord.isEnabled) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Selected region is not available",
+            });
+          }
         }
 
-        if (!regionRecord.isEnabled) {
+        if (cloudProviderRecord.supportsRegions && !input.regionId) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Selected region is not available",
+            message: "Region is required for the selected cloud provider",
           });
         }
 
@@ -993,7 +1011,7 @@ export const workspaceRouter = router({
         // Get GitHub username from user.name (set during OAuth)
         const [userRecord] = await db.select().from(user).where(eq(user.id, userId));
 
-        const githubUsername = userRecord?.name;
+        const githubUsername = userRecord?.name ?? undefined;
 
         // Validate git integration / repo access first, then generate token if needed
         let githubAppToken: string | undefined;
@@ -1281,7 +1299,7 @@ export const workspaceRouter = router({
           encryptedServerPassword = passwordData.encryptedPassword;
         }
 
-        const DEFAULT_DOCKER_ENV_VARS = {
+        const DEFAULT_DOCKER_ENV_VARS: WorkspaceEnvironmentVariables = {
           REPO_URL: input.repo || undefined,
           OPENCODE_CONFIG_BASE64: agentConfig
             ? Buffer.from(
@@ -1318,7 +1336,7 @@ export const workspaceRouter = router({
               imageId: imageRecord.imageId,
               subdomain,
               repositoryUrl: input.repo,
-              regionIdentifier: regionRecord.externalRegionIdentifier,
+              regionIdentifier: regionRecord?.externalRegionIdentifier,
               environmentVariables: DEFAULT_DOCKER_ENV_VARS,
               persistent: input.persistent,
             })
@@ -1328,7 +1346,7 @@ export const workspaceRouter = router({
               imageId: imageRecord.imageId,
               subdomain,
               repositoryUrl: input.repo,
-              regionIdentifier: regionRecord.externalRegionIdentifier,
+              regionIdentifier: regionRecord?.externalRegionIdentifier,
               environmentVariables: DEFAULT_DOCKER_ENV_VARS,
             });
 
@@ -1343,7 +1361,7 @@ export const workspaceRouter = router({
             cloudProviderId: input.cloudProviderId,
             gitIntegrationId: input.gitIntegrationId ?? null,
             persistent: input.persistent,
-            regionId: input.regionId,
+            regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,
             domain,
             subdomain,
@@ -1376,7 +1394,7 @@ export const workspaceRouter = router({
               workspaceId: workspaceId,
               userId: userId,
               cloudProviderId: input.cloudProviderId,
-              regionId: input.regionId,
+              regionId: regionRecord?.id,
               externalVolumeId: persistentInfo.externalVolumeId,
               mountPath: "/workspace",
               createdAt: new Date(persistentInfo.volumeCreatedAt),
@@ -1412,8 +1430,8 @@ export const workspaceRouter = router({
           userEmail: fetchedUser.email,
           agentTypeName: agentTypeRecord.name,
           cloudProviderName: cloudProviderRecord.name,
-          regionName: regionRecord.name,
-          regionExternalIdentifier: regionRecord.externalRegionIdentifier,
+          regionName: regionRecord?.name || "no-region",
+          regionExternalIdentifier: regionRecord?.externalRegionIdentifier || "N/A",
           repoUrl: input.repo,
           serviceCreatedAt: workspaceInfo.serviceCreatedAt,
           upstreamUrl: newWorkspace.upstreamUrl,
@@ -1482,24 +1500,27 @@ export const workspaceRouter = router({
           });
         }
 
-        // Get the region identifier
-        const [workspaceRegion] = await db
-          .select()
-          .from(region)
-          .where(eq(region.id, existingWorkspace.regionId));
+        let workspaceRegion;
+        if (provider.supportsRegions && existingWorkspace.regionId) {
+          // Get the region identifier
+          [workspaceRegion] = await db
+            .select()
+            .from(region)
+            .where(eq(region.id, existingWorkspace.regionId));
 
-        if (!workspaceRegion) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Region not found",
-          });
+          if (!workspaceRegion) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Region not found",
+            });
+          }
         }
 
         // Get compute provider and stop the workspace
         const computeProvider = await getProviderByCloudProviderId(provider.name);
         await computeProvider.stopWorkspace(
           existingWorkspace.externalInstanceId,
-          workspaceRegion.externalRegionIdentifier,
+          workspaceRegion?.externalRegionIdentifier,
           existingWorkspace.externalRunningDeploymentId ?? undefined,
         );
 
@@ -1595,22 +1616,25 @@ export const workspaceRouter = router({
           });
         }
 
-        // Get the region identifier
-        const [workspaceRegion] = await db
-          .select()
-          .from(region)
-          .where(eq(region.id, existingWorkspace.regionId));
+        let workspaceRegion;
+        if (provider.supportsRegions && existingWorkspace.regionId) {
+          // Get the region identifier
+          [workspaceRegion] = await db
+            .select()
+            .from(region)
+            .where(eq(region.id, existingWorkspace.regionId));
 
-        if (!workspaceRegion) {
-          console.error("Region not found for workspace:", existingWorkspace.id);
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Region not found" });
+          if (!workspaceRegion) {
+            console.error("Region not found for workspace:", existingWorkspace.id);
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Region not found" });
+          }
         }
 
         // Get compute provider and restart the workspace
         const computeProvider = await getProviderByCloudProviderId(provider.name);
         await computeProvider.restartWorkspace(
           existingWorkspace.externalInstanceId,
-          workspaceRegion.externalRegionIdentifier,
+          workspaceRegion?.externalRegionIdentifier,
           existingWorkspace.externalRunningDeploymentId ?? undefined,
         );
 

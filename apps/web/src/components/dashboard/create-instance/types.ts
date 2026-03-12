@@ -19,6 +19,7 @@ export interface AgentType {
 export interface CloudProvider {
   id: string;
   name: string;
+  supportsRegions: boolean;
   regions?: Region[];
 }
 
@@ -152,6 +153,8 @@ export const ICON_MAP: Record<string, string> = {
   opencode: "/opencode.svg",
   shuvcode: "/opencode.svg",
   railway: "/railway.svg",
+  cloudflare: "/cloudflare.svg",
+  e2b: "/E2B.svg",
   aws: "/EC2.svg",
   claude: "/code.svg",
   ralph: "/ralph-wiggum.svg",

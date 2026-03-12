@@ -121,6 +121,19 @@ export const githubWebhookProcedure = t.procedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+export const e2bWebhookProcedure = t.procedure.use(({ ctx, next }) => {
+  const e2bSignature = ctx.e2bSignature;
+
+  if (!e2bSignature) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "GitHub e2b-signature required",
+    });
+  }
+
+  return next({ ctx });
+});
+
 export const cloudflareWebhookProcedure = t.procedure.use(({ ctx, next }) => {
   const token = ctx.bearerToken;
 

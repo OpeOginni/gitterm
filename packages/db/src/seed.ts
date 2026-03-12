@@ -1,4 +1,4 @@
-import { db, eq } from "./index";
+import { db, eq, and } from "./index";
 import { agentType, cloudProvider, image, region } from "./schema/cloud";
 import { modelProvider, model } from "./schema/model-credentials";
 import { providerType, providerConfigField } from "./schema/provider-config";
@@ -9,15 +9,30 @@ import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
  * These define the default providers, agent types, images, and regions.
  * The seed is idempotent - it will:
  * - Add new items that don't exist
- * - Skip items that already exist (preserving their isEnabled state)
- * - Never delete or modify existing items
+ * - Update seeded metadata/config fields when definitions change
+ * - Preserve enablement flags managed in admin
+ * - Never delete existing items
  */
 
+const hasSameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
 const seedCloudProviders = [
-  { name: "Railway", isEnabled: false },
-  { name: "AWS", isEnabled: false },
-  { name: "Local", isEnabled: false },
-  { name: "Cloudflare", isEnabled: false, isSandbox: true },
+  { name: "Railway", isEnabled: false, supportsRegions: true },
+  { name: "AWS", isEnabled: false, supportsRegions: true },
+  {
+    name: "Cloudflare",
+    isEnabled: false,
+    isSandbox: true,
+    supportsRegions: false,
+    supportServerOnly: true,
+  },
+  {
+    name: "E2B",
+    isEnabled: false,
+    isSandbox: true,
+    supportsRegions: false,
+    supportServerOnly: true,
+  },
 ];
 
 const seedAgentTypes = [
@@ -66,13 +81,6 @@ const seedRegions = [
     location: "Singapore",
     externalRegionIdentifier: "asia-southeast1-eqsg3a",
     providerName: "Railway",
-  },
-  // Local region
-  {
-    name: "Local",
-    location: "Local Machine",
-    externalRegionIdentifier: "local",
-    providerName: "Local",
   },
 ];
 
@@ -298,7 +306,37 @@ export async function seedDatabase(): Promise<void> {
     });
 
     if (existing) {
-      console.log(`[seed]   Provider "${provider.name}" already exists`);
+      const updates: Partial<typeof cloudProvider.$inferInsert> = {};
+      const targetIsSandbox = provider.isSandbox ?? false;
+      const targetSupportsRegions = provider.supportsRegions ?? true;
+      const targetSupportServerOnly = provider.supportServerOnly ?? false;
+
+      if (existing.isSandbox !== targetIsSandbox) {
+        updates.isSandbox = targetIsSandbox;
+      }
+
+      if (existing.supportsRegions !== targetSupportsRegions) {
+        updates.supportsRegions = targetSupportsRegions;
+      }
+
+      if (existing.supportServerOnly !== targetSupportServerOnly) {
+        updates.supportServerOnly = targetSupportServerOnly;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await db
+          .update(cloudProvider)
+          .set({
+            ...updates,
+            updatedAt: new Date(),
+          })
+          .where(eq(cloudProvider.id, existing.id));
+
+        console.log(`[seed]   Updated provider metadata for "${provider.name}"`);
+      } else {
+        console.log(`[seed]   Provider "${provider.name}" already exists`);
+      }
+
       providerMap.set(provider.name, existing.id);
     } else {
       const [created] = await db
@@ -307,6 +345,8 @@ export async function seedDatabase(): Promise<void> {
           name: provider.name,
           isEnabled: true,
           isSandbox: provider.isSandbox ?? false,
+          supportsRegions: provider.supportsRegions ?? true,
+          supportServerOnly: provider.supportServerOnly ?? false,
         })
         .returning();
       console.log(`[seed]   Created provider "${provider.name}"`);
@@ -471,14 +511,132 @@ export async function seedDatabase(): Promise<void> {
   console.log("[seed] Seeding provider types...");
   const providerTypeMap = new Map<string, string>(); // name -> id
 
+  const syncProviderConfigFields = async (providerTypeId: string, providerName: string) => {
+    let createdCount = 0;
+    let updatedCount = 0;
+
+    for (const field of seedProviderTypes[providerName]!.fields) {
+      const existingField = await db.query.providerConfigField.findFirst({
+        where: and(
+          eq(providerConfigField.providerTypeId, providerTypeId),
+          eq(providerConfigField.fieldName, field.fieldName),
+        ),
+      });
+
+      if (!existingField) {
+        await db.insert(providerConfigField).values({
+          providerTypeId,
+          fieldName: field.fieldName,
+          fieldLabel: field.fieldLabel,
+          fieldType: field.fieldType,
+          isRequired: field.isRequired,
+          isEncrypted: field.isEncrypted,
+          defaultValue: field.defaultValue,
+          options: field.options ?? null,
+          validationRules: field.validationRules ?? null,
+          sortOrder: field.sortOrder,
+        });
+        createdCount += 1;
+        continue;
+      }
+
+      const updates: Partial<typeof providerConfigField.$inferInsert> = {};
+      const defaultValue = field.defaultValue ?? null;
+      const options = field.options ?? null;
+      const validationRules = field.validationRules ?? null;
+
+      if (existingField.fieldLabel !== field.fieldLabel) {
+        updates.fieldLabel = field.fieldLabel;
+      }
+
+      if (existingField.fieldType !== field.fieldType) {
+        updates.fieldType = field.fieldType;
+      }
+
+      if (existingField.isRequired !== field.isRequired) {
+        updates.isRequired = field.isRequired;
+      }
+
+      if (existingField.isEncrypted !== field.isEncrypted) {
+        updates.isEncrypted = field.isEncrypted;
+      }
+
+      if (existingField.defaultValue !== defaultValue) {
+        updates.defaultValue = defaultValue;
+      }
+
+      if (!hasSameJson(existingField.options, options)) {
+        updates.options = options;
+      }
+
+      if (!hasSameJson(existingField.validationRules, validationRules)) {
+        updates.validationRules = validationRules;
+      }
+
+      if (existingField.sortOrder !== field.sortOrder) {
+        updates.sortOrder = field.sortOrder;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await db
+          .update(providerConfigField)
+          .set({
+            ...updates,
+            updatedAt: new Date(),
+          })
+          .where(eq(providerConfigField.id, existingField.id));
+        updatedCount += 1;
+      }
+    }
+
+    if (createdCount > 0 || updatedCount > 0) {
+      console.log(
+        `[seed]   Synced config fields for "${providerName}" (created: ${createdCount}, updated: ${updatedCount})`,
+      );
+    }
+  };
+
   for (const provider of Object.values(seedProviderTypes)) {
     const existing = await db.query.providerType.findFirst({
       where: eq(providerType.name, provider.name),
     });
 
     if (existing) {
-      console.log(`[seed]   Provider type "${provider.name}" already exists`);
+      const updates: Partial<typeof providerType.$inferInsert> = {};
+
+      if (existing.displayName !== provider.displayName) {
+        updates.displayName = provider.displayName;
+      }
+
+      if (existing.category !== provider.category) {
+        updates.category = provider.category;
+      }
+
+      if (!hasSameJson(existing.configSchema, provider.configSchema)) {
+        updates.configSchema = provider.configSchema;
+      }
+
+      if (!existing.isBuiltIn) {
+        updates.isBuiltIn = true;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await db
+          .update(providerType)
+          .set({
+            ...updates,
+            updatedAt: new Date(),
+          })
+          .where(eq(providerType.id, existing.id));
+
+        console.log(`[seed]   Updated provider type "${provider.name}"`);
+      } else {
+        console.log(`[seed]   Provider type "${provider.name}" already exists`);
+      }
+
       providerTypeMap.set(provider.name, existing.id);
+
+      await syncProviderConfigFields(existing.id, provider.name);
     } else {
       const [created] = await db
         .insert(providerType)
@@ -494,24 +652,7 @@ export async function seedDatabase(): Promise<void> {
       console.log(`[seed]   Created provider type "${provider.name}"`);
       providerTypeMap.set(provider.name, created!.id);
 
-      // Seed config fields for this provider type
-      for (const field of provider.fields) {
-        await db.insert(providerConfigField).values({
-          providerTypeId: created!.id,
-          fieldName: field.fieldName,
-          fieldLabel: field.fieldLabel,
-          fieldType: field.fieldType,
-          isRequired: field.isRequired,
-          isEncrypted: field.isEncrypted,
-          defaultValue: field.defaultValue,
-          options: field.options ?? null,
-          validationRules: field.validationRules ?? null,
-          sortOrder: field.sortOrder,
-        });
-      }
-      console.log(
-        `[seed]   Created ${provider.fields.length} config fields for "${provider.name}"`,
-      );
+      await syncProviderConfigFields(created!.id, provider.name);
     }
   }
 

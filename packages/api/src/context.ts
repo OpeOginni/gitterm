@@ -22,7 +22,9 @@ export async function createContext({ context }: CreateContextOptions) {
     "X-GitHub-Hook-Installation-Target-ID",
   );
   const githubXHubSignature256 = context.req.raw.headers.get("x-hub-signature-256");
-  const githubRawBody = await context.req.text();
+  const rawBody = await context.req.text();
+
+  const e2bSignature = context.req.raw.headers.get("e2b-signature");
 
   return {
     session,
@@ -31,7 +33,8 @@ export async function createContext({ context }: CreateContextOptions) {
     githubEvent,
     githubInstallationTargetId,
     githubXHubSignature256,
-    githubRawBody,
+    rawBody,
+    e2bSignature,
   };
 }
 

@@ -27,12 +27,14 @@ import { providerType } from "@gitterm/db/schema/provider-config";
 
 const createCloudProviderSchema = z.object({
   name: z.string().min(1, "Provider name is required"),
+  supportsRegions: z.boolean().default(true),
 });
 
 const updateCloudProviderSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1, "Provider name is required").optional(),
   providerConfigId: z.uuid().nullable().optional(),
+  supportsRegions: z.boolean().optional(),
 });
 
 const createRegionSchema = z.object({
@@ -148,6 +150,7 @@ export const infrastructureRouter = router({
       .insert(cloudProvider)
       .values({
         name: input.name,
+        supportsRegions: input.supportsRegions,
         isEnabled: false,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -271,6 +274,13 @@ export const infrastructureRouter = router({
 
     if (!provider) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Cloud provider not found" });
+    }
+
+    if (!provider.supportsRegions) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This provider does not support regions",
+      });
     }
 
     const [newRegion] = await db

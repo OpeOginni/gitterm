@@ -68,7 +68,7 @@ export const githubWebhookRouter = router({
       }
 
       const webhooks = getWebhooks();
-      const verified = await webhooks.verify(ctx.githubRawBody, ctx.githubXHubSignature256!);
+      const verified = await webhooks.verify(ctx.rawBody, ctx.githubXHubSignature256!);
 
       if (!verified) {
         throw new TRPCError({

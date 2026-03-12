@@ -58,6 +58,10 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error("Railway environment ID is not configured");
     }
 
+    if (!config.regionIdentifier) {
+      throw new Error("Railway needs region");
+    }
+
     const { serviceCreate } = await railway
       .ServiceCreate({
         input: {
@@ -195,6 +199,10 @@ export class RailwayProvider implements ComputeProvider {
 
     if (!defaultRegion) {
       throw new Error("Railway default region is not configured");
+    }
+
+    if (!config.regionIdentifier) {
+      throw new Error("Railway needs region");
     }
 
     const { serviceCreate } = await railway

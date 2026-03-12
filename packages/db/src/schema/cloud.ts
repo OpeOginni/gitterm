@@ -27,6 +27,8 @@ export const cloudProvider = pgTable("cloud_provider", {
   }),
   isEnabled: boolean("is_enabled").notNull().default(true),
   isSandbox: boolean("is_sandbox").notNull().default(false),
+  supportsRegions: boolean("supports_regions").notNull().default(true),
+  supportServerOnly: boolean("support_server_only").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

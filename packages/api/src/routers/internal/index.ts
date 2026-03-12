@@ -12,7 +12,7 @@ import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/in
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
-import { getProviderByCloudProviderId } from "../../providers";
+import { getProviderByCloudProviderId, railwayProvider } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
   closeUsageSession,
@@ -27,6 +27,9 @@ import { agentLoopWebhookSchema } from "../agent-loop/webhook";
 import { getAgentLoopService } from "../../service/agent-loop";
 import { deductRunFromQuota, refundRunToQuota } from "../../service/quotas/run-quota";
 import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/helpers";
+import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
+import { getProviderConfigService } from "../../service/config/provider-config";
+import type { E2BConfig } from "../../providers/e2b";
 
 /**
  * Internal router for service-to-service communication
@@ -197,20 +200,25 @@ export const internalRouter = router({
       }
 
       // Get region
-      const [workspaceRegion] = await db.select().from(region).where(eq(region.id, ws.regionId));
 
-      if (!workspaceRegion) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Region not found",
-        });
+      let workspaceRegion;
+
+      if (provider.supportsRegions && ws.regionId) {
+        [workspaceRegion] = await db.select().from(region).where(eq(region.id, ws.regionId));
+
+        if (!workspaceRegion) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Region not found",
+          });
+        }
       }
 
       // Stop via provider
       const computeProvider = await getProviderByCloudProviderId(provider.name);
       await computeProvider.stopWorkspace(
         ws.externalInstanceId,
-        workspaceRegion.externalRegionIdentifier,
+        workspaceRegion?.externalRegionIdentifier,
         ws.externalRunningDeploymentId || undefined,
       );
 
@@ -284,13 +292,15 @@ export const internalRouter = router({
       }
 
       // Get region
-      const [workspaceRegion] = await db.select().from(region).where(eq(region.id, ws.regionId));
+      if (provider.supportsRegions && ws.regionId) {
+        const [workspaceRegion] = await db.select().from(region).where(eq(region.id, ws.regionId));
 
-      if (!workspaceRegion) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Region not found",
-        });
+        if (!workspaceRegion) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Region not found",
+          });
+        }
       }
 
       const [persistedVolume] = ws.persistent
@@ -302,7 +312,10 @@ export const internalRouter = router({
 
       const computeProvider = await getProviderByCloudProviderId(provider.name);
 
-      await computeProvider.terminateWorkspace(ws.externalInstanceId, persistedVolume?.externalVolumeId);
+      await computeProvider.terminateWorkspace(
+        ws.externalInstanceId,
+        persistedVolume?.externalVolumeId,
+      );
 
       // Update workspace status
       const now = new Date();
@@ -666,6 +679,191 @@ export const internalRouter = router({
 
       return { updated: [] };
     }),
+
+  processE2bWebhook: internalProcedure.input(e2bWebhookSchema).mutation(async ({ input, ctx }) => {
+    const signature = ctx.e2bSignature;
+    const webhookRawBody = ctx.rawBody;
+
+    if (!signature) {
+      console.error("No signature passed in for E2B Webhook");
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "E2B e2b-signature required",
+      });
+    }
+    const dbConfig = (await getProviderConfigService().getProviderConfigForUse("e2b")) as E2BConfig;
+
+    if (!dbConfig) {
+      console.error("E2B provider is not configured.");
+      throw new Error("E2B provider is not configured. Please configure it in the admin panel.");
+    }
+
+    const verified = verifyE2BWebhookSignature(dbConfig.webhookSecret, webhookRawBody, signature);
+
+    if (!verified) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "E2b e2b-signature verification failed",
+      });
+    }
+
+    if (input.type === "sandbox.lifecycle.created" && input.sandboxId) {
+      const serviceId = input.sandboxId;
+
+      const [e2bProvider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.name, "E2B"));
+
+      if (!e2bProvider) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "E2B provider not found in database",
+        });
+      }
+
+      const updatedWorkspaces = await db
+        .update(workspace)
+        .set({
+          status: "running",
+          updatedAt: new Date(input.timestamp),
+        })
+        .where(
+          and(
+            eq(workspace.cloudProviderId, e2bProvider.id),
+            eq(workspace.externalInstanceId, serviceId),
+            eq(workspace.status, "pending"),
+          ),
+        )
+        .returning({
+          id: workspace.id,
+          status: workspace.status,
+          updatedAt: workspace.updatedAt,
+          userId: workspace.userId,
+          workspaceDomain: workspace.domain,
+        });
+
+      return { updated: updatedWorkspaces };
+    }
+
+    if (input.type === "sandbox.lifecycle.resumed" && input.sandboxId) {
+      const serviceId = input.sandboxId;
+
+      const [e2bProvider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.name, "E2B"));
+
+      if (!e2bProvider) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "E2B provider not found in database",
+        });
+      }
+
+      const updatedWorkspaces = await db
+        .update(workspace)
+        .set({
+          status: "running",
+          updatedAt: new Date(input.timestamp),
+        })
+        .where(
+          and(
+            eq(workspace.cloudProviderId, e2bProvider.id),
+            eq(workspace.externalInstanceId, serviceId),
+            eq(workspace.status, "stopped"),
+          ),
+        )
+        .returning({
+          id: workspace.id,
+          status: workspace.status,
+          updatedAt: workspace.updatedAt,
+          userId: workspace.userId,
+          workspaceDomain: workspace.domain,
+        });
+
+      return { updated: updatedWorkspaces };
+    }
+
+    if (input.type === "sandbox.lifecycle.paused" && input.sandboxId) {
+      const serviceId = input.sandboxId;
+
+      const [e2bProvider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.name, "E2B"));
+
+      if (!e2bProvider) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "E2B provider not found in database",
+        });
+      }
+
+      const updatedWorkspaces = await db
+        .update(workspace)
+        .set({
+          status: "stopped",
+          updatedAt: new Date(input.timestamp),
+        })
+        .where(
+          and(
+            eq(workspace.cloudProviderId, e2bProvider.id),
+            eq(workspace.externalInstanceId, serviceId),
+            eq(workspace.status, "running"),
+          ),
+        )
+        .returning({
+          id: workspace.id,
+          status: workspace.status,
+          updatedAt: workspace.updatedAt,
+          userId: workspace.userId,
+          workspaceDomain: workspace.domain,
+        });
+
+      return { updated: updatedWorkspaces };
+    }
+
+    if (input.type === "sandbox.lifecycle.killed" && input.sandboxId) {
+      const serviceId = input.sandboxId;
+
+      const [e2bProvider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.name, "E2B"));
+
+      if (!e2bProvider) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "E2B provider not found in database",
+        });
+      }
+
+      const updatedWorkspaces = await db
+        .update(workspace)
+        .set({
+          status: "terminated",
+          updatedAt: new Date(input.timestamp),
+        })
+        .where(
+          and(
+            eq(workspace.cloudProviderId, e2bProvider.id),
+            eq(workspace.externalInstanceId, serviceId),
+          ),
+        )
+        .returning({
+          id: workspace.id,
+          status: workspace.status,
+          updatedAt: workspace.updatedAt,
+          userId: workspace.userId,
+          workspaceDomain: workspace.domain,
+        });
+
+      return { updated: updatedWorkspaces };
+    }
+
+    return { updated: [] };
+  }),
 
   /**
    * Validate workspace access for SSE subscription
