@@ -25,6 +25,8 @@ import type { Route } from "next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
+import { getIcon } from "@/components/dashboard/create-instance";
+import Image from "next/image";
 
 export default function ProvidersPage() {
   const router = useRouter();
@@ -164,7 +166,13 @@ export default function ProvidersPage() {
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-start gap-3">
                     <div className="mt-1 rounded-xl bg-white/[0.04] p-2.5 transition-colors">
-                      <Globe className="h-5 w-5 text-white/40" />
+                      <Image
+                        src={getIcon(provider.name)}
+                        alt={provider.name}
+                        height={20}
+                        width={20}
+                        className="h-5 w-5 text-white/40"
+                      />
                     </div>
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">

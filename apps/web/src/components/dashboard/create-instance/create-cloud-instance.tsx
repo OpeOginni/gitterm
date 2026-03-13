@@ -61,7 +61,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   // Derived selections (user choice or first available)
   const selectedCloudProviderId =
     userCloudProviderId ?? cloudProvidersData?.cloudProviders[0]?.id ?? "";
-  const selectedAgentTypeId = userAgentTypeId ?? agentTypesData?.agentTypes[0]?.id ?? "";
 
   const selectedCloudProvider = useMemo((): CloudProvider | null => {
     if (!selectedCloudProviderId) return null;
@@ -81,6 +80,20 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     );
     return (provider?.regions ?? []) as Region[];
   }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
+
+  const availableAgents = useMemo((): AgentType[] => {
+    const agents = agentTypesData?.agentTypes ?? [];
+    if (!selectedCloudProviderId) return agents;
+
+    const provider = cloudProvidersData?.cloudProviders.find(
+      (p) => p.id === selectedCloudProviderId,
+    );
+    if (provider?.supportServerOnly) return agents.filter((agent) => agent.serverOnly);
+
+    return agents;
+  }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders, agentTypesData?.agentTypes]);
+
+  const selectedAgentTypeId = userAgentTypeId ?? availableAgents[0]?.id ?? "";
 
   const selectedRegion = useMemo(() => {
     if (userRegionId && availableRegions.some((r) => r.id === userRegionId)) {
@@ -222,8 +235,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 </SelectContent>
               ) : (
                 <SelectContent>
-                  {agentTypesData?.agentTypes && agentTypesData.agentTypes.length > 0 ? (
-                    agentTypesData.agentTypes.map((agent) => (
+                  {availableAgents && availableAgents.length > 0 ? (
+                    availableAgents.map((agent) => (
                       <SelectItem key={agent.id} value={agent.id}>
                         <div className="flex items-center">
                           <Image

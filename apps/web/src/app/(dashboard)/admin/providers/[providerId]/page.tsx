@@ -48,7 +48,6 @@ export default function ProviderSettingsPage() {
   const queryClient = useQueryClient();
 
   const [providerName, setProviderName] = useState("");
-  const [supportsRegions, setSupportsRegions] = useState(true);
   const [selectedProviderTypeId, setSelectedProviderTypeId] = useState("");
   const [configForm, setConfigForm] = useState<Record<string, any>>({});
   const [configName, setConfigName] = useState("");
@@ -172,7 +171,6 @@ export default function ProviderSettingsPage() {
     }
 
     setProviderName(provider.name ?? "");
-    setSupportsRegions(provider.supportsRegions ?? true);
     setConfigName(provider.providerConfig?.name ?? `${provider.name} Default`);
     setConfigForm(provider.providerConfig?.config ?? {});
     setConfigEnabled(provider.providerConfig?.isEnabled ?? true);
@@ -262,13 +260,6 @@ export default function ProviderSettingsPage() {
         await updateProvider.mutateAsync({
           id: provider.id,
           name: nextProviderName,
-        });
-      }
-
-      if (supportsRegions !== provider.supportsRegions) {
-        await updateProvider.mutateAsync({
-          id: provider.id,
-          supportsRegions,
         });
       }
 
@@ -443,12 +434,6 @@ export default function ProviderSettingsPage() {
                   <Label>Provider Type</Label>
                   <Input value={selectedProviderType?.displayName ?? "Unknown"} disabled readOnly />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-sm text-white/40">Supports Regions</Label>
-                  <div className="flex min-h-10 items-center rounded-md border border-input bg-background px-3">
-                    <Switch checked={supportsRegions} onCheckedChange={setSupportsRegions} />
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -512,7 +497,7 @@ export default function ProviderSettingsPage() {
               )}
             </div>
 
-            {supportsRegions && (
+            {provider?.supportsRegions && (
               <div className="rounded-2xl border border-border bg-card p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">

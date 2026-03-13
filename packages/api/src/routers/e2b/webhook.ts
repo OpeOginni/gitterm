@@ -26,25 +26,33 @@ export const webhookType = z.enum([
   "sandbox.lifecycle.killed",
 ]);
 
-export const e2bWebhookSchema = z.object({
-  version: z.string(),
+export const e2bWebhookSchema = z.looseObject({
   id: z.uuid(),
+  version: z.string(),
   type: webhookType,
-  eventData: z.any(),
-  sandboxBuildId: z.uuid(),
-  sandboxExecutionId: z.uuid(),
-  sandboxId: z.string(),
-  sandboxTeamId: z.uuid(),
-  sandboxTemplateId: z.string(),
   timestamp: z.string(),
+  eventData: z.any(),
+  event_category: z.enum(["lifecycle"]),
+  event_label: z.enum(["create", "kill", "pause", "resume"]),
+  sandbox_id: z.string(),
+  sandbox_execution_id: z.uuid(),
+  sandbox_template_id: z.string(),
+  sandbox_build_id: z.string(),
+  sandbox_team_id: z.uuid(),
 });
 
 export const e2bWebhookRouter = router({
   handleWebhook: e2bWebhookProcedure.input(e2bWebhookSchema).mutation(async ({ input, ctx }) => {
+    console.log(input);
     const signature = ctx.e2bSignature ?? undefined;
     try {
       const client = getInternalClient({ "e2b-signature": signature });
-      const result = await client.internal.processE2bWebhook.mutate(input);
+      const result = await client.internal.processE2bWebhook.mutate({
+        ...input,
+        rawBody: ctx.rawBody,
+      });
+
+      console.log("result", result);
 
       for (const record of result.updated) {
         WORKSPACE_EVENTS.emitStatus({

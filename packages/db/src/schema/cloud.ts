@@ -1,8 +1,14 @@
-import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { relations } from "drizzle-orm";
 import { volume, workspace } from "./workspace";
 import { providerConfig } from "./provider-config";
+
+export const creationSettlementEnum = pgEnum("creation_settlement", [
+  "immediate",
+  "webhook",
+  "poll",
+] as const);
 
 export const cloudAccount = pgTable("cloud_account", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -29,6 +35,7 @@ export const cloudProvider = pgTable("cloud_provider", {
   isSandbox: boolean("is_sandbox").notNull().default(false),
   supportsRegions: boolean("supports_regions").notNull().default(true),
   supportServerOnly: boolean("support_server_only").notNull().default(false),
+  creationSettlement: creationSettlementEnum("creation_settlement").default("webhook"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -108,7 +115,7 @@ export type NewCloudProvider = typeof cloudProvider.$inferInsert;
 export type NewImage = typeof image.$inferInsert;
 export type NewAgentType = typeof agentType.$inferInsert;
 export type NewCloudAccount = typeof cloudAccount.$inferInsert;
-
+export type CreationSettlement = (typeof creationSettlementEnum.enumValues)[number];
 export type CloudProviderType = typeof cloudProvider.$inferSelect;
 export type ImageType = typeof image.$inferSelect;
 export type AgentType = typeof agentType.$inferSelect;

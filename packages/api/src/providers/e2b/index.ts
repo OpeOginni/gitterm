@@ -45,9 +45,15 @@ export class E2BProvider implements ComputeProvider {
       apiKey: apiKey,
       timeoutMs: 10 * 60 * 1_000, // 10 mins timeout
       lifecycle: {
-        onTimeout: "kill",
+        onTimeout: "pause",
+      },
+      envs: {
+        OPENCODE_SERVER_PASSWORD: config.environmentVariables?.OPENCODE_SERVER_PASSWORD ?? "",
       },
     });
+
+    const workspaceDir = `/home/user/workspace`;
+    const repoDir = `${workspaceDir}/${config.environmentVariables?.REPO_NAME}`;
 
     if (config.repositoryUrl && config.environmentVariables) {
       // We Clone Repository
@@ -55,30 +61,80 @@ export class E2BProvider implements ComputeProvider {
         ? config.repositoryUrl
         : `${config.repositoryUrl}.git`;
 
-      await e2bSandbox.git.clone(parsedGitRepoUrl, {
-        path: `/workspace/${config.environmentVariables.REPO_NAME}`,
-        username: config.environmentVariables.USER_GITHUB_USERNAME,
-        password: config.environmentVariables.GITHUB_APP_TOKEN,
+      const username = config.environmentVariables.GITHUB_APP_TOKEN
+        ? config.environmentVariables.USER_GITHUB_USERNAME
+        : undefined;
+      const password = config.environmentVariables.GITHUB_APP_TOKEN;
+
+      await e2bSandbox.commands.run(`mkdir -p ${workspaceDir}`).catch(async (err) => {
+        e2bSandbox.kill();
+        console.error("EB2 Killed sanbbox because of err: ", err);
+        throw err;
       });
+
+      await e2bSandbox.git
+        .clone(parsedGitRepoUrl, {
+          path: repoDir,
+          username: username,
+          password: password,
+        })
+        .catch(async (err) => {
+          e2bSandbox.kill();
+          console.error("EB2 Killed sanbbox because of err: ", err);
+          throw err;
+        });
     }
 
     if (config.environmentVariables && config.environmentVariables.OPENCODE_CONFIG_BASE64) {
-      await e2bSandbox.commands.run("mkdir -p ~/.config/opencode");
-      await e2bSandbox.commands.run(
-        `echo "${config.environmentVariables.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
-      );
+      await e2bSandbox.commands.run("mkdir -p ~/.config/opencode").catch(async (err) => {
+        e2bSandbox.kill();
+        console.error("EB2 Killed sanbbox because of err: ", err);
+        throw err;
+      });
+
+      await e2bSandbox.commands
+        .run(
+          `echo "${config.environmentVariables.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
+        )
+        .catch(async (err) => {
+          e2bSandbox.kill();
+          console.error("EB2 Killed sanbbox because of err: ", err);
+          throw err;
+        });
     }
 
     if (config.environmentVariables && config.environmentVariables.OPENCODE_CREDENTIALS_BASE64) {
-      await e2bSandbox.commands.run("mkdir -p ~/.local/share/opencode");
-      await e2bSandbox.commands.run(
-        `echo "${config.environmentVariables.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
-      );
+      await e2bSandbox.commands.run("mkdir -p ~/.local/share/opencode").catch(async (err) => {
+        e2bSandbox.kill();
+        console.error("EB2 Killed sanbbox because of err: ", err);
+        throw err;
+      });
+
+      await e2bSandbox.commands
+        .run(
+          `echo "${config.environmentVariables.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
+        )
+        .catch(async (err) => {
+          e2bSandbox.kill();
+          console.error("EB2 Killed sanbbox because of err: ", err);
+          throw err;
+        });
     }
 
-    await e2bSandbox.commands.run("opencode serve --hostname 0.0.0.0 --port 4096", {
-      background: true,
-    });
+    await e2bSandbox.commands
+      .run(
+        `cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port 4096 > /tmp/opencode.log 2>&1`,
+        {
+          background: true,
+          onStdout: (data) => console.log(data),
+          onStderr: (data) => console.error(data),
+        },
+      )
+      .catch(async (err) => {
+        e2bSandbox.kill();
+        console.error("EB2 Killed sanbbox because of err: ", err);
+        throw err;
+      });
 
     const host = e2bSandbox.getHost(4096);
 
@@ -116,7 +172,13 @@ export class E2BProvider implements ComputeProvider {
       lifecycle: {
         onTimeout: "kill",
       },
+      envs: {
+        OPENCODE_SERVER_PASSWORD: config.environmentVariables?.OPENCODE_SERVER_PASSWORD ?? "",
+      },
     });
+
+    const workspaceDir = `/home/user/workspace`;
+    const repoDir = `${workspaceDir}/${config.environmentVariables?.REPO_NAME}`;
 
     if (config.repositoryUrl && config.environmentVariables) {
       // We Clone Repository
@@ -124,30 +186,80 @@ export class E2BProvider implements ComputeProvider {
         ? config.repositoryUrl
         : `${config.repositoryUrl}.git`;
 
-      await e2bSandbox.git.clone(parsedGitRepoUrl, {
-        path: `/workspace/${config.environmentVariables.REPO_NAME}`,
-        username: config.environmentVariables.USER_GITHUB_USERNAME,
-        password: config.environmentVariables.GITHUB_APP_TOKEN,
+      const username = config.environmentVariables.GITHUB_APP_TOKEN
+        ? config.environmentVariables.USER_GITHUB_USERNAME
+        : undefined;
+      const password = config.environmentVariables.GITHUB_APP_TOKEN;
+
+      await e2bSandbox.commands.run(`mkdir -p ${workspaceDir}`).catch(async (err) => {
+        e2bSandbox.kill();
+        console.error("EB2 Killed sanbbox because of err: ", err);
+        throw err;
       });
+
+      await e2bSandbox.git
+        .clone(parsedGitRepoUrl, {
+          path: repoDir,
+          username: username,
+          password: password,
+        })
+        .catch(async (err) => {
+          e2bSandbox.kill();
+          console.error("EB2 Killed sanbbox because of err: ", err);
+          throw err;
+        });
     }
 
     if (config.environmentVariables && config.environmentVariables.OPENCODE_CONFIG_BASE64) {
-      await e2bSandbox.commands.run("mkdir -p ~/.config/opencode");
-      await e2bSandbox.commands.run(
-        `echo "${config.environmentVariables.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
-      );
+      await e2bSandbox.commands.run("mkdir -p ~/.config/opencode").catch(async (err) => {
+        e2bSandbox.kill();
+        console.error("EB2 Killed sanbbox because of err: ", err);
+        throw err;
+      });
+
+      await e2bSandbox.commands
+        .run(
+          `echo "${config.environmentVariables.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
+        )
+        .catch(async (err) => {
+          e2bSandbox.kill();
+          console.error("EB2 Killed sanbbox because of err: ", err);
+          throw err;
+        });
     }
 
     if (config.environmentVariables && config.environmentVariables.OPENCODE_CREDENTIALS_BASE64) {
-      await e2bSandbox.commands.run("mkdir -p ~/.local/share/opencode");
-      await e2bSandbox.commands.run(
-        `echo "${config.environmentVariables.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
-      );
+      await e2bSandbox.commands.run("mkdir -p ~/.local/share/opencode").catch(async (err) => {
+        e2bSandbox.kill();
+        console.error("EB2 Killed sanbbox because of err: ", err);
+        throw err;
+      });
+
+      await e2bSandbox.commands
+        .run(
+          `echo "${config.environmentVariables.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
+        )
+        .catch(async (err) => {
+          e2bSandbox.kill();
+          console.error("EB2 Killed sanbbox because of err: ", err);
+          throw err;
+        });
     }
 
-    await e2bSandbox.commands.run("opencode serve --hostname 0.0.0.0 --port 4096", {
-      background: true,
-    });
+    await e2bSandbox.commands
+      .run(
+        `cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port 4096 > /tmp/opencode.log 2>&1`,
+        {
+          background: true,
+          onStdout: (data) => console.log(data),
+          onStderr: (data) => console.error(data),
+        },
+      )
+      .catch(async (err) => {
+        e2bSandbox.kill();
+        console.error("EB2 Killed sanbbox because of err: ", err);
+        throw err;
+      });
 
     const host = e2bSandbox.getHost(4096);
 
@@ -174,8 +286,8 @@ export class E2BProvider implements ComputeProvider {
 
   async stopWorkspace(
     externalId: string,
-    regionIdentifier: string,
-    externalRunningDeploymentId?: string,
+    _regionIdentifier: string,
+    _externalRunningDeploymentId?: string,
   ): Promise<void> {
     const { apiKey } = await this.getConfig();
 
@@ -195,8 +307,8 @@ export class E2BProvider implements ComputeProvider {
 
   async restartWorkspace(
     externalId: string,
-    regionIdentifier: string,
-    externalRunningDeploymentId?: string,
+    _regionIdentifier: string,
+    _externalRunningDeploymentId?: string,
   ): Promise<void> {
     const { apiKey } = await this.getConfig();
 
@@ -212,7 +324,7 @@ export class E2BProvider implements ComputeProvider {
     });
   }
 
-  async terminateWorkspace(externalServiceId: string, externalVolumeId?: string): Promise<void> {
+  async terminateWorkspace(externalServiceId: string, _externalVolumeId?: string): Promise<void> {
     const { apiKey } = await this.getConfig();
 
     if (!apiKey) {
@@ -278,7 +390,10 @@ export class E2BProvider implements ComputeProvider {
     return { domain };
   }
 
-  async removeExposedPortDomain(externalServiceDomainId: string): Promise<void> {
+  async removeExposedPortDomain(_externalServiceDomainId: string): Promise<void> {
     // No way to remove exposed port
   }
 }
+
+// Singleton instance
+export const e2bProvider = new E2BProvider();

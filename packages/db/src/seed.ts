@@ -1,5 +1,5 @@
 import { db, eq, and } from "./index";
-import { agentType, cloudProvider, image, region } from "./schema/cloud";
+import { agentType, cloudProvider, image, region, type CreationSettlement } from "./schema/cloud";
 import { modelProvider, model } from "./schema/model-credentials";
 import { providerType, providerConfigField } from "./schema/provider-config";
 import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
@@ -17,14 +17,25 @@ import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
 const hasSameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 const seedCloudProviders = [
-  { name: "Railway", isEnabled: false, supportsRegions: true },
-  { name: "AWS", isEnabled: false, supportsRegions: true },
+  {
+    name: "Railway",
+    isEnabled: false,
+    supportsRegions: true,
+    creationSettlement: "webhook" as CreationSettlement,
+  },
+  {
+    name: "AWS",
+    isEnabled: false,
+    supportsRegions: true,
+    creationSettlement: "poll" as CreationSettlement,
+  },
   {
     name: "Cloudflare",
     isEnabled: false,
     isSandbox: true,
     supportsRegions: false,
     supportServerOnly: true,
+    creationSettlement: "poll" as CreationSettlement,
   },
   {
     name: "E2B",
@@ -32,6 +43,7 @@ const seedCloudProviders = [
     isSandbox: true,
     supportsRegions: false,
     supportServerOnly: true,
+    creationSettlement: "immediate" as CreationSettlement,
   },
 ];
 
@@ -46,11 +58,6 @@ const seedImages = [
     name: "gitterm-opencode-server",
     imageId: "opeoginni/gitterm-opencode-server",
     agentTypeName: "OpenCode Server",
-  },
-  {
-    name: "gitterm-opencode-web",
-    imageId: "opeoginni/gitterm-opencode-server",
-    agentTypeName: "OpenCode Web",
   },
 ];
 
@@ -310,6 +317,7 @@ export async function seedDatabase(): Promise<void> {
       const targetIsSandbox = provider.isSandbox ?? false;
       const targetSupportsRegions = provider.supportsRegions ?? true;
       const targetSupportServerOnly = provider.supportServerOnly ?? false;
+      const targetCreationSettlement = provider.creationSettlement ?? "webhook";
 
       if (existing.isSandbox !== targetIsSandbox) {
         updates.isSandbox = targetIsSandbox;
@@ -321,6 +329,10 @@ export async function seedDatabase(): Promise<void> {
 
       if (existing.supportServerOnly !== targetSupportServerOnly) {
         updates.supportServerOnly = targetSupportServerOnly;
+      }
+
+      if (existing.creationSettlement !== targetCreationSettlement) {
+        updates.creationSettlement = targetCreationSettlement;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -343,10 +355,11 @@ export async function seedDatabase(): Promise<void> {
         .insert(cloudProvider)
         .values({
           name: provider.name,
-          isEnabled: true,
+          isEnabled: provider.isEnabled,
           isSandbox: provider.isSandbox ?? false,
-          supportsRegions: provider.supportsRegions ?? true,
+          supportsRegions: provider.supportsRegions,
           supportServerOnly: provider.supportServerOnly ?? false,
+          creationSettlement: provider.creationSettlement ?? "webhook",
         })
         .returning();
       console.log(`[seed]   Created provider "${provider.name}"`);

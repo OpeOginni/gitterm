@@ -222,7 +222,7 @@ export async function updateLastActive(workspaceId: string): Promise<void> {
  * Uses configurable idle timeout from database
  */
 export async function getIdleWorkspaces(): Promise<
-  Array<{ id: string; externalInstanceId: string; userId: string; regionId: string }>
+  Array<{ id: string; externalInstanceId: string; userId: string; regionId: string | null }>
 > {
   const idleTimeoutMinutes = await getConfiguredIdleTimeout();
   const idleThreshold = new Date(Date.now() - idleTimeoutMinutes * 60 * 1000);

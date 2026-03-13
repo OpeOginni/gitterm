@@ -1328,6 +1328,10 @@ export const workspaceRouter = router({
         // Get compute provider
         const computeProvider = await getProviderByCloudProviderId(cloudProviderRecord.name);
 
+        // If immediate we send the intial workspace status to running
+        const initialWorkspaceStatus =
+          cloudProviderRecord.creationSettlement === "immediate" ? "running" : "pending";
+
         // Create workspace via compute provider
         const workspaceInfo = input.persistent
           ? await computeProvider.createPersistentWorkspace({
@@ -1368,7 +1372,7 @@ export const workspaceRouter = router({
             serverOnly: agentTypeRecord.serverOnly,
             serverPassword: encryptedServerPassword ?? null,
             upstreamUrl: workspaceInfo.upstreamUrl,
-            status: "pending",
+            status: initialWorkspaceStatus,
             hostingType: isLocal ? "local" : "cloud",
             name: input.name || subdomain,
             startedAt: new Date(workspaceInfo.serviceCreatedAt),
@@ -1412,7 +1416,7 @@ export const workspaceRouter = router({
         // Emit status event
         WORKSPACE_EVENTS.emitStatus({
           workspaceId,
-          status: "pending",
+          status: initialWorkspaceStatus,
           updatedAt: new Date(workspaceInfo.serviceCreatedAt),
           userId,
           workspaceDomain: domain,

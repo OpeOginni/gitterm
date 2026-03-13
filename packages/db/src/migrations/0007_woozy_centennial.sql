@@ -1,0 +1,2 @@
+CREATE TYPE "public"."creation_settlement" AS ENUM('immediate', 'webhook', 'poll');--> statement-breakpoint
+ALTER TABLE "cloud_provider" ADD COLUMN "creation_settlement" "creation_settlement" DEFAULT 'webhook';

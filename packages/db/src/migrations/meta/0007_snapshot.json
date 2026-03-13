@@ -1,6 +1,6 @@
 {
-  "id": "0fb5b402-1f74-480f-a6e9-f31470e8fcbe",
-  "prevId": "8aa54834-0fac-49a9-973d-6813558a465a",
+  "id": "4e3a1b93-e40f-402e-ae42-bf3ea85e6d59",
+  "prevId": "0fb5b402-1f74-480f-a6e9-f31470e8fcbe",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1068,6 +1068,14 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "creation_settlement": {
+          "name": "creation_settlement",
+          "type": "creation_settlement",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'webhook'"
         },
         "created_at": {
           "name": "created_at",
@@ -3282,6 +3290,11 @@
       "name": "user_role",
       "schema": "public",
       "values": ["user", "admin"]
+    },
+    "public.creation_settlement": {
+      "name": "creation_settlement",
+      "schema": "public",
+      "values": ["immediate", "webhook", "poll"]
     },
     "public.git_provider": {
       "name": "git_provider",
