@@ -35,6 +35,12 @@ export function Footer() {
               </Link>
             )}
             <Link
+              href={"/enterprise" as Route}
+              className="uppercase tracking-widest transition-colors hover:text-white/70"
+            >
+              Enterprise
+            </Link>
+            <Link
               href="https://www.npmjs.com/package/gitterm"
               target="_blank"
               className="uppercase tracking-widest transition-colors hover:text-white/70"

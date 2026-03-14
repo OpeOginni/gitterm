@@ -98,7 +98,7 @@ function CloudProvisionDemo() {
         <div className="flex items-center justify-center gap-2">
           {[
             { name: "Railway", active: true },
-            { name: "AWS", active: false },
+            { name: "E2B", active: false },
             { name: "Cloudflare", active: false },
           ].map((provider) => (
             <div

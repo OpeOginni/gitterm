@@ -13,7 +13,7 @@ const modelProviders = [
 const infraProviders = [
   { src: "/railway.svg", label: "Railway" },
   { src: "/cloudflare.svg", label: "Cloudflare" },
-  { src: "/EC2.svg", label: "AWS EC2" },
+  { src: "/E2B.svg", label: "E2B" },
 ];
 
 export function HeroSection() {
@@ -43,7 +43,7 @@ export function HeroSection() {
           >
             OpenCode
           </Link>{" "}
-          workspaces in seconds. Persistent state, agentic loops, and zero config.
+          workspaces in seconds. Persistent state, single config, any cloud/sandbox provider.
         </p>
 
         {/* CTA row */}

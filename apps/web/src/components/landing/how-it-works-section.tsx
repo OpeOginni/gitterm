@@ -7,7 +7,7 @@ const steps = [
   {
     number: "02",
     title: "Create a workspace",
-    description: "Pick a model provider, choose your infra, and connect a repo.",
+    description: "Setup a model provider, and opencode config, and create a workspace from a repo.",
   },
   {
     number: "03",
@@ -29,26 +29,28 @@ export function HowItWorksSection() {
           </h2>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          {steps.map((step, idx) => (
-            <div
-              key={step.number}
-              className="relative rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 transition-colors hover:border-white/[0.12] hover:bg-white/[0.04]"
-            >
-              {/* Step number */}
-              <span className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-primary/10 font-mono text-sm font-bold text-primary">
-                {step.number}
-              </span>
+        {/* Single card housing all steps */}
+        <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+          <div className="h-px w-full bg-primary/40" />
+          <div className="grid divide-y divide-white/[0.06] md:grid-cols-3 md:divide-x md:divide-y-0">
+            {steps.map((step, idx) => (
+              <div key={step.number} className="relative p-8 md:p-10">
+                {/* Step number with connector */}
+                <div className="mb-6 flex items-center gap-4">
+                  <span className="relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 font-mono text-sm font-bold text-primary">
+                    {step.number}
+                  </span>
+                  {/* Dashed connector line -- stretches to the right edge */}
+                  {idx < steps.length - 1 && (
+                    <div className="hidden h-px flex-1 border-t border-dashed border-primary/20 md:block" />
+                  )}
+                </div>
 
-              {/* Connector line between cards (desktop only) */}
-              {idx < steps.length - 1 && (
-                <div className="pointer-events-none absolute right-0 top-1/2 hidden h-px w-4 -translate-y-1/2 translate-x-full bg-white/[0.06] md:block" />
-              )}
-
-              <h3 className="mb-2 text-lg font-semibold text-white/90">{step.title}</h3>
-              <p className="text-sm leading-relaxed text-white/45">{step.description}</p>
-            </div>
-          ))}
+                <h3 className="mb-2 text-lg font-semibold text-white/90">{step.title}</h3>
+                <p className="text-sm leading-relaxed text-white/45">{step.description}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

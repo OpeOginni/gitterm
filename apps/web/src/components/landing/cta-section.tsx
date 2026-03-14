@@ -14,13 +14,13 @@ export function CTASection() {
 
           <div className="relative">
             <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
-              Get started
+              Extend your workflow
             </p>
             <h2 className="mb-4 text-3xl font-bold tracking-tight text-white md:text-4xl text-balance">
-              Start building with OpenCode in minutes.
+              Take OpenCode from local to cloud.
             </h2>
             <p className="mx-auto mb-8 max-w-md text-base text-white/50">
-              Free tier included. No credit card required.
+              You already use OpenCode locally. GitTerm lets you run it in the cloud too. Same config, more power.
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link href="/dashboard">

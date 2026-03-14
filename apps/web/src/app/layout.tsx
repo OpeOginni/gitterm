@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     siteName: "GitTerm",
     images: [
       {
-        url: "/og-card/og-card-reduced.jpg",
+        url: "/og-card/og-card-reduced.png",
         width: 1200,
         height: 630,
         alt: "GitTerm — Cloud workspaces for OpenCode",

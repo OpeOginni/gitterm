@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import type { Route } from "next";
 import { Button } from "@/components/ui/button";
 import { Star, Terminal } from "lucide-react";
@@ -11,9 +10,6 @@ import { isBillingEnabled } from "@gitterm/env/web";
 export function LandingHeader() {
   const { data: session } = authClient.useSession();
   const showPricing = isBillingEnabled();
-  const pathname = usePathname();
-  const isHomePage = pathname === "/";
-
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/6 bg-[#09090b]/80 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between px-6">
@@ -45,25 +41,29 @@ export function LandingHeader() {
               Pricing
             </Link>
           )}
+          <Link
+            href={"/enterprise" as Route}
+            className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
+          >
+            Enterprise
+          </Link>
         </nav>
 
         <div className="flex items-center gap-2.5">
-          {isHomePage && (
-            <Link
-              href="https://github.com/OpeOginni/gitterm"
-              target="_blank"
-              title="Star on GitHub"
+          <Link
+            href="https://github.com/OpeOginni/gitterm"
+            target="_blank"
+            title="Star on GitHub"
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 border-white/8 bg-transparent px-2.5 text-white/50 transition-colors hover:border-primary hover:text-white/80 sm:px-3"
             >
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 border-white/8 bg-transparent px-2.5 text-white/50 transition-colors hover:border-primary hover:text-white/80 sm:px-3"
-              >
-                <Star className="h-3.5 w-3.5 shrink-0 text-primary sm:mr-1.5" />
-                <span className="hidden font-mono text-xs sm:inline">Star on Github</span>
-              </Button>
-            </Link>
-          )}
+              <Star className="h-3.5 w-3.5 shrink-0 text-primary sm:mr-1.5" />
+              <span className="hidden font-mono text-xs sm:inline">Star on Github</span>
+            </Button>
+          </Link>
           {session ? (
             <Link href="/dashboard">
               <Button

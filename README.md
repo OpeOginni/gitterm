@@ -104,7 +104,7 @@ Minimum events GitTerm currently uses:
 - `sandbox.lifecycle.resumed`
 - `sandbox.lifecycle.killed`
 
-### Cloudflare Sandbox
+### Cloudflare Sandbox (WIP)
 
 Set these values in the admin panel:
 

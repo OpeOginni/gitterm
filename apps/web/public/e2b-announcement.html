@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1200" />
+    <title>GitTerm — E2B Now Supported</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 1200px;
+        height: 675px;
+        overflow: hidden;
+        background: #09090b;
+        font-family: "DM Sans", sans-serif;
+        color: #fff;
+        position: relative;
+      }
+
+      /* Dot grid texture */
+      body::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(
+          circle,
+          rgba(255, 255, 255, 0.03) 1px,
+          transparent 1px
+        );
+        background-size: 28px 28px;
+        z-index: 0;
+      }
+
+      /* Ambient glows */
+      .glow-1 {
+        position: absolute;
+        width: 550px;
+        height: 550px;
+        top: -160px;
+        right: -80px;
+        background: radial-gradient(closest-side, rgba(200, 164, 78, 0.06), transparent);
+        border-radius: 50%;
+        z-index: 0;
+      }
+      .glow-2 {
+        position: absolute;
+        width: 400px;
+        height: 400px;
+        bottom: -100px;
+        left: -60px;
+        background: radial-gradient(closest-side, rgba(200, 164, 78, 0.04), transparent);
+        border-radius: 50%;
+        z-index: 0;
+      }
+
+      /* ─── Layout ─── */
+      .card {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        grid-template-rows: auto 1fr auto;
+        padding: 48px 64px;
+      }
+
+      /* ─── Top bar ─── */
+      .top {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand-icon {
+        width: 24px;
+        height: 24px;
+        color: #c8a44e;
+      }
+
+      .brand-name {
+        font-family: "Space Mono", monospace;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        color: rgba(255, 255, 255, 0.7);
+        text-transform: uppercase;
+      }
+
+      .badge {
+        font-family: "Space Mono", monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #c8a44e;
+        border: 1px solid rgba(200, 164, 78, 0.2);
+        background: rgba(200, 164, 78, 0.08);
+        padding: 7px 18px;
+        border-radius: 999px;
+      }
+
+      /* ─── Left: logos + headline ─── */
+      .left {
+        grid-column: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding-right: 48px;
+      }
+
+      .logos {
+        display: flex;
+        align-items: center;
+        gap: 36px;
+        margin-bottom: 44px;
+      }
+
+      .logo-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .logo-box img {
+        width: 88px;
+        height: 88px;
+      }
+
+      .logo-box .logo-label {
+        font-family: "Space Mono", monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.5);
+      }
+
+      .connector {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+        margin-bottom: 24px;
+      }
+
+      .connector span {
+        font-size: 24px;
+        font-weight: 300;
+        color: rgba(200, 164, 78, 0.5);
+        line-height: 1;
+      }
+
+      .headline {
+        font-size: 54px;
+        font-weight: 700;
+        line-height: 1.12;
+        letter-spacing: -0.02em;
+        color: #fff;
+        text-align: center;
+      }
+
+      .headline em {
+        font-style: normal;
+        color: #c8a44e;
+      }
+
+      /* ─── Right: highlights panel ─── */
+      /*
+        TEMPLATE NOTE: Update the highlights below for each new provider.
+        Keep to 3-4 short points that describe what makes this provider
+        a good fit for OpenCode workspaces.
+      */
+      .right {
+        grid-column: 2;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        border-left: 1px solid rgba(255, 255, 255, 0.06);
+        padding-left: 48px;
+      }
+
+      .highlights-label {
+        font-family: "Space Mono", monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.25);
+        margin-bottom: 24px;
+      }
+
+      .highlights {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .highlight {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+      }
+
+      .highlight-icon {
+        width: 8px;
+        height: 8px;
+        min-width: 8px;
+        margin-top: 7px;
+        border-radius: 50%;
+        background: #c8a44e;
+        opacity: 0.6;
+      }
+
+      .highlight-text {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .highlight-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.85);
+      }
+
+      .highlight-desc {
+        font-size: 13px;
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.35);
+      }
+
+      /* ─── Bottom bar ─── */
+      .bottom {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .bottom-left {
+        font-family: "Space Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.2);
+      }
+
+      .url {
+        font-family: "Space Mono", monospace;
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        color: rgba(255, 255, 255, 0.3);
+      }
+
+      .url strong {
+        color: #c8a44e;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow-1"></div>
+    <div class="glow-2"></div>
+
+    <div class="card">
+      <!-- Top bar -->
+      <div class="top">
+        <div class="brand">
+          <svg
+            class="brand-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="4 17 10 11 4 5" />
+            <line x1="12" y1="19" x2="20" y2="19" />
+          </svg>
+          <span class="brand-name">GitTerm</span>
+        </div>
+        <div class="badge">Now Supported</div>
+      </div>
+
+      <!-- Left: logos + headline -->
+      <!--
+        TEMPLATE: Replace the logo src, alt, label, and headline
+        for each new provider announcement.
+      -->
+      <div class="left">
+        <div class="logos">
+          <div class="logo-box">
+            <img src="/opencode.svg" alt="OpenCode" />
+            <span class="logo-label">OpenCode</span>
+          </div>
+          <div class="connector"><span>+</span></div>
+          <div class="logo-box">
+            <img src="/E2B.svg" alt="E2B" />
+            <span class="logo-label">E2B</span>
+          </div>
+        </div>
+        <h1 class="headline">
+          E2B is now on<br /><em>GitTerm.</em>
+        </h1>
+      </div>
+
+      <!-- Right: highlights panel -->
+      <!--
+        TEMPLATE: Swap these highlights for each provider.
+        Keep to 3-4 short points about why this provider
+        is great for running OpenCode workspaces.
+      -->
+      <div class="right">
+        <span class="highlights-label">Why E2B</span>
+        <div class="highlights">
+          <div class="highlight">
+            <div class="highlight-icon"></div>
+            <div class="highlight-text">
+              <span class="highlight-title">Blazing fast sandboxes</span>
+              <span class="highlight-desc"
+                >Benched at 0.5s median TTI across 100 concurrent spawns.</span
+              >
+            </div>
+          </div>
+          <div class="highlight">
+            <div class="highlight-icon"></div>
+            <div class="highlight-text">
+              <span class="highlight-title">Native OpenCode support</span>
+              <span class="highlight-desc"
+                >First-party OpenCode template with ongoing support.</span
+              >
+            </div>
+          </div>
+          <div class="highlight">
+            <div class="highlight-icon"></div>
+            <div class="highlight-text">
+              <span class="highlight-title">Store, pause, resume, no bill</span>
+              <span class="highlight-desc"
+                >Sandboxes persist automatically. You stop paying when idle.</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom bar -->
+      <div class="bottom">
+        <span class="bottom-left">Deploy OpenCode workspaces on E2B</span>
+        <span class="url"><strong>gitterm</strong>.dev</span>
+      </div>
+    </div>
+  </body>
+</html>
