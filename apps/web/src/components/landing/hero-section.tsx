@@ -98,7 +98,7 @@ export function HeroSection() {
           {/* Infra */}
           <div className="mt-8 border-t border-white/[0.06] pt-8">
             <p className="mb-5 text-center font-mono text-[11px] uppercase tracking-[0.25em] text-white/30">
-              Deploy on
+              Run Workspaces on
             </p>
             <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
               {infraProviders.map((i) => (
