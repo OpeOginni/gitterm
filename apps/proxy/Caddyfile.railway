@@ -125,7 +125,10 @@
 			uri path_regexp "^/ws/[^/]+(/.*)$" "$1"
 			uri path_regexp "^/ws/[^/]+/?$" "/"
 
-			reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
+			@cloud_workspace_https header X-Container-Protocol https
+			@cloud_workspace_http header X-Container-Protocol http
+
+			reverse_proxy @cloud_workspace_https {header.X-Container-Host}:{header.X-Container-Port} {
 				header_up Upgrade {header.Upgrade}
 				header_up Connection {header.Connection}
 				header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
@@ -141,7 +144,34 @@
 
 				# Modify CSP header to allow data URIs for WebAssembly
 				header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
-		
+
+				transport http {
+					tls
+					compression off
+					dial_timeout 10s
+					response_header_timeout 0
+					expect_continue_timeout 0
+					keepalive 2m
+					keepalive_idle_conns 10
+				}
+			}
+
+			reverse_proxy @cloud_workspace_http {header.X-Container-Host}:{header.X-Container-Port} {
+				header_up Upgrade {header.Upgrade}
+				header_up Connection {header.Connection}
+				header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+				header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+				header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+				header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+				header_up Host {header.X-Container-Host}
+				header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
+				header_up X-Real-IP {remote_ip}
+				header_up X-Forwarded-For {remote_ip}
+				header_up User-Agent {header.User-Agent}
+				header_up Cookie {header.Cookie}
+
+				# Modify CSP header to allow data URIs for WebAssembly
+				header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
 
 				transport http {
 					compression off
@@ -184,8 +214,42 @@
 		}
 
 		# Cloud workspaces: route to container
-		@cloud_workspace header X-Hosting-Type cloud
-		reverse_proxy @cloud_workspace {header.X-Container-Host}:{header.X-Container-Port} {
+		@cloud_workspace_https {
+			header X-Hosting-Type cloud
+			header X-Container-Protocol https
+		}
+		@cloud_workspace_http {
+			header X-Hosting-Type cloud
+			header X-Container-Protocol http
+		}
+		reverse_proxy @cloud_workspace_https {header.X-Container-Host}:{header.X-Container-Port} {
+			header_up Upgrade {header.Upgrade}
+			header_up Connection {header.Connection}
+			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+			header_up Host {header.X-Container-Host}
+			header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
+			header_up X-Real-IP {remote_ip}
+			header_up X-Forwarded-For {remote_ip}
+			header_up User-Agent {header.User-Agent}
+			header_up Cookie {header.Cookie}
+
+			header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
+
+			transport http {
+				tls
+				compression off
+				dial_timeout 10s
+				response_header_timeout 0
+				expect_continue_timeout 0
+				keepalive 2m
+				keepalive_idle_conns 10
+			}
+		}
+
+		reverse_proxy @cloud_workspace_http {header.X-Container-Host}:{header.X-Container-Port} {
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
 			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
