@@ -47,7 +47,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 # Default command
 
 # IPv6 support
-CMD ["opencode", "serve", "--port", "7681", "--hostname", "::"]
+CMD ["opencode", "serve", "--port", "7681", "--hostname", "[::]"]
 
 # docker build -f ./Opencode.Server.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-server:latest .
 
