@@ -70,106 +70,106 @@
 		}
 
 		# Cloud workspaces: route to containers using dynamic host/port from headers
-		reverse_proxy @cloud_workspace_https {header.X-Container-Host}:{header.X-Container-Port} {
-			# WebSocket support
-			header_up Upgrade {header.Upgrade}
-			header_up Connection {header.Connection}
-			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+		route @cloud_workspace {
+			handle @cloud_workspace_https {
+				reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
+					# WebSocket support
+					header_up Upgrade {header.Upgrade}
+					header_up Connection {header.Connection}
+					header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+					header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+					header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+					header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 
-			# Standard proxy headers
-			header_up Host {header.X-Container-Host}
-			header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
-			header_up X-Real-IP {remote_ip}
-			header_up X-Forwarded-For {remote_ip}
-			header_up User-Agent {header.User-Agent}
-			header_up Cookie {header.Cookie}
-			header_up X-Routing-Mode subdomain
+					# Standard proxy headers
+					header_up Host {header.X-Container-Host}
+					header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
+					header_up X-Real-IP {remote_ip}
+					header_up X-Forwarded-For {remote_ip}
+					header_up User-Agent {header.User-Agent}
+					header_up Cookie {header.Cookie}
+					header_up X-Routing-Mode subdomain
 
-			# Modify CSP header to allow data URIs for WebAssembly
-			header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
+					# Modify CSP header to allow data URIs for WebAssembly
+					header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
 
-			# Transport settings optimized for WebSocket/ttyd
-			transport http {
-				tls
-				compression off
-				dial_timeout 10s
-				response_header_timeout 0
-				expect_continue_timeout 0
-				keepalive 2m
-				keepalive_idle_conns 10
-				read_buffer 32768
-				write_buffer 32768
+					# Transport settings optimized for WebSocket/ttyd
+					transport http {
+						tls
+						compression off
+						dial_timeout 10s
+						response_header_timeout 0
+						expect_continue_timeout 0
+						keepalive 2m
+						keepalive_idle_conns 10
+						read_buffer 32768
+						write_buffer 32768
+					}
+
+					@unavailable status 403 404 503
+					handle_response @unavailable {
+						root * /srv/errors
+						rewrite * /unavailable.html
+						file_server
+					}
+
+					@server_error status 500 502 504
+					handle_response @server_error {
+						root * /srv/errors
+						rewrite * /error.html
+						file_server
+					}
+				}
 			}
 
-			# Intercept upstream error responses and show nice error pages.
-			# Do NOT intercept 401 so browser can show HTTP auth prompt
-			# for server-only workspaces protected by OPENCODE_SERVER_PASSWORD.
-			@unavailable status 403 404 503
-			handle_response @unavailable {
-				root * /srv/errors
-				rewrite * /unavailable.html
-				file_server
-			}
+			handle {
+				reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
+					# WebSocket support
+					header_up Upgrade {header.Upgrade}
+					header_up Connection {header.Connection}
+					header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
+					header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
+					header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
+					header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 
-			@server_error status 500 502 504
-			handle_response @server_error {
-				root * /srv/errors
-				rewrite * /error.html
-				file_server
-			}
-		}
+					# Standard proxy headers
+					header_up Host {header.X-Container-Host}
+					header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
+					header_up X-Real-IP {remote_ip}
+					header_up X-Forwarded-For {remote_ip}
+					header_up User-Agent {header.User-Agent}
+					header_up Cookie {header.Cookie}
+					header_up X-Routing-Mode subdomain
 
-		reverse_proxy @cloud_workspace {header.X-Container-Host}:{header.X-Container-Port} {
-			# WebSocket support
-			header_up Upgrade {header.Upgrade}
-			header_up Connection {header.Connection}
-			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-			header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
+					# Modify CSP header to allow data URIs for WebAssembly
+					header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
 
-			# Standard proxy headers
-			header_up Host {header.X-Container-Host}
-			header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
-			header_up X-Real-IP {remote_ip}
-			header_up X-Forwarded-For {remote_ip}
-			header_up User-Agent {header.User-Agent}
-			header_up Cookie {header.Cookie}
-			header_up X-Routing-Mode subdomain
+					# Transport settings optimized for WebSocket/ttyd
+					transport http {
+						compression off
+						dial_timeout 10s
+						response_header_timeout 0
+						expect_continue_timeout 0
+						keepalive 2m
+						keepalive_idle_conns 10
+						read_buffer 32768
+						write_buffer 32768
+					}
 
-			# Modify CSP header to allow data URIs for WebAssembly
-			header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
+					@unavailable status 403 404 503
+					handle_response @unavailable {
+						root * /srv/errors
+						rewrite * /unavailable.html
+						file_server
+					}
 
-			# Transport settings optimized for WebSocket/ttyd
-			transport http {
-				compression off
-				dial_timeout 10s
-				response_header_timeout 0
-				expect_continue_timeout 0
-				keepalive 2m
-				keepalive_idle_conns 10
-				read_buffer 32768
-				write_buffer 32768
-			}
-
-			# Intercept upstream error responses and show nice error pages.
-			# Do NOT intercept 401 so browser can show HTTP auth prompt
-			# for server-only workspaces protected by OPENCODE_SERVER_PASSWORD.
-			@unavailable status 403 404 503
-			handle_response @unavailable {
-				root * /srv/errors
-				rewrite * /unavailable.html
-				file_server
-			}
-
-			@server_error status 500 502 504
-			handle_response @server_error {
-				root * /srv/errors
-				rewrite * /error.html
-				file_server
+					@server_error status 500 502 504
+					handle_response @server_error {
+						root * /srv/errors
+						rewrite * /error.html
+						file_server
+					}
+				}
 			}
 		}
 	}

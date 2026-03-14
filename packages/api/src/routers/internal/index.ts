@@ -745,7 +745,7 @@ export const internalRouter = router({
             and(
               eq(workspace.cloudProviderId, e2bProvider.id),
               eq(workspace.externalInstanceId, serviceId),
-              eq(workspace.status, "stopped"),
+              or(eq(workspace.status, "stopped"), eq(workspace.status, "pending")),
             ),
           )
           .returning({
