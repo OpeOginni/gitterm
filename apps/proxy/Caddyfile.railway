@@ -126,7 +126,6 @@
 			uri path_regexp "^/ws/[^/]+/?$" "/"
 
 			@cloud_workspace_https header X-Container-Protocol https
-			@cloud_workspace_http header X-Container-Protocol http
 
 			reverse_proxy @cloud_workspace_https {header.X-Container-Host}:{header.X-Container-Port} {
 				header_up Upgrade {header.Upgrade}
@@ -156,7 +155,7 @@
 				}
 			}
 
-			reverse_proxy @cloud_workspace_http {header.X-Container-Host}:{header.X-Container-Port} {
+			reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
 				header_up Upgrade {header.Upgrade}
 				header_up Connection {header.Connection}
 				header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
@@ -214,13 +213,12 @@
 		}
 
 		# Cloud workspaces: route to container
+		@cloud_workspace {
+			header X-Hosting-Type cloud
+		}
 		@cloud_workspace_https {
 			header X-Hosting-Type cloud
 			header X-Container-Protocol https
-		}
-		@cloud_workspace_http {
-			header X-Hosting-Type cloud
-			header X-Container-Protocol http
 		}
 		reverse_proxy @cloud_workspace_https {header.X-Container-Host}:{header.X-Container-Port} {
 			header_up Upgrade {header.Upgrade}
@@ -249,7 +247,7 @@
 			}
 		}
 
-		reverse_proxy @cloud_workspace_http {header.X-Container-Host}:{header.X-Container-Port} {
+		reverse_proxy @cloud_workspace {header.X-Container-Host}:{header.X-Container-Port} {
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
 			header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}

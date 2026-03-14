@@ -60,14 +60,13 @@
 			header_up X-Routing-Mode subdomain
 		}
 
+		@cloud_workspace {
+			header X-Hosting-Type cloud
+		}
+
 		@cloud_workspace_https {
 			header X-Hosting-Type cloud
 			header X-Container-Protocol https
-		}
-
-		@cloud_workspace_http {
-			header X-Hosting-Type cloud
-			header X-Container-Protocol http
 		}
 
 		# Cloud workspaces: route to containers using dynamic host/port from headers
@@ -123,7 +122,7 @@
 			}
 		}
 
-		reverse_proxy @cloud_workspace_http {header.X-Container-Host}:{header.X-Container-Port} {
+		reverse_proxy @cloud_workspace {header.X-Container-Host}:{header.X-Container-Port} {
 			# WebSocket support
 			header_up Upgrade {header.Upgrade}
 			header_up Connection {header.Connection}
