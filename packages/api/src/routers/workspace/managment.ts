@@ -47,6 +47,11 @@ import {
   detectWorkspaceToolingManifestFromPaths,
   encodeWorkspaceToolingManifestBase64,
 } from "../../utils/workspace-tooling";
+import {
+  deleteAllWorkspaceRouteAccess,
+  deleteWorkspaceRouteAccess,
+  upsertWorkspaceRouteAccess,
+} from "../../service/workspace-route-access";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -1388,6 +1393,14 @@ export const workspaceRouter = router({
           });
         }
 
+        if (workspaceInfo.upstreamAccess?.headers) {
+          await upsertWorkspaceRouteAccess(
+            workspaceId,
+            null,
+            workspaceInfo.upstreamAccess.headers,
+          );
+        }
+
         // Create volume record (only for persistent workspaces)
         let newVolume = null;
         if (input.persistent) {
@@ -1732,6 +1745,8 @@ export const workspaceRouter = router({
         .where(eq(workspace.id, input.workspaceId))
         .returning();
 
+      await deleteAllWorkspaceRouteAccess(input.workspaceId);
+
       // Delete volume record
       if (fetchedWorkspace.persistent) {
         await db.delete(volume).where(eq(volume.id, fetchedWorkspace.volume.id));
@@ -1780,10 +1795,11 @@ export const workspaceRouter = router({
 
       const computeProvider = await getProviderByCloudProviderId(provider.name);
 
-      const { domain, externalPortDomainId } = await computeProvider.createOrGetExposedPortDomain(
-        fetchedWorkspace.externalInstanceId,
-        input.port,
-      );
+      const { domain, externalPortDomainId, upstreamAccess } =
+        await computeProvider.createOrGetExposedPortDomain(
+          fetchedWorkspace.externalInstanceId,
+          input.port,
+        );
 
       await db
         .update(workspace)
@@ -1799,6 +1815,12 @@ export const workspaceRouter = router({
           },
         })
         .where(eq(workspace.id, input.workspaceId));
+
+      if (upstreamAccess?.headers) {
+        await upsertWorkspaceRouteAccess(input.workspaceId, input.port, upstreamAccess.headers);
+      } else {
+        await deleteWorkspaceRouteAccess(input.workspaceId, input.port);
+      }
 
       return {
         success: true,
@@ -1851,6 +1873,8 @@ export const workspaceRouter = router({
           },
         })
         .where(eq(workspace.id, input.workspaceId));
+
+      await deleteWorkspaceRouteAccess(input.workspaceId, input.port);
 
       return {
         success: true,

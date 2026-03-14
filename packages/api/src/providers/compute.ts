@@ -32,6 +32,10 @@ export interface WorkspaceConfig {
   environmentVariables?: WorkspaceEnvironmentVariables;
 }
 
+export interface UpstreamAccess {
+  headers: Record<string, string>;
+}
+
 export interface PersistentWorkspaceConfig extends WorkspaceConfig {
   persistent: boolean;
 }
@@ -39,6 +43,7 @@ export interface PersistentWorkspaceConfig extends WorkspaceConfig {
 export interface WorkspaceInfo {
   externalServiceId: string;
   upstreamUrl: string; // URL to proxy requests to (e.g., Railway internal URL)
+  upstreamAccess?: UpstreamAccess;
   domain: string;
   serviceCreatedAt: Date;
 }
@@ -103,7 +108,7 @@ export interface ComputeProvider {
   createOrGetExposedPortDomain(
     externalServiceId: string,
     port: number,
-  ): Promise<{ domain: string; externalPortDomainId?: string }>;
+  ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }>;
 
   /**
    * Remove a domain for an exposed port

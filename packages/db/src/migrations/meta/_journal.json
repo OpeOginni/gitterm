@@ -47,15 +47,8 @@
     {
       "idx": 6,
       "version": "7",
-      "when": 1773358134542,
-      "tag": "0006_cool_korvac",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1773406008276,
-      "tag": "0007_woozy_centennial",
+      "when": 1773485591261,
+      "tag": "0006_rapid_maggott",
       "breakpoints": true
     }
   ]

@@ -29,6 +29,7 @@ import { deductRunFromQuota, refundRunToQuota } from "../../service/quotas/run-q
 import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/helpers";
 import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import type { E2BConfig } from "../../providers/e2b";
 
 /**
@@ -327,6 +328,8 @@ export const internalRouter = router({
           updatedAt: now,
         })
         .where(eq(workspace.id, input.workspaceId));
+
+      await deleteAllWorkspaceRouteAccess(input.workspaceId);
 
       // Emit status event
       WORKSPACE_EVENTS.emitStatus({
@@ -791,6 +794,10 @@ export const internalRouter = router({
             userId: workspace.userId,
             workspaceDomain: workspace.domain,
           });
+
+        await Promise.all(
+          updatedWorkspaces.map((updatedWorkspace) => deleteAllWorkspaceRouteAccess(updatedWorkspace.id)),
+        );
 
         return { updated: updatedWorkspaces };
       }

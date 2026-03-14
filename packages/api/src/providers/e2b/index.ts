@@ -3,6 +3,7 @@ import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
   PersistentWorkspaceInfo,
+  UpstreamAccess,
   WorkspaceConfig,
   WorkspaceInfo,
   WorkspaceStatusResult,
@@ -15,6 +16,14 @@ export type { E2BConfig } from "./types";
 
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
+
+function getTrafficAccessHeaders(token: string): UpstreamAccess {
+  return {
+    headers: {
+      "e2b-traffic-access-token": token,
+    },
+  };
+}
 
 export class E2BProvider implements ComputeProvider {
   readonly name = "e2b";
@@ -44,6 +53,9 @@ export class E2BProvider implements ComputeProvider {
     const e2bSandbox = await Sandbox.create("opencode", {
       apiKey: apiKey,
       timeoutMs: 10 * 60 * 1_000, // 10 mins timeout
+      network: {
+        allowPublicTraffic: false,
+      },
       lifecycle: {
         onTimeout: "pause",
       },
@@ -137,6 +149,12 @@ export class E2BProvider implements ComputeProvider {
       });
 
     const host = e2bSandbox.getHost(4096);
+    const trafficAccessToken = e2bSandbox.trafficAccessToken;
+
+    if (!trafficAccessToken) {
+      await e2bSandbox.kill().catch(() => undefined);
+      throw new Error("E2B traffic access token missing");
+    }
 
     const upstreamUrl = `https://${host}`;
 
@@ -152,6 +170,7 @@ export class E2BProvider implements ComputeProvider {
     return {
       externalServiceId: e2bSandbox.sandboxId,
       upstreamUrl,
+      upstreamAccess: getTrafficAccessHeaders(trafficAccessToken),
       domain,
       serviceCreatedAt: new Date((await e2bSandbox.getInfo()).startedAt),
     };
@@ -169,6 +188,9 @@ export class E2BProvider implements ComputeProvider {
     const e2bSandbox = await Sandbox.create("opencode", {
       apiKey: apiKey,
       timeoutMs: 10 * 60 * 1_000, // 10 mins timeout
+      network: {
+        allowPublicTraffic: false,
+      },
       lifecycle: {
         onTimeout: "kill",
       },
@@ -262,6 +284,12 @@ export class E2BProvider implements ComputeProvider {
       });
 
     const host = e2bSandbox.getHost(4096);
+    const trafficAccessToken = e2bSandbox.trafficAccessToken;
+
+    if (!trafficAccessToken) {
+      await e2bSandbox.kill().catch(() => undefined);
+      throw new Error("E2B traffic access token missing");
+    }
 
     const upstreamUrl = `https://${host}`;
 
@@ -278,6 +306,7 @@ export class E2BProvider implements ComputeProvider {
       externalServiceId: e2bSandbox.sandboxId,
       externalVolumeId: e2bSandbox.sandboxId,
       upstreamUrl,
+      upstreamAccess: getTrafficAccessHeaders(trafficAccessToken),
       domain,
       serviceCreatedAt: new Date((await e2bSandbox.getInfo()).startedAt),
       volumeCreatedAt: new Date((await e2bSandbox.getInfo()).startedAt),
@@ -373,7 +402,7 @@ export class E2BProvider implements ComputeProvider {
   async createOrGetExposedPortDomain(
     externalServiceId: string,
     port: number,
-  ): Promise<{ domain: string; externalPortDomainId?: string }> {
+  ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }> {
     const { apiKey } = await this.getConfig();
 
     if (!apiKey) {
@@ -387,7 +416,11 @@ export class E2BProvider implements ComputeProvider {
     const host = sandbox.getHost(port);
     const domain = `https://${host}`;
 
-    return { domain };
+    const upstreamAccess = sandbox.trafficAccessToken
+      ? getTrafficAccessHeaders(sandbox.trafficAccessToken)
+      : undefined;
+
+    return { domain, upstreamAccess };
   }
 
   async removeExposedPortDomain(_externalServiceDomainId: string): Promise<void> {
