@@ -184,6 +184,34 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       },
     ],
   },
+
+  e2b: {
+    name: "e2b",
+    displayName: "E2B",
+    category: "sandbox",
+    configSchema: z.object({
+      apiKey: z.string().min(1, "API KEY is required"),
+      webhookSecret: z.string().min(1, "Webhook secret is required"),
+    }),
+    fields: [
+      {
+        fieldName: "apiKey",
+        fieldLabel: "API KEY",
+        fieldType: "password",
+        isRequired: true,
+        isEncrypted: true,
+        sortOrder: 1,
+      },
+      {
+        fieldName: "webhookSecret",
+        fieldLabel: "Webhook Secret",
+        fieldType: "password",
+        isRequired: true,
+        isEncrypted: true,
+        sortOrder: 2,
+      },
+    ],
+  },
 };
 
 export function getProviderDefinition(providerName: string): ProviderDefinition | undefined {

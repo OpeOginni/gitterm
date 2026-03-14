@@ -15,6 +15,7 @@ import { closeUsageSession } from "../../utils/metering";
 import { getProviderByCloudProviderId } from "../../providers";
 import { validateAgentConfig } from "@gitterm/schema";
 import { polarClient, isBillingEnabled } from "@gitterm/auth";
+import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 
 export const userRouter = router({
   deleteUser: protectedProcedure.mutation(async ({ ctx }) => {
@@ -70,6 +71,8 @@ export const userRouter = router({
               updatedAt: new Date(),
             })
             .where(eq(workspace.id, ws.id));
+
+          await deleteAllWorkspaceRouteAccess(ws.id);
 
           // Delete volume record if persistent
           if (ws.persistent && ws.volume) {

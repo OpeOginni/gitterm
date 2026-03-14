@@ -60,7 +60,8 @@ export function detectWorkspaceToolingManifestFromPaths(
   owner?: string,
   repo?: string,
 ): WorkspaceToolingManifest {
-  const hasExact = (name: string) => paths.some((path) => path === name || path.endsWith(`/${name}`));
+  const hasExact = (name: string) =>
+    paths.some((path) => path === name || path.endsWith(`/${name}`));
   const hasRegex = (pattern: RegExp) => paths.some((path) => pattern.test(path));
 
   const hasNodeSignals =
@@ -84,9 +85,7 @@ export function detectWorkspaceToolingManifestFromPaths(
     hasExact("setup.cfg");
   const hasDotnet = hasRegex(/\.(csproj|sln|cs)$/i);
   const hasBuildTools =
-    hasRegex(/\.(c|h|cpp|hpp|cc|cxx)$/i) ||
-    hasExact("CMakeLists.txt") ||
-    hasExact("Makefile");
+    hasRegex(/\.(c|h|cpp|hpp|cc|cxx)$/i) || hasExact("CMakeLists.txt") || hasExact("Makefile");
   const hasRust =
     hasExact("Cargo.toml") ||
     hasExact("Cargo.lock") ||

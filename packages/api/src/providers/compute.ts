@@ -5,14 +5,35 @@
 
 export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
 
+export interface WorkspaceEnvironmentVariables {
+  REPO_URL?: string;
+  OPENCODE_CONFIG_BASE64: string;
+  OPENCODE_CREDENTIALS_BASE64: string;
+  OPENCODE_SERVER_PASSWORD?: string;
+  USER_GITHUB_USERNAME?: string;
+  GITHUB_APP_TOKEN?: string;
+  GITHUB_APP_TOKEN_EXPIRY?: string;
+  WORKSPACE_TOOLING_MANIFEST_BASE64: string;
+  REPO_OWNER?: string;
+  REPO_NAME?: string;
+  WORKSPACE_ID: string;
+  WORKSPACE_AUTH_TOKEN: string;
+  WORKSPACE_API_URL: string;
+  [key: string]: string | undefined;
+}
+
 export interface WorkspaceConfig {
   workspaceId: string;
   userId: string;
   imageId: string;
   subdomain: string;
   repositoryUrl?: string;
-  regionIdentifier: string;
-  environmentVariables?: Record<string, string | undefined>;
+  regionIdentifier?: string;
+  environmentVariables?: WorkspaceEnvironmentVariables;
+}
+
+export interface UpstreamAccess {
+  headers: Record<string, string>;
 }
 
 export interface PersistentWorkspaceConfig extends WorkspaceConfig {
@@ -22,6 +43,7 @@ export interface PersistentWorkspaceConfig extends WorkspaceConfig {
 export interface WorkspaceInfo {
   externalServiceId: string;
   upstreamUrl: string; // URL to proxy requests to (e.g., Railway internal URL)
+  upstreamAccess?: UpstreamAccess;
   domain: string;
   serviceCreatedAt: Date;
 }
@@ -57,7 +79,7 @@ export interface ComputeProvider {
    */
   stopWorkspace(
     externalId: string,
-    regionIdentifier: string,
+    regionIdentifier?: string,
     externalRunningDeploymentId?: string,
   ): Promise<void>;
 
@@ -66,7 +88,7 @@ export interface ComputeProvider {
    */
   restartWorkspace(
     externalId: string,
-    regionIdentifier: string,
+    regionIdentifier?: string,
     externalRunningDeploymentId?: string,
   ): Promise<void>;
 
@@ -86,7 +108,7 @@ export interface ComputeProvider {
   createOrGetExposedPortDomain(
     externalServiceId: string,
     port: number,
-  ): Promise<{ domain: string; externalPortDomainId?: string }>;
+  ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }>;
 
   /**
    * Remove a domain for an exposed port

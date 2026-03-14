@@ -79,8 +79,12 @@ export default function ProviderSettingsPage() {
   });
 
   const updateProvider = useMutation({
-    mutationFn: (params: { id: string; providerConfigId?: string | null; name?: string }) =>
-      trpcClient.admin.infrastructure.updateProvider.mutate(params),
+    mutationFn: (params: {
+      id: string;
+      providerConfigId?: string | null;
+      name?: string;
+      supportsRegions?: boolean;
+    }) => trpcClient.admin.infrastructure.updateProvider.mutate(params),
   });
 
   const toggleProvider = useMutation({
@@ -493,124 +497,127 @@ export default function ProviderSettingsPage() {
               )}
             </div>
 
-            {/* Regions Section */}
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-white/90">Regions</p>
-                  <p className="text-xs text-white/40">
-                    Enable, disable, or add regions for this provider.
-                  </p>
+            {provider?.supportsRegions && (
+              <div className="rounded-2xl border border-border bg-card p-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-white/90">Regions</p>
+                    <p className="text-xs text-white/40">
+                      Enable, disable, or add regions for this provider.
+                    </p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                  >
+                    {provider?.regions?.length ?? 0} total
+                  </Badge>
                 </div>
-                <Badge
-                  variant="outline"
-                  className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                >
-                  {provider?.regions?.length ?? 0} total
-                </Badge>
-              </div>
 
-              <div className="mt-4 space-y-2">
-                {provider?.regions?.length ? (
-                  provider.regions.map((region: any) => (
-                    <div
-                      key={region.id}
-                      className={`flex items-center justify-between rounded-xl border border-border bg-white/[0.02] px-4 py-3 ${
-                        !region.isEnabled ? "opacity-60" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="rounded-xl bg-white/[0.04] p-2">
-                          <MapPin className="h-4 w-4 text-white/40" />
-                        </div>
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-white/90">{region.name}</span>
-                            {!region.isEnabled && (
-                              <Badge
-                                variant="outline"
-                                className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                              >
-                                Disabled
-                              </Badge>
-                            )}
+                <div className="mt-4 space-y-2">
+                  {provider?.regions?.length ? (
+                    provider.regions.map((region: any) => (
+                      <div
+                        key={region.id}
+                        className={`flex items-center justify-between rounded-xl border border-border bg-white/[0.02] px-4 py-3 ${
+                          !region.isEnabled ? "opacity-60" : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-xl bg-white/[0.04] p-2">
+                            <MapPin className="h-4 w-4 text-white/40" />
                           </div>
-                          <p className="text-xs text-white/30">
-                            {region.location} • {region.externalRegionIdentifier}
-                          </p>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-white/90">
+                                {region.name}
+                              </span>
+                              {!region.isEnabled && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                                >
+                                  Disabled
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-white/30">
+                              {region.location} • {region.externalRegionIdentifier}
+                            </p>
+                          </div>
                         </div>
+                        <Switch
+                          checked={region.isEnabled}
+                          onCheckedChange={(checked) =>
+                            toggleRegion.mutate({ id: region.id, isEnabled: checked })
+                          }
+                        />
                       </div>
-                      <Switch
-                        checked={region.isEnabled}
-                        onCheckedChange={(checked) =>
-                          toggleRegion.mutate({ id: region.id, isEnabled: checked })
-                        }
+                    ))
+                  ) : (
+                    <p className="py-12 text-center text-white/30">No regions configured yet.</p>
+                  )}
+                </div>
+
+                <div className="mt-5 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-5">
+                  <p className="text-sm font-medium text-white/90">Add Region</p>
+                  <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="region-name">Region Name</Label>
+                      <Input
+                        id="region-name"
+                        value={newRegion.name}
+                        onChange={(e) => setNewRegion({ ...newRegion, name: e.target.value })}
+                        placeholder="e.g., US West"
                       />
                     </div>
-                  ))
-                ) : (
-                  <p className="py-12 text-center text-white/30">No regions configured yet.</p>
-                )}
-              </div>
-
-              <div className="mt-5 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-5">
-                <p className="text-sm font-medium text-white/90">Add Region</p>
-                <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="region-name">Region Name</Label>
-                    <Input
-                      id="region-name"
-                      value={newRegion.name}
-                      onChange={(e) => setNewRegion({ ...newRegion, name: e.target.value })}
-                      placeholder="e.g., US West"
-                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="location">Location</Label>
+                      <Input
+                        id="location"
+                        value={newRegion.location}
+                        onChange={(e) => setNewRegion({ ...newRegion, location: e.target.value })}
+                        placeholder="e.g., California"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="external-id">External Identifier</Label>
+                      <Input
+                        id="external-id"
+                        value={newRegion.externalRegionIdentifier}
+                        onChange={(e) =>
+                          setNewRegion({ ...newRegion, externalRegionIdentifier: e.target.value })
+                        }
+                        placeholder="e.g., us-west-2"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="location">Location</Label>
-                    <Input
-                      id="location"
-                      value={newRegion.location}
-                      onChange={(e) => setNewRegion({ ...newRegion, location: e.target.value })}
-                      placeholder="e.g., California"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="external-id">External Identifier</Label>
-                    <Input
-                      id="external-id"
-                      value={newRegion.externalRegionIdentifier}
-                      onChange={(e) =>
-                        setNewRegion({ ...newRegion, externalRegionIdentifier: e.target.value })
+                  <div className="mt-4 flex items-center justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (!provider?.id) {
+                          toast.error("Select a provider first.");
+                          return;
+                        }
+                        createRegion.mutate({
+                          cloudProviderId: provider.id,
+                          ...newRegion,
+                        });
+                      }}
+                      disabled={
+                        !newRegion.name ||
+                        !newRegion.location ||
+                        !newRegion.externalRegionIdentifier ||
+                        createRegion.isPending
                       }
-                      placeholder="e.g., us-west-2"
-                    />
+                    >
+                      {createRegion.isPending ? "Adding..." : "Add Region"}
+                    </Button>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-end">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      if (!provider?.id) {
-                        toast.error("Select a provider first.");
-                        return;
-                      }
-                      createRegion.mutate({
-                        cloudProviderId: provider.id,
-                        ...newRegion,
-                      });
-                    }}
-                    disabled={
-                      !newRegion.name ||
-                      !newRegion.location ||
-                      !newRegion.externalRegionIdentifier ||
-                      createRegion.isPending
-                    }
-                  >
-                    {createRegion.isPending ? "Adding..." : "Add Region"}
-                  </Button>
-                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>

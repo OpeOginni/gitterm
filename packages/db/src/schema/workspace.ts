@@ -53,9 +53,7 @@ export const workspace = pgTable("workspace", {
   cloudProviderId: uuid("cloud_provider_id")
     .notNull()
     .references(() => cloudProvider.id, { onDelete: "cascade" }),
-  regionId: uuid("region_id")
-    .notNull()
-    .references(() => region.id, { onDelete: "cascade" }),
+  regionId: uuid("region_id").references(() => region.id, { onDelete: "cascade" }),
   repositoryUrl: text("repository_url"),
   domain: text("domain").notNull(), // Full domain: {uuid}.gitterm.dev or just {uuid} in path mode
   subdomain: text("subdomain"), // The workspace URL identifier (UUID format)
@@ -94,9 +92,7 @@ export const volume = pgTable("volume", {
   cloudProviderId: uuid("cloud_provider_id")
     .notNull()
     .references(() => cloudProvider.id, { onDelete: "cascade" }),
-  regionId: uuid("region_id")
-    .notNull()
-    .references(() => region.id, { onDelete: "cascade" }),
+  regionId: uuid("region_id").references(() => region.id, { onDelete: "cascade" }),
   externalVolumeId: text("external_volume_id").notNull(),
   mountPath: text("mount_path").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),

@@ -284,7 +284,11 @@ function InstanceCard({
   const isPending = workspace.status === "pending";
 
   const connectCommand = workspace.subdomain
-    ? getAttachCommand(workspace.subdomain, workspace.image.agentType.name, workspace.serverPassword)
+    ? getAttachCommand(
+        workspace.subdomain,
+        workspace.image.agentType.name,
+        workspace.serverPassword,
+      )
     : null;
 
   // Get the workspace URL for linking

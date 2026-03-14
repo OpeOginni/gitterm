@@ -51,7 +51,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     trpc.workspace.listAgentTypes.queryOptions(),
   );
   const { data: cloudProvidersData, isLoading: isLoadingCloudProviders } = useQuery(
-    trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true, nonSandboxOnly: true }),
+    trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true }),
   );
   const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
   const { data: subdomainPermissions } = useQuery(
@@ -61,7 +61,17 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   // Derived selections (user choice or first available)
   const selectedCloudProviderId =
     userCloudProviderId ?? cloudProvidersData?.cloudProviders[0]?.id ?? "";
-  const selectedAgentTypeId = userAgentTypeId ?? agentTypesData?.agentTypes[0]?.id ?? "";
+
+  const selectedCloudProvider = useMemo((): CloudProvider | null => {
+    if (!selectedCloudProviderId) return null;
+    return (
+      (cloudProvidersData?.cloudProviders.find((p) => p.id === selectedCloudProviderId) as
+        | CloudProvider
+        | undefined) ?? null
+    );
+  }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
+
+  const selectedProviderSupportsRegions = selectedCloudProvider?.supportsRegions ?? true;
 
   const availableRegions = useMemo((): Region[] => {
     if (!selectedCloudProviderId) return [];
@@ -70,6 +80,20 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     );
     return (provider?.regions ?? []) as Region[];
   }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
+
+  const availableAgents = useMemo((): AgentType[] => {
+    const agents = agentTypesData?.agentTypes ?? [];
+    if (!selectedCloudProviderId) return agents;
+
+    const provider = cloudProvidersData?.cloudProviders.find(
+      (p) => p.id === selectedCloudProviderId,
+    );
+    if (provider?.supportServerOnly) return agents.filter((agent) => agent.serverOnly);
+
+    return agents;
+  }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders, agentTypesData?.agentTypes]);
+
+  const selectedAgentTypeId = userAgentTypeId ?? availableAgents[0]?.id ?? "";
 
   const selectedRegion = useMemo(() => {
     if (userRegionId && availableRegions.some((r) => r.id === userRegionId)) {
@@ -102,11 +126,23 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     }),
   );
 
-  const isValid = !!(repoUrl && selectedAgentTypeId && selectedCloudProviderId && selectedRegion);
+  const isValid = !!(
+    repoUrl &&
+    selectedAgentTypeId &&
+    selectedCloudProviderId &&
+    (!selectedProviderSupportsRegions || selectedRegion)
+  );
 
   const handleSubmit = async () => {
     if (!isValid) {
       toast.error("Please fill in all required fields.");
+      return;
+    }
+
+    if (selectedProviderSupportsRegions && !selectedRegion) {
+      toast.error(
+        "No default region is configured for this provider. Ask an admin to add one or enable region support.",
+      );
       return;
     }
 
@@ -199,8 +235,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 </SelectContent>
               ) : (
                 <SelectContent>
-                  {agentTypesData?.agentTypes && agentTypesData.agentTypes.length > 0 ? (
-                    agentTypesData.agentTypes.map((agent) => (
+                  {availableAgents && availableAgents.length > 0 ? (
+                    availableAgents.map((agent) => (
                       <SelectItem key={agent.id} value={agent.id}>
                         <div className="flex items-center">
                           <Image
@@ -267,40 +303,42 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
         {/* Region & Repository Access */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium">Region</Label>
-            <Select
-              value={selectedRegion}
-              onValueChange={setUserRegionId}
-              disabled={availableRegions.length === 0}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    availableRegions.length > 0 ? "Select region" : "No regions available"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {availableRegions.length > 0 ? (
-                  availableRegions.map((region) => (
-                    <SelectItem key={region.id} value={region.id}>
-                      {region.name}
+          {selectedProviderSupportsRegions && (
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium">Region</Label>
+              <Select
+                value={selectedRegion}
+                onValueChange={setUserRegionId}
+                disabled={availableRegions.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      availableRegions.length > 0 ? "Select region" : "No regions available"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableRegions.length > 0 ? (
+                    availableRegions.map((region) => (
+                      <SelectItem key={region.id} value={region.id}>
+                        {region.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-regions" disabled>
+                      <div className="flex items-center">
+                        <AlertCircle className="mr-2 h-4 w-4" />
+                        No regions available
+                      </div>
                     </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="no-regions" disabled>
-                    <div className="flex items-center">
-                      <AlertCircle className="mr-2 h-4 w-4" />
-                      No regions available
-                    </div>
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-          <div className="grid gap-2">
+          <div className={`grid gap-2 ${selectedProviderSupportsRegions ? "" : "sm:col-span-2"}`}>
             <Label className="text-sm font-medium flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>

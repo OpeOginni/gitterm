@@ -106,7 +106,7 @@
 		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol e2b-traffic-access-token
 
 			header_up Host {host}
 			header_up X-Internal-Key {$INTERNAL_API_KEY}
@@ -133,6 +133,7 @@
 				header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
 				header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 				header_up Host {header.X-Container-Host}
+				header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
 				header_up X-Real-IP {remote_ip}
 				header_up X-Forwarded-For {remote_ip}
 				header_up User-Agent {header.User-Agent}
@@ -168,7 +169,7 @@
 		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol e2b-traffic-access-token
 
 			header_up Host {host}
 			header_up X-Requested-Port {http.regexp.portsub.1}
@@ -192,6 +193,7 @@
 			header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
 			header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 			header_up Host {header.X-Container-Host}
+			header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
 			header_up X-Real-IP {remote_ip}
 			header_up X-Forwarded-For {remote_ip}
 			header_up User-Agent {header.User-Agent}

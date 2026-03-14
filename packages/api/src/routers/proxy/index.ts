@@ -4,6 +4,7 @@ import { workspace } from "@gitterm/db/schema/workspace";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import env from "@gitterm/env/server";
+import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { extractWorkspaceSubdomain } from "../../utils/routing";
 
 // Inlined error page HTML templates (to work in bundled builds)
@@ -265,6 +266,23 @@ function htmlError(c: Context, type: "unavailable" | "error", status: Contentful
   return c.html(html, status);
 }
 
+function buildProxyResolveHeaders(
+  headers: Record<string, string>,
+  upstreamAccessHeaders?: Record<string, string> | null,
+) {
+  const responseHeaders: Record<string, string> = { ...headers };
+
+  if (!upstreamAccessHeaders) {
+    return responseHeaders;
+  }
+
+  for (const [key, value] of Object.entries(upstreamAccessHeaders)) {
+    responseHeaders[key] = value;
+  }
+
+  return responseHeaders;
+}
+
 export const proxyResolverRouter = async (c: Context) => {
   console.log("[PROXY-RESOLVE] Request received");
 
@@ -326,6 +344,7 @@ export const proxyResolverRouter = async (c: Context) => {
     }
 
     let portUpstream: string | null = null;
+    let upstreamAccessHeaders: Record<string, string> | null = null;
     if (extractedPort) {
       portUpstream = ws.exposedPorts?.[extractedPort]?.upstreamUrl ?? null;
       if (!portUpstream) {
@@ -335,7 +354,14 @@ export const proxyResolverRouter = async (c: Context) => {
         );
         return htmlError(c, "unavailable", 404);
       }
+
+      upstreamAccessHeaders = await getWorkspaceRouteAccess(ws.id, Number(extractedPort));
     }
+
+    if (!upstreamAccessHeaders) {
+      upstreamAccessHeaders = await getWorkspaceRouteAccess(ws.id);
+    }
+
     console.log("[PROXY-RESOLVE] Workspace found:", {
       id: ws.id,
       subdomain: ws.subdomain,
@@ -366,13 +392,20 @@ export const proxyResolverRouter = async (c: Context) => {
         "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
       });
 
-      return c.text("OK", 200, {
-        "X-Upstream-URL": upstreamUrl.toString(),
-        "X-Container-Host": upstreamUrl.hostname,
-        "X-Container-Port": port,
-        "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
-        "X-Hosting-Type": "cloud",
-      });
+      return c.text(
+        "OK",
+        200,
+        buildProxyResolveHeaders(
+          {
+            "X-Upstream-URL": upstreamUrl.toString(),
+            "X-Container-Host": upstreamUrl.hostname,
+            "X-Container-Port": port,
+            "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+            "X-Hosting-Type": "cloud",
+          },
+          upstreamAccessHeaders,
+        ),
+      );
     }
 
     // Validate auth for non-server-only
@@ -404,14 +437,21 @@ export const proxyResolverRouter = async (c: Context) => {
       protocol: upstreamUrl.protocol,
     });
 
-    return c.text("OK", 200, {
-      "X-Upstream-URL": upstreamUrl.toString(),
-      "X-Container-Host": upstreamUrl.hostname,
-      "X-Container-Port": port,
-      "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
-      "X-User-ID": session.user.id,
-      "X-Hosting-Type": ws.hostingType,
-    });
+    return c.text(
+      "OK",
+      200,
+      buildProxyResolveHeaders(
+        {
+          "X-Upstream-URL": upstreamUrl.toString(),
+          "X-Container-Host": upstreamUrl.hostname,
+          "X-Container-Port": port,
+          "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+          "X-User-ID": session.user.id,
+          "X-Hosting-Type": ws.hostingType,
+        },
+        upstreamAccessHeaders,
+      ),
+    );
   } catch (error) {
     console.error("Auth resolve error:", error);
     return htmlError(c, "error", 500);

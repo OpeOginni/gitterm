@@ -43,6 +43,13 @@
       "when": 1773180936285,
       "tag": "0005_wide_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773485591261,
+      "tag": "0006_rapid_maggott",
+      "breakpoints": true
     }
   ]
 }

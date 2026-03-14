@@ -2,14 +2,13 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "../routers/index";
 import env from "@gitterm/env/listener";
 
-/**
- * Create an internal tRPC client for service-to-service communication
- * Uses INTERNAL_API_KEY for authentication
- *
- * @param serverUrl - The server URL (e.g., http://localhost:3000)
- * @param apiKey - The internal API key
- */
-export function createInternalClient(serverUrl: string, apiKey: string) {
+type InternalClientExtraHeaders = Record<string, string | undefined>;
+
+export function createInternalClient(
+  serverUrl: string,
+  apiKey: string,
+  extraHeaders?: InternalClientExtraHeaders,
+) {
   if (!apiKey) {
     console.warn("[internal-client] INTERNAL_API_KEY not set - internal API calls will fail");
   }
@@ -18,9 +17,23 @@ export function createInternalClient(serverUrl: string, apiKey: string) {
     links: [
       httpBatchLink({
         url: `${serverUrl}/trpc`,
-        headers: () => ({
-          "x-internal-key": apiKey || "",
-        }),
+        headers: () => {
+          const baseHeaders: Record<string, string> = {
+            "x-internal-key": apiKey || "",
+          };
+
+          if (!extraHeaders) {
+            return baseHeaders;
+          }
+
+          for (const [key, value] of Object.entries(extraHeaders)) {
+            if (value !== undefined) {
+              baseHeaders[key] = value;
+            }
+          }
+
+          return baseHeaders;
+        },
       }),
     ],
   });
@@ -29,15 +42,15 @@ export function createInternalClient(serverUrl: string, apiKey: string) {
 // For backward compatibility: try to load from server env if available
 let _internalClient: ReturnType<typeof createInternalClient> | null = null;
 
-/**
- * Get the default internal client (configured from server env)
- * Only works when running in a context with @gitterm/env/server available
- */
-export function getInternalClient() {
+export function getInternalClient(extraHeaders?: InternalClientExtraHeaders) {
+  if (extraHeaders) {
+    const serverUrl = env.SERVER_URL || "http://localhost:3000";
+    const apiKey = env.INTERNAL_API_KEY || "";
+    return createInternalClient(serverUrl, apiKey, extraHeaders);
+  }
+
   if (!_internalClient) {
-    // Lazy load to avoid issues when env is not available
     try {
-      // Dynamic import would be better but causes issues with tRPC types
       const serverUrl = env.SERVER_URL || "http://localhost:3000";
       const apiKey = env.INTERNAL_API_KEY || "";
       _internalClient = createInternalClient(serverUrl, apiKey);

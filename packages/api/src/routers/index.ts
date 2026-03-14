@@ -14,6 +14,7 @@ import { adminRouter } from "./admin";
 import { agentLoopRouter } from "./agent-loop";
 import { agentLoopWebhookRouter } from "./agent-loop/webhook";
 import { modelCredentialsRouter } from "./model-credentials";
+import { e2bWebhookRouter } from "./e2b/webhook";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -40,6 +41,7 @@ export type AppRouter = typeof appRouter;
 
 export const listenerRouter = router({
   railway: railwayWebhookRouter,
+  e2b: e2bWebhookRouter,
   github: githubWebhookRouter,
   workspace: workspaceEventsRouter,
   agentLoop: agentLoopWebhookRouter,
