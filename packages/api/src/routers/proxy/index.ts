@@ -390,6 +390,7 @@ export const proxyResolverRouter = async (c: Context) => {
         "X-Container-Host": upstreamUrl.hostname,
         "X-Container-Port": port,
         "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+        "hasUpStreamAccessHeader": upstreamAccessHeaders !== null
       });
 
       return c.text(
@@ -435,6 +436,7 @@ export const proxyResolverRouter = async (c: Context) => {
       containerHost: upstreamUrl.hostname,
       containerPort: port,
       protocol: upstreamUrl.protocol,
+      "hasUpStreamAccessHeader": upstreamAccessHeaders !== null
     });
 
     return c.text(
