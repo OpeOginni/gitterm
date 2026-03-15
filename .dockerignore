@@ -1,0 +1,13 @@
+.git
+.github
+.opencode
+.turbo
+**/.DS_Store
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/.next
+**/dist
+media
+Screenshot *.png
