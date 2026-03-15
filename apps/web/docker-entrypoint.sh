@@ -3,23 +3,21 @@ set -eu
 
 TARGET_DIR="/app/apps/web/.next"
 
-replace_placeholder() {
-  var_name="$1"
-  placeholder="__${var_name}__"
-  value="${2}"
+replace_literal() {
+  search="$1"
+  value="$2"
   escaped_value=$(printf '%s' "$value" | sed 's/[&|\\]/\\&/g')
+  escaped_search=$(printf '%s' "$search" | sed 's/[&|\\]/\\&/g')
 
   if [ -d "$TARGET_DIR" ]; then
     find "$TARGET_DIR" -type f \( -name "*.js" -o -name "*.html" -o -name "*.json" \) -exec \
-      sed -i "s|${placeholder}|${escaped_value}|g" {} +
+      sed -i "s|${escaped_search}|${escaped_value}|g" {} +
   fi
 }
 
-replace_placeholder "NEXT_PUBLIC_ENABLE_BILLING" "${NEXT_PUBLIC_ENABLE_BILLING:-false}"
-replace_placeholder "NEXT_PUBLIC_ENABLE_EMAIL_AUTH" "${NEXT_PUBLIC_ENABLE_EMAIL_AUTH:-true}"
-replace_placeholder "NEXT_PUBLIC_ENABLE_GITHUB_AUTH" "${NEXT_PUBLIC_ENABLE_GITHUB_AUTH:-false}"
-replace_placeholder "NEXT_PUBLIC_BASE_DOMAIN" "${NEXT_PUBLIC_BASE_DOMAIN:-localhost}"
-replace_placeholder "NEXT_PUBLIC_SERVER_URL" "${NEXT_PUBLIC_SERVER_URL:-http://localhost:8888/api}"
-replace_placeholder "NEXT_PUBLIC_LISTENER_URL" "${NEXT_PUBLIC_LISTENER_URL:-http://localhost:8888/listener}"
+replace_literal "http://build.localhost:8888/listener" "${NEXT_PUBLIC_LISTENER_URL:-http://localhost:8888/listener}"
+replace_literal "http://build.localhost:8888/api" "${NEXT_PUBLIC_SERVER_URL:-http://localhost:8888/api}"
+replace_literal "http://build.localhost:8888" "${NEXT_PUBLIC_AUTH_URL:-http://localhost:8888}"
+replace_literal "build.localhost" "${NEXT_PUBLIC_BASE_DOMAIN:-localhost}"
 
 exec "$@"
