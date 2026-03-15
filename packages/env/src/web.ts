@@ -7,6 +7,11 @@
 
 import { z, parseEnv, optional, nodeEnv, boolWithDefault, routingMode } from "./index";
 
+const routingModeWithBuildPlaceholder = z.preprocess(
+  (value) => (value === "__NEXT_PUBLIC_ROUTING_MODE__" ? "path" : value),
+  routingMode,
+);
+
 const schema = z.object({
   NODE_ENV: nodeEnv,
 
@@ -14,7 +19,7 @@ const schema = z.object({
   NEXT_PUBLIC_ENABLE_EMAIL_AUTH: boolWithDefault(false),
   NEXT_PUBLIC_ENABLE_GITHUB_AUTH: boolWithDefault(true),
   NEXT_PUBLIC_BASE_DOMAIN: z.string().default("gitterm.dev"),
-  NEXT_PUBLIC_ROUTING_MODE: routingMode,
+  NEXT_PUBLIC_ROUTING_MODE: routingModeWithBuildPlaceholder,
   NEXT_PUBLIC_SERVER_URL: optional,
   NEXT_PUBLIC_AUTH_URL: optional,
   NEXT_PUBLIC_LISTENER_URL: optional,
