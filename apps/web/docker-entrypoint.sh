@@ -18,8 +18,8 @@ replace_placeholder() {
 replace_placeholder "NEXT_PUBLIC_ENABLE_BILLING" "${NEXT_PUBLIC_ENABLE_BILLING:-false}"
 replace_placeholder "NEXT_PUBLIC_ENABLE_EMAIL_AUTH" "${NEXT_PUBLIC_ENABLE_EMAIL_AUTH:-true}"
 replace_placeholder "NEXT_PUBLIC_ENABLE_GITHUB_AUTH" "${NEXT_PUBLIC_ENABLE_GITHUB_AUTH:-false}"
-replace_placeholder "NEXT_PUBLIC_BASE_DOMAIN" "${NEXT_PUBLIC_BASE_DOMAIN:-gitterm.dev}"
-replace_placeholder "NEXT_PUBLIC_SERVER_URL" "${NEXT_PUBLIC_SERVER_URL:-}"
-replace_placeholder "NEXT_PUBLIC_LISTENER_URL" "${NEXT_PUBLIC_LISTENER_URL:-}"
+replace_placeholder "NEXT_PUBLIC_BASE_DOMAIN" "${NEXT_PUBLIC_BASE_DOMAIN:-localhost}"
+replace_placeholder "NEXT_PUBLIC_SERVER_URL" "${NEXT_PUBLIC_SERVER_URL:-http://localhost:8888/api}"
+replace_placeholder "NEXT_PUBLIC_LISTENER_URL" "${NEXT_PUBLIC_LISTENER_URL:-http://localhost:8888/listener}"
 
 exec "$@"
