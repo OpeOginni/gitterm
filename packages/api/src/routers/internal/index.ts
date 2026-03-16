@@ -796,7 +796,9 @@ export const internalRouter = router({
           });
 
         await Promise.all(
-          updatedWorkspaces.map((updatedWorkspace) => deleteAllWorkspaceRouteAccess(updatedWorkspace.id)),
+          updatedWorkspaces.map((updatedWorkspace) =>
+            deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+          ),
         );
 
         return { updated: updatedWorkspaces };

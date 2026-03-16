@@ -34,9 +34,7 @@ export function EnterpriseContent() {
     const company = data.get("company") as string;
     const message = data.get("message") as string;
 
-    const subject = encodeURIComponent(
-      `GitTerm Enterprise — ${company || name}`
-    );
+    const subject = encodeURIComponent(`GitTerm Enterprise — ${company || name}`);
     const body = encodeURIComponent(
       [
         `Name: ${name}`,
@@ -45,13 +43,10 @@ export function EnterpriseContent() {
         `Team size: ${teamSize}`,
         ``,
         message,
-      ].join("\n")
+      ].join("\n"),
     );
 
-    window.open(
-      `mailto:brightoginni123@gmail.com?subject=${subject}&body=${body}`,
-      "_self"
-    );
+    window.open(`mailto:brightoginni123@gmail.com?subject=${subject}&body=${body}`, "_self");
 
     setSubmitted(true);
   }
@@ -77,9 +72,8 @@ export function EnterpriseContent() {
         </h1>
 
         <p className="mx-auto mt-6 max-w-xl text-center text-base leading-relaxed text-white/50 sm:text-lg">
-          GitTerm is still early, but if you want to run it for your team
-          we&apos;ll help you get set up. Tell us what you need and
-          we&apos;ll figure it out together.
+          GitTerm is still early, but if you want to run it for your team we&apos;ll help you get
+          set up. Tell us what you need and we&apos;ll figure it out together.
         </p>
 
         {/* ── Form card ── */}
@@ -100,8 +94,8 @@ export function EnterpriseContent() {
                     We&apos;ll be in touch
                   </h3>
                   <p className="max-w-sm text-sm leading-relaxed text-white/45">
-                    Your email client should have opened with a pre-filled
-                    message. If it didn&apos;t, email us directly at{" "}
+                    Your email client should have opened with a pre-filled message. If it
+                    didn&apos;t, email us directly at{" "}
                     <a
                       href="mailto:enterprise@gitterm.dev"
                       className="text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:decoration-primary/60"

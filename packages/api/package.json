@@ -78,7 +78,7 @@
     "@aws-sdk/client-sts": "^3.936.0",
     "@cloudflare/sandbox": "^0.6.10",
     "@cloudflare/workers-types": "^4.20260107.1",
-    "@daytonaio/sdk": "^0.129.0",
+    "@daytonaio/sdk": "^0.151.0",
     "@gitterm/auth": "workspace:*",
     "@gitterm/db": "workspace:*",
     "@gitterm/env": "workspace:*",

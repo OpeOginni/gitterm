@@ -43,6 +43,7 @@ import { getProviderConfigService } from "../../service/config/provider-config";
 import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-credentials";
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
 import {
+  buildWorkspaceToolingManifestBase64,
   createDefaultWorkspaceToolingManifest,
   detectWorkspaceToolingManifestFromPaths,
   encodeWorkspaceToolingManifestBase64,
@@ -82,33 +83,6 @@ function normalizeRepoUrl(url: string): string {
     .trim()
     .replace(/\/+$/, "")
     .replace(/\.git\/?$/i, "");
-}
-
-async function buildWorkspaceToolingManifestBase64(params: {
-  owner?: string;
-  repo?: string;
-  installationId?: string;
-}): Promise<string> {
-  const fallback = createDefaultWorkspaceToolingManifest(params.owner, params.repo);
-
-  if (!params.owner || !params.repo || !params.installationId) {
-    return encodeWorkspaceToolingManifestBase64(fallback);
-  }
-
-  try {
-    const tree = await getGitHubAppService().getFileTree(
-      params.installationId,
-      params.owner,
-      params.repo,
-    );
-    const filePaths = tree.filter((item) => item.type === "blob").map((item) => item.path);
-    const manifest = detectWorkspaceToolingManifestFromPaths(filePaths, params.owner, params.repo);
-    console.log(manifest);
-    return encodeWorkspaceToolingManifestBase64(manifest);
-  } catch (error) {
-    console.error("Failed to build tooling manifest from repository tree:", error);
-    return encodeWorkspaceToolingManifestBase64(fallback);
-  }
 }
 
 export const workspaceRouter = router({
@@ -1394,11 +1368,7 @@ export const workspaceRouter = router({
         }
 
         if (workspaceInfo.upstreamAccess?.headers) {
-          await upsertWorkspaceRouteAccess(
-            workspaceId,
-            null,
-            workspaceInfo.upstreamAccess.headers,
-          );
+          await upsertWorkspaceRouteAccess(workspaceId, null, workspaceInfo.upstreamAccess.headers);
         }
 
         // Create volume record (only for persistent workspaces)

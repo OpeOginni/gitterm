@@ -46,9 +46,7 @@ export function MirrorLocalSection() {
             <div className="h-px w-full bg-primary/40" />
             <div className="p-6">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-sm font-semibold text-white/80">
-                  opencode.json
-                </span>
+                <span className="font-mono text-sm font-semibold text-white/80">opencode.json</span>
                 <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-primary">
                   Synced
                 </span>
