@@ -1,5 +1,5 @@
 import { db, eq, and } from "./index";
-import { agentType, cloudProvider, image, region, type CreationSettlement } from "./schema/cloud";
+import { agentType, cloudProvider, image, region, type ProviderSettlement } from "./schema/cloud";
 import { modelProvider, model } from "./schema/model-credentials";
 import { providerType, providerConfigField } from "./schema/provider-config";
 import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
@@ -21,13 +21,19 @@ const seedCloudProviders = [
     name: "Railway",
     isEnabled: false,
     supportsRegions: true,
-    creationSettlement: "webhook" as CreationSettlement,
+    creationSettlement: "webhook" as ProviderSettlement,
+    stopSettlement: "webhook" as ProviderSettlement,
+    restartSettlement: "webhook" as ProviderSettlement,
+    terminationSettlement: "webhook" as ProviderSettlement,
   },
   {
     name: "AWS",
     isEnabled: false,
     supportsRegions: true,
-    creationSettlement: "poll" as CreationSettlement,
+    creationSettlement: "poll" as ProviderSettlement,
+    stopSettlement: "immediate" as ProviderSettlement,
+    restartSettlement: "poll" as ProviderSettlement,
+    terminationSettlement: "immediate" as ProviderSettlement,
   },
   {
     name: "Cloudflare",
@@ -35,7 +41,10 @@ const seedCloudProviders = [
     isSandbox: true,
     supportsRegions: false,
     supportServerOnly: true,
-    creationSettlement: "poll" as CreationSettlement,
+    creationSettlement: "poll" as ProviderSettlement,
+    stopSettlement: "immediate" as ProviderSettlement,
+    restartSettlement: "poll" as ProviderSettlement,
+    terminationSettlement: "immediate" as ProviderSettlement,
   },
   {
     name: "E2B",
@@ -43,7 +52,21 @@ const seedCloudProviders = [
     isSandbox: true,
     supportsRegions: false,
     supportServerOnly: true,
-    creationSettlement: "immediate" as CreationSettlement,
+    creationSettlement: "immediate" as ProviderSettlement,
+    stopSettlement: "webhook" as ProviderSettlement,
+    restartSettlement: "webhook" as ProviderSettlement,
+    terminationSettlement: "webhook" as ProviderSettlement,
+  },
+  {
+    name: "Daytona",
+    isEnabled: false,
+    isSandbox: true,
+    supportsRegions: true,
+    supportServerOnly: true,
+    creationSettlement: "immediate" as ProviderSettlement,
+    stopSettlement: "immediate" as ProviderSettlement,
+    restartSettlement: "immediate" as ProviderSettlement,
+    terminationSettlement: "immediate" as ProviderSettlement,
   },
 ];
 
@@ -88,6 +111,19 @@ const seedRegions = [
     location: "Singapore",
     externalRegionIdentifier: "asia-southeast1-eqsg3a",
     providerName: "Railway",
+  },
+  // Daytona Regions
+  {
+    name: "Europe",
+    location: "",
+    externalRegionIdentifier: "eu",
+    providerName: "Daytona",
+  },
+  {
+    name: "United States",
+    location: "",
+    externalRegionIdentifier: "us",
+    providerName: "Daytona",
   },
 ];
 
@@ -317,7 +353,10 @@ export async function seedDatabase(): Promise<void> {
       const targetIsSandbox = provider.isSandbox ?? false;
       const targetSupportsRegions = provider.supportsRegions ?? true;
       const targetSupportServerOnly = provider.supportServerOnly ?? false;
-      const targetCreationSettlement = provider.creationSettlement ?? "webhook";
+      const targetProviderCreationSettlement = provider.creationSettlement ?? "webhook";
+      const targetProviderStopSettlement = provider.stopSettlement ?? "webhook";
+      const targetProviderRestartSettlement = provider.restartSettlement ?? "webhook";
+      const targetProviderTerminationSettlement = provider.terminationSettlement ?? "webhook";
 
       if (existing.isSandbox !== targetIsSandbox) {
         updates.isSandbox = targetIsSandbox;
@@ -331,8 +370,20 @@ export async function seedDatabase(): Promise<void> {
         updates.supportServerOnly = targetSupportServerOnly;
       }
 
-      if (existing.creationSettlement !== targetCreationSettlement) {
-        updates.creationSettlement = targetCreationSettlement;
+      if (existing.creationSettlement !== targetProviderCreationSettlement) {
+        updates.creationSettlement = targetProviderCreationSettlement;
+      }
+
+      if (existing.stopSettlement !== targetProviderStopSettlement) {
+        updates.stopSettlement = targetProviderStopSettlement;
+      }
+
+      if (existing.restartSettlement !== targetProviderRestartSettlement) {
+        updates.restartSettlement = targetProviderRestartSettlement;
+      }
+
+      if (existing.terminationSettlement !== targetProviderTerminationSettlement) {
+        updates.terminationSettlement = targetProviderTerminationSettlement;
       }
 
       if (Object.keys(updates).length > 0) {

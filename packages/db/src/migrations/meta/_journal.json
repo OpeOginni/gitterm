@@ -50,6 +50,13 @@
       "when": 1773485591261,
       "tag": "0006_rapid_maggott",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773919905672,
+      "tag": "0007_silly_titanium_man",
+      "breakpoints": true
     }
   ]
 }

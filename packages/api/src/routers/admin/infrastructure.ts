@@ -28,6 +28,7 @@ import { providerType } from "@gitterm/db/schema/provider-config";
 const createCloudProviderSchema = z.object({
   name: z.string().min(1, "Provider name is required"),
   supportsRegions: z.boolean().default(true),
+  allowUserRegionSelection: z.boolean().default(true),
 });
 
 const updateCloudProviderSchema = z.object({
@@ -35,6 +36,7 @@ const updateCloudProviderSchema = z.object({
   name: z.string().min(1, "Provider name is required").optional(),
   providerConfigId: z.uuid().nullable().optional(),
   supportsRegions: z.boolean().optional(),
+  allowUserRegionSelection: z.boolean().optional(),
 });
 
 const createRegionSchema = z.object({
@@ -151,6 +153,7 @@ export const infrastructureRouter = router({
       .values({
         name: input.name,
         supportsRegions: input.supportsRegions,
+        allowUserRegionSelection: input.allowUserRegionSelection,
         isEnabled: false,
         createdAt: new Date(),
         updatedAt: new Date(),

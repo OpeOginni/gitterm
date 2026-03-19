@@ -1,3 +1,5 @@
+import { getGitHubAppService } from "../service/github";
+
 export type WorkspaceToolingManifest = {
   version: 1;
   detectedFrom: {
@@ -122,4 +124,37 @@ export function detectWorkspaceToolingManifestFromPaths(
 
 export function encodeWorkspaceToolingManifestBase64(manifest: WorkspaceToolingManifest): string {
   return Buffer.from(JSON.stringify(manifest)).toString("base64");
+}
+
+export function decodeWorkspaceToolingManifestBase64(
+  encodedManifest: string,
+): WorkspaceToolingManifest {
+  const decodedManifest = Buffer.from(encodedManifest, "base64").toString("utf8");
+  return JSON.parse(decodedManifest);
+}
+
+export async function buildWorkspaceToolingManifestBase64(params: {
+  owner?: string;
+  repo?: string;
+  installationId?: string;
+}): Promise<string> {
+  const fallback = createDefaultWorkspaceToolingManifest(params.owner, params.repo);
+
+  if (!params.owner || !params.repo || !params.installationId) {
+    return encodeWorkspaceToolingManifestBase64(fallback);
+  }
+
+  try {
+    const tree = await getGitHubAppService().getFileTree(
+      params.installationId,
+      params.owner,
+      params.repo,
+    );
+    const filePaths = tree.filter((item) => item.type === "blob").map((item) => item.path);
+    const manifest = detectWorkspaceToolingManifestFromPaths(filePaths, params.owner, params.repo);
+    return encodeWorkspaceToolingManifestBase64(manifest);
+  } catch (error) {
+    console.error("Failed to build tooling manifest from repository tree:", error);
+    return encodeWorkspaceToolingManifestBase64(fallback);
+  }
 }

@@ -254,16 +254,38 @@ class ProviderConfigService {
     return { encrypted, metadata };
   }
 
+  private applyConfigDefaults(
+    providerName: string,
+    config: Record<string, any>,
+  ): Record<string, any> {
+    const definition = getProviderDefinition(providerName);
+    if (!definition) {
+      return config;
+    }
+
+    const defaults = definition.fields.reduce<Record<string, any>>((acc, field) => {
+      if (field.defaultValue !== undefined) {
+        acc[field.fieldName] = field.defaultValue;
+      }
+      return acc;
+    }, {});
+
+    return {
+      ...defaults,
+      ...config,
+    };
+  }
+
   private decryptConfig(
     config: any & { providerType: { name: string; displayName: string; category: string } },
   ): DecryptedProviderConfig {
     const credentials = this.encryption.decrypt(config.encryptedCredentials);
     const decryptedConfig = JSON.parse(credentials);
 
-    const fullConfig = {
+    const fullConfig = this.applyConfigDefaults(config.providerType.name, {
       ...decryptedConfig,
       ...config.configMetadata,
-    };
+    });
 
     return {
       id: config.id,
@@ -314,28 +336,41 @@ class ProviderConfigService {
       throw new Error(`Provider type not found: ${providerTypeId}`);
     }
 
+    const definition = getProviderDefinition(fetchedProviderType.name);
+    const definitionFields = new Map(
+      definition?.fields.map((field) => [field.fieldName, field] as const) ?? [],
+    );
+
     return fetchedProviderType.configFields
       .map((field) => ({
         fieldName: field.fieldName,
-        fieldLabel: field.fieldLabel,
-        fieldType: field.fieldType,
-        isRequired: field.isRequired,
-        isEncrypted: field.isEncrypted,
-        defaultValue: field.defaultValue ?? undefined,
-        options: (field.options as any) ?? undefined,
-        validationRules: (field.validationRules as any) ?? undefined,
-        sortOrder: field.sortOrder,
+        fieldLabel: definitionFields.get(field.fieldName)?.fieldLabel ?? field.fieldLabel,
+        fieldType: definitionFields.get(field.fieldName)?.fieldType ?? field.fieldType,
+        isRequired: definitionFields.get(field.fieldName)?.isRequired ?? field.isRequired,
+        isEncrypted: definitionFields.get(field.fieldName)?.isEncrypted ?? field.isEncrypted,
+        defaultValue:
+          definitionFields.get(field.fieldName)?.defaultValue ?? field.defaultValue ?? undefined,
+        options:
+          (definitionFields.get(field.fieldName)?.options as any) ??
+          (field.options as any) ??
+          undefined,
+        validationRules:
+          (definitionFields.get(field.fieldName)?.validationRules as any) ??
+          (field.validationRules as any) ??
+          undefined,
+        sortOrder: definitionFields.get(field.fieldName)?.sortOrder ?? field.sortOrder,
       }))
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
   async getMissingRequiredFields(config: DecryptedProviderConfig): Promise<string[]> {
     const fields = await this.getProviderConfigFields(config.providerTypeId);
+    const resolvedConfig = this.applyConfigDefaults(config.providerType.name, config.config);
 
     return fields
       .filter((field) => field.isRequired)
       .filter((field) => {
-        const value = config.config[field.fieldName];
+        const value = resolvedConfig[field.fieldName];
 
         if (value === null || value === undefined) {
           return true;

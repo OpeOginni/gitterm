@@ -20,7 +20,8 @@ export function CTASection() {
               Take OpenCode from local to cloud.
             </h2>
             <p className="mx-auto mb-8 max-w-md text-base text-white/50">
-              You already use OpenCode locally. GitTerm lets you run it in the cloud too. Same config, more power.
+              You already use OpenCode locally. GitTerm lets you run it in the cloud too. Same
+              config, more power.
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link href="/dashboard">

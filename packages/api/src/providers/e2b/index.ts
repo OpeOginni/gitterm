@@ -1,3 +1,5 @@
+import { Sandbox } from "e2b";
+import env from "@gitterm/env/server";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import type {
   ComputeProvider,
@@ -8,14 +10,15 @@ import type {
   WorkspaceInfo,
   WorkspaceStatusResult,
 } from "../compute";
-import { Sandbox } from "e2b";
-
 import type { E2BConfig } from "./types";
-import env from "@gitterm/env/server";
+
 export type { E2BConfig } from "./types";
 
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
+const WORKSPACE_DIR = "/home/user/workspace";
+
+type E2BSandbox = Awaited<ReturnType<typeof Sandbox.connect>>;
 
 function getTrafficAccessHeaders(token: string): UpstreamAccess {
   return {
@@ -39,101 +42,131 @@ export class E2BProvider implements ComputeProvider {
       console.error("E2B provider is not configured.");
       throw new Error("E2B provider is not configured. Please configure it in the admin panel.");
     }
+
     this.config = dbConfig as E2BConfig;
     return this.config;
   }
 
-  async createWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
+  private async getApiKey(): Promise<string> {
     const { apiKey } = await this.getConfig();
 
     if (!apiKey) {
       throw new Error("E2B Api Key not configured");
     }
 
-    const e2bSandbox = await Sandbox.create("opencode", {
-      apiKey: apiKey,
-      timeoutMs: 10 * 60 * 1_000, // 10 mins timeout
+    return apiKey;
+  }
+
+  private getDomain(subdomain: string): string {
+    return ROUTING_MODE === "path"
+      ? BASE_DOMAIN.includes("localhost")
+        ? `http://${BASE_DOMAIN}/ws/${subdomain}`
+        : `https://${BASE_DOMAIN}/ws/${subdomain}`
+      : BASE_DOMAIN.includes("localhost")
+        ? `http://${subdomain}.${BASE_DOMAIN}`
+        : `https://${subdomain}.${BASE_DOMAIN}`;
+  }
+
+  private getRepoDir(config: WorkspaceConfig): string {
+    return `${WORKSPACE_DIR}/${config.environmentVariables?.REPO_NAME}`;
+  }
+
+  private async createSandbox(
+    config: WorkspaceConfig,
+    onTimeout: "pause" | "kill",
+  ): Promise<E2BSandbox> {
+    const apiKey = await this.getApiKey();
+
+    return Sandbox.create("opencode", {
+      apiKey,
+      timeoutMs: 10 * 60 * 1_000,
       network: {
         allowPublicTraffic: false,
       },
       lifecycle: {
-        onTimeout: "pause",
+        onTimeout,
       },
       envs: {
         OPENCODE_SERVER_PASSWORD: config.environmentVariables?.OPENCODE_SERVER_PASSWORD ?? "",
       },
     });
+  }
 
-    const workspaceDir = `/home/user/workspace`;
-    const repoDir = `${workspaceDir}/${config.environmentVariables?.REPO_NAME}`;
+  private async connectSandbox(externalId: string): Promise<E2BSandbox> {
+    const apiKey = await this.getApiKey();
 
-    if (config.repositoryUrl && config.environmentVariables) {
-      // We Clone Repository
-      const parsedGitRepoUrl = config.repositoryUrl.endsWith(".git")
-        ? config.repositoryUrl
-        : `${config.repositoryUrl}.git`;
+    return Sandbox.connect(externalId, {
+      apiKey,
+    });
+  }
 
-      const username = config.environmentVariables.GITHUB_APP_TOKEN
-        ? config.environmentVariables.USER_GITHUB_USERNAME
-        : undefined;
-      const password = config.environmentVariables.GITHUB_APP_TOKEN;
+  private async runCommand(
+    sandbox: E2BSandbox,
+    command: string,
+    errorContext: string,
+  ): Promise<void> {
+    await sandbox.commands.run(command).catch(async (err) => {
+      await sandbox.kill().catch(() => undefined);
+      console.error(`E2B Sandbox Error (${errorContext})`, err);
+      throw err;
+    });
+  }
 
-      await e2bSandbox.commands.run(`mkdir -p ${workspaceDir}`).catch(async (err) => {
-        e2bSandbox.kill();
-        console.error("EB2 Killed sanbbox because of err: ", err);
-        throw err;
-      });
-
-      await e2bSandbox.git
-        .clone(parsedGitRepoUrl, {
-          path: repoDir,
-          username: username,
-          password: password,
-        })
-        .catch(async (err) => {
-          e2bSandbox.kill();
-          console.error("EB2 Killed sanbbox because of err: ", err);
-          throw err;
-        });
+  private async cloneRepository(
+    sandbox: E2BSandbox,
+    config: WorkspaceConfig,
+    repoDir: string,
+  ): Promise<void> {
+    if (!config.repositoryUrl || !config.environmentVariables) {
+      return;
     }
 
-    if (config.environmentVariables && config.environmentVariables.OPENCODE_CONFIG_BASE64) {
-      await e2bSandbox.commands.run("mkdir -p ~/.config/opencode").catch(async (err) => {
-        e2bSandbox.kill();
-        console.error("EB2 Killed sanbbox because of err: ", err);
+    const parsedGitRepoUrl = config.repositoryUrl.endsWith(".git")
+      ? config.repositoryUrl
+      : `${config.repositoryUrl}.git`;
+
+    const username = config.environmentVariables.GITHUB_APP_TOKEN
+      ? config.environmentVariables.USER_GITHUB_USERNAME
+      : undefined;
+    const password = config.environmentVariables.GITHUB_APP_TOKEN;
+
+    await this.runCommand(sandbox, `mkdir -p ${WORKSPACE_DIR}`, "mkdir workspace");
+
+    await sandbox.git
+      .clone(parsedGitRepoUrl, {
+        path: repoDir,
+        username,
+        password,
+      })
+      .catch(async (err) => {
+        await sandbox.kill().catch(() => undefined);
+        console.error("E2B Sandbox Error (git.clone)", err);
         throw err;
       });
+  }
 
-      await e2bSandbox.commands
-        .run(
-          `echo "${config.environmentVariables.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
-        )
-        .catch(async (err) => {
-          e2bSandbox.kill();
-          console.error("EB2 Killed sanbbox because of err: ", err);
-          throw err;
-        });
+  private async writeOpencodeFiles(sandbox: E2BSandbox, config: WorkspaceConfig): Promise<void> {
+    if (config.environmentVariables?.OPENCODE_CONFIG_BASE64) {
+      await this.runCommand(sandbox, "mkdir -p ~/.config/opencode", "mkdir config dir");
+      await this.runCommand(
+        sandbox,
+        `echo "${config.environmentVariables.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
+        "write opencode config",
+      );
     }
 
-    if (config.environmentVariables && config.environmentVariables.OPENCODE_CREDENTIALS_BASE64) {
-      await e2bSandbox.commands.run("mkdir -p ~/.local/share/opencode").catch(async (err) => {
-        e2bSandbox.kill();
-        console.error("EB2 Killed sanbbox because of err: ", err);
-        throw err;
-      });
-
-      await e2bSandbox.commands
-        .run(
-          `echo "${config.environmentVariables.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
-        )
-        .catch(async (err) => {
-          e2bSandbox.kill();
-          console.error("EB2 Killed sanbbox because of err: ", err);
-          throw err;
-        });
+    if (config.environmentVariables?.OPENCODE_CREDENTIALS_BASE64) {
+      await this.runCommand(sandbox, "mkdir -p ~/.local/share/opencode", "mkdir auth dir");
+      await this.runCommand(
+        sandbox,
+        `echo "${config.environmentVariables.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
+        "write opencode auth",
+      );
     }
+  }
 
-    await e2bSandbox.commands
+  private async startOpencodeServer(sandbox: E2BSandbox, repoDir: string): Promise<void> {
+    await sandbox.commands
       .run(
         `cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port 4096 > /tmp/opencode.log 2>&1`,
         {
@@ -143,10 +176,23 @@ export class E2BProvider implements ComputeProvider {
         },
       )
       .catch(async (err) => {
-        e2bSandbox.kill();
-        console.error("EB2 Killed sanbbox because of err: ", err);
+        await sandbox.kill().catch(() => undefined);
+        console.error("E2B Sandbox Error (start opencode serve)", err);
         throw err;
       });
+  }
+
+  private async provisionWorkspace(
+    config: WorkspaceConfig,
+    onTimeout: "pause" | "kill",
+    persistent: boolean,
+  ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
+    const e2bSandbox = await this.createSandbox(config, onTimeout);
+    const repoDir = this.getRepoDir(config);
+
+    await this.cloneRepository(e2bSandbox, config, repoDir);
+    await this.writeOpencodeFiles(e2bSandbox, config);
+    await this.startOpencodeServer(e2bSandbox, repoDir);
 
     const host = e2bSandbox.getHost(4096);
     const trafficAccessToken = e2bSandbox.trafficAccessToken;
@@ -156,161 +202,35 @@ export class E2BProvider implements ComputeProvider {
       throw new Error("E2B traffic access token missing");
     }
 
-    const upstreamUrl = `https://${host}`;
+    const serviceCreatedAt = new Date((await e2bSandbox.getInfo()).startedAt);
 
-    const domain =
-      ROUTING_MODE === "path"
-        ? BASE_DOMAIN.includes("localhost")
-          ? `http://${BASE_DOMAIN}/ws/${config.subdomain}`
-          : `https://${BASE_DOMAIN}/ws/${config.subdomain}`
-        : BASE_DOMAIN.includes("localhost")
-          ? `http://${config.subdomain}.${BASE_DOMAIN}`
-          : `https://${config.subdomain}.${BASE_DOMAIN}`;
+    const workspaceInfo: WorkspaceInfo = {
+      externalServiceId: e2bSandbox.sandboxId,
+      upstreamUrl: `https://${host}`,
+      upstreamAccess: getTrafficAccessHeaders(trafficAccessToken),
+      domain: this.getDomain(config.subdomain),
+      serviceCreatedAt,
+    };
+
+    if (!persistent) {
+      return workspaceInfo;
+    }
 
     return {
-      externalServiceId: e2bSandbox.sandboxId,
-      upstreamUrl,
-      upstreamAccess: getTrafficAccessHeaders(trafficAccessToken),
-      domain,
-      serviceCreatedAt: new Date((await e2bSandbox.getInfo()).startedAt),
+      ...workspaceInfo,
+      externalVolumeId: e2bSandbox.sandboxId,
+      volumeCreatedAt: serviceCreatedAt,
     };
+  }
+
+  async createWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
+    return (await this.provisionWorkspace(config, "pause", false)) as WorkspaceInfo;
   }
 
   async createPersistentWorkspace(
     config: PersistentWorkspaceConfig,
   ): Promise<PersistentWorkspaceInfo> {
-    const { apiKey } = await this.getConfig();
-
-    if (!apiKey) {
-      throw new Error("E2B Api Key not configured");
-    }
-
-    const e2bSandbox = await Sandbox.create("opencode", {
-      apiKey: apiKey,
-      timeoutMs: 10 * 60 * 1_000, // 10 mins timeout
-      network: {
-        allowPublicTraffic: false,
-      },
-      lifecycle: {
-        onTimeout: "kill",
-      },
-      envs: {
-        OPENCODE_SERVER_PASSWORD: config.environmentVariables?.OPENCODE_SERVER_PASSWORD ?? "",
-      },
-    });
-
-    const workspaceDir = `/home/user/workspace`;
-    const repoDir = `${workspaceDir}/${config.environmentVariables?.REPO_NAME}`;
-
-    if (config.repositoryUrl && config.environmentVariables) {
-      // We Clone Repository
-      const parsedGitRepoUrl = config.repositoryUrl.endsWith(".git")
-        ? config.repositoryUrl
-        : `${config.repositoryUrl}.git`;
-
-      const username = config.environmentVariables.GITHUB_APP_TOKEN
-        ? config.environmentVariables.USER_GITHUB_USERNAME
-        : undefined;
-      const password = config.environmentVariables.GITHUB_APP_TOKEN;
-
-      await e2bSandbox.commands.run(`mkdir -p ${workspaceDir}`).catch(async (err) => {
-        e2bSandbox.kill();
-        console.error("EB2 Killed sanbbox because of err: ", err);
-        throw err;
-      });
-
-      await e2bSandbox.git
-        .clone(parsedGitRepoUrl, {
-          path: repoDir,
-          username: username,
-          password: password,
-        })
-        .catch(async (err) => {
-          e2bSandbox.kill();
-          console.error("EB2 Killed sanbbox because of err: ", err);
-          throw err;
-        });
-    }
-
-    if (config.environmentVariables && config.environmentVariables.OPENCODE_CONFIG_BASE64) {
-      await e2bSandbox.commands.run("mkdir -p ~/.config/opencode").catch(async (err) => {
-        e2bSandbox.kill();
-        console.error("EB2 Killed sanbbox because of err: ", err);
-        throw err;
-      });
-
-      await e2bSandbox.commands
-        .run(
-          `echo "${config.environmentVariables.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
-        )
-        .catch(async (err) => {
-          e2bSandbox.kill();
-          console.error("EB2 Killed sanbbox because of err: ", err);
-          throw err;
-        });
-    }
-
-    if (config.environmentVariables && config.environmentVariables.OPENCODE_CREDENTIALS_BASE64) {
-      await e2bSandbox.commands.run("mkdir -p ~/.local/share/opencode").catch(async (err) => {
-        e2bSandbox.kill();
-        console.error("EB2 Killed sanbbox because of err: ", err);
-        throw err;
-      });
-
-      await e2bSandbox.commands
-        .run(
-          `echo "${config.environmentVariables.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
-        )
-        .catch(async (err) => {
-          e2bSandbox.kill();
-          console.error("EB2 Killed sanbbox because of err: ", err);
-          throw err;
-        });
-    }
-
-    await e2bSandbox.commands
-      .run(
-        `cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port 4096 > /tmp/opencode.log 2>&1`,
-        {
-          background: true,
-          onStdout: (data) => console.log(data),
-          onStderr: (data) => console.error(data),
-        },
-      )
-      .catch(async (err) => {
-        e2bSandbox.kill();
-        console.error("EB2 Killed sanbbox because of err: ", err);
-        throw err;
-      });
-
-    const host = e2bSandbox.getHost(4096);
-    const trafficAccessToken = e2bSandbox.trafficAccessToken;
-
-    if (!trafficAccessToken) {
-      await e2bSandbox.kill().catch(() => undefined);
-      throw new Error("E2B traffic access token missing");
-    }
-
-    const upstreamUrl = `https://${host}`;
-
-    const domain =
-      ROUTING_MODE === "path"
-        ? BASE_DOMAIN.includes("localhost")
-          ? `http://${BASE_DOMAIN}/ws/${config.subdomain}`
-          : `https://${BASE_DOMAIN}/ws/${config.subdomain}`
-        : BASE_DOMAIN.includes("localhost")
-          ? `http://${config.subdomain}.${BASE_DOMAIN}`
-          : `https://${config.subdomain}.${BASE_DOMAIN}`;
-
-    return {
-      externalServiceId: e2bSandbox.sandboxId,
-      externalVolumeId: e2bSandbox.sandboxId,
-      upstreamUrl,
-      upstreamAccess: getTrafficAccessHeaders(trafficAccessToken),
-      domain,
-      serviceCreatedAt: new Date((await e2bSandbox.getInfo()).startedAt),
-      volumeCreatedAt: new Date((await e2bSandbox.getInfo()).startedAt),
-    };
+    return (await this.provisionWorkspace(config, "kill", true)) as PersistentWorkspaceInfo;
   }
 
   async stopWorkspace(
@@ -318,17 +238,10 @@ export class E2BProvider implements ComputeProvider {
     _regionIdentifier: string,
     _externalRunningDeploymentId?: string,
   ): Promise<void> {
-    const { apiKey } = await this.getConfig();
+    const apikey = await this.getApiKey();
+    const e2bSandbox = await this.connectSandbox(externalId);
 
-    if (!apiKey) {
-      throw new Error("E2B Api Key not configured");
-    }
-
-    const e2bSandbox = await Sandbox.connect(externalId, {
-      apiKey: apiKey,
-    });
-
-    await e2bSandbox.pause().catch((error) => {
+    await e2bSandbox.pause({ apiKey: apikey }).catch((error) => {
       console.error("E2B Sandbox Error (Sandbox.pause)", error.message);
       throw new Error(`E2B Sandbox Error (Sandbox.pause): ${error.message}`);
     });
@@ -339,30 +252,14 @@ export class E2BProvider implements ComputeProvider {
     _regionIdentifier: string,
     _externalRunningDeploymentId?: string,
   ): Promise<void> {
-    const { apiKey } = await this.getConfig();
-
-    if (!apiKey) {
-      throw new Error("E2B Api Key not configured");
-    }
-
-    await Sandbox.connect(externalId, {
-      apiKey: apiKey,
-    }).catch((error) => {
+    await this.connectSandbox(externalId).catch((error) => {
       console.error("E2B Sandbox Error while restarting (Sandbox.connect)", error.message);
       throw new Error(`E2B Sandbox Error while restarting (Sandbox.connect): ${error.message}`);
     });
   }
 
   async terminateWorkspace(externalServiceId: string, _externalVolumeId?: string): Promise<void> {
-    const { apiKey } = await this.getConfig();
-
-    if (!apiKey) {
-      throw new Error("E2B Api Key not configured");
-    }
-
-    const e2bSandbox = await Sandbox.connect(externalServiceId, {
-      apiKey: apiKey,
-    });
+    const e2bSandbox = await this.connectSandbox(externalServiceId);
 
     await e2bSandbox.kill().catch((error) => {
       console.error("E2B Sandbox Error (Sandbox.kill)", error.message);
@@ -371,17 +268,8 @@ export class E2BProvider implements ComputeProvider {
   }
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
-    const { apiKey } = await this.getConfig();
-
-    if (!apiKey) {
-      throw new Error("E2B Api Key not configured");
-    }
-
     try {
-      const sandbox = await Sandbox.connect(externalId, {
-        apiKey: apiKey,
-      });
-
+      const sandbox = await this.connectSandbox(externalId);
       const info: any = await sandbox.getInfo();
 
       if (info.state === "paused") {
@@ -403,24 +291,15 @@ export class E2BProvider implements ComputeProvider {
     externalServiceId: string,
     port: number,
   ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }> {
-    const { apiKey } = await this.getConfig();
-
-    if (!apiKey) {
-      throw new Error("E2B Api Key not configured");
-    }
-
-    const sandbox = await Sandbox.connect(externalServiceId, {
-      apiKey: apiKey,
-    });
-
+    const sandbox = await this.connectSandbox(externalServiceId);
     const host = sandbox.getHost(port);
-    const domain = `https://${host}`;
 
-    const upstreamAccess = sandbox.trafficAccessToken
-      ? getTrafficAccessHeaders(sandbox.trafficAccessToken)
-      : undefined;
-
-    return { domain, upstreamAccess };
+    return {
+      domain: `https://${host}`,
+      upstreamAccess: sandbox.trafficAccessToken
+        ? getTrafficAccessHeaders(sandbox.trafficAccessToken)
+        : undefined,
+    };
   }
 
   async removeExposedPortDomain(_externalServiceDomainId: string): Promise<void> {
@@ -428,5 +307,4 @@ export class E2BProvider implements ComputeProvider {
   }
 }
 
-// Singleton instance
 export const e2bProvider = new E2BProvider();

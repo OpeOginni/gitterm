@@ -48,6 +48,7 @@ export default function ProviderSettingsPage() {
   const queryClient = useQueryClient();
 
   const [providerName, setProviderName] = useState("");
+  const [allowUserRegionSelection, setAllowUserRegionSelection] = useState(true);
   const [selectedProviderTypeId, setSelectedProviderTypeId] = useState("");
   const [configForm, setConfigForm] = useState<Record<string, any>>({});
   const [configName, setConfigName] = useState("");
@@ -84,6 +85,7 @@ export default function ProviderSettingsPage() {
       providerConfigId?: string | null;
       name?: string;
       supportsRegions?: boolean;
+      allowUserRegionSelection?: boolean;
     }) => trpcClient.admin.infrastructure.updateProvider.mutate(params),
   });
 
@@ -171,6 +173,7 @@ export default function ProviderSettingsPage() {
     }
 
     setProviderName(provider.name ?? "");
+    setAllowUserRegionSelection(provider.allowUserRegionSelection ?? true);
     setConfigName(provider.providerConfig?.name ?? `${provider.name} Default`);
     setConfigForm(provider.providerConfig?.config ?? {});
     setConfigEnabled(provider.providerConfig?.isEnabled ?? true);
@@ -260,6 +263,13 @@ export default function ProviderSettingsPage() {
         await updateProvider.mutateAsync({
           id: provider.id,
           name: nextProviderName,
+        });
+      }
+
+      if (allowUserRegionSelection !== provider.allowUserRegionSelection) {
+        await updateProvider.mutateAsync({
+          id: provider.id,
+          allowUserRegionSelection,
         });
       }
 
@@ -435,6 +445,24 @@ export default function ProviderSettingsPage() {
                   <Input value={selectedProviderType?.displayName ?? "Unknown"} disabled readOnly />
                 </div>
               </div>
+              {provider?.supportsRegions && (
+                <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-white/90">Allow User Region Selection</p>
+                    <p className="text-xs text-white/40">
+                      When enabled, users can choose a region. When disabled, the default region is
+                      always used.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm text-white/40">Enabled</Label>
+                    <Switch
+                      checked={allowUserRegionSelection}
+                      onCheckedChange={setAllowUserRegionSelection}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Credentials & Config Section */}

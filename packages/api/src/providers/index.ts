@@ -1,4 +1,5 @@
 import type { ComputeProvider } from "./compute";
+import { daytonaProvider } from "./daytona";
 import { e2bProvider } from "./e2b";
 import { railwayProvider } from "./railway";
 
@@ -15,6 +16,7 @@ export { e2bProvider } from "./e2b";
 const availableProviders: Record<string, ComputeProvider> = {
   railway: railwayProvider,
   e2b: e2bProvider,
+  daytona: daytonaProvider,
   // Future providers:
   // docker: dockerProvider,
   // kubernetes: kubernetesProvider,

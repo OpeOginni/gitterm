@@ -3,13 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1200" />
-    <title>GitTerm — E2B Now Supported</title>
+    <title>GitTerm - Daytona Now Supported</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap"
       rel="stylesheet"
     />
     <style>
+      :root {
+        --bg: #09090b;
+        --text: #ffffff;
+        --muted: rgba(255, 255, 255, 0.35);
+        --soft: rgba(255, 255, 255, 0.08);
+        --accent: #c8a44e;
+        --accent-soft: rgba(200, 164, 78, 0.08);
+        --accent-border: rgba(200, 164, 78, 0.2);
+      }
+
       *,
       *::before,
       *::after {
@@ -22,13 +32,12 @@
         width: 1200px;
         height: 675px;
         overflow: hidden;
-        background: #09090b;
+        background: var(--bg);
         font-family: "DM Sans", sans-serif;
-        color: #fff;
+        color: var(--text);
         position: relative;
       }
 
-      /* Dot grid texture */
       body::before {
         content: "";
         position: absolute;
@@ -38,29 +47,28 @@
         z-index: 0;
       }
 
-      /* Ambient glows */
       .glow-1 {
         position: absolute;
-        width: 550px;
-        height: 550px;
+        width: 560px;
+        height: 560px;
         top: -160px;
-        right: -80px;
-        background: radial-gradient(closest-side, rgba(200, 164, 78, 0.06), transparent);
+        right: -100px;
+        background: radial-gradient(closest-side, rgba(200, 164, 78, 0.08), transparent);
         border-radius: 50%;
         z-index: 0;
       }
+
       .glow-2 {
         position: absolute;
-        width: 400px;
-        height: 400px;
-        bottom: -100px;
-        left: -60px;
+        width: 420px;
+        height: 420px;
+        bottom: -120px;
+        left: -80px;
         background: radial-gradient(closest-side, rgba(200, 164, 78, 0.04), transparent);
         border-radius: 50%;
         z-index: 0;
       }
 
-      /* ─── Layout ─── */
       .card {
         position: relative;
         z-index: 1;
@@ -72,7 +80,6 @@
         padding: 48px 64px;
       }
 
-      /* ─── Top bar ─── */
       .top {
         grid-column: 1 / -1;
         display: flex;
@@ -90,7 +97,7 @@
       .brand-icon {
         width: 24px;
         height: 24px;
-        color: #c8a44e;
+        color: var(--accent);
       }
 
       .brand-name {
@@ -108,14 +115,13 @@
         font-weight: 700;
         letter-spacing: 0.2em;
         text-transform: uppercase;
-        color: #c8a44e;
-        border: 1px solid rgba(200, 164, 78, 0.2);
-        background: rgba(200, 164, 78, 0.08);
+        color: var(--accent);
+        border: 1px solid var(--accent-border);
+        background: var(--accent-soft);
         padding: 7px 18px;
         border-radius: 999px;
       }
 
-      /* ─── Left: logos + headline ─── */
       .left {
         grid-column: 1;
         display: flex;
@@ -144,7 +150,7 @@
         height: 88px;
       }
 
-      .logo-box .logo-label {
+      .logo-label {
         font-family: "Space Mono", monospace;
         font-size: 11px;
         font-weight: 700;
@@ -160,7 +166,7 @@
         width: 48px;
         height: 48px;
         border-radius: 14px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--soft);
         background: rgba(255, 255, 255, 0.03);
         margin-bottom: 24px;
       }
@@ -177,21 +183,15 @@
         font-weight: 700;
         line-height: 1.12;
         letter-spacing: -0.02em;
-        color: #fff;
+        color: var(--text);
         text-align: center;
       }
 
       .headline em {
         font-style: normal;
-        color: #c8a44e;
+        color: var(--accent);
       }
 
-      /* ─── Right: highlights panel ─── */
-      /*
-        TEMPLATE NOTE: Update the highlights below for each new provider.
-        Keep to 3-4 short points that describe what makes this provider
-        a good fit for OpenCode workspaces.
-      */
       .right {
         grid-column: 2;
         display: flex;
@@ -229,8 +229,8 @@
         min-width: 8px;
         margin-top: 7px;
         border-radius: 50%;
-        background: #c8a44e;
-        opacity: 0.6;
+        background: var(--accent);
+        opacity: 0.75;
       }
 
       .highlight-text {
@@ -248,10 +248,9 @@
       .highlight-desc {
         font-size: 13px;
         line-height: 1.5;
-        color: rgba(255, 255, 255, 0.35);
+        color: var(--muted);
       }
 
-      /* ─── Bottom bar ─── */
       .bottom {
         grid-column: 1 / -1;
         display: flex;
@@ -278,7 +277,7 @@
       }
 
       .url strong {
-        color: #c8a44e;
+        color: var(--accent);
         font-weight: 700;
       }
     </style>
@@ -288,7 +287,6 @@
     <div class="glow-2"></div>
 
     <div class="card">
-      <!-- Top bar -->
       <div class="top">
         <div class="brand">
           <svg
@@ -308,11 +306,6 @@
         <div class="badge">Now Supported</div>
       </div>
 
-      <!-- Left: logos + headline -->
-      <!--
-        TEMPLATE: Replace the logo src, alt, label, and headline
-        for each new provider announcement.
-      -->
       <div class="left">
         <div class="logos">
           <div class="logo-box">
@@ -321,55 +314,48 @@
           </div>
           <div class="connector"><span>+</span></div>
           <div class="logo-box">
-            <img src="/E2B.svg" alt="E2B" />
-            <span class="logo-label">E2B</span>
+            <img src="/daytona.svg" alt="Daytona" />
+            <span class="logo-label">Daytona</span>
           </div>
         </div>
-        <h1 class="headline">E2B is now on<br /><em>GitTerm.</em></h1>
+        <h1 class="headline">Daytona is now on<br /><em>GitTerm.</em></h1>
       </div>
 
-      <!-- Right: highlights panel -->
-      <!--
-        TEMPLATE: Swap these highlights for each provider.
-        Keep to 3-4 short points about why this provider
-        is great for running OpenCode workspaces.
-      -->
       <div class="right">
-        <span class="highlights-label">Why E2B</span>
+        <span class="highlights-label">Why Daytona</span>
         <div class="highlights">
           <div class="highlight">
             <div class="highlight-icon"></div>
             <div class="highlight-text">
-              <span class="highlight-title">Blazing fast sandboxes</span>
+              <span class="highlight-title">Instant cloud sandboxes</span>
               <span class="highlight-desc"
-                >Benched at 0.5s median TTI across 100 concurrent spawns.</span
+                >Spin up clean remote dev environments for OpenCode in seconds. Benched at 0.67s median TTI.</span
               >
             </div>
           </div>
           <div class="highlight">
             <div class="highlight-icon"></div>
             <div class="highlight-text">
-              <span class="highlight-title">Native OpenCode support</span>
+              <span class="highlight-title">Docker in Docker</span>
               <span class="highlight-desc"
-                >First-party OpenCode template with ongoing support.</span
+                >Spin up databases, Redis, and other services inside the sandbox so you and your agents can work against a real dev stack.</span
               >
             </div>
           </div>
           <div class="highlight">
             <div class="highlight-icon"></div>
             <div class="highlight-text">
-              <span class="highlight-title">Store, pause, resume, no bill</span>
+              <span class="highlight-title">US and EU regions</span>
               <span class="highlight-desc"
-                >Sandboxes persist automatically. You stop paying when idle.</span
+                >Choose the closest Daytona target region for lower-latency workspaces.</span
               >
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Bottom bar -->
       <div class="bottom">
-        <span class="bottom-left">Deploy OpenCode workspaces on E2B</span>
+        <span class="bottom-left">Deploy OpenCode workspaces on Daytona</span>
         <span class="url"><strong>gitterm</strong>.dev</span>
       </div>
     </div>

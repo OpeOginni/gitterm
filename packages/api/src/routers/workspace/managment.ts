@@ -43,6 +43,7 @@ import { getProviderConfigService } from "../../service/config/provider-config";
 import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-credentials";
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
 import {
+  buildWorkspaceToolingManifestBase64,
   createDefaultWorkspaceToolingManifest,
   detectWorkspaceToolingManifestFromPaths,
   encodeWorkspaceToolingManifestBase64,
@@ -82,33 +83,6 @@ function normalizeRepoUrl(url: string): string {
     .trim()
     .replace(/\/+$/, "")
     .replace(/\.git\/?$/i, "");
-}
-
-async function buildWorkspaceToolingManifestBase64(params: {
-  owner?: string;
-  repo?: string;
-  installationId?: string;
-}): Promise<string> {
-  const fallback = createDefaultWorkspaceToolingManifest(params.owner, params.repo);
-
-  if (!params.owner || !params.repo || !params.installationId) {
-    return encodeWorkspaceToolingManifestBase64(fallback);
-  }
-
-  try {
-    const tree = await getGitHubAppService().getFileTree(
-      params.installationId,
-      params.owner,
-      params.repo,
-    );
-    const filePaths = tree.filter((item) => item.type === "blob").map((item) => item.path);
-    const manifest = detectWorkspaceToolingManifestFromPaths(filePaths, params.owner, params.repo);
-    console.log(manifest);
-    return encodeWorkspaceToolingManifestBase64(manifest);
-  } catch (error) {
-    console.error("Failed to build tooling manifest from repository tree:", error);
-    return encodeWorkspaceToolingManifestBase64(fallback);
-  }
 }
 
 export const workspaceRouter = router({
@@ -921,34 +895,85 @@ export const workspaceRouter = router({
         // Get region info
         let regionRecord: typeof region.$inferSelect | undefined;
 
-        if (input.regionId && cloudProviderRecord.supportsRegions) {
-          [regionRecord] = await db
-            .select()
-            .from(region)
-            .where(
-              and(eq(region.id, input.regionId), eq(region.cloudProviderId, input.cloudProviderId)),
-            );
+        if (cloudProviderRecord.supportsRegions) {
+          // Check if user is allowed to select regions
+          if (cloudProviderRecord.allowUserRegionSelection) {
+            // User can select - validate the provided region
+            if (input.regionId) {
+              [regionRecord] = await db
+                .select()
+                .from(region)
+                .where(
+                  and(
+                    eq(region.id, input.regionId),
+                    eq(region.cloudProviderId, input.cloudProviderId),
+                  ),
+                );
 
-          if (!regionRecord) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Invalid region for the selected cloud provider",
-            });
+              if (!regionRecord) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: "Invalid region for the selected cloud provider",
+                });
+              }
+
+              if (!regionRecord.isEnabled) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: "Selected region is not available",
+                });
+              }
+            } else {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Region is required for the selected cloud provider",
+              });
+            }
+          } else {
+            // User cannot select - use the default region from provider config
+            if (cloudProviderRecord.providerConfigId) {
+              const providerConfig = await providerConfigService.getProviderConfigById(
+                cloudProviderRecord.providerConfigId,
+              );
+              const defaultRegionIdentifier = providerConfig?.config?.defaultRegion;
+
+              if (defaultRegionIdentifier) {
+                [regionRecord] = await db
+                  .select()
+                  .from(region)
+                  .where(
+                    and(
+                      eq(region.externalRegionIdentifier, defaultRegionIdentifier),
+                      eq(region.cloudProviderId, input.cloudProviderId),
+                      eq(region.isEnabled, true),
+                    ),
+                  );
+              }
+            }
+
+            // If no default region found or not enabled, try to get any enabled region
+            if (!regionRecord) {
+              const [anyEnabledRegion] = await db
+                .select()
+                .from(region)
+                .where(
+                  and(
+                    eq(region.cloudProviderId, input.cloudProviderId),
+                    eq(region.isEnabled, true),
+                  ),
+                )
+                .limit(1);
+
+              regionRecord = anyEnabledRegion;
+            }
+
+            if (!regionRecord) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "No available region found for the selected cloud provider",
+              });
+            }
           }
-
-          if (!regionRecord.isEnabled) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Selected region is not available",
-            });
-          }
-        }
-
-        if (cloudProviderRecord.supportsRegions && !input.regionId) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Region is required for the selected cloud provider",
-          });
         }
 
         // Get image for this agent type (take the first one)
@@ -1394,11 +1419,7 @@ export const workspaceRouter = router({
         }
 
         if (workspaceInfo.upstreamAccess?.headers) {
-          await upsertWorkspaceRouteAccess(
-            workspaceId,
-            null,
-            workspaceInfo.upstreamAccess.headers,
-          );
+          await upsertWorkspaceRouteAccess(workspaceId, null, workspaceInfo.upstreamAccess.headers);
         }
 
         // Create volume record (only for persistent workspaces)
@@ -1655,12 +1676,14 @@ export const workspaceRouter = router({
           existingWorkspace.externalRunningDeploymentId ?? undefined,
         );
 
+        const restartWorkspaceStatus =
+          provider.restartSettlement === "immediate" ? "running" : "pending";
         // Update workspace status
         const now = new Date();
         await db
           .update(workspace)
           .set({
-            status: "pending",
+            status: restartWorkspaceStatus,
             stoppedAt: null,
             lastActiveAt: now,
             updatedAt: now,
@@ -1670,7 +1693,7 @@ export const workspaceRouter = router({
         // Emit status event
         WORKSPACE_EVENTS.emitStatus({
           workspaceId: input.workspaceId,
-          status: "pending",
+          status: restartWorkspaceStatus,
           updatedAt: now,
           userId,
           workspaceDomain: existingWorkspace.domain,
@@ -1678,7 +1701,11 @@ export const workspaceRouter = router({
 
         return {
           success: true,
-          message: "Workspace restarting",
+          message:
+            restartWorkspaceStatus === "running"
+              ? "Workspace restarted successfully"
+              : "Workspace restarting",
+          status: restartWorkspaceStatus,
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -1733,7 +1760,6 @@ export const workspaceRouter = router({
         fetchedWorkspace.persistent ? fetchedWorkspace.volume.externalVolumeId : undefined,
       );
 
-      // Update workspace status
       const [updatedWorkspace] = await db
         .update(workspace)
         .set({

@@ -1,6 +1,6 @@
 {
-  "id": "af428955-19b5-40be-9824-213926c0b69f",
-  "prevId": "8aa54834-0fac-49a9-973d-6813558a465a",
+  "id": "7760c1e0-508f-4f13-8e87-84fb0d62978c",
+  "prevId": "af428955-19b5-40be-9824-213926c0b69f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1062,6 +1062,13 @@
           "notNull": true,
           "default": true
         },
+        "allow_user_region_selection": {
+          "name": "allow_user_region_selection",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
         "support_server_only": {
           "name": "support_server_only",
           "type": "boolean",
@@ -1071,7 +1078,31 @@
         },
         "creation_settlement": {
           "name": "creation_settlement",
-          "type": "creation_settlement",
+          "type": "settlement_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'webhook'"
+        },
+        "stop_settlement": {
+          "name": "stop_settlement",
+          "type": "settlement_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'webhook'"
+        },
+        "restart_settlement": {
+          "name": "restart_settlement",
+          "type": "settlement_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'webhook'"
+        },
+        "termination_settlement": {
+          "name": "termination_settlement",
+          "type": "settlement_enum",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": false,
@@ -3353,8 +3384,8 @@
       "schema": "public",
       "values": ["user", "admin"]
     },
-    "public.creation_settlement": {
-      "name": "creation_settlement",
+    "public.settlement_enum": {
+      "name": "settlement_enum",
       "schema": "public",
       "values": ["immediate", "webhook", "poll"]
     },

@@ -50,11 +50,7 @@ export function LandingHeader() {
         </nav>
 
         <div className="flex items-center gap-2.5">
-          <Link
-            href="https://github.com/OpeOginni/gitterm"
-            target="_blank"
-            title="Star on GitHub"
-          >
+          <Link href="https://github.com/OpeOginni/gitterm" target="_blank" title="Star on GitHub">
             <Button
               variant="outline"
               size="sm"

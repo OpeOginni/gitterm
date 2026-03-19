@@ -23,20 +23,20 @@ The fastest way to self-host:
 
 Required services:
 
-| Service | Purpose |
-| --- | --- |
-| PostgreSQL | Database |
-| Redis | Cache and pub/sub |
-| server | Main API |
-| web | Dashboard and auth UI |
-| proxy | Caddy reverse proxy |
-| listener | Webhook and event ingress |
-| worker | Background jobs |
+| Service    | Purpose                   |
+| ---------- | ------------------------- |
+| PostgreSQL | Database                  |
+| Redis      | Cache and pub/sub         |
+| server     | Main API                  |
+| web        | Dashboard and auth UI     |
+| proxy      | Caddy reverse proxy       |
+| listener   | Webhook and event ingress |
+| worker     | Background jobs           |
 
 Recommended worker cron:
 
-| Worker | Schedule | Purpose |
-| --- | --- | --- |
+| Worker        | Schedule       | Purpose                                   |
+| ------------- | -------------- | ----------------------------------------- |
 | `idle-reaper` | `*/10 * * * *` | Stops idle workspaces and enforces quotas |
 
 ## Routing
@@ -70,7 +70,7 @@ If your `listener` service is not public, use the proxy form.
 
 Set these values in the admin panel:
 
-- `API URL`
+- optional: `API URL` (defaults to `https://backboard.railway.app/graphql/v2`)
 - `API Token`
 - `Project ID`
 - `Environment ID`

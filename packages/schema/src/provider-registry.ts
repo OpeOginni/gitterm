@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const providerCategoryEnum = z.enum(["compute", "sandbox", "both"]);
 export const fieldTypeEnum = z.enum(["text", "password", "number", "select", "url", "boolean"]);
+export const DEFAULT_RAILWAY_API_URL = "https://backboard.railway.app/graphql/v2";
 
 export interface ProviderConfigField {
   fieldName: string;
@@ -33,7 +34,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     displayName: "Railway",
     category: "compute",
     configSchema: z.object({
-      apiUrl: z.url("Must be a valid URL"),
+      apiUrl: z.url("Must be a valid URL").default(DEFAULT_RAILWAY_API_URL),
       apiToken: z.string().min(1, "API token is required"),
       projectId: z.string().min(1, "Project ID is required"),
       environmentId: z.string().min(1, "Environment ID is required"),
@@ -45,8 +46,9 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         fieldName: "apiUrl",
         fieldLabel: "API URL",
         fieldType: "url",
-        isRequired: true,
+        isRequired: false,
         isEncrypted: false,
+        defaultValue: DEFAULT_RAILWAY_API_URL,
         sortOrder: 1,
       },
       {
@@ -184,7 +186,6 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       },
     ],
   },
-
   e2b: {
     name: "e2b",
     displayName: "E2B",
@@ -208,6 +209,37 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         fieldType: "password",
         isRequired: true,
         isEncrypted: true,
+        sortOrder: 2,
+      },
+    ],
+  },
+  daytona: {
+    name: "daytona",
+    displayName: "Daytona",
+    category: "sandbox",
+    configSchema: z.object({
+      apiKey: z.string().min(1, "API KEY is required"),
+      defaultTargetRegion: z.enum(["us", "eu"], "region of eu or us is required"),
+    }),
+    fields: [
+      {
+        fieldName: "apiKey",
+        fieldLabel: "API KEY",
+        fieldType: "password",
+        isRequired: true,
+        isEncrypted: true,
+        sortOrder: 1,
+      },
+      {
+        fieldName: "defaultTargetRegion",
+        fieldLabel: "Default Target Region",
+        fieldType: "select",
+        options: [
+          { value: "us", label: "United States" },
+          { value: "eu", label: "Europe" },
+        ],
+        isRequired: true,
+        isEncrypted: false,
         sortOrder: 2,
       },
     ],

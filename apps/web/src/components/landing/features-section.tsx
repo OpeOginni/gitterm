@@ -1,10 +1,4 @@
-import {
-  Cloud,
-  Save,
-  Layers,
-  Power,
-  Globe,
-} from "lucide-react";
+import { Cloud, Save, Layers, Power, Globe } from "lucide-react";
 import { GitHub } from "../logos/Github";
 
 const heroFeature = {
@@ -69,9 +63,7 @@ export function FeaturesSection() {
               <heroFeature.icon className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h3 className="mb-2 text-xl font-bold text-white md:text-2xl">
-                {heroFeature.title}
-              </h3>
+              <h3 className="mb-2 text-xl font-bold text-white md:text-2xl">{heroFeature.title}</h3>
               <p className="max-w-2xl text-sm leading-relaxed text-white/45 md:text-base">
                 {heroFeature.description}
               </p>

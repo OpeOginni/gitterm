@@ -14,6 +14,7 @@ const infraProviders = [
   { src: "/railway.svg", label: "Railway" },
   { src: "/cloudflare.svg", label: "Cloudflare" },
   { src: "/E2B.svg", label: "E2B" },
+  { src: "/daytona.svg", label: "Daytona" },
 ];
 
 export function HeroSection() {
