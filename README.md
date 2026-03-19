@@ -53,7 +53,7 @@ Path routing is useful when you do not control wildcard DNS. Subdomain routing i
 
 ## Provider Setup
 
-Provider configuration is driven by `packages/schema/src/provider-registry.ts`. Current provider definitions include Railway, AWS, Cloudflare Sandbox, and E2B.
+Provider configuration is driven by `packages/schema/src/provider-registry.ts`. Current provider definitions include [Railway](https://railway.com), [AWS](https://aws.amazon.com/), [Daytona](https://daytona.io/), [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/), and [E2B](https://e2b.dev/).
 
 Open the admin panel and add the required values for each provider you want to offer.
 
@@ -66,7 +66,7 @@ Webhook endpoints depend on how you expose GitTerm:
 
 If your `listener` service is not public, use the proxy form.
 
-### Railway
+### [Railway](https://railway.com)
 
 Set these values in the admin panel:
 
@@ -83,7 +83,7 @@ Webhook setup:
 - Endpoint via listener: `https://<listener-base-url>/trpc/railway.handleWebhook`
 - Accept these Railway events: `Deployment Failed`, `Deployment Deploying`, `Deployment Slept`, `Deployment Deployed`
 
-### E2B
+### [E2B](https://e2b.dev/)
 
 [![SPONSORED BY E2B FOR STARTUPS](https://img.shields.io/badge/SPONSORED%20BY-E2B%20FOR%20STARTUPS-ff8800?style=for-the-badge)](https://e2b.dev/startups)
 
@@ -106,7 +106,16 @@ Minimum events GitTerm currently uses:
 - `sandbox.lifecycle.resumed`
 - `sandbox.lifecycle.killed`
 
-### Cloudflare Sandbox (WIP)
+### [Daytona](https://daytona.io/)
+
+Daytona is configured from the GitTerm admin panel.
+
+Set these values in the admin panel:
+
+- `API Key`
+- `Default Target Region` (`us` or `eu`)
+
+### [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) (WIP)
 
 Set these values in the admin panel:
 
