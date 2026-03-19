@@ -90,26 +90,6 @@ jobs:
       contents: write
 
     steps:
-      - name: Generate image manifest
-        env:
-          VERSION: ${{ needs.version-release.outputs.version }}
-          SERVER_DIGEST: ${{ needs.build-server.outputs.digest }}
-          LISTENER_DIGEST: ${{ needs.build-listener.outputs.digest }}
-          IDLE_REAPER_WORKER_DIGEST: ${{ needs.build-idle-reaper-worker.outputs.digest }}
-          PROXY_DIGEST: ${{ needs.build-proxy.outputs.digest }}
-          WEB_DIGEST: ${{ needs.build-web.outputs.digest }}
-          IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/gitterm
-        run: |
-          IMAGE_PREFIX=$(printf '%s' "$IMAGE_PREFIX" | tr '[:upper:]' '[:lower:]')
-
-          cat <<EOF > container-images-v${VERSION}.txt
-          ${IMAGE_PREFIX}-server:v${VERSION}@${SERVER_DIGEST}
-          ${IMAGE_PREFIX}-listener:v${VERSION}@${LISTENER_DIGEST}
-          ${IMAGE_PREFIX}-idle-reaper-worker:v${VERSION}@${IDLE_REAPER_WORKER_DIGEST}
-          ${IMAGE_PREFIX}-proxy:v${VERSION}@${PROXY_DIGEST}
-          ${IMAGE_PREFIX}-web:v${VERSION}@${WEB_DIGEST}
-          EOF
-
       - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,8 +98,7 @@ jobs:
           gh release create "v${{ needs.version-release.outputs.version }}" \
             --verify-tag \
             --generate-notes \
-            --title "v${{ needs.version-release.outputs.version }}" \
-            "container-images-v${{ needs.version-release.outputs.version }}.txt#container-images-v${{ needs.version-release.outputs.version }}.txt"
+            --title "v${{ needs.version-release.outputs.version }}"
 
   # Build API Server
   build-server:
@@ -166,6 +145,14 @@ jobs:
             ${{ steps.image.outputs.prefix }}-server:latest
             ${{ steps.image.outputs.prefix }}-server:v${{ needs.version-release.outputs.version }}
             ${{ steps.image.outputs.prefix }}-server:${{ steps.image.outputs.short }}
+          labels: |
+            org.opencontainers.image.title=GitTerm Server
+            org.opencontainers.image.description=Main API service for GitTerm.
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
+            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=server
           cache-to: type=gha,mode=max,scope=server
 
@@ -214,6 +201,14 @@ jobs:
             ${{ steps.image.outputs.prefix }}-listener:latest
             ${{ steps.image.outputs.prefix }}-listener:v${{ needs.version-release.outputs.version }}
             ${{ steps.image.outputs.prefix }}-listener:${{ steps.image.outputs.short }}
+          labels: |
+            org.opencontainers.image.title=GitTerm Listener
+            org.opencontainers.image.description=Webhook and workspace event ingress for GitTerm.
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
+            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=listener
           cache-to: type=gha,mode=max,scope=listener
 
@@ -262,6 +257,14 @@ jobs:
             ${{ steps.image.outputs.prefix }}-idle-reaper-worker:latest
             ${{ steps.image.outputs.prefix }}-idle-reaper-worker:v${{ needs.version-release.outputs.version }}
             ${{ steps.image.outputs.prefix }}-idle-reaper-worker:${{ steps.image.outputs.short }}
+          labels: |
+            org.opencontainers.image.title=GitTerm Idle Reaper Worker
+            org.opencontainers.image.description=Background worker that stops idle workspaces and enforces quotas for GitTerm.
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
+            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=idle-reaper-worker
           cache-to: type=gha,mode=max,scope=idle-reaper-worker
 
@@ -310,6 +313,14 @@ jobs:
             ${{ steps.image.outputs.prefix }}-proxy:latest
             ${{ steps.image.outputs.prefix }}-proxy:v${{ needs.version-release.outputs.version }}
             ${{ steps.image.outputs.prefix }}-proxy:${{ steps.image.outputs.short }}
+          labels: |
+            org.opencontainers.image.title=GitTerm Proxy
+            org.opencontainers.image.description=Caddy reverse proxy for GitTerm path and subdomain workspace routing.
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
+            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=proxy
           cache-to: type=gha,mode=max,scope=proxy
 
@@ -358,5 +369,13 @@ jobs:
             ${{ steps.image.outputs.prefix }}-web:latest
             ${{ steps.image.outputs.prefix }}-web:v${{ needs.version-release.outputs.version }}
             ${{ steps.image.outputs.prefix }}-web:${{ steps.image.outputs.short }}
+          labels: |
+            org.opencontainers.image.title=GitTerm Web
+            org.opencontainers.image.description=Dashboard and authentication UI for GitTerm.
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
+            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
