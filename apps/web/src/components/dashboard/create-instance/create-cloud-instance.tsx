@@ -112,11 +112,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const { mutateAsync: createWorkspace, isPending: isSubmitting } = useMutation(
     trpc.workspace.createWorkspace.mutationOptions({
       onSuccess: (data) => {
-        toast.success(
-          data.workspace.status === "pending"
-            ? "Workspace is provisioning"
-            : "Workspace created successfully",
-        );
         queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
         onSuccess({
           type: "workspace",
