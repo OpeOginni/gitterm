@@ -77,6 +77,21 @@ jobs:
           git tag -a "v$VERSION" -m "Release v$VERSION"
           git push origin "v$VERSION"
 
+  publish-release:
+    needs: version-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ needs.version-release.outputs.version }}" \
+            --generate-notes \
+            --title "v${{ needs.version-release.outputs.version }}"
+
   # Build API Server
   build-server:
     needs: version-release
