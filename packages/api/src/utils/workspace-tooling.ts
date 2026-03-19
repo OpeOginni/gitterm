@@ -152,7 +152,6 @@ export async function buildWorkspaceToolingManifestBase64(params: {
     );
     const filePaths = tree.filter((item) => item.type === "blob").map((item) => item.path);
     const manifest = detectWorkspaceToolingManifestFromPaths(filePaths, params.owner, params.repo);
-    console.log(manifest);
     return encodeWorkspaceToolingManifestBase64(manifest);
   } catch (error) {
     console.error("Failed to build tooling manifest from repository tree:", error);
