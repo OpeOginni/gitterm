@@ -17,13 +17,8 @@ const ROUTING_MODE = env.ROUTING_MODE;
 
 export class RailwayProvider implements ComputeProvider {
   readonly name = "railway";
-  private config: RailwayConfig | null = null;
 
   async getConfig(): Promise<RailwayConfig> {
-    if (this.config) {
-      return this.config;
-    }
-
     const dbConfig = await getProviderConfigService().getProviderConfigForUse("railway");
     if (!dbConfig) {
       console.error("Railway provider is not configured.");
@@ -31,8 +26,7 @@ export class RailwayProvider implements ComputeProvider {
         "Railway provider is not configured. Please configure it in the admin panel.",
       );
     }
-    this.config = dbConfig as RailwayConfig;
-    return this.config;
+    return dbConfig as RailwayConfig;
   }
 
   private async getClient(): Promise<RailwayClient> {

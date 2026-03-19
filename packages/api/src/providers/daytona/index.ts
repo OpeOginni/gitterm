@@ -56,13 +56,8 @@ function toDate(value?: string | number | Date | null): Date {
 
 export class DaytonaProvider implements ComputeProvider {
   readonly name = "daytona";
-  private config: DaytonaConfig | null = null;
 
   async getConfig(): Promise<DaytonaConfig> {
-    if (this.config) {
-      return this.config;
-    }
-
     const dbConfig = await getProviderConfigService().getProviderConfigForUse("daytona");
     if (!dbConfig) {
       console.error("Daytona provider is not configured.");
@@ -71,8 +66,7 @@ export class DaytonaProvider implements ComputeProvider {
       );
     }
 
-    this.config = dbConfig as DaytonaConfig;
-    return this.config;
+    return dbConfig as DaytonaConfig;
   }
 
   private async createClient(pickedRegion?: string): Promise<Daytona> {

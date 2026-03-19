@@ -30,21 +30,15 @@ function getTrafficAccessHeaders(token: string): UpstreamAccess {
 
 export class E2BProvider implements ComputeProvider {
   readonly name = "e2b";
-  private config: E2BConfig | null = null;
 
   async getConfig(): Promise<E2BConfig> {
-    if (this.config) {
-      return this.config;
-    }
-
     const dbConfig = await getProviderConfigService().getProviderConfigForUse("e2b");
     if (!dbConfig) {
       console.error("E2B provider is not configured.");
       throw new Error("E2B provider is not configured. Please configure it in the admin panel.");
     }
 
-    this.config = dbConfig as E2BConfig;
-    return this.config;
+    return dbConfig as E2BConfig;
   }
 
   private async getApiKey(): Promise<string> {

@@ -80,8 +80,6 @@ function createRequester(url: string, token?: string) {
 
 export type RailwayClient = ReturnType<typeof getSdk>;
 
-let railwayClient: RailwayClient | null = null;
-
 export async function createRailwayClient(): Promise<RailwayClient | null> {
   const dbConfig = (await getProviderConfigService().getProviderConfigForUse(
     "railway",
@@ -94,11 +92,7 @@ export async function createRailwayClient(): Promise<RailwayClient | null> {
 }
 
 export async function getRailwayClient(): Promise<RailwayClient | null> {
-  if (railwayClient) {
-    return railwayClient;
-  }
-  railwayClient = await createRailwayClient();
-  return railwayClient;
+  return createRailwayClient();
 }
 
 // Re-export types for convenience

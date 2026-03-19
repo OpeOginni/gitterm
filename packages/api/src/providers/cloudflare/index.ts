@@ -56,20 +56,14 @@ export interface SandboxRunResult {
  */
 export class CloudflareSandboxProvider {
   readonly name = "cloudflare";
-  private config: CloudflareConfig | null = null;
 
   async getConfig(): Promise<CloudflareConfig | null> {
-    if (this.config) {
-      return this.config;
-    }
-
     try {
       const dbConfig = await getProviderConfigService().getProviderConfigForUse("cloudflare");
       if (!dbConfig) {
         return null;
       }
-      this.config = dbConfig as CloudflareConfig;
-      return this.config;
+      return dbConfig as CloudflareConfig;
     } catch (error) {
       console.warn(
         "[CloudflareProvider] Failed to load config from database, falling back to env vars:",
