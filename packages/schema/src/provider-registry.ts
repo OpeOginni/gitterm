@@ -197,7 +197,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     fields: [
       {
         fieldName: "apiKey",
-        fieldLabel: "API KEY",
+        fieldLabel: "API Key",
         fieldType: "password",
         isRequired: true,
         isEncrypted: true,
@@ -224,7 +224,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     fields: [
       {
         fieldName: "apiKey",
-        fieldLabel: "API KEY",
+        fieldLabel: "API Key",
         fieldType: "password",
         isRequired: true,
         isEncrypted: true,
