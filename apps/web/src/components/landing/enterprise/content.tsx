@@ -97,10 +97,10 @@ export function EnterpriseContent() {
                     Your email client should have opened with a pre-filled message. If it
                     didn&apos;t, email us directly at{" "}
                     <a
-                      href="mailto:enterprise@gitterm.dev"
+                      href="mailto:brightoginni123@gmail.com"
                       className="text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:decoration-primary/60"
                     >
-                      enterprise@gitterm.dev
+                      brightoginni123@gmail.com
                     </a>
                   </p>
                   <Button

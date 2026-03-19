@@ -78,19 +78,48 @@ jobs:
           git push origin "v$VERSION"
 
   publish-release:
-    needs: version-release
+    needs:
+      - version-release
+      - build-server
+      - build-listener
+      - build-idle-reaper-worker
+      - build-proxy
+      - build-web
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
+      - name: Generate image manifest
+        env:
+          VERSION: ${{ needs.version-release.outputs.version }}
+          SERVER_DIGEST: ${{ needs.build-server.outputs.digest }}
+          LISTENER_DIGEST: ${{ needs.build-listener.outputs.digest }}
+          IDLE_REAPER_WORKER_DIGEST: ${{ needs.build-idle-reaper-worker.outputs.digest }}
+          PROXY_DIGEST: ${{ needs.build-proxy.outputs.digest }}
+          WEB_DIGEST: ${{ needs.build-web.outputs.digest }}
+          IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/gitterm
+        run: |
+          IMAGE_PREFIX=$(printf '%s' "$IMAGE_PREFIX" | tr '[:upper:]' '[:lower:]')
+
+          cat <<EOF > container-images-v${VERSION}.txt
+          ${IMAGE_PREFIX}-server:v${VERSION}@${SERVER_DIGEST}
+          ${IMAGE_PREFIX}-listener:v${VERSION}@${LISTENER_DIGEST}
+          ${IMAGE_PREFIX}-idle-reaper-worker:v${VERSION}@${IDLE_REAPER_WORKER_DIGEST}
+          ${IMAGE_PREFIX}-proxy:v${VERSION}@${PROXY_DIGEST}
+          ${IMAGE_PREFIX}-web:v${VERSION}@${WEB_DIGEST}
+          EOF
+
       - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release create "v${{ needs.version-release.outputs.version }}" \
+            --verify-tag \
             --generate-notes \
-            --title "v${{ needs.version-release.outputs.version }}"
+            --title "v${{ needs.version-release.outputs.version }}" \
+            "container-images-v${{ needs.version-release.outputs.version }}.txt#container-images-v${{ needs.version-release.outputs.version }}.txt"
 
   # Build API Server
   build-server:
@@ -99,6 +128,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout repository
@@ -124,6 +155,7 @@ jobs:
           echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push server
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -131,9 +163,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ steps.image.outputs.prefix }}-server:latest
-            ghcr.io/${{ steps.image.outputs.prefix }}-server:v${{ needs.version-release.outputs.version }}
-            ghcr.io/${{ steps.image.outputs.prefix }}-server:${{ github.sha }}
+            ${{ steps.image.outputs.prefix }}-server:latest
+            ${{ steps.image.outputs.prefix }}-server:v${{ needs.version-release.outputs.version }}
+            ${{ steps.image.outputs.prefix }}-server:${{ steps.image.outputs.short }}
           cache-from: type=gha,scope=server
           cache-to: type=gha,mode=max,scope=server
 
@@ -144,6 +176,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout repository
@@ -169,6 +203,7 @@ jobs:
           echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push listener
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -189,6 +224,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout repository
@@ -214,6 +251,7 @@ jobs:
           echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push idle-reaper-worker
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -234,6 +272,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout repository
@@ -259,6 +299,7 @@ jobs:
           echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push proxy (path-based routing)
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -279,6 +320,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout repository
@@ -304,6 +347,7 @@ jobs:
           echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push web
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
