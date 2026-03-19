@@ -184,8 +184,12 @@ function InstanceCard({
 
   const restartWorkspaceMutation = useMutation(
     trpc.workspace.restartWorkspace.mutationOptions({
-      onSuccess: () => {
-        toast.success("Workspace restarting...");
+      onSuccess: (data) => {
+        toast.success(
+          data.status === "pending"
+            ? "Workspace restarting..."
+            : "Workspace restarted successfully",
+        );
         queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
       },
       onError: (error) => {

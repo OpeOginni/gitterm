@@ -26,6 +26,7 @@ function getTrafficAccessHeaders(token: string): UpstreamAccess {
   return {
     headers: {
       "x-daytona-preview-token": token,
+      "X-Daytona-Skip-Preview-Warning": "true",
     },
   };
 }
@@ -65,21 +66,27 @@ export class DaytonaProvider implements ComputeProvider {
     const dbConfig = await getProviderConfigService().getProviderConfigForUse("daytona");
     if (!dbConfig) {
       console.error("Daytona provider is not configured.");
-      throw new Error("Daytona provider is not configured. Please configure it in the admin panel.");
+      throw new Error(
+        "Daytona provider is not configured. Please configure it in the admin panel.",
+      );
     }
 
     this.config = dbConfig as DaytonaConfig;
     return this.config;
   }
 
-  private async createClient(): Promise<Daytona> {
-    const { apiKey, daytonaTarget } = await this.getConfig();
+  private async createClient(pickedRegion?: string): Promise<Daytona> {
+    const { apiKey, defaultTargetRegion } = await this.getConfig();
 
     if (!apiKey) {
       throw new Error("Daytona Api Key not configured");
     }
 
-    return new Daytona({ apiKey, target: daytonaTarget });
+    if (!defaultTargetRegion) {
+      throw new Error("Daytona Default Target Region is not configured");
+    }
+
+    return new Daytona({ apiKey, target: pickedRegion ?? defaultTargetRegion });
   }
 
   private getDomain(subdomain: string): string {
@@ -172,7 +179,7 @@ export class DaytonaProvider implements ComputeProvider {
     config: WorkspaceConfig,
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const daytona = await this.createClient();
+    const daytona = await this.createClient(config.regionIdentifier);
     const repoName = config.environmentVariables?.REPO_NAME;
     const repoDir = getRepoDir(repoName);
 
@@ -228,7 +235,9 @@ export class DaytonaProvider implements ComputeProvider {
     const workspaceInfo: WorkspaceInfo = {
       externalServiceId: sandbox.id,
       upstreamUrl: previewUrlData.url,
-      upstreamAccess: previewUrlData.token ? getTrafficAccessHeaders(previewUrlData.token) : undefined,
+      upstreamAccess: previewUrlData.token
+        ? getTrafficAccessHeaders(previewUrlData.token)
+        : undefined,
       domain: this.getDomain(config.subdomain),
       serviceCreatedAt,
     };
@@ -356,7 +365,9 @@ export class DaytonaProvider implements ComputeProvider {
 
     return {
       domain: previewUrlData.url,
-      upstreamAccess: previewUrlData.token ? getTrafficAccessHeaders(previewUrlData.token) : undefined,
+      upstreamAccess: previewUrlData.token
+        ? getTrafficAccessHeaders(previewUrlData.token)
+        : undefined,
     };
   }
 

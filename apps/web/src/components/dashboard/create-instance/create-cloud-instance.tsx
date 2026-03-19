@@ -71,7 +71,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     );
   }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
 
-  const selectedProviderSupportsRegions = selectedCloudProvider?.supportsRegions ?? true;
+  const shouldShowRegionSelector =
+    selectedCloudProvider?.supportsRegions && selectedCloudProvider?.allowUserRegionSelection;
 
   const availableRegions = useMemo((): Region[] => {
     if (!selectedCloudProviderId) return [];
@@ -111,7 +112,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const { mutateAsync: createWorkspace, isPending: isSubmitting } = useMutation(
     trpc.workspace.createWorkspace.mutationOptions({
       onSuccess: (data) => {
-        toast.success("Workspace is provisioning");
+        toast.success(
+          data.workspace.status === "pending"
+            ? "Workspace is provisioning"
+            : "Workspace created successfully",
+        );
         queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
         onSuccess({
           type: "workspace",
@@ -130,7 +135,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     repoUrl &&
     selectedAgentTypeId &&
     selectedCloudProviderId &&
-    (!selectedProviderSupportsRegions || selectedRegion)
+    (!shouldShowRegionSelector || selectedRegion)
   );
 
   const handleSubmit = async () => {
@@ -139,7 +144,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       return;
     }
 
-    if (selectedProviderSupportsRegions && !selectedRegion) {
+    if (shouldShowRegionSelector && !selectedRegion) {
       toast.error(
         "No default region is configured for this provider. Ask an admin to add one or enable region support.",
       );
@@ -153,7 +158,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       repo: normalizedRepoUrl,
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: selectedCloudProviderId,
-      regionId: selectedRegion,
+      regionId: shouldShowRegionSelector ? selectedRegion : undefined,
       gitIntegrationId: userGitIntegrationId === "none" ? undefined : userGitIntegrationId,
       persistent,
       subdomain: subdomain || undefined,
@@ -291,8 +296,19 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value="no-cloud-providers" disabled>
-                      No cloud providers found
+                    <SelectItem
+                      value="no-cloud-providers"
+                      disabled
+                      className="py-3 focus:bg-transparent focus:text-inherit"
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-foreground">
+                          No cloud providers available
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Contact your admin to configure and enable providers
+                        </span>
+                      </div>
                     </SelectItem>
                   )}
                 </SelectContent>
@@ -303,7 +319,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
         {/* Region & Repository Access */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {selectedProviderSupportsRegions && (
+          {shouldShowRegionSelector && (
             <div className="grid gap-2">
               <Label className="text-sm font-medium">Region</Label>
               <Select
@@ -338,7 +354,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             </div>
           )}
 
-          <div className={`grid gap-2 ${selectedProviderSupportsRegions ? "" : "sm:col-span-2"}`}>
+          <div className={`grid gap-2 ${shouldShowRegionSelector ? "" : "sm:col-span-2"}`}>
             <Label className="text-sm font-medium flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>

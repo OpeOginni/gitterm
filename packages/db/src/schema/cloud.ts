@@ -4,11 +4,7 @@ import { relations } from "drizzle-orm";
 import { volume, workspace } from "./workspace";
 import { providerConfig } from "./provider-config";
 
-export const creationSettlementEnum = pgEnum("creation_settlement", [
-  "immediate",
-  "webhook",
-  "poll",
-] as const);
+export const settlementEnum = pgEnum("settelment_enum", ["immediate", "webhook", "poll"] as const);
 
 export const cloudAccount = pgTable("cloud_account", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -34,8 +30,12 @@ export const cloudProvider = pgTable("cloud_provider", {
   isEnabled: boolean("is_enabled").notNull().default(true),
   isSandbox: boolean("is_sandbox").notNull().default(false),
   supportsRegions: boolean("supports_regions").notNull().default(true),
+  allowUserRegionSelection: boolean("allow_user_region_selection").notNull().default(true),
   supportServerOnly: boolean("support_server_only").notNull().default(false),
-  creationSettlement: creationSettlementEnum("creation_settlement").default("webhook"),
+  creationSettlement: settlementEnum("creation_settlement").default("webhook"),
+  stopSettlement: settlementEnum("stop_settlement").default("webhook"),
+  restartSettlement: settlementEnum("restart_settlement").default("webhook"),
+  terminationSettlement: settlementEnum("termination_settlement").default("webhook"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -115,7 +115,7 @@ export type NewCloudProvider = typeof cloudProvider.$inferInsert;
 export type NewImage = typeof image.$inferInsert;
 export type NewAgentType = typeof agentType.$inferInsert;
 export type NewCloudAccount = typeof cloudAccount.$inferInsert;
-export type CreationSettlement = (typeof creationSettlementEnum.enumValues)[number];
+export type ProviderSettlement = (typeof settlementEnum.enumValues)[number];
 export type CloudProviderType = typeof cloudProvider.$inferSelect;
 export type ImageType = typeof image.$inferSelect;
 export type AgentType = typeof agentType.$inferSelect;

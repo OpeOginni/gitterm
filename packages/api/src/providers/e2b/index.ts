@@ -112,7 +112,11 @@ export class E2BProvider implements ComputeProvider {
     });
   }
 
-  private async cloneRepository(sandbox: E2BSandbox, config: WorkspaceConfig, repoDir: string): Promise<void> {
+  private async cloneRepository(
+    sandbox: E2BSandbox,
+    config: WorkspaceConfig,
+    repoDir: string,
+  ): Promise<void> {
     if (!config.repositoryUrl || !config.environmentVariables) {
       return;
     }
@@ -163,11 +167,14 @@ export class E2BProvider implements ComputeProvider {
 
   private async startOpencodeServer(sandbox: E2BSandbox, repoDir: string): Promise<void> {
     await sandbox.commands
-      .run(`cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port 4096 > /tmp/opencode.log 2>&1`, {
-        background: true,
-        onStdout: (data) => console.log(data),
-        onStderr: (data) => console.error(data),
-      })
+      .run(
+        `cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port 4096 > /tmp/opencode.log 2>&1`,
+        {
+          background: true,
+          onStdout: (data) => console.log(data),
+          onStderr: (data) => console.error(data),
+        },
+      )
       .catch(async (err) => {
         await sandbox.kill().catch(() => undefined);
         console.error("E2B Sandbox Error (start opencode serve)", err);
@@ -231,9 +238,10 @@ export class E2BProvider implements ComputeProvider {
     _regionIdentifier: string,
     _externalRunningDeploymentId?: string,
   ): Promise<void> {
+    const apikey = await this.getApiKey();
     const e2bSandbox = await this.connectSandbox(externalId);
 
-    await e2bSandbox.pause().catch((error) => {
+    await e2bSandbox.pause({ apiKey: apikey }).catch((error) => {
       console.error("E2B Sandbox Error (Sandbox.pause)", error.message);
       throw new Error(`E2B Sandbox Error (Sandbox.pause): ${error.message}`);
     });

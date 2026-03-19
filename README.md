@@ -70,7 +70,7 @@ If your `listener` service is not public, use the proxy form.
 
 Set these values in the admin panel:
 
-- `API URL`
+- optional: `API URL` (defaults to `https://backboard.railway.app/graphql/v2`)
 - `API Token`
 - `Project ID`
 - `Environment ID`
