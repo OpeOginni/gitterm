@@ -4,7 +4,7 @@ import { relations } from "drizzle-orm";
 import { volume, workspace } from "./workspace";
 import { providerConfig } from "./provider-config";
 
-export const settlementEnum = pgEnum("settelment_enum", ["immediate", "webhook", "poll"] as const);
+export const settlementEnum = pgEnum("settlement_enum", ["immediate", "webhook", "poll"] as const);
 
 export const cloudAccount = pgTable("cloud_account", {
   id: uuid("id").primaryKey().defaultRandom(),

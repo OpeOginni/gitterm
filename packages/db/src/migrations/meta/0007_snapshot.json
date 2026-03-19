@@ -1078,7 +1078,7 @@
         },
         "creation_settlement": {
           "name": "creation_settlement",
-          "type": "settelment_enum",
+          "type": "settlement_enum",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": false,
@@ -1086,7 +1086,7 @@
         },
         "stop_settlement": {
           "name": "stop_settlement",
-          "type": "settelment_enum",
+          "type": "settlement_enum",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": false,
@@ -1094,7 +1094,7 @@
         },
         "restart_settlement": {
           "name": "restart_settlement",
-          "type": "settelment_enum",
+          "type": "settlement_enum",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": false,
@@ -1102,7 +1102,7 @@
         },
         "termination_settlement": {
           "name": "termination_settlement",
-          "type": "settelment_enum",
+          "type": "settlement_enum",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": false,
@@ -3384,8 +3384,8 @@
       "schema": "public",
       "values": ["user", "admin"]
     },
-    "public.settelment_enum": {
-      "name": "settelment_enum",
+    "public.settlement_enum": {
+      "name": "settlement_enum",
       "schema": "public",
       "values": ["immediate", "webhook", "poll"]
     },
