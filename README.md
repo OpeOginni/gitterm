@@ -85,6 +85,8 @@ Webhook setup:
 
 ### E2B
 
+[![SPONSORED BY E2B FOR STARTUPS](https://img.shields.io/badge/SPONSORED%20BY-E2B%20FOR%20STARTUPS-ff8800?style=for-the-badge)](https://e2b.dev/startups)
+
 E2B is configured from the GitTerm admin panel and the E2B dashboard at `https://e2b.dev/`.
 
 Set these values in the admin panel:
