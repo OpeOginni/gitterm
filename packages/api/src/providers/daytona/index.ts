@@ -11,6 +11,15 @@ import type {
   WorkspaceInfo,
   WorkspaceStatusResult,
 } from "../compute";
+import {
+  buildHostAlias,
+  buildSshCommand,
+  buildSshConnectionString,
+  buildStandardSshConfigSnippet,
+  type WorkspaceEditorAccess,
+  type WorkspaceEditorAccessCleanupConfig,
+  type WorkspaceEditorAccessConfig,
+} from "../editor-access";
 import type { DaytonaConfig } from "./types";
 
 const BASE_DOMAIN = env.BASE_DOMAIN;
@@ -364,6 +373,38 @@ export class DaytonaProvider implements ComputeProvider {
         : undefined,
     };
   }
+
+  async getWorkspaceEditorAccess(
+    config: WorkspaceEditorAccessConfig,
+  ): Promise<WorkspaceEditorAccess> {
+    const daytona = await this.createClient(config.regionIdentifier);
+    const sandbox = await daytona.get(config.externalServiceId);
+    const sshToken = await sandbox.createSshAccess(120);
+    const host = "ssh.app.daytona.io";
+    const user = sshToken.token;
+    const port = 22;
+    const hostAlias = buildHostAlias(config.subdomain);
+
+    return {
+      providerName: this.name,
+      transportKind: "direct-ssh",
+      hostAlias,
+      host,
+      port,
+      user,
+      sshConnectionString: buildSshConnectionString({ host, port, user }),
+      sshCommand: buildSshCommand({ host, port, user }),
+      sshConfigSnippet: buildStandardSshConfigSnippet({ hostAlias, host, port, user }),
+      projectPathHint: config.projectPathHint,
+      expiresAt: new Date(Date.now() + 120 * 60 * 1000).toISOString(),
+      notes: [
+        "This short-lived SSH token expires after about two hours.",
+        "Use the generated host alias in VS Code Remote SSH, Cursor, Windsurf, or NeoVim.",
+      ],
+    };
+  }
+
+  async revokeWorkspaceEditorAccess(_config: WorkspaceEditorAccessCleanupConfig): Promise<void> {}
 
   async removeExposedPortDomain(_externalServiceDomainId: string): Promise<void> {
     // Daytona preview links are generated on demand and do not need explicit cleanup here.
