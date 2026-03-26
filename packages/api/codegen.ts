@@ -7,7 +7,7 @@ const config: CodegenConfig = {
   },
   documents: ["src/**/*.graphql"],
   generates: {
-    "src/service/railway/graphql/generated/railway.ts": {
+    "src/providers/railway/graphql/generated/railway.ts": {
       plugins: ["typescript", "typescript-operations", "typescript-generic-sdk"],
       config: {
         rawRequest: false,

@@ -16,8 +16,62 @@ import { getProviderByCloudProviderId } from "../../providers";
 import { validateAgentConfig } from "@gitterm/schema";
 import { polarClient, isBillingEnabled } from "@gitterm/auth";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import { isValidSshPublicKey, normalizeSshPublicKey } from "../../utils/ssh-public-key";
 
 export const userRouter = router({
+  getSshPublicKey: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    if (!userId) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+    }
+
+    const record = await db.query.user.findFirst({
+      where: eq(user.id, userId),
+      columns: { sshPublicKey: true },
+    });
+
+    return {
+      publicKey: record?.sshPublicKey ?? null,
+      hasPublicKey: !!record?.sshPublicKey,
+    };
+  }),
+
+  updateSshPublicKey: protectedProcedure
+    .input(
+      z.object({
+        publicKey: z.string().optional().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      if (!userId) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+      }
+
+      const normalized = input.publicKey ? normalizeSshPublicKey(input.publicKey) : "";
+      if (normalized && !isValidSshPublicKey(normalized)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Please provide a valid OpenSSH public key.",
+        });
+      }
+
+      const [updatedUser] = await db
+        .update(user)
+        .set({
+          sshPublicKey: normalized || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(user.id, userId))
+        .returning({ sshPublicKey: user.sshPublicKey });
+
+      return {
+        success: true,
+        publicKey: updatedUser?.sshPublicKey ?? null,
+        hasPublicKey: !!updatedUser?.sshPublicKey,
+      };
+    }),
+
   deleteUser: protectedProcedure.mutation(async ({ ctx }) => {
     const userId = ctx.session.user.id;
     if (!userId) {

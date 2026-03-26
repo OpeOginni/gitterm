@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertCircle, ArrowUpRight, Info, Loader2, Plus, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Info, KeyRound, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +29,17 @@ import {
   type CloudProvider,
   type Region,
   type CreateInstanceResult,
+  type EditorTarget,
+  type WorkspaceProfile,
 } from "./types";
+
+const editorTargetIcons: Record<EditorTarget, Array<{ src: string; alt: string }>> = {
+  vscode: [
+    { src: "/vscode.svg", alt: "VS Code" },
+    { src: "/cursor.svg", alt: "Cursor" },
+  ],
+  neovim: [{ src: "/neovim.svg", alt: "NeoVim" }],
+};
 
 interface CreateCloudInstanceProps {
   onSuccess: (result: CreateInstanceResult) => void;
@@ -45,6 +55,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [userRegionId, setUserRegionId] = useState<string | null>(null);
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string>("none");
   const [persistent, setPersistent] = useState(true);
+  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
+  const [editorTarget, setEditorTarget] = useState<EditorTarget>("vscode");
 
   // Data fetching
   const { data: agentTypesData, isLoading: isLoadingAgentTypes } = useQuery(
@@ -57,6 +69,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const { data: subdomainPermissions } = useQuery(
     trpc.workspace.getSubdomainPermissions.queryOptions(),
   );
+  const { data: sshPublicKeyData } = useQuery(trpc.user.getSshPublicKey.queryOptions());
 
   // Derived selections (user choice or first available)
   const selectedCloudProviderId =
@@ -103,9 +116,22 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     return availableRegions[0]?.id ?? "";
   }, [userRegionId, availableRegions]);
 
+  const canEnableEditorAccess =
+    !!selectedCloudProvider?.editorAccessSupport?.supported &&
+    availableAgents.some((agent) => agent.id === selectedAgentTypeId && agent.serverOnly) &&
+    (selectedCloudProvider?.name.toLowerCase() === "daytona" || sshPublicKeyData?.hasPublicKey === true);
+
+  const requiresUserSshKey = selectedCloudProvider?.name.toLowerCase() !== "daytona";
+
+  const selectedEditorSupport = selectedCloudProvider?.editorAccessSupport;
+
   const handleCloudProviderChange = (providerId: string) => {
     setUserCloudProviderId(providerId);
     setUserRegionId(null);
+  };
+
+  const handleProfileChange = (enabled: boolean) => {
+    setWorkspaceProfile(enabled ? "ssh-enabled" : "standard");
   };
 
   // Mutation
@@ -130,7 +156,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     repoUrl &&
     selectedAgentTypeId &&
     selectedCloudProviderId &&
-    (!shouldShowRegionSelector || selectedRegion)
+    (!shouldShowRegionSelector || selectedRegion) &&
+    (workspaceProfile === "standard" || !!editorTarget)
   );
 
   const handleSubmit = async () => {
@@ -157,8 +184,18 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       gitIntegrationId: userGitIntegrationId === "none" ? undefined : userGitIntegrationId,
       persistent,
       subdomain: subdomain || undefined,
+      workspaceProfile,
+      editorTarget: workspaceProfile === "ssh-enabled" ? editorTarget : undefined,
     });
   };
+
+  const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
+
+  useEffect(() => {
+    if (workspaceProfile === "ssh-enabled" && !canEnableEditorAccess) {
+      setWorkspaceProfile("standard");
+    }
+  }, [workspaceProfile, canEnableEditorAccess]);
 
   const integrations = installationsData?.installations;
 
@@ -425,6 +462,115 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               <p className="text-xs text-muted-foreground">
                 Keep your files and data between sessions. Disable for ephemeral workspaces.
               </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 rounded-lg border border-border/50 bg-secondary/20 p-4 sm:col-span-2">
+            <Checkbox
+              id="editor-access"
+              checked={workspaceProfile === "ssh-enabled"}
+              onCheckedChange={(checked) => handleProfileChange(checked === true)}
+              disabled={!canEnableEditorAccess}
+              className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-accent"
+            />
+            <div className="grid gap-3 flex-1">
+              <div className="grid gap-1">
+                <Label htmlFor="editor-access" className="text-sm font-medium cursor-pointer">
+                  Enable Editor Access (SSH)
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {canEnableEditorAccess
+                    ? selectedEditorSupport?.description ??
+                      "Connect VS Code-compatible editors or NeoVim over SSH."
+                    : !selectedCloudProvider?.editorAccessSupport?.supported
+                      ? "This provider does not expose editor SSH access yet."
+                      : !selectedAgent?.serverOnly
+                        ? "Choose a server-only agent type to unlock SSH editor access."
+                        : "Editor access is available for this provider."}
+                </p>
+              </div>
+
+              {requiresUserSshKey && !sshPublicKeyData?.hasPublicKey && selectedAgent?.serverOnly && selectedCloudProvider?.editorAccessSupport?.supported && (
+                <Link
+                  href={"/dashboard/settings" as Route}
+                  className="flex items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-400/90 transition-colors hover:bg-amber-500/10"
+                >
+                  <KeyRound className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Add an SSH public key in <span className="font-medium underline underline-offset-2">Settings</span> to enable editor access for this provider.
+                  </span>
+                </Link>
+              )}
+
+              {selectedEditorSupport?.requiresLocalBinaries && workspaceProfile === "ssh-enabled" && (
+                <div className="rounded-md border border-border/50 bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Local requirement:</span>{" "}
+                  install {selectedEditorSupport.requiresLocalBinaries.join(", ")} before connecting.
+                  {selectedCloudProvider?.name.toLowerCase() === "e2b" ? (
+                    <span> On macOS you can use <code>brew install websocat</code>.</span>
+                  ) : null}
+                </div>
+              )}
+
+              {workspaceProfile === "ssh-enabled" && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(["vscode", "neovim"] as const).map((target) => {
+                    const isSelected = editorTarget === target;
+                    const icons = editorTargetIcons[target];
+                    const label = target === "vscode" ? "VS Code Compatible" : "NeoVim";
+                    const description =
+                      target === "vscode"
+                        ? "VS Code, Cursor, Windsurf, and forks."
+                        : "Terminal-first SSH editing.";
+
+                    return (
+                      <button
+                        key={target}
+                        type="button"
+                        onClick={() => setEditorTarget(target)}
+                        className={`group relative flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
+                          isSelected
+                            ? "border-primary/60 bg-primary/5 ring-1 ring-primary/20"
+                            : "border-border/40 bg-background/30 hover:border-border/70 hover:bg-background/50"
+                        }`}
+                      >
+                        <div
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                            isSelected
+                              ? "border-primary bg-primary"
+                              : "border-muted-foreground/40"
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
+                          )}
+                        </div>
+
+                        <div className="grid gap-1.5 min-w-0">
+                          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                            <span className="flex items-center gap-1">
+                              {icons.map((icon) => (
+                                <Image
+                                  key={icon.src}
+                                  src={icon.src}
+                                  alt={icon.alt}
+                                  width={18}
+                                  height={18}
+                                  className="h-[18px] w-[18px]"
+                                />
+                              ))}
+                            </span>
+                            {label}
+                          </span>
+                          <span className="text-[11px] leading-tight text-muted-foreground">
+                            {description}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
