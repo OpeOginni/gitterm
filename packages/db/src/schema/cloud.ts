@@ -1,6 +1,6 @@
-import { boolean, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { volume, workspace } from "./workspace";
 import { providerConfig } from "./provider-config";
 
@@ -32,6 +32,10 @@ export const cloudProvider = pgTable("cloud_provider", {
   supportsRegions: boolean("supports_regions").notNull().default(true),
   allowUserRegionSelection: boolean("allow_user_region_selection").notNull().default(true),
   supportServerOnly: boolean("support_server_only").notNull().default(false),
+  editorAccessSupport: jsonb("editor_access_support")
+    .$type<CloudProviderEditorAccessSupport>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   creationSettlement: settlementEnum("creation_settlement").default("webhook"),
   stopSettlement: settlementEnum("stop_settlement").default("webhook"),
   restartSettlement: settlementEnum("restart_settlement").default("webhook"),
@@ -60,6 +64,10 @@ export const image = pgTable("image", {
   agentTypeId: uuid("agent_type_id")
     .notNull()
     .references(() => agentType.id, { onDelete: "cascade" }),
+  providerMetadata: jsonb("provider_metadata")
+    .$type<ImageProviderMetadata>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   isEnabled: boolean("is_enabled").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -110,6 +118,27 @@ export const imageRelations = relations(image, ({ one }) => ({
     references: [agentType.id],
   }),
 }));
+
+export interface CloudProviderEditorAccessSupport {
+  supported?: boolean;
+  transportKind?: "direct-ssh" | "proxycommand-ssh" | "managed-ssh";
+  label?: string;
+  description?: string;
+  requiresLocalBinaries?: string[];
+}
+
+export interface DaytonaImageProviderMetadata {
+  snapshot?: string;
+  snapshotsByRegion?: Record<string, string | undefined>;
+}
+
+export interface ImageProviderMetadata {
+  e2b?: {
+    templateId?: string;
+  };
+  daytona?: DaytonaImageProviderMetadata;
+  [provider: string]: unknown;
+}
 
 export type NewCloudProvider = typeof cloudProvider.$inferInsert;
 export type NewImage = typeof image.$inferInsert;
