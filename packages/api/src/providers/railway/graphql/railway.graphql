@@ -142,3 +142,22 @@ mutation ServiceDomainCreate($environmentId: String!, $serviceId: String!, $targ
 mutation ServiceDomainDelete($serviceDomainId: String!) {
   serviceDomainDelete(id: $serviceDomainId)
 }
+
+mutation TcpProxyCreate($applicationPort: Int!, $environmentId: String!, $serviceId: String!) {
+  tcpProxyCreate(
+    input: {
+      applicationPort: $applicationPort
+      environmentId: $environmentId
+      serviceId: $serviceId
+    }
+  ) {
+    id
+    domain
+    proxyPort
+    applicationPort
+  }
+}
+
+mutation TcpProxyDelete($id: String!) {
+  tcpProxyDelete(id: $id)
+}

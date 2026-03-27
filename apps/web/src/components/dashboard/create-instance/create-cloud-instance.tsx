@@ -1,12 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertCircle, ArrowUpRight, Info, Loader2, Plus, Sparkles } from "lucide-react";
+import {
+  ArrowUpRight,
+  Key,
+  KeyRound,
+  Loader2,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getWorkspaceDisplayUrl } from "@/lib/utils";
+import { cn, getWorkspaceDisplayUrl } from "@/lib/utils";
 import { isBillingEnabled } from "@gitterm/env/web";
 import type { Route } from "next";
 import {
@@ -29,7 +36,10 @@ import {
   type CloudProvider,
   type Region,
   type CreateInstanceResult,
+  type WorkspaceProfile,
 } from "./types";
+import { GitHubRepositoryBranchField } from "./github-repository-branch-field";
+import { normalizeGitHubRepositoryUrl } from "./github-repository-utils";
 
 interface CreateCloudInstanceProps {
   onSuccess: (result: CreateInstanceResult) => void;
@@ -37,14 +47,16 @@ interface CreateCloudInstanceProps {
 }
 
 export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstanceProps) {
-  // Form state (null = use default)
   const [repoUrl, setRepoUrl] = useState("");
+  const [branch, setBranch] = useState("");
   const [subdomain, setSubdomain] = useState("");
   const [userAgentTypeId, setUserAgentTypeId] = useState<string | null>(null);
   const [userCloudProviderId, setUserCloudProviderId] = useState<string | null>(null);
   const [userRegionId, setUserRegionId] = useState<string | null>(null);
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string>("none");
   const [persistent, setPersistent] = useState(true);
+  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
+  const editorTarget = "vscode" as const;
 
   // Data fetching
   const { data: agentTypesData, isLoading: isLoadingAgentTypes } = useQuery(
@@ -57,8 +69,16 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const { data: subdomainPermissions } = useQuery(
     trpc.workspace.getSubdomainPermissions.queryOptions(),
   );
+  const { data: sshPublicKeyData } = useQuery(trpc.user.getSshPublicKey.queryOptions());
+  const { data: credentialsData } = useQuery(
+    trpc.modelCredentials.listMyCredentials.queryOptions(),
+  );
+  const activeCredentialCount = useMemo(
+    () => (credentialsData?.credentials ?? []).filter((c) => c.isActive).length,
+    [credentialsData?.credentials],
+  );
 
-  // Derived selections (user choice or first available)
+  // Derived selections
   const selectedCloudProviderId =
     userCloudProviderId ?? cloudProvidersData?.cloudProviders[0]?.id ?? "";
 
@@ -71,9 +91,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     );
   }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
 
-  const shouldShowRegionSelector =
-    selectedCloudProvider?.supportsRegions && selectedCloudProvider?.allowUserRegionSelection;
-
   const availableRegions = useMemo((): Region[] => {
     if (!selectedCloudProviderId) return [];
     const provider = cloudProvidersData?.cloudProviders.find(
@@ -82,15 +99,17 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     return (provider?.regions ?? []) as Region[];
   }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
 
+  const shouldShowRegionSelector =
+    (selectedCloudProvider?.supportsRegions && selectedCloudProvider?.allowUserRegionSelection) ||
+    availableRegions.length > 0;
+
   const availableAgents = useMemo((): AgentType[] => {
     const agents = agentTypesData?.agentTypes ?? [];
     if (!selectedCloudProviderId) return agents;
-
     const provider = cloudProvidersData?.cloudProviders.find(
       (p) => p.id === selectedCloudProviderId,
     );
     if (provider?.supportServerOnly) return agents.filter((agent) => agent.serverOnly);
-
     return agents;
   }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders, agentTypesData?.agentTypes]);
 
@@ -103,9 +122,22 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     return availableRegions[0]?.id ?? "";
   }, [userRegionId, availableRegions]);
 
+  const canEnableEditorAccess =
+    !!selectedCloudProvider?.editorAccessSupport?.supported &&
+    availableAgents.some((agent) => agent.id === selectedAgentTypeId && agent.serverOnly) &&
+    (selectedCloudProvider?.name.toLowerCase() === "daytona" ||
+      sshPublicKeyData?.hasPublicKey === true);
+
+  const requiresUserSshKey = selectedCloudProvider?.name.toLowerCase() !== "daytona";
+  const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
+
   const handleCloudProviderChange = (providerId: string) => {
     setUserCloudProviderId(providerId);
     setUserRegionId(null);
+  };
+
+  const handleProfileChange = (enabled: boolean) => {
+    setWorkspaceProfile(enabled ? "ssh-enabled" : "standard");
   };
 
   // Mutation
@@ -146,72 +178,104 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       return;
     }
 
-    const normalizedRepoUrl = repoUrl.replace(/\.git$/, "");
+    const normalizedRepoUrl = normalizeGitHubRepositoryUrl(repoUrl);
+    const trimmedBranch = branch.trim();
 
     await createWorkspace({
-      name: repoUrl.split("/").pop() || "new-workspace",
+      name: normalizedRepoUrl.split("/").pop() || "new-workspace",
       repo: normalizedRepoUrl,
+      branch: trimmedBranch || undefined,
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: selectedCloudProviderId,
       regionId: shouldShowRegionSelector ? selectedRegion : undefined,
       gitIntegrationId: userGitIntegrationId === "none" ? undefined : userGitIntegrationId,
       persistent,
       subdomain: subdomain || undefined,
+      workspaceProfile,
+      editorTarget: workspaceProfile === "ssh-enabled" ? editorTarget : undefined,
     });
   };
 
+  useEffect(() => {
+    if (workspaceProfile === "ssh-enabled" && !canEnableEditorAccess) {
+      setWorkspaceProfile("standard");
+    }
+  }, [workspaceProfile, canEnableEditorAccess]);
+
   const integrations = installationsData?.installations;
+  const hasIntegrations = integrations && integrations.length > 0;
+
+  const selectedGitIntegration = useMemo(() => {
+    if (!integrations || userGitIntegrationId === "none") {
+      return null;
+    }
+    const match = integrations.find(
+      (installation) => installation.git_integration.id === userGitIntegrationId,
+    );
+    if (!match) {
+      return null;
+    }
+    return {
+      gitIntegrationId: match.git_integration.id,
+      providerInstallationId: match.git_integration.providerInstallationId,
+      label: match.git_integration.providerAccountLogin,
+    };
+  }, [integrations, userGitIntegrationId]);
 
   return (
     <>
-      <div className="grid gap-5 py-4">
-        {/* Repository URL */}
-        <div className="grid gap-2">
-          <Label htmlFor="repo" className="text-sm font-medium">
-            GitHub Repository URL
-          </Label>
-          <Input
-            id="repo"
-            placeholder="https://github.com/username/repo"
-            value={repoUrl}
-            onChange={(e) => setRepoUrl(e.target.value)}
-          />
-        </div>
+      <div className="grid gap-4 py-4">
+        {/* ── 1. Repo + Branch (top priority) ── */}
+        <GitHubRepositoryBranchField
+          repoUrl={repoUrl}
+          branch={branch}
+          onRepoUrlChange={setRepoUrl}
+          onBranchChange={setBranch}
+          integration={selectedGitIntegration}
+          disabled={isSubmitting}
+        />
 
-        {/* Custom Subdomain */}
-        <div className="grid gap-2">
-          <Label htmlFor="cloud-subdomain" className="text-sm font-medium">
-            Custom Subdomain <span className="text-muted-foreground font-normal">(optional)</span>
+        {/* ── 2. Subdomain ── */}
+        <div className="grid gap-1.5">
+          <Label
+            htmlFor="cloud-subdomain"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Subdomain{" "}
+            <span className="font-normal text-muted-foreground/50">(optional)</span>
           </Label>
           <Input
             id="cloud-subdomain"
             placeholder="my-workspace"
             value={subdomain}
-            onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+            onChange={(e) =>
+              setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))
+            }
             disabled={!subdomainPermissions?.canUseCustomCloudSubdomain}
+            className="h-9"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground/60">
             {subdomainPermissions?.canUseCustomCloudSubdomain ? (
               subdomain ? (
                 <>
-                  Your workspace will be available at:{" "}
+                  Available at{" "}
                   <span className="font-mono text-primary">
                     {getWorkspaceDisplayUrl(subdomain)}
                   </span>
                 </>
               ) : (
-                "Leave empty for an auto-generated subdomain"
+                "Auto-generated if left empty"
               )
             ) : (
-              <span className="flex items-center gap-1 flex-wrap">
-                A subdomain will be generated automatically.
+              <span className="inline-flex items-center gap-1 flex-wrap">
+                Auto-generated.
                 {isBillingEnabled() && (
                   <Link
                     href={"/pricing" as Route}
-                    className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                    className="inline-flex items-center gap-0.5 text-primary hover:underline"
                   >
-                    <Sparkles className="h-3 w-3" />
-                    Upgrade for custom subdomains
+                    <Sparkles className="h-2.5 w-2.5" />
+                    Upgrade to Pro
                   </Link>
                 )}
               </span>
@@ -219,23 +283,23 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </p>
         </div>
 
-        {/* Agent Type & Cloud Provider */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium">Agent Type</Label>
+        {/* ── 3. Agent + Cloud (+ Region) ── */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Agent</Label>
             <Select value={selectedAgentTypeId} onValueChange={setUserAgentTypeId}>
-              <SelectTrigger>
+              <SelectTrigger className="h-9">
                 <SelectValue placeholder="Select agent" />
               </SelectTrigger>
               {isLoadingAgentTypes ? (
                 <SelectContent>
                   <SelectItem value="loading" disabled>
-                    Loading agent types...
+                    Loading...
                   </SelectItem>
                 </SelectContent>
               ) : (
                 <SelectContent>
-                  {availableAgents && availableAgents.length > 0 ? (
+                  {availableAgents.length > 0 ? (
                     availableAgents.map((agent) => (
                       <SelectItem key={agent.id} value={agent.id}>
                         <div className="flex items-center">
@@ -251,8 +315,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value="no-agent-types" disabled>
-                      No agent types found
+                    <SelectItem value="none" disabled>
+                      No agents found
                     </SelectItem>
                   )}
                 </SelectContent>
@@ -260,191 +324,212 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             </Select>
           </div>
 
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium">Cloud Provider</Label>
-            <Select value={selectedCloudProviderId} onValueChange={handleCloudProviderChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select cloud" />
-              </SelectTrigger>
-              {isLoadingCloudProviders ? (
-                <SelectContent>
-                  <SelectItem value="loading" disabled>
-                    Loading cloud providers...
-                  </SelectItem>
-                </SelectContent>
-              ) : (
-                <SelectContent>
-                  {cloudProvidersData?.cloudProviders &&
-                  cloudProvidersData.cloudProviders.length > 0 ? (
-                    cloudProvidersData.cloudProviders.map((cloud) => (
-                      <SelectItem key={cloud.id} value={cloud.id}>
-                        <div className="flex items-center">
-                          <Image
-                            src={getIcon(cloud.name) || "/placeholder.svg"}
-                            alt={cloud.name}
-                            width={16}
-                            height={16}
-                            className="mr-2 h-4 w-4"
-                          />
-                          {cloud.name}
-                        </div>
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem
-                      value="no-cloud-providers"
-                      disabled
-                      className="py-3 focus:bg-transparent focus:text-inherit"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-foreground">
-                          No cloud providers available
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Contact your admin to configure and enable providers
-                        </span>
-                      </div>
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              )}
-            </Select>
-          </div>
-        </div>
-
-        {/* Region & Repository Access */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {shouldShowRegionSelector && (
-            <div className="grid gap-2">
-              <Label className="text-sm font-medium">Region</Label>
-              <Select
-                value={selectedRegion}
-                onValueChange={setUserRegionId}
-                disabled={availableRegions.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      availableRegions.length > 0 ? "Select region" : "No regions available"
-                    }
-                  />
+          <div className="grid gap-1.5 min-w-0">
+            <Label className="text-xs font-medium text-muted-foreground">
+              {shouldShowRegionSelector ? "Cloud / Region" : "Cloud"}
+            </Label>
+            <div className="flex gap-2 min-w-0">
+              <Select value={selectedCloudProviderId} onValueChange={handleCloudProviderChange}>
+                <SelectTrigger className="h-9 shrink-0">
+                  <SelectValue placeholder="Select cloud" />
                 </SelectTrigger>
-                <SelectContent>
-                  {availableRegions.length > 0 ? (
-                    availableRegions.map((region) => (
+                {isLoadingCloudProviders ? (
+                  <SelectContent>
+                    <SelectItem value="loading" disabled>
+                      Loading...
+                    </SelectItem>
+                  </SelectContent>
+                ) : (
+                  <SelectContent>
+                    {cloudProvidersData?.cloudProviders &&
+                    cloudProvidersData.cloudProviders.length > 0 ? (
+                      cloudProvidersData.cloudProviders.map((cloud) => (
+                        <SelectItem key={cloud.id} value={cloud.id}>
+                          <div className="flex items-center">
+                            <Image
+                              src={getIcon(cloud.name) || "/placeholder.svg"}
+                              alt={cloud.name}
+                              width={16}
+                              height={16}
+                              className="mr-2 h-4 w-4"
+                            />
+                            {cloud.name}
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        No providers
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                )}
+              </Select>
+
+              {shouldShowRegionSelector ? (
+                <Select
+                  value={selectedRegion}
+                  onValueChange={setUserRegionId}
+                  disabled={availableRegions.length === 0}
+                >
+                  <SelectTrigger className="h-9 min-w-0 [&>span]:truncate">
+                    <SelectValue
+                      placeholder={
+                        availableRegions.length > 0 ? "Region" : "No regions"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableRegions.map((region) => (
                       <SelectItem key={region.id} value={region.id}>
                         {region.name}
                       </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-regions" disabled>
-                      <div className="flex items-center">
-                        <AlertCircle className="mr-2 h-4 w-4" />
-                        No regions available
-                      </div>
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className={`grid gap-2 ${shouldShowRegionSelector ? "" : "sm:col-span-2"}`}>
-            <Label className="text-sm font-medium flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="cursor-help decoration-dotted underline-offset-4 hover:underline">
-                    Repository Access
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="top"
-                  align="start"
-                  sideOffset={8}
-                  className="max-w-sm border-border/90 bg-popover/95 ring-1 ring-border/70 shadow-xl"
-                >
-                  Select an integration to access private repositories and enable git actions like
-                  commit, push, and fork from your instance.
-                </TooltipContent>
-              </Tooltip>
-              <Link href="/dashboard/integrations" className="text-primary hover:text-primary/80">
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            </Label>
-            <Select
-              value={userGitIntegrationId}
-              onValueChange={setuserGitIntegrationId}
-              disabled={integrations && integrations.length === 0}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    integrations && integrations.length > 0
-                      ? "Select repository access"
-                      : "No integrations found"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">
-                  <div className="flex items-center">None (public repos only)</div>
-                </SelectItem>
-                {integrations?.map((installation) => (
-                  <SelectItem
-                    key={installation.git_integration.id}
-                    value={installation.git_integration.id}
-                  >
-                    <div className="flex items-center">
-                      <Image
-                        src="/github.svg"
-                        alt="GitHub"
-                        width={16}
-                        height={16}
-                        className="mr-2 h-4 w-4"
-                      />
-                      {installation.git_integration.providerAccountLogin}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Persistent Storage */}
-          <div className="flex items-start gap-3 p-4 rounded-lg bg-secondary/30 border border-border/50 sm:col-span-2">
-            <Checkbox
-              id="persistent"
-              checked={persistent}
-              onCheckedChange={(checked) => setPersistent(checked as boolean)}
-              className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-accent"
-            />
-            <div className="grid gap-1">
-              <Label htmlFor="persistent" className="text-sm font-medium cursor-pointer">
-                Persistent Storage
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Keep your files and data between sessions. Disable for ephemeral workspaces.
-              </p>
-            </div>
-          </div>
-
-          <div className="sm:col-span-2">
-            <div className="flex items-start justify-center gap-2 rounded-md border border-border/40 bg-secondary/20 px-2 py-1.5 text-xs text-muted-foreground">
-              <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-              <p>
-                Providers will auto-auth on instance creation via your set credentials. Missing
-                credentials? Add them once in{" "}
-                <Link
-                  href={"/dashboard/settings" as Route}
-                  className="text-primary hover:underline"
-                >
-                  Settings
-                </Link>
-                .
-              </p>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
             </div>
           </div>
         </div>
+
+        {/* ── 3b. API Credentials indicator ── */}
+        <div className="flex items-center justify-between rounded-md border border-border/30 bg-secondary/10 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Key className="h-3.5 w-3.5" />
+            <span>
+              <span className="font-medium text-foreground">{activeCredentialCount}</span>{" "}
+              API {activeCredentialCount === 1 ? "credential" : "credentials"} configured
+            </span>
+          </div>
+          <Link
+            href={"/dashboard/settings" as Route}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+          >
+            Manage
+            <ArrowUpRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {/* ── 3. GitHub Connection ── */}
+        <div className="grid gap-1.5">
+          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help decoration-dotted underline-offset-4 hover:underline">
+                  GitHub Connection
+                </span>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                align="start"
+                sideOffset={6}
+                className="max-w-xs text-xs"
+              >
+                Connect a GitHub account to enable commit, push, fork and private repo access.
+              </TooltipContent>
+            </Tooltip>
+            <Link href="/dashboard/integrations" className="text-primary hover:text-primary/80">
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          </Label>
+          <Select
+            value={userGitIntegrationId}
+            onValueChange={setuserGitIntegrationId}
+            disabled={!hasIntegrations}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue
+                placeholder={hasIntegrations ? "Select account" : "No integrations"}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None (public repos only)</SelectItem>
+              {integrations?.map((installation) => (
+                <SelectItem
+                  key={installation.git_integration.id}
+                  value={installation.git_integration.id}
+                >
+                  <div className="flex items-center">
+                    <Image
+                      src="/github.svg"
+                      alt="GitHub"
+                      width={16}
+                      height={16}
+                      className="mr-2 h-4 w-4"
+                    />
+                    {installation.git_integration.providerAccountLogin}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* ── 4. SSH Editor Access ── */}
+        <div
+          className={cn(
+            "flex items-start gap-2.5 rounded-md border px-3 py-2.5 transition-all",
+            canEnableEditorAccess
+              ? "border-border/50 bg-secondary/15"
+              : "border-border/20 bg-secondary/5 opacity-50",
+          )}
+        >
+          <Checkbox
+            id="editor-access"
+            checked={workspaceProfile === "ssh-enabled"}
+            onCheckedChange={(checked) => handleProfileChange(checked === true)}
+            disabled={!canEnableEditorAccess}
+            className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-accent"
+          />
+          <div className="grid gap-1 flex-1 min-w-0">
+            <Label
+              htmlFor="editor-access"
+              className="text-xs font-medium cursor-pointer leading-none"
+            >
+              Editor Access (SSH)
+            </Label>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {canEnableEditorAccess
+                ? selectedCloudProvider?.name.toLowerCase() === "e2b"
+                  ? "Connect your editor via SSH. Requires websocat locally."
+                  : "Connect VS Code, Cursor, Zed or any SSH editor."
+                : !selectedCloudProvider?.editorAccessSupport?.supported
+                  ? "Not supported by this provider."
+                  : !selectedAgent?.serverOnly
+                    ? "Requires a server agent type."
+                    : "Available for this provider."}
+            </p>
+
+            {requiresUserSshKey &&
+              !sshPublicKeyData?.hasPublicKey &&
+              selectedAgent?.serverOnly &&
+              selectedCloudProvider?.editorAccessSupport?.supported && (
+                <Link
+                  href={"/dashboard/settings" as Route}
+                  className="inline-flex items-center gap-1.5 text-[11px] text-amber-400/80 hover:text-amber-400"
+                >
+                  <KeyRound className="h-3 w-3" />
+                  Add SSH key in Settings
+                </Link>
+              )}
+          </div>
+        </div>
+
+        {/* ── 5. Persistent storage ── */}
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="persistent"
+            checked={persistent}
+            onCheckedChange={(checked) => setPersistent(checked as boolean)}
+            className="data-[state=checked]:bg-primary data-[state=checked]:border-accent"
+          />
+          <Label htmlFor="persistent" className="text-xs cursor-pointer text-muted-foreground">
+            Persistent storage
+            <span className="text-muted-foreground/50"> &mdash; keep files between sessions</span>
+          </Label>
+        </div>
+
+
       </div>
 
       <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

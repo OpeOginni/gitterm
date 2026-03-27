@@ -1,5 +1,12 @@
 import { db, eq, and } from "./index";
-import { agentType, cloudProvider, image, region, type ProviderSettlement } from "./schema/cloud";
+import {
+  agentType,
+  cloudProvider,
+  image,
+  region,
+  type CloudProviderEditorAccessSupport,
+  type ProviderSettlement,
+} from "./schema/cloud";
 import { modelProvider, model } from "./schema/model-credentials";
 import { providerType, providerConfigField } from "./schema/provider-config";
 import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
@@ -16,11 +23,28 @@ import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
 
 const hasSameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
-const seedCloudProviders = [
+const seedCloudProviders: Array<{
+  name: string;
+  isEnabled: boolean;
+  isSandbox?: boolean;
+  supportsRegions: boolean;
+  supportServerOnly?: boolean;
+  editorAccessSupport?: CloudProviderEditorAccessSupport;
+  creationSettlement?: ProviderSettlement;
+  stopSettlement?: ProviderSettlement;
+  restartSettlement?: ProviderSettlement;
+  terminationSettlement?: ProviderSettlement;
+}> = [
   {
     name: "Railway",
     isEnabled: false,
     supportsRegions: true,
+    editorAccessSupport: {
+      supported: true,
+      transportKind: "managed-ssh",
+      label: "Managed SSH bridge",
+      description: "Connect through the Gitterm-managed SSH bridge for Railway workspaces.",
+    },
     creationSettlement: "webhook" as ProviderSettlement,
     stopSettlement: "webhook" as ProviderSettlement,
     restartSettlement: "webhook" as ProviderSettlement,
@@ -30,6 +54,11 @@ const seedCloudProviders = [
     name: "AWS",
     isEnabled: false,
     supportsRegions: true,
+    editorAccessSupport: {
+      supported: false,
+      label: "Not supported",
+      description: "This provider does not currently expose editor SSH access.",
+    },
     creationSettlement: "poll" as ProviderSettlement,
     stopSettlement: "immediate" as ProviderSettlement,
     restartSettlement: "poll" as ProviderSettlement,
@@ -41,6 +70,11 @@ const seedCloudProviders = [
     isSandbox: true,
     supportsRegions: false,
     supportServerOnly: true,
+    editorAccessSupport: {
+      supported: false,
+      label: "Not supported",
+      description: "This provider does not currently expose editor SSH access.",
+    },
     creationSettlement: "poll" as ProviderSettlement,
     stopSettlement: "immediate" as ProviderSettlement,
     restartSettlement: "poll" as ProviderSettlement,
@@ -52,6 +86,13 @@ const seedCloudProviders = [
     isSandbox: true,
     supportsRegions: false,
     supportServerOnly: true,
+    editorAccessSupport: {
+      supported: true,
+      transportKind: "proxycommand-ssh",
+      label: "SSH via ProxyCommand",
+      description: "Connect over SSH using an SSH config snippet and a local websocat bridge.",
+      requiresLocalBinaries: ["websocat"],
+    },
     creationSettlement: "immediate" as ProviderSettlement,
     stopSettlement: "webhook" as ProviderSettlement,
     restartSettlement: "webhook" as ProviderSettlement,
@@ -63,6 +104,12 @@ const seedCloudProviders = [
     isSandbox: true,
     supportsRegions: true,
     supportServerOnly: true,
+    editorAccessSupport: {
+      supported: true,
+      transportKind: "direct-ssh",
+      label: "Native SSH",
+      description: "Short-lived SSH access without any local proxy helper.",
+    },
     creationSettlement: "immediate" as ProviderSettlement,
     stopSettlement: "immediate" as ProviderSettlement,
     restartSettlement: "immediate" as ProviderSettlement,
@@ -81,6 +128,27 @@ const seedImages = [
     name: "gitterm-opencode-server",
     imageId: "opeoginni/gitterm-opencode-server",
     agentTypeName: "OpenCode Server",
+    providerMetadata: {
+      e2b: {
+        templateId: "r9xlzvdbcoocvbncrds9",
+      },
+      daytona: {
+        snapshot: "daytona-medium",
+      },
+    },
+  },
+  {
+    name: "gitterm-opencode-server-with-ssh",
+    imageId: "opeoginni/gitterm-opencode-server-with-ssh",
+    agentTypeName: "OpenCode Server",
+    providerMetadata: {
+      e2b: {
+        templateId: "nxiezl38gnw32ufyloc0",
+      },
+      daytona: {
+        snapshot: "daytona-medium",
+      },
+    },
   },
 ];
 
@@ -357,6 +425,7 @@ export async function seedDatabase(): Promise<void> {
       const targetProviderStopSettlement = provider.stopSettlement ?? "webhook";
       const targetProviderRestartSettlement = provider.restartSettlement ?? "webhook";
       const targetProviderTerminationSettlement = provider.terminationSettlement ?? "webhook";
+      const targetEditorAccessSupport = provider.editorAccessSupport ?? {};
 
       if (existing.isSandbox !== targetIsSandbox) {
         updates.isSandbox = targetIsSandbox;
@@ -386,6 +455,10 @@ export async function seedDatabase(): Promise<void> {
         updates.terminationSettlement = targetProviderTerminationSettlement;
       }
 
+      if (!hasSameJson(existing.editorAccessSupport, targetEditorAccessSupport)) {
+        updates.editorAccessSupport = targetEditorAccessSupport;
+      }
+
       if (Object.keys(updates).length > 0) {
         await db
           .update(cloudProvider)
@@ -410,7 +483,11 @@ export async function seedDatabase(): Promise<void> {
           isSandbox: provider.isSandbox ?? false,
           supportsRegions: provider.supportsRegions,
           supportServerOnly: provider.supportServerOnly ?? false,
+          editorAccessSupport: provider.editorAccessSupport ?? {},
           creationSettlement: provider.creationSettlement ?? "webhook",
+          stopSettlement: provider.stopSettlement ?? "webhook",
+          restartSettlement: provider.restartSettlement ?? "webhook",
+          terminationSettlement: provider.terminationSettlement ?? "webhook",
         })
         .returning();
       console.log(`[seed]   Created provider "${provider.name}"`);
@@ -457,6 +534,14 @@ export async function seedDatabase(): Promise<void> {
     });
 
     if (existing) {
+      await db
+        .update(image)
+        .set({
+          imageId: img.imageId,
+          providerMetadata: img.providerMetadata ?? {},
+          updatedAt: new Date(),
+        })
+        .where(eq(image.id, existing.id));
       console.log(`[seed]   Image "${img.name}" already exists`);
     } else {
       const agentTypeId = agentTypeMap.get(img.agentTypeName);
@@ -469,6 +554,7 @@ export async function seedDatabase(): Promise<void> {
         name: img.name,
         imageId: img.imageId,
         agentTypeId,
+        providerMetadata: img.providerMetadata ?? {},
         isEnabled: true,
       });
       console.log(`[seed]   Created image "${img.name}"`);

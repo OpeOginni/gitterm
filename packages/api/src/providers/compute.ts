@@ -3,10 +3,18 @@
  * Implementations exist for Railway, AWS, Azure, etc.
  */
 
+import type {
+  WorkspaceEditorAccess,
+  WorkspaceEditorAccessCleanupConfig,
+  WorkspaceEditorAccessConfig,
+} from "./editor-access";
+import type { ImageProviderMetadata } from "@gitterm/db/schema/cloud";
+
 export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
 
 export interface WorkspaceEnvironmentVariables {
   REPO_URL?: string;
+  REPO_BRANCH?: string;
   OPENCODE_CONFIG_BASE64: string;
   OPENCODE_CREDENTIALS_BASE64: string;
   OPENCODE_SERVER_PASSWORD?: string;
@@ -26,8 +34,10 @@ export interface WorkspaceConfig {
   workspaceId: string;
   userId: string;
   imageId: string;
+  imageProviderMetadata?: ImageProviderMetadata;
   subdomain: string;
   repositoryUrl?: string;
+  repositoryBranch?: string;
   regionIdentifier?: string;
   environmentVariables?: WorkspaceEnvironmentVariables;
 }
@@ -109,6 +119,16 @@ export interface ComputeProvider {
     externalServiceId: string,
     port: number,
   ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }>;
+
+  /**
+   * Build editor connection details for a running workspace.
+   */
+  getWorkspaceEditorAccess(config: WorkspaceEditorAccessConfig): Promise<WorkspaceEditorAccess>;
+
+  /**
+   * Revoke provider-managed editor access resources when no longer needed.
+   */
+  revokeWorkspaceEditorAccess(config: WorkspaceEditorAccessCleanupConfig): Promise<void>;
 
   /**
    * Remove a domain for an exposed port

@@ -9,6 +9,15 @@ import type {
 } from "../compute";
 import env from "@gitterm/env/server";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import {
+  buildHostAlias,
+  buildSshCommand,
+  buildSshConnectionString,
+  buildStandardSshConfigSnippet,
+  type WorkspaceEditorAccess,
+  type WorkspaceEditorAccessCleanupConfig,
+  type WorkspaceEditorAccessConfig,
+} from "../editor-access";
 import type { RailwayConfig } from "./types";
 export type { RailwayConfig } from "./types";
 
@@ -17,6 +26,21 @@ const ROUTING_MODE = env.ROUTING_MODE;
 
 export class RailwayProvider implements ComputeProvider {
   readonly name = "railway";
+
+  private buildEnvironmentVariables(
+    config: WorkspaceConfig | PersistentWorkspaceConfig,
+  ): Record<string, string | undefined> | undefined {
+    if (!config.environmentVariables && !config.repositoryBranch) {
+      return config.environmentVariables;
+    }
+
+    const repositoryBranch = config.repositoryBranch?.trim();
+
+    return {
+      ...config.environmentVariables,
+      REPO_BRANCH: repositoryBranch || config.environmentVariables?.REPO_BRANCH,
+    };
+  }
 
   async getConfig(): Promise<RailwayConfig> {
     const dbConfig = await getProviderConfigService().getProviderConfigForUse("railway");
@@ -43,6 +67,7 @@ export class RailwayProvider implements ComputeProvider {
     const railwayConfig = await this.getConfig();
     const railway = await this.getClient();
     const { projectId, environmentId, defaultRegion, publicRailwayDomains } = railwayConfig;
+    const environmentVariables = this.buildEnvironmentVariables(config);
 
     if (!projectId) {
       throw new Error("Railway project ID is not configured");
@@ -61,7 +86,7 @@ export class RailwayProvider implements ComputeProvider {
         input: {
           projectId,
           name: config.subdomain,
-          variables: config.environmentVariables,
+          variables: environmentVariables,
         },
       })
       .catch(async (error) => {
@@ -182,6 +207,7 @@ export class RailwayProvider implements ComputeProvider {
     const railwayConfig = await this.getConfig();
     const railway = await this.getClient();
     const { projectId, environmentId, defaultRegion, publicRailwayDomains } = railwayConfig;
+    const environmentVariables = this.buildEnvironmentVariables(config);
 
     if (!projectId) {
       throw new Error("Railway project ID is not configured");
@@ -204,7 +230,7 @@ export class RailwayProvider implements ComputeProvider {
         input: {
           projectId: projectId,
           name: config.subdomain,
-          variables: config.environmentVariables,
+          variables: environmentVariables,
         },
       })
       .catch(async (error) => {
@@ -335,8 +361,8 @@ export class RailwayProvider implements ComputeProvider {
   }
 
   async stopWorkspace(
-    externalId: string,
-    regionIdentifier: string,
+    _externalId: string,
+    _regionIdentifier: string,
     externalRunningDeploymentId?: string,
   ): Promise<void> {
     const railwayConfig = await this.getConfig();
@@ -358,8 +384,8 @@ export class RailwayProvider implements ComputeProvider {
   }
 
   async restartWorkspace(
-    externalId: string,
-    regionIdentifier: string,
+    _externalId: string,
+    _regionIdentifier: string,
     externalRunningDeploymentId?: string,
   ): Promise<void> {
     const railwayConfig = await this.getConfig();
@@ -469,6 +495,89 @@ export class RailwayProvider implements ComputeProvider {
       : `http://${externalServiceId}.railway.internal:${port}`;
 
     return { domain };
+  }
+
+  async getWorkspaceEditorAccess(
+    config: WorkspaceEditorAccessConfig,
+  ): Promise<WorkspaceEditorAccess> {
+    const railwayConfig = await this.getConfig();
+    const railway = await this.getClient();
+
+    let host = config.existingConnection?.host;
+    let port = config.existingConnection?.port;
+    let externalConnectionId = config.existingConnection?.externalConnectionId;
+
+    if (!host || !port || !externalConnectionId) {
+      const { environmentId } = railwayConfig;
+
+      if (!environmentId) {
+        throw new Error("Railway environment ID is not configured");
+      }
+
+      const { tcpProxyCreate } = await (railway as any)
+        .TcpProxyCreate({
+          applicationPort: 22,
+          environmentId,
+          serviceId: config.externalServiceId,
+        })
+        .catch((error: unknown) => {
+          console.error("Railway API Error (TcpProxyCreate):", error);
+          throw new Error(
+            `Railway API Error (TcpProxyCreate): ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
+
+      host = tcpProxyCreate.domain;
+      port = tcpProxyCreate.proxyPort;
+      externalConnectionId = tcpProxyCreate.id;
+    }
+
+    if (!host || !port || !externalConnectionId) {
+      throw new Error("Failed to provision Railway TCP proxy for editor access.");
+    }
+
+    const hostAlias = buildHostAlias(config.subdomain);
+    const user = "root";
+
+    return {
+      providerName: this.name,
+      transportKind: "managed-ssh",
+      hostAlias,
+      host,
+      port,
+      user,
+      sshConnectionString: buildSshConnectionString({ host, port, user }),
+      sshCommand: buildSshCommand({ host, port, user }),
+      sshConfigSnippet: buildStandardSshConfigSnippet({ hostAlias, host, port, user }),
+      projectPathHint: config.projectPathHint,
+      expiresAt: new Date(Date.now() + 120 * 60 * 1000).toISOString(),
+      connection: {
+        transportKind: "managed-ssh",
+        host,
+        port,
+        externalConnectionId,
+      },
+      notes: [
+        "This connection uses your saved SSH public key over a Railway TCP proxy.",
+        "Make sure the matching private key is available in your local SSH agent or config.",
+      ],
+    };
+  }
+
+  async revokeWorkspaceEditorAccess(config: WorkspaceEditorAccessCleanupConfig): Promise<void> {
+    if (!config.connection.externalConnectionId) {
+      return;
+    }
+
+    const railway = await this.getClient();
+    await (railway as any).TcpProxyDelete({ id: config.connection.externalConnectionId }).catch(
+      (error: unknown) => {
+        console.error("Railway API Error (TcpProxyDelete):", error);
+        throw new Error(
+          `Railway API Error (TcpProxyDelete): ${error instanceof Error ? error.message : String(error)}`,
+        );
+      },
+    );
   }
 
   async removeExposedPortDomain(externalServiceDomainId: string): Promise<void> {

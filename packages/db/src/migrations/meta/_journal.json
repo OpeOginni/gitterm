@@ -57,6 +57,13 @@
       "when": 1773919905672,
       "tag": "0007_silly_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774637184039,
+      "tag": "0008_puzzling_electro",
+      "breakpoints": true
     }
   ]
 }

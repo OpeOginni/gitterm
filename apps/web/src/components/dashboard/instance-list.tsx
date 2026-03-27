@@ -25,7 +25,9 @@ import {
   X,
   Plus,
   KeyRound,
+  SquareArrowOutUpRight,
 } from "lucide-react";
+import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -40,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   getWorkspaceUrl,
   getAttachCommand,
@@ -145,6 +148,8 @@ type Workspace = NonNullable<
 >["workspaces"][number];
 type CloudProvider =
   (typeof trpc.workspace.listCloudProviders)["~types"]["output"]["cloudProviders"][number];
+type WorkspaceEditorAccess =
+  (typeof trpc.workspace.getWorkspaceEditorAccess)["~types"]["output"]["access"];
 
 function InstanceCard({
   workspace,
@@ -264,10 +269,12 @@ function InstanceCard({
 
   const getRepoName = () => {
     if (!workspace.repositoryUrl) return null;
-    return workspace.repositoryUrl
+    const name = workspace.repositoryUrl
       .replace("https://github.com/", "")
       .replace("https://gitlab.com/", "")
       .replace(".git", "");
+    const branch = workspace.repositoryBranch;
+    return branch ? `${name}:${branch}` : name;
   };
 
   const getRegionInfo = () => {
@@ -287,13 +294,11 @@ function InstanceCard({
   const isStopped = workspace.status === "stopped";
   const isPending = workspace.status === "pending";
 
-  const connectCommand = workspace.subdomain
-    ? getAttachCommand(
-        workspace.subdomain,
-        workspace.image.agentType.name,
-        workspace.serverPassword,
-      )
-    : null;
+  const editorAccessQuery = useQuery({
+    ...trpc.workspace.getWorkspaceEditorAccess.queryOptions({ workspaceId: workspace.id }),
+    enabled: showConnectDialog && workspace.editorAccessEnabled && isRunning,
+    retry: false,
+  });
 
   // Get the workspace URL for linking
   const workspaceUrl = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
@@ -304,8 +309,188 @@ function InstanceCard({
   const portUrl = (port: number) =>
     workspace.subdomain ? getWorkspaceOpenPortUrl(workspace.subdomain, port) : null;
 
+  const copyValue = async (value: string, successMessage: string) => {
+    await navigator.clipboard.writeText(value);
+    toast.success(successMessage);
+  };
+
+  const editorProtocols = [
+    { name: "VS Code", protocol: "vscode", icon: "/vscode.svg" },
+    { name: "Cursor", protocol: "cursor", icon: "/cursor.svg" },
+    { name: "Zed", protocol: "zed", icon: "/zed.svg" },
+  ];
+
+  const buildEditorUri = (protocol: string, remoteTarget: string, projectPathHint: string) => {
+    const authority = `ssh-remote+${remoteTarget}`;
+    return `${protocol}://vscode-remote/${authority}${projectPathHint}`;
+  };
+
+  const renderEditorAccess = (access: WorkspaceEditorAccess) => {
+    const needsProxySetup = access.transportKind === "proxycommand-ssh";
+    const remoteTarget = needsProxySetup
+      ? access.hostAlias
+      : `${access.user}@${access.host}:${access.port}`;
+
+    return (
+      <div className="grid gap-4">
+        {/* SSH command -- always shown, always copyable */}
+        <div className="grid gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            SSH command
+          </p>
+          <div
+            className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
+            onClick={() => copyValue(access.sshCommand, "SSH command copied")}
+          >
+            <code className="block text-sm font-medium text-foreground break-all pr-8">
+              {access.sshCommand}
+            </code>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 transition-opacity group-hover:opacity-100">
+              <Copy className="h-3.5 w-3.5" />
+            </div>
+          </div>
+        </div>
+
+        {/* ProxyCommand setup steps (only for providers that need it) */}
+        {needsProxySetup && (
+          <>
+            <div className="rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5 text-xs text-muted-foreground">
+              This provider requires a local proxy. Install <code>websocat</code> and add the
+              SSH config snippet to <code>~/.ssh/config</code> before connecting.
+            </div>
+            <div className="grid gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Install websocat
+              </p>
+              <div
+                className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
+                onClick={() => copyValue("brew install websocat", "Install command copied")}
+              >
+                <code className="block text-sm font-medium text-foreground break-all pr-8">
+                  brew install websocat
+                </code>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 transition-opacity group-hover:opacity-100">
+                  <Copy className="h-3.5 w-3.5" />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                SSH config snippet
+              </p>
+              <div
+                className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
+                onClick={() => copyValue(access.sshConfigSnippet, "SSH config copied")}
+              >
+                <code className="block text-xs font-medium text-foreground break-all whitespace-pre-wrap pr-8">
+                  {access.sshConfigSnippet}
+                </code>
+                <div className="absolute right-3 top-3 opacity-40 transition-opacity group-hover:opacity-100">
+                  <Copy className="h-3.5 w-3.5" />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Open in editor buttons */}
+        <div className="grid gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Open in editor
+          </p>
+          <div className="grid gap-1.5">
+            {editorProtocols.map((editor) => (
+              <a
+                key={editor.protocol}
+                href={buildEditorUri(editor.protocol, remoteTarget, access.projectPathHint)}
+                className="flex items-center gap-3 rounded-lg border border-border/40 bg-secondary/20 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/40 hover:border-border/60"
+              >
+                <Image
+                  src={editor.icon}
+                  alt={editor.name}
+                  width={18}
+                  height={18}
+                  className="h-[18px] w-[18px]"
+                />
+                <span className="flex-1">Open in {editor.name}</span>
+                <SquareArrowOutUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {/* Copy connection string for NeoVim / other editors */}
+        <div className="grid gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Or copy for NeoVim / other editors
+          </p>
+          <div
+            className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
+            onClick={() => copyValue(access.sshConnectionString, "Connection string copied")}
+          >
+            <code className="block text-sm font-medium text-foreground break-all pr-8">
+              {access.sshConnectionString}
+            </code>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 transition-opacity group-hover:opacity-100">
+              <Copy className="h-3.5 w-3.5" />
+            </div>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Project path: <code className="text-foreground/80">{access.projectPathHint}</code>
+          {access.expiresAt && (
+            <span className="ml-2">
+              &middot; Expires {formatDistanceToNow(new Date(access.expiresAt), { addSuffix: true })}
+            </span>
+          )}
+        </p>
+
+        {(access.requiredLocalBinaries?.length || access.notes.length > 0) && (
+          <div className="grid gap-1.5 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5 text-xs text-muted-foreground">
+            {access.requiredLocalBinaries?.length ? (
+              <p>Requires: {access.requiredLocalBinaries.join(", ")}.</p>
+            ) : null}
+            {access.notes.map((note) => (
+              <p key={note}>{note}</p>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
+      <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              Editor Connect
+            </DialogTitle>
+            <DialogDescription>
+              Connect from your preferred editor over SSH.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-1">
+            {editorAccessQuery.isLoading ? (
+              <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/20 p-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Preparing SSH access...
+              </div>
+            ) : editorAccessQuery.error ? (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                {editorAccessQuery.error.message}
+              </div>
+            ) : editorAccessQuery.data ? (
+              renderEditorAccess(editorAccessQuery.data.access)
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={showOpenPortDialog}
         onOpenChange={(open) => {
@@ -480,6 +665,14 @@ function InstanceCard({
                 </div>
               </div>
             )}
+            {workspace.editorAccessEnabled && (
+              <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                <Monitor className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-xs text-white/30">
+                  Editor access enabled
+                </span>
+              </div>
+            )}
             {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
               isRunning) && (
               <div className="flex items-start gap-2 mt-0.5 min-w-0">
@@ -573,14 +766,24 @@ function InstanceCard({
                   <Copy className="h-3.5 w-3.5" />
                   Copy Attach
                 </Button>
+                {workspace.editorAccessEnabled && (
+                  <Button
+                    size="sm"
+                    className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
+                    onClick={() => setShowConnectDialog(true)}
+                  >
+                    <Terminal className="h-3.5 w-3.5" />
+                    Editor
+                  </Button>
+                )}
                 <Button
                   size="sm"
-                  className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
+                  className="h-9 text-xs gap-2 border-border/50"
+                  variant="outline"
                   asChild
                 >
                   <a href={workspaceUrl} target="_blank" rel="noreferrer">
                     <Monitor className="h-3.5 w-3.5" />
-                    Desktop App
                   </a>
                 </Button>
               </div>

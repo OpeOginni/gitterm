@@ -1,8 +1,9 @@
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { DeleteAccountSection } from "@/components/dashboard/delete-account";
-import { BillingSection, RunPacksSection } from "@/components/dashboard/billing-section";
+import { BillingSection } from "@/components/dashboard/billing-section";
 import { AgentConfigSection } from "@/components/dashboard/agent-config-section";
 import { ModelCredentialsSection } from "@/components/dashboard/model-credentials-section";
+import { SshKeySection } from "@/components/dashboard/ssh-key-section";
 import { authClient } from "@/lib/auth-client";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -34,8 +35,8 @@ export default async function SettingsPage() {
       <div className="mx-auto max-w-4xl space-y-6 pt-2">
         <BillingSection currentPlan={currentPlan} />
         <ModelCredentialsSection />
+        <SshKeySection />
         <AgentConfigSection />
-        <RunPacksSection currentPlan={currentPlan} />
         <DeleteAccountSection />
       </div>
     </DashboardShell>

@@ -1,47 +1,50 @@
-import { Cloud, Save, Layers, Power, Globe } from "lucide-react";
+import { Cloud, Save, Layers, Power, Globe, MonitorSmartphone } from "lucide-react";
 import { GitHub } from "../logos/Github";
-
-const heroFeature = {
-  icon: Layers,
-  title: "One API. Any cloud.",
-  description:
-    "Railway, E2B, Cloudflare. GitTerm gives you a single interface to deploy and manage OpenCode workspaces across any provider, server, or sandbox. Switch infra without changing a line.",
-};
 
 const features = [
   {
-    icon: Cloud,
-    title: "Instant Cloud Workspaces",
+    icon: Layers,
+    title: "One API. Any cloud.",
     description:
-      "Provision a full OpenCode environment in seconds. No Docker, no config files. Just pick a provider and go.",
+      "Railway, E2B, Daytona, deploy complete opencode worksapces across any provider from a single interface.",
+    lead: true,
+  },
+  {
+    icon: Cloud,
+    title: "Instant Workspaces",
+    description: "Full OpenCode environment in seconds. Pick a provider and go.",
   },
   {
     icon: GitHub,
     title: "GitHub Native",
-    description:
-      "Authenticate once. Clone repos, push commits, and open PRs from any workspace on any device.",
+    description: "Clone repos, push commits, and open PRs from any workspace.",
+  },
+  {
+    icon: MonitorSmartphone,
+    title: "Editor Access",
+    description: "Connect VS Code, Cursor, Zed, or NeoVim over SSH.",
   },
   {
     icon: Save,
     title: "Persistent State",
-    description:
-      "Workspaces survive restarts. Files, context, and agent memory carry over between sessions. Pick up where you left off.",
+    description: "Files, context, and agent memory carry over between sessions.",
   },
   {
     icon: Globe,
     title: "Provider Agnostic",
-    description:
-      "Not locked into one cloud. Move workspaces between Railway, E2B, and Cloudflare without friction.",
+    description: "Move workspaces between providers without friction.",
   },
   {
     icon: Power,
-    title: "Smart Resource Management",
-    description:
-      "Idle workspaces sleep automatically and wake on demand. You only pay for what you actually use.",
+    title: "Smart Resources",
+    description: "Idle workspaces sleep. You only pay for what you use.",
   },
 ];
 
 export function FeaturesSection() {
+  const lead = features[0]!;
+  const rest = features.slice(1);
+
   return (
     <section id="features" className="border-t border-white/[0.06] py-24 md:py-32">
       <div className="mx-auto max-w-[1120px] px-6">
@@ -55,54 +58,32 @@ export function FeaturesSection() {
           </h2>
         </div>
 
-        {/* Hero feature -- full width, elevated */}
-        <div className="group relative mb-4 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] transition-colors hover:border-white/[0.12] hover:bg-white/[0.04]">
-          <div className="h-px w-full bg-primary" />
-          <div className="grid items-center gap-6 p-8 md:grid-cols-[auto_1fr] md:gap-10 md:p-10">
-            <div className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
-              <heroFeature.icon className="h-7 w-7 text-primary" />
-            </div>
-            <div>
-              <h3 className="mb-2 text-xl font-bold text-white md:text-2xl">{heroFeature.title}</h3>
-              <p className="max-w-2xl text-sm leading-relaxed text-white/45 md:text-base">
-                {heroFeature.description}
-              </p>
-            </div>
+        {/* Lead feature -- same row style, slightly elevated */}
+        <div className="flex items-start gap-4 border-l-2 border-primary/50 py-5 pl-6">
+          <div className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+            <lead.icon className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white md:text-lg">{lead.title}</h3>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-white/45">
+              {lead.description}
+            </p>
           </div>
         </div>
 
-        {/* Supporting features -- asymmetric grid: 2 top, 3 bottom */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {features.slice(0, 2).map((feature) => (
+        {/* Supporting features -- 2-col rows */}
+        <div className="mt-6 grid gap-x-6 gap-y-0 md:grid-cols-2">
+          {rest.map((feature) => (
             <div
               key={feature.title}
-              className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] transition-colors hover:border-white/[0.12] hover:bg-white/[0.04]"
+              className="flex items-start gap-4 border-t border-white/[0.04] py-6"
             >
-              <div className="h-px w-full bg-primary/40" />
-              <div className="p-8">
-                <div className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
-                  <feature.icon className="h-5 w-5 text-primary" />
-                </div>
-                <h3 className="mb-2 text-lg font-semibold text-white/90">{feature.title}</h3>
-                <p className="text-sm leading-relaxed text-white/45">{feature.description}</p>
+              <div className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
+                <feature.icon className="h-[18px] w-[18px] text-primary/80" />
               </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          {features.slice(2).map((feature) => (
-            <div
-              key={feature.title}
-              className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] transition-colors hover:border-white/[0.12] hover:bg-white/[0.04]"
-            >
-              <div className="h-px w-full bg-primary/40" />
-              <div className="p-8">
-                <div className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
-                  <feature.icon className="h-5 w-5 text-primary" />
-                </div>
-                <h3 className="mb-2 text-lg font-semibold text-white/90">{feature.title}</h3>
-                <p className="text-sm leading-relaxed text-white/45">{feature.description}</p>
+              <div>
+                <h3 className="text-[15px] font-semibold text-white/85">{feature.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-white/40">{feature.description}</p>
               </div>
             </div>
           ))}

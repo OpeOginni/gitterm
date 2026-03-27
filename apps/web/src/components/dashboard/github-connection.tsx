@@ -204,7 +204,7 @@ export function GitHubConnection() {
             {/* Actions */}
             <div className="flex gap-3 pt-1">
               <Button
-                onClick={() => window.open("https://github.com/settings/installations", "_blank")}
+                onClick={() => window.open(`https://github.com/settings/installations/${installationData.installation.id}`, "_blank")}
                 variant="outline"
                 className="flex-1 border-white/[0.08] bg-transparent text-white/60 hover:border-white/[0.15] hover:bg-white/[0.04] hover:text-white/80"
               >
@@ -258,7 +258,6 @@ export function GitHubConnection() {
                 { icon: GitBranch, text: "Commit and push changes from workspaces" },
                 { icon: GitFork, text: "Fork repositories with one click" },
                 { icon: Zap, text: "Automatic token refresh (no manual setup)" },
-                { icon: Bot, text: "Connection to automated agent loops" },
               ].map((feature, i) => (
                 <div
                   key={i}

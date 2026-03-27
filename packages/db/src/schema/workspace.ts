@@ -36,6 +36,20 @@ export const workspaceHostingTypeEnum = pgEnum("workspace_hosting_type", [
   "cloud",
   "local",
 ] as const);
+export const workspaceProfileEnum = pgEnum("workspace_profile", [
+  "standard",
+  "ssh-enabled",
+] as const);
+
+export const WORKSPACE_EDITOR_TARGETS = ["vscode", "neovim"] as const;
+export type WorkspaceEditorTarget = (typeof WORKSPACE_EDITOR_TARGETS)[number];
+export const workspaceEditorTargetEnum = pgEnum("workspace_editor_target", WORKSPACE_EDITOR_TARGETS);
+export interface WorkspaceEditorConnection {
+  transportKind: "direct-ssh" | "proxycommand-ssh" | "managed-ssh";
+  host: string;
+  port: number;
+  externalConnectionId?: string;
+}
 
 export const workspace = pgTable("workspace", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -55,12 +69,17 @@ export const workspace = pgTable("workspace", {
     .references(() => cloudProvider.id, { onDelete: "cascade" }),
   regionId: uuid("region_id").references(() => region.id, { onDelete: "cascade" }),
   repositoryUrl: text("repository_url"),
+  repositoryBranch: text("repository_branch"),
   domain: text("domain").notNull(), // Full domain: {uuid}.gitterm.dev or just {uuid} in path mode
   subdomain: text("subdomain"), // The workspace URL identifier (UUID format)
   upstreamUrl: text("upstream_url"), // URL to proxy requests to (cloud container or tunnel endpoint)
   status: workspaceStatusEnum("status").notNull(),
   persistent: boolean("persistent").notNull().default(false),
   serverOnly: boolean("server_only").notNull().default(false),
+  workspaceProfile: workspaceProfileEnum("workspace_profile").notNull().default("standard"),
+  editorAccessEnabled: boolean("editor_access_enabled").notNull().default(false),
+  editorTarget: workspaceEditorTargetEnum("editor_target"),
+  editorConnection: jsonb("editor_connection").$type<WorkspaceEditorConnection | null>(),
 
   // Workspace hosting configuration
   hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"), // 'cloud' = cloud-hosted, 'local' = local machine via tunnel

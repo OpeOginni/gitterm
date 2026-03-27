@@ -9,6 +9,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull(),
   image: text("image"),
+  sshPublicKey: text("ssh_public_key"),
   allowTrial: boolean("allow_trial").notNull().default(false),
   plan: userPlanEnum("plan").notNull().default("free"),
   role: userRoleEnum("role").notNull().default("user"),

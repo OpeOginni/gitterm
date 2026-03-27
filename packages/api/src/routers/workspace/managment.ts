@@ -24,6 +24,7 @@ import {
   type PersistentWorkspaceInfo,
   type WorkspaceEnvironmentVariables,
 } from "../../providers";
+import { createProvisionLogger } from "../../providers/provision-logger";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
   getGitHubAppService,
@@ -44,15 +45,22 @@ import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-cre
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
 import {
   buildWorkspaceToolingManifestBase64,
-  createDefaultWorkspaceToolingManifest,
-  detectWorkspaceToolingManifestFromPaths,
-  encodeWorkspaceToolingManifestBase64,
 } from "../../utils/workspace-tooling";
 import {
   deleteAllWorkspaceRouteAccess,
   deleteWorkspaceRouteAccess,
   upsertWorkspaceRouteAccess,
 } from "../../service/workspace-route-access";
+import {
+  buildProjectPathHint,
+  EDITOR_TARGETS,
+  normalizeProviderEditorAccessSupport,
+  pickWorkspaceImage,
+  WORKSPACE_PROFILES,
+  type EditorTarget,
+  type WorkspaceProfile,
+} from "../../providers/editor-access";
+import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -79,10 +87,22 @@ function isSubdomainReserved(subdomain: string): boolean {
 }
 
 function normalizeRepoUrl(url: string): string {
-  return url
-    .trim()
-    .replace(/\/+$/, "")
-    .replace(/\.git\/?$/i, "");
+  const trimmed = url.trim().replace(/[?#].*$/, "").replace(/\/+$/, "");
+  const parsed = parseGitHubRepoUrl(trimmed);
+
+  if (parsed) {
+    return `https://github.com/${parsed.owner}/${parsed.repo}`;
+  }
+
+  return trimmed.replace(/\.git\/?$/i, "");
+}
+
+function normalizeEditorTarget(target?: EditorTarget): EditorTarget | undefined {
+  if (!target) {
+    return undefined;
+  }
+
+  return EDITOR_TARGETS.includes(target) ? target : undefined;
 }
 
 export const workspaceRouter = router({
@@ -226,9 +246,14 @@ export const workspaceRouter = router({
           orderBy: [asc(cloudProvider.name)],
         });
 
+        const providersWithEditorSupport = providers.map((provider) => ({
+          ...provider,
+          editorAccessSupport: normalizeProviderEditorAccessSupport(provider.editorAccessSupport),
+        }));
+
         return {
           success: true,
-          cloudProviders: providers,
+          cloudProviders: providersWithEditorSupport,
         };
       } catch (error) {
         console.error("Failed to fetch cloud providers", error);
@@ -336,6 +361,110 @@ export const workspaceRouter = router({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fetch workspaces",
           cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
+  getWorkspaceEditorAccess: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      if (!userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
+
+      const [workspaceRecord] = await db
+        .select()
+        .from(workspace)
+        .where(and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)))
+        .limit(1);
+
+      if (!workspaceRecord) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      if (!workspaceRecord.editorAccessEnabled) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Editor access is not enabled for this workspace.",
+        });
+      }
+
+      if (workspaceRecord.status !== "running") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Start the workspace before generating editor SSH access.",
+        });
+      }
+
+      const [providerRecord] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, workspaceRecord.cloudProviderId))
+        .limit(1);
+
+      if (!providerRecord) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Workspace provider not found",
+        });
+      }
+
+      let regionIdentifier: string | undefined;
+
+      if (workspaceRecord.regionId) {
+        const [workspaceRegion] = await db
+          .select()
+          .from(region)
+          .where(eq(region.id, workspaceRecord.regionId))
+          .limit(1);
+        regionIdentifier = workspaceRegion?.externalRegionIdentifier;
+      }
+
+      try {
+        const computeProvider = await getProviderByCloudProviderId(providerRecord.name);
+        const access = await computeProvider.getWorkspaceEditorAccess({
+          workspaceId: workspaceRecord.id,
+          userId,
+          externalServiceId: workspaceRecord.externalInstanceId,
+          subdomain: workspaceRecord.subdomain ?? workspaceRecord.id,
+          projectPathHint: buildProjectPathHint(workspaceRecord.repositoryUrl),
+          regionIdentifier,
+          existingConnection: workspaceRecord.editorConnection ?? undefined,
+        });
+
+        if (access.connection) {
+          await db
+            .update(workspace)
+            .set({
+              editorConnection: access.connection,
+              updatedAt: new Date(),
+            })
+            .where(eq(workspace.id, workspaceRecord.id));
+        }
+
+        return {
+          success: true,
+          access,
+          editorTarget: workspaceRecord.editorTarget,
+          workspaceProfile: workspaceRecord.workspaceProfile,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error ? error.message : "Failed to generate editor access details",
         });
       }
     }),
@@ -755,6 +884,13 @@ export const workspaceRouter = router({
       z.object({
         name: z.string().optional(),
         repo: z.string().optional(), // Optional for local workspaces
+        branch: z
+          .string()
+          .trim()
+          .min(1)
+          .max(255)
+          .regex(/^[A-Za-z0-9._/-]+$/)
+          .optional(),
         subdomain: z
           .union([
             z
@@ -770,11 +906,14 @@ export const workspaceRouter = router({
         regionId: z.string().optional(),
         gitIntegrationId: z.string().optional(),
         persistent: z.boolean(),
+        workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
+        editorTarget: z.enum(EDITOR_TARGETS).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
       const workspaceId = randomUUID();
+      const workspaceCreateLogger = createProvisionLogger("workspace-router", workspaceId);
 
       if (!userId) {
         throw new TRPCError({
@@ -850,6 +989,37 @@ export const workspaceRouter = router({
 
         // Determine if this is a local workspace
         const isLocal = cloudProviderRecord.name.toLowerCase() === "local";
+        const workspaceProfile = (input.workspaceProfile ?? "standard") as WorkspaceProfile;
+        const editorTarget = normalizeEditorTarget(input.editorTarget);
+        const editorAccessEnabled = workspaceProfile === "ssh-enabled";
+        const providerEditorSupport = normalizeProviderEditorAccessSupport(
+          cloudProviderRecord.editorAccessSupport,
+        );
+
+        if (editorAccessEnabled) {
+          if (!editorTarget) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Select at least one editor target when enabling editor access.",
+            });
+          }
+
+          const requiresUserSshKey = cloudProviderRecord.name.toLowerCase() !== "daytona";
+          if (requiresUserSshKey && !fetchedUser.sshPublicKey) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "Add an SSH public key in Settings before enabling editor access for this provider.",
+            });
+          }
+
+          if (!providerEditorSupport.supported) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `${cloudProviderRecord.name} does not currently support editor SSH access.`,
+            });
+          }
+        }
 
         // Check quota only for cloud workspaces (local doesn't use our resources)
         if (!isLocal) {
@@ -977,7 +1147,7 @@ export const workspaceRouter = router({
         }
 
         // Get image for this agent type (take the first one)
-        const [imageRecord] = await db
+        const imageRecords = await db
           .select()
           .from(image)
           .where(and(eq(image.agentTypeId, input.agentTypeId), eq(image.isEnabled, true)));
@@ -1009,10 +1179,22 @@ export const workspaceRouter = router({
           });
         }
 
+        if (editorAccessEnabled && !agentTypeRecord.serverOnly) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Editor access currently requires a server-only agent type.",
+          });
+        }
+
+        const imageRecord = pickWorkspaceImage(imageRecords, workspaceProfile);
+
         if (!imageRecord) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "No enabled image found for this agent type",
+            message:
+              workspaceProfile === "ssh-enabled"
+                ? "No SSH-enabled image found for this agent type"
+                : "No enabled image found for this agent type",
           });
         }
 
@@ -1103,6 +1285,7 @@ export const workspaceRouter = router({
             const repoValidation = await getGitHubAppService().checkIfValidRepository(
               input.repo,
               options,
+              input.branch,
             );
 
             if (!repoValidation.valid)
@@ -1130,6 +1313,12 @@ export const workspaceRouter = router({
               throw new TRPCError({
                 code: "BAD_REQUEST",
                 message: "Can't clone repository, check github integration",
+              });
+
+            if (input.branch && !repoValidation.branchExists)
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Branch "${input.branch}" not found in this repository`,
               });
           }
         }
@@ -1313,11 +1502,15 @@ export const workspaceRouter = router({
           JSON.stringify(OPENCODE_CREDENTIALS),
         ).toString("base64");
 
-        const WORKSPACE_TOOLING_MANIFEST_BASE64 = await buildWorkspaceToolingManifestBase64({
-          owner: repoInfo?.owner,
-          repo: repoInfo?.repo,
-          installationId: githubInstallationId,
-        });
+        const WORKSPACE_TOOLING_MANIFEST_BASE64 = await workspaceCreateLogger.step(
+          "build-tooling-manifest",
+          () =>
+            buildWorkspaceToolingManifestBase64({
+              owner: repoInfo?.owner,
+              repo: repoInfo?.repo,
+              installationId: githubInstallationId,
+            }),
+        );
 
         // Generate server password for serverOnly workspaces
         let serverPassword: string | undefined;
@@ -1331,6 +1524,7 @@ export const workspaceRouter = router({
 
         const DEFAULT_DOCKER_ENV_VARS: WorkspaceEnvironmentVariables = {
           REPO_URL: input.repo || undefined,
+          REPO_BRANCH: input.branch || undefined,
           OPENCODE_CONFIG_BASE64: agentConfig
             ? Buffer.from(
                 JSON.stringify({
@@ -1350,6 +1544,13 @@ export const workspaceRouter = router({
           WORKSPACE_ID: workspaceId,
           WORKSPACE_AUTH_TOKEN: workspaceAuthToken, // JWT instead of shared key
           WORKSPACE_API_URL: WORKSPACE_API_URL,
+          WORKSPACE_PROFILE: workspaceProfile,
+          EDITOR_ACCESS_ENABLED: editorAccessEnabled ? "true" : "false",
+          EDITOR_TARGET: editorTarget,
+          USER_SSH_PUBLIC_KEY:
+            editorAccessEnabled && cloudProviderRecord.name.toLowerCase() !== "daytona"
+              ? normalizeSshPublicKey(fetchedUser.sshPublicKey ?? "")
+              : undefined,
           ...(userWorkspaceEnvironmentVariables
             ? (userWorkspaceEnvironmentVariables.environmentVariables as any)
             : {}),
@@ -1363,26 +1564,34 @@ export const workspaceRouter = router({
           cloudProviderRecord.creationSettlement === "immediate" ? "running" : "pending";
 
         // Create workspace via compute provider
-        const workspaceInfo = input.persistent
-          ? await computeProvider.createPersistentWorkspace({
-              workspaceId,
-              userId,
-              imageId: imageRecord.imageId,
-              subdomain,
-              repositoryUrl: input.repo,
-              regionIdentifier: regionRecord?.externalRegionIdentifier,
-              environmentVariables: DEFAULT_DOCKER_ENV_VARS,
-              persistent: input.persistent,
-            })
-          : await computeProvider.createWorkspace({
-              workspaceId,
-              userId,
-              imageId: imageRecord.imageId,
-              subdomain,
-              repositoryUrl: input.repo,
-              regionIdentifier: regionRecord?.externalRegionIdentifier,
-              environmentVariables: DEFAULT_DOCKER_ENV_VARS,
-            });
+        const workspaceInfo = await workspaceCreateLogger.step(
+          `provision-workspace provider=${cloudProviderRecord.name.toLowerCase()} persistent=${input.persistent}`,
+          () =>
+            input.persistent
+                ? computeProvider.createPersistentWorkspace({
+                    workspaceId,
+                    userId,
+                    imageId: imageRecord.imageId,
+                    imageProviderMetadata: imageRecord.providerMetadata,
+                    subdomain,
+                    repositoryUrl: input.repo,
+                    repositoryBranch: input.branch,
+                    regionIdentifier: regionRecord?.externalRegionIdentifier,
+                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                    persistent: input.persistent,
+                  })
+                : computeProvider.createWorkspace({
+                    workspaceId,
+                    userId,
+                    imageId: imageRecord.imageId,
+                    imageProviderMetadata: imageRecord.providerMetadata,
+                    subdomain,
+                    repositoryUrl: input.repo,
+                    repositoryBranch: input.branch,
+                    regionIdentifier: regionRecord?.externalRegionIdentifier,
+                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                  }),
+        );
 
         // Save workspace to database
         const [newWorkspace] = await db
@@ -1397,9 +1606,14 @@ export const workspaceRouter = router({
             persistent: input.persistent,
             regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,
+            repositoryBranch: input.branch ?? null,
             domain,
             subdomain,
             serverOnly: agentTypeRecord.serverOnly,
+            workspaceProfile,
+            editorAccessEnabled,
+            editorTarget: editorTarget ?? null,
+            editorConnection: null,
             serverPassword: encryptedServerPassword ?? null,
             upstreamUrl: workspaceInfo.upstreamUrl,
             status: initialWorkspaceStatus,
@@ -1417,6 +1631,10 @@ export const workspaceRouter = router({
             message: "Failed to create workspace record",
           });
         }
+
+        workspaceCreateLogger.log(
+          `workspace-record-created provider=${cloudProviderRecord.name.toLowerCase()} persistent=${input.persistent}`,
+        );
 
         if (workspaceInfo.upstreamAccess?.headers) {
           await upsertWorkspaceRouteAccess(workspaceId, null, workspaceInfo.upstreamAccess.headers);
@@ -1556,6 +1774,19 @@ export const workspaceRouter = router({
 
         // Get compute provider and stop the workspace
         const computeProvider = await getProviderByCloudProviderId(provider.name);
+        if (existingWorkspace.editorConnection) {
+          await computeProvider
+            .revokeWorkspaceEditorAccess({
+              workspaceId: existingWorkspace.id,
+              externalServiceId: existingWorkspace.externalInstanceId,
+              connection: existingWorkspace.editorConnection,
+              regionIdentifier: workspaceRegion?.externalRegionIdentifier,
+            })
+            .catch((error) => {
+              console.warn("Failed to revoke workspace editor access during stop:", error);
+            });
+        }
+
         await computeProvider.stopWorkspace(
           existingWorkspace.externalInstanceId,
           workspaceRegion?.externalRegionIdentifier,
@@ -1572,6 +1803,7 @@ export const workspaceRouter = router({
           .set({
             status: "stopped",
             stoppedAt: now,
+            editorConnection: null,
             updatedAt: now,
           })
           .where(eq(workspace.id, input.workspaceId));
@@ -1755,6 +1987,18 @@ export const workspaceRouter = router({
 
       // Get compute provider and terminate the workspace
       const computeProvider = await getProviderByCloudProviderId(provider.name);
+      if (fetchedWorkspace.editorConnection) {
+        await computeProvider
+          .revokeWorkspaceEditorAccess({
+            workspaceId: fetchedWorkspace.id,
+            externalServiceId: fetchedWorkspace.externalInstanceId,
+            connection: fetchedWorkspace.editorConnection,
+          })
+          .catch((error) => {
+            console.warn("Failed to revoke workspace editor access during delete:", error);
+          });
+      }
+
       await computeProvider.terminateWorkspace(
         fetchedWorkspace.externalInstanceId,
         fetchedWorkspace.persistent ? fetchedWorkspace.volume.externalVolumeId : undefined,
@@ -1766,6 +2010,7 @@ export const workspaceRouter = router({
           status: "terminated",
           stoppedAt: new Date(),
           terminatedAt: new Date(),
+          editorConnection: null,
           updatedAt: new Date(),
         })
         .where(eq(workspace.id, input.workspaceId))

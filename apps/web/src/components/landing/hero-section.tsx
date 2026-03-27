@@ -17,14 +17,20 @@ const infraProviders = [
   { src: "/daytona.svg", label: "Daytona" },
 ];
 
+const editorProviders = [
+  { src: "/vscode.svg", label: "VS Code" },
+  { src: "/cursor.svg", label: "Cursor" },
+  { src: "/zed.svg", label: "Zed" },
+  { src: "/neovim.svg", label: "NeoVim" },
+];
+
 export function HeroSection() {
   return (
     <section className="relative overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32">
       <div className="mx-auto max-w-[1120px] px-6">
         {/* Eyebrow */}
         <div className="mb-6 flex justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-white/40">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/6 bg-white/3 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-white/40">
             Cloud workspaces for OpenCode
           </span>
         </div>
@@ -72,30 +78,6 @@ export function HeroSection() {
 
         {/* Logo bands */}
         <div className="mx-auto mt-20 max-w-3xl">
-          {/* Model providers */}
-          <div className="border-t border-white/[0.06] pt-8">
-            <p className="mb-5 text-center font-mono text-[11px] uppercase tracking-[0.25em] text-white/30">
-              Model providers
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
-              {modelProviders.map((p) => (
-                <div
-                  key={p.label}
-                  className="flex items-center gap-2.5 text-white/50 transition-colors hover:text-white/80"
-                >
-                  <Image
-                    src={p.src}
-                    alt={p.label}
-                    width={24}
-                    height={24}
-                    className="h-6 w-6 opacity-70"
-                  />
-                  <span className="text-sm font-medium">{p.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Infra */}
           <div className="mt-8 border-t border-white/[0.06] pt-8">
             <p className="mb-5 text-center font-mono text-[11px] uppercase tracking-[0.25em] text-white/30">
@@ -115,6 +97,30 @@ export function HeroSection() {
                     className="h-6 w-6 opacity-70"
                   />
                   <span className="text-sm font-medium">{i.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Editors */}
+          <div className="mt-8 border-t border-white/[0.06] pt-8">
+            <p className="mb-5 text-center font-mono text-[11px] uppercase tracking-[0.25em] text-white/30">
+              Connect To your editor
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+              {editorProviders.map((e) => (
+                <div
+                  key={e.label}
+                  className="flex items-center gap-2.5 text-white/50 transition-colors hover:text-white/80"
+                >
+                  <Image
+                    src={e.src}
+                    alt={e.label}
+                    width={24}
+                    height={24}
+                    className="h-6 w-6 opacity-70"
+                  />
+                  <span className="text-sm font-medium">{e.label}</span>
                 </div>
               ))}
             </div>

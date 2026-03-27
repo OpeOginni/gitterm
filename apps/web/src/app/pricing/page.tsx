@@ -54,7 +54,6 @@ const PLAN_TIERS: PlanTier[] = [
     description: "Full-featured cloud development and agentic coding platform",
     features: [
       "Unlimited loop projects and cloud workspaces",
-      "100 sandbox runs / month",
       "Max 40 min per run",
       "Built for professional workflows",
     ],
@@ -409,34 +408,6 @@ function PricingPageContent() {
                 loadingPlan={loadingPlan}
               />
             ))}
-          </div>
-
-          {/* Run packs */}
-          <div className="mt-24 border-t border-white/[0.06] pt-16">
-            <div className="mb-10 text-center">
-              <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
-                Add-ons
-              </p>
-              <h2 className="mb-2 text-2xl font-bold text-white">Need more runs?</h2>
-              <p className="text-sm text-white/40">One-time packs. No subscription required.</p>
-            </div>
-
-            <div className="flex flex-col items-center justify-center gap-5 sm:flex-row">
-              {RUN_PACKS.map((pack) => (
-                <RunPackCard
-                  key={pack.slug}
-                  pack={pack}
-                  onPurchase={handleRunPackPurchase}
-                  isLoading={isLoading}
-                  loadingPack={loadingPack}
-                />
-              ))}
-            </div>
-
-            <p className="mt-6 text-center text-xs text-white/30">
-              Pro subscribers get 100 runs/month included ($0.20/run value). Run packs are great for
-              power users who need more.
-            </p>
           </div>
 
           {/* Questions */}

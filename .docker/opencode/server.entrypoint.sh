@@ -2,13 +2,17 @@
 set -e
 
 WORKSPACE="/workspace"
+RUNTIME_DIR="/run/gitterm"
+GIT_CREDENTIAL_HELPER="$RUNTIME_DIR/git-credential-helper.sh"
 USER_GITHUB_USERNAME="${USER_GITHUB_USERNAME}"
 GITHUB_APP_TOKEN="${GITHUB_APP_TOKEN}"
 GITHUB_APP_TOKEN_EXPIRY="${GITHUB_APP_TOKEN_EXPIRY}"
 USER_EMAIL="${USER_EMAIL:-${USER_GITHUB_USERNAME}@users.noreply.github.com}"
+REPO_BRANCH="${REPO_BRANCH}"
 
 # Ensure workspace exists
 mkdir -p "$WORKSPACE"
+mkdir -p "$RUNTIME_DIR"
 cd "$WORKSPACE"
 
 ########################################
@@ -39,24 +43,25 @@ if [ ! -f "/workspace/.gitconfig" ]; then
     touch /workspace/.gitconfig
 fi
 
+if [ ! -z "$USER_GITHUB_USERNAME" ]; then
+    git config --global user.name "$USER_GITHUB_USERNAME"
+    git config --file /root/.gitconfig user.name "$USER_GITHUB_USERNAME"
+fi
+
+if [ ! -z "$USER_EMAIL" ]; then
+    git config --global user.email "$USER_EMAIL"
+    git config --file /root/.gitconfig user.email "$USER_EMAIL"
+fi
+
 if [ ! -z "$GITHUB_APP_TOKEN" ]; then
     echo "Configuring git with GitHub App authentication..."
-    
-    # Configure git user (stored in /workspace/.gitconfig)
-    if [ ! -z "$USER_GITHUB_USERNAME" ]; then
-        git config --global user.name "$USER_GITHUB_USERNAME"
-    fi
-    
-    if [ ! -z "$USER_EMAIL" ]; then
-        git config --global user.email "$USER_EMAIL"
-    fi
-    
+
     # Disable interactive credential helper
     git config --global credential.helper ''
     
-    # Create persistent credential helper script in /workspace
+    # Create runtime-only credential helper script
     # IMPORTANT: Use unquoted heredoc to expand $GITHUB_APP_TOKEN
-    cat > /workspace/.git-credential-helper.sh <<CRED_HELPER
+    cat > "$GIT_CREDENTIAL_HELPER" <<CRED_HELPER
 #!/bin/sh
 if [ "\$1" = "get" ]; then
     echo "protocol=https"
@@ -66,13 +71,8 @@ if [ "\$1" = "get" ]; then
 fi
 CRED_HELPER
     
-    chmod +x /workspace/.git-credential-helper.sh
-    git config --global credential.helper '/workspace/.git-credential-helper.sh'
-    
-    # Also store token in environment file for scripts to use
-    echo "export GITHUB_APP_TOKEN='${GITHUB_APP_TOKEN}'" > /workspace/.github-token
-    echo "export GITHUB_APP_TOKEN_EXPIRY='${GITHUB_APP_TOKEN_EXPIRY}'" >> /workspace/.github-token
-    chmod 600 /workspace/.github-token
+    chmod 700 "$GIT_CREDENTIAL_HELPER"
+    git config --global credential.helper "$GIT_CREDENTIAL_HELPER"
     
     echo "✓ Git configured with GitHub App token"
     echo "  Token expires at: $GITHUB_APP_TOKEN_EXPIRY"
@@ -84,36 +84,43 @@ fi
 # FIRST-TIME SETUP
 ########################################
 if [ ! -f ".initialized" ]; then
-    echo "First-time workspace setup…"
+    echo "First-time workspace setup..."
 
     if [ ! -z "$REPO_URL" ]; then
-        REPO_NAME=$(basename "$REPO_URL" .git)
-        
-        # Extract repo owner and name from URL
-        # For URLs like: https://github.com/owner/repo.git
-        REPO_OWNER=$(echo "$REPO_URL" | sed -E 's|https?://github\.com/([^/]+)/[^/]+.*|\1|')
-        REPO_NAME_EXTRACTED=$(echo "$REPO_URL" | sed -E 's|https?://github\.com/[^/]+/([^/]+)(\.git)?|\1|')
+        REPO_DIR_NAME="${REPO_NAME:-$(basename "$REPO_URL" .git)}"
 
-        echo "Cloning repo: $REPO_URL into $REPO_NAME"
+        if [ -n "$REPO_BRANCH" ]; then
+            echo "Cloning repo: $REPO_URL (branch: $REPO_BRANCH) into $REPO_DIR_NAME"
+        else
+            echo "Cloning repo: $REPO_URL into $REPO_DIR_NAME"
+        fi
         
         # If GitHub App token is available, use authenticated URL
-        if [ ! -z "$GITHUB_APP_TOKEN" ] && [ ! -z "$REPO_OWNER" ] && [ ! -z "$REPO_NAME_EXTRACTED" ]; then
-            AUTH_URL="https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${REPO_OWNER}/${REPO_NAME_EXTRACTED}.git"
-            git clone "$AUTH_URL" "$REPO_NAME"
+        if [ ! -z "$GITHUB_APP_TOKEN" ] && [ ! -z "$REPO_OWNER" ] && [ ! -z "$REPO_NAME" ]; then
+            AUTH_URL="https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${REPO_OWNER}/${REPO_NAME}.git"
+            if [ -n "$REPO_BRANCH" ]; then
+                git clone --branch "$REPO_BRANCH" --single-branch "$AUTH_URL" "$REPO_DIR_NAME"
+            else
+                git clone "$AUTH_URL" "$REPO_DIR_NAME"
+            fi
         else
             # Fallback to original URL (public repos only)
-            git clone "$REPO_URL" "$REPO_NAME"
+            if [ -n "$REPO_BRANCH" ]; then
+                git clone --branch "$REPO_BRANCH" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
+            else
+                git clone "$REPO_URL" "$REPO_DIR_NAME"
+            fi
         fi
         
         echo "$REPO_OWNER" > .repo_owner
     else
-        echo "No repo URL — using empty workspace."
-        REPO_NAME="workspace"
-        mkdir -p "$REPO_NAME"
+        echo "No repo URL - using empty workspace."
+        REPO_DIR_NAME="workspace"
+        mkdir -p "$REPO_DIR_NAME"
         echo "" > .repo_owner
     fi
 
-    echo "$REPO_NAME" > .repo_name
+    echo "$REPO_DIR_NAME" > .repo_name
 
     # Save config
     if [ ! -z "$OPENCODE_CONFIG_BASE64" ]; then
@@ -446,12 +453,10 @@ cd "$REPO_NAME"
 # All environment variables already set above
 # Scripts and shells can source /workspace/.env for consistency
 
-# Run opencode upgrade and wait for completion before starting the agent
+# Opencode is updated via image rebuilds, not runtime upgrades
 if ! command -v opencode >/dev/null 2>&1; then
     echo "❌ opencode not found in PATH: $PATH"
     exit 127
 fi
-
-opencode upgrade --method bun || echo "Warning: opencode upgrade failed, continuing anyway"
 
 exec "$@"

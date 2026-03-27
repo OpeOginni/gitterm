@@ -1,4 +1,15 @@
 export type WorkspaceType = "cloud" | "agentic-loops";
+export type WorkspaceProfile = "standard" | "ssh-enabled";
+export type EditorTarget = "vscode" | "neovim";
+export type EditorTransportKind = "direct-ssh" | "proxycommand-ssh" | "managed-ssh";
+
+export interface EditorAccessSupport {
+  supported: boolean;
+  transportKind?: EditorTransportKind;
+  label: string;
+  description: string;
+  requiresLocalBinaries?: string[];
+}
 
 // Result types for form submissions
 export type CreateInstanceResult =
@@ -22,6 +33,7 @@ export interface CloudProvider {
   supportsRegions: boolean;
   allowUserRegionSelection: boolean;
   regions?: Region[];
+  editorAccessSupport?: EditorAccessSupport;
 }
 
 export interface Region {
@@ -54,6 +66,15 @@ export interface Repository {
 export interface Branch {
   name: string;
   protected: boolean;
+}
+
+export interface ResolvedGitHubRepository {
+  owner: string;
+  repo: string;
+  fullName: string;
+  private: boolean;
+  defaultBranch: string;
+  htmlUrl: string;
 }
 
 export interface RepoFile {
