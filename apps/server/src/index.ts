@@ -20,7 +20,7 @@ const app = new Hono();
 const deviceCodeService = new DeviceCodeService();
 const agentAuthService = new CLIAutheService();
 
-app.use(logger());
+// app.use(logger());
 app.use(
   "/*",
   cors({

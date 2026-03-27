@@ -72,6 +72,14 @@
     "ngrok": {
       "cache": false,
       "persistent": true
+    },
+    "e2b:build": {
+      "cache": false,
+      "persistent": true    
+    },
+    "daytona:snapshot-build": {
+      "cache": false,
+      "persistent": true     
     }
   }
 }

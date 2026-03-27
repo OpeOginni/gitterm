@@ -132,6 +132,9 @@ const seedImages = [
       e2b: {
         templateId: "r9xlzvdbcoocvbncrds9",
       },
+      daytona: {
+        snapshot: "daytona-medium",
+      },
     },
   },
   {
@@ -141,6 +144,9 @@ const seedImages = [
     providerMetadata: {
       e2b: {
         templateId: "nxiezl38gnw32ufyloc0",
+      },
+      daytona: {
+        snapshot: "daytona-medium",
       },
     },
   },

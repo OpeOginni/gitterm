@@ -24,6 +24,7 @@ import {
   type PersistentWorkspaceInfo,
   type WorkspaceEnvironmentVariables,
 } from "../../providers";
+import { createProvisionLogger } from "../../providers/provision-logger";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
   getGitHubAppService,
@@ -901,6 +902,7 @@ export const workspaceRouter = router({
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
       const workspaceId = randomUUID();
+      const workspaceCreateLogger = createProvisionLogger("workspace-router", workspaceId);
 
       if (!userId) {
         throw new TRPCError({
@@ -1482,11 +1484,15 @@ export const workspaceRouter = router({
           JSON.stringify(OPENCODE_CREDENTIALS),
         ).toString("base64");
 
-        const WORKSPACE_TOOLING_MANIFEST_BASE64 = await buildWorkspaceToolingManifestBase64({
-          owner: repoInfo?.owner,
-          repo: repoInfo?.repo,
-          installationId: githubInstallationId,
-        });
+        const WORKSPACE_TOOLING_MANIFEST_BASE64 = await workspaceCreateLogger.step(
+          "build-tooling-manifest",
+          () =>
+            buildWorkspaceToolingManifestBase64({
+              owner: repoInfo?.owner,
+              repo: repoInfo?.repo,
+              installationId: githubInstallationId,
+            }),
+        );
 
         // Generate server password for serverOnly workspaces
         let serverPassword: string | undefined;
@@ -1539,28 +1545,32 @@ export const workspaceRouter = router({
           cloudProviderRecord.creationSettlement === "immediate" ? "running" : "pending";
 
         // Create workspace via compute provider
-        const workspaceInfo = input.persistent
-          ? await computeProvider.createPersistentWorkspace({
-              workspaceId,
-              userId,
-              imageId: imageRecord.imageId,
-              imageProviderMetadata: imageRecord.providerMetadata,
-              subdomain,
-              repositoryUrl: input.repo,
-              regionIdentifier: regionRecord?.externalRegionIdentifier,
-              environmentVariables: DEFAULT_DOCKER_ENV_VARS,
-              persistent: input.persistent,
-            })
-          : await computeProvider.createWorkspace({
-              workspaceId,
-              userId,
-              imageId: imageRecord.imageId,
-              imageProviderMetadata: imageRecord.providerMetadata,
-              subdomain,
-              repositoryUrl: input.repo,
-              regionIdentifier: regionRecord?.externalRegionIdentifier,
-              environmentVariables: DEFAULT_DOCKER_ENV_VARS,
-            });
+        const workspaceInfo = await workspaceCreateLogger.step(
+          `provision-workspace provider=${cloudProviderRecord.name.toLowerCase()} persistent=${input.persistent}`,
+          () =>
+            input.persistent
+              ? computeProvider.createPersistentWorkspace({
+                  workspaceId,
+                  userId,
+                  imageId: imageRecord.imageId,
+                  imageProviderMetadata: imageRecord.providerMetadata,
+                  subdomain,
+                  repositoryUrl: input.repo,
+                  regionIdentifier: regionRecord?.externalRegionIdentifier,
+                  environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                  persistent: input.persistent,
+                })
+              : computeProvider.createWorkspace({
+                  workspaceId,
+                  userId,
+                  imageId: imageRecord.imageId,
+                  imageProviderMetadata: imageRecord.providerMetadata,
+                  subdomain,
+                  repositoryUrl: input.repo,
+                  regionIdentifier: regionRecord?.externalRegionIdentifier,
+                  environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                }),
+        );
 
         // Save workspace to database
         const [newWorkspace] = await db
@@ -1599,6 +1609,10 @@ export const workspaceRouter = router({
             message: "Failed to create workspace record",
           });
         }
+
+        workspaceCreateLogger.log(
+          `workspace-record-created provider=${cloudProviderRecord.name.toLowerCase()} persistent=${input.persistent}`,
+        );
 
         if (workspaceInfo.upstreamAccess?.headers) {
           await upsertWorkspaceRouteAccess(workspaceId, null, workspaceInfo.upstreamAccess.headers);

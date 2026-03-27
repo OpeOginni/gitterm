@@ -72,7 +72,8 @@
     "wrangler:dev": "wrangler dev",
     "wrangler:start": "wrangler dev",
     "wrangler:cf-typegen": "wrangler types",
-    "e2b:build": "bun run ./src/providers/e2b/template/build.ts"
+    "e2b:build": "bun run ./src/providers/e2b/template/build.ts",
+    "daytona:snapshot-build": "bun run ./src/providers/daytona/snapshot/build.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ec2": "^3.938.0",

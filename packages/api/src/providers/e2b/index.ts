@@ -20,6 +20,7 @@ import {
   type WorkspaceEditorAccessCleanupConfig,
   type WorkspaceEditorAccessConfig,
 } from "../editor-access";
+import { createProvisionLogger } from "../provision-logger";
 import type { E2BConfig } from "./types";
 
 export type { E2BConfig } from "./types";
@@ -272,13 +273,9 @@ export class E2BProvider implements ComputeProvider {
     return token;
   }
 
-  private async upgradeOpencode(sandbox: E2BSandbox): Promise<void> {
-    await this.runCommand(sandbox, "opencode upgrade", "upgrade opencode");
-  }
-
   private async startOpencodeServer(sandbox: E2BSandbox, repoDir: string): Promise<void> {
     await sandbox.commands
-      .run(`cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port ${OPENCODE_PORT}`, {
+      .run(`cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port ${OPENCODE_PORT} > /tmp/opencode.log 2>&1`, {
         background: true,
         onStdout: (data) => console.log(data),
         onStderr: (data) => console.error(data),
@@ -295,23 +292,34 @@ export class E2BProvider implements ComputeProvider {
     onTimeout: "pause" | "kill",
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const sandbox = await this.createSandbox(config, onTimeout);
+    const provisionLogger = createProvisionLogger(this.name, config.workspaceId);
+    const sandbox = await provisionLogger.step("create-sandbox", () =>
+      this.createSandbox(config, onTimeout),
+    );
     const repoDir = this.getRepoDir(config);
 
-    await this.cloneRepository(sandbox, config, repoDir);
-    await this.writeOpencodeFiles(sandbox, config);
-    await this.configureSshRuntime(sandbox, config);
+    await provisionLogger.step("clone-repository", () =>
+      this.cloneRepository(sandbox, config, repoDir),
+    );
+    await provisionLogger.step("write-opencode-files", () =>
+      this.writeOpencodeFiles(sandbox, config),
+    );
+    await provisionLogger.step("configure-ssh-runtime", () =>
+      this.configureSshRuntime(sandbox, config),
+    );
+    await provisionLogger.step("start-opencode-server", () =>
+      this.startOpencodeServer(sandbox, repoDir),
+    );
 
-    if (this.isSshEnabledWorkspace(config)) {
-      await this.waitForSshBridge(sandbox);
-    }
-
-    await this.upgradeOpencode(sandbox);
-    await this.startOpencodeServer(sandbox, repoDir);
-
-    const trafficAccessToken = await this.getTrafficAccessToken(sandbox, "workspace traffic");
+    const trafficAccessToken = await provisionLogger.step("resolve-traffic-access-token", () =>
+      this.getTrafficAccessToken(sandbox, "workspace traffic"),
+    );
     const host = sandbox.getHost(OPENCODE_PORT);
-    const startedAt = new Date((await sandbox.getInfo()).startedAt);
+    const startedAt = new Date(
+      (
+        await provisionLogger.step("fetch-sandbox-info", () => sandbox.getInfo())
+      ).startedAt,
+    );
 
     const workspaceInfo: WorkspaceInfo = {
       externalServiceId: sandbox.sandboxId,
@@ -320,6 +328,10 @@ export class E2BProvider implements ComputeProvider {
       domain: this.getDomain(config.subdomain),
       serviceCreatedAt: startedAt,
     };
+
+    provisionLogger.log(
+      `workspace-ready persistent=${persistent} sshEnabled=${this.isSshEnabledWorkspace(config)}`,
+    );
 
     if (!persistent) {
       return workspaceInfo;

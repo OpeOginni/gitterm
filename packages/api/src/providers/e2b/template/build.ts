@@ -10,14 +10,14 @@ const opencodeServerE2B = await Template.build(opencodeServerTemplate, "gitterm-
   cpuCount: 2,
   memoryMB: 2048,
   onBuildLogs: defaultBuildLogger(),
-  apiKey: ""
+  apiKey: process.env.E2B_API_KEY
 });
 
 const opencodeServerWithSSH_E2B = await Template.build(opencodeServerWithSSHTemplate, "gitterm-opencode-server-with-ssh", {
-  cpuCount: 2,
+  cpuCount: 4,
   memoryMB: 4096,
   onBuildLogs: defaultBuildLogger(),
-  apiKey: ""
+  apiKey: process.env.E2B_API_KEY
 });
 
 
