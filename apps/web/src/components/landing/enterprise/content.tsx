@@ -67,7 +67,7 @@ export function EnterpriseContent() {
           </span>
         </div>
 
-        <h1 className="mx-auto max-w-3xl text-center text-[clamp(2.25rem,5vw,4.5rem)] font-bold leading-[1.08] tracking-tight text-white">
+        <h1 className="mx-auto max-w-2xl text-center text-[clamp(2.25rem,5vw,4.5rem)] font-bold leading-[1.08] tracking-tight text-white">
           Run GitTerm on <span className="text-primary">your infra.</span>
         </h1>
 

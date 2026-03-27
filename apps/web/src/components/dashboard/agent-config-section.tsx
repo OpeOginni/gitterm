@@ -15,14 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -67,8 +60,8 @@ const getIcon = (name: string) => {
 const EXAMPLE_CONFIG = `{
   "$schema": "https://opencode.ai/config.json",
   "theme": "opencode",
-  "model": "anthropic/claude-sonnet-4-5",
-  "autoupdate": true,
+  "model": "opencode/big-pickle",
+  "autoupdate": true
 }`;
 
 type ConfigFormData = {
@@ -273,118 +266,133 @@ export function AgentConfigSection() {
             <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto border-border/90 bg-card">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <Code2 className="h-5 w-5" />
-                  {isEditing ? "Edit Configuration" : "Add Agent Configuration"}
+                  <Image
+                    src={getIcon(selectedAgentName)}
+                    alt={selectedAgentName}
+                    width={20}
+                    height={20}
+                    className="h-5 w-5"
+                  />
+                  {isEditing ? "Edit Configuration" : "New Agent Configuration"}
                 </DialogTitle>
                 <DialogDescription>
                   {isEditing
-                    ? "Update your agent configuration settings."
-                    : "Create a named configuration for your agent. Test it locally first before adding it here."}
+                    ? `Update the ${selectedAgentName} configuration.`
+                    : "Define your opencode.json settings. These are applied when creating new workspaces."}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="grid gap-5 py-4">
-                {/* Important Notice - only show for new configs */}
+                {/* Test locally hint -- compact, inline */}
                 {!isEditing && (
-                  <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
-                    <Terminal className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
-                        Test Locally First
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Before adding your configuration here, test it locally by creating a{" "}
-                        <code className="px-1 py-0.5 bg-muted rounded text-[11px]">
-                          opencode.json
-                        </code>{" "}
-                        file in your project root and running the agent. Once verified, paste the
-                        working configuration below.
-                      </p>
-                    </div>
-                  </div>
+                  <p className="flex items-center gap-2 text-xs text-amber-500/80">
+                    <Terminal className="h-3.5 w-3.5 shrink-0" />
+                    Test your config locally with{" "}
+                    <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-foreground">
+                      opencode.json
+                    </code>{" "}
+                    before adding it here.
+                  </p>
                 )}
 
-                {/* Configuration Name */}
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium">Configuration Name</Label>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g., My MCP Setup, TypeScript Project, etc."
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Give your configuration a memorable name
-                  </p>
-                </div>
+                {/* Name + Agent type -- side by side */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label className="text-sm font-medium">Name</Label>
+                    <Input
+                      value={formData.name}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., MCP Setup, TS Project"
+                    />
+                  </div>
 
-                {/* Agent Type Selection */}
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium">Agent Type</Label>
-                  <Select
-                    value={formData.agentTypeId}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, agentTypeId: value }))
-                    }
-                    disabled={isEditing}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select agent type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {agentTypesData?.agentTypes?.map((agent) => (
-                        <SelectItem key={agent.id} value={agent.id}>
-                          <div className="flex items-center">
+                  <div className="grid gap-2">
+                    <Label className="text-sm font-medium">
+                      Agent Type
+                      {isEditing && (
+                        <span className="ml-1 font-normal text-muted-foreground">(locked)</span>
+                      )}
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {agentTypesData?.agentTypes?.map((agent) => {
+                        const isSelected = formData.agentTypeId === agent.id;
+                        return (
+                          <button
+                            key={agent.id}
+                            type="button"
+                            onClick={() =>
+                              setFormData((prev) => ({ ...prev, agentTypeId: agent.id }))
+                            }
+                            disabled={isEditing}
+                            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                              isSelected
+                                ? "border-primary/60 bg-primary/8 text-foreground ring-1 ring-primary/20"
+                                : "border-border/40 bg-secondary/20 text-muted-foreground hover:border-border/70 hover:bg-secondary/40 hover:text-foreground"
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
                             <Image
-                              src={getIcon(agent.name) || "/placeholder.svg"}
+                              src={getIcon(agent.name)}
                               alt={agent.name}
                               width={16}
                               height={16}
-                              className="mr-2 h-4 w-4"
+                              className="h-4 w-4"
                             />
                             {agent.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {isEditing
-                      ? "Agent type cannot be changed after creation"
-                      : "Select the agent type this configuration applies to"}
-                  </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
                 {/* JSON Configuration Input */}
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">Configuration (JSON)</Label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleLoadExample}
-                      className="h-7 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Load Example
-                    </Button>
+                    <Label className="text-sm font-medium">
+                      Configuration{" "}
+                      <span className="font-normal text-muted-foreground">
+                        &middot;{" "}
+                        <a
+                          href="https://opencode.ai/docs/config/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary/70 hover:text-primary hover:underline"
+                        >
+                          docs
+                        </a>
+                      </span>
+                    </Label>
+                    {!formData.configJson.trim() && (
+                      <button
+                        type="button"
+                        onClick={handleLoadExample}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Load example
+                      </button>
+                    )}
                   </div>
 
-                  <CodeMirror
-                    value={formData.configJson}
-                    height="240px"
-                    extensions={[json()]}
-                    onChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        configJson: value,
-                      }))
-                    }
-                    theme={theme as "light" | "dark"}
-                    basicSetup={{
-                      lineNumbers: true,
-                      foldGutter: true,
-                    }}
-                  />
+                  <div className="rounded-lg border border-border/50 overflow-hidden">
+                    <CodeMirror
+                      value={formData.configJson}
+                      height="220px"
+                      extensions={[json()]}
+                      onChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          configJson: value,
+                        }))
+                      }
+                      theme={theme as "light" | "dark"}
+                      placeholder={EXAMPLE_CONFIG}
+                      basicSetup={{
+                        lineNumbers: true,
+                        foldGutter: false,
+                      }}
+                      className="text-sm"
+                    />
+                  </div>
 
                   {jsonError ? (
                     <div className="flex items-center gap-1.5 text-xs text-red-500">
@@ -397,21 +405,6 @@ export function AgentConfigSection() {
                       Valid JSON
                     </div>
                   ) : null}
-                </div>
-
-                {/* Configuration Help */}
-                <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/50">
-                  <p>
-                    For configuration options and documentation, see{" "}
-                    <a
-                      href="https://opencode.ai/docs/config/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline font-medium"
-                    >
-                      OpenCode Config Documentation
-                    </a>
-                  </p>
                 </div>
               </div>
 
@@ -433,13 +426,12 @@ export function AgentConfigSection() {
                   {isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      {isEditing ? "Updating..." : "Creating..."}
+                      {isEditing ? "Saving..." : "Creating..."}
                     </>
+                  ) : isEditing ? (
+                    "Save Changes"
                   ) : (
-                    <>
-                      <Check className="h-4 w-4" />
-                      {isEditing ? "Update Configuration" : "Create Configuration"}
-                    </>
+                    "Create"
                   )}
                 </Button>
               </DialogFooter>

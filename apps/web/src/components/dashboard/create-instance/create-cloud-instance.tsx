@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getWorkspaceDisplayUrl } from "@/lib/utils";
+import { cn, getWorkspaceDisplayUrl } from "@/lib/utils";
 import { isBillingEnabled } from "@gitterm/env/web";
 import type { Route } from "next";
 import {
@@ -29,17 +29,10 @@ import {
   type CloudProvider,
   type Region,
   type CreateInstanceResult,
-  type EditorTarget,
   type WorkspaceProfile,
 } from "./types";
 
-const editorTargetIcons: Record<EditorTarget, Array<{ src: string; alt: string }>> = {
-  vscode: [
-    { src: "/vscode.svg", alt: "VS Code" },
-    { src: "/cursor.svg", alt: "Cursor" },
-  ],
-  neovim: [{ src: "/neovim.svg", alt: "NeoVim" }],
-};
+
 
 interface CreateCloudInstanceProps {
   onSuccess: (result: CreateInstanceResult) => void;
@@ -56,7 +49,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string>("none");
   const [persistent, setPersistent] = useState(true);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
-  const [editorTarget, setEditorTarget] = useState<EditorTarget>("vscode");
+  const editorTarget = "vscode" as const;
 
   // Data fetching
   const { data: agentTypesData, isLoading: isLoadingAgentTypes } = useQuery(
@@ -157,7 +150,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     selectedAgentTypeId &&
     selectedCloudProviderId &&
     (!shouldShowRegionSelector || selectedRegion) &&
-    (workspaceProfile === "standard" || !!editorTarget)
+    true
   );
 
   const handleSubmit = async () => {
@@ -465,15 +458,21 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             </div>
           </div>
 
-          <div className="flex items-start gap-3 rounded-lg border border-border/50 bg-secondary/20 p-4 sm:col-span-2">
+          <div
+            className={`flex items-start gap-3 rounded-lg border p-4 sm:col-span-2 transition-all ${
+              canEnableEditorAccess
+                ? "border-border/50 bg-secondary/20"
+                : "border-border/30 bg-secondary/10 opacity-50 pointer-events-none select-none"
+            }`}
+          >
             <Checkbox
               id="editor-access"
               checked={workspaceProfile === "ssh-enabled"}
               onCheckedChange={(checked) => handleProfileChange(checked === true)}
               disabled={!canEnableEditorAccess}
-              className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-accent"
+              className="mt-0.5 pointer-events-auto data-[state=checked]:bg-primary data-[state=checked]:border-accent"
             />
-            <div className="grid gap-3 flex-1">
+            <div className="grid gap-3 flex-1 pointer-events-auto">
               <div className="grid gap-1">
                 <Label htmlFor="editor-access" className="text-sm font-medium cursor-pointer">
                   Enable Editor Access (SSH)
@@ -481,11 +480,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 <p className="text-xs text-muted-foreground">
                   {canEnableEditorAccess
                     ? selectedEditorSupport?.description ??
-                      "Connect VS Code-compatible editors or NeoVim over SSH."
+                      "Connect VS Code, Cursor, Zed, NeoVim, or any SSH-compatible editor."
                     : !selectedCloudProvider?.editorAccessSupport?.supported
                       ? "This provider does not expose editor SSH access yet."
                       : !selectedAgent?.serverOnly
-                        ? "Choose a server-only agent type to unlock SSH editor access."
+                        ? "Choose a server agent type to unlock SSH editor access."
                         : "Editor access is available for this provider."}
                 </p>
               </div>
@@ -509,66 +508,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   {selectedCloudProvider?.name.toLowerCase() === "e2b" ? (
                     <span> On macOS you can use <code>brew install websocat</code>.</span>
                   ) : null}
-                </div>
-              )}
-
-              {workspaceProfile === "ssh-enabled" && (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {(["vscode", "neovim"] as const).map((target) => {
-                    const isSelected = editorTarget === target;
-                    const icons = editorTargetIcons[target];
-                    const label = target === "vscode" ? "VS Code Compatible" : "NeoVim";
-                    const description =
-                      target === "vscode"
-                        ? "VS Code, Cursor, Windsurf, and forks."
-                        : "Terminal-first SSH editing.";
-
-                    return (
-                      <button
-                        key={target}
-                        type="button"
-                        onClick={() => setEditorTarget(target)}
-                        className={`group relative flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
-                          isSelected
-                            ? "border-primary/60 bg-primary/5 ring-1 ring-primary/20"
-                            : "border-border/40 bg-background/30 hover:border-border/70 hover:bg-background/50"
-                        }`}
-                      >
-                        <div
-                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                            isSelected
-                              ? "border-primary bg-primary"
-                              : "border-muted-foreground/40"
-                          }`}
-                        >
-                          {isSelected && (
-                            <div className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
-                          )}
-                        </div>
-
-                        <div className="grid gap-1.5 min-w-0">
-                          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                            <span className="flex items-center gap-1">
-                              {icons.map((icon) => (
-                                <Image
-                                  key={icon.src}
-                                  src={icon.src}
-                                  alt={icon.alt}
-                                  width={18}
-                                  height={18}
-                                  className="h-[18px] w-[18px]"
-                                />
-                              ))}
-                            </span>
-                            {label}
-                          </span>
-                          <span className="text-[11px] leading-tight text-muted-foreground">
-                            {description}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
                 </div>
               )}
             </div>
