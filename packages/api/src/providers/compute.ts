@@ -14,6 +14,7 @@ export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
 
 export interface WorkspaceEnvironmentVariables {
   REPO_URL?: string;
+  REPO_BRANCH?: string;
   OPENCODE_CONFIG_BASE64: string;
   OPENCODE_CREDENTIALS_BASE64: string;
   OPENCODE_SERVER_PASSWORD?: string;
@@ -36,6 +37,7 @@ export interface WorkspaceConfig {
   imageProviderMetadata?: ImageProviderMetadata;
   subdomain: string;
   repositoryUrl?: string;
+  repositoryBranch?: string;
   regionIdentifier?: string;
   environmentVariables?: WorkspaceEnvironmentVariables;
 }

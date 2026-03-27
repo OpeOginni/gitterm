@@ -1,6 +1,6 @@
 import z from "zod";
 import { protectedProcedure, router } from "../../index";
-import { getGitHubAppService } from "../../service/github";
+import { GitHubAPIError, getGitHubAppService } from "../../service/github";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and } from "@gitterm/db";
 import { workspaceGitConfig, gitIntegration } from "@gitterm/db/schema/integrations";
@@ -52,7 +52,7 @@ export const githubRouter = router({
       return {
         connected: true,
         installation: {
-          id: installation.id,
+          id: installation.installationId,
           accountLogin: installation.accountLogin,
           accountType: installation.accountType,
           repositorySelection: installation.repositorySelection,
@@ -241,6 +241,127 @@ export const githubRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to list accessible repositories",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
+  /**
+   * Resolve repository metadata for a pasted GitHub URL.
+   */
+  resolveRepository: protectedProcedure
+    .input(
+      z.object({
+        repositoryUrl: z.string().trim().min(1),
+        gitIntegrationId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      const parsed = getGitHubAppService().parseRepoUrl(input.repositoryUrl);
+
+      if (!parsed) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Enter a valid GitHub repository URL",
+        });
+      }
+
+      try {
+        if (!input.gitIntegrationId) {
+          const repository = await getGitHubAppService().getPublicRepository(parsed.owner, parsed.repo);
+
+          return {
+            repository: {
+              owner: repository.owner,
+              repo: repository.repo,
+              fullName: `${repository.owner}/${repository.repo}`,
+              htmlUrl: repository.htmlUrl,
+              defaultBranch: repository.defaultBranch,
+              private: repository.private,
+            },
+          };
+        }
+
+        const [gitIntegrationRecord] = await db
+          .select()
+          .from(gitIntegration)
+          .where(
+            and(
+              eq(gitIntegration.id, input.gitIntegrationId),
+              eq(gitIntegration.userId, userId),
+              eq(gitIntegration.provider, "github"),
+            ),
+          );
+
+        if (!gitIntegrationRecord) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "GitHub integration not found",
+          });
+        }
+
+        const installation = await getGitHubAppService().getUserInstallation(
+          userId,
+          gitIntegrationRecord.providerInstallationId,
+        );
+
+        if (!installation) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "GitHub installation not found",
+          });
+        }
+
+        const repository = await getGitHubAppService().getRepository(
+          installation.installationId,
+          parsed.owner,
+          parsed.repo,
+        );
+
+        return {
+          repository: {
+            owner: repository.owner,
+            repo: repository.repo,
+            fullName: `${repository.owner}/${repository.repo}`,
+            htmlUrl: repository.htmlUrl,
+            defaultBranch: repository.defaultBranch,
+            private: repository.private,
+          },
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
+        if (error instanceof GitHubAPIError && error.statusCode === 404) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: input.gitIntegrationId
+              ? "That repository is not available through the selected integration"
+              : "That repository is not publicly accessible. Select Repository Access for private repos.",
+          });
+        }
+
+        if (error instanceof GitHubAPIError && error.statusCode === 403) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: input.gitIntegrationId
+              ? "This integration cannot access that repository"
+              : "GitHub blocked the public lookup for that repository right now",
+          });
+        }
+
+        logger.error(
+          "Failed to resolve repository",
+          {
+            userId,
+            action: "resolve_repository",
+          },
+          error as Error,
+        );
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to resolve repository",
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }

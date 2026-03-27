@@ -269,10 +269,12 @@ function InstanceCard({
 
   const getRepoName = () => {
     if (!workspace.repositoryUrl) return null;
-    return workspace.repositoryUrl
+    const name = workspace.repositoryUrl
       .replace("https://github.com/", "")
       .replace("https://gitlab.com/", "")
       .replace(".git", "");
+    const branch = workspace.repositoryBranch;
+    return branch ? `${name}:${branch}` : name;
   };
 
   const getRegionInfo = () => {
@@ -665,9 +667,9 @@ function InstanceCard({
             )}
             {workspace.editorAccessEnabled && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                <Terminal className="h-3.5 w-3.5 shrink-0 text-primary/60" />
-                <span className="rounded-md border border-border/60 bg-secondary/40 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  SSH
+                <Monitor className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-xs text-white/30">
+                  Editor access enabled
                 </span>
               </div>
             )}

@@ -166,6 +166,9 @@ export class E2BProvider implements ComputeProvider {
       return;
     }
 
+    const repoBranch =
+      config.repositoryBranch?.trim() || config.environmentVariables?.REPO_BRANCH?.trim();
+
     await sandbox.git
       .clone(this.getRepositoryUrl(config.repositoryUrl), {
         path: repoDir,
@@ -173,12 +176,14 @@ export class E2BProvider implements ComputeProvider {
           ? config.environmentVariables.USER_GITHUB_USERNAME
           : undefined,
         password: config.environmentVariables.GITHUB_APP_TOKEN,
+        branch: repoBranch
       })
       .catch(async (error) => {
         await sandbox.kill().catch(() => undefined);
         console.error("E2B Sandbox Error (git.clone)", error);
         throw error;
       });
+
   }
 
   private async writeOpencodeFiles(sandbox: E2BSandbox, config: WorkspaceConfig): Promise<void> {

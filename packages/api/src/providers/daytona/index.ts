@@ -236,9 +236,11 @@ export class DaytonaProvider implements ComputeProvider {
         ? config.environmentVariables.USER_GITHUB_USERNAME
         : undefined;
       const password = config.environmentVariables.GITHUB_APP_TOKEN;
+      const repoBranch =
+        config.repositoryBranch?.trim() || config.environmentVariables.REPO_BRANCH?.trim();
 
       await provisionLogger.step("clone-repository", () =>
-        sandbox.git.clone(parsedGitRepoUrl, repoDir, undefined, undefined, username, password).catch(
+        sandbox.git.clone(parsedGitRepoUrl, repoDir, repoBranch, undefined, username, password).catch(
           async (err) => {
             await sandbox.delete().catch(() => undefined);
             console.error("Daytona killed sandbox because of err:", err);

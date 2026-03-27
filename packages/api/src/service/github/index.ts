@@ -58,6 +58,17 @@ function isNotFoundError(error: unknown): boolean {
   return false;
 }
 
+function getGitHubErrorStatus(error: unknown): number | undefined {
+  if (error && typeof error === "object" && "status" in error) {
+    const status = (error as { status?: number }).status;
+    if (typeof status === "number") {
+      return status;
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * GitHub App Service
  *
@@ -108,13 +119,14 @@ export class GitHubAppService {
    * @param repositoryUrl - HTTPS or SSH GitHub URL
    * @param options - If provided, use the user's GitHub App integration to check access (for private repos)
    */
-  async checkIfValidRepository(
+   async checkIfValidRepository(
     repositoryUrl: string,
     options?: { userId: string; gitIntegrationId: string },
-  ): Promise<{ valid: boolean; exists: boolean; canClone: boolean }> {
+    branch?: string,
+  ): Promise<{ valid: boolean; exists: boolean; canClone: boolean; branchExists: boolean }> {
     const parsed = this.parseRepoUrl(repositoryUrl);
     if (!parsed) {
-      return { valid: false, exists: false, canClone: false };
+      return { valid: false, exists: false, canClone: false, branchExists: false };
     }
     const { owner, repo } = parsed;
 
@@ -123,12 +135,21 @@ export class GitHubAppService {
       const anonOctokit = new Octokit();
       try {
         await anonOctokit.repos.get({ owner, repo });
-        return { valid: true, exists: true, canClone: true };
+
+        if (branch) {
+          try {
+            await anonOctokit.repos.getBranch({ owner, repo, branch });
+          } catch {
+            return { valid: true, exists: true, canClone: true, branchExists: false };
+          }
+        }
+
+        return { valid: true, exists: true, canClone: true, branchExists: true };
       } catch (e: unknown) {
         logger.warn(`checkIfValidRepository: unauthenticated request failed for ${owner}/${repo}`, {
           action: "check_if_valid_repo",
         });
-        return { valid: true, exists: false, canClone: false };
+        return { valid: true, exists: false, canClone: false, branchExists: false };
         // 404: not found or private — try with user's integration if provided
       }
     }
@@ -146,7 +167,7 @@ export class GitHubAppService {
       .limit(1);
 
     if (!integration) {
-      return { valid: true, exists: false, canClone: false };
+      return { valid: true, exists: false, canClone: false, branchExists: false };
     }
 
     const installation = await this.getUserInstallation(
@@ -155,20 +176,29 @@ export class GitHubAppService {
     );
 
     if (!installation) {
-      return { valid: true, exists: false, canClone: false };
+      return { valid: true, exists: false, canClone: false, branchExists: false };
     }
 
     try {
       const { token } = await this.getUserToServerToken(installation.installationId);
       const userOctokit = new Octokit({ auth: token });
       await userOctokit.repos.get({ owner, repo });
-      return { valid: true, exists: true, canClone: true };
+
+      if (branch) {
+        try {
+          await userOctokit.repos.getBranch({ owner, repo, branch });
+        } catch {
+          return { valid: true, exists: true, canClone: true, branchExists: false };
+        }
+      }
+
+      return { valid: true, exists: true, canClone: true, branchExists: true };
     } catch (e: unknown) {
       if (isNotFoundError(e)) {
-        return { valid: true, exists: false, canClone: false };
+        return { valid: true, exists: false, canClone: false, branchExists: false };
       }
       if (e && typeof e === "object" && "status" in e && (e as { status: number }).status === 403) {
-        return { valid: true, exists: true, canClone: false };
+        return { valid: true, exists: true, canClone: false, branchExists: false };
       }
       logger.error(
         `checkIfValidRepository: auth request failed for ${owner}/${repo}`,
@@ -177,7 +207,7 @@ export class GitHubAppService {
         },
         e as Error,
       );
-      return { valid: true, exists: false, canClone: false };
+      return { valid: true, exists: false, canClone: false, branchExists: false };
     }
   }
 
@@ -409,6 +439,7 @@ export class GitHubAppService {
     cloneUrl: string;
     htmlUrl: string;
     defaultBranch: string;
+    private: boolean;
     isFork: boolean;
     parent?: { owner: string; repo: string };
   }> {
@@ -427,6 +458,7 @@ export class GitHubAppService {
         cloneUrl: data.clone_url,
         htmlUrl: data.html_url,
         defaultBranch: data.default_branch,
+        private: data.private,
         isFork: data.fork,
         parent: data.parent
           ? { owner: data.parent.owner.login, repo: data.parent.name }
@@ -436,7 +468,58 @@ export class GitHubAppService {
       if (error instanceof GitHubInstallationNotFoundError) {
         throw error; // Re-throw for caller to handle cleanup
       }
+
+      const status = getGitHubErrorStatus(error);
+      if (status === 404) {
+        throw new GitHubAPIError("Repository not found", 404);
+      }
+
+      if (status === 403) {
+        throw new GitHubAPIError("Repository access denied", 403);
+      }
+
       logger.error("Failed to get repository", { action: "get_repository" }, error as Error);
+      throw new GitHubAPIError("Failed to get repository information");
+    }
+  }
+
+  /**
+   * Get public repository information without an integration token.
+   */
+  async getPublicRepository(owner: string, repo: string): Promise<{
+    owner: string;
+    repo: string;
+    cloneUrl: string;
+    htmlUrl: string;
+    defaultBranch: string;
+    isFork: boolean;
+    private: boolean;
+  }> {
+    try {
+      const anonOctokit = new Octokit();
+      const { data } = await anonOctokit.repos.get({ owner, repo });
+
+      return {
+        owner: data.owner.login,
+        repo: data.name,
+        cloneUrl: data.clone_url,
+        htmlUrl: data.html_url,
+        defaultBranch: data.default_branch,
+        isFork: data.fork,
+        private: data.private,
+      };
+    } catch (error) {
+      const status = getGitHubErrorStatus(error);
+
+      if (status === 404) {
+        throw new GitHubAPIError("Repository not found", 404);
+      }
+
+      if (status === 403) {
+        throw new GitHubAPIError("Repository access denied", 403);
+      }
+
+      logger.error("Failed to get public repository", { action: "get_public_repository" }, error as Error);
       throw new GitHubAPIError("Failed to get repository information");
     }
   }
@@ -1108,15 +1191,18 @@ export function parseGitHubRepoUrl(url: string): { owner: string; repo: string }
   // Handle various GitHub URL formats:
   // https://github.com/owner/repo
   // https://github.com/owner/repo.git
+  // https://github.com/owner/repo/tree/branch
   // git@github.com:owner/repo.git
-  const cleaned = url.trim();
+  const cleaned = url.trim().replace(/[?#].*$/, "").replace(/\/+$/, "");
 
-  const httpsMatch = cleaned.match(/github\.com\/([^\/]+)\/([^\/\.]+)(\.git)?$/);
+  const httpsMatch = cleaned.match(
+    /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?(?:\/(?:tree|blob)\/.+)?$/i,
+  );
   if (httpsMatch) {
     return { owner: httpsMatch[1]!, repo: httpsMatch[2]! };
   }
 
-  const sshMatch = cleaned.match(/git@github\.com:([^\/]+)\/([^\/\.]+)(\.git)?$/);
+  const sshMatch = cleaned.match(/^git@github\.com:([^\/]+)\/([^\/]+?)(?:\.git)?$/i);
   if (sshMatch) {
     return { owner: sshMatch[1]!, repo: sshMatch[2]! };
   }

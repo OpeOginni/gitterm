@@ -27,6 +27,21 @@ const ROUTING_MODE = env.ROUTING_MODE;
 export class RailwayProvider implements ComputeProvider {
   readonly name = "railway";
 
+  private buildEnvironmentVariables(
+    config: WorkspaceConfig | PersistentWorkspaceConfig,
+  ): Record<string, string | undefined> | undefined {
+    if (!config.environmentVariables && !config.repositoryBranch) {
+      return config.environmentVariables;
+    }
+
+    const repositoryBranch = config.repositoryBranch?.trim();
+
+    return {
+      ...config.environmentVariables,
+      REPO_BRANCH: repositoryBranch || config.environmentVariables?.REPO_BRANCH,
+    };
+  }
+
   async getConfig(): Promise<RailwayConfig> {
     const dbConfig = await getProviderConfigService().getProviderConfigForUse("railway");
     if (!dbConfig) {
@@ -52,6 +67,7 @@ export class RailwayProvider implements ComputeProvider {
     const railwayConfig = await this.getConfig();
     const railway = await this.getClient();
     const { projectId, environmentId, defaultRegion, publicRailwayDomains } = railwayConfig;
+    const environmentVariables = this.buildEnvironmentVariables(config);
 
     if (!projectId) {
       throw new Error("Railway project ID is not configured");
@@ -70,7 +86,7 @@ export class RailwayProvider implements ComputeProvider {
         input: {
           projectId,
           name: config.subdomain,
-          variables: config.environmentVariables,
+          variables: environmentVariables,
         },
       })
       .catch(async (error) => {
@@ -191,6 +207,7 @@ export class RailwayProvider implements ComputeProvider {
     const railwayConfig = await this.getConfig();
     const railway = await this.getClient();
     const { projectId, environmentId, defaultRegion, publicRailwayDomains } = railwayConfig;
+    const environmentVariables = this.buildEnvironmentVariables(config);
 
     if (!projectId) {
       throw new Error("Railway project ID is not configured");
@@ -213,7 +230,7 @@ export class RailwayProvider implements ComputeProvider {
         input: {
           projectId: projectId,
           name: config.subdomain,
-          variables: config.environmentVariables,
+          variables: environmentVariables,
         },
       })
       .catch(async (error) => {

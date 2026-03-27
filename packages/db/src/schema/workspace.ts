@@ -69,6 +69,7 @@ export const workspace = pgTable("workspace", {
     .references(() => cloudProvider.id, { onDelete: "cascade" }),
   regionId: uuid("region_id").references(() => region.id, { onDelete: "cascade" }),
   repositoryUrl: text("repository_url"),
+  repositoryBranch: text("repository_branch"),
   domain: text("domain").notNull(), // Full domain: {uuid}.gitterm.dev or just {uuid} in path mode
   subdomain: text("subdomain"), // The workspace URL identifier (UUID format)
   upstreamUrl: text("upstream_url"), // URL to proxy requests to (cloud container or tunnel endpoint)

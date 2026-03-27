@@ -1,5 +1,5 @@
 {
-  "id": "f81fcf41-bc13-4228-8a7b-b85943fa84e4",
+  "id": "77d1cbfa-b122-4e43-8647-ca57274465f8",
   "prevId": "7760c1e0-508f-4f13-8e87-84fb0d62978c",
   "version": "7",
   "dialect": "postgresql",
@@ -3367,6 +3367,12 @@
         },
         "repository_url": {
           "name": "repository_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "repository_branch": {
+          "name": "repository_branch",
           "type": "text",
           "primaryKey": false,
           "notNull": false

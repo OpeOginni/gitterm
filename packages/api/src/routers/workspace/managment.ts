@@ -87,10 +87,14 @@ function isSubdomainReserved(subdomain: string): boolean {
 }
 
 function normalizeRepoUrl(url: string): string {
-  return url
-    .trim()
-    .replace(/\/+$/, "")
-    .replace(/\.git\/?$/i, "");
+  const trimmed = url.trim().replace(/[?#].*$/, "").replace(/\/+$/, "");
+  const parsed = parseGitHubRepoUrl(trimmed);
+
+  if (parsed) {
+    return `https://github.com/${parsed.owner}/${parsed.repo}`;
+  }
+
+  return trimmed.replace(/\.git\/?$/i, "");
 }
 
 function normalizeEditorTarget(target?: EditorTarget): EditorTarget | undefined {
@@ -880,6 +884,13 @@ export const workspaceRouter = router({
       z.object({
         name: z.string().optional(),
         repo: z.string().optional(), // Optional for local workspaces
+        branch: z
+          .string()
+          .trim()
+          .min(1)
+          .max(255)
+          .regex(/^[A-Za-z0-9._/-]+$/)
+          .optional(),
         subdomain: z
           .union([
             z
@@ -1274,6 +1285,7 @@ export const workspaceRouter = router({
             const repoValidation = await getGitHubAppService().checkIfValidRepository(
               input.repo,
               options,
+              input.branch,
             );
 
             if (!repoValidation.valid)
@@ -1301,6 +1313,12 @@ export const workspaceRouter = router({
               throw new TRPCError({
                 code: "BAD_REQUEST",
                 message: "Can't clone repository, check github integration",
+              });
+
+            if (input.branch && !repoValidation.branchExists)
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Branch "${input.branch}" not found in this repository`,
               });
           }
         }
@@ -1506,6 +1524,7 @@ export const workspaceRouter = router({
 
         const DEFAULT_DOCKER_ENV_VARS: WorkspaceEnvironmentVariables = {
           REPO_URL: input.repo || undefined,
+          REPO_BRANCH: input.branch || undefined,
           OPENCODE_CONFIG_BASE64: agentConfig
             ? Buffer.from(
                 JSON.stringify({
@@ -1549,27 +1568,29 @@ export const workspaceRouter = router({
           `provision-workspace provider=${cloudProviderRecord.name.toLowerCase()} persistent=${input.persistent}`,
           () =>
             input.persistent
-              ? computeProvider.createPersistentWorkspace({
-                  workspaceId,
-                  userId,
-                  imageId: imageRecord.imageId,
-                  imageProviderMetadata: imageRecord.providerMetadata,
-                  subdomain,
-                  repositoryUrl: input.repo,
-                  regionIdentifier: regionRecord?.externalRegionIdentifier,
-                  environmentVariables: DEFAULT_DOCKER_ENV_VARS,
-                  persistent: input.persistent,
-                })
-              : computeProvider.createWorkspace({
-                  workspaceId,
-                  userId,
-                  imageId: imageRecord.imageId,
-                  imageProviderMetadata: imageRecord.providerMetadata,
-                  subdomain,
-                  repositoryUrl: input.repo,
-                  regionIdentifier: regionRecord?.externalRegionIdentifier,
-                  environmentVariables: DEFAULT_DOCKER_ENV_VARS,
-                }),
+                ? computeProvider.createPersistentWorkspace({
+                    workspaceId,
+                    userId,
+                    imageId: imageRecord.imageId,
+                    imageProviderMetadata: imageRecord.providerMetadata,
+                    subdomain,
+                    repositoryUrl: input.repo,
+                    repositoryBranch: input.branch,
+                    regionIdentifier: regionRecord?.externalRegionIdentifier,
+                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                    persistent: input.persistent,
+                  })
+                : computeProvider.createWorkspace({
+                    workspaceId,
+                    userId,
+                    imageId: imageRecord.imageId,
+                    imageProviderMetadata: imageRecord.providerMetadata,
+                    subdomain,
+                    repositoryUrl: input.repo,
+                    repositoryBranch: input.branch,
+                    regionIdentifier: regionRecord?.externalRegionIdentifier,
+                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                  }),
         );
 
         // Save workspace to database
@@ -1585,6 +1606,7 @@ export const workspaceRouter = router({
             persistent: input.persistent,
             regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,
+            repositoryBranch: input.branch ?? null,
             domain,
             subdomain,
             serverOnly: agentTypeRecord.serverOnly,

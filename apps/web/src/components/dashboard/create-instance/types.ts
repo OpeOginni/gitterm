@@ -68,6 +68,15 @@ export interface Branch {
   protected: boolean;
 }
 
+export interface ResolvedGitHubRepository {
+  owner: string;
+  repo: string;
+  fullName: string;
+  private: boolean;
+  defaultBranch: string;
+  htmlUrl: string;
+}
+
 export interface RepoFile {
   path: string;
   name: string;
