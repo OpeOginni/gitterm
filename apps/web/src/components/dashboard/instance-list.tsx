@@ -321,6 +321,10 @@ function InstanceCard({
   ];
 
   const buildEditorUri = (protocol: string, remoteTarget: string, projectPathHint: string) => {
+    if (protocol === "zed") {
+      return `zed://ssh/${remoteTarget}${projectPathHint}`;
+    }
+
     const authority = `ssh-remote+${remoteTarget}`;
     return `${protocol}://vscode-remote/${authority}${projectPathHint}`;
   };

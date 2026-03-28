@@ -53,7 +53,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [userAgentTypeId, setUserAgentTypeId] = useState<string | null>(null);
   const [userCloudProviderId, setUserCloudProviderId] = useState<string | null>(null);
   const [userRegionId, setUserRegionId] = useState<string | null>(null);
-  const [userGitIntegrationId, setuserGitIntegrationId] = useState<string>("none");
+  const [userGitIntegrationId, setuserGitIntegrationId] = useState<string | null>(null);
   const [persistent, setPersistent] = useState(true);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
   const editorTarget = "vscode" as const;
@@ -188,7 +188,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: selectedCloudProviderId,
       regionId: shouldShowRegionSelector ? selectedRegion : undefined,
-      gitIntegrationId: userGitIntegrationId === "none" ? undefined : userGitIntegrationId,
+      gitIntegrationId:
+        selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
       persistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
@@ -204,13 +205,15 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
   const integrations = installationsData?.installations;
   const hasIntegrations = integrations && integrations.length > 0;
+  const selectedGitIntegrationId =
+    userGitIntegrationId ?? integrations?.[0]?.git_integration.id ?? "none";
 
   const selectedGitIntegration = useMemo(() => {
-    if (!integrations || userGitIntegrationId === "none") {
+    if (!integrations || selectedGitIntegrationId === "none") {
       return null;
     }
     const match = integrations.find(
-      (installation) => installation.git_integration.id === userGitIntegrationId,
+      (installation) => installation.git_integration.id === selectedGitIntegrationId,
     );
     if (!match) {
       return null;
@@ -220,7 +223,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       providerInstallationId: match.git_integration.providerInstallationId,
       label: match.git_integration.providerAccountLogin,
     };
-  }, [integrations, userGitIntegrationId]);
+  }, [integrations, selectedGitIntegrationId]);
 
   return (
     <>
@@ -433,7 +436,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             </Link>
           </Label>
           <Select
-            value={userGitIntegrationId}
+            value={selectedGitIntegrationId}
             onValueChange={setuserGitIntegrationId}
             disabled={!hasIntegrations}
           >
