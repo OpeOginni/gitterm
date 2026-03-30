@@ -104,7 +104,6 @@ export default async function IntegrationsPage() {
       <DashboardHeader
         heading="Integrations"
         text="Connect external services to enhance your workspaces."
-        className="mx-auto max-w-4xl"
       />
       <div className="mx-auto max-w-4xl space-y-6 pt-2">
         <Suspense fallback={null}>

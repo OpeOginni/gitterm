@@ -7,10 +7,10 @@ import {
   Check,
   ChevronDown,
   GitBranch,
-  Github,
   Loader2,
   Search,
 } from "lucide-react";
+import { GitHub as Github } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";

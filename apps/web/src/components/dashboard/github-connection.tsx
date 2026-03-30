@@ -8,7 +8,6 @@ import {
   XCircle,
   GitBranch,
   AlertCircle,
-  Github,
   GitFork,
   Lock,
   Zap,
@@ -18,6 +17,7 @@ import {
   Loader2,
   Bot,
 } from "lucide-react";
+import { GitHub as Github } from "@/components/logos/Github";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import env from "@gitterm/env/web";

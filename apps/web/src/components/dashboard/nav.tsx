@@ -14,7 +14,6 @@ import {
   Terminal,
   LayoutDashboard,
   Link2,
-  BarChart3,
   User,
   LogOut,
   ChevronDown,
@@ -35,9 +34,9 @@ type UserPlan = "free" | "pro";
 
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
-  { href: "/dashboard/loops", label: "Agent Loops", icon: Repeat },
+  // { href: "/dashboard/loops", label: "Agent Loops", icon: Repeat },
   { href: "/dashboard/integrations", label: "Integrations", icon: Link2 },
-  { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 export function DashboardNav() {
@@ -118,16 +117,7 @@ export function DashboardNav() {
                       <DropdownMenuSeparator className="bg-white/[0.06]" />
                     </>
                   )}
-                  <DropdownMenuItem
-                    asChild
-                    className="cursor-pointer gap-2 text-white/60 focus:bg-white/[0.04] focus:text-white/80"
-                  >
-                    <Link href={"/dashboard/settings" as Route}>
-                      <Settings className="h-4 w-4" />
-                      Settings
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-white/[0.06]" />
+                  
                   <DropdownMenuItem
                     onClick={() =>
                       authClient.signOut().then(() => {
@@ -191,14 +181,6 @@ export function DashboardNav() {
                   Admin Panel
                 </Link>
               )}
-              <Link
-                href={"/dashboard/settings" as Route}
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/40 transition-colors hover:bg-white/[0.04] hover:text-white/70"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Link>
               <button
                 onClick={() => authClient.signOut().then(() => router.push("/"))}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-400/70 transition-colors hover:bg-red-500/10"

@@ -311,7 +311,10 @@ export const workspaceRouter = router({
               },
             },
           },
-          orderBy: (workspace, { desc }) => [desc(workspace.startedAt)],
+          orderBy: (workspace, { desc }) =>
+            status === "terminated"
+              ? [desc(workspace.terminatedAt), desc(workspace.startedAt)]
+              : [desc(workspace.startedAt)],
           limit,
           offset,
         });

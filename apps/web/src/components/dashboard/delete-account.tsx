@@ -102,15 +102,11 @@ export function DeleteAccountSection() {
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="h-1 w-1 rounded-full bg-destructive/70" />
-                    Connected integrations (GitHub, Railway, etc.)
+                    Connected integrations (GitHub, etc.)
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="h-1 w-1 rounded-full bg-destructive/70" />
                     Usage history and billing data
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1 w-1 rounded-full bg-destructive/70" />
-                    Any feedback you&apos;ve submitted
                   </li>
                 </ul>
               </div>

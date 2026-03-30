@@ -1,4 +1,5 @@
-import { KeyRound, ShieldCheck, FileJson, Github } from "lucide-react";
+import { KeyRound, ShieldCheck, FileJson } from "lucide-react";
+import { GitHub as Github } from "../logos/Github";
 
 const profileItems = [
   {
