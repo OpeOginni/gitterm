@@ -21,7 +21,7 @@ const editorProviders = [
   { src: "/vscode.svg", label: "VS Code" },
   { src: "/cursor.svg", label: "Cursor" },
   { src: "/zed.svg", label: "Zed" },
-  { src: "/neovim.svg", label: "NeoVim" },
+  { src: "/neovim.svg", label: "Neovim" },
 ];
 
 export function HeroSection() {

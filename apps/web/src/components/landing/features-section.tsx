@@ -22,7 +22,7 @@ const features = [
   {
     icon: MonitorSmartphone,
     title: "Editor Access",
-    description: "Connect VS Code, Cursor, Zed, or NeoVim over SSH.",
+    description: "Open in VS Code, Cursor, or Zed. Also works with Neovim and other SSH editors.",
   },
   {
     icon: Save,

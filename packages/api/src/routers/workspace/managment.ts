@@ -53,11 +53,9 @@ import {
 } from "../../service/workspace-route-access";
 import {
   buildProjectPathHint,
-  EDITOR_TARGETS,
   normalizeProviderEditorAccessSupport,
   pickWorkspaceImage,
   WORKSPACE_PROFILES,
-  type EditorTarget,
   type WorkspaceProfile,
 } from "../../providers/editor-access";
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
@@ -95,14 +93,6 @@ function normalizeRepoUrl(url: string): string {
   }
 
   return trimmed.replace(/\.git\/?$/i, "");
-}
-
-function normalizeEditorTarget(target?: EditorTarget): EditorTarget | undefined {
-  if (!target) {
-    return undefined;
-  }
-
-  return EDITOR_TARGETS.includes(target) ? target : undefined;
 }
 
 export const workspaceRouter = router({
@@ -457,7 +447,6 @@ export const workspaceRouter = router({
         return {
           success: true,
           access,
-          editorTarget: workspaceRecord.editorTarget,
           workspaceProfile: workspaceRecord.workspaceProfile,
         };
       } catch (error) {
@@ -907,7 +896,6 @@ export const workspaceRouter = router({
         gitIntegrationId: z.string().optional(),
         persistent: z.boolean(),
         workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
-        editorTarget: z.enum(EDITOR_TARGETS).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -990,20 +978,12 @@ export const workspaceRouter = router({
         // Determine if this is a local workspace
         const isLocal = cloudProviderRecord.name.toLowerCase() === "local";
         const workspaceProfile = (input.workspaceProfile ?? "standard") as WorkspaceProfile;
-        const editorTarget = normalizeEditorTarget(input.editorTarget);
         const editorAccessEnabled = workspaceProfile === "ssh-enabled";
         const providerEditorSupport = normalizeProviderEditorAccessSupport(
           cloudProviderRecord.editorAccessSupport,
         );
 
         if (editorAccessEnabled) {
-          if (!editorTarget) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Select at least one editor target when enabling editor access.",
-            });
-          }
-
           const requiresUserSshKey = cloudProviderRecord.name.toLowerCase() !== "daytona";
           if (requiresUserSshKey && !fetchedUser.sshPublicKey) {
             throw new TRPCError({
@@ -1546,7 +1526,6 @@ export const workspaceRouter = router({
           WORKSPACE_API_URL: WORKSPACE_API_URL,
           WORKSPACE_PROFILE: workspaceProfile,
           EDITOR_ACCESS_ENABLED: editorAccessEnabled ? "true" : "false",
-          EDITOR_TARGET: editorTarget,
           USER_SSH_PUBLIC_KEY:
             editorAccessEnabled && cloudProviderRecord.name.toLowerCase() !== "daytona"
               ? normalizeSshPublicKey(fetchedUser.sshPublicKey ?? "")
@@ -1612,7 +1591,7 @@ export const workspaceRouter = router({
             serverOnly: agentTypeRecord.serverOnly,
             workspaceProfile,
             editorAccessEnabled,
-            editorTarget: editorTarget ?? null,
+            editorTarget: null,
             editorConnection: null,
             serverPassword: encryptedServerPassword ?? null,
             upstreamUrl: workspaceInfo.upstreamUrl,

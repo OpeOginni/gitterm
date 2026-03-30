@@ -56,7 +56,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string | null>(null);
   const [persistent, setPersistent] = useState(true);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
-  const editorTarget = "vscode" as const;
 
   // Data fetching
   const { data: agentTypesData, isLoading: isLoadingAgentTypes } = useQuery(
@@ -193,7 +192,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       persistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
-      editorTarget: workspaceProfile === "ssh-enabled" ? editorTarget : undefined,
     });
   };
 
@@ -495,7 +493,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               {canEnableEditorAccess
                 ? selectedCloudProvider?.name.toLowerCase() === "e2b"
                   ? "Connect your editor via SSH. Requires websocat locally."
-                  : "Connect VS Code, Cursor, Zed or any SSH editor."
+                  : "Open in VS Code, Cursor, or Zed. Also works with Neovim and other SSH editors."
                 : !selectedCloudProvider?.editorAccessSupport?.supported
                   ? "Not supported by this provider."
                   : !selectedAgent?.serverOnly

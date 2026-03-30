@@ -56,7 +56,7 @@ export function SshKeySection() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          We store only your public key. Use the same key you already use locally with VS Code Remote SSH or NeoVim.
+          We store only your public key. Use the same key you already use locally with VS Code Remote SSH or Neovim.
         </p>
 
         <div className="flex flex-col gap-2 sm:flex-row">

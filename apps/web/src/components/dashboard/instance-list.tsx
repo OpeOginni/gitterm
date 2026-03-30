@@ -424,10 +424,10 @@ function InstanceCard({
           </div>
         </div>
 
-        {/* Copy connection string for NeoVim / other editors */}
+        {/* Copy connection string for Neovim / other editors */}
         <div className="grid gap-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Or copy for NeoVim / other editors
+            Copy SSH target for Neovim / other editors
           </p>
           <div
             className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
