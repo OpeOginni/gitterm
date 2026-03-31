@@ -105,8 +105,8 @@ export const shouldNotifyDiscord = (): boolean => features.discordNotifications;
 /**
  * Available user plans
  *
- * - free: Basic access, 10 sandbox runs/month
- * - pro: Full access with 100 runs/month and premium features
+ * - free: Basic access with limited cloud runtime and workspace count
+ * - pro: Expanded workspace limits with unlimited cloud runtime
  */
 export type UserPlan = "free" | "pro";
 
@@ -120,6 +120,14 @@ export type UserPlan = "free" | "pro";
 export const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
   free: 10,
   pro: 100,
+};
+
+/**
+ * Maximum number of workspaces per plan
+ */
+const WORKSPACE_LIMITS: Record<UserPlan, number> = {
+  free: 5,
+  pro: 15,
 };
 
 /**
@@ -188,6 +196,15 @@ export const hasUnlimitedCloudMinutes = (plan: UserPlan | string): boolean => {
 };
 
 /**
+ * Get workspace limit for a plan
+ * In self-hosted mode, returns Infinity (unlimited)
+ */
+export const getWorkspaceLimit = (plan: UserPlan): number => {
+  if (isSelfHosted()) return Infinity;
+  return WORKSPACE_LIMITS[plan] ?? WORKSPACE_LIMITS.free;
+};
+
+/**
  * Get plan display info for UI
  */
 export const getPlanInfo = (
@@ -200,11 +217,11 @@ export const getPlanInfo = (
   const planInfo: Record<UserPlan, ReturnType<typeof getPlanInfo>> = {
     free: {
       name: "Free",
-      description: "10 sandbox runs/month to try agentic coding",
+      description: "60 minutes/day with up to 5 workspaces",
     },
     pro: {
       name: "Pro",
-      description: "100 runs/month with premium features",
+      description: "Unlimited cloud runtime with up to 15 workspaces",
       badge: "popular",
     },
   };

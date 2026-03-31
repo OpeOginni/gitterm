@@ -3,7 +3,7 @@
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
-import { Check, Terminal, ExternalLink, ArrowRight, Loader2, Package } from "lucide-react";
+import { Check, Terminal, ExternalLink, ArrowRight, Loader2, Globe } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
@@ -23,27 +23,17 @@ interface PlanTier {
   actionLabel: string;
 }
 
-interface RunPack {
-  runs: number;
-  price: number;
-  slug: "run_pack_50" | "run_pack_100";
-  pricePerRun: string;
-}
-
 const PLAN_TIERS: PlanTier[] = [
   {
     name: "Free",
     price: 0,
-    description: "Get started with cloud workspaces and agentic coding for free",
+    description: "Perfect for exploring agentic coding and occasional cloud development",
     features: [
       "60 minutes/day cloud runtime",
+      "5 workspaces",
       "Auto-generated subdomains",
-      "Persistent storage",
-      "Git operations on cloud workspaces",
-      "10 sandbox runs / month",
-      "Max 40 min per run",
-      "Bring-your-own inference",
-      "Community support and updates",
+      "Persistent storage & Git operations",
+      "Bring-your-own API keys",
     ],
     actionLabel: "Get Started",
   },
@@ -51,44 +41,31 @@ const PLAN_TIERS: PlanTier[] = [
     name: "Pro",
     slug: "pro",
     price: 20,
-    description: "Full-featured cloud development and agentic coding platform",
+    description: "Unlimited cloud time, 3x more workspaces, and professional features",
     features: [
-      "Unlimited loop projects and cloud workspaces",
-      "Max 40 min per run",
-      "Built for professional workflows",
+      "Unlimited daily cloud runtime",
+      "15 workspaces (3x more)",
+      "Custom subdomains for branding",
+      "Persistent storage & Git operations",
+      "Bring-your-own API keys",
     ],
     popular: true,
     actionLabel: "Go Pro",
   },
   {
     name: "Self-Hosted",
-    description: "Full control on your own infrastructure",
+    description: "Full control with unlimited everything on your own infrastructure",
     features: [
-      "Deploy on Railway, AWS, or your own servers",
-      "All features unlocked",
-      "No usage limits",
+      "Unlimited cloud runtime & workspaces",
+      "Deploy on Railway, AWS, or bare metal",
+      "All Pro features unlocked",
       "Bring your own cloud providers",
-      "Complete data ownership",
-      "Community-driven updates",
+      "Complete data ownership & privacy",
+      "Community-driven open source",
     ],
     exclusive: true,
     isSelfHost: true,
     actionLabel: "Deploy on Railway",
-  },
-];
-
-const RUN_PACKS: RunPack[] = [
-  {
-    runs: 50,
-    price: 15,
-    slug: "run_pack_50",
-    pricePerRun: "$0.30",
-  },
-  {
-    runs: 100,
-    price: 25,
-    slug: "run_pack_100",
-    pricePerRun: "$0.25",
   },
 ];
 
@@ -225,72 +202,11 @@ function PricingCard({
   );
 }
 
-/* ─── Run pack card ────────────────────────────────────────── */
-
-function RunPackCard({
-  pack,
-  onPurchase,
-  isLoading,
-  loadingPack,
-}: {
-  pack: RunPack;
-  onPurchase: (slug: "run_pack_50" | "run_pack_100") => void;
-  isLoading: boolean;
-  loadingPack?: string | null;
-}) {
-  const isThisPackLoading = isLoading && loadingPack === pack.slug;
-
-  return (
-    <div className="flex w-full max-w-[280px] flex-col justify-between rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] p-6">
-      <div>
-        <div className="mb-4 flex items-center gap-2">
-          <Package className="h-4 w-4 text-primary" />
-          <span className="font-mono text-xs uppercase tracking-[0.2em] text-white/40">
-            {pack.runs} Runs
-          </span>
-        </div>
-        <div className="mb-1 flex items-baseline gap-1.5">
-          <span className="text-3xl font-bold text-white">${pack.price}</span>
-          <span className="text-xs text-white/30">({pack.pricePerRun}/run)</span>
-        </div>
-        <p className="mt-3 text-sm leading-relaxed text-white/40">
-          One-time purchase. Runs never expire.
-        </p>
-      </div>
-      <div className="mt-6">
-        <button
-          onClick={() => onPurchase(pack.slug)}
-          disabled={isLoading}
-          className={cn(
-            "inline-flex w-full cursor-pointer items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm font-medium text-white/70 transition-colors",
-            "hover:border-white/20 hover:text-white",
-            "focus:outline-none focus:ring-2 focus:ring-gold/50 focus:ring-offset-2 focus:ring-offset-[#09090b]",
-            "disabled:cursor-not-allowed disabled:opacity-70",
-          )}
-        >
-          {isThisPackLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            <>
-              Buy {pack.runs} Runs
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* ─── Page content ─────────────────────────────────────────── */
 
 function PricingPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<"pro" | null>(null);
-  const [loadingPack, setLoadingPack] = useState<string | null>(null);
   const { data: session } = authClient.useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -353,30 +269,6 @@ function PricingPageContent() {
     }
   };
 
-  const handleRunPackPurchase = async (slug: "run_pack_50" | "run_pack_100") => {
-    if (!isBillingEnabled) {
-      window.location.href = "/dashboard";
-      return;
-    }
-
-    if (!session?.user) {
-      const redirectUrl = `/pricing?pack=${slug}`;
-      router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
-      return;
-    }
-
-    setIsLoading(true);
-    setLoadingPack(slug);
-    try {
-      await initiateCheckout(slug);
-    } catch (error) {
-      console.error("Run pack purchase failed:", error);
-    } finally {
-      setIsLoading(false);
-      setLoadingPack(null);
-    }
-  };
-
   return (
     <main className="min-h-screen bg-[#09090b] text-white dark landing-grid">
       <LandingHeader />
@@ -408,6 +300,42 @@ function PricingPageContent() {
                 loadingPlan={loadingPlan}
               />
             ))}
+          </div>
+
+          {/* Why upgrade */}
+          <div className="mt-20 border-t border-white/[0.06] pt-16">
+            <h2 className="mb-10 text-center text-2xl font-bold text-white">
+              Why upgrade to Pro?
+            </h2>
+            <div className="grid gap-6 sm:grid-cols-3">
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <span className="font-mono text-lg text-primary">3x</span>
+                </div>
+                <h3 className="mb-2 font-medium text-white">More Workspaces</h3>
+                <p className="text-sm text-white/40">
+                  15 workspaces vs 5. Keep more projects active and organized without deleting old work.
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <Terminal className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="mb-2 font-medium text-white">Unlimited Cloud Time</h3>
+                <p className="text-sm text-white/40">
+                  No more 60-minute daily limits. Work all day in your workspaces without interruptions.
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <Globe className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="mb-2 font-medium text-white">Custom Subdomains</h3>
+                <p className="text-sm text-white/40">
+                  Brand your workspaces with custom URLs. <code>yourname.gitterm.dev</code> looks professional.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Questions */}

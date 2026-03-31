@@ -39,7 +39,7 @@ import {
   decryptWorkspacePassword,
 } from "../../utils/workspace-password";
 import { getWorkspaceDomain } from "../../utils/routing";
-import { canUseCustomCloudSubdomain, type UserPlan } from "../../config/features";
+import { canUseCustomCloudSubdomain, getWorkspaceLimit, type UserPlan } from "../../config/features";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-credentials";
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
@@ -1029,11 +1029,17 @@ export const workspaceRouter = router({
             ),
           );
 
-        if (fetchedUser.email !== "brightoginni123@gmail.com" && runningWorkspaces.length >= 5) {
+        // Check workspace limit based on plan
+        const userPlanForLimit = (fetchedUser.plan || "free") as UserPlan;
+        const workspaceLimit = getWorkspaceLimit(userPlanForLimit);
+        
+        if (runningWorkspaces.length >= workspaceLimit) {
+          const isFree = userPlanForLimit === "free";
           throw new TRPCError({
             code: "FORBIDDEN",
-            message:
-              "You have reached the maximum number of workspaces. Please upgrade to a paid plan or delete some workspaces.",
+            message: isFree
+              ? "You've reached the Free plan limit of 5 workspaces. Upgrade to Pro for 15 workspaces."
+              : "You've reached your workspace limit. Delete some workspaces to create new ones.",
           });
         }
 

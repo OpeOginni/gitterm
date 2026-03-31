@@ -38,6 +38,12 @@ const limits = [
     icon: Clock,
   },
   {
+    label: "Workspaces",
+    free: "5 max",
+    pro: "15 max",
+    icon: Settings,
+  },
+  {
     label: "Custom subdomains",
     free: false,
     pro: true,
