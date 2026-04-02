@@ -6,14 +6,7 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  ArrowUpRight,
-  Key,
-  KeyRound,
-  Loader2,
-  Plus,
-  Sparkles,
-} from "lucide-react";
+import { ArrowUpRight, Key, KeyRound, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,7 +92,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
 
   const shouldShowRegionSelector =
-    (selectedCloudProvider?.supportsRegions && selectedCloudProvider?.allowUserRegionSelection) ||
+    !!selectedCloudProvider?.supportsRegions &&
+    !!selectedCloudProvider?.allowUserRegionSelection &&
     availableRegions.length > 0;
 
   const availableAgents = useMemo((): AgentType[] => {
@@ -187,8 +181,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: selectedCloudProviderId,
       regionId: shouldShowRegionSelector ? selectedRegion : undefined,
-      gitIntegrationId:
-        selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
+      gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
       persistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
@@ -238,20 +231,14 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
         {/* ── 2. Subdomain ── */}
         <div className="grid gap-1.5">
-          <Label
-            htmlFor="cloud-subdomain"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Subdomain{" "}
-            <span className="font-normal text-muted-foreground/50">(optional)</span>
+          <Label htmlFor="cloud-subdomain" className="text-xs font-medium text-muted-foreground">
+            Subdomain <span className="font-normal text-muted-foreground/50">(optional)</span>
           </Label>
           <Input
             id="cloud-subdomain"
             placeholder="my-workspace"
             value={subdomain}
-            onChange={(e) =>
-              setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))
-            }
+            onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
             disabled={!subdomainPermissions?.canUseCustomCloudSubdomain}
             className="h-9"
           />
@@ -375,9 +362,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 >
                   <SelectTrigger className="h-9 min-w-0 [&>span]:truncate">
                     <SelectValue
-                      placeholder={
-                        availableRegions.length > 0 ? "Region" : "No regions"
-                      }
+                      placeholder={availableRegions.length > 0 ? "Region" : "No regions"}
                     />
                   </SelectTrigger>
                   <SelectContent>
@@ -398,8 +383,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Key className="h-3.5 w-3.5" />
             <span>
-              <span className="font-medium text-foreground">{activeCredentialCount}</span>{" "}
-              API {activeCredentialCount === 1 ? "credential" : "credentials"} configured
+              <span className="font-medium text-foreground">{activeCredentialCount}</span> API{" "}
+              {activeCredentialCount === 1 ? "credential" : "credentials"} configured
             </span>
           </div>
           <Link
@@ -420,12 +405,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   GitHub Connection
                 </span>
               </TooltipTrigger>
-              <TooltipContent
-                side="top"
-                align="start"
-                sideOffset={6}
-                className="max-w-xs text-xs"
-              >
+              <TooltipContent side="top" align="start" sideOffset={6} className="max-w-xs text-xs">
                 Connect a GitHub account to enable commit, push, fork and private repo access.
               </TooltipContent>
             </Tooltip>
@@ -439,9 +419,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             disabled={!hasIntegrations}
           >
             <SelectTrigger className="h-9">
-              <SelectValue
-                placeholder={hasIntegrations ? "Select account" : "No integrations"}
-              />
+              <SelectValue placeholder={hasIntegrations ? "Select account" : "No integrations"} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None (public repos only)</SelectItem>
@@ -529,8 +507,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             <span className="text-muted-foreground/50"> &mdash; keep files between sessions</span>
           </Label>
         </div>
-
-
       </div>
 
       <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
