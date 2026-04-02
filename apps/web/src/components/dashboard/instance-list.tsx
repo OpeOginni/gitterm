@@ -359,8 +359,8 @@ function InstanceCard({
         {needsProxySetup && (
           <>
             <div className="rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5 text-xs text-muted-foreground">
-              This provider requires a local proxy. Install <code>websocat</code> and add the
-              SSH config snippet to <code>~/.ssh/config</code> before connecting.
+              This provider requires a local proxy. Install <code>websocat</code> and add the SSH
+              config snippet to <code>~/.ssh/config</code> before connecting.
             </div>
             <div className="grid gap-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -446,7 +446,8 @@ function InstanceCard({
           Project path: <code className="text-foreground/80">{access.projectPathHint}</code>
           {access.expiresAt && (
             <span className="ml-2">
-              &middot; Expires {formatDistanceToNow(new Date(access.expiresAt), { addSuffix: true })}
+              &middot; Expires{" "}
+              {formatDistanceToNow(new Date(access.expiresAt), { addSuffix: true })}
             </span>
           )}
         </p>
@@ -470,12 +471,8 @@ function InstanceCard({
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              Editor Connect
-            </DialogTitle>
-            <DialogDescription>
-              Connect from your preferred editor over SSH.
-            </DialogDescription>
+            <DialogTitle className="flex items-center gap-2">Editor Connect</DialogTitle>
+            <DialogDescription>Connect from your preferred editor over SSH.</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-1">
@@ -672,9 +669,7 @@ function InstanceCard({
             {workspace.editorAccessEnabled && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <Monitor className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-xs text-white/30">
-                  Editor access enabled
-                </span>
+                <span className="text-xs text-white/30">Editor access enabled</span>
               </div>
             )}
             {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||

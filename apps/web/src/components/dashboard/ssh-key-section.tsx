@@ -39,7 +39,8 @@ export function SshKeySection() {
           SSH Public Key
         </CardTitle>
         <CardDescription>
-          Used for editor access on Railway and E2B workspaces. Daytona continues to use its native short-lived SSH token flow.
+          Used for editor access on Railway and E2B workspaces. Daytona continues to use its native
+          short-lived SSH token flow.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -56,7 +57,8 @@ export function SshKeySection() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          We store only your public key. Use the same key you already use locally with VS Code Remote SSH or Neovim.
+          We store only your public key. Use the same key you already use locally with VS Code
+          Remote SSH or Neovim.
         </p>
 
         <div className="flex flex-col gap-2 sm:flex-row">

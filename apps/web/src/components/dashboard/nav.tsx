@@ -117,7 +117,7 @@ export function DashboardNav() {
                       <DropdownMenuSeparator className="bg-white/[0.06]" />
                     </>
                   )}
-                  
+
                   <DropdownMenuItem
                     onClick={() =>
                       authClient.signOut().then(() => {

@@ -13,7 +13,7 @@ interface WorkspaceOption {
   type: WorkspaceType;
   label: string;
   description: string;
-  disabled: boolean
+  disabled: boolean;
 }
 
 const workspaceOptions: WorkspaceOption[] = [
@@ -71,10 +71,14 @@ export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelector
                 />
               )}
               <div className="text-left">
-                <p className={`text-sm font-medium ${option.disabled ? "text-white/20" : isSelected ? "text-white" : "text-white/60"}`}>
+                <p
+                  className={`text-sm font-medium ${option.disabled ? "text-white/20" : isSelected ? "text-white" : "text-white/60"}`}
+                >
                   {option.label}
                 </p>
-                <p className={`text-xs ${option.disabled ? "text-white/15" : "text-white/30"}`}>{option.description}</p>
+                <p className={`text-xs ${option.disabled ? "text-white/15" : "text-white/30"}`}>
+                  {option.description}
+                </p>
               </div>
             </button>
           );

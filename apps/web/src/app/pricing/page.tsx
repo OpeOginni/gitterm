@@ -304,9 +304,7 @@ function PricingPageContent() {
 
           {/* Why upgrade */}
           <div className="mt-20 border-t border-white/[0.06] pt-16">
-            <h2 className="mb-10 text-center text-2xl font-bold text-white">
-              Why upgrade to Pro?
-            </h2>
+            <h2 className="mb-10 text-center text-2xl font-bold text-white">Why upgrade to Pro?</h2>
             <div className="grid gap-6 sm:grid-cols-3">
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -314,7 +312,8 @@ function PricingPageContent() {
                 </div>
                 <h3 className="mb-2 font-medium text-white">More Workspaces</h3>
                 <p className="text-sm text-white/40">
-                  15 workspaces vs 5. Keep more projects active and organized without deleting old work.
+                  15 workspaces vs 5. Keep more projects active and organized without deleting old
+                  work.
                 </p>
               </div>
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
@@ -323,7 +322,8 @@ function PricingPageContent() {
                 </div>
                 <h3 className="mb-2 font-medium text-white">Unlimited Cloud Time</h3>
                 <p className="text-sm text-white/40">
-                  No more 60-minute daily limits. Work all day in your workspaces without interruptions.
+                  No more 60-minute daily limits. Work all day in your workspaces without
+                  interruptions.
                 </p>
               </div>
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
@@ -332,7 +332,8 @@ function PricingPageContent() {
                 </div>
                 <h3 className="mb-2 font-medium text-white">Custom Subdomains</h3>
                 <p className="text-sm text-white/40">
-                  Brand your workspaces with custom URLs. <code>yourname.gitterm.dev</code> looks professional.
+                  Brand your workspaces with custom URLs. <code>yourname.gitterm.dev</code> looks
+                  professional.
                 </p>
               </div>
             </div>

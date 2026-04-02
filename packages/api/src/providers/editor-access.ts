@@ -6,11 +6,7 @@ export type WorkspaceProfile = (typeof WORKSPACE_PROFILES)[number];
 export const EDITOR_TARGETS = ["vscode", "neovim"] as const;
 export type EditorTarget = (typeof EDITOR_TARGETS)[number];
 
-export const EDITOR_TRANSPORT_KINDS = [
-  "direct-ssh",
-  "proxycommand-ssh",
-  "managed-ssh",
-] as const;
+export const EDITOR_TRANSPORT_KINDS = ["direct-ssh", "proxycommand-ssh", "managed-ssh"] as const;
 export type EditorTransportKind = (typeof EDITOR_TRANSPORT_KINDS)[number];
 
 export interface ProviderEditorAccessSupport {
@@ -69,15 +65,16 @@ export function normalizeProviderEditorAccessSupport(
     supported: value?.supported === true,
     transportKind: value?.transportKind,
     label: value?.label ?? "Not supported",
-    description:
-      value?.description ?? "This provider does not currently expose editor SSH access.",
+    description: value?.description ?? "This provider does not currently expose editor SSH access.",
     requiresLocalBinaries: value?.requiresLocalBinaries,
   };
 }
 
 export function isEditorReadyImageName(name: string, imageId?: string): boolean {
   const haystack = `${name} ${imageId ?? ""}`.toLowerCase();
-  return haystack.includes("with-ssh") || haystack.includes("ssh-enabled") || haystack.includes("-ssh");
+  return (
+    haystack.includes("with-ssh") || haystack.includes("ssh-enabled") || haystack.includes("-ssh")
+  );
 }
 
 export function pickWorkspaceImage<T extends { name: string; imageId: string }>(
@@ -154,6 +151,10 @@ export function buildSshConnectionString(options: {
 }
 
 export function buildProjectPathHint(repositoryUrl?: string | null): string {
-  const repoName = repositoryUrl?.replace(/\/+$/, "").split("/").pop()?.replace(/\.git$/i, "");
+  const repoName = repositoryUrl
+    ?.replace(/\/+$/, "")
+    .split("/")
+    .pop()
+    ?.replace(/\.git$/i, "");
   return repoName ? `/workspace/${repoName}` : "/workspace";
 }

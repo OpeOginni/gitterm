@@ -2,21 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  AlertCircle,
-  Check,
-  ChevronDown,
-  GitBranch,
-  Loader2,
-  Search,
-} from "lucide-react";
+import { AlertCircle, Check, ChevronDown, GitBranch, Loader2, Search } from "lucide-react";
 import { GitHub as Github } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Branch, ResolvedGitHubRepository } from "./types";
 import { parseGitHubRepositoryInput } from "./github-repository-utils";
 
@@ -242,7 +234,7 @@ export function GitHubRepositoryBranchField({
             </div>
           ) : canPickBranch ? (
             /* integration resolved -- show picker trigger */
-            <div className="relative">
+            <div>
               <button
                 type="button"
                 onClick={() => setIsBranchListOpen((open) => !open)}
@@ -269,8 +261,8 @@ export function GitHubRepositoryBranchField({
                 />
               </button>
 
-              {isBranchListOpen ? (
-                <div className="absolute inset-x-0 top-full z-20 rounded-b-md border border-t-0 border-border/60 bg-popover shadow-lg">
+              {isBranchListOpen && (
+                <div className="rounded-b-md border border-t-0 border-border/60 bg-popover">
                   <div className="border-b border-border/30 p-2">
                     <div className="relative">
                       <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -285,45 +277,43 @@ export function GitHubRepositoryBranchField({
                     </div>
                   </div>
 
-                  <ScrollArea className="max-h-52">
+                  <div className="max-h-52 overflow-y-auto overscroll-contain p-1">
                     {branchesQuery.isLoading ? (
                       <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Loading branches...
                       </div>
                     ) : filteredBranches.length > 0 ? (
-                      <div className="p-1">
-                        {filteredBranches.map((item) => {
-                          const isSelected = item.name === activeBranch;
-                          return (
-                            <button
-                              key={item.name}
-                              type="button"
-                              onClick={() => handleBranchSelect(item.name)}
-                              className={cn(
-                                "flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-secondary/60",
-                                isSelected && "bg-secondary/50",
-                              )}
-                            >
-                              <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              <span className="min-w-0 flex-1 truncate text-left font-medium">
-                                {item.name}
-                              </span>
-                              {isSelected ? (
-                                <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
+                      filteredBranches.map((item) => {
+                        const isSelected = item.name === activeBranch;
+                        return (
+                          <button
+                            key={item.name}
+                            type="button"
+                            onClick={() => handleBranchSelect(item.name)}
+                            className={cn(
+                              "flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-secondary/60",
+                              isSelected && "bg-secondary/50",
+                            )}
+                          >
+                            <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 flex-1 truncate text-left font-medium">
+                              {item.name}
+                            </span>
+                            {isSelected ? (
+                              <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+                            ) : null}
+                          </button>
+                        );
+                      })
                     ) : (
                       <p className="py-6 text-center text-sm text-muted-foreground">
                         {branchQuery ? `No branches match "${branchQuery}"` : "No branches found"}
                       </p>
                     )}
-                  </ScrollArea>
+                  </div>
                 </div>
-              ) : null}
+              )}
             </div>
           ) : (
             /* public mode -- simple text input */

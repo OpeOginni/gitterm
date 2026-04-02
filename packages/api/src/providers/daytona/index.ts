@@ -128,7 +128,9 @@ export class DaytonaProvider implements ComputeProvider {
   }
 
   private getSnapshotName(config: WorkspaceConfig): string | undefined {
-    const metadata = config.imageProviderMetadata?.daytona as DaytonaImageProviderMetadata | undefined;
+    const metadata = config.imageProviderMetadata?.daytona as
+      | DaytonaImageProviderMetadata
+      | undefined;
     return metadata?.snapshot;
   }
 
@@ -214,16 +216,11 @@ export class DaytonaProvider implements ComputeProvider {
       snapshotName ? `create-sandbox snapshot=${snapshotName}` : "create-sandbox default-snapshot",
       () =>
         daytona.create({
-          // ...(snapshotName ? { snapshot: snapshotName } : {}),
-          image: Image.base("daytonaio/sandbox:0.6.0"),
+          ...(snapshotName ? { snapshot: snapshotName } : {}),
           labels: this.getWorkspaceLabels(config, persistent),
           envVars: {
             OPENCODE_SERVER_PASSWORD: config.environmentVariables?.OPENCODE_SERVER_PASSWORD ?? "",
           },
-          resources: {
-            cpu: this.isEditorAccessWorkspace(config) ? 4 : 2,
-            memory: 4
-          }
         }),
     );
 
@@ -240,13 +237,13 @@ export class DaytonaProvider implements ComputeProvider {
         config.repositoryBranch?.trim() || config.environmentVariables.REPO_BRANCH?.trim();
 
       await provisionLogger.step("clone-repository", () =>
-        sandbox.git.clone(parsedGitRepoUrl, repoDir, repoBranch, undefined, username, password).catch(
-          async (err) => {
+        sandbox.git
+          .clone(parsedGitRepoUrl, repoDir, repoBranch, undefined, username, password)
+          .catch(async (err) => {
             await sandbox.delete().catch(() => undefined);
             console.error("Daytona killed sandbox because of err:", err);
             throw err;
-          },
-        ),
+          }),
       );
     }
 

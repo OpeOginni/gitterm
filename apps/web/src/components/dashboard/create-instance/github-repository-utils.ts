@@ -14,9 +14,7 @@ function sanitizePathPart(value: string | undefined): string | undefined {
   return decodeURIComponent(value).trim();
 }
 
-export function parseGitHubRepositoryInput(
-  input: string,
-): ParsedGitHubRepositoryInput | null {
+export function parseGitHubRepositoryInput(input: string): ParsedGitHubRepositoryInput | null {
   const trimmedInput = input.trim();
   if (!trimmedInput) {
     return null;

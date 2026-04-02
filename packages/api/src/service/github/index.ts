@@ -119,7 +119,7 @@ export class GitHubAppService {
    * @param repositoryUrl - HTTPS or SSH GitHub URL
    * @param options - If provided, use the user's GitHub App integration to check access (for private repos)
    */
-   async checkIfValidRepository(
+  async checkIfValidRepository(
     repositoryUrl: string,
     options?: { userId: string; gitIntegrationId: string },
     branch?: string,
@@ -486,7 +486,10 @@ export class GitHubAppService {
   /**
    * Get public repository information without an integration token.
    */
-  async getPublicRepository(owner: string, repo: string): Promise<{
+  async getPublicRepository(
+    owner: string,
+    repo: string,
+  ): Promise<{
     owner: string;
     repo: string;
     cloneUrl: string;
@@ -519,7 +522,11 @@ export class GitHubAppService {
         throw new GitHubAPIError("Repository access denied", 403);
       }
 
-      logger.error("Failed to get public repository", { action: "get_public_repository" }, error as Error);
+      logger.error(
+        "Failed to get public repository",
+        { action: "get_public_repository" },
+        error as Error,
+      );
       throw new GitHubAPIError("Failed to get repository information");
     }
   }
@@ -1193,7 +1200,10 @@ export function parseGitHubRepoUrl(url: string): { owner: string; repo: string }
   // https://github.com/owner/repo.git
   // https://github.com/owner/repo/tree/branch
   // git@github.com:owner/repo.git
-  const cleaned = url.trim().replace(/[?#].*$/, "").replace(/\/+$/, "");
+  const cleaned = url
+    .trim()
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "");
 
   const httpsMatch = cleaned.match(
     /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?(?:\/(?:tree|blob)\/.+)?$/i,

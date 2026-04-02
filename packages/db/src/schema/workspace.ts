@@ -43,7 +43,10 @@ export const workspaceProfileEnum = pgEnum("workspace_profile", [
 
 export const WORKSPACE_EDITOR_TARGETS = ["vscode", "neovim"] as const;
 export type WorkspaceEditorTarget = (typeof WORKSPACE_EDITOR_TARGETS)[number];
-export const workspaceEditorTargetEnum = pgEnum("workspace_editor_target", WORKSPACE_EDITOR_TARGETS);
+export const workspaceEditorTargetEnum = pgEnum(
+  "workspace_editor_target",
+  WORKSPACE_EDITOR_TARGETS,
+);
 export interface WorkspaceEditorConnection {
   transportKind: "direct-ssh" | "proxycommand-ssh" | "managed-ssh";
   host: string;

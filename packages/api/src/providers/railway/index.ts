@@ -570,14 +570,14 @@ export class RailwayProvider implements ComputeProvider {
     }
 
     const railway = await this.getClient();
-    await (railway as any).TcpProxyDelete({ id: config.connection.externalConnectionId }).catch(
-      (error: unknown) => {
+    await (railway as any)
+      .TcpProxyDelete({ id: config.connection.externalConnectionId })
+      .catch((error: unknown) => {
         console.error("Railway API Error (TcpProxyDelete):", error);
         throw new Error(
           `Railway API Error (TcpProxyDelete): ${error instanceof Error ? error.message : String(error)}`,
         );
-      },
-    );
+      });
   }
 
   async removeExposedPortDomain(externalServiceDomainId: string): Promise<void> {

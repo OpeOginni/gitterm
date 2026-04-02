@@ -204,7 +204,12 @@ export function GitHubConnection() {
             {/* Actions */}
             <div className="flex gap-3 pt-1">
               <Button
-                onClick={() => window.open(`https://github.com/settings/installations/${installationData.installation.id}`, "_blank")}
+                onClick={() =>
+                  window.open(
+                    `https://github.com/settings/installations/${installationData.installation.id}`,
+                    "_blank",
+                  )
+                }
                 variant="outline"
                 className="flex-1 border-white/[0.08] bg-transparent text-white/60 hover:border-white/[0.15] hover:bg-white/[0.04] hover:text-white/80"
               >

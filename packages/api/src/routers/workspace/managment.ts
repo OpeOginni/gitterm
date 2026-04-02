@@ -39,13 +39,15 @@ import {
   decryptWorkspacePassword,
 } from "../../utils/workspace-password";
 import { getWorkspaceDomain } from "../../utils/routing";
-import { canUseCustomCloudSubdomain, getWorkspaceLimit, type UserPlan } from "../../config/features";
+import {
+  canUseCustomCloudSubdomain,
+  getWorkspaceLimit,
+  type UserPlan,
+} from "../../config/features";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-credentials";
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
-import {
-  buildWorkspaceToolingManifestBase64,
-} from "../../utils/workspace-tooling";
+import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooling";
 import {
   deleteAllWorkspaceRouteAccess,
   deleteWorkspaceRouteAccess,
@@ -59,6 +61,7 @@ import {
   type WorkspaceProfile,
 } from "../../providers/editor-access";
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
+import type { CloudProviderType } from "@gitterm/db/schema/cloud";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -85,7 +88,10 @@ function isSubdomainReserved(subdomain: string): boolean {
 }
 
 function normalizeRepoUrl(url: string): string {
-  const trimmed = url.trim().replace(/[?#].*$/, "").replace(/\/+$/, "");
+  const trimmed = url
+    .trim()
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "");
   const parsed = parseGitHubRepoUrl(trimmed);
 
   if (parsed) {
@@ -93,6 +99,27 @@ function normalizeRepoUrl(url: string): string {
   }
 
   return trimmed.replace(/\.git\/?$/i, "");
+}
+
+async function getConfiguredDefaultRegionIdentifier(
+  provider: CloudProviderType,
+): Promise<string | undefined> {
+  if (!provider.providerConfigId) {
+    return undefined;
+  }
+
+  const providerConfig = await getProviderConfigService().getProviderConfigById(
+    provider.providerConfigId,
+  );
+  if (!providerConfig?.isEnabled) {
+    return undefined;
+  }
+
+  const defaultRegionIdentifier =
+    providerConfig.config.defaultTargetRegion?.trim() ??
+    providerConfig.config.defaultRegion?.trim();
+
+  return defaultRegionIdentifier || undefined;
 }
 
 export const workspaceRouter = router({
@@ -231,15 +258,43 @@ export const workspaceRouter = router({
           with: {
             regions: {
               where: eq(region.isEnabled, true),
+              orderBy: [asc(region.name)],
             },
           },
           orderBy: [asc(cloudProvider.name)],
         });
 
-        const providersWithEditorSupport = providers.map((provider) => ({
-          ...provider,
-          editorAccessSupport: normalizeProviderEditorAccessSupport(provider.editorAccessSupport),
-        }));
+        const providersWithEditorSupport = await Promise.all(
+          providers.map(async (provider) => {
+            let regions = provider.regions;
+
+            if (
+              provider.supportsRegions &&
+              !provider.allowUserRegionSelection &&
+              regions.length > 0
+            ) {
+              const configuredDefaultRegionIdentifier =
+                await getConfiguredDefaultRegionIdentifier(provider);
+
+              const lockedRegion = configuredDefaultRegionIdentifier
+                ? regions.find(
+                    (providerRegion) =>
+                      providerRegion.externalRegionIdentifier === configuredDefaultRegionIdentifier,
+                  )
+                : regions[0];
+
+              regions = lockedRegion ? [lockedRegion] : regions.slice(0, 1);
+            }
+
+            return {
+              ...provider,
+              regions,
+              editorAccessSupport: normalizeProviderEditorAccessSupport(
+                provider.editorAccessSupport,
+              ),
+            };
+          }),
+        );
 
         return {
           success: true,
@@ -1032,7 +1087,7 @@ export const workspaceRouter = router({
         // Check workspace limit based on plan
         const userPlanForLimit = (fetchedUser.plan || "free") as UserPlan;
         const workspaceLimit = getWorkspaceLimit(userPlanForLimit);
-        
+
         if (runningWorkspaces.length >= workspaceLimit) {
           const isFree = userPlanForLimit === "free";
           throw new TRPCError({
@@ -1090,24 +1145,20 @@ export const workspaceRouter = router({
             }
           } else {
             // User cannot select - use the default region from provider config
-            if (cloudProviderRecord.providerConfigId) {
-              const providerConfig = await providerConfigService.getProviderConfigById(
-                cloudProviderRecord.providerConfigId,
-              );
-              const defaultRegionIdentifier = providerConfig?.config?.defaultRegion;
+            const defaultRegionIdentifier =
+              await getConfiguredDefaultRegionIdentifier(cloudProviderRecord);
 
-              if (defaultRegionIdentifier) {
-                [regionRecord] = await db
-                  .select()
-                  .from(region)
-                  .where(
-                    and(
-                      eq(region.externalRegionIdentifier, defaultRegionIdentifier),
-                      eq(region.cloudProviderId, input.cloudProviderId),
-                      eq(region.isEnabled, true),
-                    ),
-                  );
-              }
+            if (defaultRegionIdentifier) {
+              [regionRecord] = await db
+                .select()
+                .from(region)
+                .where(
+                  and(
+                    eq(region.externalRegionIdentifier, defaultRegionIdentifier),
+                    eq(region.cloudProviderId, input.cloudProviderId),
+                    eq(region.isEnabled, true),
+                  ),
+                );
             }
 
             // If no default region found or not enabled, try to get any enabled region
@@ -1121,6 +1172,7 @@ export const workspaceRouter = router({
                     eq(region.isEnabled, true),
                   ),
                 )
+                .orderBy(asc(region.name))
                 .limit(1);
 
               regionRecord = anyEnabledRegion;
@@ -1556,29 +1608,29 @@ export const workspaceRouter = router({
           `provision-workspace provider=${cloudProviderRecord.name.toLowerCase()} persistent=${input.persistent}`,
           () =>
             input.persistent
-                ? computeProvider.createPersistentWorkspace({
-                    workspaceId,
-                    userId,
-                    imageId: imageRecord.imageId,
-                    imageProviderMetadata: imageRecord.providerMetadata,
-                    subdomain,
-                    repositoryUrl: input.repo,
-                    repositoryBranch: input.branch,
-                    regionIdentifier: regionRecord?.externalRegionIdentifier,
-                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
-                    persistent: input.persistent,
-                  })
-                : computeProvider.createWorkspace({
-                    workspaceId,
-                    userId,
-                    imageId: imageRecord.imageId,
-                    imageProviderMetadata: imageRecord.providerMetadata,
-                    subdomain,
-                    repositoryUrl: input.repo,
-                    repositoryBranch: input.branch,
-                    regionIdentifier: regionRecord?.externalRegionIdentifier,
-                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
-                  }),
+              ? computeProvider.createPersistentWorkspace({
+                  workspaceId,
+                  userId,
+                  imageId: imageRecord.imageId,
+                  imageProviderMetadata: imageRecord.providerMetadata,
+                  subdomain,
+                  repositoryUrl: input.repo,
+                  repositoryBranch: input.branch,
+                  regionIdentifier: regionRecord?.externalRegionIdentifier,
+                  environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                  persistent: input.persistent,
+                })
+              : computeProvider.createWorkspace({
+                  workspaceId,
+                  userId,
+                  imageId: imageRecord.imageId,
+                  imageProviderMetadata: imageRecord.providerMetadata,
+                  subdomain,
+                  repositoryUrl: input.repo,
+                  repositoryBranch: input.branch,
+                  regionIdentifier: regionRecord?.externalRegionIdentifier,
+                  environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                }),
         );
 
         // Save workspace to database

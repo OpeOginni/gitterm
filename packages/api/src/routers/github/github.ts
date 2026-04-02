@@ -269,7 +269,10 @@ export const githubRouter = router({
 
       try {
         if (!input.gitIntegrationId) {
-          const repository = await getGitHubAppService().getPublicRepository(parsed.owner, parsed.repo);
+          const repository = await getGitHubAppService().getPublicRepository(
+            parsed.owner,
+            parsed.repo,
+          );
 
           return {
             repository: {

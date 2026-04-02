@@ -3,12 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import {
-  Clock,
-  FolderGit2,
-  GitBranch,
-  Infinity as InfinityIcon,
-} from "lucide-react";
+import { Clock, FolderGit2, GitBranch, Infinity as InfinityIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,9 +45,7 @@ function UsageQuota() {
               Unlimited
             </div>
           </div>
-          <p className="mt-3 text-xs text-white/30">
-            Quota resets daily at midnight UTC.
-          </p>
+          <p className="mt-3 text-xs text-white/30">Quota resets daily at midnight UTC.</p>
         </CardContent>
       </Card>
     );
@@ -63,11 +56,7 @@ function UsageQuota() {
   const isLow = !isExhausted && usage.minutesRemaining < 15;
 
   // Pick bar color based on quota health
-  const barColor = isExhausted
-    ? "bg-destructive"
-    : isLow
-      ? "bg-amber-500"
-      : "bg-primary";
+  const barColor = isExhausted ? "bg-destructive" : isLow ? "bg-amber-500" : "bg-primary";
 
   return (
     <Card>
@@ -94,9 +83,7 @@ function UsageQuota() {
               style={{ width: `${percent}%` }}
             />
           </div>
-          <p className="text-xs text-white/30">
-            Quota resets daily at midnight UTC.
-          </p>
+          <p className="text-xs text-white/30">Quota resets daily at midnight UTC.</p>
         </div>
 
         {/* Warning banners */}
@@ -184,8 +171,7 @@ function WorkspaceHistory() {
             {terminatedTotal > TERMINATED_PAGE_SIZE && (
               <div className="flex items-center justify-between pt-1">
                 <p className="text-xs text-muted-foreground">
-                  Page {terminatedPage + 1} of{" "}
-                  {Math.ceil(terminatedTotal / TERMINATED_PAGE_SIZE)}
+                  Page {terminatedPage + 1} of {Math.ceil(terminatedTotal / TERMINATED_PAGE_SIZE)}
                 </p>
                 <div className="flex gap-2">
                   <Button

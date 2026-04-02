@@ -176,14 +176,13 @@ export class E2BProvider implements ComputeProvider {
           ? config.environmentVariables.USER_GITHUB_USERNAME
           : undefined,
         password: config.environmentVariables.GITHUB_APP_TOKEN,
-        branch: repoBranch
+        branch: repoBranch,
       })
       .catch(async (error) => {
         await sandbox.kill().catch(() => undefined);
         console.error("E2B Sandbox Error (git.clone)", error);
         throw error;
       });
-
   }
 
   private async writeOpencodeFiles(sandbox: E2BSandbox, config: WorkspaceConfig): Promise<void> {
@@ -208,10 +207,7 @@ export class E2BProvider implements ComputeProvider {
     }
   }
 
-  private async configureSshRuntime(
-    sandbox: E2BSandbox,
-    config: WorkspaceConfig,
-  ): Promise<void> {
+  private async configureSshRuntime(sandbox: E2BSandbox, config: WorkspaceConfig): Promise<void> {
     if (!this.isSshEnabledWorkspace(config)) {
       return;
     }
@@ -265,10 +261,7 @@ export class E2BProvider implements ComputeProvider {
     throw new Error("E2B SSH bridge did not become ready in time.");
   }
 
-  private async getTrafficAccessToken(
-    sandbox: E2BSandbox,
-    errorContext: string,
-  ): Promise<string> {
+  private async getTrafficAccessToken(sandbox: E2BSandbox, errorContext: string): Promise<string> {
     const token = sandbox.trafficAccessToken;
 
     if (!token) {
@@ -280,11 +273,14 @@ export class E2BProvider implements ComputeProvider {
 
   private async startOpencodeServer(sandbox: E2BSandbox, repoDir: string): Promise<void> {
     await sandbox.commands
-      .run(`cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port ${OPENCODE_PORT} > /tmp/opencode.log 2>&1`, {
-        background: true,
-        onStdout: (data) => console.log(data),
-        onStderr: (data) => console.error(data),
-      })
+      .run(
+        `cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port ${OPENCODE_PORT} > /tmp/opencode.log 2>&1`,
+        {
+          background: true,
+          onStdout: (data) => console.log(data),
+          onStderr: (data) => console.error(data),
+        },
+      )
       .catch(async (error) => {
         await sandbox.kill().catch(() => undefined);
         console.error("E2B Sandbox Error (start opencode serve)", error);
@@ -321,9 +317,7 @@ export class E2BProvider implements ComputeProvider {
     );
     const host = sandbox.getHost(OPENCODE_PORT);
     const startedAt = new Date(
-      (
-        await provisionLogger.step("fetch-sandbox-info", () => sandbox.getInfo())
-      ).startedAt,
+      (await provisionLogger.step("fetch-sandbox-info", () => sandbox.getInfo())).startedAt,
     );
 
     const workspaceInfo: WorkspaceInfo = {
@@ -436,8 +430,7 @@ export class E2BProvider implements ComputeProvider {
     const trafficAccessToken = await this.getTrafficAccessToken(sandbox, "SSH access");
     const bridgeHost = config.existingConnection?.host ?? (await this.waitForSshBridge(sandbox));
     const hostAlias = buildHostAlias(config.subdomain);
-    const proxyCommand =
-      `websocat --binary -B 65536 -H='e2b-traffic-access-token: ${trafficAccessToken}' - wss://${bridgeHost}`;
+    const proxyCommand = `websocat --binary -B 65536 -H='e2b-traffic-access-token: ${trafficAccessToken}' - wss://${bridgeHost}`;
 
     return {
       providerName: this.name,

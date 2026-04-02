@@ -75,11 +75,11 @@
     },
     "e2b:build": {
       "cache": false,
-      "persistent": true    
+      "persistent": true
     },
     "daytona:snapshot-build": {
       "cache": false,
-      "persistent": true     
+      "persistent": true
     }
   }
 }

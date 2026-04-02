@@ -568,8 +568,7 @@ export function ModelCredentialsSection() {
                 {/* Label (optional) */}
                 <div className="grid gap-2">
                   <Label className="text-sm font-medium">
-                    Label{" "}
-                    <span className="font-normal text-muted-foreground">(optional)</span>
+                    Label <span className="font-normal text-muted-foreground">(optional)</span>
                   </Label>
                   <Input
                     value={label}
@@ -700,7 +699,12 @@ export function ModelCredentialsSection() {
                           <code className="rounded-lg bg-muted px-5 py-3 text-2xl font-mono font-bold tracking-[0.2em]">
                             {deviceCode.userCode}
                           </code>
-                          <Button variant="ghost" size="icon" onClick={handleCopyCode} className="h-8 w-8">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleCopyCode}
+                            className="h-8 w-8"
+                          >
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
                         </div>

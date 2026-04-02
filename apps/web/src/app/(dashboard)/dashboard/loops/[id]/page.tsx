@@ -8,7 +8,6 @@ export default function AgentLoopsPage() {
   redirect("/dashboard");
 }
 
-
 // interface LoopPageProps {
 //   params: Promise<{ id: string }>;
 // }

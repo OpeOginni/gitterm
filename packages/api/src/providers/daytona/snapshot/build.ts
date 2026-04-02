@@ -5,7 +5,7 @@ import {
   getDaytonaSnapshotName,
   type DaytonaSnapshotKind,
   type DaytonaSnapshotRegion,
-} from "@gitterm/schema/daytona-snapshots";
+} from "./config";
 import "dotenv/config";
 
 const snapshotDefinitions: Array<{
@@ -15,9 +15,11 @@ const snapshotDefinitions: Array<{
     kind: "server",
   },
   {
-    kind: "server-with-ssh",
+    kind: "server-ssh",
   },
 ];
+
+const VSCODE_COMMIT = "cfbea10c5ffb233ea9177d34726e6056e89913dc";
 
 function createBaseImage() {
   return Image.base("oven/bun:1-slim")
@@ -25,6 +27,11 @@ function createBaseImage() {
       "RUN apt-get update && apt-get install -y --no-install-recommends git bash curl ca-certificates && rm -rf /var/lib/apt/lists/*",
       "RUN mkdir -p /opt/bun && BUN_INSTALL=/opt/bun bun add -g opencode-ai@latest",
       "RUN curl -fsSL https://get.docker.com | sh -",
+    ])
+    .dockerfileCommands([
+      `ARG VSCODE_COMMIT=${VSCODE_COMMIT}`,
+      "RUN mkdir -p /home/daytona/.vscode-server/bin/${VSCODE_COMMIT}",
+      'RUN curl -fsSL "https://update.code.visualstudio.com/commit:${VSCODE_COMMIT}/server-linux-x64/stable" | tar -xz --strip-components=1 -C /home/daytona/.vscode-server/bin/${VSCODE_COMMIT}',
     ])
     .workdir("/workspace")
     .env({
@@ -64,7 +71,8 @@ async function deleteSnapshotIfExists(daytona: Daytona, snapshotName: string) {
     console.log(`[daytona-snapshot] deleting existing snapshot ${snapshotName}`);
     await daytona.snapshot.delete(snapshot);
   } catch (error) {
-    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    const message =
+      error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
 
     if (message.includes("not found")) {
       return;
@@ -79,22 +87,25 @@ async function buildSnapshot(
   definition: (typeof snapshotDefinitions)[number],
   region: DaytonaSnapshotRegion,
 ) {
-  const snapshotName = getDaytonaSnapshotName(definition.kind, region);
+  const snapshotName = getDaytonaSnapshotName(definition.kind);
   const daytona = new Daytona({ apiKey, target: region });
 
-  // await deleteSnapshotIfExists(daytona, snapshotName);
+  await deleteSnapshotIfExists(daytona, snapshotName);
 
-  console.log(`[daytona-snapshot] creating ${snapshotName} kind=${definition.kind} region=${region}`);
+  await Bun.sleep(10_000);
+  console.log("[daytona-snapshot] waited for 10000ms");
 
-  await daytona.snapshot.create(
-    {
-      name: snapshotName,
-      regionId: region,
-      image: createSnapshotImage(definition.kind),
-      entrypoint: ["sleep", "infinity"],
-      resources: DAYTONA_SNAPSHOT_RESOURCES,
-    },
+  console.log(
+    `[daytona-snapshot] creating ${snapshotName} kind=${definition.kind} region=${region}`,
   );
+
+  await daytona.snapshot.create({
+    name: snapshotName,
+    regionId: region,
+    image: createSnapshotImage(definition.kind),
+    entrypoint: ["sleep", "infinity"],
+    resources: DAYTONA_SNAPSHOT_RESOURCES[definition.kind],
+  });
 }
 
 async function main() {

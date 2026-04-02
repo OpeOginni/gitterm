@@ -133,7 +133,7 @@ const seedImages = [
         templateId: "r9xlzvdbcoocvbncrds9",
       },
       daytona: {
-        snapshot: "daytona-medium",
+        snapshot: "gitterm/opencode-server-eu",
       },
     },
   },
@@ -146,7 +146,7 @@ const seedImages = [
         templateId: "nxiezl38gnw32ufyloc0",
       },
       daytona: {
-        snapshot: "daytona-medium",
+        snapshot: "gitterm/opencode-server-ssh-eu",
       },
     },
   },

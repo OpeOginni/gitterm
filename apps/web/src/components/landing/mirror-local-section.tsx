@@ -16,7 +16,7 @@ const profileItems = [
     icon: ShieldCheck,
     label: "SSH Public Key",
     detail: "One key for editor access across every workspace.",
-  }
+  },
 ];
 
 export function MirrorLocalSection() {
