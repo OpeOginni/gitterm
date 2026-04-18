@@ -46,13 +46,13 @@ export function DashboardNav() {
   const router = useRouter();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
-            <span className="font-mono text-sm font-bold uppercase tracking-wider text-white/90">
+            <span className="font-mono text-sm font-bold uppercase tracking-wider text-foreground">
               GitTerm
             </span>
           </Link>
@@ -71,7 +71,7 @@ export function DashboardNav() {
                     "flex items-center gap-2 rounded-lg px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors",
                     isActive
                       ? "bg-primary/10 text-primary"
-                      : "text-white/40 hover:bg-white/[0.04] hover:text-white/70",
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground/80",
                   )}
                 >
                   <item.icon className="h-3.5 w-3.5" />
@@ -84,13 +84,13 @@ export function DashboardNav() {
           {/* Right side */}
           <div className="flex items-center gap-3">
             {isPending ? (
-              <Skeleton className="h-8 w-20 bg-white/[0.04]" />
+              <Skeleton className="h-8 w-20 bg-secondary" />
             ) : (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
-                    className="hidden h-8 items-center gap-2 border-white/[0.08] bg-transparent px-2.5 text-xs text-white/60 hover:border-white/[0.15] hover:bg-white/[0.04] hover:text-white/80 md:flex"
+                    className="hidden h-8 items-center gap-2 border-border bg-transparent px-2.5 text-xs text-secondary-foreground hover:border-foreground/15 hover:bg-secondary hover:text-foreground md:flex"
                   >
                     <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
                       <User className="h-3 w-3 text-primary" />
@@ -99,22 +99,22 @@ export function DashboardNav() {
                       {session?.user?.name}
                     </span>
                     <PlanBadge plan={((session?.user as any)?.plan as UserPlan) || "free"} />
-                    <ChevronDown className="h-3 w-3 text-white/30" />
+                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-48 border-white/[0.08] bg-[#0e0e11]">
+                <DropdownMenuContent className="w-48 border-border bg-popover">
                   {(session?.user as any)?.role === "admin" && (
                     <>
                       <DropdownMenuItem
                         asChild
-                        className="cursor-pointer gap-2 text-white/60 focus:bg-white/[0.04] focus:text-white/80"
+                        className="cursor-pointer gap-2 text-secondary-foreground focus:bg-secondary focus:text-foreground"
                       >
                         <Link href={"/admin" as Route}>
                           <Shield className="h-4 w-4" />
                           Admin Panel
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-white/[0.06]" />
+                      <DropdownMenuSeparator className="bg-border" />
                     </>
                   )}
 
@@ -124,7 +124,7 @@ export function DashboardNav() {
                         router.push("/");
                       })
                     }
-                    className="cursor-pointer gap-2 text-red-400/70 focus:bg-red-500/10 focus:text-red-400"
+                    className="cursor-pointer gap-2 text-destructive/70 focus:bg-destructive/10 focus:text-destructive"
                   >
                     <LogOut className="h-4 w-4" />
                     Sign Out
@@ -136,7 +136,7 @@ export function DashboardNav() {
             <Button
               variant="ghost"
               size="icon"
-              className="text-white/50 hover:bg-white/[0.04] hover:text-white/80 md:hidden"
+              className="text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -147,7 +147,7 @@ export function DashboardNav() {
 
       {/* Mobile Navigation */}
       {mobileMenuOpen && (
-        <div className="border-t border-white/[0.06] bg-[#09090b] md:hidden">
+        <div className="border-t border-border bg-background md:hidden">
           <nav className="space-y-1 px-4 py-3">
             {navItems.map((item) => {
               const isActive =
@@ -162,7 +162,7 @@ export function DashboardNav() {
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                     isActive
                       ? "bg-primary/10 text-primary"
-                      : "text-white/40 hover:bg-white/[0.04] hover:text-white/70",
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground/80",
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -170,12 +170,12 @@ export function DashboardNav() {
                 </Link>
               );
             })}
-            <div className="mt-2 border-t border-white/[0.06] pt-2">
+            <div className="mt-2 border-t border-border pt-2">
               {(session?.user as any)?.role === "admin" && (
                 <Link
                   href={"/admin" as Route}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/40 transition-colors hover:bg-white/[0.04] hover:text-white/70"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground/80"
                 >
                   <Shield className="h-4 w-4" />
                   Admin Panel
@@ -183,7 +183,7 @@ export function DashboardNav() {
               )}
               <button
                 onClick={() => authClient.signOut().then(() => router.push("/"))}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-400/70 transition-colors hover:bg-red-500/10"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive/70 transition-colors hover:bg-destructive/10"
               >
                 <LogOut className="h-4 w-4" />
                 Sign Out

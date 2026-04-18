@@ -34,15 +34,15 @@ export function DashboardHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 border-b border-white/[0.06] pb-6 sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
     >
       <div className="space-y-1.5">
-        <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl text-balance">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl text-balance">
           {heading}
         </h1>
-        {text ? <p className="text-sm text-white/40 md:text-base">{text}</p> : null}
+        {text ? <p className="text-sm text-muted-foreground md:text-base">{text}</p> : null}
       </div>
       {children}
     </div>

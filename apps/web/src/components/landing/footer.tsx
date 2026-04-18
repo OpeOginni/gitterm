@@ -9,59 +9,50 @@ export function Footer() {
   const showPricing = isBillingEnabled();
 
   return (
-    <footer className="border-t border-white/[0.06] py-10">
+    <footer className="border-t border-border py-8">
       <div className="mx-auto max-w-[1120px] px-6">
-        <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-          <div className="flex items-center gap-2.5">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-70">
             <Terminal className="h-4 w-4 text-primary" />
-            <span className="font-mono text-xs font-bold uppercase tracking-wider text-white/70">
+            <span className="font-mono text-xs font-bold uppercase tracking-wider text-foreground/80">
               GitTerm
             </span>
-          </div>
+          </Link>
 
-          <nav className="flex items-center gap-6 font-mono text-xs text-white/35">
-            <Link
-              href="/dashboard"
-              className="uppercase tracking-widest transition-colors hover:text-white/70"
-            >
+          <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+            <Link href="/dashboard" className="transition-colors hover:text-foreground">
               Dashboard
             </Link>
             {showPricing && (
-              <Link
-                href={"/pricing" as Route}
-                className="uppercase tracking-widest transition-colors hover:text-white/70"
-              >
+              <Link href={"/pricing" as Route} className="transition-colors hover:text-foreground">
                 Pricing
               </Link>
             )}
-            <Link
-              href={"/enterprise" as Route}
-              className="uppercase tracking-widest transition-colors hover:text-white/70"
-            >
+            <Link href={"/enterprise" as Route} className="transition-colors hover:text-foreground">
               Enterprise
-            </Link>
-            <Link
-              href="https://www.npmjs.com/package/gitterm"
-              target="_blank"
-              className="uppercase tracking-widest transition-colors hover:text-white/70"
-            >
-              npm
             </Link>
             <Link
               href="https://github.com/OpeOginni/gitterm"
               target="_blank"
-              className="uppercase tracking-widest transition-colors hover:text-white/70"
+              className="transition-colors hover:text-foreground"
             >
               GitHub
             </Link>
+            <Link
+              href="https://www.npmjs.com/package/gitterm"
+              target="_blank"
+              className="transition-colors hover:text-foreground"
+            >
+              npm
+            </Link>
           </nav>
 
-          <p className="text-xs text-white/30">
+          <p className="text-xs text-muted-foreground/50">
             Built by{" "}
             <Link
               href="https://github.com/opeoginni"
               target="_blank"
-              className="text-white/50 underline decoration-white/20 underline-offset-2 transition-colors hover:text-white/70"
+              className="text-muted-foreground transition-colors hover:text-foreground"
             >
               @opeoginni
             </Link>

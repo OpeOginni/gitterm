@@ -57,13 +57,13 @@ function StatCell({
 }) {
   return (
     <div className="text-center">
-      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30">{label}</p>
+      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground/70">{label}</p>
       {isLoading ? (
-        <Skeleton className="mx-auto mt-1.5 h-8 w-14 bg-white/[0.04]" />
+        <Skeleton className="mx-auto mt-1.5 h-8 w-14 bg-secondary" />
       ) : (
         <p className="mt-1 text-2xl font-bold tabular-nums text-white">{value}</p>
       )}
-      <p className="text-xs text-white/30">{sub}</p>
+      <p className="text-xs text-muted-foreground/70">{sub}</p>
     </div>
   );
 }
@@ -93,7 +93,7 @@ export default function AdminPage() {
     return (
       <DashboardShell>
         <div className="flex h-64 items-center justify-center">
-          <Skeleton className="h-8 w-48 bg-white/[0.04]" />
+          <Skeleton className="h-8 w-48 bg-secondary" />
         </div>
       </DashboardShell>
     );
@@ -107,7 +107,7 @@ export default function AdminPage() {
       />
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 rounded-2xl border border-border bg-card p-6 sm:grid-cols-4">
         <StatCell
           label="Total Users"
           value={stats?.users.total ?? 0}
@@ -140,18 +140,18 @@ export default function AdminPage() {
           <Link
             key={item.href}
             href={item.href}
-            className="group flex items-center justify-between rounded-2xl p-4 transition-colors hover:bg-white/[0.03]"
+            className="group flex items-center justify-between rounded-2xl p-4 transition-colors hover:bg-secondary"
           >
             <div className="flex items-center gap-4">
-              <div className="rounded-xl bg-white/[0.04] p-2.5 transition-colors group-hover:bg-white/[0.06]">
-                <item.icon className="h-5 w-5 text-white/40" />
+              <div className="rounded-xl bg-secondary p-2.5 transition-colors group-hover:bg-secondary">
+                <item.icon className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
-                <p className="font-medium text-white/80">{item.title}</p>
-                <p className="text-sm text-white/35">{item.description}</p>
+                <p className="font-medium text-foreground/85">{item.title}</p>
+                <p className="text-sm text-muted-foreground/80">{item.description}</p>
               </div>
             </div>
-            <ChevronRight className="h-4 w-4 text-white/20 transition-transform group-hover:translate-x-0.5 group-hover:text-white/40" />
+            <ChevronRight className="h-4 w-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
           </Link>
         ))}
       </div>

@@ -176,7 +176,7 @@ export default function UsersPage() {
       <div className="pt-2 space-y-6">
         {/* Search */}
         <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
           <Input
             placeholder="Search users..."
             value={search}
@@ -201,20 +201,20 @@ export default function UsersPage() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-white/[0.06]">
-                      <th className="h-10 px-6 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                    <tr className="border-b border-border">
+                      <th className="h-10 px-6 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
                         User
                       </th>
-                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
                         Plan
                       </th>
-                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
                         Role
                       </th>
-                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
                         Created
                       </th>
-                      <th className="h-10 px-6 text-right align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+                      <th className="h-10 px-6 text-right align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
                         Actions
                       </th>
                     </tr>
@@ -223,12 +223,12 @@ export default function UsersPage() {
                     {data?.users.map((user) => (
                       <tr
                         key={user.id}
-                        className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.02]"
+                        className="border-b border-border/50 transition-colors hover:bg-card"
                       >
                         <td className="py-4 px-6">
                           <div>
-                            <div className="font-medium text-white/90">{user.name}</div>
-                            <div className="text-sm text-white/40">{user.email}</div>
+                            <div className="font-medium text-foreground">{user.name}</div>
+                            <div className="text-sm text-muted-foreground">{user.email}</div>
                           </div>
                         </td>
                         <td className="px-4 py-4">
@@ -273,14 +273,14 @@ export default function UsersPage() {
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="px-4 py-4 text-sm text-white/30">
+                        <td className="px-4 py-4 text-sm text-muted-foreground/70">
                           {new Date(user.createdAt).toLocaleDateString()}
                         </td>
                         <td className="py-4 px-6 text-right">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-white/30 hover:text-destructive"
+                            className="h-8 w-8 text-muted-foreground/70 hover:text-destructive"
                             onClick={() => setDeleteUserId(user.id)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -290,7 +290,7 @@ export default function UsersPage() {
                     ))}
                     {data?.users.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-12 text-center text-white/30">
+                        <td colSpan={5} className="py-12 text-center text-muted-foreground/70">
                           No users found
                         </td>
                       </tr>
@@ -302,8 +302,8 @@ export default function UsersPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 border-t border-white/[0.06]">
-                <div className="text-sm text-white/30">
+              <div className="flex items-center justify-between pt-4 border-t border-border">
+                <div className="text-sm text-muted-foreground/70">
                   Showing {page * limit + 1} to {Math.min((page + 1) * limit, data?.total ?? 0)} of{" "}
                   {data?.total ?? 0}
                 </div>

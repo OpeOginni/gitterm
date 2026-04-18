@@ -161,19 +161,19 @@ export default function AgentTypesPage() {
             {agentTypes?.map((agent) => (
               <div
                 key={agent.id}
-                className={`flex items-center justify-between p-4 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02] ${!agent.isEnabled ? "opacity-60" : ""}`}
+                className={`flex items-center justify-between p-4 border-b border-border/50 last:border-0 transition-colors hover:bg-card ${!agent.isEnabled ? "opacity-60" : ""}`}
               >
                 <div className="flex items-center gap-4">
-                  <div className="rounded-xl bg-white/[0.04] p-2.5">
-                    <Server className="h-5 w-5 text-white/40" />
+                  <div className="rounded-xl bg-secondary p-2.5">
+                    <Server className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div>
                     <div className="flex items-center gap-3">
-                      <span className="font-medium text-white/90">{agent.name}</span>
+                      <span className="font-medium text-foreground">{agent.name}</span>
                       {!agent.isEnabled && (
                         <Badge
                           variant="outline"
-                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                          className="border-border bg-secondary text-muted-foreground text-xs"
                         >
                           Disabled
                         </Badge>
@@ -181,7 +181,7 @@ export default function AgentTypesPage() {
                       {agent.serverOnly ? (
                         <Badge
                           variant="outline"
-                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                          className="border-border bg-secondary text-muted-foreground text-xs"
                         >
                           Server Only
                         </Badge>
@@ -194,7 +194,7 @@ export default function AgentTypesPage() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-white/25 mt-0.5">
+                    <p className="text-xs text-muted-foreground/60 mt-0.5">
                       Created {new Date(agent.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -209,7 +209,7 @@ export default function AgentTypesPage() {
             ))}
 
             {agentTypes?.length === 0 && (
-              <div className="py-12 text-center text-white/30">
+              <div className="py-12 text-center text-muted-foreground/70">
                 No agent types configured yet. Add one to get started.
               </div>
             )}

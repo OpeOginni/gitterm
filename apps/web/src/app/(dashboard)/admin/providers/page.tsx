@@ -113,10 +113,10 @@ export default function ProvidersPage() {
                     placeholder="e.g., Railway"
                   />
                 </div>
-                <div className="flex items-center justify-between rounded-xl border border-border bg-white/[0.02] px-3 py-2">
+                <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
                   <div>
                     <Label htmlFor="supports-regions">Supports Regions</Label>
-                    <p className="text-xs text-white/40">
+                    <p className="text-xs text-muted-foreground">
                       Disable for providers that do not expose region selection.
                     </p>
                   </div>
@@ -161,26 +161,26 @@ export default function ProvidersPage() {
               <Link
                 key={provider.id}
                 href={`/admin/providers/${provider.id}` as Route}
-                className="group block rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="group block rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-start gap-3">
-                    <div className="mt-1 rounded-xl bg-white/[0.04] p-2.5 transition-colors">
+                    <div className="mt-1 rounded-xl bg-secondary p-2.5 transition-colors">
                       <Image
                         src={getIcon(provider.name)}
                         alt={provider.name}
                         height={20}
                         width={20}
-                        className="h-5 w-5 text-white/40"
+                        className="h-5 w-5 text-muted-foreground"
                       />
                     </div>
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-white/90">{provider.name}</h3>
+                        <h3 className="font-semibold text-foreground">{provider.name}</h3>
                         {!provider.isEnabled && (
                           <Badge
                             variant="outline"
-                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                            className="border-border bg-secondary text-muted-foreground text-xs"
                           >
                             Disabled
                           </Badge>
@@ -196,7 +196,7 @@ export default function ProvidersPage() {
                         {provider.providerConfig && !provider.providerConfig.isEnabled && (
                           <Badge
                             variant="outline"
-                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                            className="border-border bg-secondary text-muted-foreground text-xs"
                           >
                             Config Disabled
                           </Badge>
@@ -210,14 +210,14 @@ export default function ProvidersPage() {
                           </Badge>
                         )}
                       </div>
-                      <div className="text-sm text-white/30">
+                      <div className="text-sm text-muted-foreground/70">
                         {provider.supportsRegions
                           ? `${provider.regions.length} region${provider.regions.length !== 1 ? "s" : ""}`
                           : "Regions not supported"}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-white/30 group-hover:text-white/60">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground/70 group-hover:text-secondary-foreground">
                     <KeyRound className="h-4 w-4" />
                     <span>Provider Settings</span>
                   </div>
@@ -226,7 +226,7 @@ export default function ProvidersPage() {
             ))}
 
             {providers?.length === 0 && (
-              <div className="py-12 text-center text-white/30">
+              <div className="py-12 text-center text-muted-foreground/70">
                 No cloud providers configured yet. Run the seed script to add defaults.
               </div>
             )}

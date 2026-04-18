@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, DM_Sans, Space_Mono } from "next/font/google";
+import { Outfit, JetBrains_Mono } from "next/font/google";
 import "../index.css";
 import Providers from "@/components/providers";
 
-const dmSans = DM_Sans({
+const outfit = Outfit({
   variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const spaceMono = Space_Mono({
+const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
@@ -69,7 +69,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${dmSans.variable} ${spaceMono.variable} antialiased`}>
+      <body className={`${outfit.variable} ${jetbrainsMono.variable} antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>

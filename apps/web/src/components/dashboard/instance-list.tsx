@@ -86,12 +86,12 @@ export function InstanceList() {
 
   if (workspaces.length === 0 && page === 0) {
     return (
-      <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.01] p-8 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03]">
-          <Terminal className="h-7 w-7 text-white/30" />
+      <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted p-8 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-secondary">
+          <Terminal className="h-7 w-7 text-muted-foreground/70" />
         </div>
-        <h3 className="mt-5 text-lg font-medium text-white/80">No active workspaces</h3>
-        <p className="mt-2 max-w-sm text-sm text-white/35">
+        <h3 className="mt-5 text-lg font-medium text-foreground/85">No active workspaces</h3>
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground/80">
           Create a new workspace to get started with your remote development environment.
         </p>
       </div>
@@ -108,8 +108,8 @@ export function InstanceList() {
 
       {/* Pagination */}
       {pagination && totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4 border-t border-white/[0.06]">
-          <p className="text-sm text-white/30">
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <p className="text-sm text-muted-foreground/70">
             Showing {pagination.offset + 1} to{" "}
             {Math.min(pagination.offset + workspaces.length, pagination.total)} of{" "}
             {pagination.total} workspaces
@@ -124,7 +124,7 @@ export function InstanceList() {
               <ChevronLeft className="h-4 w-4 mr-1" />
               Previous
             </Button>
-            <span className="text-sm text-white/30 px-2">
+            <span className="text-sm text-muted-foreground/70 px-2">
               Page {page + 1} of {totalPages}
             </span>
             <Button
@@ -241,14 +241,14 @@ function InstanceCard({
         );
       case "pending":
         return (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/50">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             Pending
           </span>
         );
       case "stopped":
         return (
-          <span className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/40">
+          <span className="inline-flex items-center rounded-full border border-border bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
             Stopped
           </span>
         );
@@ -260,7 +260,7 @@ function InstanceCard({
         );
       default:
         return (
-          <span className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/40">
+          <span className="inline-flex items-center rounded-full border border-border bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
             {status}
           </span>
         );
@@ -569,19 +569,19 @@ function InstanceCard({
         </DialogContent>
       </Dialog>
 
-      <div className="group flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-card transition-all hover:border-white/[0.12]">
+      <div className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all hover:border-foreground/15">
         <div className="px-5 pt-5 pb-3">
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.04]">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary">
                   <Box className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-semibold text-white/90 truncate">
+                  <span className="text-sm font-semibold text-foreground truncate">
                     {workspace.name || workspace.subdomain}
                   </span>
-                  <span className="text-xs text-white/30 truncate">
+                  <span className="text-xs text-muted-foreground/70 truncate">
                     {workspace.image.agentType.name}
                   </span>
                 </div>
@@ -589,7 +589,7 @@ function InstanceCard({
               {getStatusBadge(workspace.status)}
             </div>
             {getRepoName() && (
-              <div className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground/70 min-w-0 pl-12">
                 <GitBranch className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate font-mono" title={workspace.repositoryUrl || ""}>
                   {getRepoName()}
@@ -599,7 +599,7 @@ function InstanceCard({
           </div>
         </div>
         <div className="pb-4 px-5 flex-1">
-          <div className="grid gap-2.5 text-xs text-white/35 pl-12">
+          <div className="grid gap-2.5 text-xs text-muted-foreground/80 pl-12">
             <div className="flex items-center gap-2">
               <MapPin className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
@@ -646,7 +646,7 @@ function InstanceCard({
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400/60" />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <span className="text-xs font-mono text-white/40 tracking-widest select-none">
+                  <span className="text-xs font-mono text-muted-foreground tracking-widest select-none">
                     {"*".repeat(16)}
                   </span>
                   <button
@@ -669,7 +669,7 @@ function InstanceCard({
             {workspace.editorAccessEnabled && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <Monitor className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-xs text-white/30">Editor access enabled</span>
+                <span className="text-xs text-muted-foreground/70">Editor access enabled</span>
               </div>
             )}
             {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
@@ -742,7 +742,7 @@ function InstanceCard({
             )}
           </div>
         </div>
-        <div className="flex gap-2 border-t border-white/[0.06] p-4">
+        <div className="flex gap-2 border-t border-border p-4">
           {isRunning &&
             workspaceUrl &&
             (workspace.serverOnly ? (

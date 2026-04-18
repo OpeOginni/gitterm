@@ -4,26 +4,20 @@ import Link from "next/link";
 
 export function CTASection() {
   return (
-    <section className="border-t border-white/[0.06] py-24 md:py-32">
+    <section className="border-t border-border py-24 md:py-32">
       <div className="mx-auto max-w-[1120px] px-6">
-        <div className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-white/[0.02] px-6 py-16 text-center md:px-16 md:py-20">
-          {/* Subtle glow inside the card */}
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute -top-24 left-1/2 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.06),transparent)]" />
-          </div>
-
-          <div className="relative">
-            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
-              Extend your workflow
-            </p>
-            <h2 className="mb-4 text-3xl font-bold tracking-tight text-white md:text-4xl text-balance">
+        <div className="grid items-end gap-12 lg:grid-cols-[1fr_auto]">
+          {/* Left: copy + CTAs */}
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
               Take OpenCode from local to cloud.
             </h2>
-            <p className="mx-auto mb-8 max-w-md text-base text-white/50">
-              You already use OpenCode locally. GitTerm lets you run it in the cloud too. Same
-              config, more power.
+            <p className="mt-5 max-w-lg text-base leading-relaxed text-muted-foreground">
+              Same config, persistent state, any device. Start free or deploy on your own
+              infrastructure.
             </p>
-            <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+
+            <div className="mt-10 flex flex-wrap items-center gap-4">
               <Link href="/dashboard">
                 <Button
                   size="lg"
@@ -35,30 +29,52 @@ export function CTASection() {
               </Link>
               <Link href="https://github.com/OpeOginni/gitterm" target="_blank">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="lg"
-                  className="h-12 border-white/[0.08] bg-transparent px-6 font-mono text-sm uppercase tracking-wider text-white/60 hover:border-white/20 hover:text-white/90"
+                  className="h-12 px-6 text-sm text-muted-foreground hover:text-foreground"
                 >
                   View Source
                 </Button>
               </Link>
             </div>
-            <div className="mt-8">
-              <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-white/30">
-                Or deploy your own infra
-              </p>
-              <Link
-                href="https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic"
-                target="_blank"
-              >
-                <img
-                  src="https://railway.com/button.svg"
-                  alt="Deploy on Railway"
-                  className="mx-auto opacity-80 transition-opacity hover:opacity-100"
-                  height={32}
-                />
-              </Link>
-            </div>
+          </div>
+
+          {/* Right: self-host option */}
+          <div className="hidden lg:block lg:pb-2">
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/50">
+              Self-host
+            </p>
+            <Link
+              href="https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic"
+              target="_blank"
+            >
+              <img
+                src="https://railway.com/button.svg"
+                alt="Deploy on Railway"
+                className="opacity-60 transition-opacity hover:opacity-100"
+                height={28}
+              />
+            </Link>
+          </div>
+        </div>
+
+        {/* Mobile: self-host below */}
+        <div className="mt-10 border-t border-border pt-8 lg:hidden">
+          <div className="flex items-center gap-4">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/50">
+              Self-host
+            </span>
+            <Link
+              href="https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic"
+              target="_blank"
+            >
+              <img
+                src="https://railway.com/button.svg"
+                alt="Deploy on Railway"
+                className="opacity-60 transition-opacity hover:opacity-100"
+                height={28}
+              />
+            </Link>
           </div>
         </div>
       </div>

@@ -137,7 +137,7 @@ export default function ImagesPage() {
                     onChange={(e) => setNewImage({ ...newImage, imageId: e.target.value })}
                     placeholder="e.g., opeoginni/gitterm-opencode:latest"
                   />
-                  <p className="text-xs text-white/40">
+                  <p className="text-xs text-muted-foreground">
                     Full Docker image reference including registry and tag
                   </p>
                 </div>
@@ -193,19 +193,19 @@ export default function ImagesPage() {
             {images?.map((image) => (
               <div
                 key={image.id}
-                className={`flex items-center justify-between p-4 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02] ${!image.isEnabled ? "opacity-60" : ""}`}
+                className={`flex items-center justify-between p-4 border-b border-border/50 last:border-0 transition-colors hover:bg-card ${!image.isEnabled ? "opacity-60" : ""}`}
               >
                 <div className="flex items-center gap-4">
-                  <div className="rounded-xl bg-white/[0.04] p-2.5">
-                    <Container className="h-5 w-5 text-white/40" />
+                  <div className="rounded-xl bg-secondary p-2.5">
+                    <Container className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-3">
-                      <span className="font-medium text-white/90">{image.name}</span>
+                      <span className="font-medium text-foreground">{image.name}</span>
                       {!image.isEnabled && (
                         <Badge
                           variant="outline"
-                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                          className="border-border bg-secondary text-muted-foreground text-xs"
                         >
                           Disabled
                         </Badge>
@@ -219,13 +219,13 @@ export default function ImagesPage() {
                       {image.agentType.serverOnly && (
                         <Badge
                           variant="outline"
-                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                          className="border-border bg-secondary text-muted-foreground text-xs"
                         >
                           Server Only
                         </Badge>
                       )}
                     </div>
-                    <code className="font-mono text-xs text-white/25 mt-0.5 block truncate max-w-md">
+                    <code className="font-mono text-xs text-muted-foreground/60 mt-0.5 block truncate max-w-md">
                       {image.imageId}
                     </code>
                   </div>
@@ -240,7 +240,7 @@ export default function ImagesPage() {
             ))}
 
             {images?.length === 0 && (
-              <div className="py-12 text-center text-white/30">
+              <div className="py-12 text-center text-muted-foreground/70">
                 No images configured yet. Add one to get started.
               </div>
             )}

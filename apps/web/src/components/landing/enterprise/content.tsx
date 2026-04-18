@@ -55,33 +55,33 @@ export function EnterpriseContent() {
     <section className="relative overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32">
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute top-0 left-1/2 h-[600px] w-[900px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.04),transparent)]" />
+        <div className="absolute top-0 left-1/2 h-[600px] w-[900px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.03),transparent)]" />
       </div>
 
       <div className="relative mx-auto max-w-[1120px] px-6">
         {/* ── Hero ── */}
         <div className="mb-6 flex justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-white/40">
+          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             <Server className="h-3.5 w-3.5 text-primary" />
             Enterprise
           </span>
         </div>
 
-        <h1 className="mx-auto max-w-2xl text-center text-[clamp(2.25rem,5vw,4.5rem)] font-bold leading-[1.08] tracking-tight text-white">
+        <h1 className="mx-auto max-w-2xl text-center text-[clamp(2.25rem,5vw,4.5rem)] font-bold leading-[1.08] tracking-tight text-foreground">
           Run GitTerm on <span className="text-primary">your infra.</span>
         </h1>
 
-        <p className="mx-auto mt-6 max-w-xl text-center text-base leading-relaxed text-white/50 sm:text-lg">
+        <p className="mx-auto mt-6 max-w-xl text-center text-base leading-relaxed text-muted-foreground sm:text-lg">
           GitTerm is still early, but if you want to run it for your team we&apos;ll help you get
           set up. Tell us what you need and we&apos;ll figure it out together.
         </p>
 
         {/* ── Form card ── */}
         <div className="mx-auto mt-16 max-w-2xl">
-          <div className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-white/[0.02]">
+            <div className="relative overflow-hidden rounded-3xl border border-border bg-card">
             {/* Card glow */}
             <div className="pointer-events-none absolute inset-0">
-              <div className="absolute -top-24 left-1/2 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.06),transparent)]" />
+              <div className="absolute -top-24 left-1/2 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.04),transparent)]" />
             </div>
 
             <div className="relative p-6 md:p-10">
@@ -90,10 +90,10 @@ export function EnterpriseContent() {
                   <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
                     <Send className="h-6 w-6 text-primary" />
                   </div>
-                  <h3 className="mb-2 text-xl font-semibold text-white/90">
+                  <h3 className="mb-2 text-xl font-semibold text-foreground">
                     We&apos;ll be in touch
                   </h3>
-                  <p className="max-w-sm text-sm leading-relaxed text-white/45">
+                  <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
                     Your email client should have opened with a pre-filled message. If it
                     didn&apos;t, email us directly at{" "}
                     <a
@@ -105,7 +105,7 @@ export function EnterpriseContent() {
                   </p>
                   <Button
                     variant="outline"
-                    className="mt-6 h-10 border-white/[0.08] bg-transparent px-5 font-mono text-xs uppercase tracking-wider text-white/60 hover:border-white/20 hover:text-white/90"
+                    className="mt-6 h-10 border-border bg-transparent px-5 font-mono text-xs uppercase tracking-wider text-secondary-foreground hover:border-foreground/20 hover:text-foreground"
                     onClick={() => setSubmitted(false)}
                   >
                     Send another
@@ -115,18 +115,18 @@ export function EnterpriseContent() {
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="grid gap-5 sm:grid-cols-2">
                     <div>
-                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
+                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
                         Name
                       </label>
                       <Input
                         name="name"
                         required
                         placeholder="Jane Smith"
-                        className="h-11 rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
+                        className="h-11 rounded-xl border-border bg-secondary text-sm text-foreground/85 placeholder:text-muted-foreground/50 focus-visible:border-primary/40 focus-visible:ring-primary/20"
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
+                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
                         Work email
                       </label>
                       <Input
@@ -134,37 +134,37 @@ export function EnterpriseContent() {
                         type="email"
                         required
                         placeholder="jane@company.com"
-                        className="h-11 rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
+                        className="h-11 rounded-xl border-border bg-secondary text-sm text-foreground/85 placeholder:text-muted-foreground/50 focus-visible:border-primary/40 focus-visible:ring-primary/20"
                       />
                     </div>
                   </div>
 
                   <div className="grid gap-5 sm:grid-cols-2">
                     <div>
-                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
+                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
                         Company
                       </label>
                       <Input
                         name="company"
                         required
                         placeholder="Acme Inc."
-                        className="h-11 rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
+                        className="h-11 rounded-xl border-border bg-secondary text-sm text-foreground/85 placeholder:text-muted-foreground/50 focus-visible:border-primary/40 focus-visible:ring-primary/20"
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
+                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
                         Team size
                       </label>
                       <Select value={teamSize} onValueChange={setTeamSize}>
-                        <SelectTrigger className="h-11 w-full rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 focus:ring-primary/20 data-[placeholder]:text-white/20 [&>svg]:text-white/30">
+                        <SelectTrigger className="h-11 w-full rounded-xl border-border bg-secondary text-sm text-foreground/85 focus:ring-primary/20 data-[placeholder]:text-muted-foreground/50 [&>svg]:text-muted-foreground">
                           <SelectValue placeholder="Select team size" />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-white/[0.08] bg-[#151518]">
+                        <SelectContent className="rounded-xl border-border bg-popover">
                           {teamSizes.map((size) => (
                             <SelectItem
                               key={size.value}
                               value={size.value}
-                              className="rounded-lg text-sm text-white/70 focus:bg-white/[0.06] focus:text-white"
+                              className="rounded-lg text-sm text-foreground/80 focus:bg-secondary focus:text-foreground"
                             >
                               {size.label}
                             </SelectItem>
@@ -175,14 +175,14 @@ export function EnterpriseContent() {
                   </div>
 
                   <div>
-                    <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
+                    <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
                       What are you looking for?
                     </label>
                     <Textarea
                       name="message"
                       rows={3}
                       placeholder="Tell us about your team, your infra, and what you want to use GitTerm for."
-                      className="rounded-xl border-white/[0.08] bg-white/[0.03] text-sm leading-relaxed text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
+                      className="rounded-xl border-border bg-secondary text-sm leading-relaxed text-foreground/85 placeholder:text-muted-foreground/50 focus-visible:border-primary/40 focus-visible:ring-primary/20"
                     />
                   </div>
 

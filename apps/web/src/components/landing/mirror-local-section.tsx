@@ -1,65 +1,57 @@
 import { KeyRound, ShieldCheck, FileJson } from "lucide-react";
-import { GitHub as Github } from "../logos/Github";
 
 const profileItems = [
   {
     icon: KeyRound,
-    label: "Model Credentials",
-    detail: "Encrypted API keys and OAuth tokens for Anthropic, OpenAI, Copilot, and more.",
+    label: "Model credentials",
+    detail: "Encrypted API keys for Anthropic, OpenAI, Copilot, and more.",
   },
   {
     icon: FileJson,
-    label: "Agent Config",
-    detail: "Your opencode.json -- theme, model, permissions, and tools.",
+    label: "Agent config",
+    detail: "Your opencode.json with theme, model, permissions, and tools.",
   },
   {
     icon: ShieldCheck,
-    label: "SSH Public Key",
+    label: "SSH key",
     detail: "One key for editor access across every workspace.",
   },
 ];
 
 export function MirrorLocalSection() {
   return (
-    <section id="opencode-sync" className="border-t border-white/[0.06] py-24 md:py-32">
+    <section id="opencode-sync" className="border-t border-border py-24 md:py-32">
       <div className="mx-auto max-w-[1120px] px-6">
-        <div className="grid gap-12 lg:grid-cols-[1fr_1.2fr] lg:items-center">
-          {/* Left -- copy */}
-          <div>
-            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
-              Workspace Profile
-            </p>
-            <h2 className="mb-5 text-3xl font-bold tracking-tight text-white md:text-4xl">
-              Set up once. Every workspace just works.
+        <div className="grid gap-16 lg:grid-cols-2 lg:items-start">
+          {/* Left — copy */}
+          <div className="lg:sticky lg:top-24">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+              Configure once.
+              <br />
+              <span className="text-muted-foreground">Every workspace inherits it.</span>
             </h2>
-            <p className="text-base leading-relaxed text-white/50 sm:text-lg">
-              Configure your credentials, agent config, SSH key, and GitHub access in the dashboard.
-              Every new workspace inherits the same setup automatically.
+            <p className="mt-5 max-w-md text-base leading-relaxed text-muted-foreground">
+              Set up your credentials, agent config, and SSH key in the dashboard. New workspaces
+              pick up the same profile automatically. No repeated setup.
             </p>
           </div>
 
-          {/* Right -- settings-style card */}
-          <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-            <div className="h-px w-full bg-primary/40" />
-            <div className="divide-y divide-white/[0.04]">
-              {profileItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-4 px-6 py-5 transition-colors hover:bg-white/[0.02]"
-                >
-                  <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <item.icon className="h-[18px] w-[18px] text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-white/80">{item.label}</p>
-                    <p className="mt-0.5 text-[13px] leading-snug text-white/35">{item.detail}</p>
-                  </div>
-                  <span className="hidden shrink-0 rounded-full border border-primary/15 bg-primary/8 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider text-primary/70 sm:block">
-                    Synced
-                  </span>
+          {/* Right — minimal list, no card wrapper */}
+          <div className="space-y-0">
+            {profileItems.map((item, i) => (
+              <div
+                key={item.label}
+                className="flex items-start gap-4 border-b border-border py-6 first:pt-0 last:border-0"
+              >
+                <item.icon className="mt-0.5 h-[18px] w-[18px] shrink-0 text-primary/70" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{item.label}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    {item.detail}
+                  </p>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

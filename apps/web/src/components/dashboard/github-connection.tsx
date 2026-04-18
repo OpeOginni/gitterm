@@ -67,16 +67,16 @@ export function GitHubConnection() {
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+      <div className="rounded-2xl border border-border bg-card p-6">
         <div className="flex items-center gap-3 mb-2">
-          <Github className="h-5 w-5 text-white/40" />
-          <span className="text-lg font-semibold text-white/80">GitHub Integration</span>
+          <Github className="h-5 w-5 text-muted-foreground" />
+          <span className="text-lg font-semibold text-foreground/85">GitHub Integration</span>
         </div>
-        <p className="text-sm text-white/30 mb-6">
+        <p className="text-sm text-muted-foreground/70 mb-6">
           Connect your GitHub account to enable git operations in workspaces
         </p>
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-white/20" />
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />
         </div>
       </div>
     );
@@ -87,13 +87,13 @@ export function GitHubConnection() {
   const isSuspended = installation?.suspended ?? false;
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
       {/* Header */}
       <div className="px-6 pt-6 pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Github className="h-5 w-5 text-white/50" />
-            <span className="text-lg font-semibold text-white/90">GitHub Integration</span>
+            <Github className="h-5 w-5 text-muted-foreground" />
+            <span className="text-lg font-semibold text-foreground">GitHub Integration</span>
             {isConnected && (
               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
                 <CheckCircle2 className="h-3 w-3" />
@@ -105,13 +105,13 @@ export function GitHubConnection() {
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/[0.04] hover:text-white/60"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-secondary hover:text-secondary-foreground"
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
             </button>
           )}
         </div>
-        <p className="mt-1.5 text-sm text-white/35">
+        <p className="mt-1.5 text-sm text-muted-foreground/80">
           Connect your GitHub account to enable git operations (clone, commit, push, fork) in your
           workspaces
         </p>
@@ -122,7 +122,7 @@ export function GitHubConnection() {
         {isConnected && installation ? (
           <>
             {/* Installation info */}
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-3.5">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
@@ -130,12 +130,12 @@ export function GitHubConnection() {
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-white/90">@{installation.accountLogin}</p>
-                      <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/30">
+                      <p className="font-semibold text-foreground">@{installation.accountLogin}</p>
+                      <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
                         {installation.accountType}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-white/40">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Shield className="h-3.5 w-3.5" />
                       <span>
                         {installation.repositorySelection === "all"
@@ -144,7 +144,7 @@ export function GitHubConnection() {
                       </span>
                     </div>
                     {installation.installedAt && (
-                      <p className="text-xs text-white/25">
+                      <p className="text-xs text-muted-foreground/60">
                         Connected{" "}
                         {new Date(installation.installedAt).toLocaleDateString("en-US", {
                           month: "short",
@@ -171,7 +171,7 @@ export function GitHubConnection() {
                   <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-red-300">Installation Suspended</p>
-                    <p className="text-sm text-white/40">
+                    <p className="text-sm text-muted-foreground">
                       Your GitHub App installation has been suspended. Git operations will not work
                       until you resolve this on GitHub.
                     </p>
@@ -190,13 +190,13 @@ export function GitHubConnection() {
               ].map((feature) => (
                 <div
                   key={feature.label}
-                  className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5 transition-colors hover:border-white/[0.1]"
+                  className="rounded-xl border border-border bg-card p-3.5 transition-colors hover:border-foreground/15"
                 >
                   <div className="mb-1 flex items-center gap-2">
-                    <feature.icon className="h-4 w-4 text-white/30" />
-                    <span className="text-sm font-medium text-white/70">{feature.label}</span>
+                    <feature.icon className="h-4 w-4 text-muted-foreground/70" />
+                    <span className="text-sm font-medium text-foreground/80">{feature.label}</span>
                   </div>
-                  <p className="text-xs text-white/30">{feature.desc}</p>
+                  <p className="text-xs text-muted-foreground/70">{feature.desc}</p>
                 </div>
               ))}
             </div>
@@ -211,7 +211,7 @@ export function GitHubConnection() {
                   )
                 }
                 variant="outline"
-                className="flex-1 border-white/[0.08] bg-transparent text-white/60 hover:border-white/[0.15] hover:bg-white/[0.04] hover:text-white/80"
+                className="flex-1 border-border bg-transparent text-secondary-foreground hover:border-foreground/15 hover:bg-secondary hover:text-foreground/85"
               >
                 <ExternalLink className="mr-2 h-4 w-4" />
                 Manage on GitHub
@@ -238,14 +238,14 @@ export function GitHubConnection() {
         ) : (
           <>
             {/* Empty state */}
-            <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-8 text-center">
+            <div className="rounded-xl border border-dashed border-border bg-muted p-8 text-center">
               <div className="flex flex-col items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03]">
-                  <Github className="h-7 w-7 text-white/30" />
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-secondary">
+                  <Github className="h-7 w-7 text-muted-foreground/70" />
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-white/80">No GitHub Connection</p>
-                  <p className="mx-auto mt-1 max-w-sm text-sm text-white/35">
+                  <p className="text-base font-semibold text-foreground/85">No GitHub Connection</p>
+                  <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground/80">
                     Connect your GitHub account to unlock git operations and repository management
                     in your workspaces
                   </p>
@@ -255,7 +255,7 @@ export function GitHubConnection() {
 
             {/* Feature list */}
             <div className="space-y-1">
-              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.25em] text-white/25">
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground/60">
                 What you'll get
               </p>
               {[
@@ -266,9 +266,9 @@ export function GitHubConnection() {
               ].map((feature, i) => (
                 <div
                   key={i}
-                  className="group flex items-center gap-3 rounded-lg p-2.5 transition-colors hover:bg-white/[0.03]"
+                  className="group flex items-center gap-3 rounded-lg p-2.5 transition-colors hover:bg-secondary"
                 >
-                  <feature.icon className="h-4 w-4 text-white/25 transition-colors group-hover:text-primary" />
+                  <feature.icon className="h-4 w-4 text-muted-foreground/60 transition-colors group-hover:text-primary" />
                   <span className="text-sm text-white/55">{feature.text}</span>
                 </div>
               ))}
@@ -293,7 +293,7 @@ export function GitHubConnection() {
               )}
             </Button>
 
-            <p className="text-center text-xs text-white/25">
+            <p className="text-center text-xs text-muted-foreground/60">
               You'll be redirected to GitHub to install the app. You can choose which repositories
               to grant access to.
             </p>

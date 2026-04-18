@@ -59,7 +59,7 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
 
       <div className="mx-auto max-w-6xl">
         {/* Mobile tab bar */}
-        <div className="flex gap-1 overflow-x-auto border-b border-white/[0.06] pb-3 lg:hidden">
+        <div className="flex gap-1 overflow-x-auto border-b border-border pb-3 lg:hidden">
           {sidebarItems.map((item) => {
             const isActive = activeSection === item.id;
             return (
@@ -69,11 +69,11 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
                 className={cn(
                   "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-colors",
                   isActive
-                    ? "bg-white/[0.08] text-white"
-                    : "text-white/40 hover:bg-white/[0.04] hover:text-white/60",
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground",
                 )}
               >
-                <item.icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-white/30")} />
+                <item.icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-muted-foreground/70")} />
                 {item.label}
               </button>
             );
@@ -94,14 +94,14 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
                     className={cn(
                       "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
                       isActive
-                        ? "bg-white/[0.06] text-white"
-                        : "text-white/40 hover:bg-white/[0.03] hover:text-white/60",
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground",
                     )}
                   >
                     <item.icon
                       className={cn(
                         "h-4 w-4 shrink-0 transition-colors",
-                        isActive ? "text-primary" : "text-white/30 group-hover:text-white/50",
+                        isActive ? "text-primary" : "text-muted-foreground/70 group-hover:text-muted-foreground",
                       )}
                     />
                     <div className="min-w-0">
@@ -109,7 +109,7 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
                       <p
                         className={cn(
                           "text-xs truncate",
-                          isActive ? "text-white/40" : "text-white/20",
+                          isActive ? "text-muted-foreground" : "text-muted-foreground/50",
                         )}
                       >
                         {item.description}

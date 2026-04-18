@@ -34,7 +34,7 @@ const workspaceOptions: WorkspaceOption[] = [
 export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelectorProps) {
   return (
     <div className="grid gap-2">
-      <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30">
+      <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground/70">
         Workspace Type
       </span>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -47,20 +47,20 @@ export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelector
               onClick={() => !option.disabled && onChange(option.type)}
               className={`relative flex items-center gap-3 rounded-xl border p-4 transition-all ${
                 option.disabled
-                  ? "cursor-not-allowed border-white/[0.04] bg-white/[0.01]"
+                  ? "cursor-not-allowed border-border/50 bg-muted"
                   : isSelected
                     ? "border-primary/30 bg-primary/[0.06]"
-                    : "border-border hover:border-white/[0.12] hover:bg-white/[0.03]"
+                    : "border-border hover:border-foreground/15 hover:bg-secondary"
               }`}
               disabled={option.disabled}
             >
               {option.disabled && (
-                <span className="absolute -top-2 right-3 rounded-full border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-white/25">
+                <span className="absolute -top-2 right-3 rounded-full border border-border bg-secondary px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/60">
                   Rework Ongoing
                 </span>
               )}
               {option.type === "cloud" ? (
-                <Cloud className={`h-5 w-5 ${isSelected ? "text-primary" : "text-white/30"}`} />
+                <Cloud className={`h-5 w-5 ${isSelected ? "text-primary" : "text-muted-foreground/70"}`} />
               ) : (
                 <Image
                   src="/ralph-wiggum.svg"
@@ -72,11 +72,11 @@ export function WorkspaceTypeSelector({ value, onChange }: WorkspaceTypeSelector
               )}
               <div className="text-left">
                 <p
-                  className={`text-sm font-medium ${option.disabled ? "text-white/20" : isSelected ? "text-white" : "text-white/60"}`}
+                  className={`text-sm font-medium ${option.disabled ? "text-muted-foreground/50" : isSelected ? "text-white" : "text-secondary-foreground"}`}
                 >
                   {option.label}
                 </p>
-                <p className={`text-xs ${option.disabled ? "text-white/15" : "text-white/30"}`}>
+                <p className={`text-xs ${option.disabled ? "text-white/15" : "text-muted-foreground/70"}`}>
                   {option.description}
                 </p>
               </div>

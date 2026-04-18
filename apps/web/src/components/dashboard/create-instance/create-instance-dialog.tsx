@@ -77,7 +77,7 @@ export function CreateInstanceDialog() {
           <DialogTitle className="text-lg font-bold text-white sm:text-xl">
             Create New Instance
           </DialogTitle>
-          <DialogDescription className="text-white/40">
+          <DialogDescription className="text-muted-foreground">
             {DIALOG_DESCRIPTIONS[workspaceType]}
           </DialogDescription>
         </DialogHeader>

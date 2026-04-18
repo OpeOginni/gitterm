@@ -37,7 +37,7 @@ function UsageQuota() {
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Runtime today</p>
               <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
-                {usage.minutesUsed} <span className="text-base font-normal text-white/40">min</span>
+                {usage.minutesUsed} <span className="text-base font-normal text-muted-foreground">min</span>
               </p>
             </div>
             <div className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm text-primary">
@@ -45,7 +45,7 @@ function UsageQuota() {
               Unlimited
             </div>
           </div>
-          <p className="mt-3 text-xs text-white/30">Quota resets daily at midnight UTC.</p>
+          <p className="mt-3 text-xs text-muted-foreground/70">Quota resets daily at midnight UTC.</p>
         </CardContent>
       </Card>
     );
@@ -67,23 +67,23 @@ function UsageQuota() {
             <p className="text-sm font-medium text-muted-foreground">Runtime today</p>
             <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
               {usage.minutesUsed}
-              <span className="text-base font-normal text-white/40"> / {usage.dailyLimit} min</span>
+              <span className="text-base font-normal text-muted-foreground"> / {usage.dailyLimit} min</span>
             </p>
           </div>
-          <p className="pb-1 text-sm tabular-nums text-white/50">
+          <p className="pb-1 text-sm tabular-nums text-muted-foreground">
             {usage.minutesRemaining} min left
           </p>
         </div>
 
         {/* Progress bar */}
         <div className="space-y-2">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
             <div
               className={`h-full rounded-full transition-all duration-500 ${barColor}`}
               style={{ width: `${percent}%` }}
             />
           </div>
-          <p className="text-xs text-white/30">Quota resets daily at midnight UTC.</p>
+          <p className="text-xs text-muted-foreground/70">Quota resets daily at midnight UTC.</p>
         </div>
 
         {/* Warning banners */}

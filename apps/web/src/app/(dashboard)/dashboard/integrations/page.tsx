@@ -12,11 +12,11 @@ import { authClient } from "@/lib/auth-client";
 
 function GitHubConnectionSkeleton() {
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
-      <Skeleton className="mb-2 h-5 w-40 bg-white/[0.04]" />
-      <Skeleton className="h-4 w-72 bg-white/[0.04]" />
+    <div className="rounded-2xl border border-border bg-card p-6">
+      <Skeleton className="mb-2 h-5 w-40 bg-secondary" />
+      <Skeleton className="h-4 w-72 bg-secondary" />
       <div className="mt-6 flex items-center justify-center py-4">
-        <Skeleton className="h-6 w-6 bg-white/[0.04]" />
+        <Skeleton className="h-6 w-6 bg-secondary" />
       </div>
     </div>
   );
@@ -57,17 +57,17 @@ function ComingSoonCards() {
       ].map((item) => (
         <div
           key={item.name}
-          className="rounded-2xl border border-dashed border-white/[0.06] bg-white/[0.01] p-6"
+          className="rounded-2xl border border-dashed border-border bg-muted p-6"
         >
           <div className="mb-3 flex items-center gap-2">
-            <item.icon className="h-4 w-4 text-white/30" />
-            <span className="text-sm font-medium text-white/50">{item.name}</span>
-            <span className="ml-auto rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/30">
+            <item.icon className="h-4 w-4 text-muted-foreground/70" />
+            <span className="text-sm font-medium text-muted-foreground">{item.name}</span>
+            <span className="ml-auto rounded-full border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
               Soon
             </span>
           </div>
-          <p className="mb-4 text-sm text-white/30">{item.description}</p>
-          <div className="space-y-2 text-sm text-white/25">
+          <p className="mb-4 text-sm text-muted-foreground/70">{item.description}</p>
+          <div className="space-y-2 text-sm text-muted-foreground/60">
             {item.features.map((feat) => (
               <div key={feat} className="flex items-center gap-2">
                 {feat.includes("CI/CD") || feat.includes("Jira") ? (
@@ -112,7 +112,7 @@ export default async function IntegrationsPage() {
 
         <section className="space-y-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-medium text-white/90">Available</h2>
+            <h2 className="text-lg font-medium text-foreground">Available</h2>
             <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] text-primary">
               1
             </span>
@@ -123,7 +123,7 @@ export default async function IntegrationsPage() {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-lg font-medium text-white/90">Coming Soon</h2>
+          <h2 className="text-lg font-medium text-foreground">Coming Soon</h2>
           <ComingSoonCards />
         </section>
       </div>

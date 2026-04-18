@@ -75,7 +75,7 @@ function FeatureItem({ text }: { text: string }) {
   return (
     <div className="flex items-start gap-2.5">
       <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-      <span className="text-sm leading-relaxed text-white/50">{text}</span>
+      <span className="text-sm leading-relaxed text-muted-foreground">{text}</span>
     </div>
   );
 }
@@ -105,13 +105,13 @@ function PricingCard({
         "relative flex w-full max-w-[360px] flex-col justify-between rounded-2xl border p-6 transition-colors",
         plan.popular
           ? "border-primary/30 bg-primary/[0.04]"
-          : "border-white/[0.06] bg-white/[0.02]",
+          : "border-border bg-card",
       )}
     >
       {/* Header */}
       <div>
         <div className="mb-5 flex items-center justify-between">
-          <span className="font-mono text-xs uppercase tracking-[0.2em] text-white/40">
+          <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
             {plan.name}
           </span>
           {plan.popular && (
@@ -120,7 +120,7 @@ function PricingCard({
             </span>
           )}
           {plan.exclusive && (
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/40">
+            <span className="rounded-full border border-border bg-secondary px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
               Open Source
             </span>
           )}
@@ -128,15 +128,15 @@ function PricingCard({
 
         {/* Price */}
         <div className="mb-2 flex items-baseline gap-1">
-          <span className="text-4xl font-bold text-white">
+          <span className="text-4xl font-bold text-foreground">
             {plan.price !== undefined ? `$${plan.price}` : "Free"}
           </span>
           {plan.price !== undefined && plan.price > 0 && (
-            <span className="text-sm text-white/30">/month</span>
+            <span className="text-sm text-muted-foreground/70">/month</span>
           )}
         </div>
 
-        <p className="mb-6 min-h-[40px] text-sm leading-relaxed text-white/40">
+        <p className="mb-6 min-h-[40px] text-sm leading-relaxed text-muted-foreground">
           {plan.description}
         </p>
 
@@ -154,13 +154,13 @@ function PricingCard({
           <Link
             href="https://railway.com/template/gitterm?referralCode=o9MFOP"
             target="_blank"
-            className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
+            className="inline-flex w-full items-center justify-center rounded-lg border border-border bg-secondary px-6 py-2.5 font-mono text-sm font-medium text-secondary-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
           >
             {plan.actionLabel}
             <ExternalLink className="ml-2 h-4 w-4" />
           </Link>
         ) : isCurrentPlan || isFreeCurrentPlan ? (
-          <span className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.06] px-6 py-2.5 font-mono text-sm text-white/30">
+          <span className="inline-flex w-full items-center justify-center rounded-lg border border-border px-6 py-2.5 font-mono text-sm text-muted-foreground/60">
             Current Plan
           </span>
         ) : plan.slug ? (
@@ -169,7 +169,7 @@ function PricingCard({
             disabled={isLoading}
             className={cn(
               "inline-flex w-full cursor-pointer items-center justify-center rounded-lg px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-wider transition-all",
-              "focus:outline-none focus:ring-2 focus:ring-gold/50 focus:ring-offset-2 focus:ring-offset-[#09090b]",
+                "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background",
               "disabled:cursor-not-allowed disabled:opacity-70",
               plan.popular
                 ? "bg-primary text-primary-foreground hover:bg-primary/85"
@@ -191,7 +191,7 @@ function PricingCard({
         ) : (
           <Link
             href="/dashboard"
-            className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
+            className="inline-flex w-full items-center justify-center rounded-lg border border-border bg-secondary px-6 py-2.5 font-mono text-sm font-medium text-secondary-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
           >
             {plan.actionLabel}
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -270,7 +270,7 @@ function PricingPageContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-white dark landing-grid">
+    <main className="min-h-screen bg-background text-foreground dark landing-grid">
       <LandingHeader />
 
       <section className="pt-36 pb-24 md:pt-44 md:pb-32">
@@ -280,10 +280,10 @@ function PricingPageContent() {
             <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
               Pricing
             </p>
-            <h1 className="mb-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
+            <h1 className="mb-4 text-4xl font-bold tracking-tight text-foreground md:text-5xl">
               Simple, transparent pricing.
             </h1>
-            <p className="mx-auto max-w-lg text-base text-white/50 sm:text-lg">
+            <p className="mx-auto max-w-lg text-base text-muted-foreground sm:text-lg">
               Powerful agentic coding with predictable pricing. No surprise bills.
             </p>
           </div>
@@ -303,35 +303,35 @@ function PricingPageContent() {
           </div>
 
           {/* Why upgrade */}
-          <div className="mt-20 border-t border-white/[0.06] pt-16">
-            <h2 className="mb-10 text-center text-2xl font-bold text-white">Why upgrade to Pro?</h2>
+          <div className="mt-20 border-t border-border pt-16">
+            <h2 className="mb-10 text-center text-2xl font-bold text-foreground">Why upgrade to Pro?</h2>
             <div className="grid gap-6 sm:grid-cols-3">
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+              <div className="rounded-xl border border-border bg-card p-5">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <span className="font-mono text-lg text-primary">3x</span>
                 </div>
-                <h3 className="mb-2 font-medium text-white">More Workspaces</h3>
-                <p className="text-sm text-white/40">
+                <h3 className="mb-2 font-medium text-foreground">More Workspaces</h3>
+                <p className="text-sm text-muted-foreground">
                   15 workspaces vs 5. Keep more projects active and organized without deleting old
                   work.
                 </p>
               </div>
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+              <div className="rounded-xl border border-border bg-card p-5">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <Terminal className="h-5 w-5 text-primary" />
                 </div>
-                <h3 className="mb-2 font-medium text-white">Unlimited Cloud Time</h3>
-                <p className="text-sm text-white/40">
+                <h3 className="mb-2 font-medium text-foreground">Unlimited Cloud Time</h3>
+                <p className="text-sm text-muted-foreground">
                   No more 60-minute daily limits. Work all day in your workspaces without
                   interruptions.
                 </p>
               </div>
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+              <div className="rounded-xl border border-border bg-card p-5">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <Globe className="h-5 w-5 text-primary" />
                 </div>
-                <h3 className="mb-2 font-medium text-white">Custom Subdomains</h3>
-                <p className="text-sm text-white/40">
+                <h3 className="mb-2 font-medium text-foreground">Custom Subdomains</h3>
+                <p className="text-sm text-muted-foreground">
                   Brand your workspaces with custom URLs. <code>yourname.gitterm.dev</code> looks
                   professional.
                 </p>
@@ -340,16 +340,16 @@ function PricingPageContent() {
           </div>
 
           {/* Questions */}
-          <div className="mt-24 border-t border-white/[0.06] pt-16 text-center">
-            <h2 className="mb-3 text-2xl font-bold text-white">Questions?</h2>
-            <p className="mb-8 text-sm text-white/40">
+          <div className="mt-24 border-t border-border pt-16 text-center">
+            <h2 className="mb-3 text-2xl font-bold text-foreground">Questions?</h2>
+            <p className="mb-8 text-sm text-muted-foreground">
               Need help choosing the right plan? Reach out on Twitter.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <Link
                 href="https://twitter.com/BrightOginni"
                 target="_blank"
-                className="inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm text-white/60 transition-colors hover:border-white/20 hover:text-white"
+                className="inline-flex items-center justify-center rounded-lg border border-border bg-secondary px-6 py-2.5 font-mono text-sm text-secondary-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
               >
                 Reach out on Twitter
                 <ExternalLink className="ml-2 h-4 w-4" />
@@ -375,7 +375,7 @@ export default function PricingPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#09090b]">
+        <div className="flex min-h-screen items-center justify-center bg-background">
           <Terminal className="h-8 w-8 animate-pulse text-primary" />
         </div>
       }

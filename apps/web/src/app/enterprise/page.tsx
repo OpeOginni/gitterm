@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function EnterprisePage() {
   return (
-    <main className="min-h-screen bg-[#09090b] text-white dark landing-grid">
+    <main className="min-h-screen bg-background text-foreground dark landing-grid">
       <LandingHeader />
       <EnterpriseContent />
       <Footer />

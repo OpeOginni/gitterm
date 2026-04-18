@@ -8,7 +8,7 @@ import { LandingHeader } from "@/components/landing/header";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#09090b] text-white dark landing-grid">
+    <main className="min-h-screen bg-background text-foreground dark">
       <LandingHeader />
       <HeroSection />
       <FeaturesSection />
