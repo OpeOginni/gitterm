@@ -1,5 +1,4 @@
 import z from "zod";
-import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../index";
 import { DeviceCodeRepository } from "@gitterm/redis";
 

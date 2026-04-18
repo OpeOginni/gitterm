@@ -132,11 +132,21 @@ export interface DaytonaImageProviderMetadata {
   snapshotsByRegion?: Record<string, string | undefined>;
 }
 
+export interface AwsImageProviderMetadata {
+  cpu?: number;
+  memory?: number;
+  containerPort?: number;
+  healthCheckPath?: string;
+  ephemeralStorageGiB?: number;
+  architecture?: "X86_64" | "ARM64";
+}
+
 export interface ImageProviderMetadata {
   e2b?: {
     templateId?: string;
   };
   daytona?: DaytonaImageProviderMetadata;
+  aws?: AwsImageProviderMetadata;
   [provider: string]: unknown;
 }
 

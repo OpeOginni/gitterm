@@ -1,5 +1,5 @@
 import env from "@gitterm/env/server";
-import { Daytona, Image } from "@daytonaio/sdk";
+import { Daytona } from "@daytonaio/sdk";
 import type { DaytonaImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import path from "path";
 import { getProviderConfigService } from "../../service/config/provider-config";

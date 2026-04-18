@@ -309,7 +309,7 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        after: async (user, ctx) => {
+        after: async (user, _ctx) => {
           await createUserLoopRunQuota(user.id, "free");
         },
       },

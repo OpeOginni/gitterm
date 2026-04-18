@@ -85,7 +85,7 @@ export const logger = {
     logger.info("Workspace restarted", { workspaceId, userId, action: "restart" });
   },
 
-  heartbeatReceived: (workspaceId: string, action: string) => {
+  heartbeatReceived: (workspaceId: string) => {
     logger.debug("Heartbeat received", { workspaceId, action: "heartbeat" });
   },
 

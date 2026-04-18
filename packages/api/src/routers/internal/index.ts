@@ -12,7 +12,7 @@ import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/in
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
-import { getProviderByCloudProviderId, railwayProvider } from "../../providers";
+import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
   closeUsageSession,
@@ -263,6 +263,7 @@ export const internalRouter = router({
         .select({
           id: workspace.id,
           externalInstanceId: workspace.externalInstanceId,
+          exposedPorts: workspace.exposedPorts,
           userId: workspace.userId,
           cloudProviderId: workspace.cloudProviderId,
           regionId: workspace.regionId,
@@ -312,6 +313,12 @@ export const internalRouter = router({
         : [];
 
       const computeProvider = await getProviderByCloudProviderId(provider.name);
+
+      for (const exposedPort of Object.values(ws.exposedPorts ?? {})) {
+        if (exposedPort?.externalPortDomainId) {
+          await computeProvider.removeExposedPortDomain(exposedPort.externalPortDomainId);
+        }
+      }
 
       await computeProvider.terminateWorkspace(
         ws.externalInstanceId,

@@ -2039,6 +2039,12 @@ export const workspaceRouter = router({
           });
       }
 
+      for (const exposedPort of Object.values(fetchedWorkspace.exposedPorts ?? {})) {
+        if (exposedPort?.externalPortDomainId) {
+          await computeProvider.removeExposedPortDomain(exposedPort.externalPortDomainId);
+        }
+      }
+
       await computeProvider.terminateWorkspace(
         fetchedWorkspace.externalInstanceId,
         fetchedWorkspace.persistent ? fetchedWorkspace.volume.externalVolumeId : undefined,

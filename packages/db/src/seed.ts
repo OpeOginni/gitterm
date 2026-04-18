@@ -59,9 +59,9 @@ const seedCloudProviders: Array<{
       label: "Not supported",
       description: "This provider does not currently expose editor SSH access.",
     },
-    creationSettlement: "poll" as ProviderSettlement,
+    creationSettlement: "immediate" as ProviderSettlement,
     stopSettlement: "immediate" as ProviderSettlement,
-    restartSettlement: "poll" as ProviderSettlement,
+    restartSettlement: "immediate" as ProviderSettlement,
     terminationSettlement: "immediate" as ProviderSettlement,
   },
   {
@@ -123,12 +123,30 @@ const seedAgentTypes = [
 ];
 
 const seedImages = [
-  { name: "gitterm-opencode", imageId: "opeoginni/gitterm-opencode", agentTypeName: "OpenCode" },
+  {
+    name: "gitterm-opencode",
+    imageId: "opeoginni/gitterm-opencode",
+    agentTypeName: "OpenCode",
+    providerMetadata: {
+      aws: {
+        cpu: 1024,
+        memory: 2048,
+        containerPort: 7681,
+        healthCheckPath: "/",
+      },
+    },
+  },
   {
     name: "gitterm-opencode-server",
     imageId: "opeoginni/gitterm-opencode-server",
     agentTypeName: "OpenCode Server",
     providerMetadata: {
+      aws: {
+        cpu: 1024,
+        memory: 2048,
+        containerPort: 4096,
+        healthCheckPath: "/",
+      },
       e2b: {
         templateId: "r9xlzvdbcoocvbncrds9",
       },
@@ -142,6 +160,12 @@ const seedImages = [
     imageId: "opeoginni/gitterm-opencode-server-with-ssh",
     agentTypeName: "OpenCode Server",
     providerMetadata: {
+      aws: {
+        cpu: 1024,
+        memory: 2048,
+        containerPort: 4096,
+        healthCheckPath: "/",
+      },
       e2b: {
         templateId: "nxiezl38gnw32ufyloc0",
       },
@@ -179,6 +203,31 @@ const seedRegions = [
     location: "Singapore",
     externalRegionIdentifier: "asia-southeast1-eqsg3a",
     providerName: "Railway",
+  },
+  // AWS regions
+  {
+    name: "US East (N. Virginia)",
+    location: "Virginia, USA",
+    externalRegionIdentifier: "us-east-1",
+    providerName: "AWS",
+  },
+  {
+    name: "US West (Oregon)",
+    location: "Oregon, USA",
+    externalRegionIdentifier: "us-west-2",
+    providerName: "AWS",
+  },
+  {
+    name: "EU (Ireland)",
+    location: "Ireland",
+    externalRegionIdentifier: "eu-west-1",
+    providerName: "AWS",
+  },
+  {
+    name: "Asia Pacific (Tokyo)",
+    location: "Tokyo, Japan",
+    externalRegionIdentifier: "ap-northeast-1",
+    providerName: "AWS",
   },
   // Daytona Regions
   {

@@ -76,8 +76,11 @@
     "daytona:snapshot-build": "bun run ./src/providers/daytona/snapshot/build.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-ec2": "^3.938.0",
-    "@aws-sdk/client-sts": "^3.936.0",
+    "@aws-sdk/client-ec2": "^3.1032.0",
+    "@aws-sdk/client-ecs": "^3.1032.0",
+    "@aws-sdk/client-efs": "^3.1032.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.1032.0",
+    "@aws-sdk/client-sts": "^3.1032.0",
     "@cloudflare/sandbox": "^0.6.10",
     "@cloudflare/workers-types": "^4.20260107.1",
     "@daytonaio/sdk": "^0.151.0",
