@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Lock } from "lucide-react";
+import { CheckCircle2, Loader2, Lock, MapPin, Trash2, Wand2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import type { Route } from "next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,6 +34,10 @@ interface ProviderConfigField {
   defaultValue?: string;
   options?: Array<{ value: string; label: string }>;
   sortOrder: number;
+}
+
+interface AwsSetupSummary {
+  stackName: string;
 }
 
 export default function ProviderSettingsPage() {
@@ -53,6 +57,7 @@ export default function ProviderSettingsPage() {
   const [configForm, setConfigForm] = useState<Record<string, any>>({});
   const [configName, setConfigName] = useState("");
   const [configEnabled, setConfigEnabled] = useState(true);
+  const [awsSetupSummary, setAwsSetupSummary] = useState<AwsSetupSummary | null>(null);
   const [newRegion, setNewRegion] = useState({
     name: "",
     location: "",
@@ -113,6 +118,44 @@ export default function ProviderSettingsPage() {
       trpcClient.admin.infrastructure.toggleProviderConfig.mutate({ id, isEnabled }),
   });
 
+  const bootstrapAwsProvider = useMutation({
+    mutationFn: (params: {
+      providerId: string;
+      configName?: string;
+      accessKeyId: string;
+      secretAccessKey: string;
+      defaultRegion: string;
+    }) => trpcClient.admin.aws.bootstrap.mutate(params),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
+      setConfigForm(data.config);
+      setConfigEnabled(true);
+      setAllowUserRegionSelection(false);
+      setAwsSetupSummary({ stackName: data.summary.stackName });
+      toast.success("AWS infrastructure provisioned and saved");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteAwsInfrastructure = useMutation({
+    mutationFn: (params: { providerId: string }) =>
+      trpcClient.admin.aws.deleteInfrastructure.mutate(params),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
+      setConfigForm(data.config);
+      setConfigEnabled(false);
+      setAwsSetupSummary(null);
+      toast.success(
+        data.deleted
+          ? `AWS infrastructure deleted (${data.stackName})`
+          : `AWS infrastructure was already absent (${data.stackName})`,
+      );
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
   const createRegion = useMutation({
     mutationFn: (params: {
       cloudProviderId: string;
@@ -146,6 +189,9 @@ export default function ProviderSettingsPage() {
     )?.id ?? "";
 
   const selectedProviderType = providerTypes?.find((type) => type.id === selectedProviderTypeId);
+  const isAwsProvider =
+    selectedProviderType?.name?.toLowerCase() === "aws" ||
+    provider?.name?.trim().toLowerCase() === "aws";
 
   const isSavingConfig =
     createProviderConfig.isPending ||
@@ -153,6 +199,8 @@ export default function ProviderSettingsPage() {
     updateProvider.isPending ||
     toggleProviderConfig.isPending ||
     toggleProvider.isPending;
+  const isBootstrappingAws = bootstrapAwsProvider.isPending;
+  const isDeletingAwsInfrastructure = deleteAwsInfrastructure.isPending;
 
   useEffect(() => {
     if (!isSessionPending) {
@@ -177,7 +225,12 @@ export default function ProviderSettingsPage() {
     setConfigName(provider.providerConfig?.name ?? `${provider.name} Default`);
     setConfigForm(provider.providerConfig?.config ?? {});
     setConfigEnabled(provider.providerConfig?.isEnabled ?? true);
-  }, [provider?.id]);
+  }, [
+    provider?.id,
+    provider?.updatedAt,
+    provider?.providerConfig?.id,
+    provider?.providerConfig?.updatedAt,
+  ]);
 
   useEffect(() => {
     if (!provider || selectedProviderTypeId) {
@@ -208,6 +261,12 @@ export default function ProviderSettingsPage() {
     });
   }, [selectedProviderFields]);
 
+  useEffect(() => {
+    if (!isAwsProvider) {
+      setAwsSetupSummary(null);
+    }
+  }, [isAwsProvider]);
+
   const handleToggleProvider = async () => {
     if (!provider) {
       return;
@@ -226,6 +285,11 @@ export default function ProviderSettingsPage() {
   const handleSaveSettings = async () => {
     if (!provider || !selectedProviderTypeId) {
       toast.error("Select a provider to configure.");
+      return;
+    }
+
+    if (isAwsProvider) {
+      toast.error("Use the Simple Setup button to provision AWS infrastructure.");
       return;
     }
 
@@ -281,16 +345,18 @@ export default function ProviderSettingsPage() {
     }
   };
 
-  const renderField = (field: ProviderConfigField) => {
+  const AWS_EDITABLE_FIELDS = ["accessKeyId", "secretAccessKey", "defaultRegion"];
+
+  const renderField = (field: ProviderConfigField, readOnly = false) => {
     const value = configForm[field.fieldName] ?? field.defaultValue ?? "";
 
     if (field.fieldType === "password") {
       return (
-        <div key={field.fieldName} className="space-y-2">
+        <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
           <div className="flex items-center gap-2">
             <Label htmlFor={field.fieldName}>
               {field.fieldLabel}
-              {field.isRequired && <span className="text-destructive">*</span>}
+              {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
             </Label>
             {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
           </div>
@@ -300,7 +366,9 @@ export default function ProviderSettingsPage() {
             placeholder={field.fieldLabel}
             value={value}
             onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
-            required={field.isRequired}
+            required={field.isRequired && !readOnly}
+            readOnly={readOnly}
+            className={cn(readOnly && "cursor-default")}
           />
         </div>
       );
@@ -308,19 +376,20 @@ export default function ProviderSettingsPage() {
 
     if (field.fieldType === "boolean") {
       return (
-        <div key={field.fieldName} className="space-y-2">
+        <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
           <div className="flex items-center gap-2">
             <Label htmlFor={field.fieldName}>
               {field.fieldLabel}
-              {field.isRequired && <span className="text-destructive">*</span>}
+              {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
             </Label>
             {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
           </div>
           <Switch
             id={field.fieldName}
             checked={value}
+            disabled={readOnly}
             onCheckedChange={(checked) =>
-              setConfigForm({ ...configForm, [field.fieldName]: checked })
+              !readOnly && setConfigForm({ ...configForm, [field.fieldName]: checked })
             }
           />
         </div>
@@ -329,25 +398,66 @@ export default function ProviderSettingsPage() {
 
     if (field.fieldType === "select" && field.options) {
       return (
+        <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
+          <div className="flex items-center gap-2">
+            <Label htmlFor={field.fieldName}>
+              {field.fieldLabel}
+              {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
+            </Label>
+            {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
+          </div>
+          {readOnly ? (
+            <Input
+              value={field.options.find((o) => o.value === value)?.label ?? value}
+              readOnly
+              className="cursor-default"
+            />
+          ) : (
+            <Select
+              value={value}
+              onValueChange={(val) => setConfigForm({ ...configForm, [field.fieldName]: val })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={`Select ${field.fieldLabel}`} />
+              </SelectTrigger>
+              <SelectContent>
+                {field.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      );
+    }
+
+    if (
+      isAwsProvider &&
+      field.fieldName === "defaultRegion" &&
+      provider?.regions &&
+      provider.regions.length > 0
+    ) {
+      return (
         <div key={field.fieldName} className="space-y-2">
           <div className="flex items-center gap-2">
             <Label htmlFor={field.fieldName}>
               {field.fieldLabel}
               {field.isRequired && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
           </div>
           <Select
             value={value}
             onValueChange={(val) => setConfigForm({ ...configForm, [field.fieldName]: val })}
           >
             <SelectTrigger>
-              <SelectValue placeholder={`Select ${field.fieldLabel}`} />
+              <SelectValue placeholder="Select a region" />
             </SelectTrigger>
             <SelectContent>
-              {field.options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+              {provider.regions.map((r: any) => (
+                <SelectItem key={r.externalRegionIdentifier} value={r.externalRegionIdentifier}>
+                  {r.name} ({r.externalRegionIdentifier})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -357,11 +467,11 @@ export default function ProviderSettingsPage() {
     }
 
     return (
-      <div key={field.fieldName} className="space-y-2">
+      <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
         <div className="flex items-center gap-2">
           <Label htmlFor={field.fieldName}>
             {field.fieldLabel}
-            {field.isRequired && <span className="text-destructive">*</span>}
+            {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
           </Label>
           {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
         </div>
@@ -371,10 +481,53 @@ export default function ProviderSettingsPage() {
           placeholder={field.fieldLabel}
           value={value}
           onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
-          required={field.isRequired}
+          required={field.isRequired && !readOnly}
+          readOnly={readOnly}
+          className={cn(readOnly && "cursor-default")}
         />
       </div>
     );
+  };
+
+  const canRunAwsSimpleSetup =
+    !!provider?.id &&
+    String(configForm.accessKeyId ?? "").trim().length > 0 &&
+    String(configForm.secretAccessKey ?? "").trim().length > 0 &&
+    String(configForm.defaultRegion ?? "").trim().length > 0;
+
+  const hasExistingAwsSetup =
+    isAwsProvider && !!configForm.clusterArn;
+
+  const handleAwsSimpleSetup = async () => {
+    if (!provider?.id) {
+      toast.error("Provider not found.");
+      return;
+    }
+
+    await bootstrapAwsProvider.mutateAsync({
+      providerId: provider.id,
+      configName: configName.trim() || `${provider.name} Default`,
+      accessKeyId: String(configForm.accessKeyId ?? "").trim(),
+      secretAccessKey: String(configForm.secretAccessKey ?? "").trim(),
+      defaultRegion: String(configForm.defaultRegion ?? "").trim(),
+    });
+  };
+
+  const handleDeleteAwsInfrastructure = async () => {
+    if (!provider?.id) {
+      toast.error("Provider not found.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Delete the AWS CloudFormation stack and clear the auto-managed AWS config fields? This requires all AWS workspaces for this provider to already be deleted.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await deleteAwsInfrastructure.mutateAsync({ providerId: provider.id });
   };
 
   if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
@@ -489,6 +642,97 @@ export default function ProviderSettingsPage() {
                 </div>
               </div>
 
+              {isAwsProvider && (
+                <div className="mt-4 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.06]">
+                          <Wand2 className="h-3.5 w-3.5 text-white/60" />
+                        </div>
+                        <p className="text-sm font-medium text-white/90">Simple Setup</p>
+                      </div>
+                      <p className="max-w-xl text-xs leading-relaxed text-white/50">
+                        {hasExistingAwsSetup ? (
+                          <>
+                            Infrastructure is provisioned. Use{" "}
+                            <span className="text-white/70">Re-run Setup</span> to update or
+                            re-create the CloudFormation stack if anything was changed or deleted.
+                          </>
+                        ) : (
+                          <>
+                            Enter your IAM credentials and region below. Once filled, click{" "}
+                            <span className="text-white/70">Set Up AWS</span> to discover the
+                            default VPC and provision the ECS cluster, load balancer, security
+                            groups, task roles, log group, and EFS.
+                          </>
+                        )}
+                      </p>
+                      <p className="max-w-xl text-[11px] leading-relaxed text-white/30">
+                        Targets the default VPC and public subnets. Single-region only.
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      {hasExistingAwsSetup && (
+                        <Button
+                          type="button"
+                          onClick={handleDeleteAwsInfrastructure}
+                          disabled={isDeletingAwsInfrastructure || isBootstrappingAws}
+                          variant="outline"
+                          className="gap-2 border-red-500/20 bg-red-500/[0.04] text-red-300 hover:border-red-400/30 hover:bg-red-500/[0.1] hover:text-red-200"
+                        >
+                          {isDeletingAwsInfrastructure ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Deleting...
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete Setup
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        onClick={handleAwsSimpleSetup}
+                        disabled={!canRunAwsSimpleSetup || isBootstrappingAws || isDeletingAwsInfrastructure}
+                        variant="outline"
+                        className={cn(
+                          "shrink-0 gap-2 text-xs transition-all duration-500",
+                          canRunAwsSimpleSetup && !isBootstrappingAws && !hasExistingAwsSetup
+                            ? "border-amber-500/40 bg-amber-500/[0.08] text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.15)] hover:border-amber-400/60 hover:bg-amber-500/[0.14] hover:text-amber-100 hover:shadow-[0_0_20px_rgba(245,158,11,0.25)] animate-pulse"
+                            : "border-white/[0.1] bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white/90",
+                        )}
+                      >
+                        {isBootstrappingAws ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            {hasExistingAwsSetup ? "Re-running..." : "Setting up..."}
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="h-3.5 w-3.5" />
+                            {hasExistingAwsSetup ? "Re-run Setup" : "Set Up AWS"}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {awsSetupSummary && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400/80" />
+                      <span className="text-xs text-emerald-400/80">
+                        Infrastructure provisioned via CloudFormation stack{" "}
+                        <span className="font-mono text-emerald-300/70">{awsSetupSummary.stackName}</span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {!selectedProviderTypeId && (
                 <div className="mt-4 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-4 text-sm text-white/40">
                   No provider definition found for this entry. Make sure the provider name matches a
@@ -520,7 +764,12 @@ export default function ProviderSettingsPage() {
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   {selectedProviderFields
                     .sort((a, b) => a.sortOrder - b.sortOrder)
-                    .map(renderField)}
+                    .map((field) =>
+                      renderField(
+                        field,
+                        isAwsProvider && !AWS_EDITABLE_FIELDS.includes(field.fieldName),
+                      ),
+                    )}
                 </div>
               )}
             </div>

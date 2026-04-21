@@ -28,6 +28,7 @@ const seedCloudProviders: Array<{
   isEnabled: boolean;
   isSandbox?: boolean;
   supportsRegions: boolean;
+  allowUserRegionSelection?: boolean;
   supportServerOnly?: boolean;
   editorAccessSupport?: CloudProviderEditorAccessSupport;
   creationSettlement?: ProviderSettlement;
@@ -54,6 +55,7 @@ const seedCloudProviders: Array<{
     name: "AWS",
     isEnabled: false,
     supportsRegions: true,
+    allowUserRegionSelection: false,
     editorAccessSupport: {
       supported: false,
       label: "Not supported",
@@ -144,7 +146,7 @@ const seedImages = [
       aws: {
         cpu: 1024,
         memory: 2048,
-        containerPort: 4096,
+        containerPort: 7681,
         healthCheckPath: "/",
       },
       e2b: {
@@ -163,7 +165,7 @@ const seedImages = [
       aws: {
         cpu: 1024,
         memory: 2048,
-        containerPort: 4096,
+        containerPort: 7681,
         healthCheckPath: "/",
       },
       e2b: {
@@ -221,6 +223,12 @@ const seedRegions = [
     name: "EU (Ireland)",
     location: "Ireland",
     externalRegionIdentifier: "eu-west-1",
+    providerName: "AWS",
+  },
+  {
+    name: "EU (Frankfurt)",
+    location: "Frankfurt, Germany",
+    externalRegionIdentifier: "eu-central-1",
     providerName: "AWS",
   },
   {
@@ -469,6 +477,7 @@ export async function seedDatabase(): Promise<void> {
       const updates: Partial<typeof cloudProvider.$inferInsert> = {};
       const targetIsSandbox = provider.isSandbox ?? false;
       const targetSupportsRegions = provider.supportsRegions ?? true;
+      const targetAllowUserRegionSelection = provider.allowUserRegionSelection ?? true;
       const targetSupportServerOnly = provider.supportServerOnly ?? false;
       const targetProviderCreationSettlement = provider.creationSettlement ?? "webhook";
       const targetProviderStopSettlement = provider.stopSettlement ?? "webhook";
@@ -482,6 +491,10 @@ export async function seedDatabase(): Promise<void> {
 
       if (existing.supportsRegions !== targetSupportsRegions) {
         updates.supportsRegions = targetSupportsRegions;
+      }
+
+      if (existing.allowUserRegionSelection !== targetAllowUserRegionSelection) {
+        updates.allowUserRegionSelection = targetAllowUserRegionSelection;
       }
 
       if (existing.supportServerOnly !== targetSupportServerOnly) {
@@ -531,6 +544,7 @@ export async function seedDatabase(): Promise<void> {
           isEnabled: provider.isEnabled,
           isSandbox: provider.isSandbox ?? false,
           supportsRegions: provider.supportsRegions,
+          allowUserRegionSelection: provider.allowUserRegionSelection ?? true,
           supportServerOnly: provider.supportServerOnly ?? false,
           editorAccessSupport: provider.editorAccessSupport ?? {},
           creationSettlement: provider.creationSettlement ?? "webhook",
@@ -788,9 +802,23 @@ export async function seedDatabase(): Promise<void> {
       }
     }
 
-    if (createdCount > 0 || updatedCount > 0) {
+    const definedFieldNames = new Set(
+      seedProviderTypes[providerName]!.fields.map((field) => field.fieldName),
+    );
+    const allExistingFields = await db.query.providerConfigField.findMany({
+      where: eq(providerConfigField.providerTypeId, providerTypeId),
+    });
+    let deletedCount = 0;
+    for (const existing of allExistingFields) {
+      if (!definedFieldNames.has(existing.fieldName)) {
+        await db.delete(providerConfigField).where(eq(providerConfigField.id, existing.id));
+        deletedCount += 1;
+      }
+    }
+
+    if (createdCount > 0 || updatedCount > 0 || deletedCount > 0) {
       console.log(
-        `[seed]   Synced config fields for "${providerName}" (created: ${createdCount}, updated: ${updatedCount})`,
+        `[seed]   Synced config fields for "${providerName}" (created: ${createdCount}, updated: ${updatedCount}, deleted: ${deletedCount})`,
       );
     }
   };

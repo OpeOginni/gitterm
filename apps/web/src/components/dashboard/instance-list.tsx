@@ -165,8 +165,12 @@ function InstanceCard({
 
   const deleteServiceMutation = useMutation(
     trpc.workspace.deleteWorkspace.mutationOptions({
-      onSuccess: () => {
-        toast.success("Workspace terminated successfully");
+      onSuccess: (data) => {
+        toast.success(
+          data.cleanupInBackground
+            ? "Workspace removed. AWS cleanup is continuing in the background."
+            : "Workspace terminated successfully",
+        );
         queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
       },
       onError: (error) => {

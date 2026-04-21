@@ -2027,37 +2027,61 @@ export const workspaceRouter = router({
 
       // Get compute provider and terminate the workspace
       const computeProvider = await getProviderByCloudProviderId(provider.name);
-      if (fetchedWorkspace.editorConnection) {
-        await computeProvider
-          .revokeWorkspaceEditorAccess({
-            workspaceId: fetchedWorkspace.id,
-            externalServiceId: fetchedWorkspace.externalInstanceId,
-            connection: fetchedWorkspace.editorConnection,
-          })
-          .catch((error) => {
-            console.warn("Failed to revoke workspace editor access during delete:", error);
-          });
-      }
+      const terminateInBackground = provider.name.toLowerCase() === "aws";
+      const externalVolumeId = fetchedWorkspace.persistent
+        ? fetchedWorkspace.volume.externalVolumeId
+        : undefined;
+      const terminatedAt = new Date();
 
-      for (const exposedPort of Object.values(fetchedWorkspace.exposedPorts ?? {})) {
-        if (exposedPort?.externalPortDomainId) {
-          await computeProvider.removeExposedPortDomain(exposedPort.externalPortDomainId);
+      const runTerminationCleanup = async () => {
+        if (fetchedWorkspace.editorConnection) {
+          await computeProvider
+            .revokeWorkspaceEditorAccess({
+              workspaceId: fetchedWorkspace.id,
+              externalServiceId: fetchedWorkspace.externalInstanceId,
+              connection: fetchedWorkspace.editorConnection,
+            })
+            .catch((error) => {
+              console.warn("Failed to revoke workspace editor access during delete:", error);
+            });
         }
-      }
 
-      await computeProvider.terminateWorkspace(
-        fetchedWorkspace.externalInstanceId,
-        fetchedWorkspace.persistent ? fetchedWorkspace.volume.externalVolumeId : undefined,
-      );
+        for (const exposedPort of Object.values(fetchedWorkspace.exposedPorts ?? {})) {
+          if (exposedPort?.externalPortDomainId) {
+            await computeProvider.removeExposedPortDomain(exposedPort.externalPortDomainId);
+          }
+        }
+
+        await computeProvider.terminateWorkspace(
+          fetchedWorkspace.externalInstanceId,
+          externalVolumeId,
+        );
+
+        await db
+          .update(workspace)
+          .set({
+            externalInstanceId: "",
+            externalRunningDeploymentId: null,
+            upstreamUrl: null,
+            exposedPorts: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(workspace.id, fetchedWorkspace.id));
+      };
+
+      if (!terminateInBackground) {
+        await runTerminationCleanup();
+      }
 
       const [updatedWorkspace] = await db
         .update(workspace)
         .set({
           status: "terminated",
-          stoppedAt: new Date(),
-          terminatedAt: new Date(),
+          stoppedAt: terminatedAt,
+          terminatedAt,
+          exposedPorts: null,
           editorConnection: null,
-          updatedAt: new Date(),
+          updatedAt: terminatedAt,
         })
         .where(eq(workspace.id, input.workspaceId))
         .returning();
@@ -2073,14 +2097,24 @@ export const workspaceRouter = router({
       WORKSPACE_EVENTS.emitStatus({
         workspaceId: input.workspaceId,
         status: "terminated",
-        updatedAt: new Date(),
+        updatedAt: terminatedAt,
         userId,
         workspaceDomain: fetchedWorkspace.domain,
       });
 
+      if (terminateInBackground) {
+        void runTerminationCleanup().catch((error) => {
+          console.error(
+            `Failed to finish background termination for workspace ${fetchedWorkspace.id}:`,
+            error,
+          );
+        });
+      }
+
       return {
         workspace: updatedWorkspace,
         success: true,
+        cleanupInBackground: terminateInBackground,
       };
     }),
 

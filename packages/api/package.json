@@ -76,6 +76,7 @@
     "daytona:snapshot-build": "bun run ./src/providers/daytona/snapshot/build.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudformation": "^3.1032.0",
     "@aws-sdk/client-ec2": "^3.1032.0",
     "@aws-sdk/client-ecs": "^3.1032.0",
     "@aws-sdk/client-efs": "^3.1032.0",

@@ -119,7 +119,7 @@ export const infrastructureRouter = router({
       providers.map(async (provider) => ({
         ...provider,
         providerConfig: provider.providerConfigId
-          ? await service.getProviderConfigById(provider.providerConfigId)
+          ? await service.getProviderConfigByIdForDisplay(provider.providerConfigId)
           : null,
       })),
     );
@@ -142,7 +142,7 @@ export const infrastructureRouter = router({
     return {
       ...provider,
       providerConfig: provider.providerConfigId
-        ? await service.getProviderConfigById(provider.providerConfigId)
+        ? await service.getProviderConfigByIdForDisplay(provider.providerConfigId)
         : null,
     };
   }),
@@ -544,12 +544,12 @@ export const infrastructureRouter = router({
 
   listProviderConfigs: adminProcedure.query(async () => {
     const service = getProviderConfigService();
-    return await service.getAllProviderConfigs();
+    return await service.getAllProviderConfigsForDisplay();
   }),
 
   getProviderConfig: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
     const service = getProviderConfigService();
-    const config = await service.getProviderConfigById(input.id);
+    const config = await service.getProviderConfigByIdForDisplay(input.id);
 
     if (!config) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Provider config not found" });

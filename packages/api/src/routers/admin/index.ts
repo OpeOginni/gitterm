@@ -15,10 +15,12 @@ import { router, adminProcedure } from "../..";
 import { infrastructureRouter } from "./infrastructure";
 import { usersRouter } from "./users";
 import { settingsRouter } from "./settings";
+import { awsRouter } from "../aws";
 import { isGitHubAuthEnabled, isEmailAuthEnabled } from "@gitterm/env/server";
 
 export const adminRouter = router({
   infrastructure: infrastructureRouter,
+  aws: awsRouter,
   users: usersRouter,
   settings: settingsRouter,
 

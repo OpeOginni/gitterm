@@ -1,6 +1,6 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
-import { db, eq, and, sql, gt, lt, or } from "@gitterm/db";
+import { db, eq, and, ne, sql, gt, lt, or } from "@gitterm/db";
 import {
   workspace,
   usageSession,
@@ -12,7 +12,7 @@ import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/in
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
-import { getProviderByCloudProviderId } from "../../providers";
+import { awsProvider, getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
   closeUsageSession,
@@ -349,6 +349,80 @@ export const internalRouter = router({
 
       return { success: true };
     }),
+
+  sweepAwsResourcesInternal: internalProcedure.mutation(async () => {
+    const awsCloudProvider = await db.query.cloudProvider.findFirst({
+      where: eq(cloudProvider.name, "AWS"),
+    });
+
+    if (!awsCloudProvider) {
+      return {
+        success: true,
+        retriedWorkspaces: 0,
+        servicesDeleted: 0,
+        taskDefinitionsDeregistered: 0,
+        rulesDeleted: 0,
+        targetGroupsDeleted: 0,
+        accessPointsDeleted: 0,
+      };
+    }
+
+    const [activeAwsWorkspaces, terminatedAwsWorkspaces] = await Promise.all([
+      db
+        .select({ id: workspace.id })
+        .from(workspace)
+        .where(
+          and(eq(workspace.cloudProviderId, awsCloudProvider.id), ne(workspace.status, "terminated")),
+        ),
+      db
+        .select({
+          id: workspace.id,
+          externalInstanceId: workspace.externalInstanceId,
+          externalRunningDeploymentId: workspace.externalRunningDeploymentId,
+        })
+        .from(workspace)
+        .where(
+          and(
+            eq(workspace.cloudProviderId, awsCloudProvider.id),
+            eq(workspace.status, "terminated"),
+            ne(workspace.externalInstanceId, ""),
+          ),
+        ),
+    ]);
+
+    let retriedWorkspaces = 0;
+    for (const terminatedWorkspace of terminatedAwsWorkspaces) {
+      try {
+        await awsProvider.terminateWorkspace(terminatedWorkspace.externalInstanceId);
+        await db
+          .update(workspace)
+          .set({
+            externalInstanceId: "",
+            externalRunningDeploymentId: null,
+            upstreamUrl: null,
+            exposedPorts: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(workspace.id, terminatedWorkspace.id));
+        retriedWorkspaces += 1;
+      } catch (error) {
+        console.error(
+          `[internal] Failed to retry AWS termination for workspace ${terminatedWorkspace.id}:`,
+          error,
+        );
+      }
+    }
+
+    const sweepResult = await awsProvider.sweepOrphanedResources(
+      activeAwsWorkspaces.map((ws) => ws.id),
+    );
+
+    return {
+      success: true,
+      retriedWorkspaces,
+      ...sweepResult,
+    };
+  }),
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
     const fourDays = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000); // 4 Days ago
     const longTermInactiveWorkspaces = await db

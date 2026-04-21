@@ -2,6 +2,11 @@
 
 This provider runs GitTerm workspaces on AWS using `ECS` with `Fargate`, a shared `ALB`, and optional `EFS` for persistent workspaces.
 
+It supports two setup modes:
+
+- manual setup with every AWS resource entered explicitly
+- simple setup from IAM credentials, where GitTerm creates the shared ECS, ALB, security group, logging, and EFS resources for you inside the default VPC
+
 ## What The Provider Expects
 
 The AWS provider config is defined in:
@@ -226,53 +231,29 @@ The IAM user behind `accessKeyId` and `secretAccessKey` must be able to manage:
 
 Keep the IAM user separate from the task execution role and task role.
 
-A sample least-access IAM user policy lives beside this README:
+A sample IAM user policy lives beside this README:
 
 - `packages/api/src/providers/aws/iam-user-policy.json`
 
 ## IAM User Policy
 
-Use `iam-user-policy.json` as the starting point for the IAM user whose credentials are entered into the GitTerm AWS provider config.
+Use `iam-user-policy.json` as the single policy for the IAM user whose credentials are entered into the GitTerm AWS provider config.
+
+This one policy covers both:
+
+- simple setup (discovering the VPC, creating the cluster, ALB, security groups, roles, log group, EFS)
+- runtime workspace lifecycle (creating, stopping, restarting, deleting workspaces and exposed ports)
 
 Replace these placeholders before attaching it:
 
-- `<REGION>`
-- `<ACCOUNT_ID>`
-- `<TASK_EXECUTION_ROLE_NAME>`
-- `<TASK_ROLE_NAME>`
+- `<REGION>` -- the AWS region you selected during setup
+- `<ACCOUNT_ID>` -- your 12-digit AWS account ID
 
 Important notes:
 
-- This policy is action-minimal for the current provider implementation.
-- Some AWS control-plane APIs used by ECS, ALB, and EFS do not scope cleanly to specific ARNs at create-time, so those statements use `"Resource": "*"` and are limited by action set and region.
-- If you do not use persistent workspaces, you can remove the `GitTermPersistentWorkspaceAccessPoints` statement entirely.
-- The policy only allows `iam:PassRole` for the exact ECS task roles used by GitTerm.
-
-## Optional Service-Linked Role Note
-
-If this AWS account has never used ECS services before, AWS may need the ECS service-linked role to exist.
-
-In that case, create it once ahead of time or grant a temporary permission to create it:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "iam:CreateServiceLinkedRole",
-      "Resource": "*",
-      "Condition": {
-        "StringEquals": {
-          "iam:AWSServiceName": "ecs.amazonaws.com"
-        }
-      }
-    }
-  ]
-}
-```
-
-This is not required once the ECS service-linked role already exists in the account.
+- Some AWS control-plane APIs do not scope cleanly to specific ARNs at create-time, so those statements use `"Resource": "*"` and are limited by action set and region condition.
+- IAM role operations are scoped to the exact `gitterm-task-execution` and `gitterm-task` role names.
+- The ECS service-linked role creation is included in the policy. If your account already has the ECS service-linked role, that action is a no-op.
 
 ## Minimal Setup Checklist
 

@@ -141,16 +141,10 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       {
         fieldName: "defaultRegion",
         fieldLabel: "Default Region",
-        fieldType: "select",
+        fieldType: "text",
         isRequired: true,
         isEncrypted: false,
         defaultValue: "us-east-1",
-        options: [
-          { value: "us-east-1", label: "US East (N. Virginia)" },
-          { value: "us-west-2", label: "US West (Oregon)" },
-          { value: "eu-west-1", label: "EU (Ireland)" },
-          { value: "ap-northeast-1", label: "Asia Pacific (Tokyo)" },
-        ],
         sortOrder: 3,
       },
       {
