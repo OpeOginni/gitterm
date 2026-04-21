@@ -260,6 +260,34 @@ function formatErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function matchesAwsError(error: unknown, ...needles: string[]): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const awsError = error as {
+    name?: string;
+    __type?: string;
+    Code?: string;
+    code?: string;
+    message?: string;
+    Message?: string;
+  };
+
+  const haystacks = [
+    awsError.name,
+    awsError.__type,
+    awsError.Code,
+    awsError.code,
+    awsError.message,
+    awsError.Message,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .map((value) => value.toLowerCase());
+
+  return needles.some((needle) => haystacks.some((haystack) => haystack.includes(needle.toLowerCase())));
+}
+
 export class AwsProvider implements ComputeProvider {
   readonly name = "aws";
 
@@ -568,8 +596,7 @@ export class AwsProvider implements ComputeProvider {
     const { elbv2 } = await this.createClients(region);
 
     await elbv2.send(new DeleteRuleCommand({ RuleArn: ruleArn })).catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("RuleNotFound") && !message.includes("not found")) {
+      if (!matchesAwsError(error, "RuleNotFound", "not found")) {
         throw error;
       }
     });
@@ -579,8 +606,7 @@ export class AwsProvider implements ComputeProvider {
     const { elbv2 } = await this.createClients(region);
 
     await elbv2.send(new DeleteTargetGroupCommand({ TargetGroupArn: targetGroupArn })).catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("TargetGroupNotFound") && !message.includes("not found")) {
+      if (!matchesAwsError(error, "TargetGroupNotFound", "not found")) {
         throw error;
       }
     });
@@ -590,8 +616,7 @@ export class AwsProvider implements ComputeProvider {
     const { efs } = await this.createClients(region);
 
     await efs.send(new DeleteAccessPointCommand({ AccessPointId: accessPointId })).catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("AccessPointNotFound") && !message.includes("not found")) {
+      if (!matchesAwsError(error, "AccessPointNotFound", "not found")) {
         throw error;
       }
     });
@@ -1097,8 +1122,7 @@ export class AwsProvider implements ComputeProvider {
         }),
       )
       .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        if (!message.includes("ServiceNotFound") && !message.includes("not found")) {
+        if (!matchesAwsError(error, "ServiceNotFound", "ServiceNotFoundException", "not found")) {
           throw error;
         }
       });

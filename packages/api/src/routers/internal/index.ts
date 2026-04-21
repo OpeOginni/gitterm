@@ -31,6 +31,7 @@ import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import type { E2BConfig } from "../../providers/e2b";
+import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 
 /**
  * Internal router for service-to-service communication
@@ -351,75 +352,9 @@ export const internalRouter = router({
     }),
 
   sweepAwsResourcesInternal: internalProcedure.mutation(async () => {
-    const awsCloudProvider = await db.query.cloudProvider.findFirst({
-      where: eq(cloudProvider.name, "AWS"),
-    });
-
-    if (!awsCloudProvider) {
-      return {
-        success: true,
-        retriedWorkspaces: 0,
-        servicesDeleted: 0,
-        taskDefinitionsDeregistered: 0,
-        rulesDeleted: 0,
-        targetGroupsDeleted: 0,
-        accessPointsDeleted: 0,
-      };
-    }
-
-    const [activeAwsWorkspaces, terminatedAwsWorkspaces] = await Promise.all([
-      db
-        .select({ id: workspace.id })
-        .from(workspace)
-        .where(
-          and(eq(workspace.cloudProviderId, awsCloudProvider.id), ne(workspace.status, "terminated")),
-        ),
-      db
-        .select({
-          id: workspace.id,
-          externalInstanceId: workspace.externalInstanceId,
-          externalRunningDeploymentId: workspace.externalRunningDeploymentId,
-        })
-        .from(workspace)
-        .where(
-          and(
-            eq(workspace.cloudProviderId, awsCloudProvider.id),
-            eq(workspace.status, "terminated"),
-            ne(workspace.externalInstanceId, ""),
-          ),
-        ),
-    ]);
-
-    let retriedWorkspaces = 0;
-    for (const terminatedWorkspace of terminatedAwsWorkspaces) {
-      try {
-        await awsProvider.terminateWorkspace(terminatedWorkspace.externalInstanceId);
-        await db
-          .update(workspace)
-          .set({
-            externalInstanceId: "",
-            externalRunningDeploymentId: null,
-            upstreamUrl: null,
-            exposedPorts: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(workspace.id, terminatedWorkspace.id));
-        retriedWorkspaces += 1;
-      } catch (error) {
-        console.error(
-          `[internal] Failed to retry AWS termination for workspace ${terminatedWorkspace.id}:`,
-          error,
-        );
-      }
-    }
-
-    const sweepResult = await awsProvider.sweepOrphanedResources(
-      activeAwsWorkspaces.map((ws) => ws.id),
-    );
-
+    const sweepResult = await runAwsCleanupSweep();
     return {
       success: true,
-      retriedWorkspaces,
       ...sweepResult,
     };
   }),

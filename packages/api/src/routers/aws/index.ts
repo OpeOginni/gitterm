@@ -6,6 +6,7 @@ import { providerConfig, providerType } from "@gitterm/db/schema/provider-config
 import { workspace } from "@gitterm/db/schema/workspace";
 import { adminProcedure, router } from "../..";
 import { bootstrapAwsProvider, deleteAwsProviderInfrastructure } from "../../providers/aws/setup";
+import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { getProviderConfigService } from "../../service/config/provider-config";
 
 const AWS_REGION_METADATA: Record<string, { name: string; location: string }> = {
@@ -234,6 +235,15 @@ export const awsRouter = router({
         and(eq(workspace.cloudProviderId, provider.id), ne(workspace.status, "terminated")),
       );
 
+      if (activeWorkspaceCount > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Delete AWS workspaces using this provider before deleting the infrastructure.",
+        });
+      }
+
+      await runAwsCleanupSweep();
+
       const unresolvedCleanupCount = await db.$count(
         workspace,
         and(
@@ -242,13 +252,6 @@ export const awsRouter = router({
           ne(workspace.externalInstanceId, ""),
         ),
       );
-
-      if (activeWorkspaceCount > 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Delete AWS workspaces using this provider before deleting the infrastructure.",
-        });
-      }
 
       if (unresolvedCleanupCount > 0) {
         throw new TRPCError({
