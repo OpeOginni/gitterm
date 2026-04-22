@@ -409,7 +409,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 Connect a GitHub account to enable commit, push, fork and private repo access.
               </TooltipContent>
             </Tooltip>
-            <Link href="/dashboard/integrations" className="text-primary hover:text-primary/80">
+            <Link href="/dashboard/integrations" className="text-primary hover:text-foreground/70">
               <ArrowUpRight className="h-3 w-3" />
             </Link>
           </Label>
@@ -445,54 +445,69 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         </div>
 
         {/* ── 4. SSH Editor Access ── */}
-        <div
-          className={cn(
-            "flex items-start gap-2.5 rounded-md border px-3 py-2.5 transition-all",
-            canEnableEditorAccess
-              ? "border-border/50 bg-secondary/15"
-              : "border-border/20 bg-secondary/5 opacity-50",
-          )}
-        >
+        <div className={cn("flex items-center gap-2", !canEnableEditorAccess && "opacity-40")}>
           <Checkbox
             id="editor-access"
             checked={workspaceProfile === "ssh-enabled"}
             onCheckedChange={(checked) => handleProfileChange(checked === true)}
             disabled={!canEnableEditorAccess}
-            className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-accent"
+            className="data-[state=checked]:bg-primary data-[state=checked]:border-accent"
           />
-          <div className="grid gap-1 flex-1 min-w-0">
-            <Label
-              htmlFor="editor-access"
-              className="text-xs font-medium cursor-pointer leading-none"
-            >
-              Editor Access (SSH)
-            </Label>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              {canEnableEditorAccess
-                ? selectedCloudProvider?.name.toLowerCase() === "e2b"
-                  ? "Connect your editor via SSH. Requires websocat locally."
-                  : "Open in VS Code, Cursor, or Zed. Also works with Neovim and other SSH editors."
-                : !selectedCloudProvider?.editorAccessSupport?.supported
-                  ? "Not supported by this provider."
+          <Label
+            htmlFor="editor-access"
+            className="group flex flex-1 items-center gap-2 text-xs cursor-pointer text-muted-foreground"
+          >
+            <span>Editor Access (SSH)</span>
+            {canEnableEditorAccess ? (
+              <>
+                <span className="text-muted-foreground/40">&mdash; opens in</span>
+                <span className="flex items-center gap-2 px-1.5 py-0.5 transition-colors">
+                  {[
+                    { src: "/vscode.svg", alt: "VS Code" },
+                    { src: "/cursor.svg", alt: "Cursor" },
+                    { src: "/zed.svg", alt: "Zed" },
+                    { src: "/neovim.svg", alt: "Neovim" },
+                  ].map((editor) => (
+                    <Image
+                      key={editor.src}
+                      src={editor.src}
+                      alt={editor.alt}
+                      width={11}
+                      height={11}
+                      className={cn(
+                        "transition-opacity group-hover:opacity-100",
+                        workspaceProfile === "ssh-enabled" ? "opacity-100" : "opacity-60",
+                      )}
+                    />
+                  ))}
+                </span>
+              </>
+            ) : (
+              <span className="text-muted-foreground/50">
+                &mdash;{" "}
+                {!selectedCloudProvider?.editorAccessSupport?.supported
+                  ? "not supported by this provider"
                   : !selectedAgent?.serverOnly
-                    ? "Requires a server agent type."
-                    : "Available for this provider."}
-            </p>
-
-            {requiresUserSshKey &&
-              !sshPublicKeyData?.hasPublicKey &&
-              selectedAgent?.serverOnly &&
-              selectedCloudProvider?.editorAccessSupport?.supported && (
-                <Link
-                  href={"/dashboard/settings" as Route}
-                  className="inline-flex items-center gap-1.5 text-[11px] text-amber-400/80 hover:text-amber-400"
-                >
-                  <KeyRound className="h-3 w-3" />
-                  Add SSH key in Settings
-                </Link>
-              )}
-          </div>
+                    ? "requires a server agent type"
+                    : "unavailable"}
+              </span>
+            )}
+          </Label>
         </div>
+
+        {requiresUserSshKey &&
+          !sshPublicKeyData?.hasPublicKey &&
+          selectedAgent?.serverOnly &&
+          selectedCloudProvider?.editorAccessSupport?.supported &&
+          workspaceProfile === "ssh-enabled" && (
+            <Link
+              href={"/dashboard/settings" as Route}
+              className="inline-flex items-center gap-1.5 text-[11px] text-amber-400/80 hover:text-amber-400"
+            >
+              <KeyRound className="h-3 w-3" />
+              Add SSH key in Settings
+            </Link>
+          )}
 
         {/* ── 5. Persistent storage ── */}
         <div className="flex items-center gap-2">

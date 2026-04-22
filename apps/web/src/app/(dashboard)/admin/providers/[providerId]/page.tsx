@@ -5,6 +5,14 @@ import { useRouter, useParams } from "next/navigation";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, Loader2, Lock, MapPin, Trash2, Wand2 } from "lucide-react";
+import { Loader2, Lock, MapPin, RefreshCw, Trash2, Wand2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import type { Route } from "next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,11 +66,36 @@ export default function ProviderSettingsPage() {
   const [configName, setConfigName] = useState("");
   const [configEnabled, setConfigEnabled] = useState(true);
   const [awsSetupSummary, setAwsSetupSummary] = useState<AwsSetupSummary | null>(null);
+  const [awsActionDialog, setAwsActionDialog] = useState<"delete" | "reset" | null>(null);
+  const [isResettingAwsInfrastructure, setIsResettingAwsInfrastructure] = useState(false);
   const [newRegion, setNewRegion] = useState({
     name: "",
     location: "",
     externalRegionIdentifier: "",
   });
+
+  const refreshProviderQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
+  };
+
+  const applyAwsBootstrapState = (data: {
+    config: Record<string, any>;
+    summary: AwsSetupSummary;
+  }) => {
+    refreshProviderQueries();
+    setConfigForm(data.config);
+    setConfigEnabled(true);
+    setAllowUserRegionSelection(false);
+    setAwsSetupSummary({ stackName: data.summary.stackName });
+  };
+
+  const applyAwsDeleteState = (data: { config: Record<string, any> }) => {
+    refreshProviderQueries();
+    setConfigForm(data.config);
+    setConfigEnabled(false);
+    setAwsSetupSummary(null);
+  };
 
   const { data: provider, isLoading: isLoadingProvider } = useQuery({
     queryKey: ["admin", "provider", providerId],
@@ -127,12 +160,7 @@ export default function ProviderSettingsPage() {
       defaultRegion: string;
     }) => trpcClient.admin.aws.bootstrap.mutate(params),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
-      setConfigForm(data.config);
-      setConfigEnabled(true);
-      setAllowUserRegionSelection(false);
-      setAwsSetupSummary({ stackName: data.summary.stackName });
+      applyAwsBootstrapState(data);
       toast.success("AWS infrastructure provisioned and saved");
     },
     onError: (error) => toast.error(error.message),
@@ -142,11 +170,7 @@ export default function ProviderSettingsPage() {
     mutationFn: (params: { providerId: string }) =>
       trpcClient.admin.aws.deleteInfrastructure.mutate(params),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
-      setConfigForm(data.config);
-      setConfigEnabled(false);
-      setAwsSetupSummary(null);
+      applyAwsDeleteState(data);
       toast.success(
         data.deleted
           ? `AWS infrastructure deleted (${data.stackName})`
@@ -358,7 +382,7 @@ export default function ProviderSettingsPage() {
               {field.fieldLabel}
               {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
+            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
           </div>
           <Input
             id={field.fieldName}
@@ -382,7 +406,7 @@ export default function ProviderSettingsPage() {
               {field.fieldLabel}
               {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
+            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
           </div>
           <Switch
             id={field.fieldName}
@@ -404,7 +428,7 @@ export default function ProviderSettingsPage() {
               {field.fieldLabel}
               {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
+            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
           </div>
           {readOnly ? (
             <Input
@@ -473,7 +497,7 @@ export default function ProviderSettingsPage() {
             {field.fieldLabel}
             {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
           </Label>
-          {field.isEncrypted && <Lock className="h-3 w-3 text-white/30" />}
+          {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
         </div>
         <Input
           id={field.fieldName}
@@ -489,14 +513,21 @@ export default function ProviderSettingsPage() {
     );
   };
 
+  const awsAccessKeyId = String(configForm.accessKeyId ?? "").trim();
+  const awsSecretAccessKey = String(configForm.secretAccessKey ?? "").trim();
+  const awsDefaultRegion = String(configForm.defaultRegion ?? "").trim();
+  const hasSavedAwsCredentials = isAwsProvider && !!provider?.providerConfig;
+  const hasEnteredAwsCredentials =
+    awsAccessKeyId.length > 0 && awsSecretAccessKey.length > 0;
   const canRunAwsSimpleSetup =
-    !!provider?.id &&
-    String(configForm.accessKeyId ?? "").trim().length > 0 &&
-    String(configForm.secretAccessKey ?? "").trim().length > 0 &&
-    String(configForm.defaultRegion ?? "").trim().length > 0;
+    !!provider?.id && awsDefaultRegion.length > 0 && (hasEnteredAwsCredentials || hasSavedAwsCredentials);
 
   const hasExistingAwsSetup =
     isAwsProvider && !!configForm.clusterArn;
+  const canDeleteAwsInfrastructure =
+    !!provider?.id && awsDefaultRegion.length > 0 && hasSavedAwsCredentials;
+  const canResetAwsInfrastructure = hasExistingAwsSetup && canRunAwsSimpleSetup;
+  const isAwsActionPending = isDeletingAwsInfrastructure || isResettingAwsInfrastructure;
 
   const handleAwsSimpleSetup = async () => {
     if (!provider?.id) {
@@ -507,9 +538,9 @@ export default function ProviderSettingsPage() {
     await bootstrapAwsProvider.mutateAsync({
       providerId: provider.id,
       configName: configName.trim() || `${provider.name} Default`,
-      accessKeyId: String(configForm.accessKeyId ?? "").trim(),
-      secretAccessKey: String(configForm.secretAccessKey ?? "").trim(),
-      defaultRegion: String(configForm.defaultRegion ?? "").trim(),
+      accessKeyId: awsAccessKeyId,
+      secretAccessKey: awsSecretAccessKey,
+      defaultRegion: awsDefaultRegion,
     });
   };
 
@@ -519,15 +550,48 @@ export default function ProviderSettingsPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      "Delete the AWS CloudFormation stack and clear the auto-managed AWS config fields? This requires all AWS workspaces for this provider to already be deleted.",
-    );
+    setAwsActionDialog("delete");
+  };
 
-    if (!confirmed) {
+  const confirmDeleteAwsInfrastructure = async () => {
+    if (!provider?.id) {
+      toast.error("Provider not found.");
       return;
     }
 
-    await deleteAwsInfrastructure.mutateAsync({ providerId: provider.id });
+    try {
+      await deleteAwsInfrastructure.mutateAsync({ providerId: provider.id });
+      setAwsActionDialog(null);
+    } catch {
+      return;
+    }
+  };
+
+  const handleResetAwsInfrastructure = async () => {
+    if (!provider?.id) {
+      toast.error("Provider not found.");
+      return;
+    }
+
+    setIsResettingAwsInfrastructure(true);
+    try {
+      await trpcClient.admin.aws.deleteInfrastructure.mutate({ providerId: provider.id });
+      const bootstrapResult = await trpcClient.admin.aws.bootstrap.mutate({
+        providerId: provider.id,
+        configName: configName.trim() || `${provider.name} Default`,
+        accessKeyId: awsAccessKeyId,
+        secretAccessKey: awsSecretAccessKey,
+        defaultRegion: awsDefaultRegion,
+      });
+
+      applyAwsBootstrapState(bootstrapResult);
+      toast.success(`AWS infrastructure reset (${bootstrapResult.summary.stackName})`);
+      setAwsActionDialog(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to reset AWS infrastructure");
+    } finally {
+      setIsResettingAwsInfrastructure(false);
+    }
   };
 
   if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
@@ -573,13 +637,13 @@ export default function ProviderSettingsPage() {
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-white/90">Provider</p>
-                  <p className="text-xs text-white/40">
+                  <p className="text-sm font-medium text-foreground/90">Provider</p>
+                  <p className="text-xs text-muted-foreground">
                     Update the display name and enablement for this provider.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Label className="text-sm text-white/40">Enabled</Label>
+                  <Label className="text-sm text-muted-foreground">Enabled</Label>
                   <Switch checked={provider?.isEnabled} onCheckedChange={handleToggleProvider} />
                 </div>
               </div>
@@ -599,16 +663,16 @@ export default function ProviderSettingsPage() {
                 </div>
               </div>
               {provider?.supportsRegions && (
-                <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-4">
+                <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-white/90">Allow User Region Selection</p>
-                    <p className="text-xs text-white/40">
+                    <p className="text-sm font-medium text-foreground/90">Allow User Region Selection</p>
+                    <p className="text-xs text-muted-foreground">
                       When enabled, users can choose a region. When disabled, the default region is
                       always used.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label className="text-sm text-white/40">Enabled</Label>
+                    <Label className="text-sm text-muted-foreground">Enabled</Label>
                     <Switch
                       checked={allowUserRegionSelection}
                       onCheckedChange={setAllowUserRegionSelection}
@@ -622,14 +686,14 @@ export default function ProviderSettingsPage() {
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-white/90">Credentials & Config</p>
+                  <p className="text-sm font-medium text-foreground/90">Credentials & Config</p>
                   <p
                     className={cn(
                       "text-xs",
                       provider?.providerConfig
                         ? provider.providerConfig.isEnabled
                           ? "text-emerald-400"
-                          : "text-white/30"
+                          : "text-muted-foreground"
                         : "text-amber-400",
                     )}
                   >
@@ -643,98 +707,143 @@ export default function ProviderSettingsPage() {
               </div>
 
               {isAwsProvider && (
-                <div className="mt-4 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.06]">
-                          <Wand2 className="h-3.5 w-3.5 text-white/60" />
-                        </div>
-                        <p className="text-sm font-medium text-white/90">Simple Setup</p>
-                      </div>
-                      <p className="max-w-xl text-xs leading-relaxed text-white/50">
-                        {hasExistingAwsSetup ? (
-                          <>
-                            Infrastructure is provisioned. Use{" "}
-                            <span className="text-white/70">Re-run Setup</span> to update or
-                            re-create the CloudFormation stack if anything was changed or deleted.
-                          </>
-                        ) : (
-                          <>
-                            Enter your IAM credentials and region below. Once filled, click{" "}
-                            <span className="text-white/70">Set Up AWS</span> to discover the
-                            default VPC and provision the ECS cluster, load balancer, security
-                            groups, task roles, log group, and EFS.
-                          </>
-                        )}
-                      </p>
-                      <p className="max-w-xl text-[11px] leading-relaxed text-white/30">
-                        Targets the default VPC and public subnets. Single-region only.
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      {hasExistingAwsSetup && (
-                        <Button
-                          type="button"
-                          onClick={handleDeleteAwsInfrastructure}
-                          disabled={isDeletingAwsInfrastructure || isBootstrappingAws}
-                          variant="outline"
-                          className="gap-2 border-red-500/20 bg-red-500/[0.04] text-red-300 hover:border-red-400/30 hover:bg-red-500/[0.1] hover:text-red-200"
-                        >
-                          {isDeletingAwsInfrastructure ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              Deleting...
-                            </>
-                          ) : (
-                            <>
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Delete Setup
-                            </>
-                          )}
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        onClick={handleAwsSimpleSetup}
-                        disabled={!canRunAwsSimpleSetup || isBootstrappingAws || isDeletingAwsInfrastructure}
-                        variant="outline"
-                        className={cn(
-                          "shrink-0 gap-2 text-xs transition-all duration-500",
-                          canRunAwsSimpleSetup && !isBootstrappingAws && !hasExistingAwsSetup
-                            ? "border-amber-500/40 bg-amber-500/[0.08] text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.15)] hover:border-amber-400/60 hover:bg-amber-500/[0.14] hover:text-amber-100 hover:shadow-[0_0_20px_rgba(245,158,11,0.25)] animate-pulse"
-                            : "border-white/[0.1] bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white/90",
-                        )}
-                      >
-                        {isBootstrappingAws ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            {hasExistingAwsSetup ? "Re-running..." : "Setting up..."}
-                          </>
-                        ) : (
-                          <>
-                            <Wand2 className="h-3.5 w-3.5" />
-                            {hasExistingAwsSetup ? "Re-run Setup" : "Set Up AWS"}
-                          </>
-                        )}
-                      </Button>
-                    </div>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-foreground/[0.015] px-4 py-3">
+                  <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em]">
+                    <span className="text-muted-foreground">aws.stack</span>
+                    <span className="h-1 w-1 rounded-full bg-foreground/20" />
+                    <span className={hasExistingAwsSetup ? "text-emerald-300/80" : "text-muted-foreground"}>
+                      {hasExistingAwsSetup
+                        ? awsSetupSummary?.stackName ?? "active"
+                        : "not provisioned"}
+                    </span>
                   </div>
-
-                  {awsSetupSummary && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400/80" />
-                      <span className="text-xs text-emerald-400/80">
-                        Infrastructure provisioned via CloudFormation stack{" "}
-                        <span className="font-mono text-emerald-300/70">{awsSetupSummary.stackName}</span>
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAwsSimpleSetup}
+                      disabled={!canRunAwsSimpleSetup || isBootstrappingAws || isAwsActionPending}
+                    >
+                      {isBootstrappingAws ? <Loader2 className="animate-spin" /> : <Wand2 />}
+                      {hasExistingAwsSetup ? "Apply" : "Provision"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setAwsActionDialog("reset")}
+                      disabled={!canResetAwsInfrastructure || isBootstrappingAws || isAwsActionPending}
+                    >
+                      {isResettingAwsInfrastructure ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                      Reset
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleDeleteAwsInfrastructure}
+                      disabled={!canDeleteAwsInfrastructure || isBootstrappingAws || isAwsActionPending}
+                    >
+                      {isDeletingAwsInfrastructure ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               )}
 
+              <Dialog open={awsActionDialog !== null} onOpenChange={(open) => !open && setAwsActionDialog(null)}>
+                <DialogContent className="sm:max-w-xl">
+                  <DialogHeader>
+                    <div className="flex items-center justify-between pb-1 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                      <span>{awsActionDialog === "reset" ? "aws.reset" : "aws.delete"}</span>
+                      <span className="text-foreground/55">confirmation</span>
+                    </div>
+                    <DialogTitle>
+                      {awsActionDialog === "reset"
+                        ? "Reset AWS infrastructure"
+                        : "Delete AWS infrastructure"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {awsActionDialog === "reset"
+                        ? "GitTerm will delete the shared stack, then provision it again using the saved region and encrypted credentials."
+                        : "The shared AWS stack will be removed. Saved credentials and region stay encrypted in GitTerm for a future rebuild."}
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <ul className="overflow-hidden rounded-lg border border-border divide-y divide-border/70">
+                    {[
+                      "All AWS workspaces for this provider must already be deleted.",
+                      awsActionDialog === "reset"
+                        ? "Saved access keys remain encrypted and will be reused for the rebuild."
+                        : "Saved access keys remain encrypted and are not removed.",
+                      awsActionDialog === "reset"
+                        ? "Provider returns to service as soon as the new stack finishes provisioning."
+                        : "Provider stays inactive until you provision or repair infrastructure again.",
+                    ].map((line, index) => (
+                      <li
+                        key={index}
+                        className="flex items-start gap-3 px-4 py-2.5 text-xs leading-relaxed text-foreground/60"
+                      >
+                        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-foreground/55">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAwsActionDialog(null)}
+                      disabled={isAwsActionPending || isBootstrappingAws}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={awsActionDialog === "reset" ? "secondary" : "destructive"}
+                      onClick={
+                        awsActionDialog === "reset"
+                          ? handleResetAwsInfrastructure
+                          : confirmDeleteAwsInfrastructure
+                      }
+                      disabled={isAwsActionPending || isBootstrappingAws}
+                    >
+                      {awsActionDialog === "reset" ? (
+                        isResettingAwsInfrastructure ? (
+                          <>
+                            <Loader2 className="animate-spin" />
+                            Resetting
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw />
+                            Confirm Reset
+                          </>
+                        )
+                      ) : isDeletingAwsInfrastructure ? (
+                        <>
+                          <Loader2 className="animate-spin" />
+                          Deleting
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 />
+                          Confirm Delete
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
               {!selectedProviderTypeId && (
-                <div className="mt-4 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-4 text-sm text-white/40">
+                <div className="mt-4 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4 text-sm text-muted-foreground">
                   No provider definition found for this entry. Make sure the provider name matches a
                   registered provider type.
                 </div>
@@ -778,14 +887,14 @@ export default function ProviderSettingsPage() {
               <div className="rounded-2xl border border-border bg-card p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-white/90">Regions</p>
-                    <p className="text-xs text-white/40">
+                    <p className="text-sm font-medium text-foreground/90">Regions</p>
+                    <p className="text-xs text-muted-foreground">
                       Enable, disable, or add regions for this provider.
                     </p>
                   </div>
                   <Badge
                     variant="outline"
-                    className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                    className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-xs"
                   >
                     {provider?.regions?.length ?? 0} total
                   </Badge>
@@ -796,29 +905,29 @@ export default function ProviderSettingsPage() {
                     provider.regions.map((region: any) => (
                       <div
                         key={region.id}
-                        className={`flex items-center justify-between rounded-xl border border-border bg-white/[0.02] px-4 py-3 ${
+                        className={`flex items-center justify-between rounded-xl border border-border bg-foreground/[0.02] px-4 py-3 ${
                           !region.isEnabled ? "opacity-60" : ""
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="rounded-xl bg-white/[0.04] p-2">
-                            <MapPin className="h-4 w-4 text-white/40" />
+                          <div className="rounded-xl bg-foreground/[0.04] p-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
                           </div>
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-white/90">
+                              <span className="text-sm font-medium text-foreground/90">
                                 {region.name}
                               </span>
                               {!region.isEnabled && (
                                 <Badge
                                   variant="outline"
-                                  className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                                  className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-xs"
                                 >
                                   Disabled
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-xs text-white/30">
+                            <p className="text-xs text-muted-foreground">
                               {region.location} • {region.externalRegionIdentifier}
                             </p>
                           </div>
@@ -832,12 +941,12 @@ export default function ProviderSettingsPage() {
                       </div>
                     ))
                   ) : (
-                    <p className="py-12 text-center text-white/30">No regions configured yet.</p>
+                    <p className="py-12 text-center text-muted-foreground">No regions configured yet.</p>
                   )}
                 </div>
 
-                <div className="mt-5 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-5">
-                  <p className="text-sm font-medium text-white/90">Add Region</p>
+                <div className="mt-5 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-5">
+                  <p className="text-sm font-medium text-foreground/90">Add Region</p>
                   <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="space-y-2">
                       <Label htmlFor="region-name">Region Name</Label>
@@ -901,3 +1010,5 @@ export default function ProviderSettingsPage() {
     </DashboardShell>
   );
 }
+
+

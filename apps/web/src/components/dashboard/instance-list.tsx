@@ -100,7 +100,7 @@ export function InstanceList() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(320px,420px))]">
         {workspaces.map((workspace) => (
           <InstanceCard key={workspace.id} workspace={workspace} providers={providers} />
         ))}

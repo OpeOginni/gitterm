@@ -288,6 +288,19 @@ function matchesAwsError(error: unknown, ...needles: string[]): boolean {
   return needles.some((needle) => haystacks.some((haystack) => haystack.includes(needle.toLowerCase())));
 }
 
+function isMissingAwsInfrastructureError(error: unknown): boolean {
+  return matchesAwsError(
+    error,
+    "ListenerNotFound",
+    "One or more listeners not found",
+    "LoadBalancerNotFound",
+    "ClusterNotFound",
+    "FileSystemNotFound",
+    "does not exist",
+    "not found",
+  );
+}
+
 export class AwsProvider implements ComputeProvider {
   readonly name = "aws";
 
@@ -1122,7 +1135,16 @@ export class AwsProvider implements ComputeProvider {
         }),
       )
       .catch((error) => {
-        if (!matchesAwsError(error, "ServiceNotFound", "ServiceNotFoundException", "not found")) {
+        if (
+          !matchesAwsError(
+            error,
+            "ServiceNotFound",
+            "ServiceNotFoundException",
+            "ClusterNotFound",
+            "ClusterNotFoundException",
+            "not found",
+          )
+        ) {
           throw error;
         }
       });
@@ -1271,16 +1293,30 @@ export class AwsProvider implements ComputeProvider {
 
     const serviceArns: string[] = [];
     let serviceNextToken: string | undefined;
-    do {
-      const servicesResponse = await ecs.send(
-        new ListServicesCommand({
-          cluster: config.clusterArn,
-          nextToken: serviceNextToken,
-        }),
-      );
-      serviceArns.push(...(servicesResponse.serviceArns ?? []));
-      serviceNextToken = servicesResponse.nextToken;
-    } while (serviceNextToken);
+    try {
+      do {
+        const servicesResponse = await ecs.send(
+          new ListServicesCommand({
+            cluster: config.clusterArn,
+            nextToken: serviceNextToken,
+          }),
+        );
+        serviceArns.push(...(servicesResponse.serviceArns ?? []));
+        serviceNextToken = servicesResponse.nextToken;
+      } while (serviceNextToken);
+    } catch (error) {
+      if (isMissingAwsInfrastructureError(error)) {
+        return {
+          servicesDeleted,
+          taskDefinitionsDeregistered,
+          rulesDeleted,
+          targetGroupsDeleted,
+          accessPointsDeleted,
+        };
+      }
+
+      throw error;
+    }
 
     for (const serviceArn of serviceArns) {
       if (!isGitTermServiceArn(serviceArn)) {
@@ -1354,9 +1390,24 @@ export class AwsProvider implements ComputeProvider {
       taskDefinitionsDeregistered += 1;
     }
 
-    const rulesResponse = await elbv2.send(
-      new DescribeRulesCommand({ ListenerArn: config.albListenerArn }),
-    );
+    const rulesResponse = await elbv2
+      .send(new DescribeRulesCommand({ ListenerArn: config.albListenerArn }))
+      .catch((error) => {
+        if (isMissingAwsInfrastructureError(error)) {
+          return null;
+        }
+
+        throw error;
+      });
+    if (!rulesResponse) {
+      return {
+        servicesDeleted,
+        taskDefinitionsDeregistered,
+        rulesDeleted,
+        targetGroupsDeleted,
+        accessPointsDeleted,
+      };
+    }
     const taggedRuleArns = (rulesResponse.Rules ?? [])
       .filter((rule) => !rule.IsDefault && rule.RuleArn)
       .map((rule) => rule.RuleArn as string);
@@ -1404,12 +1455,29 @@ export class AwsProvider implements ComputeProvider {
     if (config.efsFileSystemId) {
       let nextToken: string | undefined;
       do {
-        const accessPointResponse = await efs.send(
-          new DescribeAccessPointsCommand({
-            FileSystemId: config.efsFileSystemId,
-            NextToken: nextToken,
-          }),
-        );
+        const accessPointResponse = await efs
+          .send(
+            new DescribeAccessPointsCommand({
+              FileSystemId: config.efsFileSystemId,
+              NextToken: nextToken,
+            }),
+          )
+          .catch((error) => {
+            if (isMissingAwsInfrastructureError(error)) {
+              return null;
+            }
+
+            throw error;
+          });
+        if (!accessPointResponse) {
+          return {
+            servicesDeleted,
+            taskDefinitionsDeregistered,
+            rulesDeleted,
+            targetGroupsDeleted,
+            accessPointsDeleted,
+          };
+        }
 
         for (const accessPoint of accessPointResponse.AccessPoints ?? []) {
           const taggedWorkspaceId = getTagValue(

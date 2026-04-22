@@ -337,6 +337,7 @@ async function waitForStackDeletion(
   stackName: string,
 ): Promise<void> {
   const deadline = Date.now() + STACK_TIMEOUT_MS;
+  let forceDeleteRequested = false;
 
   while (Date.now() < deadline) {
     const stack = await cf
@@ -349,6 +350,18 @@ async function waitForStackDeletion(
     }
 
     if (stack.StackStatus === "DELETE_FAILED") {
+      if (!forceDeleteRequested) {
+        forceDeleteRequested = true;
+        await cf.send(
+          new DeleteStackCommand({
+            StackName: stackName,
+            DeletionMode: "FORCE_DELETE_STACK",
+          }),
+        );
+        await sleep(STACK_POLL_INTERVAL_MS);
+        continue;
+      }
+
       throw new Error(
         `Failed to delete stack ${stackName}: ${stack.StackStatusReason ?? "unknown reason"}`,
       );

@@ -10,7 +10,7 @@ import { cookies } from "next/headers";
 
 function InstanceListSkeleton() {
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(320px,420px))]">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
           <Skeleton className="mb-4 h-5 w-28 bg-white/[0.04]" />
