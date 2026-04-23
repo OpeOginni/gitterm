@@ -133,7 +133,6 @@
       "name": "worker",
       "dependencies": {
         "@gitterm/api": "workspace:*",
-        "@gitterm/db": "workspace:*",
         "dotenv": "catalog:",
       },
       "devDependencies": {
