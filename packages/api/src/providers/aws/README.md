@@ -422,6 +422,26 @@ A sample policy for the control-plane IAM user lives here:
 
 - `packages/api/src/providers/aws/iam-user-policy.json`
 
+Sample runtime policies for a restricted demo environment live here:
+
+- `packages/api/src/providers/aws/demo-task-role-policy.json`
+- `packages/api/src/providers/aws/demo-lambda-execution-role-policy.json`
+- `packages/api/src/providers/aws/demo-lambda-execution-role-trust-policy.json`
+
+Use them like this:
+
+- keep `iam-user-policy.json` attached to the GitTerm control-plane IAM user only
+- attach `demo-task-role-policy.json` to the ECS task role used as `taskRoleArn`
+- attach `demo-lambda-execution-role-policy.json` to pre-created Lambda execution roles such as `gtdemo-lambda-exec-basic`
+- use `demo-lambda-execution-role-trust-policy.json` as the trust relationship for those Lambda execution roles
+
+The demo task-role policy is intentionally scoped for a dedicated demo environment:
+
+- Bedrock access is limited to the model ARNs you list
+- S3 access is limited to buckets named `gtdemo-*`
+- Lambda read, invoke, update-code, delete, and version actions are limited to functions named `gtdemo-*`
+- Lambda create and update-configuration are limited by region, so use this in a dedicated demo account or further narrow it for your environment
+
 ## Important Current Limitations
 
 - AWS editor SSH access is not implemented.
