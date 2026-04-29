@@ -183,6 +183,53 @@ Important caveat:
 - termination is marked complete in the GitTerm database immediately, but AWS cleanup runs in the background for this provider
 - editor SSH access is not currently supported for AWS
 
+## Generated AWS App Permissions Note
+
+This section is a working note for future AWS app-generation docs.
+
+For generated AWS apps, avoid requiring admins to manually create every Lambda execution role and then tell the agent which role ARN to use. The intended model is:
+
+- no manual role creation per generated app
+- no need to tell the agent a pre-created role name
+- the agent creates Lambda execution roles named `gitterm-lambda-gen-*`
+- the agent always creates those roles with the permissions boundary `gitterm-lambda-gen-boundary`
+
+Why this is safer:
+
+- without a boundary, allowing `iam:CreateRole` plus `iam:PutRolePolicy` is dangerous
+- with a boundary, the agent can create roles, but only roles capped to the approved generated-app permissions such as S3, Bedrock, and CloudWatch Logs
+- with a boundary, the agent cannot create a role with EC2 admin, IAM admin, organization access, or other out-of-scope permissions
+- `iam:PassRole` remains narrow because the agent can only pass `gitterm-lambda-gen-*` roles to Lambda
+
+One additional safety rule:
+
+- do not let the agent edit the permissions boundary policy itself
+
+Do not grant the generated-app agent role:
+
+- `iam:CreatePolicyVersion`
+- `iam:SetDefaultPolicyVersion`
+- `iam:DeletePolicy`
+- `iam:DeletePolicyVersion`
+- `iam:AttachUserPolicy`
+- broad `iam:*`
+
+For production, use the same architecture with tighter scoping:
+
+- per-workspace, per-account, or per-project resource prefixes
+- per-project permissions boundaries
+- session tags
+- CloudTrail auditing
+- automatic cleanup
+- isolated AWS accounts per user or team where appropriate
+
+The core principle stays the same:
+
+- let the agent create app infrastructure
+- keep IAM role creation bounded by permissions boundaries
+- keep `iam:PassRole` narrow
+- do not make humans pre-create every Lambda execution role
+
 ## Lifecycle Walkthrough
 
 ### 1. Infra Setup Flow

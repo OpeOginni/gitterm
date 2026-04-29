@@ -2,7 +2,7 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "DemoListBedrockModels",
+      "Sid": "ListBedrockModels",
       "Effect": "Allow",
       "Action": [
         "bedrock:ListFoundationModels"
@@ -10,101 +10,91 @@
       "Resource": "*"
     },
     {
-      "Sid": "DemoBedrockInference",
+      "Sid": "BedrockInference",
       "Effect": "Allow",
       "Action": [
         "bedrock:GetFoundationModel",
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream"
       ],
-      "Resource": [
-        "arn:aws:bedrock:<REGION>::foundation-model/<MODEL_ID_1>",
-        "arn:aws:bedrock:<REGION>::foundation-model/<MODEL_ID_2>"
-      ]
+      "Resource": "*"
     },
     {
-      "Sid": "DemoListBuckets",
+      "Sid": "ManageS3ForGeneratedApps",
       "Effect": "Allow",
       "Action": [
-        "s3:ListAllMyBuckets"
+        "s3:*"
       ],
       "Resource": "*"
     },
     {
-      "Sid": "DemoUseBuckets",
+      "Sid": "ManageLambdaForGeneratedApps",
       "Effect": "Allow",
       "Action": [
-        "s3:GetBucketLocation",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::gtdemo-*"
-      ]
-    },
-    {
-      "Sid": "DemoUseBucketObjects",
-      "Effect": "Allow",
-      "Action": [
-        "s3:DeleteObject",
-        "s3:GetObject",
-        "s3:PutObject"
-      ],
-      "Resource": [
-        "arn:aws:s3:::gtdemo-*/*"
-      ]
-    },
-    {
-      "Sid": "DemoListFunctions",
-      "Effect": "Allow",
-      "Action": [
-        "lambda:ListFunctions"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "DemoReadAndInvokeFunctions",
-      "Effect": "Allow",
-      "Action": [
-        "lambda:DeleteFunction",
-        "lambda:GetFunction",
-        "lambda:GetFunctionConfiguration",
-        "lambda:InvokeFunction",
-        "lambda:ListVersionsByFunction",
-        "lambda:PublishVersion",
-        "lambda:UpdateFunctionCode"
-      ],
-      "Resource": [
-        "arn:aws:lambda:<REGION>:<ACCOUNT_ID>:function:gtdemo-*"
-      ]
-    },
-    {
-      "Sid": "DemoCreateAndConfigureFunctions",
-      "Effect": "Allow",
-      "Action": [
-        "lambda:CreateFunction",
-        "lambda:UpdateFunctionConfiguration"
+        "lambda:*"
       ],
       "Resource": "*",
       "Condition": {
         "StringEquals": {
-          "aws:RequestedRegion": "<REGION>"
+          "aws:RequestedRegion": "eu-central-1"
         }
       }
     },
     {
-      "Sid": "DemoPassLambdaExecutionRoles",
+      "Sid": "CreateBoundedGeneratedLambdaRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole"
+      ],
+      "Resource": "arn:aws:iam::539608377039:role/gitterm-lambda-gen-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::539608377039:policy/gitterm-lambda-gen-boundary",
+          "aws:RequestTag/ManagedBy": "gitterm"
+        }
+      }
+    },
+    {
+      "Sid": "ManageGeneratedLambdaRoleInlinePolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:DeleteRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:ListRolePolicies",
+        "iam:GetRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::539608377039:role/gitterm-lambda-gen-*"
+    },
+    {
+      "Sid": "PassGeneratedLambdaRolesToLambda",
       "Effect": "Allow",
       "Action": [
         "iam:PassRole"
       ],
-      "Resource": [
-        "arn:aws:iam::<ACCOUNT_ID>:role/gtdemo-lambda-exec-*"
-      ],
+      "Resource": "arn:aws:iam::539608377039:role/gitterm-lambda-gen-*",
       "Condition": {
         "StringEquals": {
           "iam:PassedToService": "lambda.amazonaws.com"
         }
       }
+    },
+    {
+      "Sid": "ReadIamForPlanning",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:ListRoles",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies",
+        "iam:GetRolePolicy",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion"
+      ],
+      "Resource": "*"
     }
   ]
 }

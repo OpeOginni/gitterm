@@ -77,19 +77,21 @@ export function isEditorReadyImageName(name: string, imageId?: string): boolean 
   );
 }
 
-export function pickWorkspaceImage<T extends { name: string; imageId: string }>(
+export function pickWorkspaceImage<
+  T extends { name: string; imageId: string; providerMetadata?: { isDefault?: boolean } | null },
+>(
   images: T[],
-  profile: WorkspaceProfile,
+  _profile: WorkspaceProfile,
 ): T | undefined {
   if (images.length === 0) {
     return undefined;
   }
 
-  if (profile === "ssh-enabled") {
-    return images.find((img) => isEditorReadyImageName(img.name, img.imageId));
-  }
-
-  return images.find((img) => !isEditorReadyImageName(img.name, img.imageId)) ?? images[0];
+  return (
+    images.find((img) => img.providerMetadata?.isDefault === true) ??
+    images.find((img) => !isEditorReadyImageName(img.name, img.imageId)) ??
+    images[0]
+  );
 }
 
 export function buildHostAlias(subdomain: string): string {

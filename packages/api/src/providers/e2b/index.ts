@@ -101,11 +101,14 @@ export class E2BProvider implements ComputeProvider {
   }
 
   private isSshEnabledWorkspace(config: WorkspaceConfig): boolean {
-    return config.imageId.includes("with-ssh");
+    return config.environmentVariables?.WORKSPACE_PROFILE === "ssh-enabled";
   }
 
   private getTemplateId(config: WorkspaceConfig): string {
-    const templateId = config.imageProviderMetadata?.e2b?.templateId;
+    const e2bMetadata = config.imageProviderMetadata?.e2b;
+    const templateId = this.isSshEnabledWorkspace(config)
+      ? (e2bMetadata?.sshTemplateId ?? e2bMetadata?.templateId)
+      : e2bMetadata?.templateId;
 
     if (!templateId) {
       throw new Error(`No E2B template ID configured for image ${config.imageId}`);

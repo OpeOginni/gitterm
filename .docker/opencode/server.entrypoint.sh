@@ -143,6 +143,12 @@ fi
 REPO_NAME=$(cat .repo_name)
 REPO_OWNER=$(cat .repo_owner 2>/dev/null || echo "")
 REPO_DIR="/workspace/$REPO_NAME"
+
+if [ -f /aws-agent-context.sh ]; then
+    echo "Generating OpenCode AWS agent context at $REPO_DIR/AGENTS.md..."
+    WORKSPACE="$REPO_DIR" sh /aws-agent-context.sh || echo "⚠ Failed to generate AWS agent context"
+fi
+
 TOOLING_MANIFEST_JSON=""
 TOOLING_MANIFEST_ENABLED=""
 

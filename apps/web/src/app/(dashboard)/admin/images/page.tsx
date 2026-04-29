@@ -27,17 +27,34 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Route } from "next";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Container } from "lucide-react";
+import { Plus, Container, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
+
+const DEFAULT_PROVIDER_METADATA = `{
+  "aws": {
+    "cpu": 2048,
+    "memory": 4096,
+    "containerPort": 7681,
+    "healthCheckPath": "/"
+  },
+  "e2b": {
+    "templateId": "",
+    "sshTemplateId": ""
+  },
+  "daytona": {
+    "snapshot": ""
+  }
+}`;
 
 export default function ImagesPage() {
   const router = useRouter();
   const { data: session, isPending: isSessionPending } = authClient.useSession();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [deleteImageId, setDeleteImageId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isSessionPending) {
@@ -52,7 +69,12 @@ export default function ImagesPage() {
       }
     }
   }, [session?.user, isSessionPending]);
-  const [newImage, setNewImage] = useState({ name: "", imageId: "", agentTypeId: "" });
+  const [newImage, setNewImage] = useState({
+    name: "",
+    imageId: "",
+    agentTypeId: "",
+    providerMetadataJson: DEFAULT_PROVIDER_METADATA,
+  });
 
   const { data: images, isLoading } = useQuery({
     queryKey: ["admin", "images"],
@@ -65,16 +87,49 @@ export default function ImagesPage() {
   });
 
   const createImage = useMutation({
-    mutationFn: (params: { name: string; imageId: string; agentTypeId: string }) =>
+    mutationFn: (params: {
+      name: string;
+      imageId: string;
+      agentTypeId: string;
+      providerMetadata: Record<string, unknown>;
+    }) =>
       trpcClient.admin.infrastructure.createImage.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
       setIsCreateOpen(false);
-      setNewImage({ name: "", imageId: "", agentTypeId: "" });
+      setNewImage({
+        name: "",
+        imageId: "",
+        agentTypeId: "",
+        providerMetadataJson: DEFAULT_PROVIDER_METADATA,
+      });
       toast.success("Image created");
     },
     onError: (error) => toast.error(error.message),
   });
+
+  const handleCreateImage = () => {
+    let providerMetadata: Record<string, unknown>;
+
+    try {
+      const parsed = JSON.parse(newImage.providerMetadataJson || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        toast.error("Provider metadata must be a JSON object");
+        return;
+      }
+      providerMetadata = parsed;
+    } catch {
+      toast.error("Provider metadata contains invalid JSON");
+      return;
+    }
+
+    createImage.mutate({
+      name: newImage.name,
+      imageId: newImage.imageId,
+      agentTypeId: newImage.agentTypeId,
+      providerMetadata,
+    });
+  };
 
   const toggleImage = useMutation({
     mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) =>
@@ -82,6 +137,17 @@ export default function ImagesPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
       toast.success(`Image ${data.isEnabled ? "enabled" : "disabled"}`);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteImage = useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      trpcClient.admin.infrastructure.deleteImage.mutate({ id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
+      setDeleteImageId(null);
+      toast.success("Image deleted");
     },
     onError: (error) => toast.error(error.message),
   });
@@ -159,13 +225,28 @@ export default function ImagesPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="providerMetadata">Provider Metadata</Label>
+                  <textarea
+                    id="providerMetadata"
+                    value={newImage.providerMetadataJson}
+                    onChange={(e) =>
+                      setNewImage({ ...newImage, providerMetadataJson: e.target.value })
+                    }
+                    className="min-h-52 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground shadow-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    spellCheck={false}
+                  />
+                  <p className="text-xs text-white/40">
+                    Optional provider-specific config such as AWS resources, E2B templates, or Daytona snapshots.
+                  </p>
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => createImage.mutate(newImage)}
+                  onClick={handleCreateImage}
                   disabled={
                     !newImage.name ||
                     !newImage.imageId ||
@@ -190,7 +271,10 @@ export default function ImagesPage() {
           </div>
         ) : (
           <div className="rounded-2xl border border-border bg-card overflow-hidden">
-            {images?.map((image) => (
+            {images?.map((image) => {
+              const isSeeded = image.name === "gitterm-opencode" || image.name === "gitterm-opencode-server";
+
+              return (
               <div
                 key={image.id}
                 className={`flex items-center justify-between p-4 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02] ${!image.isEnabled ? "opacity-60" : ""}`}
@@ -230,14 +314,26 @@ export default function ImagesPage() {
                     </code>
                   </div>
                 </div>
-                <Switch
-                  checked={image.isEnabled}
-                  onCheckedChange={(checked) =>
-                    toggleImage.mutate({ id: image.id, isEnabled: checked })
-                  }
-                />
+                <div className="flex items-center gap-2">
+                  {!isSeeded && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-white/35 hover:text-red-400"
+                      onClick={() => setDeleteImageId(image.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Switch
+                    checked={image.isEnabled}
+                    onCheckedChange={(checked) =>
+                      toggleImage.mutate({ id: image.id, isEnabled: checked })
+                    }
+                  />
+                </div>
               </div>
-            ))}
+            )})}
 
             {images?.length === 0 && (
               <div className="py-12 text-center text-white/30">
@@ -247,6 +343,29 @@ export default function ImagesPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={!!deleteImageId} onOpenChange={() => setDeleteImageId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Image</DialogTitle>
+            <DialogDescription>
+              This removes the custom image from the admin catalog. Seeded images cannot be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteImageId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteImageId && deleteImage.mutate({ id: deleteImageId })}
+              disabled={deleteImage.isPending}
+            >
+              {deleteImage.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardShell>
   );
 }

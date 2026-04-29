@@ -130,9 +130,10 @@ const seedImages = [
     imageId: "opeoginni/gitterm-opencode",
     agentTypeName: "OpenCode",
     providerMetadata: {
+      isDefault: true,
       aws: {
-        cpu: 1024,
-        memory: 2048,
+        cpu: 2048,
+        memory: 4096,
         containerPort: 7681,
         healthCheckPath: "/",
       },
@@ -143,36 +144,19 @@ const seedImages = [
     imageId: "opeoginni/gitterm-opencode-server",
     agentTypeName: "OpenCode Server",
     providerMetadata: {
+      isDefault: true,
       aws: {
-        cpu: 1024,
-        memory: 2048,
+        cpu: 2048,
+        memory: 4096,
         containerPort: 7681,
         healthCheckPath: "/",
       },
       e2b: {
         templateId: "r9xlzvdbcoocvbncrds9",
+        sshTemplateId: "nxiezl38gnw32ufyloc0",
       },
       daytona: {
         snapshot: "gitterm/opencode-server-eu",
-      },
-    },
-  },
-  {
-    name: "gitterm-opencode-server-with-ssh",
-    imageId: "opeoginni/gitterm-opencode-server-with-ssh",
-    agentTypeName: "OpenCode Server",
-    providerMetadata: {
-      aws: {
-        cpu: 1024,
-        memory: 2048,
-        containerPort: 7681,
-        healthCheckPath: "/",
-      },
-      e2b: {
-        templateId: "nxiezl38gnw32ufyloc0",
-      },
-      daytona: {
-        snapshot: "gitterm/opencode-server-ssh-eu",
       },
     },
   },

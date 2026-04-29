@@ -10,6 +10,7 @@ import {
   DescribeVpcsCommand,
   EC2Client,
 } from "@aws-sdk/client-ec2";
+import { CreateRoleCommand, GetRoleCommand, IAMClient } from "@aws-sdk/client-iam";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import type { AwsConfig } from "./types";
 
@@ -94,6 +95,7 @@ function buildTemplate(subnetCount: number): string {
     Description: "GitTerm shared infrastructure for AWS workspace provider",
     Parameters: {
       VpcId: { Type: "AWS::EC2::VPC::Id" },
+      ExistingTaskRoleArn: { Type: "String", Default: "" },
       ...subnetParams,
     },
     Conditions: subnetConditions,
@@ -219,23 +221,6 @@ function buildTemplate(subnetCount: number): string {
         },
       },
 
-      TaskRole: {
-        Type: "AWS::IAM::Role",
-        Properties: {
-          RoleName: "gitterm-task",
-          AssumeRolePolicyDocument: {
-            Version: "2012-10-17",
-            Statement: [
-              {
-                Effect: "Allow",
-                Principal: { Service: "ecs-tasks.amazonaws.com" },
-                Action: "sts:AssumeRole",
-              },
-            ],
-          },
-        },
-      },
-
       LogGroup: {
         Type: "AWS::Logs::LogGroup",
         Properties: {
@@ -274,7 +259,7 @@ function buildTemplate(subnetCount: number): string {
         Value: { "Fn::GetAtt": ["TaskExecutionRole", "Arn"] },
       },
       TaskRoleArn: {
-        Value: { "Fn::GetAtt": ["TaskRole", "Arn"] },
+        Value: { Ref: "ExistingTaskRoleArn" },
       },
       LogGroupName: {
         Value: { Ref: "LogGroup" },
@@ -330,6 +315,52 @@ async function findPublicSubnetIds(ec2: EC2Client, vpcId: string): Promise<strin
   }
 
   return subnetIds;
+}
+
+async function findExistingIamRoleArn(iam: IAMClient, roleName: string): Promise<string | undefined> {
+  try {
+    const response = await iam.send(new GetRoleCommand({ RoleName: roleName }));
+    return response.Role?.Arn;
+  } catch (error) {
+    if (error instanceof Error && error.name === "NoSuchEntityException") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+async function ensureTaskRoleArn(iam: IAMClient): Promise<string> {
+  const existingArn = await findExistingIamRoleArn(iam, "gitterm-task");
+  if (existingArn) {
+    return existingArn;
+  }
+
+  const response = await iam.send(
+    new CreateRoleCommand({
+      RoleName: "gitterm-task",
+      AssumeRolePolicyDocument: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Effect: "Allow",
+            Principal: { Service: "ecs-tasks.amazonaws.com" },
+            Action: "sts:AssumeRole",
+          },
+        ],
+      }),
+      Tags: [
+        { Key: "ManagedBy", Value: "gitterm" },
+        { Key: "Purpose", Value: "workspace-task-role" },
+      ],
+    }),
+  );
+
+  const arn = response.Role?.Arn;
+  if (!arn) {
+    throw new Error("Created gitterm-task role but AWS did not return its ARN.");
+  }
+
+  return arn;
 }
 
 async function waitForStackDeletion(
@@ -476,6 +507,7 @@ async function waitForStack(
 
     if (
       status.endsWith("_FAILED") ||
+      status.endsWith("ROLLBACK_IN_PROGRESS") ||
       status === "ROLLBACK_COMPLETE" ||
       status === "UPDATE_ROLLBACK_COMPLETE"
     ) {
@@ -507,6 +539,7 @@ export async function bootstrapAwsProvider(input: AwsBootstrapInput): Promise<Aw
 
   const sts = new STSClient({ region, credentials });
   const ec2 = new EC2Client({ region, credentials });
+  const iam = new IAMClient({ region, credentials });
   const cf = new CloudFormationClient({ region, credentials });
 
   const identity = await sts.send(new GetCallerIdentityCommand({}));
@@ -517,12 +550,14 @@ export async function bootstrapAwsProvider(input: AwsBootstrapInput): Promise<Aw
 
   const vpcId = await findDefaultVpc(ec2);
   const subnetIds = await findPublicSubnetIds(ec2, vpcId);
+  const ensuredTaskRoleArn = await ensureTaskRoleArn(iam);
 
   const stackName = buildStackName(region);
   const templateBody = buildTemplate(subnetIds.length);
 
   const parameters = [
     { ParameterKey: "VpcId", ParameterValue: vpcId },
+    { ParameterKey: "ExistingTaskRoleArn", ParameterValue: ensuredTaskRoleArn },
     ...subnetIds.map((id, i) => ({
       ParameterKey: `Subnet${i + 1}`,
       ParameterValue: id,

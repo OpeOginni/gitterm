@@ -142,8 +142,10 @@ export interface AwsImageProviderMetadata {
 }
 
 export interface ImageProviderMetadata {
+  isDefault?: boolean;
   e2b?: {
     templateId?: string;
+    sshTemplateId?: string;
   };
   daytona?: DaytonaImageProviderMetadata;
   aws?: AwsImageProviderMetadata;

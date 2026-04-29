@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import z from "zod";
 import { protectedProcedure, workspaceAuthProcedure, router } from "../../index";
-import { db, eq, and, asc, or, ne, SQL, sql } from "@gitterm/db";
+import { db, eq, and, asc, desc, or, ne, SQL, sql } from "@gitterm/db";
 import {
   agentWorkspaceConfig,
   workspaceEnvironmentVariables,
@@ -1191,7 +1191,8 @@ export const workspaceRouter = router({
         const imageRecords = await db
           .select()
           .from(image)
-          .where(and(eq(image.agentTypeId, input.agentTypeId), eq(image.isEnabled, true)));
+          .where(and(eq(image.agentTypeId, input.agentTypeId), eq(image.isEnabled, true)))
+          .orderBy(desc(image.updatedAt));
 
         const [agentTypeRecord] = await db
           .select()
@@ -1232,10 +1233,7 @@ export const workspaceRouter = router({
         if (!imageRecord) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message:
-              workspaceProfile === "ssh-enabled"
-                ? "No SSH-enabled image found for this agent type"
-                : "No enabled image found for this agent type",
+            message: "No enabled image found for this agent type",
           });
         }
 
