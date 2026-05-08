@@ -4,9 +4,7 @@
     {
       "Sid": "ListBedrockModels",
       "Effect": "Allow",
-      "Action": [
-        "bedrock:ListFoundationModels"
-      ],
+      "Action": ["bedrock:ListFoundationModels"],
       "Resource": "*"
     },
     {
@@ -22,17 +20,13 @@
     {
       "Sid": "ManageS3ForGeneratedApps",
       "Effect": "Allow",
-      "Action": [
-        "s3:*"
-      ],
+      "Action": ["s3:*"],
       "Resource": "*"
     },
     {
       "Sid": "ManageLambdaForGeneratedApps",
       "Effect": "Allow",
-      "Action": [
-        "lambda:*"
-      ],
+      "Action": ["lambda:*"],
       "Resource": "*",
       "Condition": {
         "StringEquals": {
@@ -43,9 +37,7 @@
     {
       "Sid": "CreateBoundedGeneratedLambdaRoles",
       "Effect": "Allow",
-      "Action": [
-        "iam:CreateRole"
-      ],
+      "Action": ["iam:CreateRole"],
       "Resource": "arn:aws:iam::539608377039:role/gitterm-lambda-gen-*",
       "Condition": {
         "StringEquals": {
@@ -72,9 +64,7 @@
     {
       "Sid": "PassGeneratedLambdaRolesToLambda",
       "Effect": "Allow",
-      "Action": [
-        "iam:PassRole"
-      ],
+      "Action": ["iam:PassRole"],
       "Resource": "arn:aws:iam::539608377039:role/gitterm-lambda-gen-*",
       "Condition": {
         "StringEquals": {
