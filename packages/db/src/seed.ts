@@ -3,6 +3,7 @@ import {
   agentType,
   cloudProvider,
   image,
+  providerAgentImage,
   region,
   type CloudProviderEditorAccessSupport,
   type ProviderSettlement,
@@ -57,9 +58,10 @@ const seedCloudProviders: Array<{
     supportsRegions: true,
     allowUserRegionSelection: false,
     editorAccessSupport: {
-      supported: false,
-      label: "Not supported",
-      description: "This provider does not currently expose editor SSH access.",
+      supported: true,
+      transportKind: "direct-ssh",
+      label: "Native SSH",
+      description: "Connect directly to the ECS task public IP for editor access.",
     },
     creationSettlement: "immediate" as ProviderSettlement,
     stopSettlement: "immediate" as ProviderSettlement,
@@ -145,12 +147,6 @@ const seedImages = [
     agentTypeName: "OpenCode Server",
     providerMetadata: {
       isDefault: true,
-      aws: {
-        cpu: 2048,
-        memory: 4096,
-        containerPort: 7681,
-        healthCheckPath: "/",
-      },
       e2b: {
         templateId: "r9xlzvdbcoocvbncrds9",
         sshTemplateId: "nxiezl38gnw32ufyloc0",
@@ -159,6 +155,28 @@ const seedImages = [
         snapshot: "gitterm/opencode-server-eu",
       },
     },
+  },
+  {
+    name: "gitterm-opencode-aws-server",
+    imageId: "opeoginni/gitterm-opencode-aws-server",
+    agentTypeName: "OpenCode Server",
+    providerMetadata: {
+      aws: {
+        cpu: 2048,
+        memory: 4096,
+        containerPort: 7681,
+        healthCheckPath: "/",
+      },
+    },
+  },
+];
+
+const seedProviderAgentImages = [
+  {
+    providerName: "AWS",
+    agentTypeName: "OpenCode Server",
+    imageName: "gitterm-opencode-aws-server",
+    workspaceProfile: null,
   },
 ];
 
@@ -574,6 +592,7 @@ export async function seedDatabase(): Promise<void> {
   // Seed Images
   // =========================================================================
   console.log("[seed] Seeding images...");
+  const imageMap = new Map<string, string>();
 
   for (const img of seedImages) {
     const existing = await db.query.image.findFirst({
@@ -590,6 +609,7 @@ export async function seedDatabase(): Promise<void> {
         })
         .where(eq(image.id, existing.id));
       console.log(`[seed]   Image "${img.name}" already exists`);
+      imageMap.set(img.name, existing.id);
     } else {
       const agentTypeId = agentTypeMap.get(img.agentTypeName);
       if (!agentTypeId) {
@@ -597,14 +617,69 @@ export async function seedDatabase(): Promise<void> {
         continue;
       }
 
-      await db.insert(image).values({
-        name: img.name,
-        imageId: img.imageId,
-        agentTypeId,
-        providerMetadata: img.providerMetadata ?? {},
-        isEnabled: true,
-      });
+      const [created] = await db
+        .insert(image)
+        .values({
+          name: img.name,
+          imageId: img.imageId,
+          agentTypeId,
+          providerMetadata: img.providerMetadata ?? {},
+          isEnabled: true,
+        })
+        .returning();
       console.log(`[seed]   Created image "${img.name}"`);
+      imageMap.set(img.name, created!.id);
+    }
+  }
+
+  // =========================================================================
+  // Seed Provider Image Assignments
+  // =========================================================================
+  console.log("[seed] Seeding provider image assignments...");
+
+  for (const assignment of seedProviderAgentImages) {
+    const cloudProviderId = providerMap.get(assignment.providerName);
+    const agentTypeId = agentTypeMap.get(assignment.agentTypeName);
+    const imageId = imageMap.get(assignment.imageName);
+
+    if (!cloudProviderId || !agentTypeId || !imageId) {
+      console.log(
+        `[seed]   Skipping image assignment ${assignment.providerName}/${assignment.agentTypeName} - missing provider, agent type, or image`,
+      );
+      continue;
+    }
+
+    const existing = await db.query.providerAgentImage.findFirst({
+      where: and(
+        eq(providerAgentImage.cloudProviderId, cloudProviderId),
+        eq(providerAgentImage.agentTypeId, agentTypeId),
+      ),
+    });
+
+    if (existing) {
+      await db
+        .update(providerAgentImage)
+        .set({
+          imageId,
+          workspaceProfile: assignment.workspaceProfile,
+          isDefault: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(providerAgentImage.id, existing.id));
+      console.log(
+        `[seed]   Updated image assignment ${assignment.providerName}/${assignment.agentTypeName}`,
+      );
+    } else {
+      await db.insert(providerAgentImage).values({
+        cloudProviderId,
+        agentTypeId,
+        imageId,
+        workspaceProfile: assignment.workspaceProfile,
+        isDefault: true,
+      });
+      console.log(
+        `[seed]   Created image assignment ${assignment.providerName}/${assignment.agentTypeName}`,
+      );
     }
   }
 

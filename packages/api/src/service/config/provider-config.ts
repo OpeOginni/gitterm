@@ -50,7 +50,9 @@ class ProviderConfigService {
     return configs.map((config) => this.decryptConfig(config));
   }
 
-  async getAllProviderConfigsForDisplay(includeDisabled = false): Promise<DecryptedProviderConfig[]> {
+  async getAllProviderConfigsForDisplay(
+    includeDisabled = false,
+  ): Promise<DecryptedProviderConfig[]> {
     const configs = await this.getAllProviderConfigs(includeDisabled);
     return configs.map((config) => this.redactConfigForDisplay(config));
   }

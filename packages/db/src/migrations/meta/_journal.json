@@ -64,6 +64,13 @@
       "when": 1774637184039,
       "tag": "0008_puzzling_electro",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778276665883,
+      "tag": "0009_red_loki",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,13 @@
-import { boolean, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { relations, sql } from "drizzle-orm";
 import { volume, workspace } from "./workspace";
@@ -73,6 +82,33 @@ export const image = pgTable("image", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const providerAgentImage = pgTable(
+  "provider_agent_image",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cloudProviderId: uuid("cloud_provider_id")
+      .notNull()
+      .references(() => cloudProvider.id, { onDelete: "cascade" }),
+    agentTypeId: uuid("agent_type_id")
+      .notNull()
+      .references(() => agentType.id, { onDelete: "cascade" }),
+    imageId: uuid("image_id")
+      .notNull()
+      .references(() => image.id, { onDelete: "cascade" }),
+    workspaceProfile: text("workspace_profile"),
+    isDefault: boolean("is_default").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("provider_agent_image_unique").on(
+      table.cloudProviderId,
+      table.agentTypeId,
+      sql`coalesce(${table.workspaceProfile}, '')`,
+    ),
+  ],
+);
+
 export const agentType = pgTable("agent_type", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
@@ -119,6 +155,21 @@ export const imageRelations = relations(image, ({ one }) => ({
   }),
 }));
 
+export const providerAgentImageRelations = relations(providerAgentImage, ({ one }) => ({
+  cloudProvider: one(cloudProvider, {
+    fields: [providerAgentImage.cloudProviderId],
+    references: [cloudProvider.id],
+  }),
+  agentType: one(agentType, {
+    fields: [providerAgentImage.agentTypeId],
+    references: [agentType.id],
+  }),
+  image: one(image, {
+    fields: [providerAgentImage.imageId],
+    references: [image.id],
+  }),
+}));
+
 export interface CloudProviderEditorAccessSupport {
   supported?: boolean;
   transportKind?: "direct-ssh" | "proxycommand-ssh" | "managed-ssh";
@@ -154,6 +205,7 @@ export interface ImageProviderMetadata {
 
 export type NewCloudProvider = typeof cloudProvider.$inferInsert;
 export type NewImage = typeof image.$inferInsert;
+export type NewProviderAgentImage = typeof providerAgentImage.$inferInsert;
 export type NewAgentType = typeof agentType.$inferInsert;
 export type NewCloudAccount = typeof cloudAccount.$inferInsert;
 export type ProviderSettlement = (typeof settlementEnum.enumValues)[number];
