@@ -63,12 +63,14 @@ export const awsRouter = router({
       : null;
 
     const accessKeyId =
-      String(input.accessKeyId ?? "").trim() || String(existingConfig?.config.accessKeyId ?? "").trim();
+      String(input.accessKeyId ?? "").trim() ||
+      String(existingConfig?.config.accessKeyId ?? "").trim();
     const secretAccessKey =
       String(input.secretAccessKey ?? "").trim() ||
       String(existingConfig?.config.secretAccessKey ?? "").trim();
     const defaultRegion =
-      String(input.defaultRegion ?? "").trim() || String(existingConfig?.config.defaultRegion ?? "").trim();
+      String(input.defaultRegion ?? "").trim() ||
+      String(existingConfig?.config.defaultRegion ?? "").trim();
 
     if (!accessKeyId || !secretAccessKey || !defaultRegion) {
       throw new TRPCError({
@@ -126,8 +128,9 @@ export const awsRouter = router({
       });
     }
 
-    const persistedConfigForDisplay =
-      await providerConfigService.getProviderConfigByIdForDisplay(savedConfig.id);
+    const persistedConfigForDisplay = await providerConfigService.getProviderConfigByIdForDisplay(
+      savedConfig.id,
+    );
     if (!persistedConfigForDisplay) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -170,7 +173,10 @@ export const awsRouter = router({
       .where(eq(region.cloudProviderId, provider.id));
 
     const selectedRegion = await db.query.region.findFirst({
-      where: eq(region.externalRegionIdentifier, defaultRegion),
+      where: and(
+        eq(region.cloudProviderId, provider.id),
+        eq(region.externalRegionIdentifier, defaultRegion),
+      ),
     });
 
     if (selectedRegion) {
@@ -262,7 +268,9 @@ export const awsRouter = router({
       }
 
       const providerConfigService = getProviderConfigService();
-      const currentConfig = await providerConfigService.getProviderConfigById(provider.providerConfigId);
+      const currentConfig = await providerConfigService.getProviderConfigById(
+        provider.providerConfigId,
+      );
 
       if (!currentConfig) {
         throw new TRPCError({

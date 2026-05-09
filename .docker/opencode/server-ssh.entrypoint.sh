@@ -39,6 +39,15 @@ Subsystem sftp internal-sftp
 EOF
 
 ssh-keygen -A
-/usr/sbin/sshd
+
+echo "Starting sshd on port 22..."
+/usr/sbin/sshd -D -e &
+SSHD_PID="$!"
+
+sleep 1
+if ! kill -0 "$SSHD_PID" 2>/dev/null; then
+    echo "sshd failed to stay running" >&2
+    exit 1
+fi
 
 exec /server-entrypoint.sh "$@"

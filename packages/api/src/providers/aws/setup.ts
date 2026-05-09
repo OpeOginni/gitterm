@@ -5,11 +5,7 @@ import {
   DescribeStacksCommand,
   UpdateStackCommand,
 } from "@aws-sdk/client-cloudformation";
-import {
-  DescribeSubnetsCommand,
-  DescribeVpcsCommand,
-  EC2Client,
-} from "@aws-sdk/client-ec2";
+import { DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
 import { CreateRoleCommand, GetRoleCommand, IAMClient } from "@aws-sdk/client-iam";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import type { AwsConfig } from "./types";
@@ -140,6 +136,17 @@ function buildTemplate(subnetCount: number): string {
           FromPort: 1,
           ToPort: 65535,
           SourceSecurityGroupId: { Ref: "AlbSecurityGroup" },
+        },
+      },
+
+      WorkspaceSshIngress: {
+        Type: "AWS::EC2::SecurityGroupIngress",
+        Properties: {
+          GroupId: { Ref: "WorkspaceSecurityGroup" },
+          IpProtocol: "tcp",
+          FromPort: 22,
+          ToPort: 22,
+          CidrIp: "0.0.0.0/0",
         },
       },
 
@@ -317,7 +324,10 @@ async function findPublicSubnetIds(ec2: EC2Client, vpcId: string): Promise<strin
   return subnetIds;
 }
 
-async function findExistingIamRoleArn(iam: IAMClient, roleName: string): Promise<string | undefined> {
+async function findExistingIamRoleArn(
+  iam: IAMClient,
+  roleName: string,
+): Promise<string | undefined> {
   try {
     const response = await iam.send(new GetRoleCommand({ RoleName: roleName }));
     return response.Role?.Arn;
@@ -363,10 +373,7 @@ async function ensureTaskRoleArn(iam: IAMClient): Promise<string> {
   return arn;
 }
 
-async function waitForStackDeletion(
-  cf: CloudFormationClient,
-  stackName: string,
-): Promise<void> {
+async function waitForStackDeletion(cf: CloudFormationClient, stackName: string): Promise<void> {
   const deadline = Date.now() + STACK_TIMEOUT_MS;
   let forceDeleteRequested = false;
 
@@ -416,10 +423,7 @@ async function createOrUpdateStack(
     .catch(() => null);
 
   if (existing && existing.StackStatus !== "DELETE_COMPLETE") {
-    if (
-      existing.StackStatus === "ROLLBACK_COMPLETE" ||
-      existing.StackStatus === "CREATE_FAILED"
-    ) {
+    if (existing.StackStatus === "ROLLBACK_COMPLETE" || existing.StackStatus === "CREATE_FAILED") {
       await cf.send(new DeleteStackCommand({ StackName: stackName }));
       await waitForStackDeletion(cf, stackName);
       await cf.send(

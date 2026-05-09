@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     nodejs \
     npm \
+    openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
 # Install AWS CLI
@@ -42,12 +43,14 @@ ENV HOME=/workspace \
     PATH=/workspace/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Copy and set up entrypoint script
-COPY ./opencode/server.entrypoint.sh /entrypoint.sh
+COPY ./opencode/server.entrypoint.sh /server-entrypoint.sh
+COPY ./opencode/server-ssh.entrypoint.sh /entrypoint.sh
 COPY ./opencode/aws-agent-context.sh /aws-agent-context.sh
-RUN chmod +x /entrypoint.sh /aws-agent-context.sh
+RUN chmod +x /server-entrypoint.sh /entrypoint.sh /aws-agent-context.sh
 
 # Expose the ttyd port
 ENV PORT=7681
+EXPOSE 22
 EXPOSE 7681
 
 # Define the entrypoint

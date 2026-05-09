@@ -8,7 +8,13 @@ import {
   workspace,
   volume,
 } from "@gitterm/db/schema/workspace";
-import { agentType, image, cloudProvider, region } from "@gitterm/db/schema/cloud";
+import {
+  agentType,
+  image,
+  cloudProvider,
+  providerAgentImage,
+  region,
+} from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
 import {
@@ -1110,8 +1116,9 @@ export const workspaceRouter = router({
         let regionRecord: typeof region.$inferSelect | undefined;
 
         if (cloudProviderRecord.supportsRegions) {
+          const forceConfiguredDefaultRegion = cloudProviderRecord.name.toLowerCase() === "aws";
           // Check if user is allowed to select regions
-          if (cloudProviderRecord.allowUserRegionSelection) {
+          if (cloudProviderRecord.allowUserRegionSelection && !forceConfiguredDefaultRegion) {
             // User can select - validate the provided region
             if (input.regionId) {
               [regionRecord] = await db
@@ -1161,8 +1168,9 @@ export const workspaceRouter = router({
                 );
             }
 
-            // If no default region found or not enabled, try to get any enabled region
-            if (!regionRecord) {
+            // If no default region found or not enabled, try to get any enabled region.
+            // AWS is pinned to the configured infrastructure region and must not fall back.
+            if (!regionRecord && !forceConfiguredDefaultRegion) {
               const [anyEnabledRegion] = await db
                 .select()
                 .from(region)
@@ -1228,7 +1236,19 @@ export const workspaceRouter = router({
           });
         }
 
-        const imageRecord = pickWorkspaceImage(imageRecords, workspaceProfile);
+        const assignedProviderImage = await db.query.providerAgentImage.findFirst({
+          where: and(
+            eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
+            eq(providerAgentImage.agentTypeId, input.agentTypeId),
+          ),
+          with: {
+            image: true,
+          },
+        });
+
+        const imageRecord = assignedProviderImage?.image?.isEnabled
+          ? assignedProviderImage.image
+          : pickWorkspaceImage(imageRecords, workspaceProfile);
 
         if (!imageRecord) {
           throw new TRPCError({

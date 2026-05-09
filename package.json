@@ -50,9 +50,10 @@
     "docker:opencode:build": "docker build -f .docker/Opencode.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode:latest .docker && docker push opeoginni/gitterm-opencode:latest",
     "docker:opencode-server:build": "docker build -f .docker/Opencode.Server.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-server:latest .docker && docker push opeoginni/gitterm-opencode-server:latest",
     "docker:opencode-server-ssh:build": "docker build -f .docker/Opencode.Server.SSH.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-server-with-ssh:latest .docker && docker push opeoginni/gitterm-opencode-server-with-ssh:latest",
+    "docker:opencode-aws-server:build": "docker build -f .docker/Opencode.Server.AWS.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-aws-server:latest .docker && docker push opeoginni/gitterm-opencode-aws-server:latest",
     "e2b:template-build": "turbo -F @gitterm/api e2b:build",
     "daytona:snapshot-build": "turbo -F @gitterm/api daytona:snapshot-build",
-    "opencode-upgrade": "bun run docker:opencode:build && bun run docker:opencode-server:build && bun run docker:opencode-server-ssh:build && bun run e2b:template-build && bun run daytona:snapshot-build"
+    "opencode-upgrade": "bun run docker:opencode:build && bun run docker:opencode-server:build && bun run docker:opencode-server-ssh:build && bun run docker:opencode-aws-server:build && bun run e2b:template-build && bun run daytona:snapshot-build"
   },
   "dependencies": {
     "@trpc/client": "^11.8.1",

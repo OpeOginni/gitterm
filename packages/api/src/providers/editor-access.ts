@@ -78,13 +78,18 @@ export function isEditorReadyImageName(name: string, imageId?: string): boolean 
 }
 
 export function pickWorkspaceImage<
-  T extends { name: string; imageId: string; providerMetadata?: { isDefault?: boolean } | null },
->(
-  images: T[],
-  _profile: WorkspaceProfile,
-): T | undefined {
+  T extends {
+    name: string;
+    imageId: string;
+    providerMetadata?: { isDefault?: boolean } | null;
+  },
+>(images: T[], profile: WorkspaceProfile): T | undefined {
   if (images.length === 0) {
     return undefined;
+  }
+
+  if (profile === "ssh-enabled") {
+    return images.find((img) => isEditorReadyImageName(img.name, img.imageId)) ?? images[0];
   }
 
   return (

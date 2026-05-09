@@ -210,109 +210,114 @@ export default function AgentTypesPage() {
               const isSeeded = agent.name === "OpenCode" || agent.name === "OpenCode Server";
 
               return (
-              <div
-                key={agent.id}
-                className={`flex flex-col gap-4 border-b border-white/[0.04] p-4 transition-colors last:border-0 hover:bg-white/[0.02] md:flex-row md:items-center md:justify-between ${!agent.isEnabled ? "opacity-60" : ""}`}
-              >
-                <div className="flex min-w-0 items-start gap-4">
-                  <div className="rounded-xl bg-white/[0.04] p-2.5">
-                    <Server className="h-5 w-5 text-white/40" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="font-medium text-white/90">{agent.name}</span>
-                      {!agent.isEnabled && (
-                        <Badge
-                          variant="outline"
-                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                        >
-                          Disabled
-                        </Badge>
-                      )}
-                      {agent.serverOnly ? (
-                        <Badge
-                          variant="outline"
-                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                        >
-                          Server Only
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs"
-                        >
-                          Terminal
-                        </Badge>
-                      )}
+                <div
+                  key={agent.id}
+                  className={`flex flex-col gap-4 border-b border-white/[0.04] p-4 transition-colors last:border-0 hover:bg-white/[0.02] md:flex-row md:items-center md:justify-between ${!agent.isEnabled ? "opacity-60" : ""}`}
+                >
+                  <div className="flex min-w-0 items-start gap-4">
+                    <div className="rounded-xl bg-white/[0.04] p-2.5">
+                      <Server className="h-5 w-5 text-white/40" />
                     </div>
-                    <p className="text-xs text-white/25 mt-0.5">
-                      Created {new Date(agent.createdAt).toLocaleDateString()}
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="flex items-center gap-1 text-xs text-white/35">
-                        <Container className="h-3.5 w-3.5" />
-                        Images:
-                      </span>
-                      {agentImages.length > 0 ? (
-                        agentImages.map((image) => (
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="font-medium text-white/90">{agent.name}</span>
+                        {!agent.isEnabled && (
                           <Badge
-                            key={image.id}
                             variant="outline"
-                            className={`max-w-48 text-xs ${
-                              image.isEnabled
-                                ? "border-primary/20 bg-primary/10 text-primary"
-                                : "border-white/[0.08] bg-white/[0.04] text-white/40"
-                            }`}
+                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
                           >
-                            <span className="truncate">{image.name}</span>
-                            {isDefaultImage(image) && <span className="ml-1 text-white/35">Default</span>}
+                            Disabled
                           </Badge>
-                        ))
-                      ) : (
-                        <span className="text-xs text-white/25">None connected</span>
-                      )}
+                        )}
+                        {agent.serverOnly ? (
+                          <Badge
+                            variant="outline"
+                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                          >
+                            Server Only
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs"
+                          >
+                            Terminal
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-white/25 mt-0.5">
+                        Created {new Date(agent.createdAt).toLocaleDateString()}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="flex items-center gap-1 text-xs text-white/35">
+                          <Container className="h-3.5 w-3.5" />
+                          Images:
+                        </span>
+                        {agentImages.length > 0 ? (
+                          agentImages.map((image) => (
+                            <Badge
+                              key={image.id}
+                              variant="outline"
+                              className={`max-w-48 text-xs ${
+                                image.isEnabled
+                                  ? "border-primary/20 bg-primary/10 text-primary"
+                                  : "border-white/[0.08] bg-white/[0.04] text-white/40"
+                              }`}
+                            >
+                              <span className="truncate">{image.name}</span>
+                              {isDefaultImage(image) && (
+                                <span className="ml-1 text-white/35">Default</span>
+                              )}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-xs text-white/25">None connected</span>
+                        )}
+                      </div>
                     </div>
+                  </div>
+
+                  <div className="flex w-full items-center gap-3 md:w-auto">
+                    <Select
+                      value={defaultImage?.id ?? ""}
+                      onValueChange={(imageId) => setDefaultImage.mutate({ id: imageId })}
+                      disabled={enabledAgentImages.length === 0 || setDefaultImage.isPending}
+                    >
+                      <SelectTrigger className="w-full md:w-52">
+                        <SelectValue
+                          placeholder={
+                            enabledAgentImages.length === 0 ? "No images" : "Image in use"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {enabledAgentImages.map((image) => (
+                          <SelectItem key={image.id} value={image.id}>
+                            {image.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Switch
+                      checked={agent.isEnabled}
+                      onCheckedChange={(checked) =>
+                        toggleAgentType.mutate({ id: agent.id, isEnabled: checked })
+                      }
+                    />
+                    {!isSeeded && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-white/35 hover:text-red-400"
+                        onClick={() => setDeleteAgentId(agent.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex w-full items-center gap-3 md:w-auto">
-                  <Select
-                    value={defaultImage?.id ?? ""}
-                    onValueChange={(imageId) => setDefaultImage.mutate({ id: imageId })}
-                    disabled={enabledAgentImages.length === 0 || setDefaultImage.isPending}
-                  >
-                    <SelectTrigger className="w-full md:w-52">
-                      <SelectValue
-                        placeholder={enabledAgentImages.length === 0 ? "No images" : "Image in use"}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {enabledAgentImages.map((image) => (
-                        <SelectItem key={image.id} value={image.id}>
-                          {image.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Switch
-                    checked={agent.isEnabled}
-                    onCheckedChange={(checked) =>
-                      toggleAgentType.mutate({ id: agent.id, isEnabled: checked })
-                    }
-                  />
-                  {!isSeeded && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-white/35 hover:text-red-400"
-                      onClick={() => setDeleteAgentId(agent.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                  </div>
-              </div>
-            )})}
+              );
+            })}
 
             {agentTypes?.length === 0 && (
               <div className="py-12 text-center text-white/30">
@@ -328,7 +333,8 @@ export default function AgentTypesPage() {
           <DialogHeader>
             <DialogTitle>Delete Agent Type</DialogTitle>
             <DialogDescription>
-              This removes the custom agent type and its connected images. Seeded agent types cannot be deleted.
+              This removes the custom agent type and its connected images. Seeded agent types cannot
+              be deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -117,6 +117,25 @@ export default function ProviderSettingsPage() {
     enabled: !!selectedProviderTypeId,
   });
 
+  const { data: agentTypes } = useQuery({
+    queryKey: ["admin", "agentTypes"],
+    queryFn: () => trpcClient.admin.infrastructure.listAgentTypes.query(),
+  });
+
+  const { data: images } = useQuery({
+    queryKey: ["admin", "images"],
+    queryFn: () => trpcClient.admin.infrastructure.listImages.query(),
+  });
+
+  const { data: providerImageAssignments } = useQuery({
+    queryKey: ["admin", "providerImageAssignments", providerId],
+    queryFn: () =>
+      trpcClient.admin.infrastructure.listProviderImageAssignments.query({
+        cloudProviderId: providerId as string,
+      }),
+    enabled: !!providerId,
+  });
+
   const updateProvider = useMutation({
     mutationFn: (params: {
       id: string;
@@ -149,6 +168,30 @@ export default function ProviderSettingsPage() {
   const toggleProviderConfig = useMutation({
     mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) =>
       trpcClient.admin.infrastructure.toggleProviderConfig.mutate({ id, isEnabled }),
+  });
+
+  const upsertProviderImageAssignment = useMutation({
+    mutationFn: (params: { cloudProviderId: string; agentTypeId: string; imageId: string }) =>
+      trpcClient.admin.infrastructure.upsertProviderImageAssignment.mutate(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "providerImageAssignments", providerId],
+      });
+      toast.success("Provider image assignment saved");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteProviderImageAssignment = useMutation({
+    mutationFn: (params: { cloudProviderId: string; agentTypeId: string }) =>
+      trpcClient.admin.infrastructure.deleteProviderImageAssignment.mutate(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "providerImageAssignments", providerId],
+      });
+      toast.success("Provider image assignment removed");
+    },
+    onError: (error) => toast.error(error.message),
   });
 
   const bootstrapAwsProvider = useMutation({
@@ -225,6 +268,12 @@ export default function ProviderSettingsPage() {
     toggleProvider.isPending;
   const isBootstrappingAws = bootstrapAwsProvider.isPending;
   const isDeletingAwsInfrastructure = deleteAwsInfrastructure.isPending;
+
+  const assignmentByAgentType = new Map(
+    providerImageAssignments?.map((assignment: any) => [assignment.agentTypeId, assignment]) ?? [],
+  );
+
+  const assignableAgentTypes = agentTypes?.filter((agent: any) => agent.isEnabled) ?? [];
 
   useEffect(() => {
     if (!isSessionPending) {
@@ -517,13 +566,13 @@ export default function ProviderSettingsPage() {
   const awsSecretAccessKey = String(configForm.secretAccessKey ?? "").trim();
   const awsDefaultRegion = String(configForm.defaultRegion ?? "").trim();
   const hasSavedAwsCredentials = isAwsProvider && !!provider?.providerConfig;
-  const hasEnteredAwsCredentials =
-    awsAccessKeyId.length > 0 && awsSecretAccessKey.length > 0;
+  const hasEnteredAwsCredentials = awsAccessKeyId.length > 0 && awsSecretAccessKey.length > 0;
   const canRunAwsSimpleSetup =
-    !!provider?.id && awsDefaultRegion.length > 0 && (hasEnteredAwsCredentials || hasSavedAwsCredentials);
+    !!provider?.id &&
+    awsDefaultRegion.length > 0 &&
+    (hasEnteredAwsCredentials || hasSavedAwsCredentials);
 
-  const hasExistingAwsSetup =
-    isAwsProvider && !!configForm.clusterArn;
+  const hasExistingAwsSetup = isAwsProvider && !!configForm.clusterArn;
   const canDeleteAwsInfrastructure =
     !!provider?.id && awsDefaultRegion.length > 0 && hasSavedAwsCredentials;
   const canResetAwsInfrastructure = hasExistingAwsSetup && canRunAwsSimpleSetup;
@@ -665,16 +714,20 @@ export default function ProviderSettingsPage() {
               {provider?.supportsRegions && (
                 <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground/90">Allow User Region Selection</p>
+                    <p className="text-sm font-medium text-foreground/90">
+                      Allow User Region Selection
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      When enabled, users can choose a region. When disabled, the default region is
-                      always used.
+                      {isAwsProvider
+                        ? "AWS uses the default region selected in the credentials config above."
+                        : "When enabled, users can choose a region. When disabled, the default region is always used."}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Label className="text-sm text-muted-foreground">Enabled</Label>
                     <Switch
-                      checked={allowUserRegionSelection}
+                      checked={isAwsProvider ? false : allowUserRegionSelection}
+                      disabled={isAwsProvider}
                       onCheckedChange={setAllowUserRegionSelection}
                     />
                   </div>
@@ -711,9 +764,13 @@ export default function ProviderSettingsPage() {
                   <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em]">
                     <span className="text-muted-foreground">aws.stack</span>
                     <span className="h-1 w-1 rounded-full bg-foreground/20" />
-                    <span className={hasExistingAwsSetup ? "text-emerald-300/80" : "text-muted-foreground"}>
+                    <span
+                      className={
+                        hasExistingAwsSetup ? "text-emerald-300/80" : "text-muted-foreground"
+                      }
+                    >
                       {hasExistingAwsSetup
-                        ? awsSetupSummary?.stackName ?? "active"
+                        ? (awsSetupSummary?.stackName ?? "active")
                         : "not provisioned"}
                     </span>
                   </div>
@@ -733,9 +790,15 @@ export default function ProviderSettingsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => setAwsActionDialog("reset")}
-                      disabled={!canResetAwsInfrastructure || isBootstrappingAws || isAwsActionPending}
+                      disabled={
+                        !canResetAwsInfrastructure || isBootstrappingAws || isAwsActionPending
+                      }
                     >
-                      {isResettingAwsInfrastructure ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                      {isResettingAwsInfrastructure ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <RefreshCw />
+                      )}
                       Reset
                     </Button>
                     <Button
@@ -743,21 +806,29 @@ export default function ProviderSettingsPage() {
                       size="sm"
                       variant="destructive"
                       onClick={handleDeleteAwsInfrastructure}
-                      disabled={!canDeleteAwsInfrastructure || isBootstrappingAws || isAwsActionPending}
+                      disabled={
+                        !canDeleteAwsInfrastructure || isBootstrappingAws || isAwsActionPending
+                      }
                     >
-                      {isDeletingAwsInfrastructure ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                      {isDeletingAwsInfrastructure ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <Trash2 />
+                      )}
                       Delete
                     </Button>
                   </div>
                 </div>
               )}
 
-              <Dialog open={awsActionDialog !== null} onOpenChange={(open) => !open && setAwsActionDialog(null)}>
+              <Dialog
+                open={awsActionDialog !== null}
+                onOpenChange={(open) => !open && setAwsActionDialog(null)}
+              >
                 <DialogContent className="sm:max-w-xl">
                   <DialogHeader>
-                    <div className="flex items-center justify-between pb-1 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    <div className="pb-1 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                       <span>{awsActionDialog === "reset" ? "aws.reset" : "aws.delete"}</span>
-                      <span className="text-foreground/55">confirmation</span>
                     </div>
                     <DialogTitle>
                       {awsActionDialog === "reset"
@@ -883,6 +954,100 @@ export default function ProviderSettingsPage() {
               )}
             </div>
 
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground/90">Default Images</p>
+                  <p className="text-xs text-muted-foreground">
+                    Choose the container image this provider should use for each agent type.
+                  </p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-xs"
+                >
+                  {providerImageAssignments?.length ?? 0} assigned
+                </Badge>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {assignableAgentTypes.map((agent: any) => {
+                  const assignment = assignmentByAgentType.get(agent.id) as any;
+                  const compatibleImages =
+                    images?.filter((img: any) => img.agentTypeId === agent.id && img.isEnabled) ??
+                    [];
+                  const selectedImageId = assignment?.imageId ?? "fallback";
+
+                  return (
+                    <div
+                      key={agent.id}
+                      className="grid gap-3 rounded-xl border border-border/70 bg-foreground/[0.01] p-4 md:grid-cols-[minmax(0,1fr)_minmax(260px,360px)] md:items-center"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground/90">{agent.name}</p>
+                          {agent.serverOnly && (
+                            <Badge
+                              variant="outline"
+                              className="border-foreground/[0.08] text-[10px]"
+                            >
+                              Server Only
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {assignment?.image?.imageId ??
+                            "Uses the global default image for this agent type."}
+                        </p>
+                      </div>
+
+                      <Select
+                        value={selectedImageId}
+                        disabled={!provider?.id || compatibleImages.length === 0}
+                        onValueChange={(imageId) => {
+                          if (!provider?.id) {
+                            return;
+                          }
+
+                          if (imageId === "fallback") {
+                            deleteProviderImageAssignment.mutate({
+                              cloudProviderId: provider.id,
+                              agentTypeId: agent.id,
+                            });
+                            return;
+                          }
+
+                          upsertProviderImageAssignment.mutate({
+                            cloudProviderId: provider.id,
+                            agentTypeId: agent.id,
+                            imageId,
+                          });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select image" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fallback">Global default</SelectItem>
+                          {compatibleImages.map((img: any) => (
+                            <SelectItem key={img.id} value={img.id}>
+                              {img.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+
+                {assignableAgentTypes.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4 text-sm text-muted-foreground">
+                    No enabled agent types are available.
+                  </div>
+                )}
+              </div>
+            </div>
+
             {provider?.supportsRegions && (
               <div className="rounded-2xl border border-border bg-card p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -941,7 +1106,9 @@ export default function ProviderSettingsPage() {
                       </div>
                     ))
                   ) : (
-                    <p className="py-12 text-center text-muted-foreground">No regions configured yet.</p>
+                    <p className="py-12 text-center text-muted-foreground">
+                      No regions configured yet.
+                    </p>
                   )}
                 </div>
 
@@ -1010,5 +1177,3 @@ export default function ProviderSettingsPage() {
     </DashboardShell>
   );
 }
-
-

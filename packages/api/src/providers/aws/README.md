@@ -265,10 +265,12 @@ This is the flow when a user creates an AWS-backed workspace:
 8. The AWS provider creates an ECS Fargate service with desired count `1`.
 9. The AWS provider waits for the target group to become healthy.
 10. The provider returns:
-   - a serialized external service handle with AWS resource identifiers
-   - the shared ALB URL as `upstreamUrl`
-   - the routing header GitTerm must inject
-   - the public GitTerm workspace domain
+
+- a serialized external service handle with AWS resource identifiers
+- the shared ALB URL as `upstreamUrl`
+- the routing header GitTerm must inject
+- the public GitTerm workspace domain
+
 11. GitTerm inserts the workspace row in its own database.
 12. GitTerm stores encrypted route-access headers in `workspace_route_access`.
 13. If the workspace is persistent, GitTerm inserts a `volume` row containing the EFS access point ID.

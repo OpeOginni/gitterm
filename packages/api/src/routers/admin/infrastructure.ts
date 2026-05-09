@@ -13,6 +13,7 @@ import {
   region,
   agentType,
   image,
+  providerAgentImage,
   type NewCloudProvider,
   type NewAgentType,
   type NewImage,
@@ -83,8 +84,24 @@ const updateImageSchema = z.object({
   isEnabled: z.boolean().optional(),
 });
 
+const upsertProviderAgentImageSchema = z.object({
+  cloudProviderId: z.uuid(),
+  agentTypeId: z.uuid(),
+  imageId: z.uuid(),
+  workspaceProfile: z.enum(["standard", "ssh-enabled"]).nullable().optional(),
+});
+
+const deleteProviderAgentImageSchema = z.object({
+  cloudProviderId: z.uuid(),
+  agentTypeId: z.uuid(),
+});
+
 const SEEDED_AGENT_NAMES = new Set(["OpenCode", "OpenCode Server"]);
-const SEEDED_IMAGE_NAMES = new Set(["gitterm-opencode", "gitterm-opencode-server"]);
+const SEEDED_IMAGE_NAMES = new Set([
+  "gitterm-opencode",
+  "gitterm-opencode-server",
+  "gitterm-opencode-aws-server",
+]);
 
 const createProviderConfigSchema = z.object({
   providerTypeId: z.uuid(),
@@ -171,6 +188,17 @@ export const infrastructureRouter = router({
 
   updateProvider: adminProcedure.input(updateCloudProviderSchema).mutation(async ({ input }) => {
     const { id, ...updates } = input;
+    const existingProvider = await db.query.cloudProvider.findFirst({
+      where: eq(cloudProvider.id, id),
+    });
+
+    if (!existingProvider) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
+    }
+
+    if (existingProvider.name.toLowerCase() === "aws") {
+      updates.allowUserRegionSelection = false;
+    }
 
     const [updated] = await db
       .update(cloudProvider)
@@ -451,6 +479,96 @@ export const infrastructureRouter = router({
     });
     return images;
   }),
+
+  listProviderImageAssignments: adminProcedure
+    .input(z.object({ cloudProviderId: z.uuid() }))
+    .query(async ({ input }) => {
+      return await db.query.providerAgentImage.findMany({
+        where: eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
+        with: {
+          agentType: true,
+          image: true,
+        },
+      });
+    }),
+
+  upsertProviderImageAssignment: adminProcedure
+    .input(upsertProviderAgentImageSchema)
+    .mutation(async ({ input }) => {
+      const [providerRecord, agentTypeRecord, imageRecord] = await Promise.all([
+        db.query.cloudProvider.findFirst({ where: eq(cloudProvider.id, input.cloudProviderId) }),
+        db.query.agentType.findFirst({ where: eq(agentType.id, input.agentTypeId) }),
+        db.query.image.findFirst({ where: eq(image.id, input.imageId) }),
+      ]);
+
+      if (!providerRecord) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
+      }
+
+      if (!agentTypeRecord) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
+      }
+
+      if (!imageRecord) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
+      }
+
+      if (imageRecord.agentTypeId !== input.agentTypeId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Selected image must belong to the selected agent type.",
+        });
+      }
+
+      const workspaceProfile = input.workspaceProfile ?? null;
+      const existing = await db.query.providerAgentImage.findFirst({
+        where: and(
+          eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
+          eq(providerAgentImage.agentTypeId, input.agentTypeId),
+        ),
+      });
+
+      if (existing) {
+        const [updated] = await db
+          .update(providerAgentImage)
+          .set({
+            imageId: input.imageId,
+            workspaceProfile,
+            isDefault: true,
+            updatedAt: new Date(),
+          })
+          .where(eq(providerAgentImage.id, existing.id))
+          .returning();
+        return updated;
+      }
+
+      const [created] = await db
+        .insert(providerAgentImage)
+        .values({
+          cloudProviderId: input.cloudProviderId,
+          agentTypeId: input.agentTypeId,
+          imageId: input.imageId,
+          workspaceProfile,
+          isDefault: true,
+        })
+        .returning();
+      return created;
+    }),
+
+  deleteProviderImageAssignment: adminProcedure
+    .input(deleteProviderAgentImageSchema)
+    .mutation(async ({ input }) => {
+      await db
+        .delete(providerAgentImage)
+        .where(
+          and(
+            eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
+            eq(providerAgentImage.agentTypeId, input.agentTypeId),
+          ),
+        );
+
+      return { success: true };
+    }),
 
   getImage: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
     const img = await db.query.image.findFirst({

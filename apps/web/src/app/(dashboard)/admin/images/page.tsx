@@ -92,8 +92,7 @@ export default function ImagesPage() {
       imageId: string;
       agentTypeId: string;
       providerMetadata: Record<string, unknown>;
-    }) =>
-      trpcClient.admin.infrastructure.createImage.mutate(params),
+    }) => trpcClient.admin.infrastructure.createImage.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
       setIsCreateOpen(false);
@@ -237,7 +236,8 @@ export default function ImagesPage() {
                     spellCheck={false}
                   />
                   <p className="text-xs text-white/40">
-                    Optional provider-specific config such as AWS resources, E2B templates, or Daytona snapshots.
+                    Optional provider-specific config such as AWS resources, E2B templates, or
+                    Daytona snapshots.
                   </p>
                 </div>
               </div>
@@ -272,68 +272,72 @@ export default function ImagesPage() {
         ) : (
           <div className="rounded-2xl border border-border bg-card overflow-hidden">
             {images?.map((image) => {
-              const isSeeded = image.name === "gitterm-opencode" || image.name === "gitterm-opencode-server";
+              const isSeeded =
+                image.name === "gitterm-opencode" ||
+                image.name === "gitterm-opencode-server" ||
+                image.name === "gitterm-opencode-aws-server";
 
               return (
-              <div
-                key={image.id}
-                className={`flex items-center justify-between p-4 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02] ${!image.isEnabled ? "opacity-60" : ""}`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="rounded-xl bg-white/[0.04] p-2.5">
-                    <Container className="h-5 w-5 text-white/40" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-3">
-                      <span className="font-medium text-white/90">{image.name}</span>
-                      {!image.isEnabled && (
-                        <Badge
-                          variant="outline"
-                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                        >
-                          Disabled
-                        </Badge>
-                      )}
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs"
-                      >
-                        {image.agentType.name}
-                      </Badge>
-                      {image.agentType.serverOnly && (
-                        <Badge
-                          variant="outline"
-                          className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                        >
-                          Server Only
-                        </Badge>
-                      )}
+                <div
+                  key={image.id}
+                  className={`flex items-center justify-between p-4 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02] ${!image.isEnabled ? "opacity-60" : ""}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="rounded-xl bg-white/[0.04] p-2.5">
+                      <Container className="h-5 w-5 text-white/40" />
                     </div>
-                    <code className="font-mono text-xs text-white/25 mt-0.5 block truncate max-w-md">
-                      {image.imageId}
-                    </code>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        <span className="font-medium text-white/90">{image.name}</span>
+                        {!image.isEnabled && (
+                          <Badge
+                            variant="outline"
+                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                          >
+                            Disabled
+                          </Badge>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs"
+                        >
+                          {image.agentType.name}
+                        </Badge>
+                        {image.agentType.serverOnly && (
+                          <Badge
+                            variant="outline"
+                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
+                          >
+                            Server Only
+                          </Badge>
+                        )}
+                      </div>
+                      <code className="font-mono text-xs text-white/25 mt-0.5 block truncate max-w-md">
+                        {image.imageId}
+                      </code>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!isSeeded && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-white/35 hover:text-red-400"
+                        onClick={() => setDeleteImageId(image.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Switch
+                      checked={image.isEnabled}
+                      onCheckedChange={(checked) =>
+                        toggleImage.mutate({ id: image.id, isEnabled: checked })
+                      }
+                    />
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {!isSeeded && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-white/35 hover:text-red-400"
-                      onClick={() => setDeleteImageId(image.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <Switch
-                    checked={image.isEnabled}
-                    onCheckedChange={(checked) =>
-                      toggleImage.mutate({ id: image.id, isEnabled: checked })
-                    }
-                  />
-                </div>
-              </div>
-            )})}
+              );
+            })}
 
             {images?.length === 0 && (
               <div className="py-12 text-center text-white/30">

@@ -445,7 +445,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         </div>
 
         {/* ── 4. SSH Editor Access ── */}
-        <div className={cn("flex items-center gap-2", !canEnableEditorAccess && "opacity-40")}>
+        <div className="flex items-center gap-2">
           <Checkbox
             id="editor-access"
             checked={workspaceProfile === "ssh-enabled"}
@@ -455,7 +455,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           />
           <Label
             htmlFor="editor-access"
-            className="group flex flex-1 items-center gap-2 text-xs cursor-pointer text-muted-foreground"
+            className={cn(
+              "group flex flex-1 items-center gap-2 text-xs text-muted-foreground",
+              canEnableEditorAccess ? "cursor-pointer" : "cursor-default text-muted-foreground/75",
+            )}
           >
             <span>Editor Access (SSH)</span>
             {canEnableEditorAccess ? (
@@ -483,7 +486,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 </span>
               </>
             ) : (
-              <span className="text-muted-foreground/50">
+              <span className="text-muted-foreground/70">
                 &mdash;{" "}
                 {!selectedCloudProvider?.editorAccessSupport?.supported
                   ? "not supported by this provider"

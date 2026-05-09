@@ -51,10 +51,14 @@ import type {
   WorkspaceInfo,
   WorkspaceStatusResult,
 } from "../compute";
-import type {
-  WorkspaceEditorAccess,
-  WorkspaceEditorAccessCleanupConfig,
-  WorkspaceEditorAccessConfig,
+import {
+  buildHostAlias,
+  buildSshCommand,
+  buildSshConnectionString,
+  buildStandardSshConfigSnippet,
+  type WorkspaceEditorAccess,
+  type WorkspaceEditorAccessCleanupConfig,
+  type WorkspaceEditorAccessConfig,
 } from "../editor-access";
 import type { AwsConfig, AwsExternalPortDomainId, AwsExternalServiceId } from "./types";
 
@@ -66,6 +70,8 @@ const CONTAINER_NAME = "workspace";
 const DEFAULT_CPU = 2048;
 const DEFAULT_MEMORY = 4096;
 const DEFAULT_MAIN_PORT = 4096;
+const SSH_PORT = 22;
+const SSH_USER = "root";
 const DEFAULT_HEALTH_CHECK_PATH = "/";
 const TARGET_GROUP_DEREGISTRATION_DELAY_SECONDS = 5;
 const SERVICE_STABILIZATION_TIMEOUT_MS = 3 * 60 * 1000;
@@ -111,6 +117,10 @@ function normalizeEnvironmentVariables(
   return Object.entries(environmentVariables ?? {})
     .filter((entry): entry is [string, string] => typeof entry[1] === "string")
     .map(([name, value]) => ({ name, value }));
+}
+
+function isEditorAccessEnabled(config: WorkspaceConfig): boolean {
+  return config.environmentVariables?.EDITOR_ACCESS_ENABLED === "true";
 }
 
 function getImageMetadata(config: WorkspaceConfig): AwsImageProviderMetadata {
@@ -285,7 +295,9 @@ function matchesAwsError(error: unknown, ...needles: string[]): boolean {
     .filter((value): value is string => typeof value === "string" && value.length > 0)
     .map((value) => value.toLowerCase());
 
-  return needles.some((needle) => haystacks.some((haystack) => haystack.includes(needle.toLowerCase())));
+  return needles.some((needle) =>
+    haystacks.some((haystack) => haystack.includes(needle.toLowerCase())),
+  );
 }
 
 function isMissingAwsInfrastructureError(error: unknown): boolean {
@@ -492,7 +504,10 @@ export class AwsProvider implements ComputeProvider {
     throw new Error(`Timed out waiting for target group ${targetGroupArn} to become healthy`);
   }
 
-  private async waitForServiceDeleted(externalId: AwsExternalServiceId, region?: string): Promise<void> {
+  private async waitForServiceDeleted(
+    externalId: AwsExternalServiceId,
+    region?: string,
+  ): Promise<void> {
     const deadline = Date.now() + SERVICE_STABILIZATION_TIMEOUT_MS;
 
     while (Date.now() < deadline) {
@@ -529,8 +544,11 @@ export class AwsProvider implements ComputeProvider {
       }),
     );
     const task = describedTasks.tasks?.[0];
-    const attachmentDetails = task?.attachments?.flatMap((attachment) => attachment.details ?? []) ?? [];
-    const privateIp = attachmentDetails.find((detail) => detail.name === "privateIPv4Address")?.value;
+    const attachmentDetails =
+      task?.attachments?.flatMap((attachment) => attachment.details ?? []) ?? [];
+    const privateIp = attachmentDetails.find(
+      (detail) => detail.name === "privateIPv4Address",
+    )?.value;
 
     if (privateIp) {
       return privateIp;
@@ -558,6 +576,62 @@ export class AwsProvider implements ComputeProvider {
     return resolvedPrivateIp;
   }
 
+  private async resolveTaskPublicIp(
+    externalId: AwsExternalServiceId,
+    region?: string,
+  ): Promise<string> {
+    const { ecs, ec2, config } = await this.createClients(region);
+
+    if (!config.assignPublicIp) {
+      throw new Error(
+        "AWS editor SSH access requires assignPublicIp to be enabled for the workspace task.",
+      );
+    }
+
+    const listedTasks = await ecs.send(
+      new ListTasksCommand({
+        cluster: externalId.clusterArn,
+        serviceName: externalId.serviceName,
+        desiredStatus: "RUNNING",
+      }),
+    );
+    const taskArn = listedTasks.taskArns?.[0];
+
+    if (!taskArn) {
+      throw new Error(`No running ECS task found for AWS workspace ${externalId.serviceName}`);
+    }
+
+    const describedTasks = await ecs.send(
+      new DescribeTasksCommand({
+        cluster: externalId.clusterArn,
+        tasks: [taskArn],
+      }),
+    );
+    const task = describedTasks.tasks?.[0];
+    const attachmentDetails =
+      task?.attachments?.flatMap((attachment) => attachment.details ?? []) ?? [];
+    const networkInterfaceId = attachmentDetails.find(
+      (detail) => detail.name === "networkInterfaceId",
+    )?.value;
+
+    if (!networkInterfaceId) {
+      throw new Error(`No network interface found for AWS workspace ${externalId.serviceName}`);
+    }
+
+    const networkInterfaces = await ec2.send(
+      new DescribeNetworkInterfacesCommand({
+        NetworkInterfaceIds: [networkInterfaceId],
+      }),
+    );
+    const publicIp = networkInterfaces.NetworkInterfaces?.[0]?.Association?.PublicIp;
+
+    if (!publicIp) {
+      throw new Error(`No public IP found for AWS workspace ${externalId.serviceName}`);
+    }
+
+    return publicIp;
+  }
+
   private async refreshTargetGroupRegistration(
     targetGroupArn: string,
     targetIp: string,
@@ -570,7 +644,9 @@ export class AwsProvider implements ComputeProvider {
     );
     const existingTargets =
       existingHealth.TargetHealthDescriptions?.flatMap((description) =>
-        description.Target?.Id ? [{ Id: description.Target.Id, Port: description.Target.Port }] : [],
+        description.Target?.Id
+          ? [{ Id: description.Target.Id, Port: description.Target.Port }]
+          : [],
       ) ?? [];
 
     if (existingTargets.length > 0) {
@@ -618,21 +694,25 @@ export class AwsProvider implements ComputeProvider {
   private async deleteTargetGroupIfExists(targetGroupArn: string, region?: string): Promise<void> {
     const { elbv2 } = await this.createClients(region);
 
-    await elbv2.send(new DeleteTargetGroupCommand({ TargetGroupArn: targetGroupArn })).catch((error) => {
-      if (!matchesAwsError(error, "TargetGroupNotFound", "not found")) {
-        throw error;
-      }
-    });
+    await elbv2
+      .send(new DeleteTargetGroupCommand({ TargetGroupArn: targetGroupArn }))
+      .catch((error) => {
+        if (!matchesAwsError(error, "TargetGroupNotFound", "not found")) {
+          throw error;
+        }
+      });
   }
 
   private async deleteAccessPointIfExists(accessPointId: string, region?: string): Promise<void> {
     const { efs } = await this.createClients(region);
 
-    await efs.send(new DeleteAccessPointCommand({ AccessPointId: accessPointId })).catch((error) => {
-      if (!matchesAwsError(error, "AccessPointNotFound", "not found")) {
-        throw error;
-      }
-    });
+    await efs
+      .send(new DeleteAccessPointCommand({ AccessPointId: accessPointId }))
+      .catch((error) => {
+        if (!matchesAwsError(error, "AccessPointNotFound", "not found")) {
+          throw error;
+        }
+      });
   }
 
   private async registerTaskDefinition(
@@ -647,7 +727,12 @@ export class AwsProvider implements ComputeProvider {
       name: CONTAINER_NAME,
       image: config.imageId,
       essential: true,
-      portMappings: [{ containerPort, protocol: "tcp" }],
+      portMappings: [
+        { containerPort, protocol: "tcp" },
+        ...(isEditorAccessEnabled(config)
+          ? [{ containerPort: SSH_PORT, protocol: "tcp" as const }]
+          : []),
+      ],
       environment: normalizeEnvironmentVariables(config.environmentVariables),
     };
 
@@ -758,22 +843,41 @@ export class AwsProvider implements ComputeProvider {
     region?: string,
   ): Promise<string> {
     const { elbv2 } = await this.createClients(region);
-    const response = await elbv2.send(
-      new CreateRuleCommand({
-        ListenerArn: listenerArn,
-        Priority: await this.allocateRulePriority(listenerArn, region),
-        Conditions: [
-          {
-            Field: "http-header",
-            HttpHeaderConfig: {
-              HttpHeaderName: AWS_ROUTING_HEADER,
-              Values: [routingValue],
-            },
-          },
-        ],
-        Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }],
-      }),
-    );
+    let response;
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      try {
+        response = await elbv2.send(
+          new CreateRuleCommand({
+            ListenerArn: listenerArn,
+            Priority: await this.allocateRulePriority(listenerArn, region),
+            Conditions: [
+              {
+                Field: "http-header",
+                HttpHeaderConfig: {
+                  HttpHeaderName: AWS_ROUTING_HEADER,
+                  Values: [routingValue],
+                },
+              },
+            ],
+            Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }],
+          }),
+        );
+        break;
+      } catch (error) {
+        if (attempt < 5 && matchesAwsError(error, "PriorityInUse", "priority")) {
+          await sleep(100 * attempt);
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    if (!response) {
+      throw new Error(`Failed to create ALB listener rule for routing value ${routingValue}`);
+    }
+
     const ruleArn = response.Rules?.[0]?.RuleArn;
 
     if (!ruleArn) {
@@ -890,11 +994,7 @@ export class AwsProvider implements ComputeProvider {
         region: providerRegion,
         action: "register_task_definition",
       });
-      taskDefinitionArn = await this.registerTaskDefinition(
-        config,
-        providerRegion,
-        accessPointId,
-      );
+      taskDefinitionArn = await this.registerTaskDefinition(config, providerRegion, accessPointId);
       await this.tagEcsResource(
         taskDefinitionArn,
         buildWorkspaceTags(config.workspaceId, "workspace-task-definition", {
@@ -1150,7 +1250,9 @@ export class AwsProvider implements ComputeProvider {
       });
 
     await this.waitForServiceDeleted(handle, handle.region).catch(() => undefined);
-    await this.deleteTargetGroupIfExists(handle.targetGroupArn, handle.region).catch(() => undefined);
+    await this.deleteTargetGroupIfExists(handle.targetGroupArn, handle.region).catch(
+      () => undefined,
+    );
 
     await ecs
       .send(new DeregisterTaskDefinitionCommand({ taskDefinition: handle.taskDefinitionArn }))
@@ -1200,9 +1302,7 @@ export class AwsProvider implements ComputeProvider {
       config.albListenerArn,
       workspaceHost,
       handle.region,
-    ).catch(
-      () => null,
-    );
+    ).catch(() => null);
     let targetGroupArn = getRuleTargetGroupArn(rule ?? undefined);
     let listenerRuleArn = rule?.RuleArn;
 
@@ -1263,9 +1363,33 @@ export class AwsProvider implements ComputeProvider {
   }
 
   async getWorkspaceEditorAccess(
-    _config: WorkspaceEditorAccessConfig,
+    config: WorkspaceEditorAccessConfig,
   ): Promise<WorkspaceEditorAccess> {
-    throw new Error("AWS provider does not currently support editor SSH access.");
+    const handle = parseExternalServiceId(config.externalServiceId);
+    const host = await this.resolveTaskPublicIp(handle, config.regionIdentifier ?? handle.region);
+    const hostAlias = buildHostAlias(config.subdomain);
+
+    return {
+      providerName: this.name,
+      transportKind: "direct-ssh",
+      hostAlias,
+      host,
+      port: SSH_PORT,
+      user: SSH_USER,
+      sshConnectionString: buildSshConnectionString({ host, port: SSH_PORT, user: SSH_USER }),
+      sshCommand: buildSshCommand({ host, port: SSH_PORT, user: SSH_USER }),
+      sshConfigSnippet: buildStandardSshConfigSnippet({
+        hostAlias,
+        host,
+        port: SSH_PORT,
+        user: SSH_USER,
+      }),
+      projectPathHint: config.projectPathHint,
+      notes: [
+        "AWS editor access connects directly to the ECS task public IP on port 22.",
+        "If this provider was configured manually, make sure the workspace security group allows inbound SSH from your IP.",
+      ],
+    };
   }
 
   async revokeWorkspaceEditorAccess(_config: WorkspaceEditorAccessCleanupConfig): Promise<void> {}
@@ -1273,7 +1397,9 @@ export class AwsProvider implements ComputeProvider {
   async removeExposedPortDomain(externalServiceDomainId: string): Promise<void> {
     const handle = parseExternalPortDomainId(externalServiceDomainId);
     await this.deleteRuleIfExists(handle.listenerRuleArn, handle.region).catch(() => undefined);
-    await this.deleteTargetGroupIfExists(handle.targetGroupArn, handle.region).catch(() => undefined);
+    await this.deleteTargetGroupIfExists(handle.targetGroupArn, handle.region).catch(
+      () => undefined,
+    );
   }
 
   async sweepOrphanedResources(activeWorkspaceIds: string[]): Promise<{
@@ -1323,7 +1449,9 @@ export class AwsProvider implements ComputeProvider {
         continue;
       }
 
-      const tagResponse = await ecs.send(new ListTagsForResourceCommand({ resourceArn: serviceArn }));
+      const tagResponse = await ecs.send(
+        new ListTagsForResourceCommand({ resourceArn: serviceArn }),
+      );
       if (!isManagedWorkspaceResource(tagResponse.tags, activeWorkspaceIdSet)) {
         continue;
       }
@@ -1415,7 +1543,10 @@ export class AwsProvider implements ComputeProvider {
     for (const ruleArnBatch of chunk(taggedRuleArns, 20)) {
       const tagResponse = await elbv2.send(new DescribeTagsCommand({ ResourceArns: ruleArnBatch }));
       for (const description of tagResponse.TagDescriptions ?? []) {
-        if (isManagedWorkspaceResource(description.Tags, activeWorkspaceIdSet) && description.ResourceArn) {
+        if (
+          isManagedWorkspaceResource(description.Tags, activeWorkspaceIdSet) &&
+          description.ResourceArn
+        ) {
           await this.deleteRuleIfExists(description.ResourceArn).catch(() => undefined);
           rulesDeleted += 1;
         }
@@ -1494,7 +1625,12 @@ export class AwsProvider implements ComputeProvider {
               "ManagedBy",
             ) === AWS_MANAGED_BY_TAG || Boolean(pathWorkspaceId);
 
-          if (isManaged && workspaceId && !activeWorkspaceIdSet.has(workspaceId) && accessPoint.AccessPointId) {
+          if (
+            isManaged &&
+            workspaceId &&
+            !activeWorkspaceIdSet.has(workspaceId) &&
+            accessPoint.AccessPointId
+          ) {
             await this.deleteAccessPointIfExists(accessPoint.AccessPointId).catch(() => undefined);
             accessPointsDeleted += 1;
           }
