@@ -499,7 +499,10 @@ export class AwsProvider implements ComputeProvider {
       provider: this.name,
       action: "create_workspace_target_health_timeout",
       region,
-      error: lastObservedState || "no target health observed",
+      records: {
+        lastObservedState: lastObservedState,
+      },
+      error: "no target health observed",
     });
     throw new Error(`Timed out waiting for target group ${targetGroupArn} to become healthy`);
   }
@@ -963,7 +966,9 @@ export class AwsProvider implements ComputeProvider {
       provider: this.name,
       region: providerRegion,
       action: "create_target_group",
-      error: targetGroupArn,
+      records: {
+        targetGroupArn: targetGroupArn,
+      },
     });
     let listenerRuleArn: string | undefined;
     let taskDefinitionArn: string | undefined;
@@ -984,7 +989,9 @@ export class AwsProvider implements ComputeProvider {
           provider: this.name,
           region: providerRegion,
           action: "create_access_point",
-          error: accessPointId,
+          records: {
+            accessPointId: accessPointId,
+          },
         });
       }
 
@@ -1007,7 +1014,9 @@ export class AwsProvider implements ComputeProvider {
         provider: this.name,
         region: providerRegion,
         action: "register_task_definition",
-        error: taskDefinitionArn,
+        records: {
+          taskDefinitionArn: taskDefinitionArn,
+        }
       });
 
       logger.info("AWS create listener rule started", {
@@ -1030,7 +1039,9 @@ export class AwsProvider implements ComputeProvider {
         provider: this.name,
         region: providerRegion,
         action: "create_listener_rule",
-        error: listenerRuleArn,
+        records: {
+          listenerRuleArn: listenerRuleArn,
+        },
       });
 
       logger.info("AWS create ECS service started", {
@@ -1079,7 +1090,10 @@ export class AwsProvider implements ComputeProvider {
         provider: this.name,
         region: providerRegion,
         action: "create_service",
-        error: serviceArn ?? "missing-service-arn",
+        records: {
+          serviceArn: serviceArn,
+        },
+        error: serviceArn ? "missing-service-arn" : undefined,
       });
 
       if (!serviceArn || !listenerRuleArn || !taskDefinitionArn) {
@@ -1103,7 +1117,9 @@ export class AwsProvider implements ComputeProvider {
         provider: this.name,
         region: providerRegion,
         action: "wait_for_target_health",
-        error: targetGroupArn,
+        records: {
+          targetGroupArn: targetGroupArn,
+        },
       });
       await this.waitForTargetGroupHealthy(targetGroupArn, providerRegion);
       logger.info("AWS wait for target group healthy succeeded", {
@@ -1111,7 +1127,9 @@ export class AwsProvider implements ComputeProvider {
         provider: this.name,
         region: providerRegion,
         action: "wait_for_target_health",
-        error: targetGroupArn,
+        records: {
+          targetGroupArn: targetGroupArn,
+        },
       });
 
       const upstreamUrl = trimTrailingSlash(providerConfig.albBaseUrl);

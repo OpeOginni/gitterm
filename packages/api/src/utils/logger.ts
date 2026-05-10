@@ -14,6 +14,7 @@ export interface WorkspaceLogContext {
   stopSource?: string;
   installationId?: string;
   error?: string;
+  records?: Record<string, unknown>;
 }
 
 export interface AgentLoopLogContext {

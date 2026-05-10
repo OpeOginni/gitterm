@@ -38,10 +38,10 @@
       "Sid": "CreateBoundedGeneratedLambdaRoles",
       "Effect": "Allow",
       "Action": ["iam:CreateRole"],
-      "Resource": "arn:aws:iam::539608377039:role/gitterm-lambda-gen-*",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-lambda-gen-*",
       "Condition": {
         "StringEquals": {
-          "iam:PermissionsBoundary": "arn:aws:iam::539608377039:policy/gitterm-lambda-gen-boundary",
+          "iam:PermissionsBoundary": "arn:aws:iam::<ACCOUNT_ID>:policy/gitterm-lambda-gen-boundary",
           "aws:RequestTag/ManagedBy": "gitterm"
         }
       }
@@ -59,13 +59,13 @@
         "iam:PutRolePolicy",
         "iam:DeleteRolePolicy"
       ],
-      "Resource": "arn:aws:iam::539608377039:role/gitterm-lambda-gen-*"
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-lambda-gen-*"
     },
     {
       "Sid": "PassGeneratedLambdaRolesToLambda",
       "Effect": "Allow",
       "Action": ["iam:PassRole"],
-      "Resource": "arn:aws:iam::539608377039:role/gitterm-lambda-gen-*",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-lambda-gen-*",
       "Condition": {
         "StringEquals": {
           "iam:PassedToService": "lambda.amazonaws.com"
