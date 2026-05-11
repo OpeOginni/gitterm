@@ -1,4 +1,13 @@
-import { boolean, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { relations, sql } from "drizzle-orm";
 import { volume, workspace } from "./workspace";
@@ -24,6 +33,7 @@ export const cloudAccount = pgTable("cloud_account", {
 export const cloudProvider = pgTable("cloud_provider", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
+  providerKey: text("provider_key").notNull().default("local"),
   providerConfigId: uuid("provider_config_id").references(() => providerConfig.id, {
     onDelete: "set null",
   }),
@@ -44,18 +54,27 @@ export const cloudProvider = pgTable("cloud_provider", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const region = pgTable("region", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  cloudProviderId: uuid("cloud_provider_id")
-    .notNull()
-    .references(() => cloudProvider.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  location: text("location").notNull(),
-  externalRegionIdentifier: text("external_region_identifier").notNull().unique(),
-  isEnabled: boolean("is_enabled").notNull().default(true),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+export const region = pgTable(
+  "region",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cloudProviderId: uuid("cloud_provider_id")
+      .notNull()
+      .references(() => cloudProvider.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    location: text("location").notNull(),
+    externalRegionIdentifier: text("external_region_identifier").notNull(),
+    isEnabled: boolean("is_enabled").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("region_provider_external_identifier_unique").on(
+      table.cloudProviderId,
+      table.externalRegionIdentifier,
+    ),
+  ],
+);
 
 export const image = pgTable("image", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -72,6 +91,33 @@ export const image = pgTable("image", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const providerAgentImage = pgTable(
+  "provider_agent_image",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cloudProviderId: uuid("cloud_provider_id")
+      .notNull()
+      .references(() => cloudProvider.id, { onDelete: "cascade" }),
+    agentTypeId: uuid("agent_type_id")
+      .notNull()
+      .references(() => agentType.id, { onDelete: "cascade" }),
+    imageId: uuid("image_id")
+      .notNull()
+      .references(() => image.id, { onDelete: "cascade" }),
+    workspaceProfile: text("workspace_profile"),
+    isDefault: boolean("is_default").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("provider_agent_image_unique").on(
+      table.cloudProviderId,
+      table.agentTypeId,
+      sql`coalesce(${table.workspaceProfile}, '')`,
+    ),
+  ],
+);
 
 export const agentType = pgTable("agent_type", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -119,6 +165,21 @@ export const imageRelations = relations(image, ({ one }) => ({
   }),
 }));
 
+export const providerAgentImageRelations = relations(providerAgentImage, ({ one }) => ({
+  cloudProvider: one(cloudProvider, {
+    fields: [providerAgentImage.cloudProviderId],
+    references: [cloudProvider.id],
+  }),
+  agentType: one(agentType, {
+    fields: [providerAgentImage.agentTypeId],
+    references: [agentType.id],
+  }),
+  image: one(image, {
+    fields: [providerAgentImage.imageId],
+    references: [image.id],
+  }),
+}));
+
 export interface CloudProviderEditorAccessSupport {
   supported?: boolean;
   transportKind?: "direct-ssh" | "proxycommand-ssh" | "managed-ssh";
@@ -132,16 +193,29 @@ export interface DaytonaImageProviderMetadata {
   snapshotsByRegion?: Record<string, string | undefined>;
 }
 
+export interface AwsImageProviderMetadata {
+  cpu?: number;
+  memory?: number;
+  containerPort?: number;
+  healthCheckPath?: string;
+  ephemeralStorageGiB?: number;
+  architecture?: "X86_64" | "ARM64";
+}
+
 export interface ImageProviderMetadata {
+  isDefault?: boolean;
   e2b?: {
     templateId?: string;
+    sshTemplateId?: string;
   };
   daytona?: DaytonaImageProviderMetadata;
+  aws?: AwsImageProviderMetadata;
   [provider: string]: unknown;
 }
 
 export type NewCloudProvider = typeof cloudProvider.$inferInsert;
 export type NewImage = typeof image.$inferInsert;
+export type NewProviderAgentImage = typeof providerAgentImage.$inferInsert;
 export type NewAgentType = typeof agentType.$inferInsert;
 export type NewCloudAccount = typeof cloudAccount.$inferInsert;
 export type ProviderSettlement = (typeof settlementEnum.enumValues)[number];

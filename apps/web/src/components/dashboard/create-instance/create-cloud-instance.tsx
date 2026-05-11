@@ -70,63 +70,133 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     [credentialsData?.credentials],
   );
 
-  // Derived selections
-  const selectedCloudProviderId =
-    userCloudProviderId ?? cloudProvidersData?.cloudProviders[0]?.id ?? "";
+  // AWS providers are region-scoped: multiple cloud_provider rows share
+  // providerKey === "aws" and each is pinned to one region. For the UI we
+  // group them under a single "AWS" cloud entry so users pick AWS + region,
+  // and the selected region resolves back to a specific provider row.
+  const cloudProviders = cloudProvidersData?.cloudProviders ?? [];
 
+  const awsProviders = useMemo(
+    () => cloudProviders.filter((p) => p.providerKey === "aws"),
+    [cloudProviders],
+  );
+
+  const nonAwsProviders = useMemo(
+    () => cloudProviders.filter((p) => p.providerKey !== "aws"),
+    [cloudProviders],
+  );
+
+  // "Group key" identifies a top-level cloud entry: either an individual
+  // provider id (non-AWS) or the synthetic "aws" group.
+  type CloudGroupKey = string; // "aws" | <providerId>
+
+  const hasAwsGroup = awsProviders.length > 0;
+
+  const defaultGroupKey: CloudGroupKey | "" = hasAwsGroup
+    ? "aws"
+    : (nonAwsProviders[0]?.id ?? "");
+
+  const [userCloudGroupKey, setUserCloudGroupKey] = useState<CloudGroupKey | null>(null);
+  const selectedCloudGroupKey = userCloudGroupKey ?? defaultGroupKey;
+  const isAwsGroup = selectedCloudGroupKey === "aws";
+
+  // Resolve the actual provider row for the currently selected group + region.
   const selectedCloudProvider = useMemo((): CloudProvider | null => {
-    if (!selectedCloudProviderId) return null;
+    if (isAwsGroup) {
+      // Prefer the explicitly chosen AWS region-provider, otherwise default to
+      // the first AWS provider available.
+      const matched = awsProviders.find((p) => p.id === userCloudProviderId);
+      return ((matched ?? awsProviders[0]) as CloudProvider | undefined) ?? null;
+    }
     return (
-      (cloudProvidersData?.cloudProviders.find((p) => p.id === selectedCloudProviderId) as
-        | CloudProvider
-        | undefined) ?? null
+      (nonAwsProviders.find((p) => p.id === selectedCloudGroupKey) as CloudProvider | undefined) ??
+      null
     );
-  }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
+  }, [isAwsGroup, awsProviders, nonAwsProviders, selectedCloudGroupKey, userCloudProviderId]);
+
+  const selectedCloudProviderId = selectedCloudProvider?.id ?? "";
 
   const availableRegions = useMemo((): Region[] => {
-    if (!selectedCloudProviderId) return [];
-    const provider = cloudProvidersData?.cloudProviders.find(
-      (p) => p.id === selectedCloudProviderId,
-    );
-    return (provider?.regions ?? []) as Region[];
-  }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
+    if (isAwsGroup) {
+      // Each AWS provider is pinned to one region. Surface every AWS provider's
+      // region as a selectable region; selecting one switches the provider row.
+      return awsProviders.flatMap(
+        (provider) =>
+          provider.regions?.map((r) => ({
+            id: `${provider.id}::${r.id}`,
+            name: r.name,
+          })) ?? [],
+      );
+    }
+    return (selectedCloudProvider?.regions ?? []) as Region[];
+  }, [isAwsGroup, awsProviders, selectedCloudProvider]);
 
-  const shouldShowRegionSelector =
-    !!selectedCloudProvider?.supportsRegions &&
-    !!selectedCloudProvider?.allowUserRegionSelection &&
-    availableRegions.length > 0;
+  const shouldShowRegionSelector = isAwsGroup
+    ? awsProviders.length > 0
+    : !!selectedCloudProvider?.supportsRegions &&
+      !!selectedCloudProvider?.allowUserRegionSelection &&
+      availableRegions.length > 0;
 
   const availableAgents = useMemo((): AgentType[] => {
     const agents = agentTypesData?.agentTypes ?? [];
-    if (!selectedCloudProviderId) return agents;
-    const provider = cloudProvidersData?.cloudProviders.find(
-      (p) => p.id === selectedCloudProviderId,
-    );
-    if (provider?.supportServerOnly) return agents.filter((agent) => agent.serverOnly);
+    if (!selectedCloudProvider) return agents;
+    if ((selectedCloudProvider as any).supportServerOnly) {
+      return agents.filter((agent) => agent.serverOnly);
+    }
     return agents;
-  }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders, agentTypesData?.agentTypes]);
+  }, [selectedCloudProvider, agentTypesData?.agentTypes]);
 
   const selectedAgentTypeId = userAgentTypeId ?? availableAgents[0]?.id ?? "";
 
   const selectedRegion = useMemo(() => {
+    if (isAwsGroup) {
+      // For AWS, the composite "providerId::regionId" doubles as the picker
+      // value; we resolve the provider row separately.
+      const fallback = awsProviders[0]?.regions?.[0];
+      const fallbackComposite = fallback
+        ? `${awsProviders[0].id}::${fallback.id}`
+        : "";
+      if (userRegionId && availableRegions.some((r) => r.id === userRegionId)) {
+        return userRegionId;
+      }
+      return fallbackComposite;
+    }
+
     if (userRegionId && availableRegions.some((r) => r.id === userRegionId)) {
       return userRegionId;
     }
     return availableRegions[0]?.id ?? "";
-  }, [userRegionId, availableRegions]);
+  }, [isAwsGroup, awsProviders, userRegionId, availableRegions]);
 
   const canEnableEditorAccess =
     !!selectedCloudProvider?.editorAccessSupport?.supported &&
     availableAgents.some((agent) => agent.id === selectedAgentTypeId && agent.serverOnly) &&
-    (selectedCloudProvider?.name.toLowerCase() === "daytona" ||
-      sshPublicKeyData?.hasPublicKey === true);
+    (selectedCloudProvider?.providerKey === "daytona" || sshPublicKeyData?.hasPublicKey === true);
 
-  const requiresUserSshKey = selectedCloudProvider?.name.toLowerCase() !== "daytona";
+  const requiresUserSshKey = selectedCloudProvider?.providerKey !== "daytona";
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
 
-  const handleCloudProviderChange = (providerId: string) => {
-    setUserCloudProviderId(providerId);
+  const handleCloudGroupChange = (groupKey: CloudGroupKey) => {
+    setUserCloudGroupKey(groupKey);
     setUserRegionId(null);
+    if (groupKey === "aws") {
+      // Default to first AWS provider; region picker will refine selection.
+      setUserCloudProviderId(awsProviders[0]?.id ?? null);
+    } else {
+      setUserCloudProviderId(groupKey);
+    }
+  };
+
+  const handleRegionChange = (regionValue: string) => {
+    setUserRegionId(regionValue);
+    if (isAwsGroup) {
+      // AWS region values are "<providerId>::<regionId>" so we can route the
+      // selection back to the right region-provider row.
+      const [providerId] = regionValue.split("::");
+      if (providerId) {
+        setUserCloudProviderId(providerId);
+      }
+    }
   };
 
   const handleProfileChange = (enabled: boolean) => {
@@ -174,13 +244,26 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     const normalizedRepoUrl = normalizeGitHubRepositoryUrl(repoUrl);
     const trimmedBranch = branch.trim();
 
+    // Resolve effective providerId + regionId. For AWS the composite value
+    // "<providerId>::<regionId>" splits into the right region-provider row.
+    let resolvedCloudProviderId = selectedCloudProviderId;
+    let resolvedRegionId: string | undefined = undefined;
+
+    if (isAwsGroup && selectedRegion) {
+      const [providerId, regionId] = selectedRegion.split("::");
+      if (providerId) resolvedCloudProviderId = providerId;
+      if (regionId) resolvedRegionId = regionId;
+    } else if (shouldShowRegionSelector) {
+      resolvedRegionId = selectedRegion;
+    }
+
     await createWorkspace({
       name: normalizedRepoUrl.split("/").pop() || "new-workspace",
       repo: normalizedRepoUrl,
       branch: trimmedBranch || undefined,
       agentTypeId: selectedAgentTypeId,
-      cloudProviderId: selectedCloudProviderId,
-      regionId: shouldShowRegionSelector ? selectedRegion : undefined,
+      cloudProviderId: resolvedCloudProviderId,
+      regionId: resolvedRegionId,
       gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
       persistent,
       subdomain: subdomain || undefined,
@@ -317,7 +400,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               {shouldShowRegionSelector ? "Cloud / Region" : "Cloud"}
             </Label>
             <div className="flex gap-2 min-w-0">
-              <Select value={selectedCloudProviderId} onValueChange={handleCloudProviderChange}>
+              <Select value={selectedCloudGroupKey} onValueChange={handleCloudGroupChange}>
                 <SelectTrigger className="h-9 shrink-0">
                   <SelectValue placeholder="Select cloud" />
                 </SelectTrigger>
@@ -329,9 +412,25 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   </SelectContent>
                 ) : (
                   <SelectContent>
-                    {cloudProvidersData?.cloudProviders &&
-                    cloudProvidersData.cloudProviders.length > 0 ? (
-                      cloudProvidersData.cloudProviders.map((cloud) => (
+                    {hasAwsGroup && (
+                      <SelectItem value="aws">
+                        <div className="flex items-center">
+                          <Image
+                            src="/ECS.svg"
+                            alt="AWS"
+                            width={16}
+                            height={16}
+                            className="mr-2 h-4 w-4"
+                          />
+                          AWS
+                          <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">
+                            ×{awsProviders.length}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    )}
+                    {nonAwsProviders.length > 0 ? (
+                      nonAwsProviders.map((cloud) => (
                         <SelectItem key={cloud.id} value={cloud.id}>
                           <div className="flex items-center">
                             <Image
@@ -345,11 +444,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                           </div>
                         </SelectItem>
                       ))
-                    ) : (
+                    ) : !hasAwsGroup ? (
                       <SelectItem value="none" disabled>
                         No providers
                       </SelectItem>
-                    )}
+                    ) : null}
                   </SelectContent>
                 )}
               </Select>
@@ -357,7 +456,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               {shouldShowRegionSelector ? (
                 <Select
                   value={selectedRegion}
-                  onValueChange={setUserRegionId}
+                  onValueChange={handleRegionChange}
                   disabled={availableRegions.length === 0}
                 >
                   <SelectTrigger className="h-9 min-w-0 [&>span]:truncate">
@@ -409,7 +508,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 Connect a GitHub account to enable commit, push, fork and private repo access.
               </TooltipContent>
             </Tooltip>
-            <Link href="/dashboard/integrations" className="text-primary hover:text-primary/80">
+            <Link href="/dashboard/integrations" className="text-primary hover:text-foreground/70">
               <ArrowUpRight className="h-3 w-3" />
             </Link>
           </Label>
@@ -445,54 +544,72 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         </div>
 
         {/* ── 4. SSH Editor Access ── */}
-        <div
-          className={cn(
-            "flex items-start gap-2.5 rounded-md border px-3 py-2.5 transition-all",
-            canEnableEditorAccess
-              ? "border-border/50 bg-secondary/15"
-              : "border-border/20 bg-secondary/5 opacity-50",
-          )}
-        >
+        <div className="flex items-center gap-2">
           <Checkbox
             id="editor-access"
             checked={workspaceProfile === "ssh-enabled"}
             onCheckedChange={(checked) => handleProfileChange(checked === true)}
             disabled={!canEnableEditorAccess}
-            className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-accent"
+            className="data-[state=checked]:bg-primary data-[state=checked]:border-accent"
           />
-          <div className="grid gap-1 flex-1 min-w-0">
-            <Label
-              htmlFor="editor-access"
-              className="text-xs font-medium cursor-pointer leading-none"
-            >
-              Editor Access (SSH)
-            </Label>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              {canEnableEditorAccess
-                ? selectedCloudProvider?.name.toLowerCase() === "e2b"
-                  ? "Connect your editor via SSH. Requires websocat locally."
-                  : "Open in VS Code, Cursor, or Zed. Also works with Neovim and other SSH editors."
-                : !selectedCloudProvider?.editorAccessSupport?.supported
-                  ? "Not supported by this provider."
+          <Label
+            htmlFor="editor-access"
+            className={cn(
+              "group flex flex-1 items-center gap-2 text-xs text-muted-foreground",
+              canEnableEditorAccess ? "cursor-pointer" : "cursor-default text-muted-foreground/75",
+            )}
+          >
+            <span>Editor Access (SSH)</span>
+            {canEnableEditorAccess ? (
+              <>
+                <span className="text-muted-foreground/40">&mdash; opens in</span>
+                <span className="flex items-center gap-2 px-1.5 py-0.5 transition-colors">
+                  {[
+                    { src: "/vscode.svg", alt: "VS Code" },
+                    { src: "/cursor.svg", alt: "Cursor" },
+                    { src: "/zed.svg", alt: "Zed" },
+                    { src: "/neovim.svg", alt: "Neovim" },
+                  ].map((editor) => (
+                    <Image
+                      key={editor.src}
+                      src={editor.src}
+                      alt={editor.alt}
+                      width={11}
+                      height={11}
+                      className={cn(
+                        "transition-opacity group-hover:opacity-100",
+                        workspaceProfile === "ssh-enabled" ? "opacity-100" : "opacity-60",
+                      )}
+                    />
+                  ))}
+                </span>
+              </>
+            ) : (
+              <span className="text-muted-foreground/70">
+                &mdash;{" "}
+                {!selectedCloudProvider?.editorAccessSupport?.supported
+                  ? "not supported by this provider"
                   : !selectedAgent?.serverOnly
-                    ? "Requires a server agent type."
-                    : "Available for this provider."}
-            </p>
-
-            {requiresUserSshKey &&
-              !sshPublicKeyData?.hasPublicKey &&
-              selectedAgent?.serverOnly &&
-              selectedCloudProvider?.editorAccessSupport?.supported && (
-                <Link
-                  href={"/dashboard/settings" as Route}
-                  className="inline-flex items-center gap-1.5 text-[11px] text-amber-400/80 hover:text-amber-400"
-                >
-                  <KeyRound className="h-3 w-3" />
-                  Add SSH key in Settings
-                </Link>
-              )}
-          </div>
+                    ? "requires a server agent type"
+                    : "unavailable"}
+              </span>
+            )}
+          </Label>
         </div>
+
+        {requiresUserSshKey &&
+          !sshPublicKeyData?.hasPublicKey &&
+          selectedAgent?.serverOnly &&
+          selectedCloudProvider?.editorAccessSupport?.supported &&
+          workspaceProfile === "ssh-enabled" && (
+            <Link
+              href={"/dashboard/settings" as Route}
+              className="inline-flex items-center gap-1.5 text-[11px] text-amber-400/80 hover:text-amber-400"
+            >
+              <KeyRound className="h-3 w-3" />
+              Add SSH key in Settings
+            </Link>
+          )}
 
         {/* ── 5. Persistent storage ── */}
         <div className="flex items-center gap-2">

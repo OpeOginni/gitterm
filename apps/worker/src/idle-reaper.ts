@@ -138,6 +138,18 @@ async function main() {
       }
     }
 
+    // ========================================================================
+    // 4. Retry AWS cleanup for terminated workspaces and sweep leftovers
+    // ========================================================================
+    try {
+      const sweepResult = await internalClient.internal.sweepAwsResourcesInternal.mutate();
+      console.log(
+        `[idle-reaper] AWS orphan cleanup complete (retried workspaces: ${sweepResult.retriedWorkspaces}, services: ${sweepResult.servicesDeleted}, task definitions: ${sweepResult.taskDefinitionsDeregistered}, rules: ${sweepResult.rulesDeleted}, target groups: ${sweepResult.targetGroupsDeleted}, access points: ${sweepResult.accessPointsDeleted})`,
+      );
+    } catch (error) {
+      console.error("[idle-reaper] AWS orphan cleanup failed:", error);
+    }
+
     console.log(`[idle-reaper] Completed. Total workspaces stopped: ${totalStopped}`);
     process.exit(0);
   } catch (error) {

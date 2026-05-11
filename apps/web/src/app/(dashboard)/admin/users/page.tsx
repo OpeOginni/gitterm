@@ -159,7 +159,7 @@ export default function UsersPage() {
       <DashboardHeader heading="User Management" text="View and manage all users in the system.">
         <div className="flex items-center gap-2">
           <Button asChild variant="outline">
-            <Link href={"/admin" as Route}>Back to Admin</Link>
+          <Link href={"/admin" as Route} className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground">Back to Admin</Link>
           </Button>
           {canCreateUsers && (
             <Button

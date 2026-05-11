@@ -3,6 +3,7 @@ import {
   agentType,
   cloudProvider,
   image,
+  providerAgentImage,
   region,
   type CloudProviderEditorAccessSupport,
   type ProviderSettlement,
@@ -25,9 +26,11 @@ const hasSameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === J
 
 const seedCloudProviders: Array<{
   name: string;
+  providerKey: string;
   isEnabled: boolean;
   isSandbox?: boolean;
   supportsRegions: boolean;
+  allowUserRegionSelection?: boolean;
   supportServerOnly?: boolean;
   editorAccessSupport?: CloudProviderEditorAccessSupport;
   creationSettlement?: ProviderSettlement;
@@ -37,6 +40,7 @@ const seedCloudProviders: Array<{
 }> = [
   {
     name: "Railway",
+    providerKey: "railway",
     isEnabled: false,
     supportsRegions: true,
     editorAccessSupport: {
@@ -50,22 +54,16 @@ const seedCloudProviders: Array<{
     restartSettlement: "webhook" as ProviderSettlement,
     terminationSettlement: "webhook" as ProviderSettlement,
   },
-  {
-    name: "AWS",
-    isEnabled: false,
-    supportsRegions: true,
-    editorAccessSupport: {
-      supported: false,
-      label: "Not supported",
-      description: "This provider does not currently expose editor SSH access.",
-    },
-    creationSettlement: "poll" as ProviderSettlement,
-    stopSettlement: "immediate" as ProviderSettlement,
-    restartSettlement: "poll" as ProviderSettlement,
-    terminationSettlement: "immediate" as ProviderSettlement,
-  },
+  // AWS is intentionally NOT seeded. Each AWS region is its own cloud_provider
+  // row, created by admins via `aws.createRegionProvider` (Add AWS Region in
+  // the providers admin UI). Seeding a generic "AWS" row with multiple regions
+  // attached produced ambiguous state — region resolution at deploy time falls
+  // back to a shared default config and silently lands every workspace in the
+  // first seeded region (typically us-east-1) regardless of which AWS provider
+  // was picked. Admins must explicitly add the regions they want to use.
   {
     name: "Cloudflare",
+    providerKey: "cloudflare",
     isEnabled: false,
     isSandbox: true,
     supportsRegions: false,
@@ -82,6 +80,7 @@ const seedCloudProviders: Array<{
   },
   {
     name: "E2B",
+    providerKey: "e2b",
     isEnabled: false,
     isSandbox: true,
     supportsRegions: false,
@@ -100,6 +99,7 @@ const seedCloudProviders: Array<{
   },
   {
     name: "Daytona",
+    providerKey: "daytona",
     isEnabled: false,
     isSandbox: true,
     supportsRegions: true,
@@ -123,14 +123,29 @@ const seedAgentTypes = [
 ];
 
 const seedImages = [
-  { name: "gitterm-opencode", imageId: "opeoginni/gitterm-opencode", agentTypeName: "OpenCode" },
+  {
+    name: "gitterm-opencode",
+    imageId: "opeoginni/gitterm-opencode",
+    agentTypeName: "OpenCode",
+    providerMetadata: {
+      isDefault: true,
+      aws: {
+        cpu: 2048,
+        memory: 4096,
+        containerPort: 7681,
+        healthCheckPath: "/",
+      },
+    },
+  },
   {
     name: "gitterm-opencode-server",
     imageId: "opeoginni/gitterm-opencode-server",
     agentTypeName: "OpenCode Server",
     providerMetadata: {
+      isDefault: true,
       e2b: {
         templateId: "r9xlzvdbcoocvbncrds9",
+        sshTemplateId: "nxiezl38gnw32ufyloc0",
       },
       daytona: {
         snapshot: "gitterm/opencode-server-eu",
@@ -138,19 +153,29 @@ const seedImages = [
     },
   },
   {
-    name: "gitterm-opencode-server-with-ssh",
-    imageId: "opeoginni/gitterm-opencode-server-with-ssh",
+    name: "gitterm-opencode-aws-server",
+    imageId: "opeoginni/gitterm-opencode-aws-server",
     agentTypeName: "OpenCode Server",
     providerMetadata: {
-      e2b: {
-        templateId: "nxiezl38gnw32ufyloc0",
-      },
-      daytona: {
-        snapshot: "gitterm/opencode-server-ssh-eu",
+      aws: {
+        cpu: 2048,
+        memory: 4096,
+        containerPort: 7681,
+        healthCheckPath: "/",
       },
     },
   },
 ];
+
+// AWS image assignments are NOT seeded here. They're created per-region when an
+// admin calls `aws.createRegionProvider` (each AWS region is its own
+// cloud_provider row), since providerAgentImage is keyed by cloudProviderId.
+const seedProviderAgentImages: Array<{
+  providerName: string;
+  agentTypeName: string;
+  imageName: string;
+  workspaceProfile: string | null;
+}> = [];
 
 const seedProviderTypes = PROVIDER_DEFINITIONS;
 
@@ -180,6 +205,9 @@ const seedRegions = [
     externalRegionIdentifier: "asia-southeast1-eqsg3a",
     providerName: "Railway",
   },
+  // AWS regions are NOT seeded. Each AWS region is its own cloud_provider row,
+  // created by admins via `aws.createRegionProvider` which attaches the
+  // matching region row at creation time.
   // Daytona Regions
   {
     name: "Europe",
@@ -420,6 +448,7 @@ export async function seedDatabase(): Promise<void> {
       const updates: Partial<typeof cloudProvider.$inferInsert> = {};
       const targetIsSandbox = provider.isSandbox ?? false;
       const targetSupportsRegions = provider.supportsRegions ?? true;
+      const targetAllowUserRegionSelection = provider.allowUserRegionSelection ?? true;
       const targetSupportServerOnly = provider.supportServerOnly ?? false;
       const targetProviderCreationSettlement = provider.creationSettlement ?? "webhook";
       const targetProviderStopSettlement = provider.stopSettlement ?? "webhook";
@@ -427,12 +456,20 @@ export async function seedDatabase(): Promise<void> {
       const targetProviderTerminationSettlement = provider.terminationSettlement ?? "webhook";
       const targetEditorAccessSupport = provider.editorAccessSupport ?? {};
 
+      if (existing.providerKey !== provider.providerKey) {
+        updates.providerKey = provider.providerKey;
+      }
+
       if (existing.isSandbox !== targetIsSandbox) {
         updates.isSandbox = targetIsSandbox;
       }
 
       if (existing.supportsRegions !== targetSupportsRegions) {
         updates.supportsRegions = targetSupportsRegions;
+      }
+
+      if (existing.allowUserRegionSelection !== targetAllowUserRegionSelection) {
+        updates.allowUserRegionSelection = targetAllowUserRegionSelection;
       }
 
       if (existing.supportServerOnly !== targetSupportServerOnly) {
@@ -479,9 +516,11 @@ export async function seedDatabase(): Promise<void> {
         .insert(cloudProvider)
         .values({
           name: provider.name,
+          providerKey: provider.providerKey,
           isEnabled: provider.isEnabled,
           isSandbox: provider.isSandbox ?? false,
           supportsRegions: provider.supportsRegions,
+          allowUserRegionSelection: provider.allowUserRegionSelection ?? true,
           supportServerOnly: provider.supportServerOnly ?? false,
           editorAccessSupport: provider.editorAccessSupport ?? {},
           creationSettlement: provider.creationSettlement ?? "webhook",
@@ -527,6 +566,7 @@ export async function seedDatabase(): Promise<void> {
   // Seed Images
   // =========================================================================
   console.log("[seed] Seeding images...");
+  const imageMap = new Map<string, string>();
 
   for (const img of seedImages) {
     const existing = await db.query.image.findFirst({
@@ -543,6 +583,7 @@ export async function seedDatabase(): Promise<void> {
         })
         .where(eq(image.id, existing.id));
       console.log(`[seed]   Image "${img.name}" already exists`);
+      imageMap.set(img.name, existing.id);
     } else {
       const agentTypeId = agentTypeMap.get(img.agentTypeName);
       if (!agentTypeId) {
@@ -550,14 +591,69 @@ export async function seedDatabase(): Promise<void> {
         continue;
       }
 
-      await db.insert(image).values({
-        name: img.name,
-        imageId: img.imageId,
-        agentTypeId,
-        providerMetadata: img.providerMetadata ?? {},
-        isEnabled: true,
-      });
+      const [created] = await db
+        .insert(image)
+        .values({
+          name: img.name,
+          imageId: img.imageId,
+          agentTypeId,
+          providerMetadata: img.providerMetadata ?? {},
+          isEnabled: true,
+        })
+        .returning();
       console.log(`[seed]   Created image "${img.name}"`);
+      imageMap.set(img.name, created!.id);
+    }
+  }
+
+  // =========================================================================
+  // Seed Provider Image Assignments
+  // =========================================================================
+  console.log("[seed] Seeding provider image assignments...");
+
+  for (const assignment of seedProviderAgentImages) {
+    const cloudProviderId = providerMap.get(assignment.providerName);
+    const agentTypeId = agentTypeMap.get(assignment.agentTypeName);
+    const imageId = imageMap.get(assignment.imageName);
+
+    if (!cloudProviderId || !agentTypeId || !imageId) {
+      console.log(
+        `[seed]   Skipping image assignment ${assignment.providerName}/${assignment.agentTypeName} - missing provider, agent type, or image`,
+      );
+      continue;
+    }
+
+    const existing = await db.query.providerAgentImage.findFirst({
+      where: and(
+        eq(providerAgentImage.cloudProviderId, cloudProviderId),
+        eq(providerAgentImage.agentTypeId, agentTypeId),
+      ),
+    });
+
+    if (existing) {
+      await db
+        .update(providerAgentImage)
+        .set({
+          imageId,
+          workspaceProfile: assignment.workspaceProfile,
+          isDefault: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(providerAgentImage.id, existing.id));
+      console.log(
+        `[seed]   Updated image assignment ${assignment.providerName}/${assignment.agentTypeName}`,
+      );
+    } else {
+      await db.insert(providerAgentImage).values({
+        cloudProviderId,
+        agentTypeId,
+        imageId,
+        workspaceProfile: assignment.workspaceProfile,
+        isDefault: true,
+      });
+      console.log(
+        `[seed]   Created image assignment ${assignment.providerName}/${assignment.agentTypeName}`,
+      );
     }
   }
 
@@ -739,9 +835,23 @@ export async function seedDatabase(): Promise<void> {
       }
     }
 
-    if (createdCount > 0 || updatedCount > 0) {
+    const definedFieldNames = new Set(
+      seedProviderTypes[providerName]!.fields.map((field) => field.fieldName),
+    );
+    const allExistingFields = await db.query.providerConfigField.findMany({
+      where: eq(providerConfigField.providerTypeId, providerTypeId),
+    });
+    let deletedCount = 0;
+    for (const existing of allExistingFields) {
+      if (!definedFieldNames.has(existing.fieldName)) {
+        await db.delete(providerConfigField).where(eq(providerConfigField.id, existing.id));
+        deletedCount += 1;
+      }
+    }
+
+    if (createdCount > 0 || updatedCount > 0 || deletedCount > 0) {
       console.log(
-        `[seed]   Synced config fields for "${providerName}" (created: ${createdCount}, updated: ${updatedCount})`,
+        `[seed]   Synced config fields for "${providerName}" (created: ${createdCount}, updated: ${updatedCount}, deleted: ${deletedCount})`,
       );
     }
   };

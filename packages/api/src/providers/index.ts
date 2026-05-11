@@ -1,9 +1,11 @@
 import type { ComputeProvider } from "./compute";
+import { awsProvider } from "./aws";
 import { daytonaProvider } from "./daytona";
 import { e2bProvider } from "./e2b";
 import { railwayProvider } from "./railway";
 
 export * from "./compute";
+export { awsProvider } from "./aws";
 export { railwayProvider } from "./railway";
 export { e2bProvider } from "./e2b";
 
@@ -14,6 +16,7 @@ export { e2bProvider } from "./e2b";
  *
  */
 const availableProviders: Record<string, ComputeProvider> = {
+  aws: awsProvider,
   railway: railwayProvider,
   e2b: e2bProvider,
   daytona: daytonaProvider,
@@ -55,10 +58,15 @@ export function isProviderImplemented(name: string): boolean {
 }
 
 /**
- * Get a compute provider by cloud provider name from database
+ * Get a compute provider by cloud provider implementation key.
+ *
+ * Cloud providers are stored in the DB with both a display `name` and a
+ * `providerKey`. The `providerKey` is what maps to a concrete implementation
+ * (e.g. multiple cloud_provider rows can share `providerKey = "aws"` for
+ * region-scoped AWS providers).
  */
 export async function getProviderByCloudProviderId(
-  cloudProviderName: string,
+  cloudProviderKey: string,
 ): Promise<ComputeProvider> {
-  return getProvider(cloudProviderName);
+  return getProvider(cloudProviderKey);
 }

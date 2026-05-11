@@ -1,6 +1,6 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
-import { db, eq, and, sql, gt, lt, or } from "@gitterm/db";
+import { db, eq, and, ne, sql, gt, lt, or } from "@gitterm/db";
 import {
   workspace,
   usageSession,
@@ -12,7 +12,7 @@ import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/in
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
-import { getProviderByCloudProviderId, railwayProvider } from "../../providers";
+import { awsProvider, getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
   closeUsageSession,
@@ -31,6 +31,7 @@ import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import type { E2BConfig } from "../../providers/e2b";
+import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 
 /**
  * Internal router for service-to-service communication
@@ -216,7 +217,7 @@ export const internalRouter = router({
       }
 
       // Stop via provider
-      const computeProvider = await getProviderByCloudProviderId(provider.name);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
       await computeProvider.stopWorkspace(
         ws.externalInstanceId,
         workspaceRegion?.externalRegionIdentifier,
@@ -263,6 +264,7 @@ export const internalRouter = router({
         .select({
           id: workspace.id,
           externalInstanceId: workspace.externalInstanceId,
+          exposedPorts: workspace.exposedPorts,
           userId: workspace.userId,
           cloudProviderId: workspace.cloudProviderId,
           regionId: workspace.regionId,
@@ -311,7 +313,13 @@ export const internalRouter = router({
             .where(and(eq(volume.workspaceId, ws.id), eq(volume.userId, ws.userId)))
         : [];
 
-      const computeProvider = await getProviderByCloudProviderId(provider.name);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+
+      for (const exposedPort of Object.values(ws.exposedPorts ?? {})) {
+        if (exposedPort?.externalPortDomainId) {
+          await computeProvider.removeExposedPortDomain(exposedPort.externalPortDomainId);
+        }
+      }
 
       await computeProvider.terminateWorkspace(
         ws.externalInstanceId,
@@ -342,6 +350,14 @@ export const internalRouter = router({
 
       return { success: true };
     }),
+
+  sweepAwsResourcesInternal: internalProcedure.mutation(async () => {
+    const sweepResult = await runAwsCleanupSweep();
+    return {
+      success: true,
+      ...sweepResult,
+    };
+  }),
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
     const fourDays = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000); // 4 Days ago
     const longTermInactiveWorkspaces = await db
@@ -608,7 +624,7 @@ export const internalRouter = router({
         const [railwayProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "Railway"));
+          .where(eq(cloudProvider.providerKey, "railway"));
 
         if (!railwayProvider) {
           throw new TRPCError({
@@ -648,7 +664,7 @@ export const internalRouter = router({
         const [railwayProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "Railway"));
+          .where(eq(cloudProvider.providerKey, "railway"));
 
         if (!railwayProvider) {
           throw new TRPCError({
@@ -726,7 +742,7 @@ export const internalRouter = router({
         const [e2bProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "E2B"));
+          .where(eq(cloudProvider.providerKey, "e2b"));
 
         if (!e2bProvider) {
           throw new TRPCError({
@@ -765,7 +781,7 @@ export const internalRouter = router({
         const [e2bProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "E2B"));
+          .where(eq(cloudProvider.providerKey, "e2b"));
 
         if (!e2bProvider) {
           throw new TRPCError({
@@ -810,7 +826,7 @@ export const internalRouter = router({
         const [e2bProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "E2B"));
+          .where(eq(cloudProvider.providerKey, "e2b"));
 
         if (!e2bProvider) {
           throw new TRPCError({

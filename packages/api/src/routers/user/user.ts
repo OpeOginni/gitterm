@@ -104,7 +104,7 @@ export const userRouter = router({
           if (provider) {
             // Terminate the workspace via compute provider
             try {
-              const computeProvider = await getProviderByCloudProviderId(provider.name);
+              const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
               await computeProvider.terminateWorkspace(
                 ws.externalInstanceId,
                 ws.persistent && ws.volume ? ws.volume.externalVolumeId : undefined,

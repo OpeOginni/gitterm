@@ -143,6 +143,56 @@ fi
 REPO_NAME=$(cat .repo_name)
 REPO_OWNER=$(cat .repo_owner 2>/dev/null || echo "")
 REPO_DIR="/workspace/$REPO_NAME"
+GITTERM_CONTEXT_DIR="/workspace/.gitterm"
+AWS_RUNTIME_CONTEXT_FILE="$GITTERM_CONTEXT_DIR/aws-runtime-context.md"
+
+if [ -f /aws-agent-context.sh ]; then
+    echo "Generating OpenCode AWS runtime context at $AWS_RUNTIME_CONTEXT_FILE..."
+    GITTERM_CONTEXT_DIR="$GITTERM_CONTEXT_DIR" sh /aws-agent-context.sh || echo "⚠ Failed to generate AWS runtime context"
+
+    if [ -f "$AWS_RUNTIME_CONTEXT_FILE" ]; then
+        mkdir -p ~/.config/opencode
+        if [ ! -f ~/.config/opencode/opencode.json ]; then
+            printf '{}' > ~/.config/opencode/opencode.json
+        fi
+
+        AWS_RUNTIME_CONTEXT_FILE="$AWS_RUNTIME_CONTEXT_FILE" node <<'NODE'
+const fs = require("fs");
+
+const configPath = `${process.env.HOME}/.config/opencode/opencode.json`;
+const contextFile = process.env.AWS_RUNTIME_CONTEXT_FILE;
+const contextDir = contextFile.replace(/\/[^/]*$/, "/**");
+let config = {};
+
+try {
+  config = JSON.parse(fs.readFileSync(configPath, "utf8") || "{}");
+} catch {
+  config = {};
+}
+
+const instructions = Array.isArray(config.instructions)
+  ? config.instructions
+  : typeof config.instructions === "string"
+    ? [config.instructions]
+    : [];
+
+if (!instructions.includes(contextFile)) {
+  instructions.push(contextFile);
+}
+
+config.instructions = instructions;
+config.permission = config.permission && typeof config.permission === "object" ? config.permission : {};
+config.permission.external_directory =
+  config.permission.external_directory && typeof config.permission.external_directory === "object"
+    ? config.permission.external_directory
+    : {};
+config.permission.external_directory[contextDir] = "allow";
+
+fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+NODE
+    fi
+fi
+
 TOOLING_MANIFEST_JSON=""
 TOOLING_MANIFEST_ENABLED=""
 

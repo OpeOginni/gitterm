@@ -64,6 +64,13 @@
       "when": 1774637184039,
       "tag": "0008_puzzling_electro",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778529608160,
+      "tag": "0009_wise_logan",
+      "breakpoints": true
     }
   ]
 }

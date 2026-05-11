@@ -1,14 +1,20 @@
 import { randomUUID } from "crypto";
 import z from "zod";
 import { protectedProcedure, workspaceAuthProcedure, router } from "../../index";
-import { db, eq, and, asc, or, ne, SQL, sql } from "@gitterm/db";
+import { db, eq, and, asc, desc, or, ne, SQL, sql } from "@gitterm/db";
 import {
   agentWorkspaceConfig,
   workspaceEnvironmentVariables,
   workspace,
   volume,
 } from "@gitterm/db/schema/workspace";
-import { agentType, image, cloudProvider, region } from "@gitterm/db/schema/cloud";
+import {
+  agentType,
+  image,
+  cloudProvider,
+  providerAgentImage,
+  region,
+} from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
 import {
@@ -268,7 +274,16 @@ export const workspaceRouter = router({
           providers.map(async (provider) => {
             let regions = provider.regions;
 
-            if (
+            if (provider.providerKey === "aws") {
+              // AWS providers are region-scoped (one cloud_provider row per region).
+              // The pinned region is the region row attached to this provider.
+              // We oldest-first sort to make this deterministic across legacy data
+              // where multiple region rows may be attached.
+              const sorted = [...regions].sort(
+                (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+              );
+              regions = sorted.slice(0, 1);
+            } else if (
               provider.supportsRegions &&
               !provider.allowUserRegionSelection &&
               regions.length > 0
@@ -481,7 +496,7 @@ export const workspaceRouter = router({
       }
 
       try {
-        const computeProvider = await getProviderByCloudProviderId(providerRecord.name);
+        const computeProvider = await getProviderByCloudProviderId(providerRecord.providerKey);
         const access = await computeProvider.getWorkspaceEditorAccess({
           workspaceId: workspaceRecord.id,
           userId,
@@ -1013,7 +1028,9 @@ export const workspaceRouter = router({
 
         const providerConfigService = getProviderConfigService();
 
-        if (cloudProviderRecord.name.toLowerCase() !== "local") {
+        const providerKey = (cloudProviderRecord.providerKey ?? "local").toLowerCase();
+
+        if (providerKey !== "local") {
           if (!cloudProviderRecord.providerConfigId) {
             throw new TRPCError({
               code: "BAD_REQUEST",
@@ -1034,7 +1051,7 @@ export const workspaceRouter = router({
         }
 
         // Determine if this is a local workspace
-        const isLocal = cloudProviderRecord.name.toLowerCase() === "local";
+        const isLocal = providerKey === "local";
         const workspaceProfile = (input.workspaceProfile ?? "standard") as WorkspaceProfile;
         const editorAccessEnabled = workspaceProfile === "ssh-enabled";
         const providerEditorSupport = normalizeProviderEditorAccessSupport(
@@ -1042,7 +1059,7 @@ export const workspaceRouter = router({
         );
 
         if (editorAccessEnabled) {
-          const requiresUserSshKey = cloudProviderRecord.name.toLowerCase() !== "daytona";
+          const requiresUserSshKey = providerKey !== "daytona";
           if (requiresUserSshKey && !fetchedUser.sshPublicKey) {
             throw new TRPCError({
               code: "BAD_REQUEST",
@@ -1110,8 +1127,38 @@ export const workspaceRouter = router({
         let regionRecord: typeof region.$inferSelect | undefined;
 
         if (cloudProviderRecord.supportsRegions) {
-          // Check if user is allowed to select regions
-          if (cloudProviderRecord.allowUserRegionSelection) {
+          if (providerKey === "aws") {
+            // AWS providers are region-scoped: each cloud_provider row represents
+            // exactly one AWS region, set when the provider was created via
+            // `aws.createRegionProvider`. The pinned region is the region row
+            // attached to this specific cloud_provider — NOT anything stored on
+            // the shared providerConfig blob (which only holds credentials).
+            //
+            // Reading region from providerConfig.defaultRegion would silently
+            // route deploys to the wrong region when:
+            //   - the provider hasn't been bootstrapped yet (providerConfigId null)
+            //   - the providerConfig points to a stale/shared default config
+            // Always resolve via the attached region row.
+            [regionRecord] = await db
+              .select()
+              .from(region)
+              .where(
+                and(
+                  eq(region.cloudProviderId, input.cloudProviderId),
+                  eq(region.isEnabled, true),
+                ),
+              )
+              .orderBy(asc(region.createdAt))
+              .limit(1);
+
+            if (!regionRecord) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message:
+                  "This AWS provider has no enabled region attached. Re-create the provider with a valid region.",
+              });
+            }
+          } else if (cloudProviderRecord.allowUserRegionSelection) {
             // User can select - validate the provided region
             if (input.regionId) {
               [regionRecord] = await db
@@ -1161,7 +1208,8 @@ export const workspaceRouter = router({
                 );
             }
 
-            // If no default region found or not enabled, try to get any enabled region
+            // If no default region found or not enabled, fall back to any enabled
+            // region attached to this provider.
             if (!regionRecord) {
               const [anyEnabledRegion] = await db
                 .select()
@@ -1191,7 +1239,8 @@ export const workspaceRouter = router({
         const imageRecords = await db
           .select()
           .from(image)
-          .where(and(eq(image.agentTypeId, input.agentTypeId), eq(image.isEnabled, true)));
+          .where(and(eq(image.agentTypeId, input.agentTypeId), eq(image.isEnabled, true)))
+          .orderBy(desc(image.updatedAt));
 
         const [agentTypeRecord] = await db
           .select()
@@ -1227,15 +1276,24 @@ export const workspaceRouter = router({
           });
         }
 
-        const imageRecord = pickWorkspaceImage(imageRecords, workspaceProfile);
+        const assignedProviderImage = await db.query.providerAgentImage.findFirst({
+          where: and(
+            eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
+            eq(providerAgentImage.agentTypeId, input.agentTypeId),
+          ),
+          with: {
+            image: true,
+          },
+        });
+
+        const imageRecord = assignedProviderImage?.image?.isEnabled
+          ? assignedProviderImage.image
+          : pickWorkspaceImage(imageRecords, workspaceProfile);
 
         if (!imageRecord) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message:
-              workspaceProfile === "ssh-enabled"
-                ? "No SSH-enabled image found for this agent type"
-                : "No enabled image found for this agent type",
+            message: "No enabled image found for this agent type",
           });
         }
 
@@ -1588,7 +1646,7 @@ export const workspaceRouter = router({
           WORKSPACE_PROFILE: workspaceProfile,
           EDITOR_ACCESS_ENABLED: editorAccessEnabled ? "true" : "false",
           USER_SSH_PUBLIC_KEY:
-            editorAccessEnabled && cloudProviderRecord.name.toLowerCase() !== "daytona"
+            editorAccessEnabled && providerKey !== "daytona"
               ? normalizeSshPublicKey(fetchedUser.sshPublicKey ?? "")
               : undefined,
           ...(userWorkspaceEnvironmentVariables
@@ -1597,7 +1655,7 @@ export const workspaceRouter = router({
         };
 
         // Get compute provider
-        const computeProvider = await getProviderByCloudProviderId(cloudProviderRecord.name);
+        const computeProvider = await getProviderByCloudProviderId(providerKey);
 
         // If immediate we send the intial workspace status to running
         const initialWorkspaceStatus =
@@ -1605,7 +1663,7 @@ export const workspaceRouter = router({
 
         // Create workspace via compute provider
         const workspaceInfo = await workspaceCreateLogger.step(
-          `provision-workspace provider=${cloudProviderRecord.name.toLowerCase()} persistent=${input.persistent}`,
+          `provision-workspace provider=${providerKey} persistent=${input.persistent}`,
           () =>
             input.persistent
               ? computeProvider.createPersistentWorkspace({
@@ -1673,7 +1731,7 @@ export const workspaceRouter = router({
         }
 
         workspaceCreateLogger.log(
-          `workspace-record-created provider=${cloudProviderRecord.name.toLowerCase()} persistent=${input.persistent}`,
+          `workspace-record-created provider=${providerKey} persistent=${input.persistent}`,
         );
 
         if (workspaceInfo.upstreamAccess?.headers) {
@@ -1813,7 +1871,7 @@ export const workspaceRouter = router({
         }
 
         // Get compute provider and stop the workspace
-        const computeProvider = await getProviderByCloudProviderId(provider.name);
+        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
         if (existingWorkspace.editorConnection) {
           await computeProvider
             .revokeWorkspaceEditorAccess({
@@ -1941,7 +1999,7 @@ export const workspaceRouter = router({
         }
 
         // Get compute provider and restart the workspace
-        const computeProvider = await getProviderByCloudProviderId(provider.name);
+        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
         await computeProvider.restartWorkspace(
           existingWorkspace.externalInstanceId,
           workspaceRegion?.externalRegionIdentifier,
@@ -2026,32 +2084,62 @@ export const workspaceRouter = router({
       }
 
       // Get compute provider and terminate the workspace
-      const computeProvider = await getProviderByCloudProviderId(provider.name);
-      if (fetchedWorkspace.editorConnection) {
-        await computeProvider
-          .revokeWorkspaceEditorAccess({
-            workspaceId: fetchedWorkspace.id,
-            externalServiceId: fetchedWorkspace.externalInstanceId,
-            connection: fetchedWorkspace.editorConnection,
-          })
-          .catch((error) => {
-            console.warn("Failed to revoke workspace editor access during delete:", error);
-          });
-      }
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      const terminateInBackground = provider.providerKey === "aws";
+      const externalVolumeId = fetchedWorkspace.persistent
+        ? fetchedWorkspace.volume.externalVolumeId
+        : undefined;
+      const terminatedAt = new Date();
 
-      await computeProvider.terminateWorkspace(
-        fetchedWorkspace.externalInstanceId,
-        fetchedWorkspace.persistent ? fetchedWorkspace.volume.externalVolumeId : undefined,
-      );
+      const runTerminationCleanup = async () => {
+        if (fetchedWorkspace.editorConnection) {
+          await computeProvider
+            .revokeWorkspaceEditorAccess({
+              workspaceId: fetchedWorkspace.id,
+              externalServiceId: fetchedWorkspace.externalInstanceId,
+              connection: fetchedWorkspace.editorConnection,
+            })
+            .catch((error) => {
+              console.warn("Failed to revoke workspace editor access during delete:", error);
+            });
+        }
+
+        for (const exposedPort of Object.values(fetchedWorkspace.exposedPorts ?? {})) {
+          if (exposedPort?.externalPortDomainId) {
+            await computeProvider.removeExposedPortDomain(exposedPort.externalPortDomainId);
+          }
+        }
+
+        await computeProvider.terminateWorkspace(
+          fetchedWorkspace.externalInstanceId,
+          externalVolumeId,
+        );
+
+        await db
+          .update(workspace)
+          .set({
+            externalInstanceId: "",
+            externalRunningDeploymentId: null,
+            upstreamUrl: null,
+            exposedPorts: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(workspace.id, fetchedWorkspace.id));
+      };
+
+      if (!terminateInBackground) {
+        await runTerminationCleanup();
+      }
 
       const [updatedWorkspace] = await db
         .update(workspace)
         .set({
           status: "terminated",
-          stoppedAt: new Date(),
-          terminatedAt: new Date(),
+          stoppedAt: terminatedAt,
+          terminatedAt,
+          exposedPorts: null,
           editorConnection: null,
-          updatedAt: new Date(),
+          updatedAt: terminatedAt,
         })
         .where(eq(workspace.id, input.workspaceId))
         .returning();
@@ -2067,14 +2155,24 @@ export const workspaceRouter = router({
       WORKSPACE_EVENTS.emitStatus({
         workspaceId: input.workspaceId,
         status: "terminated",
-        updatedAt: new Date(),
+        updatedAt: terminatedAt,
         userId,
         workspaceDomain: fetchedWorkspace.domain,
       });
 
+      if (terminateInBackground) {
+        void runTerminationCleanup().catch((error) => {
+          console.error(
+            `Failed to finish background termination for workspace ${fetchedWorkspace.id}:`,
+            error,
+          );
+        });
+      }
+
       return {
         workspace: updatedWorkspace,
         success: true,
+        cleanupInBackground: terminateInBackground,
       };
     }),
 
@@ -2104,7 +2202,7 @@ export const workspaceRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Cloud provider not found" });
       }
 
-      const computeProvider = await getProviderByCloudProviderId(provider.name);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
 
       const { domain, externalPortDomainId, upstreamAccess } =
         await computeProvider.createOrGetExposedPortDomain(
@@ -2171,7 +2269,7 @@ export const workspaceRouter = router({
           });
         }
 
-        const computeProvider = await getProviderByCloudProviderId(provider.name);
+        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
         await computeProvider.removeExposedPortDomain(externalPortDomainId);
       }
 

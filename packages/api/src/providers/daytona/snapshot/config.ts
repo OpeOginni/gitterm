@@ -22,9 +22,7 @@ export const DAYTONA_SNAPSHOT_RESOURCES: Record<
   },
 };
 
-export function getDaytonaSnapshotName(
-  kind: DaytonaSnapshotKind,
-): string {
+export function getDaytonaSnapshotName(kind: DaytonaSnapshotKind): string {
   return `${DAYTONA_SNAPSHOT_BASE_NAMES[kind]}`;
 }
 

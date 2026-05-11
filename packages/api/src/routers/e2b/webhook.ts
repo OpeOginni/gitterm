@@ -1,5 +1,5 @@
 import z from "zod";
-import { e2bWebhookProcedure, publicProcedure, router } from "../../index";
+import { e2bWebhookProcedure, router } from "../../index";
 import { TRPCError } from "@trpc/server";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { getInternalClient } from "../../client";

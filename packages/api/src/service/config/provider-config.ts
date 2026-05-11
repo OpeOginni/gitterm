@@ -28,6 +28,7 @@ export interface DecryptedProviderConfig {
     category: string;
   };
   config: Record<string, any>;
+  configPreviews?: Record<string, string>;
   isDefault: boolean;
   isEnabled: boolean;
   priority: number;
@@ -50,6 +51,13 @@ class ProviderConfigService {
     return configs.map((config) => this.decryptConfig(config));
   }
 
+  async getAllProviderConfigsForDisplay(
+    includeDisabled = false,
+  ): Promise<DecryptedProviderConfig[]> {
+    const configs = await this.getAllProviderConfigs(includeDisabled);
+    return configs.map((config) => this.redactConfigForDisplay(config));
+  }
+
   async getProviderConfigById(id: string): Promise<DecryptedProviderConfig | null> {
     const config = await db.query.providerConfig.findFirst({
       where: eq(providerConfig.id, id),
@@ -60,6 +68,12 @@ class ProviderConfigService {
 
     if (!config) return null;
     return this.decryptConfig(config);
+  }
+
+  async getProviderConfigByIdForDisplay(id: string): Promise<DecryptedProviderConfig | null> {
+    const config = await this.getProviderConfigById(id);
+    if (!config) return null;
+    return this.redactConfigForDisplay(config);
   }
 
   async getProviderConfigByName(providerName: string): Promise<DecryptedProviderConfig | null> {
@@ -157,14 +171,21 @@ class ProviderConfigService {
     let configMetadata = existing.configMetadata;
 
     if (updates.config) {
-      const validation = validateProviderConfig(existing.providerType.name, updates.config);
+      const existingDecryptedConfig = this.decryptConfig(existing).config;
+      const mergedConfig = this.mergeConfigPreservingEncryptedFields(
+        existing.providerType.name,
+        existingDecryptedConfig,
+        updates.config,
+      );
+
+      const validation = validateProviderConfig(existing.providerType.name, mergedConfig);
       if (!validation.success) {
         throw new Error(`Invalid config: ${validation.errors?.join(", ")}`);
       }
 
       const { encrypted, metadata } = this.separateConfigFields(
         existing.providerType.name,
-        updates.config,
+        mergedConfig,
       );
       encryptedCredentials = this.encryption.encrypt(JSON.stringify(encrypted));
       configMetadata = metadata;
@@ -254,6 +275,41 @@ class ProviderConfigService {
     return { encrypted, metadata };
   }
 
+  private mergeConfigPreservingEncryptedFields(
+    providerName: string,
+    existingConfig: Record<string, any>,
+    incomingConfig: Record<string, any>,
+  ): Record<string, any> {
+    const definition = getProviderDefinition(providerName);
+    if (!definition) {
+      return {
+        ...existingConfig,
+        ...incomingConfig,
+      };
+    }
+
+    const mergedConfig = {
+      ...existingConfig,
+      ...incomingConfig,
+    };
+
+    for (const field of definition.fields) {
+      if (!field.isEncrypted) {
+        continue;
+      }
+
+      const incomingValue = incomingConfig[field.fieldName];
+      if (
+        incomingValue === undefined ||
+        (typeof incomingValue === "string" && incomingValue.trim() === "")
+      ) {
+        mergedConfig[field.fieldName] = existingConfig[field.fieldName];
+      }
+    }
+
+    return mergedConfig;
+  }
+
   private applyConfigDefaults(
     providerName: string,
     config: Record<string, any>,
@@ -304,6 +360,48 @@ class ProviderConfigService {
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     };
+  }
+
+  private redactConfigForDisplay(config: DecryptedProviderConfig): DecryptedProviderConfig {
+    const definition = getProviderDefinition(config.providerType.name);
+    if (!definition) {
+      return config;
+    }
+
+    const redactedConfig = { ...config.config };
+    const configPreviews: Record<string, string> = {};
+    for (const field of definition.fields) {
+      if (field.isEncrypted && field.fieldName in redactedConfig) {
+        configPreviews[field.fieldName] = this.buildEncryptedFieldPreview(
+          field.fieldName,
+          redactedConfig[field.fieldName],
+        );
+        redactedConfig[field.fieldName] = "";
+      }
+    }
+
+    return {
+      ...config,
+      config: redactedConfig,
+      configPreviews,
+    };
+  }
+
+  private buildEncryptedFieldPreview(fieldName: string, value: unknown): string {
+    const normalized = String(value ?? "").trim();
+    if (!normalized) {
+      return "";
+    }
+
+    if (fieldName.toLowerCase().includes("secret") || fieldName.toLowerCase().includes("token")) {
+      return "••••••••••••";
+    }
+
+    if (normalized.length <= 8) {
+      return `${normalized.slice(0, 2)}••••`;
+    }
+
+    return `${normalized.slice(0, 4)}••••${normalized.slice(-4)}`;
   }
 
   async linkProviderConfigToCloudProvider(

@@ -30,6 +30,7 @@ export interface AgentType {
 export interface CloudProvider {
   id: string;
   name: string;
+  providerKey: string;
   supportsRegions: boolean;
   allowUserRegionSelection: boolean;
   regions?: Region[];
@@ -178,7 +179,7 @@ export const ICON_MAP: Record<string, string> = {
   cloudflare: "/cloudflare.svg",
   e2b: "/E2B.svg",
   daytona: "/daytona.svg",
-  aws: "/EC2.svg",
+  aws: "/ECS.svg",
   claude: "/code.svg",
   ralph: "/ralph-wiggum.svg",
 };
