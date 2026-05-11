@@ -1,25 +1,17 @@
 #!/bin/sh
 set -eu
 
-WORKSPACE="${WORKSPACE:-/workspace}"
-AGENT_DIR="$WORKSPACE"
-AGENT_MD="$AGENT_DIR/AGENTS.md"
+CONTEXT_DIR="${GITTERM_CONTEXT_DIR:-/workspace/.gitterm}"
+AGENT_MD="$CONTEXT_DIR/aws-runtime-context.md"
+AWS_TASK_ROLE_NAME="${AWS_TASK_ROLE_NAME:-gitterm-task}"
 
-mkdir -p "$AGENT_DIR"
+mkdir -p "$CONTEXT_DIR"
 
 write_static_header() {
-    if [ -f "$AGENT_MD" ]; then
-        cat >> "$AGENT_MD" <<'EOF'
-
----
-
-EOF
-    else
-        cat > "$AGENT_MD" <<'EOF'
+    cat > "$AGENT_MD" <<'EOF'
 # GitTerm Agent Runtime Context
 
 EOF
-    fi
 
     cat >> "$AGENT_MD" <<'EOF'
 
@@ -83,7 +75,7 @@ fi
 
 ACCOUNT_ID="$(printf '%s' "$IDENTITY_JSON" | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{console.log(JSON.parse(s).Account||'')}catch{}})" 2>/dev/null || true)"
 ARN="$(printf '%s' "$IDENTITY_JSON" | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{console.log(JSON.parse(s).Arn||'')}catch{}})" 2>/dev/null || true)"
-ROLE_NAME="gitterm-task"
+ROLE_NAME="$AWS_TASK_ROLE_NAME"
 
 append_section "Detected Runtime Role"
 printf -- '- Account ID: `%s`\n' "$ACCOUNT_ID" >> "$AGENT_MD"

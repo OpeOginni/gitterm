@@ -201,6 +201,7 @@ export default function ProviderSettingsPage() {
       accessKeyId: string;
       secretAccessKey: string;
       defaultRegion: string;
+      publicSshEnabled?: boolean;
     }) => trpcClient.admin.aws.bootstrap.mutate(params),
     onSuccess: (data) => {
       applyAwsBootstrapState(data);
@@ -459,7 +460,7 @@ export default function ProviderSettingsPage() {
           </div>
           <Switch
             id={field.fieldName}
-            checked={value}
+            checked={value === true || value === "true"}
             disabled={readOnly}
             onCheckedChange={(checked) =>
               !readOnly && setConfigForm({ ...configForm, [field.fieldName]: checked })
@@ -565,6 +566,7 @@ export default function ProviderSettingsPage() {
   const awsAccessKeyId = String(configForm.accessKeyId ?? "").trim();
   const awsSecretAccessKey = String(configForm.secretAccessKey ?? "").trim();
   const awsDefaultRegion = String(configForm.defaultRegion ?? "").trim();
+  const awsPublicSshEnabled = configForm.publicSshEnabled !== false;
   const hasSavedAwsCredentials = isAwsProvider && !!provider?.providerConfig;
   const hasEnteredAwsCredentials = awsAccessKeyId.length > 0 && awsSecretAccessKey.length > 0;
   const canRunAwsSimpleSetup =
@@ -590,6 +592,7 @@ export default function ProviderSettingsPage() {
       accessKeyId: awsAccessKeyId,
       secretAccessKey: awsSecretAccessKey,
       defaultRegion: awsDefaultRegion,
+      publicSshEnabled: awsPublicSshEnabled,
     });
   };
 
@@ -631,6 +634,7 @@ export default function ProviderSettingsPage() {
         accessKeyId: awsAccessKeyId,
         secretAccessKey: awsSecretAccessKey,
         defaultRegion: awsDefaultRegion,
+        publicSshEnabled: awsPublicSshEnabled,
       });
 
       applyAwsBootstrapState(bootstrapResult);

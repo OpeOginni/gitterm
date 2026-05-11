@@ -6,7 +6,12 @@ import {
   UpdateStackCommand,
 } from "@aws-sdk/client-cloudformation";
 import { DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
-import { CreateRoleCommand, GetRoleCommand, IAMClient } from "@aws-sdk/client-iam";
+import {
+  CreateRoleCommand,
+  GetRoleCommand,
+  IAMClient,
+  PutRolePolicyCommand,
+} from "@aws-sdk/client-iam";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import type { AwsConfig } from "./types";
 
@@ -18,6 +23,7 @@ export interface AwsBootstrapInput {
   accessKeyId: string;
   secretAccessKey: string;
   defaultRegion: string;
+  publicSshEnabled?: boolean;
 }
 
 export interface AwsBootstrapSummary {
@@ -50,8 +56,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function normalizeAwsNamePart(value: string): string {
+  return value.replace(/[^a-z0-9-]/gi, "-");
+}
+
 function buildStackName(region: string): string {
-  return `${STACK_NAME_PREFIX}-${region.replace(/[^a-z0-9-]/gi, "-")}`;
+  return `${STACK_NAME_PREFIX}-${normalizeAwsNamePart(region)}`;
+}
+
+function buildTaskRoleName(region: string): string {
+  return `gitterm-task-${normalizeAwsNamePart(region)}`;
 }
 
 function buildTemplate(subnetCount: number): string {
@@ -92,9 +106,17 @@ function buildTemplate(subnetCount: number): string {
     Parameters: {
       VpcId: { Type: "AWS::EC2::VPC::Id" },
       ExistingTaskRoleArn: { Type: "String", Default: "" },
+      PublicSshEnabled: {
+        Type: "String",
+        AllowedValues: ["true", "false"],
+        Default: "false",
+      },
       ...subnetParams,
     },
-    Conditions: subnetConditions,
+    Conditions: {
+      ...subnetConditions,
+      EnablePublicSsh: { "Fn::Equals": [{ Ref: "PublicSshEnabled" }, "true"] },
+    },
     Resources: {
       AlbSecurityGroup: {
         Type: "AWS::EC2::SecurityGroup",
@@ -141,12 +163,15 @@ function buildTemplate(subnetCount: number): string {
 
       WorkspaceSshIngress: {
         Type: "AWS::EC2::SecurityGroupIngress",
+        Condition: "EnablePublicSsh",
         Properties: {
           GroupId: { Ref: "WorkspaceSecurityGroup" },
           IpProtocol: "tcp",
           FromPort: 22,
           ToPort: 22,
           CidrIp: "0.0.0.0/0",
+          Description:
+            "Public SSH access for GitTerm editor connections. Containers require key auth.",
         },
       },
 
@@ -211,7 +236,7 @@ function buildTemplate(subnetCount: number): string {
       TaskExecutionRole: {
         Type: "AWS::IAM::Role",
         Properties: {
-          RoleName: "gitterm-task-execution",
+          RoleName: { "Fn::Sub": "gitterm-task-execution-${AWS::Region}" },
           AssumeRolePolicyDocument: {
             Version: "2012-10-17",
             Statement: [
@@ -339,15 +364,17 @@ async function findExistingIamRoleArn(
   }
 }
 
-async function ensureTaskRoleArn(iam: IAMClient): Promise<string> {
-  const existingArn = await findExistingIamRoleArn(iam, "gitterm-task");
+async function ensureTaskRoleArn(iam: IAMClient, region: string): Promise<string> {
+  const roleName = buildTaskRoleName(region);
+  const existingArn = await findExistingIamRoleArn(iam, roleName);
   if (existingArn) {
+    await ensureTaskRoleIntrospectionPolicy(iam, roleName);
     return existingArn;
   }
 
   const response = await iam.send(
     new CreateRoleCommand({
-      RoleName: "gitterm-task",
+      RoleName: roleName,
       AssumeRolePolicyDocument: JSON.stringify({
         Version: "2012-10-17",
         Statement: [
@@ -367,10 +394,39 @@ async function ensureTaskRoleArn(iam: IAMClient): Promise<string> {
 
   const arn = response.Role?.Arn;
   if (!arn) {
-    throw new Error("Created gitterm-task role but AWS did not return its ARN.");
+    throw new Error(`Created ${roleName} role but AWS did not return its ARN.`);
   }
 
+  await ensureTaskRoleIntrospectionPolicy(iam, roleName);
+
   return arn;
+}
+
+async function ensureTaskRoleIntrospectionPolicy(iam: IAMClient, roleName: string): Promise<void> {
+  await iam.send(
+    new PutRolePolicyCommand({
+      RoleName: roleName,
+      PolicyName: "gitterm-runtime-context-introspection",
+      PolicyDocument: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Effect: "Allow",
+            Action: [
+              "sts:GetCallerIdentity",
+              "iam:GetRole",
+              "iam:GetRolePolicy",
+              "iam:ListRolePolicies",
+              "iam:ListAttachedRolePolicies",
+              "iam:GetPolicy",
+              "iam:GetPolicyVersion",
+            ],
+            Resource: "*",
+          },
+        ],
+      }),
+    }),
+  );
 }
 
 async function waitForStackDeletion(cf: CloudFormationClient, stackName: string): Promise<void> {
@@ -554,7 +610,7 @@ export async function bootstrapAwsProvider(input: AwsBootstrapInput): Promise<Aw
 
   const vpcId = await findDefaultVpc(ec2);
   const subnetIds = await findPublicSubnetIds(ec2, vpcId);
-  const ensuredTaskRoleArn = await ensureTaskRoleArn(iam);
+  const ensuredTaskRoleArn = await ensureTaskRoleArn(iam, region);
 
   const stackName = buildStackName(region);
   const templateBody = buildTemplate(subnetIds.length);
@@ -562,6 +618,7 @@ export async function bootstrapAwsProvider(input: AwsBootstrapInput): Promise<Aw
   const parameters = [
     { ParameterKey: "VpcId", ParameterValue: vpcId },
     { ParameterKey: "ExistingTaskRoleArn", ParameterValue: ensuredTaskRoleArn },
+    { ParameterKey: "PublicSshEnabled", ParameterValue: input.publicSshEnabled ? "true" : "false" },
     ...subnetIds.map((id, i) => ({
       ParameterKey: `Subnet${i + 1}`,
       ParameterValue: id,
@@ -594,6 +651,7 @@ export async function bootstrapAwsProvider(input: AwsBootstrapInput): Promise<Aw
       taskExecutionRoleArn,
       taskRoleArn,
       assignPublicIp: true,
+      publicSshEnabled: input.publicSshEnabled ?? false,
       efsFileSystemId,
       logGroupName,
     },

@@ -11,6 +11,7 @@ export interface AwsConfig {
   taskExecutionRoleArn: string;
   taskRoleArn: string;
   assignPublicIp?: boolean;
+  publicSshEnabled?: boolean;
   efsFileSystemId?: string;
   logGroupName?: string;
 }

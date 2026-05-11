@@ -3,18 +3,13 @@ set -e
 
 mkdir -p /workspace /run/sshd /etc/ssh/sshd_config.d /etc/ssh/authorized_keys
 
-SSH_PASSWORD_AUTH=yes
+SSH_PASSWORD_AUTH=no
 
 if command -v usermod >/dev/null 2>&1; then
     usermod -d /workspace root || true
 fi
 
-if [ -n "$OPENCODE_SERVER_PASSWORD" ]; then
-    echo "root:$OPENCODE_SERVER_PASSWORD" | chpasswd
-fi
-
 if [ -n "$USER_SSH_PUBLIC_KEY" ]; then
-    SSH_PASSWORD_AUTH=no
     touch /etc/ssh/authorized_keys/root
     chmod 600 /etc/ssh/authorized_keys/root
     chown root:root /etc/ssh/authorized_keys/root
@@ -28,7 +23,7 @@ PubkeyAuthentication yes
 AuthorizedKeysFile /etc/ssh/authorized_keys/%u
 PasswordAuthentication ${SSH_PASSWORD_AUTH}
 KbdInteractiveAuthentication no
-PermitRootLogin yes
+PermitRootLogin prohibit-password
 UsePAM no
 AllowTcpForwarding yes
 AllowAgentForwarding yes

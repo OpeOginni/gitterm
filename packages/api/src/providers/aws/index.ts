@@ -112,7 +112,7 @@ function buildDomain(subdomain: string): string {
 }
 
 function normalizeEnvironmentVariables(
-  environmentVariables?: WorkspaceConfig["environmentVariables"],
+  environmentVariables?: Record<string, string | undefined>,
 ): Array<{ name: string; value: string }> {
   return Object.entries(environmentVariables ?? {})
     .filter((entry): entry is [string, string] => typeof entry[1] === "string")
@@ -125,6 +125,16 @@ function isEditorAccessEnabled(config: WorkspaceConfig): boolean {
 
 function getImageMetadata(config: WorkspaceConfig): AwsImageProviderMetadata {
   return config.imageProviderMetadata?.aws ?? {};
+}
+
+function getRoleNameFromArn(roleArn: string): string | undefined {
+  const marker = ":role/";
+  const index = roleArn.indexOf(marker);
+  if (index === -1) {
+    return undefined;
+  }
+
+  return roleArn.slice(index + marker.length);
 }
 
 function buildWorkspaceHost(workspaceId: string): string {
@@ -751,7 +761,10 @@ export class AwsProvider implements ComputeProvider {
           ? [{ containerPort: SSH_PORT, protocol: "tcp" as const }]
           : []),
       ],
-      environment: normalizeEnvironmentVariables(config.environmentVariables),
+      environment: normalizeEnvironmentVariables({
+        ...config.environmentVariables,
+        AWS_TASK_ROLE_NAME: getRoleNameFromArn(providerConfig.taskRoleArn),
+      }),
     };
 
     if (providerConfig.logGroupName) {
@@ -1031,7 +1044,7 @@ export class AwsProvider implements ComputeProvider {
         action: "register_task_definition",
         records: {
           taskDefinitionArn: taskDefinitionArn,
-        }
+        },
       });
 
       logger.info("AWS create listener rule started", {

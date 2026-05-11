@@ -24,6 +24,7 @@ const bootstrapAwsProviderSchema = z.object({
   accessKeyId: z.string().optional(),
   secretAccessKey: z.string().optional(),
   defaultRegion: z.string().optional(),
+  publicSshEnabled: z.boolean().optional(),
 });
 
 const deleteAwsInfrastructureSchema = z.object({
@@ -34,12 +35,19 @@ function resolveAwsSetupInput(input: {
   accessKeyId?: unknown;
   secretAccessKey?: unknown;
   defaultRegion?: unknown;
-}): { accessKeyId: string; secretAccessKey: string; defaultRegion: string } {
+  publicSshEnabled?: unknown;
+}): {
+  accessKeyId: string;
+  secretAccessKey: string;
+  defaultRegion: string;
+  publicSshEnabled: boolean;
+} {
   const config = normalizeAwsConfig(input as Record<string, any>);
   return {
     accessKeyId: config.accessKeyId,
     secretAccessKey: config.secretAccessKey,
     defaultRegion: config.defaultRegion,
+    publicSshEnabled: input.publicSshEnabled === undefined ? true : input.publicSshEnabled === true,
   };
 }
 
@@ -93,6 +101,7 @@ export const awsRouter = router({
           input.defaultRegion,
           existingConfig?.config.defaultRegion,
         ),
+        publicSshEnabled: input.publicSshEnabled ?? existingConfig?.config.publicSshEnabled ?? true,
       });
     } catch (error) {
       throw new TRPCError({
