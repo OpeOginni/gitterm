@@ -5,6 +5,7 @@ import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { providerConfig, providerType } from "@gitterm/db/schema/provider-config";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { adminProcedure, router } from "../..";
+import { normalizeAwsConfig } from "../../providers/aws";
 import { bootstrapAwsProvider, deleteAwsProviderInfrastructure } from "../../providers/aws/setup";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { getProviderConfigService } from "../../service/config/provider-config";
@@ -28,6 +29,24 @@ const bootstrapAwsProviderSchema = z.object({
 const deleteAwsInfrastructureSchema = z.object({
   providerId: z.uuid(),
 });
+
+function resolveAwsSetupInput(input: {
+  accessKeyId?: unknown;
+  secretAccessKey?: unknown;
+  defaultRegion?: unknown;
+}): { accessKeyId: string; secretAccessKey: string; defaultRegion: string } {
+  const config = normalizeAwsConfig(input as Record<string, any>);
+  return {
+    accessKeyId: config.accessKeyId,
+    secretAccessKey: config.secretAccessKey,
+    defaultRegion: config.defaultRegion,
+  };
+}
+
+function preferSubmittedValue(submitted: unknown, existing: unknown): unknown {
+  const submittedValue = String(submitted ?? "").trim();
+  return submittedValue || existing;
+}
 
 export const awsRouter = router({
   bootstrap: adminProcedure.input(bootstrapAwsProviderSchema).mutation(async ({ input }) => {
@@ -62,30 +81,29 @@ export const awsRouter = router({
       ? await providerConfigService.getProviderConfigById(provider.providerConfigId)
       : null;
 
-    const accessKeyId =
-      String(input.accessKeyId ?? "").trim() ||
-      String(existingConfig?.config.accessKeyId ?? "").trim();
-    const secretAccessKey =
-      String(input.secretAccessKey ?? "").trim() ||
-      String(existingConfig?.config.secretAccessKey ?? "").trim();
-    const defaultRegion =
-      String(input.defaultRegion ?? "").trim() ||
-      String(existingConfig?.config.defaultRegion ?? "").trim();
-
-    if (!accessKeyId || !secretAccessKey || !defaultRegion) {
+    let setupInput;
+    try {
+      setupInput = resolveAwsSetupInput({
+        accessKeyId: preferSubmittedValue(input.accessKeyId, existingConfig?.config.accessKeyId),
+        secretAccessKey: preferSubmittedValue(
+          input.secretAccessKey,
+          existingConfig?.config.secretAccessKey,
+        ),
+        defaultRegion: preferSubmittedValue(
+          input.defaultRegion,
+          existingConfig?.config.defaultRegion,
+        ),
+      });
+    } catch (error) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "AWS access key, secret key, and default region are required.",
+        message: error instanceof Error ? error.message : "AWS credentials are required.",
       });
     }
 
     let bootstrapResult;
     try {
-      bootstrapResult = await bootstrapAwsProvider({
-        accessKeyId,
-        secretAccessKey,
-        defaultRegion,
-      });
+      bootstrapResult = await bootstrapAwsProvider(setupInput);
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -175,7 +193,7 @@ export const awsRouter = router({
     const selectedRegion = await db.query.region.findFirst({
       where: and(
         eq(region.cloudProviderId, provider.id),
-        eq(region.externalRegionIdentifier, defaultRegion),
+        eq(region.externalRegionIdentifier, setupInput.defaultRegion),
       ),
     });
 
@@ -188,16 +206,16 @@ export const awsRouter = router({
         })
         .where(eq(region.id, selectedRegion.id));
     } else {
-      const regionMetadata = AWS_REGION_METADATA[defaultRegion] ?? {
-        name: defaultRegion,
-        location: defaultRegion,
+      const regionMetadata = AWS_REGION_METADATA[setupInput.defaultRegion] ?? {
+        name: setupInput.defaultRegion,
+        location: setupInput.defaultRegion,
       };
 
       await db.insert(region).values({
         cloudProviderId: provider.id,
         name: regionMetadata.name,
         location: regionMetadata.location,
-        externalRegionIdentifier: defaultRegion,
+        externalRegionIdentifier: setupInput.defaultRegion,
         isEnabled: true,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -279,27 +297,22 @@ export const awsRouter = router({
         });
       }
 
-      const accessKeyId = String(currentConfig.config.accessKeyId ?? "").trim();
-      const secretAccessKey = String(currentConfig.config.secretAccessKey ?? "").trim();
-      const defaultRegion = String(currentConfig.config.defaultRegion ?? "").trim();
-
-      if (!accessKeyId || !secretAccessKey || !defaultRegion) {
+      let setupInput;
+      try {
+        setupInput = resolveAwsSetupInput(currentConfig.config);
+      } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "AWS credentials and default region are required to delete the infrastructure.",
+          message: error instanceof Error ? error.message : "AWS credentials are required.",
         });
       }
 
-      const deleteResult = await deleteAwsProviderInfrastructure({
-        accessKeyId,
-        secretAccessKey,
-        defaultRegion,
-      });
+      const deleteResult = await deleteAwsProviderInfrastructure(setupInput);
 
       await db
         .update(providerConfig)
         .set({
-          configMetadata: { defaultRegion },
+          configMetadata: { defaultRegion: setupInput.defaultRegion },
           isEnabled: false,
           updatedAt: new Date(),
         })

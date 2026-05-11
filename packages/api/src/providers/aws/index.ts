@@ -313,6 +313,21 @@ function isMissingAwsInfrastructureError(error: unknown): boolean {
   );
 }
 
+export function normalizeAwsConfig(config: Record<string, any>): AwsConfig {
+  const normalized: AwsConfig = {
+    ...(config as AwsConfig),
+    accessKeyId: String(config.accessKeyId ?? "").trim(),
+    secretAccessKey: String(config.secretAccessKey ?? "").trim(),
+    defaultRegion: String(config.defaultRegion ?? "").trim(),
+  };
+
+  if (!normalized.accessKeyId || !normalized.secretAccessKey || !normalized.defaultRegion) {
+    throw new Error("AWS access key, secret key, and default region are required.");
+  }
+
+  return normalized;
+}
+
 export class AwsProvider implements ComputeProvider {
   readonly name = "aws";
 
@@ -323,7 +338,7 @@ export class AwsProvider implements ComputeProvider {
       throw new Error("AWS provider is not configured. Please configure it in the admin panel.");
     }
 
-    return config as AwsConfig;
+    return normalizeAwsConfig(config);
   }
 
   private async createClients(region?: string) {
