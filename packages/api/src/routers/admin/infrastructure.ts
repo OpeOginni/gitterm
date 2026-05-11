@@ -28,6 +28,10 @@ import { providerType } from "@gitterm/db/schema/provider-config";
 
 const createCloudProviderSchema = z.object({
   name: z.string().min(1, "Provider name is required"),
+  providerKey: z
+    .string()
+    .min(1, "Provider key is required")
+    .regex(/^[a-z0-9-]+$/, "Provider key must be lowercase letters, numbers, or dashes"),
   supportsRegions: z.boolean().default(true),
   allowUserRegionSelection: z.boolean().default(true),
 });
@@ -175,6 +179,7 @@ export const infrastructureRouter = router({
       .insert(cloudProvider)
       .values({
         name: input.name,
+        providerKey: input.providerKey,
         supportsRegions: input.supportsRegions,
         allowUserRegionSelection: input.allowUserRegionSelection,
         isEnabled: false,
@@ -196,7 +201,7 @@ export const infrastructureRouter = router({
       throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
     }
 
-    if (existingProvider.name.toLowerCase() === "aws") {
+    if (existingProvider.providerKey === "aws") {
       updates.allowUserRegionSelection = false;
     }
 
@@ -228,7 +233,7 @@ export const infrastructureRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
       }
 
-      if (input.isEnabled && existingProvider.name.toLowerCase() !== "local") {
+      if (input.isEnabled && existingProvider.providerKey !== "local") {
         if (!existingProvider.providerConfigId) {
           throw new TRPCError({
             code: "BAD_REQUEST",

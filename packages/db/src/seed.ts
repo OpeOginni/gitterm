@@ -26,6 +26,7 @@ const hasSameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === J
 
 const seedCloudProviders: Array<{
   name: string;
+  providerKey: string;
   isEnabled: boolean;
   isSandbox?: boolean;
   supportsRegions: boolean;
@@ -39,6 +40,7 @@ const seedCloudProviders: Array<{
 }> = [
   {
     name: "Railway",
+    providerKey: "railway",
     isEnabled: false,
     supportsRegions: true,
     editorAccessSupport: {
@@ -52,24 +54,16 @@ const seedCloudProviders: Array<{
     restartSettlement: "webhook" as ProviderSettlement,
     terminationSettlement: "webhook" as ProviderSettlement,
   },
-  {
-    name: "AWS",
-    isEnabled: false,
-    supportsRegions: true,
-    allowUserRegionSelection: false,
-    editorAccessSupport: {
-      supported: true,
-      transportKind: "direct-ssh",
-      label: "Native SSH",
-      description: "Connect directly to the ECS task public IP for editor access.",
-    },
-    creationSettlement: "immediate" as ProviderSettlement,
-    stopSettlement: "immediate" as ProviderSettlement,
-    restartSettlement: "immediate" as ProviderSettlement,
-    terminationSettlement: "immediate" as ProviderSettlement,
-  },
+  // AWS is intentionally NOT seeded. Each AWS region is its own cloud_provider
+  // row, created by admins via `aws.createRegionProvider` (Add AWS Region in
+  // the providers admin UI). Seeding a generic "AWS" row with multiple regions
+  // attached produced ambiguous state — region resolution at deploy time falls
+  // back to a shared default config and silently lands every workspace in the
+  // first seeded region (typically us-east-1) regardless of which AWS provider
+  // was picked. Admins must explicitly add the regions they want to use.
   {
     name: "Cloudflare",
+    providerKey: "cloudflare",
     isEnabled: false,
     isSandbox: true,
     supportsRegions: false,
@@ -86,6 +80,7 @@ const seedCloudProviders: Array<{
   },
   {
     name: "E2B",
+    providerKey: "e2b",
     isEnabled: false,
     isSandbox: true,
     supportsRegions: false,
@@ -104,6 +99,7 @@ const seedCloudProviders: Array<{
   },
   {
     name: "Daytona",
+    providerKey: "daytona",
     isEnabled: false,
     isSandbox: true,
     supportsRegions: true,
@@ -171,14 +167,15 @@ const seedImages = [
   },
 ];
 
-const seedProviderAgentImages = [
-  {
-    providerName: "AWS",
-    agentTypeName: "OpenCode Server",
-    imageName: "gitterm-opencode-aws-server",
-    workspaceProfile: null,
-  },
-];
+// AWS image assignments are NOT seeded here. They're created per-region when an
+// admin calls `aws.createRegionProvider` (each AWS region is its own
+// cloud_provider row), since providerAgentImage is keyed by cloudProviderId.
+const seedProviderAgentImages: Array<{
+  providerName: string;
+  agentTypeName: string;
+  imageName: string;
+  workspaceProfile: string | null;
+}> = [];
 
 const seedProviderTypes = PROVIDER_DEFINITIONS;
 
@@ -208,37 +205,9 @@ const seedRegions = [
     externalRegionIdentifier: "asia-southeast1-eqsg3a",
     providerName: "Railway",
   },
-  // AWS regions
-  {
-    name: "US East (N. Virginia)",
-    location: "Virginia, USA",
-    externalRegionIdentifier: "us-east-1",
-    providerName: "AWS",
-  },
-  {
-    name: "US West (Oregon)",
-    location: "Oregon, USA",
-    externalRegionIdentifier: "us-west-2",
-    providerName: "AWS",
-  },
-  {
-    name: "EU (Ireland)",
-    location: "Ireland",
-    externalRegionIdentifier: "eu-west-1",
-    providerName: "AWS",
-  },
-  {
-    name: "EU (Frankfurt)",
-    location: "Frankfurt, Germany",
-    externalRegionIdentifier: "eu-central-1",
-    providerName: "AWS",
-  },
-  {
-    name: "Asia Pacific (Tokyo)",
-    location: "Tokyo, Japan",
-    externalRegionIdentifier: "ap-northeast-1",
-    providerName: "AWS",
-  },
+  // AWS regions are NOT seeded. Each AWS region is its own cloud_provider row,
+  // created by admins via `aws.createRegionProvider` which attaches the
+  // matching region row at creation time.
   // Daytona Regions
   {
     name: "Europe",
@@ -487,6 +456,10 @@ export async function seedDatabase(): Promise<void> {
       const targetProviderTerminationSettlement = provider.terminationSettlement ?? "webhook";
       const targetEditorAccessSupport = provider.editorAccessSupport ?? {};
 
+      if (existing.providerKey !== provider.providerKey) {
+        updates.providerKey = provider.providerKey;
+      }
+
       if (existing.isSandbox !== targetIsSandbox) {
         updates.isSandbox = targetIsSandbox;
       }
@@ -543,6 +516,7 @@ export async function seedDatabase(): Promise<void> {
         .insert(cloudProvider)
         .values({
           name: provider.name,
+          providerKey: provider.providerKey,
           isEnabled: provider.isEnabled,
           isSandbox: provider.isSandbox ?? false,
           supportsRegions: provider.supportsRegions,

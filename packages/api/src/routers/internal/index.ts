@@ -217,7 +217,7 @@ export const internalRouter = router({
       }
 
       // Stop via provider
-      const computeProvider = await getProviderByCloudProviderId(provider.name);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
       await computeProvider.stopWorkspace(
         ws.externalInstanceId,
         workspaceRegion?.externalRegionIdentifier,
@@ -313,7 +313,7 @@ export const internalRouter = router({
             .where(and(eq(volume.workspaceId, ws.id), eq(volume.userId, ws.userId)))
         : [];
 
-      const computeProvider = await getProviderByCloudProviderId(provider.name);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
 
       for (const exposedPort of Object.values(ws.exposedPorts ?? {})) {
         if (exposedPort?.externalPortDomainId) {
@@ -624,7 +624,7 @@ export const internalRouter = router({
         const [railwayProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "Railway"));
+          .where(eq(cloudProvider.providerKey, "railway"));
 
         if (!railwayProvider) {
           throw new TRPCError({
@@ -664,7 +664,7 @@ export const internalRouter = router({
         const [railwayProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "Railway"));
+          .where(eq(cloudProvider.providerKey, "railway"));
 
         if (!railwayProvider) {
           throw new TRPCError({
@@ -742,7 +742,7 @@ export const internalRouter = router({
         const [e2bProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "E2B"));
+          .where(eq(cloudProvider.providerKey, "e2b"));
 
         if (!e2bProvider) {
           throw new TRPCError({
@@ -781,7 +781,7 @@ export const internalRouter = router({
         const [e2bProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "E2B"));
+          .where(eq(cloudProvider.providerKey, "e2b"));
 
         if (!e2bProvider) {
           throw new TRPCError({
@@ -826,7 +826,7 @@ export const internalRouter = router({
         const [e2bProvider] = await db
           .select()
           .from(cloudProvider)
-          .where(eq(cloudProvider.name, "E2B"));
+          .where(eq(cloudProvider.providerKey, "e2b"));
 
         if (!e2bProvider) {
           throw new TRPCError({

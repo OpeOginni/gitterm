@@ -1,4 +1,4 @@
-import { and, db, eq, ne } from "@gitterm/db";
+import { and, db, eq, inArray, ne } from "@gitterm/db";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { awsProvider } from ".";
@@ -14,11 +14,16 @@ export interface AwsSweepResult {
 }
 
 export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
-  const awsCloudProvider = await db.query.cloudProvider.findFirst({
-    where: eq(cloudProvider.name, "AWS"),
+  // Multiple cloud_provider rows can share providerKey = "aws" (one row per
+  // configured AWS region). The sweep aggregates workspaces across all of them.
+  const awsCloudProviders = await db.query.cloudProvider.findMany({
+    where: eq(cloudProvider.providerKey, "aws"),
+    with: {
+      regions: true,
+    },
   });
 
-  if (!awsCloudProvider) {
+  if (awsCloudProviders.length === 0) {
     return {
       retriedWorkspaces: 0,
       servicesDeleted: 0,
@@ -30,27 +35,21 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
     };
   }
 
-  const [activeAwsWorkspaces, terminatedAwsWorkspaces] = await Promise.all([
-    db
-      .select({ id: workspace.id })
-      .from(workspace)
-      .where(
-        and(eq(workspace.cloudProviderId, awsCloudProvider.id), ne(workspace.status, "terminated")),
+  const awsProviderIds = awsCloudProviders.map((p) => p.id);
+
+  const terminatedAwsWorkspaces = await db
+    .select({
+      id: workspace.id,
+      externalInstanceId: workspace.externalInstanceId,
+    })
+    .from(workspace)
+    .where(
+      and(
+        inArray(workspace.cloudProviderId, awsProviderIds),
+        eq(workspace.status, "terminated"),
+        ne(workspace.externalInstanceId, ""),
       ),
-    db
-      .select({
-        id: workspace.id,
-        externalInstanceId: workspace.externalInstanceId,
-      })
-      .from(workspace)
-      .where(
-        and(
-          eq(workspace.cloudProviderId, awsCloudProvider.id),
-          eq(workspace.status, "terminated"),
-          ne(workspace.externalInstanceId, ""),
-        ),
-      ),
-  ]);
+    );
 
   let retriedWorkspaces = 0;
   for (const terminatedWorkspace of terminatedAwsWorkspaces) {
@@ -75,14 +74,55 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
     }
   }
 
-  const sweepResult = await awsProvider.sweepOrphanedResources(
-    activeAwsWorkspaces.map((ws) => ws.id),
-  );
+  let servicesDeleted = 0;
+  let taskDefinitionsDeregistered = 0;
+  let rulesDeleted = 0;
+  let targetGroupsDeleted = 0;
+  let accessPointsDeleted = 0;
+
+  for (const provider of awsCloudProviders) {
+    if (!provider.providerConfigId) {
+      continue;
+    }
+
+    const pinnedRegion =
+      provider.regions.find((region) => region.isEnabled) ??
+      [...provider.regions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+
+    if (!pinnedRegion?.externalRegionIdentifier) {
+      continue;
+    }
+
+    const activeProviderWorkspaces = await db
+      .select({ id: workspace.id })
+      .from(workspace)
+      .where(
+        and(eq(workspace.cloudProviderId, provider.id), ne(workspace.status, "terminated")),
+      );
+
+    try {
+      const providerSweepResult = await awsProvider.sweepOrphanedResources(
+        activeProviderWorkspaces.map((ws) => ws.id),
+        pinnedRegion.externalRegionIdentifier,
+      );
+
+      servicesDeleted += providerSweepResult.servicesDeleted;
+      taskDefinitionsDeregistered += providerSweepResult.taskDefinitionsDeregistered;
+      rulesDeleted += providerSweepResult.rulesDeleted;
+      targetGroupsDeleted += providerSweepResult.targetGroupsDeleted;
+      accessPointsDeleted += providerSweepResult.accessPointsDeleted;
+    } catch (error) {
+      console.error(
+        `[aws-reconcile] Failed to sweep orphaned resources for provider ${provider.id} (${pinnedRegion.externalRegionIdentifier}):`,
+        error,
+      );
+    }
+  }
 
   const unresolvedCleanupCount = await db.$count(
     workspace,
     and(
-      eq(workspace.cloudProviderId, awsCloudProvider.id),
+      inArray(workspace.cloudProviderId, awsProviderIds),
       eq(workspace.status, "terminated"),
       ne(workspace.externalInstanceId, ""),
     ),
@@ -91,6 +131,10 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
   return {
     retriedWorkspaces,
     unresolvedCleanupCount,
-    ...sweepResult,
+    servicesDeleted,
+    taskDefinitionsDeregistered,
+    rulesDeleted,
+    targetGroupsDeleted,
+    accessPointsDeleted,
   };
 }

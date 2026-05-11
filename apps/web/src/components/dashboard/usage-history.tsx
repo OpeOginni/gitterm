@@ -8,6 +8,11 @@ import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Clock, GitBranch } from "lucide-react";
 
+const historyTabsListClassName =
+  "inline-flex h-auto w-auto items-center gap-5 rounded-none border-b border-border/60 bg-transparent p-0";
+const historyTabsTriggerClassName =
+  "group h-auto flex-none rounded-none border-x-0 border-t-0 border-b-2 border-transparent px-0 py-2 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none";
+
 export function UsageHistory() {
   const { data, isLoading } = useQuery(
     trpc.workspace.listWorkspaces.queryOptions({
@@ -86,18 +91,23 @@ export function UsageHistory() {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="active" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-secondary/30 p-1">
-            <TabsTrigger
-              value="active"
-              className="data-[state=active]:bg-card data-[state=active]:text-foreground"
-            >
-              Active ({activeWorkspaces.length})
+          <TabsList className={historyTabsListClassName}>
+            <TabsTrigger value="active" className={historyTabsTriggerClassName}>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
+                  Active
+                </span>
+                <span className="rounded-full border border-border/70 bg-background/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors group-data-[state=active]:border-foreground/15 group-data-[state=active]:text-foreground/80">
+                  {activeWorkspaces.length}
+                </span>
+              </div>
             </TabsTrigger>
-            <TabsTrigger
-              value="terminated"
-              className="data-[state=active]:bg-card data-[state=active]:text-foreground"
-            >
-              Terminated ({terminatedWorkspaces.length})
+            <TabsTrigger value="terminated" className={historyTabsTriggerClassName}>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
+                  Terminated
+                </span>
+              </div>
             </TabsTrigger>
           </TabsList>
 

@@ -470,6 +470,25 @@ Keep these credentials separate from the ECS task execution role and task role.
 A sample policy for the control-plane IAM user lives here:
 
 - `packages/api/src/providers/aws/iam-user-policy.json`
+- `packages/api/src/providers/aws/iam-user-policy.eu-central-1.json` example pinned to `eu-central-1`
+
+Important notes about that sample policy:
+
+- it is intentionally all-region by default so one GitTerm control-plane user can manage multiple AWS region-scoped providers
+- replace `<ACCOUNT_ID>` before attaching it
+- CloudFormation is scoped to `arn:aws:cloudformation:*:<ACCOUNT_ID>:stack/gitterm-*/*`, which allows GitTerm to create one regional stack per AWS provider such as `gitterm-eu-central-1` or `gitterm-us-east-1`
+- IAM role permissions are scoped to `gitterm-task-*` and `gitterm-task-execution-*` because the current simple-setup flow creates region-scoped roles like `gitterm-task-eu-central-1` and `gitterm-task-execution-eu-central-1`
+
+If you want to pin the sample policy to a single region later, tighten these places:
+
+- in `GitTermCloudFormation`, replace the region wildcard in the stack ARN with a concrete region such as `eu-central-1`
+- in `GitTermSetupResources`, add an `aws:RequestedRegion` condition for that region
+- in `GitTermWorkspaceLifecycle`, add the same `aws:RequestedRegion` condition
+- if you also want to pin IAM role access to one region-specific role set, replace `gitterm-task-*` and `gitterm-task-execution-*` with concrete role names like `gitterm-task-eu-central-1` and `gitterm-task-execution-eu-central-1`
+
+If you want a concrete locked example instead of editing the wildcard sample yourself, start from:
+
+- `packages/api/src/providers/aws/iam-user-policy.eu-central-1.json`
 
 Sample runtime policies for a restricted demo environment live here:
 

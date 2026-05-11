@@ -1,5 +1,5 @@
 {
-  "id": "39dac4d7-59a6-4817-a4fe-1e225be0eb13",
+  "id": "a2f709bd-cb9d-4ec4-8668-2828db8b5aa4",
   "prevId": "77d1cbfa-b122-4e43-8647-ca57274465f8",
   "version": "7",
   "dialect": "postgresql",
@@ -1117,6 +1117,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "provider_key": {
+          "name": "provider_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'local'"
+        },
         "provider_config_id": {
           "name": "provider_config_id",
           "type": "uuid",
@@ -1520,7 +1527,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "region_provider_external_identifier_unique": {
+          "name": "region_provider_external_identifier_unique",
+          "columns": [
+            {
+              "expression": "cloud_provider_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_region_identifier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "region_cloud_provider_id_cloud_provider_id_fk": {
           "name": "region_cloud_provider_id_cloud_provider_id_fk",
@@ -1537,15 +1566,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "region_external_region_identifier_unique": {
-          "name": "region_external_region_identifier_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "external_region_identifier"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

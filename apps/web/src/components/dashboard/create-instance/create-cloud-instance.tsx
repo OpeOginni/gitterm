@@ -70,63 +70,133 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     [credentialsData?.credentials],
   );
 
-  // Derived selections
-  const selectedCloudProviderId =
-    userCloudProviderId ?? cloudProvidersData?.cloudProviders[0]?.id ?? "";
+  // AWS providers are region-scoped: multiple cloud_provider rows share
+  // providerKey === "aws" and each is pinned to one region. For the UI we
+  // group them under a single "AWS" cloud entry so users pick AWS + region,
+  // and the selected region resolves back to a specific provider row.
+  const cloudProviders = cloudProvidersData?.cloudProviders ?? [];
 
+  const awsProviders = useMemo(
+    () => cloudProviders.filter((p) => p.providerKey === "aws"),
+    [cloudProviders],
+  );
+
+  const nonAwsProviders = useMemo(
+    () => cloudProviders.filter((p) => p.providerKey !== "aws"),
+    [cloudProviders],
+  );
+
+  // "Group key" identifies a top-level cloud entry: either an individual
+  // provider id (non-AWS) or the synthetic "aws" group.
+  type CloudGroupKey = string; // "aws" | <providerId>
+
+  const hasAwsGroup = awsProviders.length > 0;
+
+  const defaultGroupKey: CloudGroupKey | "" = hasAwsGroup
+    ? "aws"
+    : (nonAwsProviders[0]?.id ?? "");
+
+  const [userCloudGroupKey, setUserCloudGroupKey] = useState<CloudGroupKey | null>(null);
+  const selectedCloudGroupKey = userCloudGroupKey ?? defaultGroupKey;
+  const isAwsGroup = selectedCloudGroupKey === "aws";
+
+  // Resolve the actual provider row for the currently selected group + region.
   const selectedCloudProvider = useMemo((): CloudProvider | null => {
-    if (!selectedCloudProviderId) return null;
+    if (isAwsGroup) {
+      // Prefer the explicitly chosen AWS region-provider, otherwise default to
+      // the first AWS provider available.
+      const matched = awsProviders.find((p) => p.id === userCloudProviderId);
+      return ((matched ?? awsProviders[0]) as CloudProvider | undefined) ?? null;
+    }
     return (
-      (cloudProvidersData?.cloudProviders.find((p) => p.id === selectedCloudProviderId) as
-        | CloudProvider
-        | undefined) ?? null
+      (nonAwsProviders.find((p) => p.id === selectedCloudGroupKey) as CloudProvider | undefined) ??
+      null
     );
-  }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
+  }, [isAwsGroup, awsProviders, nonAwsProviders, selectedCloudGroupKey, userCloudProviderId]);
+
+  const selectedCloudProviderId = selectedCloudProvider?.id ?? "";
 
   const availableRegions = useMemo((): Region[] => {
-    if (!selectedCloudProviderId) return [];
-    const provider = cloudProvidersData?.cloudProviders.find(
-      (p) => p.id === selectedCloudProviderId,
-    );
-    return (provider?.regions ?? []) as Region[];
-  }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders]);
+    if (isAwsGroup) {
+      // Each AWS provider is pinned to one region. Surface every AWS provider's
+      // region as a selectable region; selecting one switches the provider row.
+      return awsProviders.flatMap(
+        (provider) =>
+          provider.regions?.map((r) => ({
+            id: `${provider.id}::${r.id}`,
+            name: r.name,
+          })) ?? [],
+      );
+    }
+    return (selectedCloudProvider?.regions ?? []) as Region[];
+  }, [isAwsGroup, awsProviders, selectedCloudProvider]);
 
-  const shouldShowRegionSelector =
-    !!selectedCloudProvider?.supportsRegions &&
-    !!selectedCloudProvider?.allowUserRegionSelection &&
-    availableRegions.length > 0;
+  const shouldShowRegionSelector = isAwsGroup
+    ? awsProviders.length > 0
+    : !!selectedCloudProvider?.supportsRegions &&
+      !!selectedCloudProvider?.allowUserRegionSelection &&
+      availableRegions.length > 0;
 
   const availableAgents = useMemo((): AgentType[] => {
     const agents = agentTypesData?.agentTypes ?? [];
-    if (!selectedCloudProviderId) return agents;
-    const provider = cloudProvidersData?.cloudProviders.find(
-      (p) => p.id === selectedCloudProviderId,
-    );
-    if (provider?.supportServerOnly) return agents.filter((agent) => agent.serverOnly);
+    if (!selectedCloudProvider) return agents;
+    if ((selectedCloudProvider as any).supportServerOnly) {
+      return agents.filter((agent) => agent.serverOnly);
+    }
     return agents;
-  }, [selectedCloudProviderId, cloudProvidersData?.cloudProviders, agentTypesData?.agentTypes]);
+  }, [selectedCloudProvider, agentTypesData?.agentTypes]);
 
   const selectedAgentTypeId = userAgentTypeId ?? availableAgents[0]?.id ?? "";
 
   const selectedRegion = useMemo(() => {
+    if (isAwsGroup) {
+      // For AWS, the composite "providerId::regionId" doubles as the picker
+      // value; we resolve the provider row separately.
+      const fallback = awsProviders[0]?.regions?.[0];
+      const fallbackComposite = fallback
+        ? `${awsProviders[0].id}::${fallback.id}`
+        : "";
+      if (userRegionId && availableRegions.some((r) => r.id === userRegionId)) {
+        return userRegionId;
+      }
+      return fallbackComposite;
+    }
+
     if (userRegionId && availableRegions.some((r) => r.id === userRegionId)) {
       return userRegionId;
     }
     return availableRegions[0]?.id ?? "";
-  }, [userRegionId, availableRegions]);
+  }, [isAwsGroup, awsProviders, userRegionId, availableRegions]);
 
   const canEnableEditorAccess =
     !!selectedCloudProvider?.editorAccessSupport?.supported &&
     availableAgents.some((agent) => agent.id === selectedAgentTypeId && agent.serverOnly) &&
-    (selectedCloudProvider?.name.toLowerCase() === "daytona" ||
-      sshPublicKeyData?.hasPublicKey === true);
+    (selectedCloudProvider?.providerKey === "daytona" || sshPublicKeyData?.hasPublicKey === true);
 
-  const requiresUserSshKey = selectedCloudProvider?.name.toLowerCase() !== "daytona";
+  const requiresUserSshKey = selectedCloudProvider?.providerKey !== "daytona";
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
 
-  const handleCloudProviderChange = (providerId: string) => {
-    setUserCloudProviderId(providerId);
+  const handleCloudGroupChange = (groupKey: CloudGroupKey) => {
+    setUserCloudGroupKey(groupKey);
     setUserRegionId(null);
+    if (groupKey === "aws") {
+      // Default to first AWS provider; region picker will refine selection.
+      setUserCloudProviderId(awsProviders[0]?.id ?? null);
+    } else {
+      setUserCloudProviderId(groupKey);
+    }
+  };
+
+  const handleRegionChange = (regionValue: string) => {
+    setUserRegionId(regionValue);
+    if (isAwsGroup) {
+      // AWS region values are "<providerId>::<regionId>" so we can route the
+      // selection back to the right region-provider row.
+      const [providerId] = regionValue.split("::");
+      if (providerId) {
+        setUserCloudProviderId(providerId);
+      }
+    }
   };
 
   const handleProfileChange = (enabled: boolean) => {
@@ -174,13 +244,26 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     const normalizedRepoUrl = normalizeGitHubRepositoryUrl(repoUrl);
     const trimmedBranch = branch.trim();
 
+    // Resolve effective providerId + regionId. For AWS the composite value
+    // "<providerId>::<regionId>" splits into the right region-provider row.
+    let resolvedCloudProviderId = selectedCloudProviderId;
+    let resolvedRegionId: string | undefined = undefined;
+
+    if (isAwsGroup && selectedRegion) {
+      const [providerId, regionId] = selectedRegion.split("::");
+      if (providerId) resolvedCloudProviderId = providerId;
+      if (regionId) resolvedRegionId = regionId;
+    } else if (shouldShowRegionSelector) {
+      resolvedRegionId = selectedRegion;
+    }
+
     await createWorkspace({
       name: normalizedRepoUrl.split("/").pop() || "new-workspace",
       repo: normalizedRepoUrl,
       branch: trimmedBranch || undefined,
       agentTypeId: selectedAgentTypeId,
-      cloudProviderId: selectedCloudProviderId,
-      regionId: shouldShowRegionSelector ? selectedRegion : undefined,
+      cloudProviderId: resolvedCloudProviderId,
+      regionId: resolvedRegionId,
       gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
       persistent,
       subdomain: subdomain || undefined,
@@ -317,7 +400,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               {shouldShowRegionSelector ? "Cloud / Region" : "Cloud"}
             </Label>
             <div className="flex gap-2 min-w-0">
-              <Select value={selectedCloudProviderId} onValueChange={handleCloudProviderChange}>
+              <Select value={selectedCloudGroupKey} onValueChange={handleCloudGroupChange}>
                 <SelectTrigger className="h-9 shrink-0">
                   <SelectValue placeholder="Select cloud" />
                 </SelectTrigger>
@@ -329,9 +412,25 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   </SelectContent>
                 ) : (
                   <SelectContent>
-                    {cloudProvidersData?.cloudProviders &&
-                    cloudProvidersData.cloudProviders.length > 0 ? (
-                      cloudProvidersData.cloudProviders.map((cloud) => (
+                    {hasAwsGroup && (
+                      <SelectItem value="aws">
+                        <div className="flex items-center">
+                          <Image
+                            src="/ECS.svg"
+                            alt="AWS"
+                            width={16}
+                            height={16}
+                            className="mr-2 h-4 w-4"
+                          />
+                          AWS
+                          <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">
+                            ×{awsProviders.length}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    )}
+                    {nonAwsProviders.length > 0 ? (
+                      nonAwsProviders.map((cloud) => (
                         <SelectItem key={cloud.id} value={cloud.id}>
                           <div className="flex items-center">
                             <Image
@@ -345,11 +444,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                           </div>
                         </SelectItem>
                       ))
-                    ) : (
+                    ) : !hasAwsGroup ? (
                       <SelectItem value="none" disabled>
                         No providers
                       </SelectItem>
-                    )}
+                    ) : null}
                   </SelectContent>
                 )}
               </Select>
@@ -357,7 +456,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               {shouldShowRegionSelector ? (
                 <Select
                   value={selectedRegion}
-                  onValueChange={setUserRegionId}
+                  onValueChange={handleRegionChange}
                   disabled={availableRegions.length === 0}
                 >
                   <SelectTrigger className="h-9 min-w-0 [&>span]:truncate">

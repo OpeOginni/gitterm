@@ -12,7 +12,7 @@
         "cloudformation:DescribeStackEvents",
         "cloudformation:GetTemplate"
       ],
-      "Resource": "arn:aws:cloudformation:*:<ACCOUNT_ID>:stack/gitterm-*/*"
+      "Resource": "arn:aws:cloudformation:eu-central-1:<ACCOUNT_ID>:stack/gitterm-*/*"
     },
     {
       "Sid": "GitTermDiscovery",
@@ -62,7 +62,12 @@
         "elasticfilesystem:DeleteMountTarget",
         "elasticfilesystem:TagResource"
       ],
-      "Resource": "*"
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "eu-central-1"
+        }
+      }
     },
     {
       "Sid": "GitTermRoleManagement",
@@ -82,8 +87,8 @@
         "iam:GetPolicyVersion"
       ],
       "Resource": [
-        "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-execution-*",
-        "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-*"
+        "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-execution-eu-central-1",
+        "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-eu-central-1"
       ]
     },
     {
@@ -121,15 +126,20 @@
         "elasticfilesystem:TagResource",
         "ec2:DescribeNetworkInterfaces"
       ],
-      "Resource": "*"
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "eu-central-1"
+        }
+      }
     },
     {
       "Sid": "GitTermPassRole",
       "Effect": "Allow",
       "Action": "iam:PassRole",
       "Resource": [
-        "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-execution-*",
-        "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-*"
+        "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-execution-eu-central-1",
+        "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-eu-central-1"
       ],
       "Condition": {
         "StringEquals": {

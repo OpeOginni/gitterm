@@ -30,6 +30,7 @@ export interface AgentType {
 export interface CloudProvider {
   id: string;
   name: string;
+  providerKey: string;
   supportsRegions: boolean;
   allowUserRegionSelection: boolean;
   regions?: Region[];

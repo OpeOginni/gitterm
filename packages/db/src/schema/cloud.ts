@@ -33,6 +33,7 @@ export const cloudAccount = pgTable("cloud_account", {
 export const cloudProvider = pgTable("cloud_provider", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
+  providerKey: text("provider_key").notNull().default("local"),
   providerConfigId: uuid("provider_config_id").references(() => providerConfig.id, {
     onDelete: "set null",
   }),
@@ -53,18 +54,27 @@ export const cloudProvider = pgTable("cloud_provider", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const region = pgTable("region", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  cloudProviderId: uuid("cloud_provider_id")
-    .notNull()
-    .references(() => cloudProvider.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  location: text("location").notNull(),
-  externalRegionIdentifier: text("external_region_identifier").notNull().unique(),
-  isEnabled: boolean("is_enabled").notNull().default(true),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+export const region = pgTable(
+  "region",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cloudProviderId: uuid("cloud_provider_id")
+      .notNull()
+      .references(() => cloudProvider.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    location: text("location").notNull(),
+    externalRegionIdentifier: text("external_region_identifier").notNull(),
+    isEnabled: boolean("is_enabled").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("region_provider_external_identifier_unique").on(
+      table.cloudProviderId,
+      table.externalRegionIdentifier,
+    ),
+  ],
+);
 
 export const image = pgTable("image", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -39,7 +39,9 @@ import {
 } from "@aws-sdk/client-efs";
 import { DescribeNetworkInterfacesCommand, EC2Client } from "@aws-sdk/client-ec2";
 import env from "@gitterm/env/server";
+import { db, eq } from "@gitterm/db";
 import type { AwsImageProviderMetadata } from "@gitterm/db/schema/cloud";
+import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { logger } from "../../utils/logger";
 import type {
@@ -341,7 +343,36 @@ export function normalizeAwsConfig(config: Record<string, any>): AwsConfig {
 export class AwsProvider implements ComputeProvider {
   readonly name = "aws";
 
-  async getConfig(): Promise<AwsConfig> {
+  /**
+   * Resolve the AWS provider config that matches a target region.
+   *
+   * Multiple cloud_provider rows can share providerKey = "aws", one per
+   * configured region. We look for the row whose attached region matches
+   * `region`. If `region` is not supplied or no match is found, fall back to
+   * any enabled AWS provider config.
+   */
+  async getConfig(region?: string): Promise<AwsConfig> {
+    if (region) {
+      const candidates = await db.query.cloudProvider.findMany({
+        where: eq(cloudProvider.providerKey, "aws"),
+        with: { regions: true },
+      });
+
+      const matched = candidates.find((p) =>
+        p.regions.some((r) => r.externalRegionIdentifier === region),
+      );
+
+      if (matched?.providerConfigId) {
+        const configRecord = await getProviderConfigService().getProviderConfigById(
+          matched.providerConfigId,
+        );
+        if (configRecord && configRecord.isEnabled) {
+          return normalizeAwsConfig(configRecord.config);
+        }
+      }
+    }
+
+    // Fallback for callers without explicit region context (e.g. sweeps).
     const config = await getProviderConfigService().getProviderConfigForUse("aws");
 
     if (!config) {
@@ -352,7 +383,7 @@ export class AwsProvider implements ComputeProvider {
   }
 
   private async createClients(region?: string) {
-    const config = await this.getConfig();
+    const config = await this.getConfig(region);
     const targetRegion = region ?? config.defaultRegion;
     const credentials = {
       accessKeyId: config.accessKeyId,
@@ -1448,7 +1479,7 @@ export class AwsProvider implements ComputeProvider {
     );
   }
 
-  async sweepOrphanedResources(activeWorkspaceIds: string[]): Promise<{
+  async sweepOrphanedResources(activeWorkspaceIds: string[], region?: string): Promise<{
     servicesDeleted: number;
     taskDefinitionsDeregistered: number;
     rulesDeleted: number;
@@ -1456,7 +1487,7 @@ export class AwsProvider implements ComputeProvider {
     accessPointsDeleted: number;
   }> {
     const activeWorkspaceIdSet = new Set(activeWorkspaceIds);
-    const { config, ecs, elbv2, efs } = await this.createClients();
+    const { config, ecs, elbv2, efs } = await this.createClients(region);
     let servicesDeleted = 0;
     let taskDefinitionsDeregistered = 0;
     let rulesDeleted = 0;
@@ -1593,7 +1624,7 @@ export class AwsProvider implements ComputeProvider {
           isManagedWorkspaceResource(description.Tags, activeWorkspaceIdSet) &&
           description.ResourceArn
         ) {
-          await this.deleteRuleIfExists(description.ResourceArn).catch(() => undefined);
+          await this.deleteRuleIfExists(description.ResourceArn, region).catch(() => undefined);
           rulesDeleted += 1;
         }
       }
@@ -1623,7 +1654,9 @@ export class AwsProvider implements ComputeProvider {
           isGitTermTargetGroupArn(description.ResourceArn) &&
           isManagedWorkspaceResource(description.Tags, activeWorkspaceIdSet)
         ) {
-          await this.deleteTargetGroupIfExists(description.ResourceArn).catch(() => undefined);
+          await this.deleteTargetGroupIfExists(description.ResourceArn, region).catch(
+            () => undefined,
+          );
           targetGroupsDeleted += 1;
         }
       }
@@ -1677,7 +1710,9 @@ export class AwsProvider implements ComputeProvider {
             !activeWorkspaceIdSet.has(workspaceId) &&
             accessPoint.AccessPointId
           ) {
-            await this.deleteAccessPointIfExists(accessPoint.AccessPointId).catch(() => undefined);
+            await this.deleteAccessPointIfExists(accessPoint.AccessPointId, region).catch(
+              () => undefined,
+            );
             accessPointsDeleted += 1;
           }
         }

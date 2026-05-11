@@ -79,6 +79,26 @@ export default function ProviderSettingsPage() {
     queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
   };
 
+  const preserveAwsEncryptedFields = (
+    nextConfig: Record<string, any>,
+    currentConfig: Record<string, any>,
+  ) => {
+    if ((provider as { providerKey?: string } | undefined)?.providerKey !== "aws") {
+      return nextConfig;
+    }
+
+    const merged = { ...nextConfig };
+    for (const fieldName of ["accessKeyId", "secretAccessKey"]) {
+      const nextValue = String(nextConfig[fieldName] ?? "").trim();
+      const currentValue = String(currentConfig[fieldName] ?? "").trim();
+      if (!nextValue && currentValue) {
+        merged[fieldName] = currentConfig[fieldName];
+      }
+    }
+
+    return merged;
+  };
+
   const applyAwsBootstrapState = (data: {
     config: Record<string, any>;
     summary: AwsSetupSummary;
@@ -90,13 +110,6 @@ export default function ProviderSettingsPage() {
     setAwsSetupSummary({ stackName: data.summary.stackName });
   };
 
-  const applyAwsDeleteState = (data: { config: Record<string, any> }) => {
-    refreshProviderQueries();
-    setConfigForm(data.config);
-    setConfigEnabled(false);
-    setAwsSetupSummary(null);
-  };
-
   const { data: provider, isLoading: isLoadingProvider } = useQuery({
     queryKey: ["admin", "provider", providerId],
     queryFn: () => trpcClient.admin.infrastructure.getProvider.query({ id: providerId as string }),
@@ -106,15 +119,6 @@ export default function ProviderSettingsPage() {
   const { data: providerTypes } = useQuery({
     queryKey: ["admin", "providerTypes"],
     queryFn: () => trpcClient.admin.infrastructure.listProviderTypes.query(),
-  });
-
-  const { data: selectedProviderFields, isLoading: isLoadingFields } = useQuery({
-    queryKey: ["admin", "providerConfigFields", selectedProviderTypeId],
-    queryFn: () =>
-      trpcClient.admin.infrastructure.getProviderConfigFields.query({
-        providerTypeId: selectedProviderTypeId,
-      }),
-    enabled: !!selectedProviderTypeId,
   });
 
   const { data: agentTypes } = useQuery({
@@ -214,12 +218,15 @@ export default function ProviderSettingsPage() {
     mutationFn: (params: { providerId: string }) =>
       trpcClient.admin.aws.deleteInfrastructure.mutate(params),
     onSuccess: (data) => {
-      applyAwsDeleteState(data);
+      queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
+      queryClient.cancelQueries({ queryKey: ["admin", "provider", providerId] });
+      queryClient.removeQueries({ queryKey: ["admin", "provider", providerId] });
       toast.success(
         data.deleted
-          ? `AWS infrastructure deleted (${data.stackName})`
-          : `AWS infrastructure was already absent (${data.stackName})`,
+          ? `AWS infrastructure and provider deleted (${data.stackName})`
+          : `AWS provider deleted (${data.stackName})`,
       );
+      router.push("/admin/providers" as Route);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -256,10 +263,41 @@ export default function ProviderSettingsPage() {
       (type) => type.name.toLowerCase() === providerNameValue.trim().toLowerCase(),
     )?.id ?? "";
 
-  const selectedProviderType = providerTypes?.find((type) => type.id === selectedProviderTypeId);
+  // Find a provider type by key (the canonical implementation identifier on
+  // the cloud_provider row, e.g. "aws" for any AWS region-scoped provider).
+  // Display names like "AWS EU (Frankfurt)" don't match a registered provider
+  // type by name, so for region-scoped providers we must resolve via providerKey.
+  const findProviderTypeIdByKey = (providerKeyValue: string | undefined | null) => {
+    if (!providerKeyValue) return "";
+    return (
+      providerTypes?.find(
+        (type) => type.name.toLowerCase() === providerKeyValue.trim().toLowerCase(),
+      )?.id ?? ""
+    );
+  };
+
+  const providerKey = (provider as { providerKey?: string } | undefined)?.providerKey ?? "";
+
+  const resolvedProviderTypeId =
+    selectedProviderTypeId ||
+    provider?.providerConfig?.providerTypeId ||
+    findProviderTypeIdByKey(providerKey) ||
+    findProviderTypeId(provider?.name ?? "");
+
+  const selectedProviderType = providerTypes?.find((type) => type.id === resolvedProviderTypeId);
+  // Resolve AWS-ness from providerKey (data source of truth) rather than the
+  // display name, which is user-defined per region (e.g. "AWS EU (Frankfurt)").
   const isAwsProvider =
-    selectedProviderType?.name?.toLowerCase() === "aws" ||
-    provider?.name?.trim().toLowerCase() === "aws";
+    providerKey.toLowerCase() === "aws" || selectedProviderType?.name?.toLowerCase() === "aws";
+
+  const { data: selectedProviderFields, isLoading: isLoadingFields } = useQuery({
+    queryKey: ["admin", "providerConfigFields", resolvedProviderTypeId],
+    queryFn: () =>
+      trpcClient.admin.infrastructure.getProviderConfigFields.query({
+        providerTypeId: resolvedProviderTypeId,
+      }),
+    enabled: !!resolvedProviderTypeId,
+  });
 
   const isSavingConfig =
     createProviderConfig.isPending ||
@@ -294,10 +332,27 @@ export default function ProviderSettingsPage() {
       return;
     }
 
+    const pinnedAwsRegion =
+      provider.providerKey === "aws"
+        ? provider.regions?.find((region: any) => region.isEnabled) ?? provider.regions?.[0]
+        : undefined;
+
     setProviderName(provider.name ?? "");
     setAllowUserRegionSelection(provider.allowUserRegionSelection ?? true);
     setConfigName(provider.providerConfig?.name ?? `${provider.name} Default`);
-    setConfigForm(provider.providerConfig?.config ?? {});
+    setConfigForm((current) =>
+      preserveAwsEncryptedFields(
+        {
+          ...(provider.providerConfig?.config ?? {}),
+          ...(pinnedAwsRegion
+            ? {
+                defaultRegion: pinnedAwsRegion.externalRegionIdentifier,
+              }
+            : {}),
+        },
+        current,
+      ),
+    );
     setConfigEnabled(provider.providerConfig?.isEnabled ?? true);
   }, [
     provider?.id,
@@ -311,8 +366,16 @@ export default function ProviderSettingsPage() {
       return;
     }
 
+    // Resolution order:
+    //  1. The providerConfig's explicit providerTypeId (most reliable — set at bootstrap).
+    //  2. The cloud_provider's providerKey (e.g. "aws") — maps any region-scoped
+    //     AWS row like "AWS EU (Frankfurt)" to the registered AWS provider type.
+    //  3. Display-name match (covers legacy providers whose name equals the type
+    //     name like "Railway", "Cloudflare", etc.).
     const providerTypeId =
-      provider.providerConfig?.providerTypeId ?? findProviderTypeId(provider.name);
+      provider.providerConfig?.providerTypeId ??
+      findProviderTypeIdByKey((provider as any).providerKey) ??
+      findProviderTypeId(provider.name);
 
     if (providerTypeId) {
       setSelectedProviderTypeId(providerTypeId);
@@ -357,7 +420,7 @@ export default function ProviderSettingsPage() {
   };
 
   const handleSaveSettings = async () => {
-    if (!provider || !selectedProviderTypeId) {
+    if (!provider || !resolvedProviderTypeId) {
       toast.error("Select a provider to configure.");
       return;
     }
@@ -381,7 +444,7 @@ export default function ProviderSettingsPage() {
         });
       } else {
         const created = await createProviderConfig.mutateAsync({
-          providerTypeId: selectedProviderTypeId,
+          providerTypeId: resolvedProviderTypeId,
           name,
           config: configForm,
           isDefault: true,
@@ -419,10 +482,22 @@ export default function ProviderSettingsPage() {
     }
   };
 
-  const AWS_EDITABLE_FIELDS = ["accessKeyId", "secretAccessKey", "defaultRegion"];
+  const AWS_EDITABLE_FIELDS = [
+    "accessKeyId",
+    "secretAccessKey",
+    "defaultRegion",
+    "publicSshEnabled",
+  ];
 
   const renderField = (field: ProviderConfigField, readOnly = false) => {
     const value = configForm[field.fieldName] ?? field.defaultValue ?? "";
+    const encryptedFieldPreview = provider?.providerConfig?.configPreviews?.[field.fieldName] ?? "";
+    const hasSavedEncryptedValue =
+      !!provider?.providerConfig &&
+      field.isEncrypted &&
+      String(encryptedFieldPreview).trim().length > 0 &&
+      String(value ?? "").trim().length === 0 &&
+      !readOnly;
 
     if (field.fieldType === "password") {
       return (
@@ -434,16 +509,26 @@ export default function ProviderSettingsPage() {
             </Label>
             {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
           </div>
+          {hasSavedEncryptedValue && (
+            <div className="rounded-md border border-border/70 bg-foreground/[0.02] px-3 py-2 font-mono text-xs text-muted-foreground">
+              {encryptedFieldPreview}
+            </div>
+          )}
           <Input
             id={field.fieldName}
             type="password"
-            placeholder={field.fieldLabel}
+            placeholder={hasSavedEncryptedValue ? "Enter new value to replace" : field.fieldLabel}
             value={value}
             onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
             required={field.isRequired && !readOnly}
             readOnly={readOnly}
             className={cn(readOnly && "cursor-default")}
           />
+          {hasSavedEncryptedValue && (
+            <p className="text-xs text-muted-foreground">
+              Current value is masked above. Leave this blank to keep it, or enter a new one to replace it.
+            </p>
+          )}
         </div>
       );
     }
@@ -507,60 +592,69 @@ export default function ProviderSettingsPage() {
       );
     }
 
-    if (
-      isAwsProvider &&
-      field.fieldName === "defaultRegion" &&
-      provider?.regions &&
-      provider.regions.length > 0
-    ) {
-      return (
-        <div key={field.fieldName} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Label htmlFor={field.fieldName}>
-              {field.fieldLabel}
-              {field.isRequired && <span className="text-destructive">*</span>}
-            </Label>
-          </div>
-          <Select
-            value={value}
-            onValueChange={(val) => setConfigForm({ ...configForm, [field.fieldName]: val })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a region" />
-            </SelectTrigger>
-            <SelectContent>
-              {provider.regions.map((r: any) => (
-                <SelectItem key={r.externalRegionIdentifier} value={r.externalRegionIdentifier}>
-                  {r.name} ({r.externalRegionIdentifier})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+  if (
+    isAwsProvider &&
+    field.fieldName === "defaultRegion" &&
+    provider?.regions &&
+    provider.regions.length > 0
+  ) {
+    const pinnedRegion =
+      provider.regions.find((region: any) => region.isEnabled) ?? provider.regions[0];
+
+    return (
+      <div key={field.fieldName} className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Label htmlFor={field.fieldName}>
+            {field.fieldLabel}
+            {field.isRequired && <span className="text-destructive">*</span>}
+          </Label>
+        </div>
+        <Input
+          id={field.fieldName}
+          value={pinnedRegion?.externalRegionIdentifier ?? value}
+          readOnly
+          className="cursor-default"
+        />
+        {pinnedRegion && (
+          <p className="text-xs text-muted-foreground">
+            Pinned to {pinnedRegion.name} for this AWS provider.
+          </p>
+        )}
         </div>
       );
     }
 
     return (
-      <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
-        <div className="flex items-center gap-2">
-          <Label htmlFor={field.fieldName}>
-            {field.fieldLabel}
-            {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
-          </Label>
-          {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+        <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
+          <div className="flex items-center gap-2">
+            <Label htmlFor={field.fieldName}>
+              {field.fieldLabel}
+              {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
+            </Label>
+            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+          </div>
+          {hasSavedEncryptedValue && (
+            <div className="rounded-md border border-border/70 bg-foreground/[0.02] px-3 py-2 font-mono text-xs text-muted-foreground">
+              {encryptedFieldPreview}
+            </div>
+          )}
+          <Input
+            id={field.fieldName}
+            type={field.fieldType === "number" ? "number" : field.fieldType}
+            placeholder={hasSavedEncryptedValue ? "Enter new value to replace" : field.fieldLabel}
+            value={value}
+            onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
+            required={field.isRequired && !readOnly}
+            readOnly={readOnly}
+            className={cn(readOnly && "cursor-default")}
+          />
+          {hasSavedEncryptedValue && (
+            <p className="text-xs text-muted-foreground">
+              Current value is masked above. Leave this blank to keep it, or enter a new one to replace it.
+            </p>
+          )}
         </div>
-        <Input
-          id={field.fieldName}
-          type={field.fieldType === "number" ? "number" : field.fieldType}
-          placeholder={field.fieldLabel}
-          value={value}
-          onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
-          required={field.isRequired && !readOnly}
-          readOnly={readOnly}
-          className={cn(readOnly && "cursor-default")}
-        />
-      </div>
-    );
+      );
   };
 
   const awsAccessKeyId = String(configForm.accessKeyId ?? "").trim();
@@ -612,6 +706,7 @@ export default function ProviderSettingsPage() {
     }
 
     try {
+      toast("Deleting AWS infrastructure. This can take a few minutes.");
       await deleteAwsInfrastructure.mutateAsync({ providerId: provider.id });
       setAwsActionDialog(null);
     } catch {
@@ -669,7 +764,7 @@ export default function ProviderSettingsPage() {
           </Button>
           <Button
             onClick={handleSaveSettings}
-            disabled={!selectedProviderTypeId || isSavingConfig}
+            disabled={!resolvedProviderTypeId || isSavingConfig}
             className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
           >
             {isSavingConfig ? "Saving..." : "Save Settings"}
@@ -917,9 +1012,9 @@ export default function ProviderSettingsPage() {
                 </DialogContent>
               </Dialog>
 
-              {!selectedProviderTypeId && (
+              {!resolvedProviderTypeId && (
                 <div className="mt-4 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4 text-sm text-muted-foreground">
-                  No provider definition found for this entry. Make sure the provider name matches a
+                  No provider definition found for this entry. Make sure the provider key maps to a
                   registered provider type.
                 </div>
               )}
@@ -936,7 +1031,7 @@ export default function ProviderSettingsPage() {
                 </div>
               </div>
 
-              {selectedProviderTypeId && isLoadingFields && (
+              {resolvedProviderTypeId && isLoadingFields && (
                 <div className="mt-4 space-y-4">
                   <Skeleton className="h-12 w-full" />
                   <Skeleton className="h-12 w-full" />
@@ -944,7 +1039,7 @@ export default function ProviderSettingsPage() {
                 </div>
               )}
 
-              {selectedProviderTypeId && selectedProviderFields && (
+              {resolvedProviderTypeId && selectedProviderFields && (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   {selectedProviderFields
                     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -1052,7 +1147,7 @@ export default function ProviderSettingsPage() {
               </div>
             </div>
 
-            {provider?.supportsRegions && (
+            {provider?.supportsRegions && !isAwsProvider && (
               <div className="rounded-2xl border border-border bg-card p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
@@ -1118,7 +1213,7 @@ export default function ProviderSettingsPage() {
 
                 <div className="mt-5 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-5">
                   <p className="text-sm font-medium text-foreground/90">Add Region</p>
-                  <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="space-y-2">
                       <Label htmlFor="region-name">Region Name</Label>
                       <Input
@@ -1133,7 +1228,9 @@ export default function ProviderSettingsPage() {
                       <Input
                         id="location"
                         value={newRegion.location}
-                        onChange={(e) => setNewRegion({ ...newRegion, location: e.target.value })}
+                        onChange={(e) =>
+                          setNewRegion({ ...newRegion, location: e.target.value })
+                        }
                         placeholder="e.g., California"
                       />
                     </div>
@@ -1143,7 +1240,10 @@ export default function ProviderSettingsPage() {
                         id="external-id"
                         value={newRegion.externalRegionIdentifier}
                         onChange={(e) =>
-                          setNewRegion({ ...newRegion, externalRegionIdentifier: e.target.value })
+                          setNewRegion({
+                            ...newRegion,
+                            externalRegionIdentifier: e.target.value,
+                          })
                         }
                         placeholder="e.g., us-west-2"
                       />

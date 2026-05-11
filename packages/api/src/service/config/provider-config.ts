@@ -28,6 +28,7 @@ export interface DecryptedProviderConfig {
     category: string;
   };
   config: Record<string, any>;
+  configPreviews?: Record<string, string>;
   isDefault: boolean;
   isEnabled: boolean;
   priority: number;
@@ -368,8 +369,13 @@ class ProviderConfigService {
     }
 
     const redactedConfig = { ...config.config };
+    const configPreviews: Record<string, string> = {};
     for (const field of definition.fields) {
       if (field.isEncrypted && field.fieldName in redactedConfig) {
+        configPreviews[field.fieldName] = this.buildEncryptedFieldPreview(
+          field.fieldName,
+          redactedConfig[field.fieldName],
+        );
         redactedConfig[field.fieldName] = "";
       }
     }
@@ -377,7 +383,25 @@ class ProviderConfigService {
     return {
       ...config,
       config: redactedConfig,
+      configPreviews,
     };
+  }
+
+  private buildEncryptedFieldPreview(fieldName: string, value: unknown): string {
+    const normalized = String(value ?? "").trim();
+    if (!normalized) {
+      return "";
+    }
+
+    if (fieldName.toLowerCase().includes("secret") || fieldName.toLowerCase().includes("token")) {
+      return "••••••••••••";
+    }
+
+    if (normalized.length <= 8) {
+      return `${normalized.slice(0, 2)}••••`;
+    }
+
+    return `${normalized.slice(0, 4)}••••${normalized.slice(-4)}`;
   }
 
   async linkProviderConfigToCloudProvider(

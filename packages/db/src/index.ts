@@ -46,6 +46,7 @@ export {
   gte,
   isNull,
   isNotNull,
+  inArray,
   ne,
   SQL,
 } from "drizzle-orm";
