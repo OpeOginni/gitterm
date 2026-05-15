@@ -57,7 +57,7 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
         text="Manage your usage, workspace configuration, and account."
       />
 
-      <div className="mx-auto max-w-6xl">
+      <div>
         {/* Mobile tab bar */}
         <div className="flex gap-1 overflow-x-auto border-b border-white/[0.06] pb-3 lg:hidden">
           {sidebarItems.map((item) => {

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowRight, Send, Server } from "lucide-react";
+import env from "@gitterm/env/web";
 
 const teamSizes = [
   { value: "1-10", label: "1 - 10 developers" },
@@ -22,33 +23,48 @@ const teamSizes = [
 
 export function EnterpriseContent() {
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [teamSize, setTeamSize] = useState("");
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setError("");
+
+    if (!env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY) {
+      setError("The enterprise contact form is not configured yet. Please email us directly.");
+      return;
+    }
+
     const form = e.currentTarget;
     const data = new FormData(form);
 
-    const name = data.get("name") as string;
-    const email = data.get("email") as string;
-    const company = data.get("company") as string;
-    const message = data.get("message") as string;
+    data.append("access_key", env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY);
+    data.append("subject", "New GitTerm Enterprise Request");
+    data.append("from_name", "GitTerm Enterprise Form");
+    data.append("team_size", teamSize);
 
-    const subject = encodeURIComponent(`GitTerm Enterprise — ${company || name}`);
-    const body = encodeURIComponent(
-      [
-        `Name: ${name}`,
-        `Email: ${email}`,
-        `Company: ${company}`,
-        `Team size: ${teamSize}`,
-        ``,
-        message,
-      ].join("\n"),
-    );
+    setIsSubmitting(true);
 
-    window.open(`mailto:brightoginni123@gmail.com?subject=${subject}&body=${body}`, "_self");
+    try {
+      const response = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        body: data,
+      });
+      const result = (await response.json()) as { success?: boolean; message?: string };
 
-    setSubmitted(true);
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to submit enterprise request");
+      }
+
+      form.reset();
+      setTeamSize("");
+      setSubmitted(true);
+    } catch {
+      setError("We couldn't send your request. Please email us directly at");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -94,19 +110,22 @@ export function EnterpriseContent() {
                     We&apos;ll be in touch
                   </h3>
                   <p className="max-w-sm text-sm leading-relaxed text-white/45">
-                    Your email client should have opened with a pre-filled message. If it
-                    didn&apos;t, email us directly at{" "}
+                    Your request was sent. If you need to add anything else, email us directly
+                    at{" "}
                     <a
-                      href="mailto:brightoginni123@gmail.com"
+                      href="mailto:enterprise@gitterm.dev"
                       className="text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:decoration-primary/60"
                     >
-                      brightoginni123@gmail.com
+                      enterprise@gitterm.dev
                     </a>
                   </p>
                   <Button
                     variant="outline"
                     className="mt-6 h-10 border-white/[0.08] bg-transparent px-5 font-mono text-xs uppercase tracking-wider text-white/60 hover:border-white/20 hover:text-white/90"
-                    onClick={() => setSubmitted(false)}
+                    onClick={() => {
+                      setSubmitted(false);
+                      setError("");
+                    }}
                   >
                     Send another
                   </Button>
@@ -156,7 +175,7 @@ export function EnterpriseContent() {
                         Team size
                       </label>
                       <Select value={teamSize} onValueChange={setTeamSize}>
-                        <SelectTrigger className="h-11 w-full rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 focus:ring-primary/20 data-[placeholder]:text-white/20 [&>svg]:text-white/30">
+                        <SelectTrigger className="h-11 w-full rounded-xl border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white/80 shadow-none hover:bg-white/[0.03] focus-visible:border-primary/40 focus-visible:ring-primary/20 data-[placeholder]:text-white/20 data-[size=default]:h-11 [&>svg]:text-white/30">
                           <SelectValue placeholder="Select team size" />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl border-white/[0.08] bg-[#151518]">
@@ -186,12 +205,25 @@ export function EnterpriseContent() {
                     />
                   </div>
 
+                  {error ? (
+                    <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm leading-relaxed text-red-200">
+                      {error}{" "}
+                      <a
+                        href="mailto:enterprise@gitterm.dev"
+                        className="underline decoration-red-200/40 underline-offset-2 hover:decoration-red-200/70"
+                      >
+                        enterprise@gitterm.dev
+                      </a>
+                    </p>
+                  ) : null}
+
                   <Button
                     type="submit"
                     size="lg"
+                    disabled={isSubmitting}
                     className="h-12 w-full bg-primary px-8 font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
                   >
-                    Get in touch
+                    {isSubmitting ? "Sending..." : "Get in touch"}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </form>

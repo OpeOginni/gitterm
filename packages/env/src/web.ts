@@ -24,6 +24,7 @@ const schema = z.object({
   NEXT_PUBLIC_AUTH_URL: optional,
   NEXT_PUBLIC_LISTENER_URL: optional,
   NEXT_PUBLIC_GITHUB_APP_NAME: optional,
+  NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY: optional,
 });
 
 export type WebEnv = z.infer<typeof schema>;
@@ -43,6 +44,7 @@ const rawEnv: Record<string, string | undefined> = {
   NEXT_PUBLIC_AUTH_URL: process.env.NEXT_PUBLIC_AUTH_URL,
   NEXT_PUBLIC_LISTENER_URL: process.env.NEXT_PUBLIC_LISTENER_URL,
   NEXT_PUBLIC_GITHUB_APP_NAME: process.env.NEXT_PUBLIC_GITHUB_APP_NAME,
+  NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY: process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY,
 };
 
 const env = parseEnv(schema, rawEnv);

@@ -14,7 +14,7 @@
  *   }
  */
 
-import env from "@gitterm/env/server";
+import env, { getGitHubAuthCredentials } from "@gitterm/env/server";
 import { isSelfHosted, isManaged } from "./deployment";
 import { getFreeTierDailyMinutes } from "../service/config/system-config";
 
@@ -57,9 +57,9 @@ export const features = {
 
   /**
    * Enable GitHub OAuth provider
-   * Auto-detected from GITHUB_CLIENT_ID presence
+   * Auto-detected from GitHub App OAuth credentials presence.
    */
-  githubAuth: !!env.GITHUB_CLIENT_ID,
+  githubAuth: !!getGitHubAuthCredentials(),
 
   /**
    * Enable email/password authentication

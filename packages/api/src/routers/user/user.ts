@@ -16,6 +16,7 @@ import { getProviderByCloudProviderId } from "../../providers";
 import { validateAgentConfig } from "@gitterm/schema";
 import { polarClient, isBillingEnabled } from "@gitterm/auth";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import { updateWorkspaceByIdAndInvalidate } from "../../service/workspace-mutations";
 import { isValidSshPublicKey, normalizeSshPublicKey } from "../../utils/ssh-public-key";
 
 export const userRouter = router({
@@ -116,15 +117,16 @@ export const userRouter = router({
           }
 
           // Update workspace status to terminated
-          await db
-            .update(workspace)
-            .set({
+          await updateWorkspaceByIdAndInvalidate(
+            ws.id,
+            {
               status: "terminated",
               stoppedAt: new Date(),
               terminatedAt: new Date(),
               updatedAt: new Date(),
-            })
-            .where(eq(workspace.id, ws.id));
+            },
+            ws.subdomain,
+          );
 
           await deleteAllWorkspaceRouteAccess(ws.id);
 

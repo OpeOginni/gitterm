@@ -1,6 +1,6 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
-import { db, eq, and, ne, sql, gt, lt, or } from "@gitterm/db";
+import { db, eq, and, sql, gt, lt, or } from "@gitterm/db";
 import {
   workspace,
   usageSession,
@@ -12,7 +12,7 @@ import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/in
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { TRPCError } from "@trpc/server";
-import { awsProvider, getProviderByCloudProviderId } from "../../providers";
+import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
   closeUsageSession,
@@ -30,6 +30,14 @@ import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/he
 import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import {
+  updateWorkspaceByIdAndInvalidate,
+  updateWorkspaceStatusAndInvalidate,
+} from "../../service/workspace-mutations";
+import {
+  filterIdleWorkspacesByRedisActivity,
+  recordWorkspaceActivity,
+} from "../../service/workspace-activity";
 import type { E2BConfig } from "../../providers/e2b";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 
@@ -84,13 +92,7 @@ export const internalRouter = router({
     .input(z.object({ workspaceId: z.string() }))
     .mutation(async ({ input }) => {
       const now = new Date();
-      await db
-        .update(workspace)
-        .set({
-          lastActiveAt: now,
-          updatedAt: now,
-        })
-        .where(eq(workspace.id, input.workspaceId));
+      await recordWorkspaceActivity(input.workspaceId, now);
 
       return { success: true, updatedAt: now };
     }),
@@ -100,7 +102,7 @@ export const internalRouter = router({
     const idleTimeoutMinutes = await getConfiguredIdleTimeout();
     const idleThreshold = new Date(Date.now() - idleTimeoutMinutes * 60 * 1000);
 
-    const idleWorkspaces = await db
+    const idleCandidates = await db
       .select({
         id: workspace.id,
         externalInstanceId: workspace.externalInstanceId,
@@ -108,11 +110,14 @@ export const internalRouter = router({
         regionId: workspace.regionId,
         cloudProviderId: workspace.cloudProviderId,
         domain: workspace.domain,
+        lastActiveAt: workspace.lastActiveAt,
       })
       .from(workspace)
       .where(and(eq(workspace.status, "running"), lt(workspace.lastActiveAt, idleThreshold)));
 
-    return idleWorkspaces;
+    const idleWorkspaces = await filterIdleWorkspacesByRedisActivity(idleCandidates, idleThreshold);
+
+    return idleWorkspaces.map(({ lastActiveAt: _lastActiveAt, ...idleWorkspace }) => idleWorkspace);
   }),
 
   getQuotaExceededWorkspaces: internalProcedure.query(async () => {
@@ -232,14 +237,11 @@ export const internalRouter = router({
 
       // Update workspace status
       const now = new Date();
-      await db
-        .update(workspace)
-        .set({
-          status: "stopped",
-          stoppedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(workspace.id, input.workspaceId));
+      await updateWorkspaceByIdAndInvalidate(input.workspaceId, {
+        status: "stopped",
+        stoppedAt: now,
+        updatedAt: now,
+      });
 
       // Emit status event
       WORKSPACE_EVENTS.emitStatus({
@@ -328,14 +330,11 @@ export const internalRouter = router({
 
       // Update workspace status
       const now = new Date();
-      await db
-        .update(workspace)
-        .set({
-          status: "terminated",
-          terminatedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(workspace.id, input.workspaceId));
+      await updateWorkspaceByIdAndInvalidate(input.workspaceId, {
+        status: "terminated",
+        terminatedAt: now,
+        updatedAt: now,
+      });
 
       await deleteAllWorkspaceRouteAccess(input.workspaceId);
 
@@ -633,27 +632,18 @@ export const internalRouter = router({
           });
         }
 
-        const updatedWorkspaces = await db
-          .update(workspace)
-          .set({
+        const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
+          and(
+            eq(workspace.cloudProviderId, railwayProvider.id),
+            eq(workspace.externalInstanceId, serviceId),
+            eq(workspace.status, "pending"),
+          ),
+          {
             status: "running",
             updatedAt: new Date(input.timestamp),
             externalRunningDeploymentId: input.resource.deployment?.id,
-          })
-          .where(
-            and(
-              eq(workspace.cloudProviderId, railwayProvider.id),
-              eq(workspace.externalInstanceId, serviceId),
-              eq(workspace.status, "pending"),
-            ),
-          )
-          .returning({
-            id: workspace.id,
-            status: workspace.status,
-            updatedAt: workspace.updatedAt,
-            userId: workspace.userId,
-            workspaceDomain: workspace.domain,
-          });
+          },
+        );
 
         return { updated: updatedWorkspaces };
       }
@@ -673,25 +663,13 @@ export const internalRouter = router({
           });
         }
 
-        const updatedWorkspaces = await db
-          .update(workspace)
-          .set({
+        const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
+          and(eq(workspace.cloudProviderId, railwayProvider.id), eq(workspace.externalInstanceId, serviceId)),
+          {
             status: "stopped",
             updatedAt: new Date(input.timestamp),
-          })
-          .where(
-            and(
-              eq(workspace.cloudProviderId, railwayProvider.id),
-              eq(workspace.externalInstanceId, serviceId),
-            ),
-          )
-          .returning({
-            id: workspace.id,
-            status: workspace.status,
-            updatedAt: workspace.updatedAt,
-            userId: workspace.userId,
-            workspaceDomain: workspace.domain,
-          });
+          },
+        );
 
         return { updated: updatedWorkspaces };
       }
@@ -751,26 +729,17 @@ export const internalRouter = router({
           });
         }
 
-        const updatedWorkspaces = await db
-          .update(workspace)
-          .set({
+        const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
+          and(
+            eq(workspace.cloudProviderId, e2bProvider.id),
+            eq(workspace.externalInstanceId, serviceId),
+            or(eq(workspace.status, "stopped"), eq(workspace.status, "pending")),
+          ),
+          {
             status: "running",
             updatedAt: new Date(input.timestamp),
-          })
-          .where(
-            and(
-              eq(workspace.cloudProviderId, e2bProvider.id),
-              eq(workspace.externalInstanceId, serviceId),
-              or(eq(workspace.status, "stopped"), eq(workspace.status, "pending")),
-            ),
-          )
-          .returning({
-            id: workspace.id,
-            status: workspace.status,
-            updatedAt: workspace.updatedAt,
-            userId: workspace.userId,
-            workspaceDomain: workspace.domain,
-          });
+          },
+        );
 
         return { updated: updatedWorkspaces };
       }
@@ -790,33 +759,23 @@ export const internalRouter = router({
           });
         }
 
-        const updatedWorkspaces = await db
-          .update(workspace)
-          .set({
+        const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
+          and(
+            eq(workspace.cloudProviderId, e2bProvider.id),
+            eq(workspace.externalInstanceId, serviceId),
+            eq(workspace.status, "running"),
+          ),
+          {
             status: "stopped",
             updatedAt: new Date(input.timestamp),
-          })
-          .where(
-            and(
-              eq(workspace.cloudProviderId, e2bProvider.id),
-              eq(workspace.externalInstanceId, serviceId),
-              eq(workspace.status, "running"),
-            ),
-          )
-          .returning({
-            id: workspace.id,
-            status: workspace.status,
-            updatedAt: workspace.updatedAt,
-            userId: workspace.userId,
-            workspaceDomain: workspace.domain,
-          });
+          },
+        );
 
         await Promise.all(
           updatedWorkspaces.map((updatedWorkspace) =>
             deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
           ),
         );
-
         return { updated: updatedWorkspaces };
       }
 
@@ -835,25 +794,13 @@ export const internalRouter = router({
           });
         }
 
-        const updatedWorkspaces = await db
-          .update(workspace)
-          .set({
+        const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
+          and(eq(workspace.cloudProviderId, e2bProvider.id), eq(workspace.externalInstanceId, serviceId)),
+          {
             status: "terminated",
             updatedAt: new Date(input.timestamp),
-          })
-          .where(
-            and(
-              eq(workspace.cloudProviderId, e2bProvider.id),
-              eq(workspace.externalInstanceId, serviceId),
-            ),
-          )
-          .returning({
-            id: workspace.id,
-            status: workspace.status,
-            updatedAt: workspace.updatedAt,
-            userId: workspace.userId,
-            workspaceDomain: workspace.domain,
-          });
+          },
+        );
 
         return { updated: updatedWorkspaces };
       }

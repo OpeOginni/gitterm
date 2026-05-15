@@ -1,6 +1,7 @@
 import { and, db, eq, isNull } from "@gitterm/db";
 import { workspaceRouteAccess } from "@gitterm/db/schema/workspace-route-access";
 import { getEncryptionService } from "./encryption";
+import { invalidateAllProxyRouteAccessCache, invalidateProxyRouteAccessCache } from "./proxy-cache";
 
 const encryption = getEncryptionService();
 
@@ -26,6 +27,10 @@ export async function upsertWorkspaceRouteAccess(
   port: number | null,
   headers: UpstreamHeaders,
 ): Promise<void> {
+  const invalidateRouteAccess = () =>
+    port === null
+      ? invalidateAllProxyRouteAccessCache(workspaceId)
+      : invalidateProxyRouteAccessCache(workspaceId, port);
   const normalizedHeaders = normalizeHeaders(headers);
 
   if (Object.keys(normalizedHeaders).length === 0) {
@@ -47,6 +52,7 @@ export async function upsertWorkspaceRouteAccess(
       .update(workspaceRouteAccess)
       .set({ encryptedHeaders, updatedAt: now })
       .where(eq(workspaceRouteAccess.id, existing.id));
+    await invalidateRouteAccess();
     return;
   }
 
@@ -57,6 +63,7 @@ export async function upsertWorkspaceRouteAccess(
     createdAt: now,
     updatedAt: now,
   });
+  await invalidateRouteAccess();
 }
 
 export async function deleteWorkspaceRouteAccess(
@@ -64,10 +71,14 @@ export async function deleteWorkspaceRouteAccess(
   port: number | null,
 ): Promise<void> {
   await db.delete(workspaceRouteAccess).where(getRouteAccessCondition(workspaceId, port));
+  await (port === null
+    ? invalidateAllProxyRouteAccessCache(workspaceId)
+    : invalidateProxyRouteAccessCache(workspaceId, port));
 }
 
 export async function deleteAllWorkspaceRouteAccess(workspaceId: string): Promise<void> {
   await db.delete(workspaceRouteAccess).where(eq(workspaceRouteAccess.workspaceId, workspaceId));
+  await invalidateAllProxyRouteAccessCache(workspaceId);
 }
 
 export async function getWorkspaceRouteAccess(

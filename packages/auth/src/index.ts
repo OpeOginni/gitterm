@@ -11,6 +11,7 @@ import env, {
   isProduction,
   isBillingEnabled as checkBillingEnabled,
   isGitHubAuthEnabled,
+  getGitHubAuthCredentials,
 } from "@gitterm/env/auth";
 import { addMonths } from "date-fns";
 
@@ -20,6 +21,7 @@ import { addMonths } from "date-fns";
 
 const SUBDOMAIN_DOMAIN = `.${env.BASE_DOMAIN}`;
 const AUTH_BASE_PATH = "/api/auth";
+const githubAuthCredentials = getGitHubAuthCredentials();
 
 function inferBaseUrlOrigin(): string {
   // If explicitly configured, trust it (but normalize to origin so better-auth can append basePath cleanly)
@@ -270,8 +272,8 @@ export const auth = betterAuth({
   socialProviders: isGitHubAuthEnabled()
     ? {
         github: {
-          clientId: env.GITHUB_CLIENT_ID!,
-          clientSecret: env.GITHUB_CLIENT_SECRET!,
+          clientId: githubAuthCredentials!.clientId,
+          clientSecret: githubAuthCredentials!.clientSecret,
         },
       }
     : undefined,

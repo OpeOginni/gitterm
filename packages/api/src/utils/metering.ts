@@ -9,6 +9,7 @@ import { logger } from "./logger";
 import { shouldEnforceQuota, shouldMeterUsage, getDailyMinuteQuotaAsync } from "../config/features";
 import { isSelfHosted } from "../config/deployment";
 import { getIdleTimeoutMinutes, getFreeTierDailyMinutes } from "../service/config/system-config";
+import { filterIdleWorkspacesByRedisActivity, recordWorkspaceActivity } from "../service/workspace-activity";
 
 // Legacy constants - kept for backwards compatibility but should use getters below
 // These are now the DEFAULT values; actual values come from database
@@ -208,13 +209,7 @@ export async function closeUsageSession(
  * Update last active timestamp for a workspace
  */
 export async function updateLastActive(workspaceId: string): Promise<void> {
-  await db
-    .update(workspace)
-    .set({
-      lastActiveAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(workspace.id, workspaceId));
+  await recordWorkspaceActivity(workspaceId);
 }
 
 /**
@@ -233,11 +228,13 @@ export async function getIdleWorkspaces(): Promise<
       externalInstanceId: workspace.externalInstanceId,
       userId: workspace.userId,
       regionId: workspace.regionId,
+      lastActiveAt: workspace.lastActiveAt,
     })
     .from(workspace)
     .where(and(eq(workspace.status, "running"), sql`${workspace.lastActiveAt} < ${idleThreshold}`));
 
-  return idleWorkspaces;
+  const filtered = await filterIdleWorkspacesByRedisActivity(idleWorkspaces, idleThreshold);
+  return filtered.map(({ lastActiveAt: _lastActiveAt, ...idleWorkspace }) => idleWorkspace);
 }
 
 /**

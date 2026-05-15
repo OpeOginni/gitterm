@@ -137,12 +137,17 @@ Set these env vars on the `server` service:
 
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_APP_CLIENT_ID` (for login with the same GitHub App)
+- `GITHUB_APP_CLIENT_SECRET` (for login with the same GitHub App)
 
-Set both or neither.
+Set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` together for repo integration. Set
+`GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` if GitHub login is enabled.
+A separate GitHub OAuth App is not required.
 
 GitHub App setup:
 
-- Callback URL: `https://<api-url>/api/github/callback`
+- Callback URL: `https://<base-domain>/api/auth/callback/github`
+- Setup URL: `https://<api-url>/api/github/callback`
 - Webhook via proxy: `https://<your-base-domain>/listener/trpc/github.handleInstallationWebhook`
 - Webhook via listener: `https://<listener-base-url>/trpc/github.handleInstallationWebhook`
 
