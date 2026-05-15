@@ -28,8 +28,8 @@ const schema = z.object({
   CORS_ORIGIN: optional,
 
   // GitHub
-  GITHUB_CLIENT_ID: optional,
-  GITHUB_CLIENT_SECRET: optional,
+  GITHUB_APP_CLIENT_ID: optional,
+  GITHUB_APP_CLIENT_SECRET: optional,
 
   // Polar
   POLAR_ACCESS_TOKEN: optional,
@@ -51,6 +51,13 @@ export const isManaged = () => env.DEPLOYMENT_MODE === "managed";
 export const isProduction = () => env.NODE_ENV === "production";
 export const isBillingEnabled = () =>
   (env.ENABLE_BILLING || isManaged()) && !!env.POLAR_ACCESS_TOKEN;
-export const isGitHubAuthEnabled = () => !!env.GITHUB_CLIENT_ID;
+export const getGitHubAuthCredentials = () => {
+  const clientId = env.GITHUB_APP_CLIENT_ID;
+  const clientSecret = env.GITHUB_APP_CLIENT_SECRET;
+
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
+};
+
+export const isGitHubAuthEnabled = () => !!getGitHubAuthCredentials();
 
 export { schema as authEnvSchema };

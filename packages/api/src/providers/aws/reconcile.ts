@@ -2,6 +2,7 @@ import { and, db, eq, inArray, ne } from "@gitterm/db";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { awsProvider } from ".";
+import { updateWorkspaceRoutingAndInvalidate } from "../../service/workspace-mutations";
 
 export interface AwsSweepResult {
   retriedWorkspaces: number;
@@ -55,16 +56,13 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
   for (const terminatedWorkspace of terminatedAwsWorkspaces) {
     try {
       await awsProvider.terminateWorkspace(terminatedWorkspace.externalInstanceId);
-      await db
-        .update(workspace)
-        .set({
+      await updateWorkspaceRoutingAndInvalidate(terminatedWorkspace.id, {
           externalInstanceId: "",
           externalRunningDeploymentId: null,
           upstreamUrl: null,
           exposedPorts: null,
           updatedAt: new Date(),
-        })
-        .where(eq(workspace.id, terminatedWorkspace.id));
+        });
       retriedWorkspaces += 1;
     } catch (error) {
       console.error(

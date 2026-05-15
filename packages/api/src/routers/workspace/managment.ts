@@ -60,6 +60,12 @@ import {
   upsertWorkspaceRouteAccess,
 } from "../../service/workspace-route-access";
 import {
+  updateWorkspaceByIdAndInvalidate,
+  updateWorkspaceByIdReturningAndInvalidate,
+  updateWorkspaceRoutingAndInvalidate,
+  invalidateWorkspaceCacheAfterMutation,
+} from "../../service/workspace-mutations";
+import {
   buildProjectPathHint,
   normalizeProviderEditorAccessSupport,
   pickWorkspaceImage,
@@ -1737,6 +1743,7 @@ export const workspaceRouter = router({
         if (workspaceInfo.upstreamAccess?.headers) {
           await upsertWorkspaceRouteAccess(workspaceId, null, workspaceInfo.upstreamAccess.headers);
         }
+        await invalidateWorkspaceCacheAfterMutation(workspaceId, subdomain);
 
         // Create volume record (only for persistent workspaces)
         let newVolume = null;
@@ -1896,15 +1903,16 @@ export const workspaceRouter = router({
 
         // Update workspace status
         const now = new Date();
-        await db
-          .update(workspace)
-          .set({
+        await updateWorkspaceByIdAndInvalidate(
+          input.workspaceId,
+          {
             status: "stopped",
             stoppedAt: now,
             editorConnection: null,
             updatedAt: now,
-          })
-          .where(eq(workspace.id, input.workspaceId));
+          },
+          existingWorkspace.subdomain,
+        );
 
         // Emit status event
         WORKSPACE_EVENTS.emitStatus({
@@ -2010,15 +2018,16 @@ export const workspaceRouter = router({
           provider.restartSettlement === "immediate" ? "running" : "pending";
         // Update workspace status
         const now = new Date();
-        await db
-          .update(workspace)
-          .set({
+        await updateWorkspaceByIdAndInvalidate(
+          input.workspaceId,
+          {
             status: restartWorkspaceStatus,
             stoppedAt: null,
             lastActiveAt: now,
             updatedAt: now,
-          })
-          .where(eq(workspace.id, input.workspaceId));
+          },
+          existingWorkspace.subdomain,
+        );
 
         // Emit status event
         WORKSPACE_EVENTS.emitStatus({
@@ -2115,34 +2124,31 @@ export const workspaceRouter = router({
           externalVolumeId,
         );
 
-        await db
-          .update(workspace)
-          .set({
-            externalInstanceId: "",
-            externalRunningDeploymentId: null,
-            upstreamUrl: null,
-            exposedPorts: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(workspace.id, fetchedWorkspace.id));
-      };
+          await updateWorkspaceRoutingAndInvalidate(
+            fetchedWorkspace.id,
+            {
+              externalInstanceId: "",
+              externalRunningDeploymentId: null,
+              upstreamUrl: null,
+              exposedPorts: null,
+              updatedAt: new Date(),
+            },
+            fetchedWorkspace.subdomain,
+          );
+        };
 
       if (!terminateInBackground) {
         await runTerminationCleanup();
       }
 
-      const [updatedWorkspace] = await db
-        .update(workspace)
-        .set({
+      const [updatedWorkspace] = await updateWorkspaceByIdReturningAndInvalidate(input.workspaceId, {
           status: "terminated",
           stoppedAt: terminatedAt,
           terminatedAt,
           exposedPorts: null,
           editorConnection: null,
           updatedAt: terminatedAt,
-        })
-        .where(eq(workspace.id, input.workspaceId))
-        .returning();
+        });
 
       await deleteAllWorkspaceRouteAccess(input.workspaceId);
 
@@ -2210,9 +2216,9 @@ export const workspaceRouter = router({
           input.port,
         );
 
-      await db
-        .update(workspace)
-        .set({
+      await updateWorkspaceRoutingAndInvalidate(
+        input.workspaceId,
+        {
           exposedPorts: {
             ...(fetchedWorkspace.exposedPorts ?? {}),
             [input.port]: {
@@ -2222,8 +2228,9 @@ export const workspaceRouter = router({
               externalPortDomainId,
             },
           },
-        })
-        .where(eq(workspace.id, input.workspaceId));
+        },
+        fetchedWorkspace.subdomain,
+      );
 
       if (upstreamAccess?.headers) {
         await upsertWorkspaceRouteAccess(input.workspaceId, input.port, upstreamAccess.headers);
@@ -2273,15 +2280,16 @@ export const workspaceRouter = router({
         await computeProvider.removeExposedPortDomain(externalPortDomainId);
       }
 
-      await db
-        .update(workspace)
-        .set({
+      await updateWorkspaceRoutingAndInvalidate(
+        input.workspaceId,
+        {
           exposedPorts: {
             ...(fetchedWorkspace.exposedPorts ?? {}),
             [input.port]: undefined,
           },
-        })
-        .where(eq(workspace.id, input.workspaceId));
+        },
+        fetchedWorkspace.subdomain,
+      );
 
       await deleteWorkspaceRouteAccess(input.workspaceId, input.port);
 

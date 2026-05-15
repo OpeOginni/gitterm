@@ -6,7 +6,7 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowUpRight, Key, KeyRound, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowUpRight, Key, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn, getWorkspaceDisplayUrl } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
 import { isBillingEnabled } from "@gitterm/env/web";
 import type { Route } from "next";
 import {
@@ -91,6 +92,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   type CloudGroupKey = string; // "aws" | <providerId>
 
   const hasAwsGroup = awsProviders.length > 0;
+  const hasNoProviders = !isLoadingCloudProviders && cloudProviders.length === 0;
+
+  const { data: session } = authClient.useSession();
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
 
   const defaultGroupKey: CloudGroupKey | "" = hasAwsGroup
     ? "aws"
@@ -400,9 +405,13 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               {shouldShowRegionSelector ? "Cloud / Region" : "Cloud"}
             </Label>
             <div className="flex gap-2 min-w-0">
-              <Select value={selectedCloudGroupKey} onValueChange={handleCloudGroupChange}>
+              <Select
+                value={selectedCloudGroupKey}
+                onValueChange={handleCloudGroupChange}
+                disabled={hasNoProviders}
+              >
                 <SelectTrigger className="h-9 shrink-0">
-                  <SelectValue placeholder="Select cloud" />
+                  <SelectValue placeholder={hasNoProviders ? "No providers" : "Select cloud"} />
                 </SelectTrigger>
                 {isLoadingCloudProviders ? (
                   <SelectContent>
@@ -444,10 +453,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                           </div>
                         </SelectItem>
                       ))
-                    ) : !hasAwsGroup ? (
-                      <SelectItem value="none" disabled>
-                        No providers
-                      </SelectItem>
                     ) : null}
                   </SelectContent>
                 )}
@@ -472,6 +477,15 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                     ))}
                   </SelectContent>
                 </Select>
+              ) : null}
+              {hasNoProviders && isAdmin ? (
+                <Link
+                  href={"/admin/providers" as Route}
+                  className="inline-flex items-center gap-1 self-center text-[11px] font-medium text-primary hover:underline"
+                >
+                  Add a provider
+                  <ArrowUpRight className="h-3 w-3" />
+                </Link>
               ) : null}
             </div>
           </div>
@@ -587,29 +601,27 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             ) : (
               <span className="text-muted-foreground/70">
                 &mdash;{" "}
-                {!selectedCloudProvider?.editorAccessSupport?.supported
-                  ? "not supported by this provider"
-                  : !selectedAgent?.serverOnly
-                    ? "requires a server agent type"
-                    : "unavailable"}
+                {!selectedCloudProvider?.editorAccessSupport?.supported ? (
+                  "not supported by this provider"
+                ) : !selectedAgent?.serverOnly ? (
+                  "requires a server agent type"
+                ) : requiresUserSshKey && !sshPublicKeyData?.hasPublicKey ? (
+                  <Link
+                    href={"/dashboard/settings" as Route}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-amber-400/80 hover:text-amber-400 hover:underline"
+                  >
+                    add an SSH key in Settings
+                  </Link>
+                ) : (
+                  "unavailable"
+                )}
               </span>
             )}
           </Label>
         </div>
 
-        {requiresUserSshKey &&
-          !sshPublicKeyData?.hasPublicKey &&
-          selectedAgent?.serverOnly &&
-          selectedCloudProvider?.editorAccessSupport?.supported &&
-          workspaceProfile === "ssh-enabled" && (
-            <Link
-              href={"/dashboard/settings" as Route}
-              className="inline-flex items-center gap-1.5 text-[11px] text-amber-400/80 hover:text-amber-400"
-            >
-              <KeyRound className="h-3 w-3" />
-              Add SSH key in Settings
-            </Link>
-          )}
+
 
         {/* ── 5. Persistent storage ── */}
         <div className="flex items-center gap-2">

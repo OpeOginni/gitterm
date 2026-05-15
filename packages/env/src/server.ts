@@ -47,9 +47,9 @@ const baseSchema = z
     INTERNAL_API_KEY: optional,
     DEVICE_CODE_VERIFICATION_URI: optional,
 
-    // GitHub OAuth
-    GITHUB_CLIENT_ID: optional,
-    GITHUB_CLIENT_SECRET: optional,
+    // GitHub App OAuth
+    GITHUB_APP_CLIENT_ID: optional,
+    GITHUB_APP_CLIENT_SECRET: optional,
 
     // GitHub App (either both or neither)
     GITHUB_APP_ID: optional,
@@ -116,16 +116,19 @@ const baseSchema = z
 
     // GitHub auth requires GitHub OAuth credentials
     if (data.ENABLE_GITHUB_AUTH) {
-      if (!data.GITHUB_CLIENT_ID) {
+      const hasGitHubAuthClientId = !!data.GITHUB_APP_CLIENT_ID;
+      const hasGitHubAuthClientSecret = !!data.GITHUB_APP_CLIENT_SECRET;
+
+      if (!hasGitHubAuthClientId) {
         errors.push({
-          path: "GITHUB_CLIENT_ID",
-          message: "GITHUB_CLIENT_ID is required when ENABLE_GITHUB_AUTH is true",
+          path: "GITHUB_APP_CLIENT_ID",
+          message: "GITHUB_APP_CLIENT_ID is required when ENABLE_GITHUB_AUTH is true",
         });
       }
-      if (!data.GITHUB_CLIENT_SECRET) {
+      if (!hasGitHubAuthClientSecret) {
         errors.push({
-          path: "GITHUB_CLIENT_SECRET",
-          message: "GITHUB_CLIENT_SECRET is required when ENABLE_GITHUB_AUTH is true",
+          path: "GITHUB_APP_CLIENT_SECRET",
+          message: "GITHUB_APP_CLIENT_SECRET is required when ENABLE_GITHUB_AUTH is true",
         });
       }
     }
@@ -198,5 +201,11 @@ export const hasAdminBootstrap = () =>
   !!env.ADMIN_EMAIL && !!env.ADMIN_PASSWORD && isEmailAuthEnabled() && !isGitHubAuthEnabled();
 export const getAdminCredentials = () =>
   hasAdminBootstrap() ? { email: env.ADMIN_EMAIL!, password: env.ADMIN_PASSWORD! } : null;
+export const getGitHubAuthCredentials = () => {
+  const clientId = env.GITHUB_APP_CLIENT_ID;
+  const clientSecret = env.GITHUB_APP_CLIENT_SECRET;
+
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
+};
 
 export { baseSchema as serverEnvSchema };

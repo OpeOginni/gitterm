@@ -1,8 +1,5 @@
 import { protectedProcedure, publicProcedure, router } from "../index";
-import { railwayWebhookRouter } from "./railway/webhook";
-import { githubWebhookRouter } from "./github/webhook";
 import { workspaceRouter } from "./workspace/managment";
-import { workspaceEventsRouter } from "./workspace/events";
 import { workspaceOperationsRouter } from "./workspace/operations";
 import { internalRouter } from "./internal";
 import { githubRouter } from "./github/github";
@@ -12,9 +9,7 @@ import { userRouter } from "./user/user";
 import { deviceRouter } from "./device";
 import { adminRouter } from "./admin";
 import { agentLoopRouter } from "./agent-loop";
-import { agentLoopWebhookRouter } from "./agent-loop/webhook";
 import { modelCredentialsRouter } from "./model-credentials";
-import { e2bWebhookRouter } from "./e2b/webhook";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -39,14 +34,6 @@ export const appRouter = router({
 });
 export type AppRouter = typeof appRouter;
 
-export const listenerRouter = router({
-  railway: railwayWebhookRouter,
-  e2b: e2bWebhookRouter,
-  github: githubWebhookRouter,
-  workspace: workspaceEventsRouter,
-  agentLoop: agentLoopWebhookRouter,
-});
-
-export type ListenerRouter = typeof listenerRouter;
+export { listenerRouter, type ListenerRouter } from "./listener";
 
 export { proxyResolverRouter };

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { trpcServer } from "@hono/trpc-server";
-import { createContext } from "@gitterm/api/context";
-import { listenerRouter } from "@gitterm/api/routers/index";
+import { createListenerContext } from "@gitterm/api/context";
+import { listenerRouter } from "@gitterm/api/routers/listener";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -37,7 +37,7 @@ app.use(
   trpcServer({
     router: listenerRouter,
     createContext: (_opts, context) => {
-      return createContext({ context });
+      return createListenerContext({ context });
     },
     onError: (error) => {
       console.error(error);

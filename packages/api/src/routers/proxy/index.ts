@@ -5,7 +5,40 @@ import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import env from "@gitterm/env/server";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import {
+  getCachedProxyRouteAccess,
+  getCachedProxyWorkspace,
+  hasRecentProxyWorkspaceMiss,
+  hasCachedProxyWorkspaceMiss,
+  cacheProxyWorkspaceMiss,
+  setCachedProxyRouteAccess,
+  setCachedProxyWorkspace,
+  setCachedProxyWorkspaceMiss,
+  type ProxyWorkspaceCacheEntry,
+} from "../../service/proxy-cache";
+import { recordWorkspaceActivity } from "../../service/workspace-activity";
 import { extractWorkspaceSubdomain } from "../../utils/routing";
+
+const DEBUG_PROXY_RESOLVE = process.env.DEBUG_PROXY_RESOLVE === "true";
+
+function debugProxyResolve(message: string, data?: unknown) {
+  if (!DEBUG_PROXY_RESOLVE) return;
+  if (data === undefined) {
+    console.log(message);
+    return;
+  }
+  console.log(message, data);
+}
+
+async function getCachedOrFetchRouteAccess(workspaceId: string, port?: number | null) {
+  const normalizedPort = port ?? null;
+  const cached = await getCachedProxyRouteAccess(workspaceId, normalizedPort);
+  if (cached !== undefined) return cached;
+
+  const access = await getWorkspaceRouteAccess(workspaceId, port);
+  await setCachedProxyRouteAccess(workspaceId, normalizedPort, access);
+  return access;
+}
 
 // Inlined error page HTML templates (to work in bundled builds)
 const UNAVAILABLE_HTML = `<!DOCTYPE html>
@@ -284,16 +317,16 @@ function buildProxyResolveHeaders(
 }
 
 export const proxyResolverRouter = async (c: Context) => {
-  console.log("[PROXY-RESOLVE] Request received");
+  debugProxyResolve("[PROXY-RESOLVE] Request received");
 
   try {
     const internalKey = c.req.header("X-Internal-Key") || "";
     if (!internalKey) {
-      console.log("[PROXY-RESOLVE] Missing internal key");
+      debugProxyResolve("[PROXY-RESOLVE] Missing internal key");
       return htmlError(c, "unavailable", 401);
     }
     if (internalKey !== env.INTERNAL_API_KEY) {
-      console.log("[PROXY-RESOLVE] Invalid internal key");
+      debugProxyResolve("[PROXY-RESOLVE] Invalid internal key");
       return htmlError(c, "unavailable", 401);
     }
 
@@ -307,7 +340,7 @@ export const proxyResolverRouter = async (c: Context) => {
       "x-routing-mode": routingMode,
     });
 
-    console.log("[PROXY-RESOLVE] Extracted subdomain:", {
+    debugProxyResolve("[PROXY-RESOLVE] Extracted subdomain:", {
       subdomain,
       host,
       originalUri,
@@ -315,7 +348,7 @@ export const proxyResolverRouter = async (c: Context) => {
     });
 
     if (!subdomain) {
-      console.log("[PROXY-RESOLVE] No subdomain found");
+      debugProxyResolve("[PROXY-RESOLVE] No subdomain found");
       return htmlError(c, "unavailable", 400);
     }
 
@@ -324,22 +357,46 @@ export const proxyResolverRouter = async (c: Context) => {
       subdomain = subdomain?.replace(`${extractedPort}-`, "");
     }
 
-    // Get session from cookies
-    const session = await auth.api.getSession({
-      headers: c.req.raw.headers,
-    });
+    if (hasRecentProxyWorkspaceMiss(subdomain)) {
+      return htmlError(c, "unavailable", 404);
+    }
+
+    if (await hasCachedProxyWorkspaceMiss(subdomain)) {
+      cacheProxyWorkspaceMiss(subdomain);
+      return htmlError(c, "unavailable", 404);
+    }
 
     // Check workspace - only match active (running) workspaces
     // Subdomain is not unique, so we must filter by status to get the correct one
-
-    const [ws] = await db
-      .select()
-      .from(workspace)
-      .where(and(eq(workspace.subdomain, subdomain), eq(workspace.status, "running")))
-      .limit(1);
+    let ws = await getCachedProxyWorkspace(subdomain);
 
     if (!ws) {
-      console.log("[PROXY-RESOLVE] Workspace not found for subdomain:", subdomain);
+      const [workspaceRecord] = await db
+        .select({
+          id: workspace.id,
+          subdomain: workspace.subdomain,
+          userId: workspace.userId,
+          upstreamUrl: workspace.upstreamUrl,
+          hostingType: workspace.hostingType,
+          status: workspace.status,
+          serverOnly: workspace.serverOnly,
+          exposedPorts: workspace.exposedPorts,
+        })
+        .from(workspace)
+        .where(and(eq(workspace.subdomain, subdomain), eq(workspace.status, "running")))
+        .limit(1);
+
+      ws = (workspaceRecord as ProxyWorkspaceCacheEntry | undefined) ?? null;
+
+      if (ws) {
+        await setCachedProxyWorkspace(subdomain, ws);
+      }
+    }
+
+    if (!ws) {
+      cacheProxyWorkspaceMiss(subdomain);
+      await setCachedProxyWorkspaceMiss(subdomain);
+      debugProxyResolve("[PROXY-RESOLVE] Workspace not found for subdomain:", subdomain);
       return htmlError(c, "unavailable", 404);
     }
 
@@ -348,21 +405,21 @@ export const proxyResolverRouter = async (c: Context) => {
     if (extractedPort) {
       portUpstream = ws.exposedPorts?.[extractedPort]?.upstreamUrl ?? null;
       if (!portUpstream) {
-        console.log(
+        debugProxyResolve(
           "[PROXY-RESOLVE] Port upstream URL not found for extracted port:",
           extractedPort,
         );
         return htmlError(c, "unavailable", 404);
       }
 
-      upstreamAccessHeaders = await getWorkspaceRouteAccess(ws.id, Number(extractedPort));
+      upstreamAccessHeaders = await getCachedOrFetchRouteAccess(ws.id, Number(extractedPort));
     }
 
     if (!upstreamAccessHeaders) {
-      upstreamAccessHeaders = await getWorkspaceRouteAccess(ws.id);
+      upstreamAccessHeaders = await getCachedOrFetchRouteAccess(ws.id);
     }
 
-    console.log("[PROXY-RESOLVE] Workspace found:", {
+    debugProxyResolve("[PROXY-RESOLVE] Workspace found:", {
       id: ws.id,
       subdomain: ws.subdomain,
       hostingType: ws.hostingType,
@@ -385,13 +442,15 @@ export const proxyResolverRouter = async (c: Context) => {
         upstreamUrl = portUrl;
       }
 
-      console.log("[PROXY-RESOLVE] Server-only workspace response:", {
+      debugProxyResolve("[PROXY-RESOLVE] Server-only workspace response:", {
         "X-Upstream-URL": ws.upstreamUrl,
         "X-Container-Host": upstreamUrl.hostname,
         "X-Container-Port": port,
         "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
         hasUpStreamAccessHeader: upstreamAccessHeaders !== null,
       });
+
+      await recordWorkspaceActivity(ws.id);
 
       return c.text(
         "OK",
@@ -411,6 +470,10 @@ export const proxyResolverRouter = async (c: Context) => {
 
     // Validate auth for non-server-only
     // Use 403 here to avoid colliding with upstream Basic Auth 401 challenges.
+    const session = await auth.api.getSession({
+      headers: c.req.raw.headers,
+    });
+
     if (!session) {
       return htmlError(c, "unavailable", 403);
     }
@@ -431,7 +494,7 @@ export const proxyResolverRouter = async (c: Context) => {
       upstreamUrl = portUrl;
     }
 
-    console.log("[PROXY-RESOLVE] Cloud workspace routing:", {
+    debugProxyResolve("[PROXY-RESOLVE] Cloud workspace routing:", {
       upstreamUrl: ws.upstreamUrl,
       containerHost: upstreamUrl.hostname,
       containerPort: port,
@@ -439,6 +502,8 @@ export const proxyResolverRouter = async (c: Context) => {
       upstreamAccessHeaders: upstreamAccessHeaders,
       hasUpStreamAccessHeader: upstreamAccessHeaders !== null,
     });
+
+    await recordWorkspaceActivity(ws.id);
 
     return c.text(
       "OK",
