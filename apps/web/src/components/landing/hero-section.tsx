@@ -124,15 +124,21 @@ export function HeroSection() {
           className="rise mx-auto mt-7 max-w-xl font-sans text-base leading-[1.65] text-white/55 sm:text-[17px]"
           style={{ animationDelay: "180ms" }}
         >
-          Try a public GitHub repo in a 10-minute{" "}
-          <Link
-            href="https://opencode.ai/"
-            target="_blank"
-            className="text-white/85 underline decoration-white/20 underline-offset-[5px] transition hover:decoration-primary"
-          >
-            OpenCode
-          </Link>{" "}
-          sandbox. Sign in for persistent workspaces, your own keys, and cloud choice.
+          {anonEnabled ? (
+            <>
+              Try a public GitHub repo in a 10-minute{" "}
+              <Link
+                href="https://opencode.ai/"
+                target="_blank"
+                className="text-white/85 underline decoration-white/20 underline-offset-[5px] transition hover:decoration-primary"
+              >
+                OpenCode
+              </Link>{" "}
+              sandbox. Sign in for persistent workspaces, your own keys, and cloud choice.
+            </>
+          ) : (
+            "Sign in for persistent workspaces, your own keys, and cloud choice."
+          )}
         </p>
 
         <div className="rise mx-auto mt-11 max-w-2xl text-left" style={{ animationDelay: "260ms" }}>
