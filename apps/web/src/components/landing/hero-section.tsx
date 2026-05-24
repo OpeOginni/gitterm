@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { isAnonTryEnabled } from "@gitterm/env/web";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
@@ -55,8 +56,7 @@ export function HeroSection() {
 
   const launchMutation = useMutation(trpc.anon.tryGitterm.mutationOptions());
   const killMutation = useMutation(trpc.anon.killAnonWorkspace.mutationOptions());
-  const anonStatus = useQuery(trpc.anon.status.queryOptions());
-  const anonEnabled = anonStatus.data?.enabled ?? false;
+  const anonEnabled = isAnonTryEnabled();
 
   async function handleLaunch(e: React.FormEvent) {
     e.preventDefault();
@@ -142,14 +142,7 @@ export function HeroSection() {
         </p>
 
         <div className="rise mx-auto mt-11 max-w-2xl text-left" style={{ animationDelay: "260ms" }}>
-          {anonStatus.isLoading ? (
-            <div className="scanlines relative overflow-hidden rounded-xl border border-white/[0.1] bg-card p-8">
-              <div className="flex items-center justify-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading...
-              </div>
-            </div>
-          ) : anonStatus.data?.enabled ? (
+          {anonEnabled ? (
             <>
               {result ? (
                 <ResultCard
