@@ -1,28 +1,39 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, DM_Sans, Space_Mono } from "next/font/google";
+import { Geist, Fraunces, JetBrains_Mono } from "next/font/google";
+import { Suspense } from "react";
 import "../index.css";
 import Providers from "@/components/providers";
+import { PostHogProvider } from "@/components/posthog-provider";
 
-const dmSans = DM_Sans({
+const geist = Geist({
   variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const spaceMono = Space_Mono({
+const jetbrains = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["400", "500", "700"],
 });
 
+const fraunces = Fraunces({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  axes: ["opsz", "SOFT"],
+  style: ["normal", "italic"],
+});
+
+const TITLE = "GitTerm · Cloud workspaces for coding agents";
+const DESCRIPTION =
+  "Run any coding agent (OpenCode, and more soon) in persistent cloud workspaces. One config, any cloud, any device.";
+
 export const metadata: Metadata = {
-  title: "GitTerm — Cloud workspaces for OpenCode",
-  description:
-    "Launch OpenCode in seconds. Secure, stateful workspaces accessible from any device.",
+  title: TITLE,
+  description: DESCRIPTION,
   metadataBase: new URL("https://gitterm.dev"),
   openGraph: {
-    title: "GitTerm — Cloud workspaces for OpenCode",
-    description:
-      "Launch OpenCode in seconds. Secure, stateful workspaces accessible from any device.",
+    title: TITLE,
+    description: DESCRIPTION,
     url: "https://gitterm.dev",
     siteName: "GitTerm",
     images: [
@@ -30,7 +41,7 @@ export const metadata: Metadata = {
         url: "/og-card/og-card-reduced.png",
         width: 1200,
         height: 630,
-        alt: "GitTerm — Cloud workspaces for OpenCode",
+        alt: TITLE,
       },
     ],
     locale: "en_US",
@@ -38,9 +49,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "GitTerm — Cloud workspaces for OpenCode",
-    description:
-      "Launch OpenCode in seconds. Secure, stateful workspaces accessible from any device.",
+    title: TITLE,
+    description: DESCRIPTION,
     images: ["/og-card/og-card.png"],
   },
   manifest: "/favicon_io/site.webmanifest",
@@ -69,8 +79,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${dmSans.variable} ${spaceMono.variable} antialiased`}>
+      <body className={`${geist.variable} ${jetbrains.variable} ${fraunces.variable} antialiased`}>
         <Providers>{children}</Providers>
+        <Suspense fallback={null}>
+          <PostHogProvider />
+        </Suspense>
       </body>
     </html>
   );

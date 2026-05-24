@@ -17,6 +17,7 @@ import { CliCommandDisplay } from "./cli-command-display";
 import { CreateCloudInstance } from "./create-cloud-instance";
 import { CreateAgentLoop } from "./create-agent-loop";
 import type { WorkspaceType, CreateInstanceResult } from "./types";
+import { track } from "@/lib/analytics";
 
 const DIALOG_DESCRIPTIONS: Record<WorkspaceType, string> = {
   cloud: "Deploy a new development workspace from a GitHub repository.",
@@ -65,8 +66,15 @@ export function CreateInstanceDialog() {
     }
   }, [open]);
 
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen) {
+      track("create_instance_dialog_opened");
+    }
+    setOpen(nextOpen);
+  }, []);
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button className="gap-2 bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85">
           <Plus className="h-4 w-4" /> New Instance

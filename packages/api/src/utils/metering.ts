@@ -9,7 +9,10 @@ import { logger } from "./logger";
 import { shouldEnforceQuota, shouldMeterUsage, getDailyMinuteQuotaAsync } from "../config/features";
 import { isSelfHosted } from "../config/deployment";
 import { getIdleTimeoutMinutes, getFreeTierDailyMinutes } from "../service/config/system-config";
-import { filterIdleWorkspacesByRedisActivity, recordWorkspaceActivity } from "../service/workspace-activity";
+import {
+  filterIdleWorkspacesByRedisActivity,
+  recordWorkspaceActivity,
+} from "../service/workspace-activity";
 
 // Legacy constants - kept for backwards compatibility but should use getters below
 // These are now the DEFAULT values; actual values come from database

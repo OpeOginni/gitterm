@@ -334,7 +334,7 @@ export default function ProviderSettingsPage() {
 
     const pinnedAwsRegion =
       provider.providerKey === "aws"
-        ? provider.regions?.find((region: any) => region.isEnabled) ?? provider.regions?.[0]
+        ? (provider.regions?.find((region: any) => region.isEnabled) ?? provider.regions?.[0])
         : undefined;
 
     setProviderName(provider.name ?? "");
@@ -367,8 +367,8 @@ export default function ProviderSettingsPage() {
     }
 
     // Resolution order:
-    //  1. The providerConfig's explicit providerTypeId (most reliable — set at bootstrap).
-    //  2. The cloud_provider's providerKey (e.g. "aws") — maps any region-scoped
+    //  1. The providerConfig's explicit providerTypeId (most reliable - set at bootstrap).
+    //  2. The cloud_provider's providerKey (e.g. "aws") - maps any region-scoped
     //     AWS row like "AWS EU (Frankfurt)" to the registered AWS provider type.
     //  3. Display-name match (covers legacy providers whose name equals the type
     //     name like "Railway", "Cloudflare", etc.).
@@ -526,7 +526,8 @@ export default function ProviderSettingsPage() {
           />
           {hasSavedEncryptedValue && (
             <p className="text-xs text-muted-foreground">
-              Current value is masked above. Leave this blank to keep it, or enter a new one to replace it.
+              Current value is masked above. Leave this blank to keep it, or enter a new one to
+              replace it.
             </p>
           )}
         </div>
@@ -592,69 +593,70 @@ export default function ProviderSettingsPage() {
       );
     }
 
-  if (
-    isAwsProvider &&
-    field.fieldName === "defaultRegion" &&
-    provider?.regions &&
-    provider.regions.length > 0
-  ) {
-    const pinnedRegion =
-      provider.regions.find((region: any) => region.isEnabled) ?? provider.regions[0];
+    if (
+      isAwsProvider &&
+      field.fieldName === "defaultRegion" &&
+      provider?.regions &&
+      provider.regions.length > 0
+    ) {
+      const pinnedRegion =
+        provider.regions.find((region: any) => region.isEnabled) ?? provider.regions[0];
 
-    return (
-      <div key={field.fieldName} className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Label htmlFor={field.fieldName}>
-            {field.fieldLabel}
-            {field.isRequired && <span className="text-destructive">*</span>}
-          </Label>
-        </div>
-        <Input
-          id={field.fieldName}
-          value={pinnedRegion?.externalRegionIdentifier ?? value}
-          readOnly
-          className="cursor-default"
-        />
-        {pinnedRegion && (
-          <p className="text-xs text-muted-foreground">
-            Pinned to {pinnedRegion.name} for this AWS provider.
-          </p>
-        )}
+      return (
+        <div key={field.fieldName} className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Label htmlFor={field.fieldName}>
+              {field.fieldLabel}
+              {field.isRequired && <span className="text-destructive">*</span>}
+            </Label>
+          </div>
+          <Input
+            id={field.fieldName}
+            value={pinnedRegion?.externalRegionIdentifier ?? value}
+            readOnly
+            className="cursor-default"
+          />
+          {pinnedRegion && (
+            <p className="text-xs text-muted-foreground">
+              Pinned to {pinnedRegion.name} for this AWS provider.
+            </p>
+          )}
         </div>
       );
     }
 
     return (
-        <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
-          <div className="flex items-center gap-2">
-            <Label htmlFor={field.fieldName}>
-              {field.fieldLabel}
-              {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
-            </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
-          </div>
-          {hasSavedEncryptedValue && (
-            <div className="rounded-md border border-border/70 bg-foreground/[0.02] px-3 py-2 font-mono text-xs text-muted-foreground">
-              {encryptedFieldPreview}
-            </div>
-          )}
-          <Input
-            id={field.fieldName}
-            type={field.fieldType === "number" ? "number" : field.fieldType}
-            placeholder={hasSavedEncryptedValue ? "Enter new value to replace" : field.fieldLabel}
-            value={value}
-            onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
-            required={field.isRequired && !readOnly}
-            readOnly={readOnly}
-            className={cn(readOnly && "cursor-default")}
-          />
-          {hasSavedEncryptedValue && (
-            <p className="text-xs text-muted-foreground">
-              Current value is masked above. Leave this blank to keep it, or enter a new one to replace it.
-            </p>
-          )}
+      <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
+        <div className="flex items-center gap-2">
+          <Label htmlFor={field.fieldName}>
+            {field.fieldLabel}
+            {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
+          </Label>
+          {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
         </div>
-      );
+        {hasSavedEncryptedValue && (
+          <div className="rounded-md border border-border/70 bg-foreground/[0.02] px-3 py-2 font-mono text-xs text-muted-foreground">
+            {encryptedFieldPreview}
+          </div>
+        )}
+        <Input
+          id={field.fieldName}
+          type={field.fieldType === "number" ? "number" : field.fieldType}
+          placeholder={hasSavedEncryptedValue ? "Enter new value to replace" : field.fieldLabel}
+          value={value}
+          onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
+          required={field.isRequired && !readOnly}
+          readOnly={readOnly}
+          className={cn(readOnly && "cursor-default")}
+        />
+        {hasSavedEncryptedValue && (
+          <p className="text-xs text-muted-foreground">
+            Current value is masked above. Leave this blank to keep it, or enter a new one to
+            replace it.
+          </p>
+        )}
+      </div>
+    );
   };
 
   const awsAccessKeyId = String(configForm.accessKeyId ?? "").trim();
@@ -1213,7 +1215,7 @@ export default function ProviderSettingsPage() {
 
                 <div className="mt-5 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-5">
                   <p className="text-sm font-medium text-foreground/90">Add Region</p>
-                    <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="space-y-2">
                       <Label htmlFor="region-name">Region Name</Label>
                       <Input
@@ -1228,9 +1230,7 @@ export default function ProviderSettingsPage() {
                       <Input
                         id="location"
                         value={newRegion.location}
-                        onChange={(e) =>
-                          setNewRegion({ ...newRegion, location: e.target.value })
-                        }
+                        onChange={(e) => setNewRegion({ ...newRegion, location: e.target.value })}
                         placeholder="e.g., California"
                       />
                     </div>

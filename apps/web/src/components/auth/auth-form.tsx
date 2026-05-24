@@ -7,6 +7,8 @@ import { authClient } from "@/lib/auth-client";
 import { Loader2 } from "lucide-react";
 import { isEmailAuthEnabled, isGitHubAuthEnabled } from "@gitterm/env/web";
 import env from "@gitterm/env/web";
+import posthog from "posthog-js";
+import { ANALYTICS_ENABLED } from "@/lib/analytics";
 
 interface AuthFormProps {
   redirectUrl?: string;
@@ -47,6 +49,10 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
         setError(result.error.message || "Failed to sign in");
         return;
       }
+      if (ANALYTICS_ENABLED) {
+        posthog.identify(email, { email });
+        posthog.capture("sign_in", { method: "email" });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -55,6 +61,9 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
   };
 
   const handleGitHubAuth = () => {
+    if (ANALYTICS_ENABLED) {
+      posthog.capture("github_sign_in_initiated");
+    }
     authClient.signIn.social({
       provider: "github",
       callbackURL,

@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn, getWorkspaceDisplayUrl } from "@/lib/utils";
+import { track, AnalyticsEvent } from "@/lib/analytics";
 import { authClient } from "@/lib/auth-client";
 import { isBillingEnabled } from "@gitterm/env/web";
 import type { Route } from "next";
@@ -97,9 +98,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const { data: session } = authClient.useSession();
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
 
-  const defaultGroupKey: CloudGroupKey | "" = hasAwsGroup
-    ? "aws"
-    : (nonAwsProviders[0]?.id ?? "");
+  const defaultGroupKey: CloudGroupKey | "" = hasAwsGroup ? "aws" : (nonAwsProviders[0]?.id ?? "");
 
   const [userCloudGroupKey, setUserCloudGroupKey] = useState<CloudGroupKey | null>(null);
   const selectedCloudGroupKey = userCloudGroupKey ?? defaultGroupKey;
@@ -158,9 +157,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       // For AWS, the composite "providerId::regionId" doubles as the picker
       // value; we resolve the provider row separately.
       const fallback = awsProviders[0]?.regions?.[0];
-      const fallbackComposite = fallback
-        ? `${awsProviders[0].id}::${fallback.id}`
-        : "";
+      const fallbackComposite = fallback ? `${awsProviders[0].id}::${fallback.id}` : "";
       if (userRegionId && availableRegions.some((r) => r.id === userRegionId)) {
         return userRegionId;
       }
@@ -213,6 +210,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     trpc.workspace.createWorkspace.mutationOptions({
       onSuccess: (data) => {
         queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
+        track(AnalyticsEvent.WorkspaceCreate, {
+          provider: selectedCloudProvider?.providerKey,
+          persistent,
+          profile: workspaceProfile,
+        });
         onSuccess({
           type: "workspace",
           workspaceId: data.workspace.id,
@@ -438,22 +440,22 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                         </div>
                       </SelectItem>
                     )}
-                    {nonAwsProviders.length > 0 ? (
-                      nonAwsProviders.map((cloud) => (
-                        <SelectItem key={cloud.id} value={cloud.id}>
-                          <div className="flex items-center">
-                            <Image
-                              src={getIcon(cloud.name) || "/placeholder.svg"}
-                              alt={cloud.name}
-                              width={16}
-                              height={16}
-                              className="mr-2 h-4 w-4"
-                            />
-                            {cloud.name}
-                          </div>
-                        </SelectItem>
-                      ))
-                    ) : null}
+                    {nonAwsProviders.length > 0
+                      ? nonAwsProviders.map((cloud) => (
+                          <SelectItem key={cloud.id} value={cloud.id}>
+                            <div className="flex items-center">
+                              <Image
+                                src={getIcon(cloud.name) || "/placeholder.svg"}
+                                alt={cloud.name}
+                                width={16}
+                                height={16}
+                                className="mr-2 h-4 w-4"
+                              />
+                              {cloud.name}
+                            </div>
+                          </SelectItem>
+                        ))
+                      : null}
                   </SelectContent>
                 )}
               </Select>
@@ -620,8 +622,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             )}
           </Label>
         </div>
-
-
 
         {/* ── 5. Persistent storage ── */}
         <div className="flex items-center gap-2">

@@ -57,12 +57,12 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
     try {
       await awsProvider.terminateWorkspace(terminatedWorkspace.externalInstanceId);
       await updateWorkspaceRoutingAndInvalidate(terminatedWorkspace.id, {
-          externalInstanceId: "",
-          externalRunningDeploymentId: null,
-          upstreamUrl: null,
-          exposedPorts: null,
-          updatedAt: new Date(),
-        });
+        externalInstanceId: "",
+        externalRunningDeploymentId: null,
+        upstreamUrl: null,
+        exposedPorts: null,
+        updatedAt: new Date(),
+      });
       retriedWorkspaces += 1;
     } catch (error) {
       console.error(
@@ -94,9 +94,7 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
     const activeProviderWorkspaces = await db
       .select({ id: workspace.id })
       .from(workspace)
-      .where(
-        and(eq(workspace.cloudProviderId, provider.id), ne(workspace.status, "terminated")),
-      );
+      .where(and(eq(workspace.cloudProviderId, provider.id), ne(workspace.status, "terminated")));
 
     try {
       const providerSweepResult = await awsProvider.sweepOrphanedResources(

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Terminal, Check, ArrowRight } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/analytics";
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
@@ -25,6 +26,7 @@ function CheckoutSuccessContent() {
       if (storedPlan) {
         setCheckoutPlan(storedPlan);
         sessionStorage.removeItem("checkout_plan");
+        track("checkout_completed", { plan: storedPlan });
       }
     }
   }, []);
@@ -33,9 +35,9 @@ function CheckoutSuccessContent() {
   const planName = userPlan.charAt(0).toUpperCase() + userPlan.slice(1);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#09090b] landing-grid dark">
+    <div className="flex min-h-screen flex-col bg-background landing-grid dark">
       {/* Header */}
-      <header className="border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
+      <header className="border-b border-white/[0.06] bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
           <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
@@ -136,7 +138,7 @@ export default function CheckoutSuccessPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#09090b]">
+        <div className="flex min-h-screen items-center justify-center bg-background">
           <Terminal className="h-8 w-8 animate-pulse text-primary" />
         </div>
       }

@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowRight, Send, Server } from "lucide-react";
+import { ArrowRight, Send, Server, Shield, Lock, Building2 } from "lucide-react";
 import env from "@gitterm/env/web";
 
 const teamSizes = [
@@ -69,33 +69,68 @@ export function EnterpriseContent() {
 
   return (
     <section className="relative overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32">
-      {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute top-0 left-1/2 h-[600px] w-[900px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.04),transparent)]" />
       </div>
 
-      <div className="relative mx-auto max-w-[1120px] px-6">
-        {/* ── Hero ── */}
-        <div className="mb-6 flex justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-white/40">
+      <div className="relative mx-auto max-w-[1200px] px-6">
+        <div className="mb-8 flex items-center gap-3">
+          <span className="h-px flex-1 bg-white/[0.08]" />
+          <span className="marker inline-flex items-center gap-2">
             <Server className="h-3.5 w-3.5 text-primary" />
-            Enterprise
+            Enterprise · self-hosted &amp; managed
           </span>
         </div>
 
-        <h1 className="mx-auto max-w-2xl text-center text-[clamp(2.25rem,5vw,4.5rem)] font-bold leading-[1.08] tracking-tight text-white">
-          Run GitTerm on <span className="text-primary">your infra.</span>
+        <h1 className="font-display text-[clamp(2.5rem,6vw,5rem)] font-light leading-[0.98] tracking-tight text-white">
+          GitTerm for{" "}
+          <span className="font-display-italic text-[color:var(--cream)]">teams</span>.
         </h1>
 
-        <p className="mx-auto mt-6 max-w-xl text-center text-base leading-relaxed text-white/50 sm:text-lg">
-          GitTerm is still early, but if you want to run it for your team we&apos;ll help you get
-          set up. Tell us what you need and we&apos;ll figure it out together.
+        <p className="mt-6 max-w-2xl text-base leading-[1.65] text-white/55 sm:text-[17px]">
+          Bring your own sandbox or cloud provider. We'll help you set it up for your organization.
+           Whether that's E2B, Daytona, Railway, Cloudflare, AWS, or your own infra. Your keys,
+          your data, your rules.
         </p>
+        <div className="mt-14 grid gap-px bg-white/[0.06] md:grid-cols-3">
+          {[
+            {
+              icon: Shield,
+              title: "Your sandbox, your cloud",
+              description:
+                "Connect your own E2B, Daytona, Railway, Cloudflare, or AWS accounts. Use the sandbox or cloud provider that fits your team.",
+            },
+            {
+              icon: Lock,
+              title: "Your keys, your data",
+              description:
+                "BYOK for everything: model credentials, encryption keys, SSH keys. GitTerm never sees your provider API keys or your source code.",
+            },
+            {
+              icon: Building2,
+              title: "Built for teams",
+              description:
+                "Team-scoped workspaces, shared agent configs, and organization-level GitHub integrations. Admin controls for who can create what.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="bg-background p-7">
+              <div className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                <item.icon className="h-4 w-4 text-primary" />
+              </div>
+              <h3 className="mb-2 text-[15px] font-semibold text-white/90">{item.title}</h3>
+              <p className="text-sm leading-relaxed text-white/45">{item.description}</p>
+            </div>
+          ))}
+        </div>
 
         {/* ── Form card ── */}
         <div className="mx-auto mt-16 max-w-2xl">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-white/[0.08]" />
+            <span className="marker">Get in touch</span>
+          </div>
+
           <div className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-white/[0.02]">
-            {/* Card glow */}
             <div className="pointer-events-none absolute inset-0">
               <div className="absolute -top-24 left-1/2 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.06),transparent)]" />
             </div>
@@ -106,12 +141,9 @@ export function EnterpriseContent() {
                   <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
                     <Send className="h-6 w-6 text-primary" />
                   </div>
-                  <h3 className="mb-2 text-xl font-semibold text-white/90">
-                    We&apos;ll be in touch
-                  </h3>
+                  <h3 className="mb-2 text-xl font-semibold text-white/90">We'll be in touch</h3>
                   <p className="max-w-sm text-sm leading-relaxed text-white/45">
-                    Your request was sent. If you need to add anything else, email us directly
-                    at{" "}
+                    Your request was sent. If you need to add anything else, email us directly at{" "}
                     <a
                       href="mailto:enterprise@gitterm.dev"
                       className="text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:decoration-primary/60"
@@ -178,7 +210,7 @@ export function EnterpriseContent() {
                         <SelectTrigger className="h-11 w-full rounded-xl border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white/80 shadow-none hover:bg-white/[0.03] focus-visible:border-primary/40 focus-visible:ring-primary/20 data-[placeholder]:text-white/20 data-[size=default]:h-11 [&>svg]:text-white/30">
                           <SelectValue placeholder="Select team size" />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-white/[0.08] bg-[#151518]">
+                        <SelectContent className="rounded-xl border-white/[0.08] bg-surface-2">
                           {teamSizes.map((size) => (
                             <SelectItem
                               key={size.value}
@@ -200,7 +232,7 @@ export function EnterpriseContent() {
                     <Textarea
                       name="message"
                       rows={3}
-                      placeholder="Tell us about your team, your infra, and what you want to use GitTerm for."
+                      placeholder="Tell us about your team, which sandbox or cloud provider you want to use, and how we can help you get set up."
                       className="rounded-xl border-white/[0.08] bg-white/[0.03] text-sm leading-relaxed text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
                     />
                   </div>

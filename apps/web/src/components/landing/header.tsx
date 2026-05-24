@@ -11,12 +11,18 @@ export function LandingHeader() {
   const { data: session } = authClient.useSession();
   const showPricing = isBillingEnabled();
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/6 bg-[#09090b]/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-background/75 backdrop-blur-xl">
+      <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between px-6">
+        <Link
+          href="/"
+          className="group flex items-center gap-2.5 transition-opacity hover:opacity-80"
+        >
           <Terminal className="h-5 w-5 text-primary" />
-          <span className="font-mono text-sm font-bold tracking-wider uppercase text-white/90">
+          <span className="font-mono text-sm font-bold tracking-[0.18em] uppercase text-white/90">
             GitTerm
+          </span>
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.25em] text-white/30 sm:inline">
+            / cloud workspaces
           </span>
         </Link>
 
@@ -71,7 +77,7 @@ export function LandingHeader() {
             </Link>
           ) : (
             <>
-              <Link href="/login">
+              <Link href="/login" className="hidden sm:inline-flex">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -83,7 +89,7 @@ export function LandingHeader() {
               <Link href="/dashboard">
                 <Button
                   size="sm"
-                  className="h-8 bg-primary px-4 font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+                  className="h-8 bg-primary px-4 font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary-foreground hover:bg-primary/85"
                 >
                   Get Started
                 </Button>

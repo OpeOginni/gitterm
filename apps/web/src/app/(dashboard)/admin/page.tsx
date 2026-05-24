@@ -3,12 +3,14 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import { Users, Server, Image, Globe, ChevronRight, Settings } from "lucide-react";
+import { Users, Server, Image, Globe, ChevronRight, Settings, Loader2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { trpcClient } from "@/utils/trpc";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
+import { toast } from "sonner";
 import type { Route } from "next";
 
 const NAV_ITEMS = [
@@ -84,9 +86,27 @@ export default function AdminPage() {
     }
   }, [session, isSessionPending, router]);
 
+  const queryClient = useQueryClient();
   const { data: stats, isLoading } = useQuery({
     queryKey: ["admin", "stats"],
     queryFn: () => trpcClient.admin.users.stats.query(),
+  });
+
+  const cleanupAnonMutation = useMutation({
+    mutationFn: () => trpcClient.admin.users.cleanupAnonStragglers.mutate(),
+    onSuccess: ({ found, terminated }) => {
+      if (found === 0) {
+        toast.success("No anon stragglers found.");
+      } else {
+        toast.success(
+          `Terminated ${terminated} of ${found} anon ${found === 1 ? "workspace" : "workspaces"}.`,
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
+    },
+    onError: (error) => {
+      toast.error(`Cleanup failed: ${error.message}`);
+    },
   });
 
   if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
@@ -132,6 +152,34 @@ export default function AdminPage() {
           sub="can resume"
           isLoading={isLoading}
         />
+      </div>
+
+      {/* Maintenance row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.015] px-4 py-3">
+        <div className="min-w-0">
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+            Anon stragglers
+          </p>
+          <p className="mt-0.5 text-[13px] text-white/55">
+            Terminate any try‑gitterm sandboxes that outlived their 10‑min lease (E2B webhook /
+            reaper safety net).
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => cleanupAnonMutation.mutate()}
+          disabled={cleanupAnonMutation.isPending}
+          className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
+        >
+          {cleanupAnonMutation.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
+          {cleanupAnonMutation.isPending ? "Sweeping…" : "Sweep now"}
+        </Button>
       </div>
 
       {/* Nav list */}

@@ -1,56 +1,68 @@
+import { Sliders, Rocket, Monitor, RotateCcw } from "lucide-react";
+
 const steps = [
   {
     number: "01",
-    title: "Sign in",
-    description: "Authenticate with GitHub. Your dashboard is ready in seconds.",
+    title: "Set your profile",
+    description:
+      "Configure model keys, SSH, and agent settings once in the dashboard to automatically apply them to every workspace.",
+    icon: Sliders,
   },
   {
     number: "02",
-    title: "Create a workspace",
-    description: "Setup a model provider, and opencode config, and create a workspace from a repo.",
+    title: "Launch",
+    description:
+      "Pick a cloud provider, paste a repo link, and we provision, install OpenCode, and boot your agent in under a minute.",
+    icon: Rocket,
   },
   {
     number: "03",
-    title: "Ship",
-    description: "OpenCode runs in the cloud with persistent state. Resume from any device.",
+    title: "Connect",
+    description:
+      "Connect via browser terminal, SSH from your editor, or opencode attach from any machine on your network.",
+    icon: Monitor,
+  },
+  {
+    number: "04",
+    title: "Persist",
+    description:
+      "Stop today and resume tomorrow with your entire filesystem and agent context preserved exactly as you left it.",
+    icon: RotateCcw,
   },
 ];
 
 export function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="border-t border-white/[0.06] py-24 md:py-32">
-      <div className="mx-auto max-w-[1120px] px-6">
-        <div className="mb-14 text-center">
-          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
-            How it works
-          </p>
-          <h2 className="mx-auto max-w-lg text-3xl font-bold tracking-tight text-white md:text-4xl">
-            Three steps to a running workspace.
+    <section id="how-it-works" className="border-t border-white/[0.06] py-20 md:py-28">
+      <div className="mx-auto max-w-[1100px] px-6">
+        <div className="mb-12 max-w-xl">
+          <div className="mb-5 flex items-center gap-3">
+            <span className="h-px flex-1 bg-white/[0.08]" />
+            <span className="marker">How it works</span>
+          </div>
+          <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
+            How GitTerm moves your agent to the{" "}
+            <span className="font-display-italic text-[color:var(--cream)]">cloud</span>.
           </h2>
         </div>
 
-        {/* Single card housing all steps */}
-        <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-          <div className="h-px w-full bg-primary/40" />
-          <div className="grid divide-y divide-white/[0.06] md:grid-cols-3 md:divide-x md:divide-y-0">
-            {steps.map((step, idx) => (
-              <div key={step.number} className="relative p-8 md:p-10">
-                {/* Step number with connector */}
-                <div className="mb-6 flex items-center gap-4">
-                  <span className="relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 font-mono text-sm font-bold text-primary">
-                    {step.number}
-                  </span>
-                  {/* Dashed connector line -- stretches to the right edge */}
-                  {idx < steps.length - 1 && (
-                    <div className="hidden h-px flex-1 border-t border-dashed border-primary/20 md:block" />
-                  )}
-                </div>
-
-                <h3 className="mb-2 text-lg font-semibold text-white/90">{step.title}</h3>
-                <p className="text-sm leading-relaxed text-white/45">{step.description}</p>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {steps.map((step) => (
+            <div
+              key={step.number}
+              className="group relative rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 transition-colors hover:border-white/[0.12]"
+            >
+              <div className="mb-4 flex items-center gap-3">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 font-mono text-sm font-bold text-primary">
+                  {step.number}
+                </span>
+                <span className="h-px flex-1 bg-white/[0.06]" />
+                <step.icon className="h-4 w-4 text-white/25 transition-colors group-hover:text-primary/60" />
               </div>
-            ))}
-          </div>
+              <h3 className="mb-1.5 text-[15px] font-semibold text-white/90">{step.title}</h3>
+              <p className="text-sm leading-snug text-white/45">{step.description}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>

@@ -47,14 +47,14 @@ export default function DevicePage() {
 
   if (isPending || !session) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#09090b]">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-white/30" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#09090b] landing-grid dark">
+    <div className="flex min-h-screen flex-col bg-background landing-grid dark">
       <main className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm space-y-6">
           {/* Header */}

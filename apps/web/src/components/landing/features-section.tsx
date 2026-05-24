@@ -1,89 +1,64 @@
-import { Cloud, Save, Layers, Power, Globe, MonitorSmartphone } from "lucide-react";
-import { GitHub } from "../logos/Github";
+import { Layers, KeyRound, MonitorSmartphone, Save, GitBranch } from "lucide-react";
 
 const features = [
   {
     icon: Layers,
-    title: "One API. Any cloud.",
+    title: "Your laptop, off the hook.",
     description:
-      "Railway, E2B, Daytona, deploy complete opencode worksapces across any provider from a single interface.",
-    lead: true,
+      "Workspaces run on E2B, Daytona, Railway, or Cloudflare. Pick the cloud that fits your workload.",
   },
   {
-    icon: Cloud,
-    title: "Instant Workspaces",
-    description: "Full OpenCode environment in seconds. Pick a provider and go.",
-  },
-  {
-    icon: GitHub,
-    title: "GitHub Native",
-    description: "Clone repos, push commits, and open PRs from any workspace.",
+    icon: KeyRound,
+    title: "Configure once.",
+    description:
+      "Add your model keys, SSH key, and agent config. Every new workspace inherits the setup.",
   },
   {
     icon: MonitorSmartphone,
-    title: "Editor Access",
-    description: "Open in VS Code, Cursor, or Zed. Also works with Neovim and other SSH editors.",
+    title: "Securely resume from any device.",
+    description:
+      "Browser terminal, attach to any supported agent client or open in your favourite SSH-aware editor. Same workspace, any screen.",
   },
   {
     icon: Save,
-    title: "Persistent State",
-    description: "Files, context, and agent memory carry over between sessions.",
+    title: "Persistent state.",
+    description: "Files, context, and checkpoints survive restarts. Stop today, pick up tomorrow.",
   },
   {
-    icon: Globe,
-    title: "Provider Agnostic",
-    description: "Move workspaces between providers without friction.",
-  },
-  {
-    icon: Power,
-    title: "Smart Resources",
-    description: "Idle workspaces sleep. You only pay for what you use.",
+    icon: GitBranch,
+    title: "Your repos, your commits.",
+    description:
+      "Connect your GitHub account and work with your repos directly. Clone, commit, push, and open pull requests from the workspace terminal.",
   },
 ];
 
 export function FeaturesSection() {
-  const lead = features[0]!;
-  const rest = features.slice(1);
-
   return (
-    <section id="features" className="border-t border-white/[0.06] py-24 md:py-32">
-      <div className="mx-auto max-w-[1120px] px-6">
-        {/* Section header */}
-        <div className="mb-14 max-w-xl">
-          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
-            Capabilities
-          </p>
-          <h2 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
-            Everything you need to run OpenCode in the cloud.
+    <section id="features" className="border-t border-white/[0.06] py-20 md:py-28">
+      <div className="mx-auto max-w-[1100px] px-6">
+        <div className="mb-12 max-w-xl">
+          <div className="mb-5 flex items-center gap-3">
+            <span className="h-px flex-1 bg-white/[0.08]" />
+            <span className="marker">What you get</span>
+          </div>
+          <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
+            A real <span className="font-display-italic text-[color:var(--cream)]">home</span> for
+            your agent.
           </h2>
         </div>
 
-        {/* Lead feature -- same row style, slightly elevated */}
-        <div className="flex items-start gap-4 border-l-2 border-primary/50 py-5 pl-6">
-          <div className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-            <lead.icon className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-white md:text-lg">{lead.title}</h3>
-            <p className="mt-1 max-w-xl text-sm leading-relaxed text-white/45">
-              {lead.description}
-            </p>
-          </div>
-        </div>
-
-        {/* Supporting features -- 2-col rows */}
-        <div className="mt-6 grid gap-x-6 gap-y-0 md:grid-cols-2">
-          {rest.map((feature) => (
+        <div className="grid gap-x-8 gap-y-0 md:grid-cols-2">
+          {features.map((feature) => (
             <div
               key={feature.title}
-              className="flex items-start gap-4 border-t border-white/[0.04] py-6"
+              className="flex items-start gap-4 border-t border-white/[0.06] py-6"
             >
               <div className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
                 <feature.icon className="h-[18px] w-[18px] text-primary/80" />
               </div>
               <div>
                 <h3 className="text-[15px] font-semibold text-white/85">{feature.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-white/40">{feature.description}</p>
+                <p className="mt-1 text-sm leading-relaxed text-white/45">{feature.description}</p>
               </div>
             </div>
           ))}

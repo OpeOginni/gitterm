@@ -38,7 +38,7 @@ function CloudProvisionDemo() {
         <div className="h-3 w-3 rounded-full bg-red-500/80" />
         <div className="h-3 w-3 rounded-full bg-yellow-500/80" />
         <div className="h-3 w-3 rounded-full bg-green-500/80" />
-        <span className="ml-3 text-xs text-muted-foreground font-mono">gitterm — dashboard</span>
+        <span className="ml-3 text-xs text-muted-foreground font-mono">gitterm · dashboard</span>
       </div>
 
       <div className="p-5 min-h-[260px] flex flex-col gap-5">

@@ -46,7 +46,7 @@ export function DashboardNav() {
   const router = useRouter();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-background/80 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
           {/* Logo */}
@@ -102,7 +102,7 @@ export function DashboardNav() {
                     <ChevronDown className="h-3 w-3 text-white/30" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-48 border-white/[0.08] bg-[#0e0e11]">
+                <DropdownMenuContent className="w-48 border-white/[0.08] bg-popover">
                   {(session?.user as any)?.role === "admin" && (
                     <>
                       <DropdownMenuItem
@@ -147,7 +147,7 @@ export function DashboardNav() {
 
       {/* Mobile Navigation */}
       {mobileMenuOpen && (
-        <div className="border-t border-white/[0.06] bg-[#09090b] md:hidden">
+        <div className="border-t border-white/[0.06] bg-background md:hidden">
           <nav className="space-y-1 px-4 py-3">
             {navItems.map((item) => {
               const isActive =

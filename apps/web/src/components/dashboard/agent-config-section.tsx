@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
 import {
   Dialog,
   DialogContent,
@@ -248,280 +248,279 @@ export function AgentConfigSection() {
   const isPending = isAdding || isUpdating;
   const configurations = configurationsData?.configurations || [];
 
-  return (
-    <Card className="mb-4 border-border">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-muted-foreground" />
-            <CardTitle>Agent Configurations</CardTitle>
-          </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Configuration
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto border-border/90 bg-card">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Image
-                    src={getIcon(selectedAgentName)}
-                    alt={selectedAgentName}
-                    width={20}
-                    height={20}
-                    className="h-5 w-5"
-                  />
-                  {isEditing ? "Edit Configuration" : "New Agent Configuration"}
-                </DialogTitle>
-                <DialogDescription>
-                  {isEditing
-                    ? `Update the ${selectedAgentName} configuration.`
-                    : "Define your opencode.json settings. These are applied when creating new workspaces."}
-                </DialogDescription>
-              </DialogHeader>
+  const addConfigDialog = (
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]">
+          <Plus className="h-3.5 w-3.5" />
+          Add configuration
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto border-border/90 bg-card">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Image
+              src={getIcon(selectedAgentName)}
+              alt={selectedAgentName}
+              width={20}
+              height={20}
+              className="h-5 w-5"
+            />
+            {isEditing ? "Edit Configuration" : "New Agent Configuration"}
+          </DialogTitle>
+          <DialogDescription>
+            {isEditing
+              ? `Update the ${selectedAgentName} configuration.`
+              : "Define your opencode.json settings. These are applied when creating new workspaces."}
+          </DialogDescription>
+        </DialogHeader>
 
-              <div className="grid gap-5 py-4">
-                {/* Test locally hint -- compact, inline */}
-                {!isEditing && (
-                  <p className="flex items-center gap-2 text-xs text-amber-500/80">
-                    <Terminal className="h-3.5 w-3.5 shrink-0" />
-                    Test your config locally with{" "}
-                    <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-foreground">
-                      opencode.json
-                    </code>{" "}
-                    before adding it here.
-                  </p>
+        <div className="grid gap-5 py-4">
+          {/* Test locally hint -- compact, inline */}
+          {!isEditing && (
+            <p className="flex items-center gap-2 text-xs text-amber-500/80">
+              <Terminal className="h-3.5 w-3.5 shrink-0" />
+              Test your config locally with{" "}
+              <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-foreground">
+                opencode.json
+              </code>{" "}
+              before adding it here.
+            </p>
+          )}
+
+          {/* Name + Agent type -- side by side */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium">Name</Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g., MCP Setup, TS Project"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium">
+                Agent Type
+                {isEditing && (
+                  <span className="ml-1 font-normal text-muted-foreground">(locked)</span>
                 )}
-
-                {/* Name + Agent type -- side by side */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Name</Label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder="e.g., MCP Setup, TS Project"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">
-                      Agent Type
-                      {isEditing && (
-                        <span className="ml-1 font-normal text-muted-foreground">(locked)</span>
-                      )}
-                    </Label>
-                    <div className="flex flex-wrap gap-2">
-                      {agentTypesData?.agentTypes?.map((agent) => {
-                        const isSelected = formData.agentTypeId === agent.id;
-                        return (
-                          <button
-                            key={agent.id}
-                            type="button"
-                            onClick={() =>
-                              setFormData((prev) => ({ ...prev, agentTypeId: agent.id }))
-                            }
-                            disabled={isEditing}
-                            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
-                              isSelected
-                                ? "border-primary/60 bg-primary/8 text-foreground ring-1 ring-primary/20"
-                                : "border-border/40 bg-secondary/20 text-muted-foreground hover:border-border/70 hover:bg-secondary/40 hover:text-foreground"
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
-                          >
-                            <Image
-                              src={getIcon(agent.name)}
-                              alt={agent.name}
-                              width={16}
-                              height={16}
-                              className="h-4 w-4"
-                            />
-                            {agent.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* JSON Configuration Input */}
-                <div className="grid gap-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">
-                      Configuration{" "}
-                      <span className="font-normal text-muted-foreground">
-                        &middot;{" "}
-                        <a
-                          href="https://opencode.ai/docs/config/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary/70 hover:text-primary hover:underline"
-                        >
-                          docs
-                        </a>
-                      </span>
-                    </Label>
-                    {!formData.configJson.trim() && (
-                      <button
-                        type="button"
-                        onClick={handleLoadExample}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Load example
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="rounded-lg border border-border/50 overflow-hidden">
-                    <CodeMirror
-                      value={formData.configJson}
-                      height="220px"
-                      extensions={[json()]}
-                      onChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          configJson: value,
-                        }))
-                      }
-                      theme={theme as "light" | "dark"}
-                      placeholder={EXAMPLE_CONFIG}
-                      basicSetup={{
-                        lineNumbers: true,
-                        foldGutter: false,
-                      }}
-                      className="text-sm"
-                    />
-                  </div>
-
-                  {jsonError ? (
-                    <div className="flex items-center gap-1.5 text-xs text-red-500">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      {jsonError}
-                    </div>
-                  ) : formData.configJson.trim() ? (
-                    <div className="flex items-center gap-1.5 text-xs text-green-500">
-                      <Check className="h-3.5 w-3.5" />
-                      Valid JSON
-                    </div>
-                  ) : null}
-                </div>
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {agentTypesData?.agentTypes?.map((agent) => {
+                  const isSelected = formData.agentTypeId === agent.id;
+                  return (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, agentTypeId: agent.id }))}
+                      disabled={isEditing}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                        isSelected
+                          ? "border-primary/60 bg-primary/15 text-foreground ring-1 ring-primary/25"
+                          : "border-white/[0.08] bg-white/[0.05] text-white/75 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <Image
+                        src={getIcon(agent.name)}
+                        alt={agent.name}
+                        width={16}
+                        height={16}
+                        className="h-4 w-4"
+                      />
+                      {agent.name}
+                    </button>
+                  );
+                })}
               </div>
+            </div>
+          </div>
 
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setDialogOpen(false)}
-                  className="border-border/50"
+          {/* JSON Configuration Input */}
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">
+                Configuration{" "}
+                <span className="font-normal text-muted-foreground">
+                  &middot;{" "}
+                  <a
+                    href="https://opencode.ai/docs/config/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary/70 hover:text-primary hover:underline"
+                  >
+                    docs
+                  </a>
+                </span>
+              </Label>
+              {!formData.configJson.trim() && (
+                <button
+                  type="button"
+                  onClick={handleLoadExample}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={
-                    isPending || !!jsonError || !formData.configJson.trim() || !formData.name.trim()
-                  }
-                  className="gap-2"
-                >
-                  {isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {isEditing ? "Saving..." : "Creating..."}
-                    </>
-                  ) : isEditing ? (
-                    "Save Changes"
-                  ) : (
-                    "Create"
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                  Load example
+                </button>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-border/50 overflow-hidden">
+              <CodeMirror
+                value={formData.configJson}
+                height="220px"
+                extensions={[json()]}
+                onChange={(value) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    configJson: value,
+                  }))
+                }
+                theme={theme as "light" | "dark"}
+                placeholder={EXAMPLE_CONFIG}
+                basicSetup={{
+                  lineNumbers: true,
+                  foldGutter: false,
+                }}
+                className="text-sm"
+              />
+            </div>
+
+            {jsonError ? (
+              <div className="flex items-center gap-1.5 text-xs text-red-500">
+                <AlertCircle className="h-3.5 w-3.5" />
+                {jsonError}
+              </div>
+            ) : formData.configJson.trim() ? (
+              <div className="flex items-center gap-1.5 text-xs text-green-500">
+                <Check className="h-3.5 w-3.5" />
+                Valid JSON
+              </div>
+            ) : null}
+          </div>
         </div>
-        <CardDescription>
-          Create and manage named configurations for your AI coding agents. These can be applied
-          when creating new workspaces.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoadingConfigs ? (
-          <div className="space-y-3">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-          </div>
-        ) : configurations.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Code2 className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p className="text-sm">No configurations yet</p>
-            <p className="text-xs mt-1">Create your first configuration to get started</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {configurations.map((config) => (
-              <div
-                key={config.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-secondary/20 hover:bg-secondary/30 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                    <Image
-                      src={getIcon(config.agentTypeName || "") || "/opencode.svg"}
-                      alt={config.agentTypeName || "Agent"}
-                      width={20}
-                      height={20}
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{config.name}</p>
-                      <Badge variant="secondary" className="text-xs">
-                        {config.agentTypeName}
-                      </Badge>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setDialogOpen(false)}
+            className="border-border/50"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              isPending || !!jsonError || !formData.configJson.trim() || !formData.name.trim()
+            }
+            className="gap-2"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {isEditing ? "Saving..." : "Creating..."}
+              </>
+            ) : isEditing ? (
+              "Save Changes"
+            ) : (
+              "Create"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  return (
+    <>
+      <SettingsSection
+        eyebrow="02 / Agents"
+        icon={Settings}
+        title="Agent configurations"
+        description="Save named opencode.json presets and apply them when creating new workspaces."
+        action={addConfigDialog}
+      >
+        <SettingsSectionBody>
+          {isLoadingConfigs ? (
+            <div className="space-y-2">
+              <Skeleton className="h-14 w-full bg-white/[0.04]" />
+              <Skeleton className="h-14 w-full bg-white/[0.04]" />
+            </div>
+          ) : configurations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl bg-input/40 px-6 py-10 text-center">
+              <Code2 className="mb-3 h-8 w-8 text-white/25" />
+              <p className="text-sm text-white/65">No configurations yet</p>
+              <p className="mt-1 text-[12px] text-white/35">
+                Save your first opencode.json preset to reuse it across workspaces.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {configurations.map((config) => (
+                <div
+                  key={config.id}
+                  className="flex items-center justify-between gap-3 rounded-lg bg-input/60 px-4 py-3 transition-colors hover:bg-input"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                      <Image
+                        src={getIcon(config.agentTypeName || "") || "/opencode.svg"}
+                        alt={config.agentTypeName || "Agent"}
+                        width={20}
+                        height={20}
+                      />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Updated{" "}
-                      {new Date(config.updatedAt).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{config.name}</p>
+                        <Badge variant="secondary" className="text-xs">
+                          {config.agentTypeName}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Updated{" "}
+                        {new Date(config.updatedAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </div>
                   </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          handleEdit({
+                            id: config.id,
+                            name: config.name,
+                            agentTypeId: config.agentTypeId,
+                            config: config.config,
+                          })
+                        }
+                      >
+                        <Edit3 className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleDeleteClick(config.id)}
+                        className="text-red-600 focus:text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() =>
-                        handleEdit({
-                          id: config.id,
-                          name: config.name,
-                          agentTypeId: config.agentTypeId,
-                          config: config.config,
-                        })
-                      }
-                    >
-                      <Edit3 className="h-4 w-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleDeleteClick(config.id)}
-                      className="text-red-600 focus:text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
+              ))}
+            </div>
+          )}
+        </SettingsSectionBody>
+      </SettingsSection>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -557,6 +556,6 @@ export function AgentConfigSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </>
   );
 }

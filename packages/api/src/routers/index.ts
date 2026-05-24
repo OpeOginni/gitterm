@@ -10,6 +10,7 @@ import { deviceRouter } from "./device";
 import { adminRouter } from "./admin";
 import { agentLoopRouter } from "./agent-loop";
 import { modelCredentialsRouter } from "./model-credentials";
+import { anonRouter } from "./anon";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -31,6 +32,7 @@ export const appRouter = router({
   agentLoop: agentLoopRouter,
   modelCredentials: modelCredentialsRouter,
   workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
+  anon: anonRouter,
 });
 export type AppRouter = typeof appRouter;
 

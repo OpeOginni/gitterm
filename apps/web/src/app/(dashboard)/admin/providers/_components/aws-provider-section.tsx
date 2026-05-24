@@ -7,13 +7,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import Image from "next/image";
 import type { Route } from "next";
-import {
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  Loader2,
-  Plus,
-} from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, Loader2, Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,7 +48,13 @@ function getCanonicalAwsRegion(provider: ProviderRow) {
 function getRegionFlag(region?: ProviderRow["regions"][number] | null) {
   const details = `${region?.name ?? ""} ${region?.location ?? ""}`.toLowerCase();
 
-  if (details.includes("virginia") || details.includes("ohio") || details.includes("oregon") || details.includes("california") || details.includes("usa")) {
+  if (
+    details.includes("virginia") ||
+    details.includes("ohio") ||
+    details.includes("oregon") ||
+    details.includes("california") ||
+    details.includes("usa")
+  ) {
     return "🇺🇸";
   }
   if (details.includes("canada") || details.includes("montréal")) {
@@ -210,7 +210,7 @@ export function AwsProviderSection({ awsProviders }: AwsProviderSectionProps) {
                       .slice(0, 3)
                       .map((p) => getCanonicalAwsRegion(p)?.externalRegionIdentifier)
                       .filter(Boolean)
-                      .join(", ") || "—"
+                      .join(", ") || "-"
                   }${awsCount > 3 ? ` +${awsCount - 3}` : ""}`}
             </p>
           </div>

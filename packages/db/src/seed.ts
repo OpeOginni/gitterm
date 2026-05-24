@@ -57,7 +57,7 @@ const seedCloudProviders: Array<{
   // AWS is intentionally NOT seeded. Each AWS region is its own cloud_provider
   // row, created by admins via `aws.createRegionProvider` (Add AWS Region in
   // the providers admin UI). Seeding a generic "AWS" row with multiple regions
-  // attached produced ambiguous state — region resolution at deploy time falls
+  // attached produced ambiguous state - region resolution at deploy time falls
   // back to a shared default config and silently lands every workspace in the
   // first seeded region (typically us-east-1) regardless of which AWS provider
   // was picked. Admins must explicitly add the regions they want to use.
@@ -129,6 +129,9 @@ const seedImages = [
     agentTypeName: "OpenCode",
     providerMetadata: {
       isDefault: true,
+      daytona: {
+        snapshot: "gitterm/opencode-server",
+      },
       aws: {
         cpu: 2048,
         memory: 4096,
@@ -148,7 +151,7 @@ const seedImages = [
         sshTemplateId: "nxiezl38gnw32ufyloc0",
       },
       daytona: {
-        snapshot: "gitterm/opencode-server-eu",
+        snapshot: "gitterm/opencode-server",
       },
     },
   },

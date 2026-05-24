@@ -150,7 +150,7 @@ export class GitHubAppService {
           action: "check_if_valid_repo",
         });
         return { valid: true, exists: false, canClone: false, branchExists: false };
-        // 404: not found or private — try with user's integration if provided
+        // 404: not found or private - try with user's integration if provided
       }
     }
 
@@ -1192,6 +1192,35 @@ export function getGitHubAppService(): GitHubAppService {
  */
 export function isGitHubAppConfigured(): boolean {
   return !!env.GITHUB_APP_ID && !!env.GITHUB_APP_PRIVATE_KEY;
+}
+
+export async function checkPublicGitHubRepository(
+  repositoryUrl: string,
+  branch?: string,
+): Promise<{ valid: boolean; exists: boolean; canClone: boolean; branchExists: boolean }> {
+  const parsed = parseGitHubRepoUrl(repositoryUrl);
+  if (!parsed) {
+    return { valid: false, exists: false, canClone: false, branchExists: false };
+  }
+
+  const { owner, repo } = parsed;
+  const anonOctokit = new Octokit();
+
+  try {
+    await anonOctokit.repos.get({ owner, repo });
+
+    if (branch) {
+      try {
+        await anonOctokit.repos.getBranch({ owner, repo, branch });
+      } catch {
+        return { valid: true, exists: true, canClone: true, branchExists: false };
+      }
+    }
+
+    return { valid: true, exists: true, canClone: true, branchExists: true };
+  } catch {
+    return { valid: true, exists: false, canClone: false, branchExists: false };
+  }
 }
 
 export function parseGitHubRepoUrl(url: string): { owner: string; repo: string } | null {
