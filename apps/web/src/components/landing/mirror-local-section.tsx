@@ -10,7 +10,7 @@ const profileItems = [
   {
     icon: FileJson,
     label: "Agent Config",
-    detail: "Your opencode.json -- theme, model, permissions, and tools.",
+    detail: "Your opencode.json, including theme, model, permissions, and tools.",
   },
   {
     icon: ShieldCheck,
@@ -24,7 +24,7 @@ export function MirrorLocalSection() {
     <section id="opencode-sync" className="border-t border-white/[0.06] py-24 md:py-32">
       <div className="mx-auto max-w-[1120px] px-6">
         <div className="grid gap-12 lg:grid-cols-[1fr_1.2fr] lg:items-center">
-          {/* Left -- copy */}
+          {/* Left: copy */}
           <div>
             <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
               Workspace Profile
@@ -38,7 +38,7 @@ export function MirrorLocalSection() {
             </p>
           </div>
 
-          {/* Right -- settings-style card */}
+          {/* Right: settings-style card */}
           <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
             <div className="h-px w-full bg-primary/40" />
             <div className="divide-y divide-white/[0.04]">

@@ -19,6 +19,7 @@ import { GitHub as Github } from "@/components/logos/Github";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import env from "@gitterm/env/web";
+import { track } from "@/lib/analytics";
 
 const GITHUB_APP_NAME = env.NEXT_PUBLIC_GITHUB_APP_NAME || "gitterm-dev";
 
@@ -34,6 +35,7 @@ export function GitHubConnection() {
   const disconnectMutation = useMutation(trpc.github.disconnectApp.mutationOptions());
 
   const handleConnect = () => {
+    track("github_connected");
     setIsConnecting(true);
     const redirectUrl = `${env.NEXT_PUBLIC_SERVER_URL}/api/github/callback`;
     window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
@@ -54,6 +56,7 @@ export function GitHubConnection() {
   const handleDisconnect = async () => {
     try {
       await disconnectMutation.mutateAsync();
+      track("github_disconnected");
       toast.success("GitHub App disconnect requested. Changes will take effect shortly.");
       await queryClient.invalidateQueries({
         queryKey: trpc.github.getInstallationStatus.queryKey(),

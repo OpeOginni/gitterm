@@ -3,11 +3,12 @@
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
-import { Check, Terminal, ExternalLink, ArrowRight, Loader2, Globe } from "lucide-react";
+import { Check, Terminal, ExternalLink, ArrowRight, Loader2, Globe, KeyRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/analytics";
 
 type UserPlan = "free" | "pro";
 
@@ -27,7 +28,7 @@ const PLAN_TIERS: PlanTier[] = [
   {
     name: "Free",
     price: 0,
-    description: "Perfect for exploring agentic coding and occasional cloud development",
+    description: "Explore agentic coding with ephemeral and persistent cloud workspaces",
     features: [
       "60 minutes/day cloud runtime",
       "5 workspaces",
@@ -69,8 +70,6 @@ const PLAN_TIERS: PlanTier[] = [
   },
 ];
 
-/* ─── Feature check item ──────────────────────────────────── */
-
 function FeatureItem({ text }: { text: string }) {
   return (
     <div className="flex items-start gap-2.5">
@@ -79,8 +78,6 @@ function FeatureItem({ text }: { text: string }) {
     </div>
   );
 }
-
-/* ─── Plan card ────────────────────────────────────────────── */
 
 function PricingCard({
   plan,
@@ -108,7 +105,6 @@ function PricingCard({
           : "border-white/[0.06] bg-white/[0.02]",
       )}
     >
-      {/* Header */}
       <div>
         <div className="mb-5 flex items-center justify-between">
           <span className="font-mono text-xs uppercase tracking-[0.2em] text-white/40">
@@ -126,7 +122,6 @@ function PricingCard({
           )}
         </div>
 
-        {/* Price */}
         <div className="mb-2 flex items-baseline gap-1">
           <span className="text-4xl font-bold text-white">
             {plan.price !== undefined ? `$${plan.price}` : "Free"}
@@ -140,7 +135,6 @@ function PricingCard({
           {plan.description}
         </p>
 
-        {/* Features */}
         <div className="flex flex-col gap-3">
           {plan.features.map((feature) => (
             <FeatureItem key={feature} text={feature} />
@@ -148,7 +142,6 @@ function PricingCard({
         </div>
       </div>
 
-      {/* Action */}
       <div className="mt-8">
         {plan.isSelfHost ? (
           <Link
@@ -169,7 +162,7 @@ function PricingCard({
             disabled={isLoading}
             className={cn(
               "inline-flex w-full cursor-pointer items-center justify-center rounded-lg px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-wider transition-all",
-              "focus:outline-none focus:ring-2 focus:ring-gold/50 focus:ring-offset-2 focus:ring-offset-[#09090b]",
+              "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-[#09090b]",
               "disabled:cursor-not-allowed disabled:opacity-70",
               plan.popular
                 ? "bg-primary text-primary-foreground hover:bg-primary/85"
@@ -201,8 +194,6 @@ function PricingCard({
     </div>
   );
 }
-
-/* ─── Page content ─────────────────────────────────────────── */
 
 function PricingPageContent() {
   const [isLoading, setIsLoading] = useState(false);
@@ -257,6 +248,7 @@ function PricingPageContent() {
       return;
     }
 
+    track("upgrade_initiated", { plan: slug });
     setIsLoading(true);
     setLoadingPlan(slug);
     try {
@@ -270,21 +262,25 @@ function PricingPageContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-white dark landing-grid">
+    <main className="min-h-screen bg-background text-white dark landing-grid grain">
       <LandingHeader />
 
       <section className="pt-36 pb-24 md:pt-44 md:pb-32">
-        <div className="mx-auto max-w-[1120px] px-6">
+        <div className="mx-auto max-w-[1200px] px-6">
           {/* Header */}
-          <div className="mb-16 text-center">
-            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
-              Pricing
-            </p>
-            <h1 className="mb-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
-              Simple, transparent pricing.
+          <div className="mb-16">
+            <div className="mb-6 flex items-center gap-3">
+              <span className="h-px flex-1 bg-white/[0.08]" />
+              <span className="marker">Pricing · plain &amp; predictable</span>
+            </div>
+            <h1 className="font-display text-[clamp(2.5rem,6vw,5rem)] font-light leading-[0.98] tracking-tight text-white">
+              We just <span className="font-display-italic text-[color:var(--cream)]">run</span> the
+              workspaces.
             </h1>
-            <p className="mx-auto max-w-lg text-base text-white/50 sm:text-lg">
-              Powerful agentic coding with predictable pricing. No surprise bills.
+            <p className="mt-6 max-w-2xl text-base leading-[1.65] text-white/55 sm:text-[17px]">
+              You bring your model API keys. We don't resell them. GitTerm only charges for the
+              cloud workspace itself - compute, storage, and networking - so your AI bill stays with
+              your provider, not us.
             </p>
           </div>
 
@@ -302,9 +298,45 @@ function PricingPageContent() {
             ))}
           </div>
 
+          {/* BYOK explainer */}
+          <div className="mt-16 border-t border-white/[0.06] pt-12">
+            <div className="mb-8 flex items-center gap-3">
+              <span className="h-px flex-1 bg-white/[0.08]" />
+              <span className="marker">Bring your own keys</span>
+            </div>
+            <div className="grid gap-8 md:grid-cols-2">
+              <div>
+                <h3 className="mb-3 font-display text-xl font-light tracking-tight text-white">
+                  No AI markup. No middleman.
+                </h3>
+                <p className="text-sm leading-relaxed text-white/50">
+                  GitTerm never resells AI model access. You bring your own Anthropic, OpenAI, or
+                  Copilot credentials and we inject them into your workspaces. Your AI spending is
+                  between you and the provider. We don't take a cut.
+                </p>
+              </div>
+              <div>
+                <h3 className="mb-3 font-display text-xl font-light tracking-tight text-white">
+                  What the $20 actually covers.
+                </h3>
+                <p className="text-sm leading-relaxed text-white/50">
+                  The Pro plan pays for cloud workspace infrastructure: compute time, persistent
+                  storage, subdomain hosting, and our multi-cloud orchestration layer. Think of it
+                  as renting a purpose-built VM fleet for your agents, not a SaaS subscription with
+                  hidden AI fees.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Why upgrade */}
           <div className="mt-20 border-t border-white/[0.06] pt-16">
-            <h2 className="mb-10 text-center text-2xl font-bold text-white">Why upgrade to Pro?</h2>
+            <div className="mb-10 flex items-baseline gap-3">
+              <h2 className="font-display text-2xl font-light tracking-tight text-white md:text-3xl">
+                Why upgrade to{" "}
+                <span className="font-display-italic text-[color:var(--cream)]">Pro</span>?
+              </h2>
+            </div>
             <div className="grid gap-6 sm:grid-cols-3">
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -332,8 +364,8 @@ function PricingPageContent() {
                 </div>
                 <h3 className="mb-2 font-medium text-white">Custom Subdomains</h3>
                 <p className="text-sm text-white/40">
-                  Brand your workspaces with custom URLs. <code>yourname.gitterm.dev</code> looks
-                  professional.
+                  Brand your workspaces with custom URLs.{" "}
+                  <code className="text-white/60">yourname.gitterm.dev</code> looks professional.
                 </p>
               </div>
             </div>
@@ -341,7 +373,9 @@ function PricingPageContent() {
 
           {/* Questions */}
           <div className="mt-24 border-t border-white/[0.06] pt-16 text-center">
-            <h2 className="mb-3 text-2xl font-bold text-white">Questions?</h2>
+            <h2 className="mb-3 font-display text-2xl font-light tracking-tight text-white">
+              Questions?
+            </h2>
             <p className="mb-8 text-sm text-white/40">
               Need help choosing the right plan? Reach out on Twitter.
             </p>
@@ -356,7 +390,7 @@ function PricingPageContent() {
               </Link>
               <Link
                 href="/dashboard"
-                className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/85"
+                className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-[0.16em] text-primary-foreground transition-colors hover:bg-primary/85"
               >
                 Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -375,7 +409,7 @@ export default function PricingPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#09090b]">
+        <div className="flex min-h-screen items-center justify-center bg-background">
           <Terminal className="h-8 w-8 animate-pulse text-primary" />
         </div>
       }

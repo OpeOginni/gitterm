@@ -11,9 +11,9 @@ function LoginContent() {
   const redirect = searchParams.get("redirect");
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#09090b] landing-grid dark">
+    <div className="flex min-h-screen flex-col bg-background landing-grid dark">
       {/* Minimal header */}
-      <header className="border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
+      <header className="border-b border-white/[0.06] bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
           <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
@@ -70,7 +70,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#09090b]">
+        <div className="flex min-h-screen items-center justify-center bg-background">
           <Terminal className="h-8 w-8 animate-pulse text-primary" />
         </div>
       }

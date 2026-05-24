@@ -87,6 +87,8 @@ const baseSchema = z
     ENABLE_USAGE_METERING: boolWithDefault(false),
     ENABLE_EMAIL_AUTH: boolWithDefault(true),
     ENABLE_GITHUB_AUTH: boolWithDefault(false),
+    ENABLE_ANON_TRY: boolWithDefault(false),
+    ANON_IP_HASH_SALT: optional, // Salt for hashing client IPs before storing them
     // ... keep the z.object({ ... }) as-is ...
   })
   .superRefine((data, ctx) => {
@@ -182,6 +184,8 @@ const env = parseEnv(baseSchema);
 export default env;
 
 // Helpers
+export const isAnonTryEnabled = () => env.ENABLE_ANON_TRY;
+
 export const isManaged = () => env.DEPLOYMENT_MODE === "managed";
 export const isSelfHosted = () => env.DEPLOYMENT_MODE === "self-hosted";
 export const isBillingEnabled = () => isManaged() && !!env.POLAR_ACCESS_TOKEN;

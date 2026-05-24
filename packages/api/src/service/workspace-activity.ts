@@ -10,7 +10,10 @@ function logActivityCacheError(action: string, error: unknown) {
   }
 }
 
-export async function recordWorkspaceActivity(workspaceId: string, now = new Date()): Promise<void> {
+export async function recordWorkspaceActivity(
+  workspaceId: string,
+  now = new Date(),
+): Promise<void> {
   const timestamp = now.toISOString();
 
   try {
@@ -23,7 +26,12 @@ export async function recordWorkspaceActivity(workspaceId: string, now = new Dat
       "NX",
     );
 
-    await redis.set(RedisKeys.workspaceLastActive(workspaceId), timestamp, "EX", LAST_ACTIVE_TTL_SECONDS);
+    await redis.set(
+      RedisKeys.workspaceLastActive(workspaceId),
+      timestamp,
+      "EX",
+      LAST_ACTIVE_TTL_SECONDS,
+    );
 
     if (shouldPersist === "OK") {
       await updateWorkspaceByIdAndInvalidate(workspaceId, {
@@ -50,10 +58,9 @@ export async function getWorkspaceLastActivity(workspaceId: string): Promise<Dat
   }
 }
 
-export async function filterIdleWorkspacesByRedisActivity<T extends { id: string; lastActiveAt: Date | null }>(
-  workspaces: T[],
-  idleThreshold: Date,
-): Promise<T[]> {
+export async function filterIdleWorkspacesByRedisActivity<
+  T extends { id: string; lastActiveAt: Date | null },
+>(workspaces: T[], idleThreshold: Date): Promise<T[]> {
   if (workspaces.length === 0) return workspaces;
 
   try {

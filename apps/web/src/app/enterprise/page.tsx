@@ -4,14 +4,14 @@ import { EnterpriseContent } from "@/components/landing/enterprise/content";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Enterprise — GitTerm",
+  title: "GitTerm · Enterprise",
   description:
-    "We'll help you set up GitTerm on your own infrastructure. Reach out and we'll get you running.",
+    "Bring agentic coding inside your VPC. Your cloud, your keys, your policies. Self-hosted GitTerm for teams.",
 };
 
 export default function EnterprisePage() {
   return (
-    <main className="min-h-screen bg-[#09090b] text-white dark landing-grid">
+    <main className="min-h-screen bg-background text-white dark landing-grid grain">
       <LandingHeader />
       <EnterpriseContent />
       <Footer />

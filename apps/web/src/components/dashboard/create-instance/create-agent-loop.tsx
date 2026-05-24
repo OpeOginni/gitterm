@@ -27,6 +27,7 @@ import {
   type Branch,
   type CreateInstanceResult,
 } from "./types";
+import { track } from "@/lib/analytics";
 
 interface CreateAgentLoopProps {
   onSuccess: (result: CreateInstanceResult) => void;
@@ -223,6 +224,12 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
       onSuccess: () => {
         toast.success("Agentic Loop created! Go to Agent Loops to start your first run.");
         queryClient.invalidateQueries(trpc.agentLoop.listLoops.queryOptions());
+        track("agent_loop_created", {
+          provider: selectedProvider?.name,
+          model: selectedModel?.name,
+          run_mode: runMode,
+          iterations: runMode === "automatic" ? iterations : undefined,
+        });
         onSuccess({ type: "agent-loop" });
       },
       onError: (error) => {

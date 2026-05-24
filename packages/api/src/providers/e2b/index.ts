@@ -350,6 +350,17 @@ export class E2BProvider implements ComputeProvider {
     return (await this.provisionWorkspace(config, "pause", false)) as WorkspaceInfo;
   }
 
+  /**
+   * Spawn an ephemeral, throwaway sandbox for the anonymous "try gitterm"
+   * homepage flow. Identical to `createWorkspace` but uses `onTimeout: "kill"`
+   * so the sandbox is destroyed (not paused) when the 10-minute lease
+   * expires. There's no signed-in user to ever resume an anon workspace, so
+   * pausing would just leave a zombie.
+   */
+  async createEphemeralAnonWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
+    return (await this.provisionWorkspace(config, "kill", false)) as WorkspaceInfo;
+  }
+
   async createPersistentWorkspace(
     config: PersistentWorkspaceConfig,
   ): Promise<PersistentWorkspaceInfo> {

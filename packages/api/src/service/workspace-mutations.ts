@@ -50,19 +50,18 @@ export async function updateWorkspaceByIdReturningAndInvalidate(
   return updatedWorkspaces;
 }
 
-export async function updateWorkspaceStatusAndInvalidate(where: SQL | undefined, set: WorkspaceUpdate) {
-  const updatedWorkspaces = await db
-    .update(workspace)
-    .set(set)
-    .where(where)
-    .returning({
-      id: workspace.id,
-      status: workspace.status,
-      updatedAt: workspace.updatedAt,
-      userId: workspace.userId,
-      workspaceDomain: workspace.domain,
-      subdomain: workspace.subdomain,
-    });
+export async function updateWorkspaceStatusAndInvalidate(
+  where: SQL | undefined,
+  set: WorkspaceUpdate,
+) {
+  const updatedWorkspaces = await db.update(workspace).set(set).where(where).returning({
+    id: workspace.id,
+    status: workspace.status,
+    updatedAt: workspace.updatedAt,
+    userId: workspace.userId,
+    workspaceDomain: workspace.domain,
+    subdomain: workspace.subdomain,
+  });
 
   await invalidateUpdatedWorkspaces(updatedWorkspaces);
   return updatedWorkspaces satisfies WorkspaceStatusUpdateResult[];

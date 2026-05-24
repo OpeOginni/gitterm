@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,7 @@ import {
 import CodeMirror from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { useTheme } from "next-themes";
+import { track } from "@/lib/analytics";
 
 type AuthType = "api_key" | "oauth";
 
@@ -214,6 +215,7 @@ export function ModelCredentialsSection() {
   const storeApiKeyMutation = useMutation(
     trpc.modelCredentials.storeApiKey.mutationOptions({
       onSuccess: () => {
+        track("api_key_saved", { provider: selectedProvider?.name, auth_type: "api_key" });
         toast.success("API key saved securely");
         setAddDialogOpen(false);
         invalidateCredentials();
@@ -227,6 +229,7 @@ export function ModelCredentialsSection() {
   const storeOAuthTokensMutation = useMutation(
     trpc.modelCredentials.storeOAuthTokens.mutationOptions({
       onSuccess: () => {
+        track("api_key_saved", { provider: selectedProvider?.name, auth_type: "oauth_tokens" });
         toast.success("OpenAI Codex tokens saved successfully");
         setAddDialogOpen(false);
         invalidateCredentials();
@@ -312,6 +315,7 @@ export function ModelCredentialsSection() {
   const completeOAuthMutation = useMutation(
     trpc.modelCredentials.completeOAuth.mutationOptions({
       onSuccess: () => {
+        track("api_key_saved", { provider: selectedProvider?.name, auth_type: "oauth" });
         toast.success("GitHub Copilot connected successfully");
         setAddDialogOpen(false);
         invalidateCredentials();
@@ -479,415 +483,405 @@ export function ModelCredentialsSection() {
     initiateOAuthMutation.isPending ||
     completeOAuthMutation.isPending;
 
-  return (
-    <Card className="mb-4 border-border">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Key className="h-5 w-5 text-muted-foreground" />
-            <CardTitle>Model Credentials</CardTitle>
+  const addCredentialDialog = (
+    <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]">
+          <Plus className="h-3.5 w-3.5" />
+          Add credential
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[600px] sm:min-h-[560px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {selectedProvider ? (
+              <Image
+                src={getProviderLogo(selectedProvider.name)}
+                alt={selectedProvider.displayName}
+                width={20}
+                height={20}
+                className="h-5 w-5"
+              />
+            ) : (
+              <Shield className="h-5 w-5" />
+            )}
+            {selectedProvider
+              ? `Add ${selectedProvider.displayName} Credential`
+              : "Add Model Credential"}
+          </DialogTitle>
+          <DialogDescription>
+            {selectedProvider?.authType === "oauth" && isCodexProvider
+              ? "Paste your auth.json tokens from the OpenCode CLI."
+              : selectedProvider?.authType === "oauth"
+                ? "Connect via GitHub device code flow."
+                : "Store an encrypted API key for automated agent runs."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-5 py-4">
+          {/* Provider Selection -- horizontal scrollable chips */}
+          <div className="grid gap-2.5">
+            <Label className="text-sm font-medium">Provider</Label>
+            <div className="flex flex-wrap gap-2">
+              {[...providers]
+                .sort((a, b) => {
+                  if (a.isRecommended && !b.isRecommended) return -1;
+                  if (!a.isRecommended && b.isRecommended) return 1;
+                  return a.displayName.localeCompare(b.displayName);
+                })
+                .map((provider) => {
+                  const isSelected = selectedProviderId === provider.id;
+                  return (
+                    <button
+                      key={provider.id}
+                      type="button"
+                      onClick={() => setSelectedProviderId(provider.id)}
+                      disabled={oauthStep !== "idle"}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                        isSelected
+                          ? "border-primary/60 bg-primary/15 text-foreground ring-1 ring-primary/25"
+                          : "border-white/[0.08] bg-white/[0.05] text-white/75 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <Image
+                        src={getProviderLogo(provider.name)}
+                        alt={provider.displayName}
+                        width={16}
+                        height={16}
+                        className="h-4 w-4"
+                      />
+                      {provider.displayName}
+                      {provider.isRecommended && (
+                        <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                          Recommended
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
           </div>
-          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Credential
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {selectedProvider ? (
-                    <Image
-                      src={getProviderLogo(selectedProvider.name)}
-                      alt={selectedProvider.displayName}
-                      width={20}
-                      height={20}
-                      className="h-5 w-5"
-                    />
-                  ) : (
-                    <Shield className="h-5 w-5" />
-                  )}
-                  {selectedProvider
-                    ? `Add ${selectedProvider.displayName} Credential`
-                    : "Add Model Credential"}
-                </DialogTitle>
-                <DialogDescription>
-                  {selectedProvider?.authType === "oauth" && isCodexProvider
-                    ? "Paste your auth.json tokens from the OpenCode CLI."
-                    : selectedProvider?.authType === "oauth"
-                      ? "Connect via GitHub device code flow."
-                      : "Store an encrypted API key for automated agent runs."}
-                </DialogDescription>
-              </DialogHeader>
 
-              <div className="grid gap-5 py-4">
-                {/* Provider Selection -- horizontal scrollable chips */}
-                <div className="grid gap-2.5">
-                  <Label className="text-sm font-medium">Provider</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {[...providers]
-                      .sort((a, b) => {
-                        if (a.isRecommended && !b.isRecommended) return -1;
-                        if (!a.isRecommended && b.isRecommended) return 1;
-                        return a.displayName.localeCompare(b.displayName);
-                      })
-                      .map((provider) => {
-                        const isSelected = selectedProviderId === provider.id;
-                        return (
-                          <button
-                            key={provider.id}
-                            type="button"
-                            onClick={() => setSelectedProviderId(provider.id)}
-                            disabled={oauthStep !== "idle"}
-                            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
-                              isSelected
-                                ? "border-primary/60 bg-primary/8 text-foreground ring-1 ring-primary/20"
-                                : "border-border/40 bg-secondary/20 text-muted-foreground hover:border-border/70 hover:bg-secondary/40 hover:text-foreground"
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
-                          >
-                            <Image
-                              src={getProviderLogo(provider.name)}
-                              alt={provider.displayName}
-                              width={16}
-                              height={16}
-                              className="h-4 w-4"
-                            />
-                            {provider.displayName}
-                            {provider.isRecommended && (
-                              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                                Recommended
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
+          {/* Label (optional) */}
+          <div className="grid gap-2">
+            <Label className="text-sm font-medium">
+              Label <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="e.g., Work account, Personal"
+              disabled={oauthStep !== "idle"}
+            />
+          </div>
 
-                {/* Label (optional) */}
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium">
-                    Label <span className="font-normal text-muted-foreground">(optional)</span>
-                  </Label>
-                  <Input
-                    value={label}
-                    onChange={(e) => setLabel(e.target.value)}
-                    placeholder="e.g., Work account, Personal"
-                    disabled={oauthStep !== "idle"}
-                  />
-                </div>
+          {/* API Key Input (for api_key providers) */}
+          {selectedProvider?.authType === "api_key" && (
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium">API Key</Label>
+              <Input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-..."
+                className="font-mono"
+              />
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Shield className="h-3 w-3 shrink-0 text-green-500" />
+                Properly Encrypted at rest.
+              </p>
+            </div>
+          )}
 
-                {/* API Key Input (for api_key providers) */}
-                {selectedProvider?.authType === "api_key" && (
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">API Key</Label>
-                    <Input
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="sk-..."
-                      className="font-mono"
-                    />
-                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Shield className="h-3 w-3 shrink-0 text-green-500" />
-                      Properly Encrypted at rest.
-                    </p>
-                  </div>
-                )}
-
-                {/* Codex Auth - Paste auth.json */}
-                {selectedProvider?.authType === "oauth" && isCodexProvider && (
-                  <div className="grid gap-4">
-                    <div className="grid gap-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        How to get your tokens
-                      </p>
-                      <ol className="grid gap-1.5 text-[13px] text-muted-foreground">
-                        <li className="flex items-baseline gap-2">
-                          <span className="shrink-0 text-xs font-mono text-primary/60">1.</span>
-                          Run{" "}
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-foreground">
-                            opencode auth login
-                          </code>
-                        </li>
-                        <li className="flex items-baseline gap-2">
-                          <span className="shrink-0 text-xs font-mono text-primary/60">2.</span>
-                          Copy{" "}
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-foreground">
-                            ~/.local/share/opencode/auth.json
-                          </code>
-                        </li>
-                        <li className="flex items-baseline gap-2">
-                          <span className="shrink-0 text-xs font-mono text-primary/60">3.</span>
-                          Paste below
-                        </li>
-                      </ol>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label className="text-sm font-medium">auth.json</Label>
-                      <div className="rounded-lg border border-border/50 overflow-hidden">
-                        <CodeMirror
-                          value={authJsonInput}
-                          height="140px"
-                          extensions={[json()]}
-                          onChange={(value) => {
-                            setAuthJsonInput(value);
-                          }}
-                          theme={theme as "light" | "dark"}
-                          placeholder='{ "openai": { "type": "oauth", "refresh": "..." } }'
-                          basicSetup={{
-                            lineNumbers: true,
-                            foldGutter: false,
-                          }}
-                          className="text-sm"
-                        />
-                      </div>
-                      {authJsonError ? (
-                        <div className="flex items-center gap-1.5 text-xs text-red-500">
-                          <AlertCircle className="h-3.5 w-3.5" />
-                          {authJsonError}
-                        </div>
-                      ) : authJsonInput.trim() ? (
-                        <div className="flex items-center gap-1.5 text-xs text-green-500">
-                          <Check className="h-3.5 w-3.5" />
-                          Valid -- tokens found
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
-
-                {/* GitHub Copilot OAuth Flow (Device Code) */}
-                {selectedProvider?.authType === "oauth" && !isCodexProvider && (
-                  <div className="grid gap-4">
-                    {oauthStep === "idle" && (
-                      <div className="flex flex-col items-center gap-4 rounded-lg border border-border/50 bg-secondary/20 p-8">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                          <ExternalLink className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm font-medium">Connect with GitHub</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Authorize Copilot access via device code flow.
-                          </p>
-                        </div>
-                        <Button
-                          onClick={handleStartOAuth}
-                          disabled={initiateOAuthMutation.isPending}
-                          className="gap-2"
-                        >
-                          {initiateOAuthMutation.isPending ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Starting...
-                            </>
-                          ) : (
-                            "Start Authorization"
-                          )}
-                        </Button>
-                      </div>
-                    )}
-
-                    {oauthStep === "pending" && deviceCode && (
-                      <div className="flex flex-col items-center gap-5 rounded-lg border border-border/50 bg-secondary/20 p-8">
-                        <p className="text-sm text-muted-foreground">
-                          Open the link and enter this code:
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <code className="rounded-lg bg-muted px-5 py-3 text-2xl font-mono font-bold tracking-[0.2em]">
-                            {deviceCode.userCode}
-                          </code>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleCopyCode}
-                            className="h-8 w-8"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                        <a
-                          href={deviceCode.verificationUri}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-                        >
-                          {deviceCode.verificationUri}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                        <Button onClick={handleStartPolling} className="gap-2">
-                          <Check className="h-4 w-4" />
-                          I&apos;ve entered the code
-                        </Button>
-                      </div>
-                    )}
-
-                    {oauthStep === "polling" && (
-                      <div className="flex flex-col items-center gap-4 rounded-lg border border-border/50 bg-secondary/20 p-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                        <p className="text-sm text-muted-foreground">
-                          Waiting for authorization...
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
+          {/* Codex Auth - Paste auth.json */}
+          {selectedProvider?.authType === "oauth" && isCodexProvider && (
+            <div className="grid gap-3">
+              <div className="rounded-lg bg-input/40 px-3.5 py-2.5">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-white/55">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
+                    How to
+                  </span>
+                  Run
+                  <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-white/85">
+                    opencode auth login
+                  </code>
+                  then copy
+                  <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-white/85">
+                    ~/.local/share/opencode/auth.json
+                  </code>
+                  below.
+                </p>
               </div>
 
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setAddDialogOpen(false)}
-                  className="border-border/50"
-                >
-                  Cancel
-                </Button>
-                {selectedProvider?.authType === "api_key" && (
-                  <Button
-                    onClick={handleSubmitApiKey}
-                    disabled={isSubmitting || !apiKey.trim()}
-                    className="gap-2"
-                  >
-                    {storeApiKeyMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      "Save Key"
-                    )}
-                  </Button>
-                )}
-                {selectedProvider?.authType === "oauth" && isCodexProvider && (
-                  <Button
-                    onClick={handleSubmitAuthJson}
-                    disabled={isSubmitting || !authJsonInput.trim() || !!authJsonError}
-                    className="gap-2"
-                  >
-                    {storeOAuthTokensMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      "Save Tokens"
-                    )}
-                  </Button>
-                )}
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-        <CardDescription>
-          Store API keys and OAuth credentials for AI model providers. Credentials are encrypted and
-          used for automated agent runs.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoadingCredentials || isLoadingProviders ? (
-          <div className="space-y-3">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-          </div>
-        ) : credentials.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Key className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p className="text-sm">No credentials saved</p>
-            <p className="text-xs mt-1">Add your first credential to enable automated agent runs</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {credentials.map((credential) => {
-              const isRecommended = isProviderRecommended(credential.providerName, providers);
-              return (
-                <div
-                  key={credential.id}
-                  className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                    credential.isActive
-                      ? isRecommended
-                        ? "border-l-2 border-l-primary border-border/50 bg-secondary/20 hover:bg-secondary/30"
-                        : "border-border/50 bg-secondary/20 hover:bg-secondary/30"
-                      : "border-border/30 bg-muted/20 opacity-60"
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <Image
-                        src={getProviderLogo(credential.providerName)}
-                        alt={credential.providerDisplayName}
-                        width={20}
-                        height={20}
-                        className="h-5 w-5"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{credential.providerDisplayName}</p>
-                        {isRecommended && credential.isActive && (
-                          <span className="text-xs text-muted-foreground">Recommended</span>
-                        )}
-                        {credential.label && (
-                          <Badge variant="outline" className="text-xs">
-                            {credential.label}
-                          </Badge>
-                        )}
-                        {!credential.isActive && (
-                          <Badge variant="destructive" className="text-xs">
-                            Revoked
-                          </Badge>
-                        )}
-                        {credential.authType === "oauth" && (
-                          <span className="text-xs text-muted-foreground/70">OAuth</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="font-mono">...{credential.keyHash.slice(-8)}</span>
-                        {credential.lastUsedAt && (
-                          <span>
-                            Last used{" "}
-                            {new Date(credential.lastUsedAt).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="border-border/90">
-                      {credential.isActive && (
-                        <DropdownMenuItem
-                          onClick={() =>
-                            revokeCredentialMutation.mutate({ credentialId: credential.id })
-                          }
-                        >
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Revoke
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        onClick={() => handleDeleteClick(credential.id)}
-                        className="text-red-600 focus:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+              <div className="grid gap-2">
+                <Label className="text-sm font-medium">auth.json</Label>
+                <div className="rounded-lg border border-border/50 overflow-hidden">
+                  <CodeMirror
+                    value={authJsonInput}
+                    height="120px"
+                    extensions={[json()]}
+                    onChange={(value) => {
+                      setAuthJsonInput(value);
+                    }}
+                    theme={theme as "light" | "dark"}
+                    placeholder='{ "openai": { "type": "oauth", "refresh": "..." } }'
+                    basicSetup={{
+                      lineNumbers: true,
+                      foldGutter: false,
+                    }}
+                    className="text-sm"
+                  />
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
+                {authJsonError ? (
+                  <div className="flex items-center gap-1.5 text-xs text-red-500">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {authJsonError}
+                  </div>
+                ) : authJsonInput.trim() ? (
+                  <div className="flex items-center gap-1.5 text-xs text-green-500">
+                    <Check className="h-3.5 w-3.5" />
+                    Valid tokens found
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* GitHub Copilot OAuth Flow (Device Code) */}
+          {selectedProvider?.authType === "oauth" && !isCodexProvider && (
+            <div className="grid gap-4">
+              {oauthStep === "idle" && (
+                <div className="flex flex-col items-center gap-4 rounded-lg border border-border/50 bg-secondary/20 p-8">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <ExternalLink className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium">Connect with GitHub</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Authorize Copilot access via device code flow.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleStartOAuth}
+                    disabled={initiateOAuthMutation.isPending}
+                    className="gap-2"
+                  >
+                    {initiateOAuthMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      "Start Authorization"
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {oauthStep === "pending" && deviceCode && (
+                <div className="flex flex-col items-center gap-5 rounded-lg border border-border/50 bg-secondary/20 p-8">
+                  <p className="text-sm text-muted-foreground">
+                    Open the link and enter this code:
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="rounded-lg bg-muted px-5 py-3 text-2xl font-mono font-bold tracking-[0.2em]">
+                      {deviceCode.userCode}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleCopyCode}
+                      className="h-8 w-8"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <a
+                    href={deviceCode.verificationUri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                  >
+                    {deviceCode.verificationUri}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <Button onClick={handleStartPolling} className="gap-2">
+                    <Check className="h-4 w-4" />
+                    I&apos;ve entered the code
+                  </Button>
+                </div>
+              )}
+
+              {oauthStep === "polling" && (
+                <div className="flex flex-col items-center gap-4 rounded-lg border border-border/50 bg-secondary/20 p-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">Waiting for authorization...</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setAddDialogOpen(false)}
+            className="border-border/50"
+          >
+            Cancel
+          </Button>
+          {selectedProvider?.authType === "api_key" && (
+            <Button
+              onClick={handleSubmitApiKey}
+              disabled={isSubmitting || !apiKey.trim()}
+              className="gap-2"
+            >
+              {storeApiKeyMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Key"
+              )}
+            </Button>
+          )}
+          {selectedProvider?.authType === "oauth" && isCodexProvider && (
+            <Button
+              onClick={handleSubmitAuthJson}
+              disabled={isSubmitting || !authJsonInput.trim() || !!authJsonError}
+              className="gap-2"
+            >
+              {storeOAuthTokensMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Tokens"
+              )}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  return (
+    <>
+      <SettingsSection
+        eyebrow="01 / Credentials"
+        icon={Key}
+        title="Model credentials"
+        description="Bring your own keys. We never resell AI access - credentials are encrypted at rest and only injected into your workspaces."
+        action={addCredentialDialog}
+      >
+        <SettingsSectionBody>
+          {isLoadingCredentials || isLoadingProviders ? (
+            <div className="space-y-2">
+              <Skeleton className="h-14 w-full bg-white/[0.04]" />
+              <Skeleton className="h-14 w-full bg-white/[0.04]" />
+            </div>
+          ) : credentials.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl bg-input/40 px-6 py-10 text-center">
+              <Key className="mb-3 h-8 w-8 text-white/25" />
+              <p className="text-sm text-white/65">No credentials saved</p>
+              <p className="mt-1 text-[12px] text-white/35">
+                Add your first key to unlock automated agent runs.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {credentials.map((credential) => {
+                const isRecommended = isProviderRecommended(credential.providerName, providers);
+                return (
+                  <div
+                    key={credential.id}
+                    className={`flex items-center justify-between gap-3 rounded-lg px-4 py-3 transition-colors ${
+                      credential.isActive
+                        ? isRecommended
+                          ? "border-l-2 border-l-primary bg-input/60 hover:bg-input"
+                          : "bg-input/60 hover:bg-input"
+                        : "bg-input/20 opacity-60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                        <Image
+                          src={getProviderLogo(credential.providerName)}
+                          alt={credential.providerDisplayName}
+                          width={20}
+                          height={20}
+                          className="h-5 w-5"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{credential.providerDisplayName}</p>
+                          {isRecommended && credential.isActive && (
+                            <span className="text-xs text-muted-foreground">Recommended</span>
+                          )}
+                          {credential.label && (
+                            <Badge variant="outline" className="text-xs">
+                              {credential.label}
+                            </Badge>
+                          )}
+                          {!credential.isActive && (
+                            <Badge variant="destructive" className="text-xs">
+                              Revoked
+                            </Badge>
+                          )}
+                          {credential.authType === "oauth" && (
+                            <span className="text-xs text-muted-foreground/70">OAuth</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span className="font-mono">...{credential.keyHash.slice(-8)}</span>
+                          {credential.lastUsedAt && (
+                            <span>
+                              Last used{" "}
+                              {new Date(credential.lastUsedAt).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="border-border/90">
+                        {credential.isActive && (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              revokeCredentialMutation.mutate({ credentialId: credential.id })
+                            }
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Revoke
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => handleDeleteClick(credential.id)}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </SettingsSectionBody>
+      </SettingsSection>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -924,6 +918,6 @@ export function ModelCredentialsSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </>
   );
 }

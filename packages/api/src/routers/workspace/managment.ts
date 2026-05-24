@@ -1137,7 +1137,7 @@ export const workspaceRouter = router({
             // AWS providers are region-scoped: each cloud_provider row represents
             // exactly one AWS region, set when the provider was created via
             // `aws.createRegionProvider`. The pinned region is the region row
-            // attached to this specific cloud_provider — NOT anything stored on
+            // attached to this specific cloud_provider - NOT anything stored on
             // the shared providerConfig blob (which only holds credentials).
             //
             // Reading region from providerConfig.defaultRegion would silently
@@ -1149,10 +1149,7 @@ export const workspaceRouter = router({
               .select()
               .from(region)
               .where(
-                and(
-                  eq(region.cloudProviderId, input.cloudProviderId),
-                  eq(region.isEnabled, true),
-                ),
+                and(eq(region.cloudProviderId, input.cloudProviderId), eq(region.isEnabled, true)),
               )
               .orderBy(asc(region.createdAt))
               .limit(1);
@@ -2124,31 +2121,34 @@ export const workspaceRouter = router({
           externalVolumeId,
         );
 
-          await updateWorkspaceRoutingAndInvalidate(
-            fetchedWorkspace.id,
-            {
-              externalInstanceId: "",
-              externalRunningDeploymentId: null,
-              upstreamUrl: null,
-              exposedPorts: null,
-              updatedAt: new Date(),
-            },
-            fetchedWorkspace.subdomain,
-          );
-        };
+        await updateWorkspaceRoutingAndInvalidate(
+          fetchedWorkspace.id,
+          {
+            externalInstanceId: "",
+            externalRunningDeploymentId: null,
+            upstreamUrl: null,
+            exposedPorts: null,
+            updatedAt: new Date(),
+          },
+          fetchedWorkspace.subdomain,
+        );
+      };
 
       if (!terminateInBackground) {
         await runTerminationCleanup();
       }
 
-      const [updatedWorkspace] = await updateWorkspaceByIdReturningAndInvalidate(input.workspaceId, {
+      const [updatedWorkspace] = await updateWorkspaceByIdReturningAndInvalidate(
+        input.workspaceId,
+        {
           status: "terminated",
           stoppedAt: terminatedAt,
           terminatedAt,
           exposedPorts: null,
           editorConnection: null,
           updatedAt: terminatedAt,
-        });
+        },
+      );
 
       await deleteAllWorkspaceRouteAccess(input.workspaceId);
 

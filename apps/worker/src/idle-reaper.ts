@@ -109,6 +109,30 @@ async function main() {
       );
     }
 
+    try {
+      console.log("[idle-reaper] Checking for anon try-gitterm stragglers...");
+      const stragglers = await internalClient.internal.getAnonStragglerWorkspaces.query();
+      if (stragglers.length === 0) {
+        console.log("[idle-reaper] No anon stragglers found");
+      } else {
+        console.log(`[idle-reaper] Found ${stragglers.length} anon straggler workspace(s)`);
+        for (const ws of stragglers) {
+          try {
+            console.log(`[idle-reaper] Terminating anon straggler ${ws.id}...`);
+            await internalClient.internal.terminateWorkspaceInternal.mutate({
+              workspaceId: ws.id,
+            });
+            console.log(`[idle-reaper] Anon workspace ${ws.id} terminated`);
+            totalStopped++;
+          } catch (error) {
+            console.error(`[idle-reaper] Failed to terminate anon straggler ${ws.id}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[idle-reaper] Anon straggler check failed:", error);
+    }
+
     // ========================================================================
     // 3. Terminate workspaces that have not been reached or used in 4 days
     // ========================================================================

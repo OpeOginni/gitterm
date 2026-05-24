@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and, ne } from "@gitterm/db";
-import {
-  cloudProvider,
-  image,
-  providerAgentImage,
-  region,
-} from "@gitterm/db/schema/cloud";
+import { cloudProvider, image, providerAgentImage, region } from "@gitterm/db/schema/cloud";
 import { providerConfig, providerType } from "@gitterm/db/schema/provider-config";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { adminProcedure, router } from "../..";
@@ -194,7 +189,7 @@ export const awsRouter = router({
       // providerAgentImage is keyed by cloudProviderId, so every AWS region
       // provider needs its own (agentType -> image) assignments to be deployable.
       // We pick the set of images that carry AWS-specific provider metadata
-      // (e.g. `providerMetadata.aws.cpu/memory/containerPort/...`) — those are
+      // (e.g. `providerMetadata.aws.cpu/memory/containerPort/...`) - those are
       // the images intended to run on AWS infrastructure.
       const allImages = await db.query.image.findMany({
         where: eq(image.isEnabled, true),
@@ -205,7 +200,7 @@ export const awsRouter = router({
 
       if (awsImages.length === 0) {
         console.warn(
-          `[aws.createRegionProvider] No AWS-compatible images found. Provider "${created.name}" was created but has no image assignments — workspaces cannot be deployed against it until an image is assigned via the admin panel.`,
+          `[aws.createRegionProvider] No AWS-compatible images found. Provider "${created.name}" was created but has no image assignments - workspaces cannot be deployed against it until an image is assigned via the admin panel.`,
         );
       } else {
         // Use a single (agentType, image) per agentType to avoid violating the

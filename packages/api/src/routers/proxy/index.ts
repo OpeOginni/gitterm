@@ -18,6 +18,7 @@ import {
 } from "../../service/proxy-cache";
 import { recordWorkspaceActivity } from "../../service/workspace-activity";
 import { extractWorkspaceSubdomain } from "../../utils/routing";
+import { readAnonCookie, verifyAnonAccessToken } from "../../service/anon/anon-access-token";
 
 const DEBUG_PROXY_RESOLVE = process.env.DEBUG_PROXY_RESOLVE === "true";
 
@@ -426,6 +427,48 @@ export const proxyResolverRouter = async (c: Context) => {
       status: ws.status,
       userId: ws.userId,
     });
+
+    // Visitors of the homepage anon flow get a short-lived HMAC-signed
+    // cookie (see `service/anon/anon-access-token.ts`) scoped to a single
+    // workspace subdomain. If present and valid we authorize without
+    // requiring a logged-in session - and skip OpenCode's basic-auth as
+    // well, since we trust the cookie's HMAC + 10-min exp.
+    const anonCookieRaw = readAnonCookie(c.req.header("Cookie"));
+    if (anonCookieRaw) {
+      const verified = verifyAnonAccessToken(anonCookieRaw, ws.subdomain ?? "");
+      if (verified && verified.workspaceId === ws.id) {
+        if (!ws.upstreamUrl) {
+          return htmlError(c, "error", 500);
+        }
+        let upstreamUrl = new URL(ws.upstreamUrl);
+        let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
+        if (extractedPort && portUpstream) {
+          const portUrl = new URL(portUpstream);
+          port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
+          upstreamUrl = portUrl;
+        }
+        debugProxyResolve("[PROXY-RESOLVE] Anon cookie authorized:", {
+          subdomain: ws.subdomain,
+          workspaceId: ws.id,
+        });
+        await recordWorkspaceActivity(ws.id);
+        return c.text(
+          "OK",
+          200,
+          buildProxyResolveHeaders(
+            {
+              "X-Upstream-URL": upstreamUrl.toString(),
+              "X-Container-Host": upstreamUrl.hostname,
+              "X-Container-Port": port,
+              "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+              "X-Hosting-Type": ws.hostingType,
+              "X-Anon-Access": "1",
+            },
+            upstreamAccessHeaders,
+          ),
+        );
+      }
+    }
 
     // Server-only workspaces skip auth
     if (ws.serverOnly) {

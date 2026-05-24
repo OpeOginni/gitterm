@@ -11,6 +11,7 @@ import {
 import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/integrations";
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
+import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
@@ -357,6 +358,38 @@ export const internalRouter = router({
       ...sweepResult,
     };
   }),
+  /**
+   * Find anonymous "try gitterm" workspaces that have outlived their 10-min
+   * E2B lease (with a 2-minute grace buffer for webhook delivery). These are
+   * always still in `running` state in the DB if E2B's webhook was delayed
+   * or lost. The reaper terminates them as a safety net.
+   */
+  getAnonStragglerWorkspaces: internalProcedure.query(async () => {
+    // 12 minutes ago: 10-min lease + 2-min grace
+    const cutoff = new Date(Date.now() - 12 * 60 * 1000);
+    const stragglers = await db
+      .select({
+        id: workspace.id,
+        externalInstanceId: workspace.externalInstanceId,
+        userId: workspace.userId,
+        cloudProviderId: workspace.cloudProviderId,
+        startedAt: workspace.startedAt,
+      })
+      .from(workspace)
+      .innerJoin(user, eq(workspace.userId, user.id))
+      .where(
+        and(
+          eq(workspace.status, "running"),
+          eq(workspace.persistent, false),
+          lt(workspace.startedAt, cutoff),
+          // Synthetic anon users live on this domain - see service/anon/anon-user.ts
+          sql`${user.email} LIKE ${"%@anon.gitterm.local"}`,
+        ),
+      );
+
+    return stragglers;
+  }),
+
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
     const fourDays = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000); // 4 Days ago
     const longTermInactiveWorkspaces = await db
@@ -664,7 +697,10 @@ export const internalRouter = router({
         }
 
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
-          and(eq(workspace.cloudProviderId, railwayProvider.id), eq(workspace.externalInstanceId, serviceId)),
+          and(
+            eq(workspace.cloudProviderId, railwayProvider.id),
+            eq(workspace.externalInstanceId, serviceId),
+          ),
           {
             status: "stopped",
             updatedAt: new Date(input.timestamp),
@@ -795,7 +831,10 @@ export const internalRouter = router({
         }
 
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
-          and(eq(workspace.cloudProviderId, e2bProvider.id), eq(workspace.externalInstanceId, serviceId)),
+          and(
+            eq(workspace.cloudProviderId, e2bProvider.id),
+            eq(workspace.externalInstanceId, serviceId),
+          ),
           {
             status: "terminated",
             updatedAt: new Date(input.timestamp),
@@ -1286,8 +1325,6 @@ export const internalRouter = router({
             runNumber: run.runNumber,
             error: input.error,
           });
-
-          // TODO: Send email notification about failure
 
           return {
             success: true,

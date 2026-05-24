@@ -10,6 +10,8 @@
   --card-foreground: oklch(0.08 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.08 0 0);
+  --surface-2: oklch(0.96 0 0);
+  --surface-2-foreground: oklch(0.08 0 0);
   --primary: oklch(0.08 0 0);
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.95 0 0);
@@ -59,12 +61,21 @@
 }
 
 .dark {
+  /* ── Surface elevation scale ──────────────────────────────────────────
+   * Use the Tailwind utilities below - never hardcode hex on the page:
+   *   bg-background  → page surface (darkest)
+   *   bg-card        → elevated cards / terminal previews
+   *   bg-popover     → dropdowns, header backdrops
+   *   bg-surface-2   → modals, select content, sheets (highest)
+   */
   --background: #09090b;
   --foreground: rgba(255 255 255 / 0.9);
-  --card: #101013;
+  --card: #0c0c10;
   --card-foreground: rgba(255 255 255 / 0.85);
-  --popover: #111114;
+  --popover: #0e0e11;
   --popover-foreground: rgba(255 255 255 / 0.85);
+  --surface-2: #151518;
+  --surface-2-foreground: rgba(255 255 255 / 0.9);
   --primary: #c8a44e;
   --primary-foreground: #09090b;
   --secondary: rgba(255 255 255 / 0.06);
@@ -118,6 +129,8 @@
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+  --color-surface-2: var(--surface-2);
+  --color-surface-2-foreground: var(--surface-2-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -164,8 +177,186 @@
   --shadow-2xl: var(--shadow-2xl);
 }
 
-/* Landing page dot grid texture */
+/* ─── Landing: editorial terminal aesthetic ─────────────────── */
+
+/* Dot grid - solid ~2px dots so they survive font-smoothing on retina, with
+ * a second sparser layer at higher contrast for atmospheric depth.
+ *
+ * `!important` is intentional: pages also set `bg-[#09090b]` via Tailwind
+ * utilities and v4's cascade can outrank our `background-image` otherwise,
+ * which would erase the dots.
+ */
 .landing-grid {
-  background-image: radial-gradient(circle, rgba(255 255 255 / 0.04) 1px, transparent 1px);
-  background-size: 32px 32px;
+  background-color: var(--background) !important;
+  background-image:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.09) 1.2px, transparent 1.5px),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.035) 1px, transparent 1.3px) !important;
+  background-size:
+    140px 140px,
+    32px 32px !important;
+  background-position:
+    0 0,
+    16px 16px !important;
+  background-repeat: repeat, repeat !important;
+}
+
+/* Hairline editorial rule */
+.hairline {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255 255 255 / 0.12) 12%,
+    rgba(255 255 255 / 0.12) 88%,
+    transparent 100%
+  );
+}
+
+/* SVG noise grain - applied as a fixed overlay via .grain::after */
+.grain {
+  position: relative;
+}
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Faint scanlines on a target element (use .scanlines on a positioned el) */
+.scanlines {
+  position: relative;
+}
+.scanlines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255 255 255 / 0.025) 0px,
+    rgba(255 255 255 / 0.025) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: overlay;
+  border-radius: inherit;
+}
+
+/* Display serif utility - Fraunces, narrow tracking, optical size large */
+.font-display {
+  font-family: var(--font-serif), ui-serif, Georgia, serif;
+  font-variation-settings:
+    "opsz" 144,
+    "SOFT" 30;
+  letter-spacing: -0.025em;
+}
+
+.font-display-italic {
+  font-family: var(--font-serif), ui-serif, Georgia, serif;
+  font-style: italic;
+  font-variation-settings:
+    "opsz" 144,
+    "SOFT" 80;
+  letter-spacing: -0.015em;
+}
+
+/* Cream accent for serif italic flourishes */
+:root {
+  --cream: #f3e7c9;
+  --ink: #0a0a0c;
+}
+
+/* Animated terminal caret */
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.caret {
+  display: inline-block;
+  width: 0.55ch;
+  height: 1em;
+  background: currentColor;
+  vertical-align: -0.1em;
+  margin-left: 1px;
+  animation: blink 1s steps(1) infinite;
+}
+
+/* Marquee for logo strip */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  animation: marquee 38s linear infinite;
+  width: max-content;
+}
+
+/* Rise-in stagger for hero reveals */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: rise 0.9s cubic-bezier(0.2, 0.65, 0.2, 1) both;
+}
+
+@keyframes cta-arrow-nudge {
+  0%,
+  100% {
+    transform: translateX(-2px);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+}
+.cta-arrow-nudge {
+  animation: cta-arrow-nudge 1.15s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-arrow-nudge {
+    animation: none;
+  }
+}
+
+/* Vertical mono labels (editorial side-marks) */
+.vlabel {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(255 255 255 / 0.3);
+}
+
+/* Editorial number marker, e.g. "GT/01" */
+.marker {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255 255 255 / 0.35);
 }

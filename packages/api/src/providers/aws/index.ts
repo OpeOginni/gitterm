@@ -1479,7 +1479,10 @@ export class AwsProvider implements ComputeProvider {
     );
   }
 
-  async sweepOrphanedResources(activeWorkspaceIds: string[], region?: string): Promise<{
+  async sweepOrphanedResources(
+    activeWorkspaceIds: string[],
+    region?: string,
+  ): Promise<{
     servicesDeleted: number;
     taskDefinitionsDeregistered: number;
     rulesDeleted: number;

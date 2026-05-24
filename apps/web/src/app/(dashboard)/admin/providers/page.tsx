@@ -200,7 +200,12 @@ export default function ProvidersPage() {
       >
         <div className="flex gap-2">
           <Button asChild variant="outline">
-            <Link href={"/admin" as Route} className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground">Back to Admin</Link>
+            <Link
+              href={"/admin" as Route}
+              className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            >
+              Back to Admin
+            </Link>
           </Button>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
@@ -236,9 +241,7 @@ export default function ProvidersPage() {
                     id="provider-key"
                     value={newProviderKey}
                     onChange={(e) =>
-                      setNewProviderKey(
-                        e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
-                      )
+                      setNewProviderKey(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))
                     }
                     placeholder="e.g., railway"
                     className="font-mono text-xs"
@@ -293,12 +296,12 @@ export default function ProvidersPage() {
           <ProvidersPageSkeleton />
         ) : (
           <ul className="space-y-2">
-            {/* AWS — expandable cluster row */}
+            {/* AWS - expandable cluster row */}
             <li>
               <AwsProviderSection awsProviders={groupedProviders.awsProviders} />
             </li>
 
-            {/* Other providers — flat rows */}
+            {/* Other providers - flat rows */}
             {groupedProviders.others.map((provider) => (
               <li key={provider.id}>
                 <Link
@@ -376,7 +379,6 @@ export default function ProvidersPage() {
           </ul>
         )}
       </div>
-
     </DashboardShell>
   );
 }
