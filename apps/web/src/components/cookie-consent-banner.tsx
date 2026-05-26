@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  *   2. the user has not yet made a choice.
  *
  * If analytics keys are not configured (e.g. self-hosted) the banner
- * never appears — there's nothing to consent to.
+ * never appears because there's nothing to consent to.
  */
 export function CookieConsentBanner() {
   const [visible, setVisible] = useState(false);
@@ -79,7 +79,7 @@ export function CookieConsentBanner() {
           </div>
 
           <p className="mt-1.5 text-sm text-white/75">
-            We use cookies to keep you signed in and — with your permission — anonymous
+            We use cookies to keep you signed in and, with your permission, anonymous
             product analytics to improve GitTerm. We don't sell your data or run ads.
           </p>
 

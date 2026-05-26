@@ -3,7 +3,7 @@ import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 
 export const metadata: Metadata = {
-  title: "Terms of Service · GitTerm",
+  title: "GitTerm· Terms of Service",
   description:
     "The terms that govern your use of the GitTerm hosted service.",
 };

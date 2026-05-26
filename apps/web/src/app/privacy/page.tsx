@@ -3,9 +3,9 @@ import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy · GitTerm",
+  title: "GitTerm · Privacy Policy ",
   description:
-    "How GitTerm collects, uses, and protects your data — including cookies, analytics, and authentication.",
+    "How GitTerm collects, uses, and protects your data, including cookies, analytics, and authentication.",
 };
 
 const LAST_UPDATED = "May 26, 2026";
@@ -31,7 +31,7 @@ export default function PrivacyPage() {
               This Privacy Policy explains what information GitTerm ("GitTerm", "we",
               "us") collects when you use the hosted GitTerm service at gitterm.dev,
               how we use it, and the choices you have. If you self-host GitTerm,
-              this policy does not apply — you are the data controller for your own
+              this policy does not apply. You are the data controller for your own
               instance.
             </p>
           </section>
@@ -66,8 +66,8 @@ export default function PrivacyPage() {
               <li>
                 <strong className="text-white/90">Billing data.</strong> If you
                 subscribe to a paid plan, payment is processed by our payments
-                provider. We receive a customer identifier and subscription status —
-                we do not receive or store your full card details.
+                provider. We receive a customer identifier and subscription status.
+                We do not receive or store your full card details.
               </li>
               <li>
                 <strong className="text-white/90">Product analytics.</strong> If you
@@ -93,8 +93,8 @@ export default function PrivacyPage() {
                 security).
               </li>
               <li>
-                To improve the product through aggregate, anonymous usage analytics —
-                only with your consent.
+                To improve the product through aggregate, anonymous usage analytics,
+                but only with your consent.
               </li>
               <li>To comply with legal obligations.</li>
             </ul>
@@ -174,7 +174,7 @@ export default function PrivacyPage() {
               We share data only with vetted processors who help us run GitTerm.
               These include cloud hosting and compute providers, our database and
               cache providers, our authentication system, our payments processor,
-              our email provider, and — if you consent — our analytics provider.
+              our email provider, and our analytics provider if you consent.
               Each processor is bound by a data processing agreement and may only
               use your data to provide services to us.
             </p>
@@ -231,7 +231,7 @@ export default function PrivacyPage() {
             <p>
               We use industry-standard measures including TLS in transit,
               encryption at rest where supported, scoped access controls, and
-              regular dependency updates. No system is perfectly secure — please
+              regular dependency updates. No system is perfectly secure. Please
               report suspected vulnerabilities to{" "}
               <a className="text-primary underline" href="mailto:help@gitterm.dev">
                 help@gitterm.dev
