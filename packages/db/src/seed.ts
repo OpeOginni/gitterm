@@ -29,6 +29,7 @@ const seedCloudProviders: Array<{
   providerKey: string;
   isEnabled: boolean;
   isSandbox?: boolean;
+  autoPersistent?: boolean;
   supportsRegions: boolean;
   allowUserRegionSelection?: boolean;
   supportServerOnly?: boolean;
@@ -66,6 +67,7 @@ const seedCloudProviders: Array<{
     providerKey: "cloudflare",
     isEnabled: false,
     isSandbox: true,
+    autoPersistent: true,
     supportsRegions: false,
     supportServerOnly: true,
     editorAccessSupport: {
@@ -83,6 +85,7 @@ const seedCloudProviders: Array<{
     providerKey: "e2b",
     isEnabled: false,
     isSandbox: true,
+    autoPersistent: true,
     supportsRegions: false,
     supportServerOnly: true,
     editorAccessSupport: {
@@ -102,6 +105,7 @@ const seedCloudProviders: Array<{
     providerKey: "daytona",
     isEnabled: false,
     isSandbox: true,
+    autoPersistent: true,
     supportsRegions: true,
     supportServerOnly: true,
     editorAccessSupport: {
@@ -118,15 +122,28 @@ const seedCloudProviders: Array<{
 ];
 
 const seedAgentTypes = [
-  { name: "OpenCode", serverOnly: false },
-  { name: "OpenCode Server", serverOnly: true },
+  {
+    name: "OpenCode Terminal",
+    serverOnly: false,
+    description:
+      "Run the OpenCode TUI in a browser-based terminal. No local client needed.",
+    // Previous names used in older seeds. Used to migrate existing rows to the new name.
+    aliases: ["OpenCode"],
+  },
+  {
+    name: "OpenCode Server",
+    serverOnly: true,
+    description:
+      "Run a remote OpenCode server. Use it from your local TUI, Desktop app, or directly in the browser.",
+    aliases: [] as string[],
+  },
 ];
 
 const seedImages = [
   {
     name: "gitterm-opencode",
     imageId: "opeoginni/gitterm-opencode",
-    agentTypeName: "OpenCode",
+    agentTypeName: "OpenCode Terminal",
     providerMetadata: {
       isDefault: true,
       daytona: {
@@ -450,6 +467,7 @@ export async function seedDatabase(): Promise<void> {
     if (existing) {
       const updates: Partial<typeof cloudProvider.$inferInsert> = {};
       const targetIsSandbox = provider.isSandbox ?? false;
+      const targetAutoPersistent = provider.autoPersistent ?? false;
       const targetSupportsRegions = provider.supportsRegions ?? true;
       const targetAllowUserRegionSelection = provider.allowUserRegionSelection ?? true;
       const targetSupportServerOnly = provider.supportServerOnly ?? false;
@@ -465,6 +483,10 @@ export async function seedDatabase(): Promise<void> {
 
       if (existing.isSandbox !== targetIsSandbox) {
         updates.isSandbox = targetIsSandbox;
+      }
+
+      if (existing.autoPersistent !== targetAutoPersistent) {
+        updates.autoPersistent = targetAutoPersistent;
       }
 
       if (existing.supportsRegions !== targetSupportsRegions) {
@@ -522,6 +544,7 @@ export async function seedDatabase(): Promise<void> {
           providerKey: provider.providerKey,
           isEnabled: provider.isEnabled,
           isSandbox: provider.isSandbox ?? false,
+          autoPersistent: provider.autoPersistent ?? false,
           supportsRegions: provider.supportsRegions,
           allowUserRegionSelection: provider.allowUserRegionSelection ?? true,
           supportServerOnly: provider.supportServerOnly ?? false,
@@ -544,18 +567,44 @@ export async function seedDatabase(): Promise<void> {
   const agentTypeMap = new Map<string, string>(); // name -> id
 
   for (const agent of seedAgentTypes) {
-    const existing = await db.query.agentType.findFirst({
+    // Look up by current name first, then fall back to any known previous names
+    // so we can rename existing rows in place (e.g. "OpenCode" -> "OpenCode Terminal").
+    let existing = await db.query.agentType.findFirst({
       where: eq(agentType.name, agent.name),
     });
 
+    if (!existing && agent.aliases.length > 0) {
+      for (const alias of agent.aliases) {
+        const aliasRow = await db.query.agentType.findFirst({
+          where: eq(agentType.name, alias),
+        });
+        if (aliasRow) {
+          existing = aliasRow;
+          console.log(`[seed]   Renaming agent type "${alias}" -> "${agent.name}"`);
+          break;
+        }
+      }
+    }
+
     if (existing) {
-      console.log(`[seed]   Agent type "${agent.name}" already exists`);
-      agentTypeMap.set(agent.name, existing.id);
+      const [updated] = await db
+        .update(agentType)
+        .set({
+          name: agent.name,
+          description: agent.description,
+          serverOnly: agent.serverOnly,
+          updatedAt: new Date(),
+        })
+        .where(eq(agentType.id, existing.id))
+        .returning();
+      console.log(`[seed]   Updated agent type "${agent.name}"`);
+      agentTypeMap.set(agent.name, updated!.id);
     } else {
       const [created] = await db
         .insert(agentType)
         .values({
           name: agent.name,
+          description: agent.description,
           serverOnly: agent.serverOnly,
           isEnabled: true,
         })

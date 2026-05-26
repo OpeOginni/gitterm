@@ -64,7 +64,7 @@ export default function AgentTypesPage() {
       }
     }
   }, [session?.user, isSessionPending]);
-  const [newAgent, setNewAgent] = useState({ name: "", serverOnly: false });
+  const [newAgent, setNewAgent] = useState({ name: "", description: "", serverOnly: false });
 
   const { data: agentTypes, isLoading } = useQuery({
     queryKey: ["admin", "agentTypes"],
@@ -77,12 +77,12 @@ export default function AgentTypesPage() {
   });
 
   const createAgentType = useMutation({
-    mutationFn: (params: { name: string; serverOnly: boolean }) =>
+    mutationFn: (params: { name: string; description?: string; serverOnly: boolean }) =>
       trpcClient.admin.infrastructure.createAgentType.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "agentTypes"] });
       setIsCreateOpen(false);
-      setNewAgent({ name: "", serverOnly: false });
+      setNewAgent({ name: "", description: "", serverOnly: false });
       toast.success("Agent type created");
     },
     onError: (error) => toast.error(error.message),
@@ -167,7 +167,19 @@ export default function AgentTypesPage() {
                     id="name"
                     value={newAgent.name}
                     onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
-                    placeholder="e.g., OpenCode"
+                    placeholder="e.g., OpenCode Terminal"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">
+                    Description{" "}
+                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input
+                    id="description"
+                    value={newAgent.description}
+                    onChange={(e) => setNewAgent({ ...newAgent, description: e.target.value })}
+                    placeholder="Shown to users when picking an agent during workspace creation."
                   />
                 </div>
                 <div className="flex items-center space-x-2">
@@ -188,7 +200,13 @@ export default function AgentTypesPage() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => createAgentType.mutate(newAgent)}
+                  onClick={() =>
+                    createAgentType.mutate({
+                      name: newAgent.name,
+                      description: newAgent.description.trim() || undefined,
+                      serverOnly: newAgent.serverOnly,
+                    })
+                  }
                   disabled={!newAgent.name || createAgentType.isPending}
                 >
                   {createAgentType.isPending ? "Creating..." : "Create"}
@@ -212,7 +230,8 @@ export default function AgentTypesPage() {
               const agentImages = images?.filter((image) => image.agentTypeId === agent.id) ?? [];
               const enabledAgentImages = agentImages.filter((image) => image.isEnabled);
               const defaultImage = enabledAgentImages.find(isDefaultImage);
-              const isSeeded = agent.name === "OpenCode" || agent.name === "OpenCode Server";
+              const isSeeded =
+                agent.name === "OpenCode Terminal" || agent.name === "OpenCode Server";
 
               return (
                 <div
@@ -234,22 +253,13 @@ export default function AgentTypesPage() {
                             Disabled
                           </Badge>
                         )}
-                        {agent.serverOnly ? (
-                          <Badge
-                            variant="outline"
-                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                          >
-                            Server Only
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs"
-                          >
-                            Terminal
-                          </Badge>
-                        )}
+
                       </div>
+                      {agent.description && (
+                        <p className="text-xs text-white/55 mt-1 max-w-2xl leading-snug">
+                          {agent.description}
+                        </p>
+                      )}
                       <p className="text-xs text-white/25 mt-0.5">
                         Created {new Date(agent.createdAt).toLocaleDateString()}
                       </p>

@@ -212,7 +212,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
         track(AnalyticsEvent.WorkspaceCreate, {
           provider: selectedCloudProvider?.providerKey,
-          persistent,
+          persistent: selectedCloudProvider?.autoPersistent ? true : persistent,
           profile: workspaceProfile,
         });
         onSuccess({
@@ -272,7 +272,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       cloudProviderId: resolvedCloudProviderId,
       regionId: resolvedRegionId,
       gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
-      persistent,
+      persistent: selectedCloudProvider?.autoPersistent ? true : persistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
     });
@@ -367,7 +367,20 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             <Label className="text-xs font-medium text-muted-foreground">Agent</Label>
             <Select value={selectedAgentTypeId} onValueChange={setUserAgentTypeId}>
               <SelectTrigger className="h-9">
-                <SelectValue placeholder="Select agent" />
+                {selectedAgent ? (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Image
+                      src={getIcon(selectedAgent.name) || "/placeholder.svg"}
+                      alt={selectedAgent.name}
+                      width={16}
+                      height={16}
+                      className="h-4 w-4 shrink-0"
+                    />
+                    <span className="truncate">{selectedAgent.name}</span>
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Select agent" />
+                )}
               </SelectTrigger>
               {isLoadingAgentTypes ? (
                 <SelectContent>
@@ -380,15 +393,15 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   {availableAgents.length > 0 ? (
                     availableAgents.map((agent) => (
                       <SelectItem key={agent.id} value={agent.id}>
-                        <div className="flex items-center">
+                        <div className="flex items-center gap-2">
                           <Image
                             src={getIcon(agent.name) || "/placeholder.svg"}
                             alt={agent.name}
                             width={16}
                             height={16}
-                            className="mr-2 h-4 w-4"
+                            className="h-4 w-4 shrink-0"
                           />
-                          {agent.name}
+                          <span>{agent.name}</span>
                         </div>
                       </SelectItem>
                     ))
@@ -493,12 +506,33 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </div>
         </div>
 
+        {/* ── 3a. Selected agent description card ── */}
+        {selectedAgent?.description && (
+          <div className="flex items-center gap-3.5 rounded-lg border border-border/60 bg-input/20 px-3.5 py-3">
+            <Image
+              src={getIcon(selectedAgent.name) || "/placeholder.svg"}
+              alt={selectedAgent.name}
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0 opacity-80"
+            />
+            <div className="min-w-0 flex-1">
+              <span className="text-sm font-medium text-foreground/90">
+                {selectedAgent.name}
+              </span>
+              <p className="mt-0.5 text-[11px] leading-snug text-foreground/65">
+                {selectedAgent.description}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── 3b. API Credentials indicator ── */}
         <div className="flex items-center justify-between rounded-md border border-border/30 bg-secondary/10 px-3 py-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Key className="h-3.5 w-3.5" />
             <span>
-              <span className="font-medium text-foreground">{activeCredentialCount}</span> API{" "}
+              <span className="font-medium text-foreground">{activeCredentialCount}</span> Provider{" "}
               {activeCredentialCount === 1 ? "credential" : "credentials"} configured
             </span>
           </div>
@@ -571,8 +605,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           <Label
             htmlFor="editor-access"
             className={cn(
-              "group flex flex-1 items-center gap-2 text-xs text-muted-foreground",
-              canEnableEditorAccess ? "cursor-pointer" : "cursor-default text-muted-foreground/75",
+              "group flex flex-1 items-center gap-2 text-xs",
+              canEnableEditorAccess
+                ? "cursor-pointer text-foreground/90"
+                : "cursor-default text-foreground/55",
             )}
           >
             <span>Editor Access (SSH)</span>
@@ -601,7 +637,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 </span>
               </>
             ) : (
-              <span className="text-muted-foreground/70">
+              <span className="text-foreground/55">
                 &mdash;{" "}
                 {!selectedCloudProvider?.editorAccessSupport?.supported ? (
                   "not supported by this provider"
@@ -611,7 +647,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   <Link
                     href={"/dashboard/settings" as Route}
                     onClick={(e) => e.stopPropagation()}
-                    className="text-amber-400/80 hover:text-amber-400 hover:underline"
+                    className="font-medium text-amber-300 hover:text-amber-200 hover:underline"
                   >
                     add an SSH key in Settings
                   </Link>
@@ -624,18 +660,43 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         </div>
 
         {/* ── 5. Persistent storage ── */}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="persistent"
-            checked={persistent}
-            onCheckedChange={(checked) => setPersistent(checked as boolean)}
-            className="data-[state=checked]:bg-primary data-[state=checked]:border-accent"
-          />
-          <Label htmlFor="persistent" className="text-xs cursor-pointer text-muted-foreground">
-            Persistent storage
-            <span className="text-muted-foreground/50"> &mdash; keep files between sessions</span>
-          </Label>
-        </div>
+        {(() => {
+          const isAutoPersistent = !!selectedCloudProvider?.autoPersistent;
+          const effectivePersistent = isAutoPersistent ? true : persistent;
+          return (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="persistent"
+                checked={effectivePersistent}
+                disabled={isAutoPersistent}
+                onCheckedChange={(checked) => setPersistent(checked as boolean)}
+                className="data-[state=checked]:bg-primary data-[state=checked]:border-accent disabled:opacity-100 disabled:cursor-not-allowed"
+              />
+              <Label
+                htmlFor="persistent"
+                className={cn(
+                  "text-xs",
+                  isAutoPersistent
+                    ? "cursor-not-allowed text-foreground/55"
+                    : "cursor-pointer text-foreground/90",
+                )}
+              >
+                Persistent storage
+                <span
+                  className={cn(
+                    isAutoPersistent ? "text-foreground/45" : "text-foreground/55",
+                  )}
+                >
+                  {" "}
+                  &mdash;{" "}
+                  {isAutoPersistent
+                    ? `always on for ${selectedCloudProvider?.name ?? "this provider"}`
+                    : "keep files between sessions"}
+                </span>
+              </Label>
+            </div>
+          );
+        })()}
       </div>
 
       <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

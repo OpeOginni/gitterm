@@ -39,6 +39,7 @@ export const cloudProvider = pgTable("cloud_provider", {
   }),
   isEnabled: boolean("is_enabled").notNull().default(true),
   isSandbox: boolean("is_sandbox").notNull().default(false),
+  autoPersistent: boolean("auto_persistent").notNull().default(false),
   supportsRegions: boolean("supports_regions").notNull().default(true),
   allowUserRegionSelection: boolean("allow_user_region_selection").notNull().default(true),
   supportServerOnly: boolean("support_server_only").notNull().default(false),
@@ -122,6 +123,7 @@ export const providerAgentImage = pgTable(
 export const agentType = pgTable("agent_type", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
+  description: text("description"),
   serverOnly: boolean("server_only").notNull().default(false),
   isEnabled: boolean("is_enabled").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),

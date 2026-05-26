@@ -61,12 +61,14 @@ const updateRegionSchema = z.object({
 
 const createAgentTypeSchema = z.object({
   name: z.string().min(1, "Agent type name is required"),
+  description: z.string().max(500).optional(),
   serverOnly: z.boolean().default(false),
 });
 
 const updateAgentTypeSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).optional(),
+  description: z.string().max(500).nullable().optional(),
   serverOnly: z.boolean().optional(),
   isEnabled: z.boolean().optional(),
 });
@@ -406,6 +408,7 @@ export const infrastructureRouter = router({
       .insert(agentType)
       .values({
         name: input.name,
+        description: input.description ?? null,
         serverOnly: input.serverOnly,
         createdAt: new Date(),
         updatedAt: new Date(),

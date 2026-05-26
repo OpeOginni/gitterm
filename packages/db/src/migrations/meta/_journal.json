@@ -71,6 +71,13 @@
       "when": 1778529608160,
       "tag": "0009_wise_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779783775167,
+      "tag": "0010_chilly_gwen_stacy",
+      "breakpoints": true
     }
   ]
 }

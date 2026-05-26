@@ -24,6 +24,7 @@ export interface CreateInstanceFormProps {
 export interface AgentType {
   id: string;
   name: string;
+  description?: string | null;
   serverOnly: boolean;
 }
 
@@ -33,6 +34,7 @@ export interface CloudProvider {
   providerKey: string;
   supportsRegions: boolean;
   allowUserRegionSelection: boolean;
+  autoPersistent?: boolean;
   regions?: Region[];
   editorAccessSupport?: EditorAccessSupport;
 }
