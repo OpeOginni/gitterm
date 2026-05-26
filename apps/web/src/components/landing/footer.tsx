@@ -41,18 +41,23 @@ export function Footer() {
               Enterprise
             </Link>
             <Link
-              href="https://www.npmjs.com/package/gitterm"
-              target="_blank"
-              className="uppercase tracking-widest transition-colors hover:text-white/70"
-            >
-              npm
-            </Link>
-            <Link
               href="https://github.com/OpeOginni/gitterm"
               target="_blank"
               className="uppercase tracking-widest transition-colors hover:text-white/70"
             >
               GitHub
+            </Link>
+            <Link
+              href={"/privacy" as Route}
+              className="uppercase tracking-widest transition-colors hover:text-white/70"
+            >
+              Privacy
+            </Link>
+            <Link
+              href={"/terms" as Route}
+              className="uppercase tracking-widest transition-colors hover:text-white/70"
+            >
+              Terms
             </Link>
           </nav>
 

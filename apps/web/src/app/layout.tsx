@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import "../index.css";
 import Providers from "@/components/providers";
 import { PostHogProvider } from "@/components/posthog-provider";
+import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 
 const geist = Geist({
   variable: "--font-sans",
@@ -84,6 +85,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <PostHogProvider />
         </Suspense>
+        <CookieConsentBanner />
       </body>
     </html>
   );

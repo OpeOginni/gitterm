@@ -3,13 +3,14 @@
 import { useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { DashboardShell, DashboardHeader } from "@/components/dashboard/shell";
-import { BarChart3, CreditCard, Wrench, type LucideIcon } from "lucide-react";
+import { BarChart3, CreditCard, Shield, Wrench, type LucideIcon } from "lucide-react";
 
 import { UsageSection } from "./usage-section";
 import { WorkspaceSection } from "./workspace-section";
 import { AccountSection } from "./account-section";
+import { PrivacySection } from "./privacy-section";
 
-type SettingsSection = "usage" | "workspace" | "account";
+type SettingsSection = "usage" | "workspace" | "account" | "privacy";
 
 interface SidebarItem {
   id: SettingsSection;
@@ -36,6 +37,12 @@ const sidebarItems: SidebarItem[] = [
     label: "Account",
     icon: CreditCard,
     description: "Plan and account management",
+  },
+  {
+    id: "privacy",
+    label: "Privacy",
+    icon: Shield,
+    description: "Analytics and data preferences",
   },
 ];
 
@@ -127,6 +134,7 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
               {activeSection === "usage" && <UsageSection />}
               {activeSection === "workspace" && <WorkspaceSection />}
               {activeSection === "account" && <AccountSection currentPlan={currentPlan} />}
+              {activeSection === "privacy" && <PrivacySection />}
             </div>
           </div>
         </div>
