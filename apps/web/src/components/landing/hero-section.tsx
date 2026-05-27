@@ -94,12 +94,12 @@ export function HeroSection() {
   }
 
   return (
-    <section className="relative overflow-hidden pt-32 pb-20 md:pt-44 md:pb-24">
+    <section className="relative overflow-hidden pt-24 pb-14 sm:pt-32 sm:pb-20 md:pt-44 md:pb-24">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-40 left-1/2 h-[700px] w-[1100px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.08),transparent)]" />
       </div>
 
-      <div className="relative mx-auto max-w-[920px] px-6 text-center">
+      <div className="relative mx-auto max-w-[920px] px-4 text-center sm:px-6">
         <div
           className="rise mb-8 flex items-center justify-center gap-3"
           style={{ animationDelay: "0ms" }}
@@ -110,8 +110,8 @@ export function HeroSection() {
         </div>
 
         <h1
-          className={`rise font-display font-light leading-[0.98] tracking-tight text-white ${
-            anonEnabled ? "text-[clamp(2.4rem,6vw,4.8rem)]" : "text-[clamp(3rem,8vw,6.5rem)]"
+          className={`rise font-display font-light leading-[1] tracking-tight text-white sm:leading-[0.98] ${
+            anonEnabled ? "text-[clamp(2rem,7vw,4.8rem)]" : "text-[clamp(2.4rem,9vw,6.5rem)]"
           }`}
           style={{ animationDelay: "80ms" }}
         >
@@ -121,7 +121,7 @@ export function HeroSection() {
         </h1>
 
         <p
-          className="rise mx-auto mt-7 max-w-xl font-sans text-base leading-[1.65] text-white/55 sm:text-[17px]"
+          className="rise mx-auto mt-5 max-w-xl font-sans text-[15px] leading-[1.6] text-white/55 sm:mt-7 sm:text-[17px] sm:leading-[1.65]"
           style={{ animationDelay: "180ms" }}
         >
           {anonEnabled ? (
@@ -141,7 +141,7 @@ export function HeroSection() {
           )}
         </p>
 
-        <div className="rise mx-auto mt-11 max-w-2xl text-left" style={{ animationDelay: "260ms" }}>
+        <div className="rise mx-auto mt-8 max-w-2xl text-left sm:mt-11" style={{ animationDelay: "260ms" }}>
           {anonEnabled ? (
             <>
               {result ? (
@@ -187,7 +187,7 @@ export function HeroSection() {
           )}
         </div>
 
-        <div className="mt-20 text-left">
+        <div className="mt-14 text-left sm:mt-20">
           <div className="hairline" />
 
           <div className="py-7">
@@ -201,7 +201,7 @@ export function HeroSection() {
                 pick your cloud
               </span>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-9 gap-y-3">
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 sm:gap-x-9">
               {clouds.map((c) => (
                 <div
                   key={c.label}

@@ -9,8 +9,8 @@ export function Footer() {
   const showPricing = isBillingEnabled();
 
   return (
-    <footer className="border-t border-white/[0.06] py-10">
-      <div className="mx-auto max-w-[1120px] px-6">
+    <footer className="border-t border-white/[0.06] py-8 sm:py-10">
+      <div className="mx-auto max-w-[1120px] px-4 sm:px-6">
         <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
           <div className="flex items-center gap-2.5">
             <Terminal className="h-4 w-4 text-primary" />
@@ -19,7 +19,7 @@ export function Footer() {
             </span>
           </div>
 
-          <nav className="flex items-center gap-6 font-mono text-xs text-white/35">
+          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-xs text-white/35 sm:gap-6">
             <Link
               href="/dashboard"
               className="uppercase tracking-widest transition-colors hover:text-white/70"

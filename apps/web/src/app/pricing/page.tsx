@@ -99,7 +99,7 @@ function PricingCard({
   return (
     <div
       className={cn(
-        "relative flex w-full max-w-[360px] flex-col justify-between rounded-2xl border p-6 transition-colors",
+        "relative flex w-full max-w-[420px] flex-col justify-between rounded-2xl border p-5 transition-colors sm:p-6 lg:max-w-[360px]",
         plan.popular
           ? "border-primary/30 bg-primary/[0.04]"
           : "border-white/[0.06] bg-white/[0.02]",
@@ -265,19 +265,19 @@ function PricingPageContent() {
     <main className="min-h-screen bg-background text-white dark landing-grid grain">
       <LandingHeader />
 
-      <section className="pt-36 pb-24 md:pt-44 md:pb-32">
-        <div className="mx-auto max-w-[1200px] px-6">
+      <section className="pt-24 pb-16 sm:pt-32 sm:pb-24 md:pt-44 md:pb-32">
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-6">
           {/* Header */}
-          <div className="mb-16">
+          <div className="mb-10 sm:mb-16">
             <div className="mb-6 flex items-center gap-3">
               <span className="h-px flex-1 bg-white/[0.08]" />
               <span className="marker">Pricing · plain &amp; predictable</span>
             </div>
-            <h1 className="font-display text-[clamp(2.5rem,6vw,5rem)] font-light leading-[0.98] tracking-tight text-white">
+            <h1 className="font-display text-[clamp(2rem,7vw,5rem)] font-light leading-[1] tracking-tight text-white sm:leading-[0.98]">
               We just <span className="font-display-italic text-[color:var(--cream)]">run</span> the
               workspaces.
             </h1>
-            <p className="mt-6 max-w-2xl text-base leading-[1.65] text-white/55 sm:text-[17px]">
+            <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-white/55 sm:mt-6 sm:text-[17px] sm:leading-[1.65]">
               You bring your model API keys. We don't resell them. GitTerm only charges for the
               cloud workspace itself - compute, storage, and networking - so your AI bill stays with
               your provider, not us.
@@ -285,7 +285,7 @@ function PricingPageContent() {
           </div>
 
           {/* Plan cards */}
-          <div className="flex flex-col items-center justify-center gap-5 sm:flex-row sm:items-stretch">
+          <div className="flex flex-col items-center justify-center gap-5 lg:flex-row lg:items-stretch">
             {PLAN_TIERS.map((plan) => (
               <PricingCard
                 key={plan.name}
@@ -299,7 +299,7 @@ function PricingPageContent() {
           </div>
 
           {/* BYOK explainer */}
-          <div className="mt-16 border-t border-white/[0.06] pt-12">
+          <div className="mt-12 border-t border-white/[0.06] pt-10 sm:mt-16 sm:pt-12">
             <div className="mb-8 flex items-center gap-3">
               <span className="h-px flex-1 bg-white/[0.08]" />
               <span className="marker">Bring your own keys</span>
@@ -330,14 +330,14 @@ function PricingPageContent() {
           </div>
 
           {/* Why upgrade */}
-          <div className="mt-20 border-t border-white/[0.06] pt-16">
+          <div className="mt-14 border-t border-white/[0.06] pt-12 sm:mt-20 sm:pt-16">
             <div className="mb-10 flex items-baseline gap-3">
               <h2 className="font-display text-2xl font-light tracking-tight text-white md:text-3xl">
                 Why upgrade to{" "}
                 <span className="font-display-italic text-[color:var(--cream)]">Pro</span>?
               </h2>
             </div>
-            <div className="grid gap-6 sm:grid-cols-3">
+            <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <span className="font-mono text-lg text-primary">3x</span>
@@ -372,7 +372,7 @@ function PricingPageContent() {
           </div>
 
           {/* Questions */}
-          <div className="mt-24 border-t border-white/[0.06] pt-16 text-center">
+          <div className="mt-16 border-t border-white/[0.06] pt-12 text-center sm:mt-24 sm:pt-16">
             <h2 className="mb-3 font-display text-2xl font-light tracking-tight text-white">
               Questions?
             </h2>

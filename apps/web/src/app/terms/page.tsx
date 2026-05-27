@@ -14,7 +14,7 @@ export default function TermsPage() {
   return (
     <div className="min-h-screen bg-background text-white">
       <LandingHeader />
-      <main className="mx-auto max-w-[760px] px-6 pt-32 pb-20">
+      <main className="mx-auto max-w-[760px] px-4 pt-24 pb-14 sm:px-6 sm:pt-32 sm:pb-20">
         <header className="border-b border-white/[0.06] pb-8">
           <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-primary/80">
             Legal

@@ -22,10 +22,10 @@ export function ProblemSection() {
   return (
     <section
       id="problem"
-      className="relative overflow-hidden border-t border-white/[0.06] py-20 md:py-28"
+      className="relative overflow-hidden border-t border-white/[0.06] py-14 sm:py-20 md:py-28"
     >
-      <div className="relative mx-auto max-w-[1100px] px-6">
-        <div className="mb-12 max-w-2xl">
+      <div className="relative mx-auto max-w-[1100px] px-4 sm:px-6">
+        <div className="mb-10 max-w-2xl sm:mb-12">
           <div className="mb-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-white/[0.08]" />
             <span className="marker">Beyond local development</span>
@@ -42,7 +42,7 @@ export function ProblemSection() {
 
         <div className="grid gap-px bg-white/[0.06] md:grid-cols-3">
           {capabilities.map((item, idx) => (
-            <div key={idx} className="group bg-background p-7 transition-colors hover:bg-card">
+            <div key={idx} className="group bg-background p-5 transition-colors hover:bg-card sm:p-7">
               <div className="mb-6 flex items-center justify-between">
                 <span className="marker">
                   <span className="text-white/55">01.{idx + 1}</span>

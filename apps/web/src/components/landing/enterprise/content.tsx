@@ -68,12 +68,12 @@ export function EnterpriseContent() {
   }
 
   return (
-    <section className="relative overflow-hidden pt-36 pb-24 md:pt-44 md:pb-32">
+    <section className="relative overflow-hidden pt-24 pb-16 sm:pt-32 sm:pb-24 md:pt-44 md:pb-32">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute top-0 left-1/2 h-[600px] w-[900px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.04),transparent)]" />
       </div>
 
-      <div className="relative mx-auto max-w-[1200px] px-6">
+      <div className="relative mx-auto max-w-[1200px] px-4 sm:px-6">
         <div className="mb-8 flex items-center gap-3">
           <span className="h-px flex-1 bg-white/[0.08]" />
           <span className="marker inline-flex items-center gap-2">
@@ -82,17 +82,17 @@ export function EnterpriseContent() {
           </span>
         </div>
 
-        <h1 className="font-display text-[clamp(2.5rem,6vw,5rem)] font-light leading-[0.98] tracking-tight text-white">
+        <h1 className="font-display text-[clamp(2rem,7vw,5rem)] font-light leading-[1] tracking-tight text-white sm:leading-[0.98]">
           GitTerm for{" "}
           <span className="font-display-italic text-[color:var(--cream)]">teams</span>.
         </h1>
 
-        <p className="mt-6 max-w-2xl text-base leading-[1.65] text-white/55 sm:text-[17px]">
+        <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-white/55 sm:mt-6 sm:text-[17px] sm:leading-[1.65]">
           Bring your own sandbox or cloud provider. We'll help you set it up for your organization.
            Whether that's E2B, Daytona, Railway, Cloudflare, AWS, or your own infra. Your keys,
           your data, your rules.
         </p>
-        <div className="mt-14 grid gap-px bg-white/[0.06] md:grid-cols-3">
+        <div className="mt-10 grid gap-px bg-white/[0.06] sm:mt-14 md:grid-cols-3">
           {[
             {
               icon: Shield,
@@ -113,7 +113,7 @@ export function EnterpriseContent() {
                 "Team-scoped workspaces, shared agent configs, and organization-level GitHub integrations. Admin controls for who can create what.",
             },
           ].map((item) => (
-            <div key={item.title} className="bg-background p-7">
+            <div key={item.title} className="bg-background p-5 sm:p-7">
               <div className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                 <item.icon className="h-4 w-4 text-primary" />
               </div>
@@ -124,7 +124,7 @@ export function EnterpriseContent() {
         </div>
 
         {/* ── Form card ── */}
-        <div className="mx-auto mt-16 max-w-2xl">
+        <div className="mx-auto mt-12 max-w-2xl sm:mt-16">
           <div className="mb-4 flex items-center gap-3">
             <span className="h-px flex-1 bg-white/[0.08]" />
             <span className="marker">Get in touch</span>
@@ -135,7 +135,7 @@ export function EnterpriseContent() {
               <div className="absolute -top-24 left-1/2 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.06),transparent)]" />
             </div>
 
-            <div className="relative p-6 md:p-10">
+            <div className="relative p-5 sm:p-6 md:p-10">
               {submitted ? (
                 <div className="flex flex-col items-center py-8 text-center">
                   <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">

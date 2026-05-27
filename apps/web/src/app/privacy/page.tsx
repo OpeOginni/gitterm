@@ -14,7 +14,7 @@ export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-background text-white">
       <LandingHeader />
-      <main className="mx-auto max-w-[760px] px-6 pt-32 pb-20">
+      <main className="mx-auto max-w-[760px] px-4 pt-24 pb-14 sm:px-6 sm:pt-32 sm:pb-20">
         <header className="border-b border-white/[0.06] pb-8">
           <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-primary/80">
             Legal
@@ -108,8 +108,8 @@ export default function PrivacyPage() {
             <p>
               We use a small number of cookies. They fall into two categories:
             </p>
-            <div className="mt-4 overflow-hidden rounded-lg border border-white/[0.06]">
-              <table className="w-full border-collapse text-left text-sm">
+            <div className="mt-4 overflow-x-auto rounded-lg border border-white/[0.06]">
+              <table className="w-full min-w-[480px] border-collapse text-left text-sm">
                 <thead className="bg-white/[0.03] font-mono text-[11px] uppercase tracking-wider text-white/50">
                   <tr>
                     <th className="px-3 py-2.5">Cookie</th>

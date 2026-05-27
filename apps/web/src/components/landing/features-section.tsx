@@ -34,9 +34,9 @@ const features = [
 
 export function FeaturesSection() {
   return (
-    <section id="features" className="border-t border-white/[0.06] py-20 md:py-28">
-      <div className="mx-auto max-w-[1100px] px-6">
-        <div className="mb-12 max-w-xl">
+    <section id="features" className="border-t border-white/[0.06] py-14 sm:py-20 md:py-28">
+      <div className="mx-auto max-w-[1100px] px-4 sm:px-6">
+        <div className="mb-10 max-w-xl sm:mb-12">
           <div className="mb-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-white/[0.08]" />
             <span className="marker">What you get</span>
