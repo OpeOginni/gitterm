@@ -1,14 +1,16 @@
 ![GitTerm](./apps/web/public/og-card/og-card.png)
 
-Run Opencode instances your way. GitTerm supports multiple cloud providers of servers or sandboxes for remote Opencode sessions.
+Run your coding agent in the cloud. GitTerm runs Opencode in remote workspaces on the cloud provider or sandbox of your choice, so you can code from any device with your own model keys.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 ## What GitTerm does
 
-- Cloud workspaces for remote Opencode sessions
-- Browser-accessible TTYD for the Opencode TUI
-- Server-only Opencode URLs for desktop or local clients
+- Runs Opencode in cloud workspaces across multiple providers
+- Opens the Opencode TUI in your browser through TTYD
+- Gives you server-only Opencode URLs for desktop or local clients
+- Exposes any workspace port behind a shareable URL, so you can preview and test your app live
+- Keeps your model keys yours (bring your own keys, no markup)
 
 ## Deploy on Railway
 
@@ -33,11 +35,12 @@ Required services:
 | listener   | Webhook and event ingress |
 | worker     | Background jobs           |
 
-Recommended worker cron:
+Worker cron jobs:
 
-| Worker        | Schedule       | Purpose                                   |
-| ------------- | -------------- | ----------------------------------------- |
-| `idle-reaper` | `*/10 * * * *` | Stops idle workspaces and enforces quotas |
+| Worker         | Schedule       | Purpose                                   |
+| -------------- | -------------- | ----------------------------------------- |
+| `idle-reaper`  | `*/10 * * * *` | Stops idle workspaces and enforces quotas |
+| `daily-reset`  | `0 0 * * *`    | Logs daily usage stats once per day       |
 
 ## Routing
 
@@ -49,85 +52,34 @@ https://{workspace-subdomain}.your-domain.com
 https://{port}-{workspace-subdomain}.your-domain.com
 ```
 
-Path routing is useful when you do not control wildcard DNS. Subdomain routing is usually better for apps that rely on relative asset paths.
+Use path routing when you do not control wildcard DNS. Use subdomain routing for apps that rely on relative asset paths.
 
-## Provider Setup
+Open a port on a running workspace to get a live, shareable URL like `https://{port}-{workspace-subdomain}.your-domain.com`. This is handy for previewing a dev server or sharing a running app while an agent works on it.
 
-Provider configuration is driven by `packages/schema/src/provider-registry.ts`. Current provider definitions include [Railway](https://railway.com), [AWS](https://aws.amazon.com/), [Daytona](https://daytona.io/), [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/), and [E2B](https://e2b.dev/).
+## Providers
 
-Open the admin panel and add the required values for each provider you want to offer.
+GitTerm can run workspaces on any of these providers. Configure each one in the admin panel before users create workspaces. Click a provider for its full setup guide.
+
+| Provider                                                          | Type    | Webhook | Setup guide                                            |
+| ---------------------------------------------------------------- | ------- | ------- | ------------------------------------------------------ |
+| [Railway](https://railway.com)                                   | Compute | Yes     | [Guide](packages/api/src/providers/railway/README.md)  |
+| [AWS](https://aws.amazon.com/)                                   | Compute | No      | [Guide](packages/api/src/providers/aws/README.md)      |
+| [E2B](https://e2b.dev/)                                          | Sandbox | Yes     | [Guide](packages/api/src/providers/e2b/README.md)      |
+| [Daytona](https://daytona.io/)                                   | Sandbox | No      | [Guide](packages/api/src/providers/daytona/README.md)  |
+| [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) | Sandbox | No      | [Guide](packages/api/src/providers/cloudflare/README.md) |
+
+[![SPONSORED BY E2B FOR STARTUPS](https://img.shields.io/badge/SPONSORED%20BY-E2B%20FOR%20STARTUPS-ff8800?style=for-the-badge)](https://e2b.dev/startups)
+
+Field definitions for every provider live in `packages/schema/src/provider-registry.ts`.
 
 ### Webhook Base URL
 
-Webhook endpoints depend on how you expose GitTerm:
+Providers that use webhooks send events to the GitTerm listener. The endpoint depends on how you expose GitTerm:
 
 - Through the public proxy: `https://<your-base-domain>/listener/trpc/...`
 - Directly to the listener service: `https://<listener-base-url>/trpc/...`
 
-If your `listener` service is not public, use the proxy form.
-
-### [Railway](https://railway.com)
-
-Set these values in the admin panel:
-
-- optional: `API URL` (defaults to `https://backboard.railway.app/graphql/v2`)
-- `API Token`
-- `Project ID`
-- `Environment ID`
-- optional: `Default Region`
-- optional: `Public Railway Domains`
-
-Webhook setup:
-
-- Endpoint via proxy: `https://<your-base-domain>/listener/trpc/railway.handleWebhook`
-- Endpoint via listener: `https://<listener-base-url>/trpc/railway.handleWebhook`
-- Accept these Railway events: `Deployment Failed`, `Deployment Deploying`, `Deployment Slept`, `Deployment Deployed`
-
-### [E2B](https://e2b.dev/)
-
-[![SPONSORED BY E2B FOR STARTUPS](https://img.shields.io/badge/SPONSORED%20BY-E2B%20FOR%20STARTUPS-ff8800?style=for-the-badge)](https://e2b.dev/startups)
-
-E2B is configured from the GitTerm admin panel and the E2B dashboard at `https://e2b.dev/`.
-
-Set these values in the admin panel:
-
-- `API KEY`
-- `Webhook Secret`
-
-In E2B, create or update a sandbox lifecycle webhook and use:
-
-- Endpoint via proxy: `https://<your-base-domain>/listener/trpc/e2b.handleWebhook`
-- Endpoint via listener: `https://<listener-base-url>/trpc/e2b.handleWebhook`
-- Signature secret: use the same value you saved as `Webhook Secret` in GitTerm
-
-Minimum events GitTerm currently uses:
-
-- `sandbox.lifecycle.paused`
-- `sandbox.lifecycle.resumed`
-- `sandbox.lifecycle.killed`
-
-### [Daytona](https://daytona.io/)
-
-Daytona is configured from the GitTerm admin panel.
-
-Set these values in the admin panel:
-
-- `API Key`
-- `Default Target Region` (`us` or `eu`)
-
-### [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) (WIP)
-
-Set these values in the admin panel:
-
-- `Worker URL`
-- `Callback Secret`
-
-Deploy the worker from `packages/api/src/providers/cloudflare/agent-worker/src/index.ts`:
-
-```bash
-cd packages/api
-bun run wrangler:deploy
-```
+If your `listener` service is not public, use the proxy form. Exact endpoints are in each provider guide.
 
 ## GitHub Integration
 
@@ -177,3 +129,7 @@ bun run db:migrate
 ## License
 
 MIT. See `LICENSE`.
+
+## Disclaimer
+
+GitTerm is an independent project and is not affiliated with, endorsed by, or sponsored by Opencode or its maintainers. "Opencode" and any related names or marks belong to their respective owners.

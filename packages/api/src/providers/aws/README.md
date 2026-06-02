@@ -1,8 +1,34 @@
-# AWS Provider Implementation
+# AWS Provider
 
-The AWS provider runs GitTerm workspaces on AWS using `ECS` with `Fargate`, a shared `ALB`, and optional `EFS` for persistent workspaces.
+Runs GitTerm workspaces on AWS using `ECS` with `Fargate`, a shared `ALB`, and optional `EFS` for persistent workspaces.
 
-This README is implementation-focused. It explains:
+## Quick Setup
+
+The recommended path is simple setup. You only provide credentials and a region, and GitTerm provisions the shared infrastructure for you through CloudFormation.
+
+Open the admin panel and set these values:
+
+| Field              | Required | Notes                         |
+| ------------------ | -------- | ----------------------------- |
+| `Access Key ID`    | Yes      | Control-plane IAM credentials |
+| `Secret Access Key`| Yes      | Control-plane IAM credentials |
+| `Default Region`   | Yes      | Defaults to `us-east-1`       |
+| `Allow Public SSH` | No       | Enable public SSH on tasks    |
+
+GitTerm then creates a CloudFormation stack named `gitterm-<region>` with the ECS cluster, ALB and listener, security groups, task roles, CloudWatch log group, and EFS filesystem, and saves the resolved values back into the provider config.
+
+Requirements:
+
+- a default VPC with at least two public subnets in the chosen region
+- an IAM policy allowing CloudFormation, ECS, ALB, EFS, EC2 describe, and `iam:PassRole` for the GitTerm task roles. A sample lives at `iam-user-policy.json` (replace `<ACCOUNT_ID>` before attaching it).
+
+If you would rather wire up the cluster, networking, IAM roles, and ALB yourself, manual setup is also supported. See the field list under [Provider Config Fields](#provider-config-fields) and [Required AWS Resources For Manual Setup](#required-aws-resources-for-manual-setup).
+
+AWS uses ECS task state, so it does not need an inbound webhook.
+
+## Implementation Notes
+
+The rest of this document is implementation-focused. It explains:
 
 - which AWS services are used
 - what GitTerm stores in its own database
