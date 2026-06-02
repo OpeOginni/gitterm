@@ -150,8 +150,8 @@ const seedImages = [
         snapshot: "gitterm/opencode-server",
       },
       aws: {
-        cpu: 2048,
-        memory: 4096,
+        cpu: 4096,
+        memory: 16384,
         containerPort: 7681,
         healthCheckPath: "/",
       },
@@ -178,8 +178,8 @@ const seedImages = [
     agentTypeName: "OpenCode Server",
     providerMetadata: {
       aws: {
-        cpu: 2048,
-        memory: 4096,
+        cpu: 4096,
+        memory: 16384,
         containerPort: 7681,
         healthCheckPath: "/",
       },
