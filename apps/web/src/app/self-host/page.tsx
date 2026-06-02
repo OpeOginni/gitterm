@@ -1,19 +1,19 @@
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
-import { EnterpriseContent } from "@/components/landing/enterprise/content";
+import { SelfHostContent } from "@/components/landing/self-host/content";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "GitTerm · Enterprise",
+  title: "GitTerm · Self-host",
   description:
-    "Bring agentic coding inside your VPC. Your cloud, your keys, your policies. Self-hosted GitTerm for teams.",
+    "Run GitTerm on your own infrastructure. Open source and self-hostable: your cloud, your keys, your data.",
 };
 
-export default function EnterprisePage() {
+export default function SelfHostPage() {
   return (
     <main className="min-h-screen bg-background text-white dark landing-grid grain">
       <LandingHeader />
-      <EnterpriseContent />
+      <SelfHostContent />
       <Footer />
     </main>
   );

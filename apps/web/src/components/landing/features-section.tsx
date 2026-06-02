@@ -1,4 +1,4 @@
-import { Layers, KeyRound, MonitorSmartphone, Save, GitBranch } from "lucide-react";
+import { Layers, KeyRound, MonitorSmartphone, Save, GitBranch, Globe } from "lucide-react";
 
 const features = [
   {
@@ -29,6 +29,12 @@ const features = [
     title: "Your repos, your commits.",
     description:
       "Connect your GitHub account and work with your repos directly. Clone, commit, push, and open pull requests from the workspace terminal.",
+  },
+  {
+    icon: Globe,
+    title: "Preview your app live.",
+    description:
+      "Expose any workspace port behind a shareable URL. Test a dev server or share a running app while your agent keeps building.",
   },
 ];
 

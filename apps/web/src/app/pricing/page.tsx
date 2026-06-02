@@ -3,7 +3,7 @@
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
-import { Check, Terminal, ExternalLink, ArrowRight, Loader2, Globe, KeyRound } from "lucide-react";
+import { Check, Terminal, ExternalLink, ArrowRight, Loader2, Globe, KeyRound, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
@@ -377,16 +377,15 @@ function PricingPageContent() {
               Questions?
             </h2>
             <p className="mb-8 text-sm text-white/40">
-              Need help choosing the right plan? Reach out on Twitter.
+              Need help choosing the right plan? Reach out by email.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <Link
-                href="https://twitter.com/BrightOginni"
-                target="_blank"
+                href="mailto:help@gitterm.dev"
                 className="inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm text-white/60 transition-colors hover:border-white/20 hover:text-white"
               >
-                Reach out on Twitter
-                <ExternalLink className="ml-2 h-4 w-4" />
+                Reach out by email
+                <Mail className="ml-2 h-4 w-4" />
               </Link>
               <Link
                 href="/dashboard"

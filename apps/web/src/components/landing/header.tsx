@@ -48,10 +48,10 @@ export function LandingHeader() {
             </Link>
           )}
           <Link
-            href={"/enterprise" as Route}
+            href={"/self-host" as Route}
             className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
           >
-            Enterprise
+            Self-host
           </Link>
         </nav>
 

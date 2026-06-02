@@ -35,10 +35,10 @@ export function Footer() {
               </Link>
             )}
             <Link
-              href={"/enterprise" as Route}
+              href={"/self-host" as Route}
               className="uppercase tracking-widest transition-colors hover:text-white/70"
             >
-              Enterprise
+              Self-host
             </Link>
             <Link
               href="https://github.com/OpeOginni/gitterm"

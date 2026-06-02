@@ -4,35 +4,20 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ArrowRight, Send, Server, Shield, Lock, Building2 } from "lucide-react";
+import { ArrowRight, Send, Server, Shield, Lock, GitBranch } from "lucide-react";
 import env from "@gitterm/env/web";
 
-const teamSizes = [
-  { value: "1-10", label: "1 - 10 developers" },
-  { value: "11-50", label: "11 - 50 developers" },
-  { value: "51-200", label: "51 - 200 developers" },
-  { value: "200+", label: "200+ developers" },
-];
-
-export function EnterpriseContent() {
+export function SelfHostContent() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [teamSize, setTeamSize] = useState("");
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
 
     if (!env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY) {
-      setError("The enterprise contact form is not configured yet. Please email us directly.");
+      setError("The contact form is not configured yet. Please email us directly.");
       return;
     }
 
@@ -40,9 +25,8 @@ export function EnterpriseContent() {
     const data = new FormData(form);
 
     data.append("access_key", env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY);
-    data.append("subject", "New GitTerm Enterprise Request");
-    data.append("from_name", "GitTerm Enterprise Form");
-    data.append("team_size", teamSize);
+    data.append("subject", "New GitTerm Self-host Request");
+    data.append("from_name", "GitTerm Self-host Form");
 
     setIsSubmitting(true);
 
@@ -54,11 +38,10 @@ export function EnterpriseContent() {
       const result = (await response.json()) as { success?: boolean; message?: string };
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to submit enterprise request");
+        throw new Error(result.message || "Failed to submit request");
       }
 
       form.reset();
-      setTeamSize("");
       setSubmitted(true);
     } catch {
       setError("We couldn't send your request. Please email us directly at");
@@ -78,19 +61,19 @@ export function EnterpriseContent() {
           <span className="h-px flex-1 bg-white/[0.08]" />
           <span className="marker inline-flex items-center gap-2">
             <Server className="h-3.5 w-3.5 text-primary" />
-            Enterprise · self-hosted &amp; managed
+            Self-host · open source
           </span>
         </div>
 
         <h1 className="font-display text-[clamp(2rem,7vw,5rem)] font-light leading-[1] tracking-tight text-white sm:leading-[0.98]">
-          GitTerm for{" "}
-          <span className="font-display-italic text-[color:var(--cream)]">teams</span>.
+          Run GitTerm on{" "}
+          <span className="font-display-italic text-[color:var(--cream)]">your own infra</span>.
         </h1>
 
         <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-white/55 sm:mt-6 sm:text-[17px] sm:leading-[1.65]">
-          Bring your own sandbox or cloud provider. We'll help you set it up for your organization.
-           Whether that's E2B, Daytona, Railway, Cloudflare, AWS, or your own infra. Your keys,
-          your data, your rules.
+          GitTerm is open source and self-hostable. Deploy it on Railway, AWS, or bare metal, bring
+          your own sandbox provider, and keep every key and every line of code inside your own
+          perimeter. One-click deploy, or reach out if you'd like a hand setting it up.
         </p>
         <div className="mt-10 grid gap-px bg-white/[0.06] sm:mt-14 md:grid-cols-3">
           {[
@@ -98,7 +81,7 @@ export function EnterpriseContent() {
               icon: Shield,
               title: "Your sandbox, your cloud",
               description:
-                "Connect your own E2B, Daytona, Railway, Cloudflare, or AWS accounts. Use the sandbox or cloud provider that fits your team.",
+                "Connect your own E2B, Daytona, Railway, Cloudflare, or AWS accounts. Use whichever sandbox or cloud provider fits your stack.",
             },
             {
               icon: Lock,
@@ -107,10 +90,10 @@ export function EnterpriseContent() {
                 "BYOK for everything: model credentials, encryption keys, SSH keys. GitTerm never sees your provider API keys or your source code.",
             },
             {
-              icon: Building2,
-              title: "Built for teams",
+              icon: GitBranch,
+              title: "Open source, unlimited",
               description:
-                "Team-scoped workspaces, shared agent configs, and organization-level GitHub integrations. Admin controls for who can create what.",
+                "MIT-licensed and fully self-hostable. No quotas, no billing, no lock-in. Run as many workspaces as your hardware allows.",
             },
           ].map((item) => (
             <div key={item.title} className="bg-background p-5 sm:p-7">
@@ -123,11 +106,40 @@ export function EnterpriseContent() {
           ))}
         </div>
 
+        {/* ── Deploy CTA ── */}
+        <div className="mt-12 flex flex-col items-start gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 sm:mt-16 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+          <div>
+            <h3 className="text-[15px] font-semibold text-white/90">Deploy it yourself</h3>
+            <p className="mt-1 text-sm leading-relaxed text-white/45">
+              Spin up the full GitTerm stack on Railway in one click, or self-host from source.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-3">
+            <a
+              href="https://railway.com/template/gitterm?referralCode=o9MFOP"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/85"
+            >
+              Deploy on Railway
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </a>
+            <a
+              href="https://github.com/OpeOginni/gitterm"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-5 py-2.5 font-mono text-sm font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
+            >
+              View on GitHub
+            </a>
+          </div>
+        </div>
+
         {/* ── Form card ── */}
         <div className="mx-auto mt-12 max-w-2xl sm:mt-16">
           <div className="mb-4 flex items-center gap-3">
             <span className="h-px flex-1 bg-white/[0.08]" />
-            <span className="marker">Get in touch</span>
+            <span className="marker">Want help self-hosting?</span>
           </div>
 
           <div className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-white/[0.02]">
@@ -190,49 +202,26 @@ export function EnterpriseContent() {
                     </div>
                   </div>
 
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
-                        Company
-                      </label>
-                      <Input
-                        name="company"
-                        required
-                        placeholder="Acme Inc."
-                        className="h-11 rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
-                        Team size
-                      </label>
-                      <Select value={teamSize} onValueChange={setTeamSize}>
-                        <SelectTrigger className="h-11 w-full rounded-xl border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white/80 shadow-none hover:bg-white/[0.03] focus-visible:border-primary/40 focus-visible:ring-primary/20 data-[placeholder]:text-white/20 data-[size=default]:h-11 [&>svg]:text-white/30">
-                          <SelectValue placeholder="Select team size" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-white/[0.08] bg-surface-2">
-                          {teamSizes.map((size) => (
-                            <SelectItem
-                              key={size.value}
-                              value={size.value}
-                              className="rounded-lg text-sm text-white/70 focus:bg-white/[0.06] focus:text-white"
-                            >
-                              {size.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div>
+                    <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
+                      Company / project{" "}
+                      <span className="text-white/20">(optional)</span>
+                    </label>
+                    <Input
+                      name="company"
+                      placeholder="Acme Inc."
+                      className="h-11 rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
+                    />
                   </div>
 
                   <div>
                     <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
-                      What are you looking for?
+                      What do you need help with?
                     </label>
                     <Textarea
                       name="message"
                       rows={3}
-                      placeholder="Tell us about your team, which sandbox or cloud provider you want to use, and how we can help you get set up."
+                      placeholder="Tell us which sandbox or cloud provider you want to use, where you're deploying, and how we can help you get set up."
                       className="rounded-xl border-white/[0.08] bg-white/[0.03] text-sm leading-relaxed text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
                     />
                   </div>
