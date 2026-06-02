@@ -216,7 +216,7 @@ export function ModelCredentialsSection() {
     trpc.modelCredentials.storeApiKey.mutationOptions({
       onSuccess: () => {
         track("api_key_saved", { provider: selectedProvider?.name, auth_type: "api_key" });
-        toast.success("API key saved securely");
+        toast.success("API key saved");
         setAddDialogOpen(false);
         invalidateCredentials();
       },
@@ -514,7 +514,7 @@ export function ModelCredentialsSection() {
               ? "Paste your auth.json tokens from the OpenCode CLI."
               : selectedProvider?.authType === "oauth"
                 ? "Connect via GitHub device code flow."
-                : "Store an encrypted API key for automated agent runs."}
+                : "Store an API key for automated agent runs."}
           </DialogDescription>
         </DialogHeader>
 
@@ -586,10 +586,6 @@ export function ModelCredentialsSection() {
                 placeholder="sk-..."
                 className="font-mono"
               />
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Shield className="h-3 w-3 shrink-0 text-green-500" />
-                Properly Encrypted at rest.
-              </p>
             </div>
           )}
 
@@ -773,7 +769,7 @@ export function ModelCredentialsSection() {
         eyebrow="01 / Credentials"
         icon={Key}
         title="Model credentials"
-        description="Bring your own keys. We never resell AI access - credentials are encrypted at rest and only injected into your workspaces."
+        description="Bring your own keys. We never resell AI access, and your credentials are only injected into your workspaces."
         action={addCredentialDialog}
       >
         <SettingsSectionBody>
