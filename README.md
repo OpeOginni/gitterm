@@ -123,7 +123,6 @@ bun run db:migrate
 
 - Website: https://gitterm.dev
 - OpenCode: https://opencode.ai
-- CLI: https://www.npmjs.com/package/gitterm
 - GitHub: https://github.com/OpeOginni/gitterm
 
 ## License
