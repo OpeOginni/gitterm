@@ -1,4 +1,4 @@
-FROM oven/bun:1-slim
+FROM node:20-bookworm-slim
 # FROM ghcr.io/anomalyco/opencode:latest
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -12,8 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
-RUN mkdir -p /opt/bun
-RUN BUN_INSTALL=/opt/bun bun add -g opencode-ai@latest
+RUN npm install -g opencode-ai@latest
 
 # Set up working directory
 WORKDIR /workspace

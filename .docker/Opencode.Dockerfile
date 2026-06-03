@@ -48,7 +48,7 @@ RUN mkdir build && \
     make install
 
 # Multi-stage build: Stage 2 - Create runtime image
-FROM oven/bun:1-slim
+FROM node:20-bookworm-slim
 
 # Install system dependencies
 RUN apt-get update && \
@@ -75,8 +75,7 @@ RUN ldconfig
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
-RUN mkdir -p /opt/bun
-RUN BUN_INSTALL=/opt/bun bun add -g opencode-ai@latest
+RUN npm install -g opencode-ai@latest
 
 # Set up working directory
 WORKDIR /workspace
@@ -90,9 +89,7 @@ ENV HOME=/workspace \
     XDG_CACHE_HOME=/workspace/.cache \
     NPM_CONFIG_USERCONFIG=/workspace/.npmrc \
     NPM_CONFIG_CACHE=/workspace/.npm \
-    # Keep Bun global install location outside the persisted /workspace volume
-    BUN_INSTALL=/opt/bun \
-    PATH="/opt/bun/install/global/node_modules/.bin:${PATH}" \
+    PATH=/workspace/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     OPENCODE_CONFIG_DIR=/workspace/.config/opencode \
     OPENCODE_DATA_DIR=/workspace/.local/share/opencode \
     OPENCODE_CACHE_DIR=/workspace/.cache/opencode \

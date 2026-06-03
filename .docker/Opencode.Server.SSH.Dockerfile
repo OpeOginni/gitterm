@@ -1,4 +1,4 @@
-FROM oven/bun:1-slim
+FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -10,8 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /opt/bun
-RUN BUN_INSTALL=/opt/bun bun add -g opencode-ai@latest
+RUN npm install -g opencode-ai@latest
 
 WORKDIR /workspace
 
