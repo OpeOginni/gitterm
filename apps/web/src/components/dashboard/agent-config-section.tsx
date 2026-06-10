@@ -256,32 +256,41 @@ export function AgentConfigSection() {
           Add configuration
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto border-border/90 bg-card">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Image
-              src={getIcon(selectedAgentName)}
-              alt={selectedAgentName}
-              width={20}
-              height={20}
-              className="h-5 w-5"
-            />
-            {isEditing ? "Edit Configuration" : "New Agent Configuration"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? `Update the ${selectedAgentName} configuration.`
-              : "Define your opencode.json settings. These are applied when creating new workspaces."}
-          </DialogDescription>
+      <DialogContent className="gap-0 p-0 sm:max-w-[600px] max-h-[90vh] overflow-hidden">
+        <DialogHeader className="space-y-0 border-b border-white/[0.06] bg-white/[0.015] px-5 py-4">
+          <span className="block font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+            {isEditing ? "Edit / Configuration" : "New / Configuration"}
+          </span>
+          <div className="mt-2 flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04]">
+              <Image
+                src={getIcon(selectedAgentName)}
+                alt={selectedAgentName}
+                width={18}
+                height={18}
+                className="h-[18px] w-[18px]"
+              />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle>
+                {isEditing ? "Edit configuration" : "New agent configuration"}
+              </DialogTitle>
+              <DialogDescription className="mt-0.5">
+                {isEditing
+                  ? `Update the ${selectedAgentName} configuration.`
+                  : "Saved opencode.json presets, applied when creating workspaces."}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="grid gap-5 py-4">
+        <div className="grid max-h-[calc(90vh-180px)] gap-5 overflow-y-auto px-5 py-5">
           {/* Test locally hint -- compact, inline */}
           {!isEditing && (
-            <p className="flex items-center gap-2 text-xs text-amber-500/80">
+            <p className="flex items-center gap-2 rounded-lg bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-400/85">
               <Terminal className="h-3.5 w-3.5 shrink-0" />
               Test your config locally with{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-foreground">
+              <code className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[11px] font-mono text-white/85">
                 opencode.json
               </code>{" "}
               before adding it here.
@@ -291,7 +300,9 @@ export function AgentConfigSection() {
           {/* Name + Agent type -- side by side */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label className="text-sm font-medium">Name</Label>
+              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                Name
+              </Label>
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
@@ -300,11 +311,9 @@ export function AgentConfigSection() {
             </div>
 
             <div className="grid gap-2">
-              <Label className="text-sm font-medium">
-                Agent Type
-                {isEditing && (
-                  <span className="ml-1 font-normal text-muted-foreground">(locked)</span>
-                )}
+              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                Agent type
+                {isEditing && <span className="ml-1 normal-case text-white/30">(locked)</span>}
               </Label>
               <div className="flex flex-wrap gap-2">
                 {agentTypesData?.agentTypes?.map((agent) => {
@@ -339,32 +348,29 @@ export function AgentConfigSection() {
           {/* JSON Configuration Input */}
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">
+              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
                 Configuration{" "}
-                <span className="font-normal text-muted-foreground">
-                  &middot;{" "}
-                  <a
-                    href="https://opencode.ai/docs/config/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary/70 hover:text-primary hover:underline"
-                  >
-                    docs
-                  </a>
-                </span>
+                <a
+                  href="https://opencode.ai/docs/config/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-1 normal-case text-primary/70 hover:text-primary hover:underline"
+                >
+                  docs
+                </a>
               </Label>
               {!formData.configJson.trim() && (
                 <button
                   type="button"
                   onClick={handleLoadExample}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-xs text-white/40 transition-colors hover:text-white/70"
                 >
                   Load example
                 </button>
               )}
             </div>
 
-            <div className="rounded-lg border border-border/50 overflow-hidden">
+            <div className="overflow-hidden rounded-lg border border-white/[0.08]">
               <CodeMirror
                 value={formData.configJson}
                 height="220px"
@@ -399,12 +405,8 @@ export function AgentConfigSection() {
           </div>
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setDialogOpen(false)}
-            className="border-border/50"
-          >
+        <DialogFooter className="border-t border-white/[0.06] bg-white/[0.015] px-5 py-3.5">
+          <Button variant="outline" onClick={() => setDialogOpen(false)}>
             Cancel
           </Button>
           <Button
@@ -412,7 +414,7 @@ export function AgentConfigSection() {
             disabled={
               isPending || !!jsonError || !formData.configJson.trim() || !formData.name.trim()
             }
-            className="gap-2"
+            className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
           >
             {isPending ? (
               <>
@@ -420,7 +422,7 @@ export function AgentConfigSection() {
                 {isEditing ? "Saving..." : "Creating..."}
               </>
             ) : isEditing ? (
-              "Save Changes"
+              "Save changes"
             ) : (
               "Create"
             )}

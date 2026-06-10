@@ -7,6 +7,16 @@ const nextConfig: NextConfig = {
     // We run type checking separately
     ignoreBuildErrors: false,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "github.com",
+        port: "",
+        pathname: "/**",
+      },
+    ],
+  },
   async rewrites() {
     return [
       { source: "/favicon.ico", destination: "/favicon_io/favicon.ico" },

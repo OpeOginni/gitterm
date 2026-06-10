@@ -64,6 +64,7 @@ export interface Repository {
   private: boolean;
   defaultBranch: string;
   htmlUrl: string;
+  pushedAt?: string | null;
 }
 
 export interface Branch {

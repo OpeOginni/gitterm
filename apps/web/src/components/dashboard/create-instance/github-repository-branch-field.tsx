@@ -2,14 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Check, ChevronDown, GitBranch, Loader2, Search } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  ChevronDown,
+  GitBranch,
+  Loader2,
+  Lock,
+  Search,
+} from "lucide-react";
 import { GitHub as Github } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Branch, ResolvedGitHubRepository } from "./types";
+import type { Branch, Repository, ResolvedGitHubRepository } from "./types";
 import { parseGitHubRepositoryInput } from "./github-repository-utils";
 
 export interface GitIntegrationSelection {
@@ -36,6 +44,36 @@ function filterBranches(branches: Branch[], query: string): Branch[] {
   return branches.filter((b) => b.name.toLowerCase().includes(normalizedQuery));
 }
 
+/** Score a repo against the query for sorting (exact > prefix > contains). */
+function scoreRepoMatch(query: string, target: string): number {
+  const q = query.toLowerCase();
+  const t = target.toLowerCase();
+  if (!q) return 0;
+  if (t === q) return 1000;
+  if (t.startsWith(q)) return 500;
+  if (t.includes(q)) return 200;
+  return 0;
+}
+
+function filterRepos(repos: Repository[], query: string): Repository[] {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return repos.slice(0, 20);
+  }
+  return repos
+    .map((repo) => ({
+      repo,
+      score: Math.max(
+        scoreRepoMatch(trimmed, repo.fullName),
+        scoreRepoMatch(trimmed, repo.name),
+      ),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20)
+    .map((item) => item.repo);
+}
+
 export function GitHubRepositoryBranchField({
   repoUrl,
   branch,
@@ -48,14 +86,40 @@ export function GitHubRepositoryBranchField({
   const [branchQuery, setBranchQuery] = useState("");
   const branchSearchRef = useRef<HTMLInputElement>(null);
 
-  const branchSourceRef = useRef<"empty" | "default" | "manual" | "url">("empty");
+  const [isRepoListOpen, setIsRepoListOpen] = useState(false);
+  const repoFieldRef = useRef<HTMLDivElement>(null);
+  const branchFieldRef = useRef<HTMLDivElement>(null);
+
+  const branchSourceRef = useRef<"empty" | "default" | "manual" | "url">(
+    "empty",
+  );
   const repoIdentityRef = useRef("");
 
-  const parsedRepository = useMemo(() => parseGitHubRepositoryInput(repoUrl), [repoUrl]);
+  const parsedRepository = useMemo(
+    () => parseGitHubRepositoryInput(repoUrl),
+    [repoUrl],
+  );
   const hasGitHubUrl = repoUrl.trim().length > 0;
   const accessMode = integration ? "integration" : "public";
 
   // -- data fetching --
+
+  // Accessible repos for the selected integration -- powers the searchable
+  // combobox. Public mode (no integration) falls back to URL paste only.
+  const reposQuery = useQuery({
+    ...trpc.github.listAccessibleRepos.queryOptions({
+      installationId: integration?.providerInstallationId ?? "",
+    }),
+    enabled: !!integration,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const accessibleRepos = (reposQuery.data?.repos ?? []) as Repository[];
+
+  const filteredRepos = useMemo(
+    () => filterRepos(accessibleRepos, repoUrl),
+    [accessibleRepos, repoUrl],
+  );
 
   const repositoryQuery = useQuery({
     ...trpc.github.resolveRepository.queryOptions({
@@ -65,6 +129,7 @@ export function GitHubRepositoryBranchField({
     enabled: !!integration && !!parsedRepository,
     staleTime: 5 * 60 * 1000,
     retry: false,
+    meta: { skipGlobalErrorToast: true },
   });
 
   const resolvedRepository = repositoryQuery.data?.repository as
@@ -83,7 +148,11 @@ export function GitHubRepositoryBranchField({
   });
 
   const filteredBranches = useMemo(
-    () => filterBranches((branchesQuery.data?.branches ?? []) as Branch[], branchQuery),
+    () =>
+      filterBranches(
+        (branchesQuery.data?.branches ?? []) as Branch[],
+        branchQuery,
+      ),
     [branchesQuery.data?.branches, branchQuery],
   );
 
@@ -105,10 +174,19 @@ export function GitHubRepositoryBranchField({
     if (branch !== nextBranch) {
       onBranchChange(nextBranch);
     }
-  }, [branch, onBranchChange, parsedRepository?.branchFromUrl, repositoryIdentity]);
+  }, [
+    branch,
+    onBranchChange,
+    parsedRepository?.branchFromUrl,
+    repositoryIdentity,
+  ]);
 
   useEffect(() => {
-    if (!integration || !resolvedRepository?.defaultBranch || parsedRepository?.branchFromUrl) {
+    if (
+      !integration ||
+      !resolvedRepository?.defaultBranch ||
+      parsedRepository?.branchFromUrl
+    ) {
       return;
     }
     if (branchSourceRef.current === "manual") {
@@ -133,8 +211,45 @@ export function GitHubRepositoryBranchField({
     }
   }, [isBranchListOpen]);
 
+  useEffect(() => {
+    if (!isRepoListOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (
+        repoFieldRef.current &&
+        !repoFieldRef.current.contains(event.target as Node)
+      ) {
+        setIsRepoListOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [isRepoListOpen]);
+
+  // close branch dropdown on outside click
+  useEffect(() => {
+    if (!isBranchListOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (
+        branchFieldRef.current &&
+        !branchFieldRef.current.contains(event.target as Node)
+      ) {
+        setIsBranchListOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [isBranchListOpen]);
+
+  const handleRepoSelect = (repo: Repository) => {
+    onRepoUrlChange(repo.htmlUrl);
+    setIsRepoListOpen(false);
+  };
+
   const activeBranch =
-    branch || parsedRepository?.branchFromUrl || resolvedRepository?.defaultBranch || "";
+    branch ||
+    parsedRepository?.branchFromUrl ||
+    resolvedRepository?.defaultBranch ||
+    "";
 
   const handleManualBranchChange = (value: string) => {
     branchSourceRef.current = value.trim() ? "manual" : "empty";
@@ -142,7 +257,8 @@ export function GitHubRepositoryBranchField({
   };
 
   const handleBranchSelect = (value: string) => {
-    branchSourceRef.current = value === resolvedRepository?.defaultBranch ? "default" : "manual";
+    branchSourceRef.current =
+      value === resolvedRepository?.defaultBranch ? "default" : "manual";
     onBranchChange(value);
     setIsBranchListOpen(false);
     setBranchQuery("");
@@ -152,24 +268,83 @@ export function GitHubRepositoryBranchField({
 
   const showBranchPicker = !!parsedRepository;
   const branchFromUrl = parsedRepository?.branchFromUrl;
-  const isResolvingRepo = !!integration && !!parsedRepository && repositoryQuery.isLoading;
-  const resolveError = !!integration && !!parsedRepository && repositoryQuery.error;
+  const isResolvingRepo =
+    !!integration && !!parsedRepository && repositoryQuery.isLoading;
+  const resolveError =
+    !!integration && !!parsedRepository && repositoryQuery.error;
   const canPickBranch = !!integration && !!resolvedRepository && !branchFromUrl;
 
   return (
     <div className="grid gap-4">
-      {/* ── Repository URL ── */}
-      <div className="grid gap-1.5">
+      {/* ── Repository (search or paste URL) ── */}
+      <div className="grid gap-1.5" ref={repoFieldRef}>
         <Label htmlFor="repo" className="text-sm font-medium">
-          GitHub Repository URL
+          GitHub Repository
         </Label>
-        <Input
-          id="repo"
-          placeholder="https://github.com/owner/repo"
-          value={repoUrl}
-          onChange={(event) => onRepoUrlChange(event.target.value)}
-          disabled={disabled}
-        />
+        <div className="relative">
+          <Input
+            id="repo"
+            placeholder={
+              integration
+                ? "Search your repos or paste a URL"
+                : "https://github.com/owner/repo"
+            }
+            value={repoUrl}
+            onChange={(event) => {
+              onRepoUrlChange(event.target.value);
+              if (integration) setIsRepoListOpen(true);
+            }}
+            onFocus={() => {
+              if (integration) setIsRepoListOpen(true);
+            }}
+            disabled={disabled}
+            autoComplete="off"
+          />
+
+          {/* searchable repo dropdown (integration mode only) */}
+          {integration && isRepoListOpen && !parsedRepository && (
+            <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border/60 bg-popover shadow-md">
+              <div className="max-h-60 overflow-y-auto overscroll-contain">
+                {reposQuery.isLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading repositories...
+                  </div>
+                ) : filteredRepos.length > 0 ? (
+                  <div className="p-1">
+                    {filteredRepos.map((repo) => (
+                      <button
+                        key={repo.id}
+                        type="button"
+                        onClick={() => handleRepoSelect(repo)}
+                        className="flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-secondary/60"
+                      >
+                        <Github className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-left font-medium">
+                          {repo.fullName}
+                        </span>
+                        {repo.private && (
+                          <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        )}
+                      </button>
+                    ))}
+                    {!repoUrl.trim() && accessibleRepos.length > 20 && (
+                      <div className="border-t border-border/30 px-3 py-2 text-center text-[11px] text-muted-foreground">
+                        Type to search {accessibleRepos.length} repositories
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    {repoUrl.trim()
+                      ? "No repos match — paste a URL to use any repository"
+                      : "No repositories available"}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
         {/* inline validation hint */}
         <div className="min-h-5 text-xs">
           {parsedRepository ? (
@@ -193,8 +368,9 @@ export function GitHubRepositoryBranchField({
             </span>
           ) : (
             <span className="text-muted-foreground/60">
-              Paste a URL &mdash; <code className="text-[11px]">/tree/branch</code> links set the
-              branch automatically
+              {integration
+                ? "Search your connected repos, or paste any GitHub URL"
+                : "Paste a URL — /tree/branch links set the branch automatically"}
             </span>
           )}
         </div>
@@ -209,7 +385,9 @@ export function GitHubRepositoryBranchField({
             /* branch pinned from URL */
             <div className="flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm">
               <GitBranch className="h-4 w-4 text-emerald-400" />
-              <span className="font-medium text-emerald-200">{branchFromUrl}</span>
+              <span className="font-medium text-emerald-200">
+                {branchFromUrl}
+              </span>
               <span className="text-xs text-emerald-200/60">from URL</span>
             </div>
           ) : isResolvingRepo ? (
@@ -223,34 +401,38 @@ export function GitHubRepositoryBranchField({
             <div className="grid gap-2">
               <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>{repositoryQuery.error?.message}</span>
+                <span>Repo not found — enter the branch manually</span>
               </div>
               <Input
                 placeholder="main"
                 value={branch}
-                onChange={(event) => handleManualBranchChange(event.target.value)}
+                onChange={(event) =>
+                  handleManualBranchChange(event.target.value)
+                }
                 disabled={disabled}
               />
             </div>
           ) : canPickBranch ? (
             /* integration resolved -- show picker trigger */
-            <div>
+            <div className="relative" ref={branchFieldRef}>
               <button
                 type="button"
                 onClick={() => setIsBranchListOpen((open) => !open)}
                 disabled={disabled}
                 className={cn(
-                  "flex w-full items-center justify-between rounded-md border bg-secondary/20 px-3 py-2 text-sm transition-colors hover:bg-secondary/40",
-                  isBranchListOpen
-                    ? "rounded-b-none border-b-transparent border-border/60"
-                    : "border-border/40",
+                  "flex w-full items-center justify-between rounded-md border border-border/40 bg-secondary/20 px-3 py-2 text-sm transition-colors hover:bg-secondary/40",
                 )}
               >
                 <span className="flex items-center gap-2">
                   <GitBranch className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-foreground">{activeBranch}</span>
-                  {(!branch || branch === resolvedRepository?.defaultBranch) && (
-                    <span className="text-xs text-muted-foreground">default</span>
+                  <span className="font-medium text-foreground">
+                    {activeBranch}
+                  </span>
+                  {(!branch ||
+                    branch === resolvedRepository?.defaultBranch) && (
+                    <span className="text-xs text-muted-foreground">
+                      default
+                    </span>
                   )}
                 </span>
                 <ChevronDown
@@ -262,7 +444,7 @@ export function GitHubRepositoryBranchField({
               </button>
 
               {isBranchListOpen && (
-                <div className="rounded-b-md border border-t-0 border-border/60 bg-popover">
+                <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border/60 bg-popover shadow-md">
                   <div className="border-b border-border/30 p-2">
                     <div className="relative">
                       <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -277,7 +459,7 @@ export function GitHubRepositoryBranchField({
                     </div>
                   </div>
 
-                  <div className="max-h-52 overflow-y-auto overscroll-contain p-1">
+                  <div className="max-h-60 overflow-y-auto overscroll-contain p-1">
                     {branchesQuery.isLoading ? (
                       <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -308,7 +490,9 @@ export function GitHubRepositoryBranchField({
                       })
                     ) : (
                       <p className="py-6 text-center text-sm text-muted-foreground">
-                        {branchQuery ? `No branches match "${branchQuery}"` : "No branches found"}
+                        {branchQuery
+                          ? `No branches match "${branchQuery}"`
+                          : "No branches found"}
                       </p>
                     )}
                   </div>

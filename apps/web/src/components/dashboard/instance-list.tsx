@@ -64,7 +64,9 @@ export function InstanceList() {
     }),
   );
 
-  const providersQuery = useQuery(trpc.workspace.listCloudProviders.queryOptions());
+  const providersQuery = useQuery(
+    trpc.workspace.listCloudProviders.queryOptions(),
+  );
 
   const isLoading = workspacesQuery.isLoading || providersQuery.isLoading;
 
@@ -82,7 +84,9 @@ export function InstanceList() {
   const workspaces = workspacesQuery.data?.workspaces || [];
   const pagination = workspacesQuery.data?.pagination;
   const providers = providersQuery.data?.cloudProviders || [];
-  const totalPages = pagination ? Math.ceil(pagination.total / ITEMS_PER_PAGE) : 0;
+  const totalPages = pagination
+    ? Math.ceil(pagination.total / ITEMS_PER_PAGE)
+    : 0;
 
   if (workspaces.length === 0 && page === 0) {
     return (
@@ -90,9 +94,12 @@ export function InstanceList() {
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03]">
           <Terminal className="h-7 w-7 text-white/30" />
         </div>
-        <h3 className="mt-5 text-lg font-medium text-white/80">No active workspaces</h3>
+        <h3 className="mt-5 text-lg font-medium text-white/80">
+          No active workspaces
+        </h3>
         <p className="mt-2 max-w-sm text-sm text-white/35">
-          Create a new workspace to get started with your remote development environment.
+          Connect a GitHub repo and launch a workspace that can clone, commit,
+          push, and open pull requests, or start from a blank terminal.
         </p>
       </div>
     );
@@ -102,7 +109,11 @@ export function InstanceList() {
     <div className="space-y-6">
       <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(320px,420px))]">
         {workspaces.map((workspace) => (
-          <InstanceCard key={workspace.id} workspace={workspace} providers={providers} />
+          <InstanceCard
+            key={workspace.id}
+            workspace={workspace}
+            providers={providers}
+          />
         ))}
       </div>
 
@@ -111,8 +122,8 @@ export function InstanceList() {
         <div className="flex items-center justify-between pt-4 border-t border-white/[0.06]">
           <p className="text-sm text-white/30">
             Showing {pagination.offset + 1} to{" "}
-            {Math.min(pagination.offset + workspaces.length, pagination.total)} of{" "}
-            {pagination.total} workspaces
+            {Math.min(pagination.offset + workspaces.length, pagination.total)}{" "}
+            of {pagination.total} workspaces
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -171,7 +182,9 @@ function InstanceCard({
             ? "Workspace removed. AWS cleanup is continuing in the background."
             : "Workspace terminated successfully",
         );
-        queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspace.listWorkspaces.queryKey(),
+        });
       },
       onError: (error) => {
         toast.error(`Failed to terminate workspace: ${error.message}`);
@@ -183,7 +196,9 @@ function InstanceCard({
     trpc.workspace.stopWorkspace.mutationOptions({
       onSuccess: () => {
         toast.success("Workspace stopped successfully");
-        queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspace.listWorkspaces.queryKey(),
+        });
       },
       onError: (error) => {
         toast.error(`Failed to stop workspace: ${error.message}`);
@@ -199,7 +214,9 @@ function InstanceCard({
             ? "Workspace restarting..."
             : "Workspace restarted successfully",
         );
-        queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspace.listWorkspaces.queryKey(),
+        });
       },
       onError: (error) => {
         toast.error(`Failed to restart workspace: ${error.message}`);
@@ -211,7 +228,9 @@ function InstanceCard({
     trpc.workspace.openWorkspacePort.mutationOptions({
       onSuccess: () => {
         toast.success("Port opened successfully");
-        queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspace.listWorkspaces.queryKey(),
+        });
         setShowOpenPortDialog(false);
         setOpenPortForm({ name: "", port: "" });
       },
@@ -225,7 +244,9 @@ function InstanceCard({
     trpc.workspace.closeWorkspacePort.mutationOptions({
       onSuccess: () => {
         toast.success("Port closed");
-        queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspace.listWorkspaces.queryKey(),
+        });
       },
       onError: (error) => {
         toast.error(`Failed to close port: ${error.message}`);
@@ -283,9 +304,12 @@ function InstanceCard({
 
   const getRegionInfo = () => {
     const provider = providers.find((p) => p.id === workspace.cloudProviderId);
-    if (!provider) return { name: "Unknown", location: "Unknown", providerName: "Unknown" };
+    if (!provider)
+      return { name: "Unknown", location: "Unknown", providerName: "Unknown" };
 
-    const region = provider.regions?.find((r: any) => r.id === workspace.regionId);
+    const region = provider.regions?.find(
+      (r: any) => r.id === workspace.regionId,
+    );
     return {
       name: region?.name || "Unknown",
       location: region?.location || "Unknown",
@@ -299,19 +323,25 @@ function InstanceCard({
   const isPending = workspace.status === "pending";
 
   const editorAccessQuery = useQuery({
-    ...trpc.workspace.getWorkspaceEditorAccess.queryOptions({ workspaceId: workspace.id }),
+    ...trpc.workspace.getWorkspaceEditorAccess.queryOptions({
+      workspaceId: workspace.id,
+    }),
     enabled: showConnectDialog && workspace.editorAccessEnabled && isRunning,
     retry: false,
   });
 
   // Get the workspace URL for linking
-  const workspaceUrl = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
+  const workspaceUrl = workspace.subdomain
+    ? getWorkspaceUrl(workspace.subdomain)
+    : null;
   const workspaceDisplayUrl = workspace.subdomain
     ? getWorkspaceDisplayUrl(workspace.subdomain)
     : null;
 
   const portUrl = (port: number) =>
-    workspace.subdomain ? getWorkspaceOpenPortUrl(workspace.subdomain, port) : null;
+    workspace.subdomain
+      ? getWorkspaceOpenPortUrl(workspace.subdomain, port)
+      : null;
 
   const copyValue = async (value: string, successMessage: string) => {
     await navigator.clipboard.writeText(value);
@@ -324,7 +354,11 @@ function InstanceCard({
     { name: "Zed", protocol: "zed", icon: "/zed.svg" },
   ];
 
-  const buildEditorUri = (protocol: string, remoteTarget: string, projectPathHint: string) => {
+  const buildEditorUri = (
+    protocol: string,
+    remoteTarget: string,
+    projectPathHint: string,
+  ) => {
     if (protocol === "zed") {
       return `zed://ssh/${remoteTarget}${projectPathHint}`;
     }
@@ -363,8 +397,9 @@ function InstanceCard({
         {needsProxySetup && (
           <>
             <div className="rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5 text-xs text-muted-foreground">
-              This provider requires a local proxy. Install <code>websocat</code> and add the SSH
-              config snippet to <code>~/.ssh/config</code> before connecting.
+              This provider requires a local proxy. Install{" "}
+              <code>websocat</code> and add the SSH config snippet to{" "}
+              <code>~/.ssh/config</code> before connecting.
             </div>
             <div className="grid gap-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -372,7 +407,9 @@ function InstanceCard({
               </p>
               <div
                 className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
-                onClick={() => copyValue("brew install websocat", "Install command copied")}
+                onClick={() =>
+                  copyValue("brew install websocat", "Install command copied")
+                }
               >
                 <code className="block text-sm font-medium text-foreground break-all pr-8">
                   brew install websocat
@@ -389,7 +426,9 @@ function InstanceCard({
               </p>
               <div
                 className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
-                onClick={() => copyValue(access.sshConfigSnippet, "SSH config copied")}
+                onClick={() =>
+                  copyValue(access.sshConfigSnippet, "SSH config copied")
+                }
               >
                 <code className="block text-xs font-medium text-foreground break-all whitespace-pre-wrap pr-8">
                   {access.sshConfigSnippet}
@@ -411,7 +450,11 @@ function InstanceCard({
             {editorProtocols.map((editor) => (
               <a
                 key={editor.protocol}
-                href={buildEditorUri(editor.protocol, remoteTarget, access.projectPathHint)}
+                href={buildEditorUri(
+                  editor.protocol,
+                  remoteTarget,
+                  access.projectPathHint,
+                )}
                 className="flex items-center gap-3 rounded-lg border border-border/40 bg-secondary/20 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/40 hover:border-border/60"
               >
                 <Image
@@ -435,7 +478,9 @@ function InstanceCard({
           </p>
           <div
             className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
-            onClick={() => copyValue(access.sshConnectionString, "Connection string copied")}
+            onClick={() =>
+              copyValue(access.sshConnectionString, "Connection string copied")
+            }
           >
             <code className="block text-sm font-medium text-foreground break-all pr-8">
               {access.sshConnectionString}
@@ -447,11 +492,14 @@ function InstanceCard({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Project path: <code className="text-foreground/80">{access.projectPathHint}</code>
+          Project path:{" "}
+          <code className="text-foreground/80">{access.projectPathHint}</code>
           {access.expiresAt && (
             <span className="ml-2">
               &middot; Expires{" "}
-              {formatDistanceToNow(new Date(access.expiresAt), { addSuffix: true })}
+              {formatDistanceToNow(new Date(access.expiresAt), {
+                addSuffix: true,
+              })}
             </span>
           )}
         </p>
@@ -475,8 +523,12 @@ function InstanceCard({
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">Editor Connect</DialogTitle>
-            <DialogDescription>Connect from your preferred editor over SSH.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              Editor Connect
+            </DialogTitle>
+            <DialogDescription>
+              Connect from your preferred editor over SSH.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-1">
@@ -507,7 +559,8 @@ function InstanceCard({
           <DialogHeader>
             <DialogTitle>Open workspace port</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Expose a port from this workspace. Enter a short name and the port number.
+              Expose a port from this workspace. Enter a short name and the port
+              number.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -531,7 +584,9 @@ function InstanceCard({
                 <Input
                   id="port-name"
                   value={openPortForm.name}
-                  onChange={(e) => setOpenPortForm((f) => ({ ...f, name: e.target.value }))}
+                  onChange={(e) =>
+                    setOpenPortForm((f) => ({ ...f, name: e.target.value }))
+                  }
                   placeholder="e.g. Opencode, API"
                 />
               </div>
@@ -543,7 +598,9 @@ function InstanceCard({
                   min={1}
                   max={65535}
                   value={openPortForm.port}
-                  onChange={(e) => setOpenPortForm((f) => ({ ...f, port: e.target.value }))}
+                  onChange={(e) =>
+                    setOpenPortForm((f) => ({ ...f, port: e.target.value }))
+                  }
                   placeholder="e.g. 7681"
                 />
               </div>
@@ -595,7 +652,10 @@ function InstanceCard({
             {getRepoName() && (
               <div className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12">
                 <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate font-mono" title={workspace.repositoryUrl || ""}>
+                <span
+                  className="truncate font-mono"
+                  title={workspace.repositoryUrl || ""}
+                >
                   {getRepoName()}
                 </span>
               </div>
@@ -617,7 +677,9 @@ function InstanceCard({
             <div className="flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
-                {formatDistanceToNow(new Date(workspace.startedAt), { addSuffix: true })}
+                {formatDistanceToNow(new Date(workspace.startedAt), {
+                  addSuffix: true,
+                })}
               </span>
             </div>
             {workspace.lastActiveAt && isRunning && (
@@ -625,7 +687,9 @@ function InstanceCard({
                 <HeartPlusIcon className="h-3.5 w-3.5 shrink-0 text-primary/70" />
                 <span className="truncate text-primary/70">
                   Active{" "}
-                  {formatDistanceToNow(new Date(workspace.lastActiveAt), { addSuffix: true })}
+                  {formatDistanceToNow(new Date(workspace.lastActiveAt), {
+                    addSuffix: true,
+                  })}
                 </span>
               </div>
             )}
@@ -673,56 +737,66 @@ function InstanceCard({
             {workspace.editorAccessEnabled && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <Monitor className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-xs text-white/30">Editor access enabled</span>
+                <span className="text-xs text-white/30">
+                  Editor access enabled
+                </span>
               </div>
             )}
-            {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
+            {((workspace.exposedPorts &&
+              Object.keys(workspace.exposedPorts).length > 0) ||
               isRunning) && (
               <div className="flex items-start gap-2 mt-0.5 min-w-0">
                 <EthernetPort className="h-3.5 w-3.5 shrink-0 mt-px" />
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                   {workspace.exposedPorts &&
-                    Object.entries(workspace.exposedPorts).map(([port, exposedPort]) => {
-                      const portNum = parseInt(port, 10);
-                      const isClosing = closingPort === portNum;
-                      return (
-                        <div key={port} className="flex items-center gap-1.5 min-w-0">
-                          <span className="flex items-center gap-1 text-xs min-w-0 truncate">
-                            <Link
-                              href={portUrl(portNum) ?? ("#" as any)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="bg-muted px-1.5 py-0.5 rounded font-mono text-primary/90 border border-border hover:bg-primary/10 transition-colors"
-                              title={`Open :${port} in browser`}
-                            >
-                              :{port}
-                            </Link>
-                            <span className="text-muted-foreground">
-                              {exposedPort.name ? `(${exposedPort.name})` : "(Port)"}
-                            </span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setClosingPort(portNum);
-                              closeWorkspacePortMutation.mutate({
-                                workspaceId: workspace.id,
-                                port: portNum,
-                              });
-                            }}
-                            disabled={isClosing}
-                            className="shrink-0 p-0.5 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
-                            aria-label={`Remove port ${port}`}
+                    Object.entries(workspace.exposedPorts).map(
+                      ([port, exposedPort]) => {
+                        const portNum = parseInt(port, 10);
+                        const isClosing = closingPort === portNum;
+                        return (
+                          <div
+                            key={port}
+                            className="flex items-center gap-1.5 min-w-0"
                           >
-                            {isClosing ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <X className="h-3 w-3" />
-                            )}
-                          </button>
-                        </div>
-                      );
-                    })}
+                            <span className="flex items-center gap-1 text-xs min-w-0 truncate">
+                              <Link
+                                href={portUrl(portNum) ?? ("#" as any)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="bg-muted px-1.5 py-0.5 rounded font-mono text-primary/90 border border-border hover:bg-primary/10 transition-colors"
+                                title={`Open :${port} in browser`}
+                              >
+                                :{port}
+                              </Link>
+                              <span className="text-muted-foreground">
+                                {exposedPort.name
+                                  ? `(${exposedPort.name})`
+                                  : "(Port)"}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setClosingPort(portNum);
+                                closeWorkspacePortMutation.mutate({
+                                  workspaceId: workspace.id,
+                                  port: portNum,
+                                });
+                              }}
+                              disabled={isClosing}
+                              className="shrink-0 p-0.5 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
+                              aria-label={`Remove port ${port}`}
+                            >
+                              {isClosing ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <X className="h-3 w-3" />
+                              )}
+                            </button>
+                          </div>
+                        );
+                      },
+                    )}
                   {isRunning && (
                     <button
                       type="button"
@@ -731,7 +805,8 @@ function InstanceCard({
                         setOpenPortForm({ name: "", port: "" });
                       }}
                       className={`inline-flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-primary transition-colors w-fit focus:outline-none focus:ring-1 focus:ring-ring focus:ring-offset-0 rounded ${
-                        workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0
+                        workspace.exposedPorts &&
+                        Object.keys(workspace.exposedPorts).length > 0
                           ? "mt-0.5"
                           : ""
                       }`}
@@ -807,7 +882,9 @@ function InstanceCard({
               size="sm"
               className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
               disabled={restartWorkspaceMutation.isPending}
-              onClick={() => restartWorkspaceMutation.mutate({ workspaceId: workspace.id })}
+              onClick={() =>
+                restartWorkspaceMutation.mutate({ workspaceId: workspace.id })
+              }
             >
               {restartWorkspaceMutation.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -824,7 +901,9 @@ function InstanceCard({
               size="sm"
               className="h-9 px-3 text-xs"
               disabled={stopWorkspaceMutation.isPending}
-              onClick={() => stopWorkspaceMutation.mutate({ workspaceId: workspace.id })}
+              onClick={() =>
+                stopWorkspaceMutation.mutate({ workspaceId: workspace.id })
+              }
             >
               {stopWorkspaceMutation.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -839,7 +918,9 @@ function InstanceCard({
             size="sm"
             className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
             disabled={deleteServiceMutation.isPending}
-            onClick={() => deleteServiceMutation.mutate({ workspaceId: workspace.id })}
+            onClick={() =>
+              deleteServiceMutation.mutate({ workspaceId: workspace.id })
+            }
           >
             {deleteServiceMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

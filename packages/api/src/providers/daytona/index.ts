@@ -10,8 +10,10 @@ import type {
   UpstreamAccess,
   WorkspaceConfig,
   WorkspaceInfo,
+  WorkspaceProvisioningSpec,
   WorkspaceStatusResult,
 } from "../compute";
+import { resolveProvisioningSpec } from "../provisioning-spec";
 import {
   buildHostAlias,
   buildSshCommand,
@@ -49,6 +51,10 @@ function getWorkspaceDir(): string {
 
 function getRepoDir(repoName?: string): string {
   return repoName ? path.posix.join(getWorkspaceDir(), repoName) : getWorkspaceDir();
+}
+
+function toBase64(value: string): string {
+  return Buffer.from(value).toString("base64");
 }
 
 function toDate(value?: string | number | Date | null): Date {
@@ -105,13 +111,17 @@ export class DaytonaProvider implements ComputeProvider {
         : `https://${subdomain}.${BASE_DOMAIN}`;
   }
 
-  private getWorkspaceLabels(config: WorkspaceConfig, persistent: boolean): Record<string, string> {
+  private getWorkspaceLabels(
+    config: WorkspaceConfig,
+    spec: WorkspaceProvisioningSpec | null,
+    persistent: boolean,
+  ): Record<string, string> {
     const labels: Record<string, string> = {
       [WORKSPACE_ID_LABEL]: config.workspaceId,
       [PERSISTENT_LABEL]: String(persistent),
     };
 
-    const repoName = config.environmentVariables?.REPO_NAME;
+    const repoName = spec?.repo?.name;
     if (repoName) {
       labels[REPO_NAME_LABEL] = repoName;
     }
@@ -119,8 +129,8 @@ export class DaytonaProvider implements ComputeProvider {
     return labels;
   }
 
-  private isEditorAccessWorkspace(config: WorkspaceConfig): boolean {
-    return config.environmentVariables?.EDITOR_ACCESS_ENABLED === "true";
+  private isEditorAccessWorkspace(spec: WorkspaceProvisioningSpec | null): boolean {
+    return spec?.editorAccessEnabled === true;
   }
 
   private getTargetRegion(config: WorkspaceConfig, providerConfig: DaytonaConfig): string {
@@ -209,7 +219,8 @@ export class DaytonaProvider implements ComputeProvider {
     const targetRegion = this.getTargetRegion(config, providerConfig);
     const snapshotName = this.getSnapshotName(config);
     const daytona = await this.createClient(targetRegion);
-    const repoName = config.environmentVariables?.REPO_NAME;
+    const spec = resolveProvisioningSpec(config);
+    const repoName = spec?.repo?.name;
     const repoDir = getRepoDir(repoName);
 
     const sandbox = await provisionLogger.step(
@@ -217,24 +228,21 @@ export class DaytonaProvider implements ComputeProvider {
       () =>
         daytona.create({
           ...(snapshotName ? { snapshot: snapshotName } : {}),
-          labels: this.getWorkspaceLabels(config, persistent),
+          labels: this.getWorkspaceLabels(config, spec, persistent),
           envVars: {
-            OPENCODE_SERVER_PASSWORD: config.environmentVariables?.OPENCODE_SERVER_PASSWORD ?? "",
+            OPENCODE_SERVER_PASSWORD: spec?.serverPassword ?? "",
           },
         }),
     );
 
-    if (config.repositoryUrl && config.environmentVariables) {
-      const parsedGitRepoUrl = config.repositoryUrl.endsWith(".git")
-        ? config.repositoryUrl
-        : `${config.repositoryUrl}.git`;
+    if (spec?.repo) {
+      const parsedGitRepoUrl = spec.repo.url.endsWith(".git")
+        ? spec.repo.url
+        : `${spec.repo.url}.git`;
 
-      const username = config.environmentVariables.GITHUB_APP_TOKEN
-        ? config.environmentVariables.USER_GITHUB_USERNAME
-        : undefined;
-      const password = config.environmentVariables.GITHUB_APP_TOKEN;
-      const repoBranch =
-        config.repositoryBranch?.trim() || config.environmentVariables.REPO_BRANCH?.trim();
+      const username = spec.repo.authToken ? spec.repo.authUsername : undefined;
+      const password = spec.repo.authToken;
+      const repoBranch = spec.repo.branch;
 
       await provisionLogger.step("clone-repository", () =>
         sandbox.git
@@ -247,23 +255,23 @@ export class DaytonaProvider implements ComputeProvider {
       );
     }
 
-    if (config.environmentVariables?.OPENCODE_CONFIG_BASE64) {
+    if (spec?.opencodeConfigJson) {
       await provisionLogger.step("write-opencode-config", async () => {
         await this.executeCommand(sandbox, "mkdir -p ~/.config/opencode", true);
         await this.executeCommand(
           sandbox,
-          `echo "${config.environmentVariables?.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
+          `echo "${toBase64(spec.opencodeConfigJson)}" | base64 -d > ~/.config/opencode/opencode.json`,
           true,
         );
       });
     }
 
-    if (config.environmentVariables?.OPENCODE_CREDENTIALS_BASE64) {
+    if (spec?.opencodeCredentialsJson) {
       await provisionLogger.step("write-opencode-credentials", async () => {
         await this.executeCommand(sandbox, "mkdir -p ~/.local/share/opencode", true);
         await this.executeCommand(
           sandbox,
-          `echo "${config.environmentVariables?.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
+          `echo "${toBase64(spec.opencodeCredentialsJson)}" | base64 -d > ~/.local/share/opencode/auth.json`,
           true,
         );
       });
@@ -289,7 +297,7 @@ export class DaytonaProvider implements ComputeProvider {
     };
 
     provisionLogger.log(
-      `workspace-ready persistent=${persistent} editorAccess=${this.isEditorAccessWorkspace(config)} region=${targetRegion} snapshot=${snapshotName ?? "default"}`,
+      `workspace-ready persistent=${persistent} editorAccess=${this.isEditorAccessWorkspace(spec)} region=${targetRegion} snapshot=${snapshotName ?? "default"}`,
     );
 
     if (!persistent) {

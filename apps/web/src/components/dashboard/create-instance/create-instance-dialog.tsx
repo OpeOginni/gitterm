@@ -16,6 +16,7 @@ import { WorkspaceTypeSelector } from "./workspace-type-selector";
 import { CliCommandDisplay } from "./cli-command-display";
 import { CreateCloudInstance } from "./create-cloud-instance";
 import { CreateAgentLoop } from "./create-agent-loop";
+import { usePrefetchCreateInstanceData } from "./use-prefetch-create-instance-data";
 import type { WorkspaceType, CreateInstanceResult } from "./types";
 import { track } from "@/lib/analytics";
 
@@ -30,6 +31,9 @@ export function CreateInstanceDialog() {
   const [cliCommand, setCliCommand] = useState<string | null>(null);
 
   const { watchWorkspaceStatus } = useWorkspaceStatusWatcher();
+
+  // Warm the cache so the dialog opens fully populated (no flicker / resize).
+  usePrefetchCreateInstanceData();
 
   // Handle success from any form
   const handleSuccess = useCallback(

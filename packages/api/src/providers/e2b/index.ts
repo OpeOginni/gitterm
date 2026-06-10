@@ -9,8 +9,10 @@ import type {
   WorkspaceConfig,
   WorkspaceEnvironmentVariables,
   WorkspaceInfo,
+  WorkspaceProvisioningSpec,
   WorkspaceStatusResult,
 } from "../compute";
+import { resolveProvisioningSpec } from "../provisioning-spec";
 import {
   buildHostAlias,
   buildSshCommand,
@@ -52,10 +54,13 @@ export class E2BProvider implements ComputeProvider {
   readonly name = "e2b";
 
   async getConfig(): Promise<E2BConfig> {
-    const config = await getProviderConfigService().getProviderConfigForUse("e2b");
+    const config =
+      await getProviderConfigService().getProviderConfigForUse("e2b");
 
     if (!config) {
-      throw new Error("E2B provider is not configured. Please configure it in the admin panel.");
+      throw new Error(
+        "E2B provider is not configured. Please configure it in the admin panel.",
+      );
     }
 
     return config as E2BConfig;
@@ -84,15 +89,16 @@ export class E2BProvider implements ComputeProvider {
   }
 
   private getSandboxEnvs(config: WorkspaceConfig): Record<string, string> {
-    const envs = (config.environmentVariables ?? {}) as WorkspaceEnvironmentVariables;
+    const envs = (config.environmentVariables ??
+      {}) as WorkspaceEnvironmentVariables;
 
     return Object.fromEntries(
       Object.entries(envs).filter(([, value]) => value !== undefined),
     ) as Record<string, string>;
   }
 
-  private getRepoDir(config: WorkspaceConfig): string {
-    const repoName = config.environmentVariables?.REPO_NAME ?? "workspace";
+  private getRepoDir(spec: WorkspaceProvisioningSpec | null): string {
+    const repoName = spec?.repo?.name ?? "workspace";
     return `${WORKSPACE_DIR}/${repoName}`;
   }
 
@@ -100,32 +106,39 @@ export class E2BProvider implements ComputeProvider {
     return pathHint.replace(/^\/workspace/, WORKSPACE_DIR);
   }
 
-  private isSshEnabledWorkspace(config: WorkspaceConfig): boolean {
-    return config.environmentVariables?.WORKSPACE_PROFILE === "ssh-enabled";
+  private isSshEnabledWorkspace(
+    spec: WorkspaceProvisioningSpec | null,
+  ): boolean {
+    return spec?.workspaceProfile === "ssh-enabled";
   }
 
-  private getTemplateId(config: WorkspaceConfig): string {
+  private getTemplateId(config: WorkspaceConfig, sshEnabled: boolean): string {
     const e2bMetadata = config.imageProviderMetadata?.e2b;
-    const templateId = this.isSshEnabledWorkspace(config)
+    const templateId = sshEnabled
       ? (e2bMetadata?.sshTemplateId ?? e2bMetadata?.templateId)
       : e2bMetadata?.templateId;
 
     if (!templateId) {
-      throw new Error(`No E2B template ID configured for image ${config.imageId}`);
+      throw new Error(
+        `No E2B template ID configured for image ${config.imageId}`,
+      );
     }
 
     return templateId;
   }
 
   private getRepositoryUrl(repositoryUrl: string): string {
-    return repositoryUrl.endsWith(".git") ? repositoryUrl : `${repositoryUrl}.git`;
+    return repositoryUrl.endsWith(".git")
+      ? repositoryUrl
+      : `${repositoryUrl}.git`;
   }
 
   private async createSandbox(
     config: WorkspaceConfig,
     onTimeout: "pause" | "kill",
+    sshEnabled: boolean,
   ): Promise<E2BSandbox> {
-    return Sandbox.create(this.getTemplateId(config), {
+    return Sandbox.create(this.getTemplateId(config, sshEnabled), {
       apiKey: await this.getApiKey(),
       timeoutMs: 10 * 60 * 1_000,
       network: {
@@ -159,27 +172,30 @@ export class E2BProvider implements ComputeProvider {
 
   private async cloneRepository(
     sandbox: E2BSandbox,
-    config: WorkspaceConfig,
+    spec: WorkspaceProvisioningSpec | null,
     repoDir: string,
   ): Promise<void> {
-    await this.runCommand(sandbox, `mkdir -p ${WORKSPACE_DIR}`, "mkdir workspace");
+    await this.runCommand(
+      sandbox,
+      `mkdir -p ${WORKSPACE_DIR}`,
+      "mkdir workspace",
+    );
 
-    if (!config.repositoryUrl || !config.environmentVariables) {
-      await this.runCommand(sandbox, `mkdir -p ${repoDir}`, "mkdir empty repo dir");
+    if (!spec?.repo) {
+      await this.runCommand(
+        sandbox,
+        `mkdir -p ${repoDir}`,
+        "mkdir empty repo dir",
+      );
       return;
     }
 
-    const repoBranch =
-      config.repositoryBranch?.trim() || config.environmentVariables?.REPO_BRANCH?.trim();
-
     await sandbox.git
-      .clone(this.getRepositoryUrl(config.repositoryUrl), {
+      .clone(this.getRepositoryUrl(spec.repo.url), {
         path: repoDir,
-        username: config.environmentVariables.GITHUB_APP_TOKEN
-          ? config.environmentVariables.USER_GITHUB_USERNAME
-          : undefined,
-        password: config.environmentVariables.GITHUB_APP_TOKEN,
-        branch: repoBranch,
+        username: spec.repo.authToken ? spec.repo.authUsername : undefined,
+        password: spec.repo.authToken,
+        branch: spec.repo.branch,
       })
       .catch(async (error) => {
         await sandbox.kill().catch(() => undefined);
@@ -188,45 +204,64 @@ export class E2BProvider implements ComputeProvider {
       });
   }
 
-  private async writeOpencodeFiles(sandbox: E2BSandbox, config: WorkspaceConfig): Promise<void> {
-    const envs = config.environmentVariables;
-
-    if (envs?.OPENCODE_CONFIG_BASE64) {
-      await this.runCommand(sandbox, "mkdir -p ~/.config/opencode", "mkdir config dir");
+  private async writeOpencodeFiles(
+    sandbox: E2BSandbox,
+    spec: WorkspaceProvisioningSpec | null,
+  ): Promise<void> {
+    if (spec?.opencodeConfigJson) {
       await this.runCommand(
         sandbox,
-        `echo "${envs.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
+        "mkdir -p ~/.config/opencode",
+        "mkdir config dir",
+      );
+      await this.runCommand(
+        sandbox,
+        `echo "${this.toBase64(spec.opencodeConfigJson)}" | base64 -d > ~/.config/opencode/opencode.json`,
         "write opencode config",
       );
     }
 
-    if (envs?.OPENCODE_CREDENTIALS_BASE64) {
-      await this.runCommand(sandbox, "mkdir -p ~/.local/share/opencode", "mkdir auth dir");
+    if (spec?.opencodeCredentialsJson) {
       await this.runCommand(
         sandbox,
-        `echo "${envs.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
+        "mkdir -p ~/.local/share/opencode",
+        "mkdir auth dir",
+      );
+      await this.runCommand(
+        sandbox,
+        `echo "${this.toBase64(spec.opencodeCredentialsJson)}" | base64 -d > ~/.local/share/opencode/auth.json`,
         "write opencode auth",
       );
     }
   }
 
-  private async configureSshRuntime(sandbox: E2BSandbox, config: WorkspaceConfig): Promise<void> {
-    if (!this.isSshEnabledWorkspace(config)) {
+  private toBase64(value: string): string {
+    return Buffer.from(value).toString("base64");
+  }
+
+  private async configureSshRuntime(
+    sandbox: E2BSandbox,
+    spec: WorkspaceProvisioningSpec | null,
+  ): Promise<void> {
+    if (!this.isSshEnabledWorkspace(spec)) {
       return;
     }
 
-    const publicKey = config.environmentVariables?.USER_SSH_PUBLIC_KEY;
+    const publicKey = spec?.sshPublicKey;
     if (!publicKey) {
-      throw new Error("E2B SSH workspace requires USER_SSH_PUBLIC_KEY.");
+      throw new Error("E2B SSH workspace requires a user SSH public key.");
     }
+
+    const keyB64 = this.toBase64(publicKey);
 
     await this.runCommand(
       sandbox,
       [
+        `KEY="$(echo ${keyB64} | base64 -d)"`,
         "install -d -m 0700 /home/user/.ssh",
         "touch /home/user/.ssh/authorized_keys",
         "chmod 600 /home/user/.ssh/authorized_keys",
-        `if ! grep -qxF '$USER_SSH_PUBLIC_KEY' /home/user/.ssh/authorized_keys 2>/dev/null; then printf '%s\\n' '$USER_SSH_PUBLIC_KEY' >> /home/user/.ssh/authorized_keys; fi`,
+        `if ! grep -qxF "$KEY" /home/user/.ssh/authorized_keys 2>/dev/null; then printf '%s\\n' "$KEY" >> /home/user/.ssh/authorized_keys; fi`,
       ].join(" && "),
       "configure ssh runtime",
       { user: SSH_USER },
@@ -264,7 +299,10 @@ export class E2BProvider implements ComputeProvider {
     throw new Error("E2B SSH bridge did not become ready in time.");
   }
 
-  private async getTrafficAccessToken(sandbox: E2BSandbox, errorContext: string): Promise<string> {
+  private async getTrafficAccessToken(
+    sandbox: E2BSandbox,
+    errorContext: string,
+  ): Promise<string> {
     const token = sandbox.trafficAccessToken;
 
     if (!token) {
@@ -274,7 +312,10 @@ export class E2BProvider implements ComputeProvider {
     return token;
   }
 
-  private async startOpencodeServer(sandbox: E2BSandbox, repoDir: string): Promise<void> {
+  private async startOpencodeServer(
+    sandbox: E2BSandbox,
+    repoDir: string,
+  ): Promise<void> {
     await sandbox.commands
       .run(
         `cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port ${OPENCODE_PORT} > /tmp/opencode.log 2>&1`,
@@ -296,31 +337,40 @@ export class E2BProvider implements ComputeProvider {
     onTimeout: "pause" | "kill",
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const provisionLogger = createProvisionLogger(this.name, config.workspaceId);
-    const sandbox = await provisionLogger.step("create-sandbox", () =>
-      this.createSandbox(config, onTimeout),
+    const provisionLogger = createProvisionLogger(
+      this.name,
+      config.workspaceId,
     );
-    const repoDir = this.getRepoDir(config);
+    const spec = resolveProvisioningSpec(config);
+    const sandbox = await provisionLogger.step("create-sandbox", () =>
+      this.createSandbox(config, onTimeout, this.isSshEnabledWorkspace(spec)),
+    );
+    const repoDir = this.getRepoDir(spec);
 
     await provisionLogger.step("clone-repository", () =>
-      this.cloneRepository(sandbox, config, repoDir),
+      this.cloneRepository(sandbox, spec, repoDir),
     );
     await provisionLogger.step("write-opencode-files", () =>
-      this.writeOpencodeFiles(sandbox, config),
+      this.writeOpencodeFiles(sandbox, spec),
     );
     await provisionLogger.step("configure-ssh-runtime", () =>
-      this.configureSshRuntime(sandbox, config),
+      this.configureSshRuntime(sandbox, spec),
     );
     await provisionLogger.step("start-opencode-server", () =>
       this.startOpencodeServer(sandbox, repoDir),
     );
 
-    const trafficAccessToken = await provisionLogger.step("resolve-traffic-access-token", () =>
-      this.getTrafficAccessToken(sandbox, "workspace traffic"),
+    const trafficAccessToken = await provisionLogger.step(
+      "resolve-traffic-access-token",
+      () => this.getTrafficAccessToken(sandbox, "workspace traffic"),
     );
     const host = sandbox.getHost(OPENCODE_PORT);
     const startedAt = new Date(
-      (await provisionLogger.step("fetch-sandbox-info", () => sandbox.getInfo())).startedAt,
+      (
+        await provisionLogger.step("fetch-sandbox-info", () =>
+          sandbox.getInfo(),
+        )
+      ).startedAt,
     );
 
     const workspaceInfo: WorkspaceInfo = {
@@ -332,7 +382,7 @@ export class E2BProvider implements ComputeProvider {
     };
 
     provisionLogger.log(
-      `workspace-ready persistent=${persistent} sshEnabled=${this.isSshEnabledWorkspace(config)}`,
+      `workspace-ready persistent=${persistent} sshEnabled=${this.isSshEnabledWorkspace(spec)}`,
     );
 
     if (!persistent) {
@@ -347,7 +397,11 @@ export class E2BProvider implements ComputeProvider {
   }
 
   async createWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
-    return (await this.provisionWorkspace(config, "pause", false)) as WorkspaceInfo;
+    return (await this.provisionWorkspace(
+      config,
+      "pause",
+      false,
+    )) as WorkspaceInfo;
   }
 
   /**
@@ -357,14 +411,24 @@ export class E2BProvider implements ComputeProvider {
    * expires. There's no signed-in user to ever resume an anon workspace, so
    * pausing would just leave a zombie.
    */
-  async createEphemeralAnonWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
-    return (await this.provisionWorkspace(config, "kill", false)) as WorkspaceInfo;
+  async createEphemeralAnonWorkspace(
+    config: WorkspaceConfig,
+  ): Promise<WorkspaceInfo> {
+    return (await this.provisionWorkspace(
+      config,
+      "kill",
+      false,
+    )) as WorkspaceInfo;
   }
 
   async createPersistentWorkspace(
     config: PersistentWorkspaceConfig,
   ): Promise<PersistentWorkspaceInfo> {
-    return (await this.provisionWorkspace(config, "kill", true)) as PersistentWorkspaceInfo;
+    return (await this.provisionWorkspace(
+      config,
+      "kill",
+      true,
+    )) as PersistentWorkspaceInfo;
   }
 
   async stopWorkspace(
@@ -374,10 +438,12 @@ export class E2BProvider implements ComputeProvider {
   ): Promise<void> {
     const sandbox = await this.connectSandbox(externalId);
 
-    await sandbox.pause({ apiKey: await this.getApiKey() }).catch((error: Error) => {
-      console.error("E2B Sandbox Error (Sandbox.pause)", error.message);
-      throw new Error(`E2B Sandbox Error (Sandbox.pause): ${error.message}`);
-    });
+    await sandbox
+      .pause({ apiKey: await this.getApiKey() })
+      .catch((error: Error) => {
+        console.error("E2B Sandbox Error (Sandbox.pause)", error.message);
+        throw new Error(`E2B Sandbox Error (Sandbox.pause): ${error.message}`);
+      });
   }
 
   async restartWorkspace(
@@ -386,12 +452,20 @@ export class E2BProvider implements ComputeProvider {
     _externalRunningDeploymentId?: string,
   ): Promise<void> {
     await this.connectSandbox(externalId).catch((error: Error) => {
-      console.error("E2B Sandbox Error while restarting (Sandbox.connect)", error.message);
-      throw new Error(`E2B Sandbox Error while restarting (Sandbox.connect): ${error.message}`);
+      console.error(
+        "E2B Sandbox Error while restarting (Sandbox.connect)",
+        error.message,
+      );
+      throw new Error(
+        `E2B Sandbox Error while restarting (Sandbox.connect): ${error.message}`,
+      );
     });
   }
 
-  async terminateWorkspace(externalServiceId: string, _externalVolumeId?: string): Promise<void> {
+  async terminateWorkspace(
+    externalServiceId: string,
+    _externalVolumeId?: string,
+  ): Promise<void> {
     const sandbox = await this.connectSandbox(externalServiceId);
 
     await sandbox.kill().catch((error: Error) => {
@@ -426,7 +500,11 @@ export class E2BProvider implements ComputeProvider {
   async createOrGetExposedPortDomain(
     externalServiceId: string,
     port: number,
-  ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }> {
+  ): Promise<{
+    domain: string;
+    externalPortDomainId?: string;
+    upstreamAccess?: UpstreamAccess;
+  }> {
     const sandbox = await this.connectSandbox(externalServiceId);
 
     return {
@@ -441,8 +519,12 @@ export class E2BProvider implements ComputeProvider {
     config: WorkspaceEditorAccessConfig,
   ): Promise<WorkspaceEditorAccess> {
     const sandbox = await this.connectSandbox(config.externalServiceId);
-    const trafficAccessToken = await this.getTrafficAccessToken(sandbox, "SSH access");
-    const bridgeHost = config.existingConnection?.host ?? (await this.waitForSshBridge(sandbox));
+    const trafficAccessToken = await this.getTrafficAccessToken(
+      sandbox,
+      "SSH access",
+    );
+    const bridgeHost =
+      config.existingConnection?.host ?? (await this.waitForSshBridge(sandbox));
     const hostAlias = buildHostAlias(config.subdomain);
     const proxyCommand = `websocat --binary -B 65536 -H='e2b-traffic-access-token: ${trafficAccessToken}' - wss://${bridgeHost}`;
 
@@ -482,9 +564,13 @@ export class E2BProvider implements ComputeProvider {
     };
   }
 
-  async revokeWorkspaceEditorAccess(_config: WorkspaceEditorAccessCleanupConfig): Promise<void> {}
+  async revokeWorkspaceEditorAccess(
+    _config: WorkspaceEditorAccessCleanupConfig,
+  ): Promise<void> {}
 
-  async removeExposedPortDomain(_externalServiceDomainId: string): Promise<void> {
+  async removeExposedPortDomain(
+    _externalServiceDomainId: string,
+  ): Promise<void> {
     // E2B does not expose a separate delete step for public port hosts.
   }
 }

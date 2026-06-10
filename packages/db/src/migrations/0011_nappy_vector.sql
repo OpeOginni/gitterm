@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "default_cloud_provider_id" uuid;
