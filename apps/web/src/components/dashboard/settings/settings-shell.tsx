@@ -66,7 +66,7 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
 
       <div>
         {/* Mobile tab bar */}
-        <div className="flex gap-1 overflow-x-auto border-b border-white/[0.06] pb-3 lg:hidden">
+        <div className="-mx-1 flex gap-1 overflow-x-auto border-b border-white/[0.06] px-1 pb-3 lg:hidden">
           {sidebarItems.map((item) => {
             const isActive = activeSection === item.id;
             return (
@@ -90,41 +90,74 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
         {/* Desktop: sidebar + content */}
         <div className="flex gap-8 pt-6 lg:pt-2">
           {/* Sidebar -- desktop only */}
-          <nav className="hidden w-60 shrink-0 lg:block">
-            <div className="sticky top-20 space-y-1">
-              {sidebarItems.map((item) => {
-                const isActive = activeSection === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleSectionChange(item.id)}
-                    className={cn(
-                      "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
-                      isActive
-                        ? "bg-white/[0.06] text-white"
-                        : "text-white/40 hover:bg-white/[0.03] hover:text-white/60",
-                    )}
-                  >
-                    <item.icon
+          <nav className="hidden w-64 shrink-0 lg:block">
+            <div className="sticky top-20 overflow-hidden rounded-2xl border border-white/[0.06] bg-card">
+              <div className="border-b border-white/[0.04] bg-white/[0.015] px-4 py-3">
+                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                  Settings
+                </span>
+              </div>
+              <div className="space-y-0.5 p-2">
+                {sidebarItems.map((item, index) => {
+                  const isActive = activeSection === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleSectionChange(item.id)}
                       className={cn(
-                        "h-4 w-4 shrink-0 transition-colors",
-                        isActive ? "text-primary" : "text-white/30 group-hover:text-white/50",
+                        "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-all",
+                        isActive
+                          ? "bg-primary/[0.07] text-white"
+                          : "text-white/40 hover:bg-white/[0.03] hover:text-white/65",
                       )}
-                    />
-                    <div className="min-w-0">
-                      <span className="font-medium">{item.label}</span>
-                      <p
+                    >
+                      {/* active accent bar */}
+                      <span
                         className={cn(
-                          "text-xs truncate",
-                          isActive ? "text-white/40" : "text-white/20",
+                          "absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary transition-all",
+                          isActive ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
+                          isActive
+                            ? "bg-primary/15"
+                            : "bg-white/[0.04] group-hover:bg-white/[0.06]",
                         )}
                       >
-                        {item.description}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
+                        <item.icon
+                          className={cn(
+                            "h-4 w-4 transition-colors",
+                            isActive
+                              ? "text-primary"
+                              : "text-white/35 group-hover:text-white/55",
+                          )}
+                        />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className="block font-medium">{item.label}</span>
+                        <p
+                          className={cn(
+                            "truncate text-xs",
+                            isActive ? "text-white/40" : "text-white/20",
+                          )}
+                        >
+                          {item.description}
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "font-mono text-[10px] tabular-nums transition-colors",
+                          isActive ? "text-primary/60" : "text-white/15",
+                        )}
+                      >
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </nav>
 

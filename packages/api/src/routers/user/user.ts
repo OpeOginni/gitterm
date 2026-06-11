@@ -17,13 +17,19 @@ import { validateAgentConfig } from "@gitterm/schema";
 import { polarClient, isBillingEnabled } from "@gitterm/auth";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { updateWorkspaceByIdAndInvalidate } from "../../service/workspace-mutations";
-import { isValidSshPublicKey, normalizeSshPublicKey } from "../../utils/ssh-public-key";
+import {
+  isValidSshPublicKey,
+  normalizeSshPublicKey,
+} from "../../utils/ssh-public-key";
 
 export const userRouter = router({
   getSshPublicKey: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
     if (!userId) {
-      throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
     }
 
     const record = await db.query.user.findFirst({
@@ -46,10 +52,15 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       if (!userId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
       }
 
-      const normalized = input.publicKey ? normalizeSshPublicKey(input.publicKey) : "";
+      const normalized = input.publicKey
+        ? normalizeSshPublicKey(input.publicKey)
+        : "";
       if (normalized && !isValidSshPublicKey(normalized)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -73,10 +84,90 @@ export const userRouter = router({
       };
     }),
 
+  getDefaultCloudProvider: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    if (!userId) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
+    }
+
+    const record = await db.query.user.findFirst({
+      where: eq(user.id, userId),
+      columns: { defaultCloudProviderId: true },
+    });
+
+    const storedId = record?.defaultCloudProviderId ?? null;
+    if (!storedId) {
+      return { cloudProviderId: null };
+    }
+
+    const provider = await db.query.cloudProvider.findFirst({
+      where: and(
+        eq(cloudProvider.id, storedId),
+        eq(cloudProvider.isEnabled, true),
+      ),
+      columns: { id: true },
+    });
+
+    return { cloudProviderId: provider?.id ?? null };
+  }),
+
+  setDefaultCloudProvider: protectedProcedure
+    .input(
+      z.object({
+        cloudProviderId: z.uuid().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      if (!userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
+
+      if (input.cloudProviderId) {
+        const provider = await db.query.cloudProvider.findFirst({
+          where: and(
+            eq(cloudProvider.id, input.cloudProviderId),
+            eq(cloudProvider.isEnabled, true),
+          ),
+          columns: { id: true },
+        });
+
+        if (!provider) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "That cloud provider is not available.",
+          });
+        }
+      }
+
+      const [updated] = await db
+        .update(user)
+        .set({
+          defaultCloudProviderId: input.cloudProviderId,
+          updatedAt: new Date(),
+        })
+        .where(eq(user.id, userId))
+        .returning({ defaultCloudProviderId: user.defaultCloudProviderId });
+
+      return {
+        success: true,
+        cloudProviderId: updated?.defaultCloudProviderId ?? null,
+      };
+    }),
+
   deleteUser: protectedProcedure.mutation(async ({ ctx }) => {
     const userId = ctx.session.user.id;
     if (!userId) {
-      throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
     }
 
     try {
@@ -105,10 +196,14 @@ export const userRouter = router({
           if (provider) {
             // Terminate the workspace via compute provider
             try {
-              const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+              const computeProvider = await getProviderByCloudProviderId(
+                provider.providerKey,
+              );
               await computeProvider.terminateWorkspace(
                 ws.externalInstanceId,
-                ws.persistent && ws.volume ? ws.volume.externalVolumeId : undefined,
+                ws.persistent && ws.volume
+                  ? ws.volume.externalVolumeId
+                  : undefined,
               );
             } catch (error) {
               // Log but continue - workspace might already be terminated
@@ -144,7 +239,12 @@ export const userRouter = router({
       const openSessions = await db
         .select()
         .from(usageSession)
-        .where(and(eq(usageSession.userId, userId), sql`${usageSession.stoppedAt} IS NULL`));
+        .where(
+          and(
+            eq(usageSession.userId, userId),
+            sql`${usageSession.stoppedAt} IS NULL`,
+          ),
+        );
 
       for (const session of openSessions) {
         try {
@@ -165,7 +265,9 @@ export const userRouter = router({
               : undefined;
 
           if (statusCode === 404) {
-            console.warn(`[polar] No customer found for user ${userId}, skipping delete`);
+            console.warn(
+              `[polar] No customer found for user ${userId}, skipping delete`,
+            );
           } else {
             throw error;
           }
@@ -197,7 +299,10 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       if (!userId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
       }
 
       const fetchedAgentType = await db.query.agentType.findFirst({
@@ -205,10 +310,16 @@ export const userRouter = router({
       });
 
       if (!fetchedAgentType) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent type not found",
+        });
       }
 
-      const validationResult = await validateAgentConfig(fetchedAgentType.name, input.config);
+      const validationResult = await validateAgentConfig(
+        fetchedAgentType.name,
+        input.config,
+      );
 
       if (!validationResult.success) {
         throw new TRPCError({
@@ -244,16 +355,25 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       if (!userId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
       }
 
       // Verify ownership
       const existing = await db.query.agentWorkspaceConfig.findFirst({
-        where: and(eq(agentWorkspaceConfig.id, input.id), eq(agentWorkspaceConfig.userId, userId)),
+        where: and(
+          eq(agentWorkspaceConfig.id, input.id),
+          eq(agentWorkspaceConfig.userId, userId),
+        ),
       });
 
       if (!existing) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Configuration not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Configuration not found",
+        });
       }
 
       const fetchedAgentType = await db.query.agentType.findFirst({
@@ -261,11 +381,20 @@ export const userRouter = router({
       });
 
       if (!fetchedAgentType) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent type not found",
+        });
       }
 
-      console.log("Validating configuration for agent type:", fetchedAgentType.name);
-      const validationResult = await validateAgentConfig(fetchedAgentType.name, input.config);
+      console.log(
+        "Validating configuration for agent type:",
+        fetchedAgentType.name,
+      );
+      const validationResult = await validateAgentConfig(
+        fetchedAgentType.name,
+        input.config,
+      );
       console.log("Validation result:", validationResult);
 
       if (!validationResult.success) {
@@ -294,7 +423,10 @@ export const userRouter = router({
   listAgentConfigurations: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
     if (!userId) {
-      throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
     }
 
     const configurations = await db
@@ -324,19 +456,30 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       if (!userId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
       }
 
       // Verify ownership before deleting
       const existing = await db.query.agentWorkspaceConfig.findFirst({
-        where: and(eq(agentWorkspaceConfig.id, input.id), eq(agentWorkspaceConfig.userId, userId)),
+        where: and(
+          eq(agentWorkspaceConfig.id, input.id),
+          eq(agentWorkspaceConfig.userId, userId),
+        ),
       });
 
       if (!existing) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Configuration not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Configuration not found",
+        });
       }
 
-      await db.delete(agentWorkspaceConfig).where(eq(agentWorkspaceConfig.id, input.id));
+      await db
+        .delete(agentWorkspaceConfig)
+        .where(eq(agentWorkspaceConfig.id, input.id));
 
       return { success: true };
     }),
@@ -351,11 +494,16 @@ export const userRouter = router({
       const userId = ctx.session.user.id;
       const userEmail = ctx.session.user.email;
       if (!userId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
       }
 
       try {
-        sendAdminMessage(`**Feedback submitted by ${userEmail}:**\n\n${input.feedback}`);
+        sendAdminMessage(
+          `**Feedback submitted by ${userEmail}:**\n\n${input.feedback}`,
+        );
       } catch (error) {
         console.error("Failed to send admin message", { error });
       }

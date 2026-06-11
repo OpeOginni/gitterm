@@ -491,37 +491,48 @@ export function ModelCredentialsSection() {
           Add credential
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] sm:min-h-[560px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {selectedProvider ? (
-              <Image
-                src={getProviderLogo(selectedProvider.name)}
-                alt={selectedProvider.displayName}
-                width={20}
-                height={20}
-                className="h-5 w-5"
-              />
-            ) : (
-              <Shield className="h-5 w-5" />
-            )}
-            {selectedProvider
-              ? `Add ${selectedProvider.displayName} Credential`
-              : "Add Model Credential"}
-          </DialogTitle>
-          <DialogDescription>
-            {selectedProvider?.authType === "oauth" && isCodexProvider
-              ? "Paste your auth.json tokens from the OpenCode CLI."
-              : selectedProvider?.authType === "oauth"
-                ? "Connect via GitHub device code flow."
-                : "Store an API key for automated agent runs."}
-          </DialogDescription>
+      <DialogContent className="gap-0 p-0 sm:max-w-[600px] max-h-[90vh] overflow-hidden">
+        <DialogHeader className="space-y-0 border-b border-white/[0.06] bg-white/[0.015] px-5 py-4">
+          <span className="block font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+            New / Credential
+          </span>
+          <div className="mt-2 flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04]">
+              {selectedProvider ? (
+                <Image
+                  src={getProviderLogo(selectedProvider.name)}
+                  alt={selectedProvider.displayName}
+                  width={18}
+                  height={18}
+                  className="h-[18px] w-[18px]"
+                />
+              ) : (
+                <Shield className="h-[18px] w-[18px] text-white/55" />
+              )}
+            </span>
+            <div className="min-w-0">
+              <DialogTitle>
+                {selectedProvider
+                  ? `Add ${selectedProvider.displayName} credential`
+                  : "Add model credential"}
+              </DialogTitle>
+              <DialogDescription className="mt-0.5">
+                {selectedProvider?.authType === "oauth" && isCodexProvider
+                  ? "Paste your auth.json tokens from the OpenCode CLI."
+                  : selectedProvider?.authType === "oauth"
+                    ? "Connect via GitHub device code flow."
+                    : "Store an API key for automated agent runs."}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="grid gap-5 py-4">
+        <div className="grid max-h-[calc(90vh-180px)] gap-5 overflow-y-auto px-5 py-5">
           {/* Provider Selection -- horizontal scrollable chips */}
           <div className="grid gap-2.5">
-            <Label className="text-sm font-medium">Provider</Label>
+            <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+              Provider
+            </Label>
             <div className="flex flex-wrap gap-2">
               {[...providers]
                 .sort((a, b) => {
@@ -564,8 +575,8 @@ export function ModelCredentialsSection() {
 
           {/* Label (optional) */}
           <div className="grid gap-2">
-            <Label className="text-sm font-medium">
-              Label <span className="font-normal text-muted-foreground">(optional)</span>
+            <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+              Label <span className="ml-1 normal-case text-white/30">(optional)</span>
             </Label>
             <Input
               value={label}
@@ -578,7 +589,9 @@ export function ModelCredentialsSection() {
           {/* API Key Input (for api_key providers) */}
           {selectedProvider?.authType === "api_key" && (
             <div className="grid gap-2">
-              <Label className="text-sm font-medium">API Key</Label>
+              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                API key
+              </Label>
               <Input
                 type="password"
                 value={apiKey}
@@ -610,8 +623,10 @@ export function ModelCredentialsSection() {
               </div>
 
               <div className="grid gap-2">
-                <Label className="text-sm font-medium">auth.json</Label>
-                <div className="rounded-lg border border-border/50 overflow-hidden">
+                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                  auth.json
+                </Label>
+                <div className="overflow-hidden rounded-lg border border-white/[0.08]">
                   <CodeMirror
                     value={authJsonInput}
                     height="120px"
@@ -647,7 +662,7 @@ export function ModelCredentialsSection() {
           {selectedProvider?.authType === "oauth" && !isCodexProvider && (
             <div className="grid gap-4">
               {oauthStep === "idle" && (
-                <div className="flex flex-col items-center gap-4 rounded-lg border border-border/50 bg-secondary/20 p-8">
+                <div className="flex flex-col items-center gap-4 rounded-xl border border-white/[0.08] bg-input/40 p-8">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                     <ExternalLink className="h-5 w-5 text-primary" />
                   </div>
@@ -675,7 +690,7 @@ export function ModelCredentialsSection() {
               )}
 
               {oauthStep === "pending" && deviceCode && (
-                <div className="flex flex-col items-center gap-5 rounded-lg border border-border/50 bg-secondary/20 p-8">
+                <div className="flex flex-col items-center gap-5 rounded-xl border border-white/[0.08] bg-input/40 p-8">
                   <p className="text-sm text-muted-foreground">
                     Open the link and enter this code:
                   </p>
@@ -709,7 +724,7 @@ export function ModelCredentialsSection() {
               )}
 
               {oauthStep === "polling" && (
-                <div className="flex flex-col items-center gap-4 rounded-lg border border-border/50 bg-secondary/20 p-8">
+                <div className="flex flex-col items-center gap-4 rounded-xl border border-white/[0.08] bg-input/40 p-8">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   <p className="text-sm text-muted-foreground">Waiting for authorization...</p>
                 </div>
@@ -718,19 +733,15 @@ export function ModelCredentialsSection() {
           )}
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setAddDialogOpen(false)}
-            className="border-border/50"
-          >
+        <DialogFooter className="border-t border-white/[0.06] bg-white/[0.015] px-5 py-3.5">
+          <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
             Cancel
           </Button>
           {selectedProvider?.authType === "api_key" && (
             <Button
               onClick={handleSubmitApiKey}
               disabled={isSubmitting || !apiKey.trim()}
-              className="gap-2"
+              className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
             >
               {storeApiKeyMutation.isPending ? (
                 <>
@@ -738,7 +749,7 @@ export function ModelCredentialsSection() {
                   Saving...
                 </>
               ) : (
-                "Save Key"
+                "Save key"
               )}
             </Button>
           )}
@@ -746,7 +757,7 @@ export function ModelCredentialsSection() {
             <Button
               onClick={handleSubmitAuthJson}
               disabled={isSubmitting || !authJsonInput.trim() || !!authJsonError}
-              className="gap-2"
+              className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
             >
               {storeOAuthTokensMutation.isPending ? (
                 <>
@@ -754,7 +765,7 @@ export function ModelCredentialsSection() {
                   Saving...
                 </>
               ) : (
-                "Save Tokens"
+                "Save tokens"
               )}
             </Button>
           )}

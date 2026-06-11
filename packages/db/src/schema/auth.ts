@@ -1,6 +1,18 @@
-import { pgTable, text, timestamp, boolean, pgEnum } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  pgEnum,
+  uuid,
+} from "drizzle-orm/pg-core";
 
-export const userPlanEnum = pgEnum("user_plan", ["free", "tunnel", "pro", "enterprise"] as const);
+export const userPlanEnum = pgEnum("user_plan", [
+  "free",
+  "tunnel",
+  "pro",
+  "enterprise",
+] as const);
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"] as const);
 
 export const user = pgTable("user", {
@@ -10,6 +22,7 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").notNull(),
   image: text("image"),
   sshPublicKey: text("ssh_public_key"),
+  defaultCloudProviderId: uuid("default_cloud_provider_id"),
   allowTrial: boolean("allow_trial").notNull().default(false),
   plan: userPlanEnum("plan").notNull().default("free"),
   role: userRoleEnum("role").notNull().default("user"),

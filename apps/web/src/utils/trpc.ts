@@ -12,7 +12,11 @@ import env from "@gitterm/env/web";
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
-    onError: (error) => {
+    onError: (error, query) => {
+      // Queries can opt out of the global error toast (e.g. inline-validated fields).
+      if (query.meta?.skipGlobalErrorToast) {
+        return;
+      }
       toast.error(error.message, {
         action: {
           label: "retry",
