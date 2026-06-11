@@ -6,6 +6,7 @@ import {
   type DaytonaSnapshotKind,
   type DaytonaSnapshotRegion,
 } from "./config";
+import { getLatestOpencodeVersion } from "../../opencode-version";
 import "dotenv/config";
 
 const snapshotDefinitions: Array<{
@@ -19,19 +20,12 @@ const snapshotDefinitions: Array<{
   },
 ];
 
-const VSCODE_COMMIT = "cfbea10c5ffb233ea9177d34726e6056e89913dc";
-
-function createBaseImage() {
+function createBaseImage(opencodeVersion: string) {
   return Image.base("node:20-bookworm-slim")
     .dockerfileCommands([
       "RUN apt-get update && apt-get install -y --no-install-recommends git bash curl ca-certificates && rm -rf /var/lib/apt/lists/*",
-      "RUN npm install -g opencode-ai@latest",
+      `RUN curl -fsSL https://opencode.ai/install | HOME=/workspace VERSION=${opencodeVersion} bash && ln -sf /workspace/.opencode/bin/opencode /usr/local/bin/opencode && /usr/local/bin/opencode --version`,
       "RUN curl -fsSL https://get.docker.com | sh -",
-    ])
-    .dockerfileCommands([
-      `ARG VSCODE_COMMIT=${VSCODE_COMMIT}`,
-      "RUN mkdir -p /home/daytona/.vscode-server/bin/${VSCODE_COMMIT}",
-      'RUN curl -fsSL "https://update.code.visualstudio.com/commit:${VSCODE_COMMIT}/server-linux-x64/stable" | tar -xz --strip-components=1 -C /home/daytona/.vscode-server/bin/${VSCODE_COMMIT}',
     ])
     .workdir("/workspace")
     .env({
@@ -42,7 +36,7 @@ function createBaseImage() {
       XDG_CACHE_HOME: "/workspace/.cache",
       NPM_CONFIG_USERCONFIG: "/workspace/.npmrc",
       NPM_CONFIG_CACHE: "/workspace/.npm",
-      PATH: "/workspace/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      PATH: "/workspace/.opencode/bin:/workspace/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
       OPENCODE_CONFIG_DIR: "/workspace/.config/opencode",
       OPENCODE_DATA_DIR: "/workspace/.local/share/opencode",
       OPENCODE_CACHE_DIR: "/workspace/.cache/opencode",
@@ -50,8 +44,8 @@ function createBaseImage() {
     });
 }
 
-function createSnapshotImage(_kind: DaytonaSnapshotKind) {
-  return createBaseImage();
+function createSnapshotImage(_kind: DaytonaSnapshotKind, opencodeVersion: string) {
+  return createBaseImage(opencodeVersion);
 }
 
 function getApiKey(): string {
@@ -85,6 +79,7 @@ async function buildSnapshot(
   apiKey: string,
   definition: (typeof snapshotDefinitions)[number],
   region: DaytonaSnapshotRegion,
+  opencodeVersion: string,
 ) {
   const snapshotName = getDaytonaSnapshotName(definition.kind);
   const daytona = new Daytona({ apiKey, target: region });
@@ -101,7 +96,7 @@ async function buildSnapshot(
   await daytona.snapshot.create({
     name: snapshotName,
     regionId: region,
-    image: createSnapshotImage(definition.kind),
+    image: createSnapshotImage(definition.kind, opencodeVersion),
     entrypoint: ["sleep", "infinity"],
     resources: DAYTONA_SNAPSHOT_RESOURCES[definition.kind],
   });
@@ -109,10 +104,12 @@ async function buildSnapshot(
 
 async function main() {
   const apiKey = getApiKey();
+  const opencodeVersion = await getLatestOpencodeVersion();
+  console.log(`[daytona-snapshot] pinning opencode version ${opencodeVersion}`);
 
   for (const region of DAYTONA_SNAPSHOT_REGIONS) {
     for (const definition of snapshotDefinitions) {
-      await buildSnapshot(apiKey, definition, region);
+      await buildSnapshot(apiKey, definition, region, opencodeVersion);
     }
   }
 

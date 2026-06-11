@@ -82,7 +82,8 @@ import {
   type WorkspaceProfile,
 } from "../../providers/editor-access";
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
-import type { CloudProviderType } from "@gitterm/db/schema/cloud";
+import { imageSupportsProvider } from "../../providers/image-compat";
+import type { CloudProviderType, ImageProviderMetadata } from "@gitterm/db/schema/cloud";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -1355,9 +1356,28 @@ export const workspaceRouter = router({
             },
           });
 
-        const imageRecord = assignedProviderImage?.image?.isEnabled
-          ? assignedProviderImage.image
-          : pickWorkspaceImage(imageRecords, workspaceProfile);
+        // An assignment is only usable if its image actually carries the
+        // provider metadata required to provision on the selected provider.
+        // Otherwise (e.g. an AWS-only image assigned to E2B) we ignore it and
+        // fall back to a profile-aware pick among provider-compatible images.
+        const assignedImage = assignedProviderImage?.image;
+        const assignmentUsable =
+          assignedImage?.isEnabled === true &&
+          imageSupportsProvider(
+            providerKey,
+            assignedImage.providerMetadata as ImageProviderMetadata | null,
+          );
+
+        const compatibleImageRecords = imageRecords.filter((img) =>
+          imageSupportsProvider(
+            providerKey,
+            img.providerMetadata as ImageProviderMetadata | null,
+          ),
+        );
+
+        const imageRecord = assignmentUsable
+          ? assignedImage
+          : pickWorkspaceImage(compatibleImageRecords, workspaceProfile);
 
         if (!imageRecord) {
           throw new TRPCError({

@@ -17,8 +17,10 @@ import {
   type NewCloudProvider,
   type NewAgentType,
   type NewImage,
+  type ImageProviderMetadata,
 } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import { imageSupportsProvider } from "../../providers/image-compat";
 import { getAllProviderDefinitions } from "@gitterm/schema";
 import { providerType } from "@gitterm/db/schema/provider-config";
 
@@ -525,6 +527,19 @@ export const infrastructureRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Selected image must belong to the selected agent type.",
+        });
+      }
+
+      const providerKey = providerRecord.providerKey ?? "local";
+      if (
+        !imageSupportsProvider(
+          providerKey,
+          imageRecord.providerMetadata as ImageProviderMetadata | null,
+        )
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Image "${imageRecord.name}" is not compatible with the ${providerRecord.name} provider (missing ${providerKey} provider metadata).`,
         });
       }
 

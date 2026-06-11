@@ -14,6 +14,7 @@ import type {
   WorkspaceStatusResult,
 } from "../compute";
 import { resolveProvisioningSpec } from "../provisioning-spec";
+import { getDaytonaSnapshotName } from "./snapshot/config";
 import {
   buildHostAlias,
   buildSshCommand,
@@ -32,7 +33,7 @@ const OPENCODE_SERVER_SESSION_ID = "gitterm-opencode-server";
 const REPO_NAME_LABEL = "gitterm_repo_name";
 const WORKSPACE_ID_LABEL = "gitterm_workspace_id";
 const PERSISTENT_LABEL = "gitterm_persistent";
-const DAYTONA_WORKSPACE_DIR = "/home/daytona/workspace";
+const DAYTONA_WORKSPACE_DIR = "/workspace";
 
 type DaytonaSandbox = Awaited<ReturnType<Daytona["get"]>>;
 
@@ -46,7 +47,7 @@ function getTrafficAccessHeaders(token: string): UpstreamAccess {
 }
 
 function getWorkspaceDir(): string {
-  return "workspace";
+  return DAYTONA_WORKSPACE_DIR;
 }
 
 function getRepoDir(repoName?: string): string {
@@ -137,11 +138,19 @@ export class DaytonaProvider implements ComputeProvider {
     return config.regionIdentifier ?? providerConfig.defaultTargetRegion;
   }
 
-  private getSnapshotName(config: WorkspaceConfig): string | undefined {
+  private getSnapshotName(config: WorkspaceConfig): string {
     const metadata = config.imageProviderMetadata?.daytona as
       | DaytonaImageProviderMetadata
       | undefined;
-    return metadata?.snapshot;
+    const snapshot = metadata?.snapshot ?? getDaytonaSnapshotName("server");
+
+    if (!metadata?.snapshot) {
+      console.warn(
+        `[daytona] no snapshot in image metadata for workspace ${config.workspaceId}; defaulting to ${snapshot}`,
+      );
+    }
+
+    return snapshot;
   }
 
   private getProjectPathHint(pathHint: string): string {
@@ -224,10 +233,10 @@ export class DaytonaProvider implements ComputeProvider {
     const repoDir = getRepoDir(repoName);
 
     const sandbox = await provisionLogger.step(
-      snapshotName ? `create-sandbox snapshot=${snapshotName}` : "create-sandbox default-snapshot",
+      `create-sandbox snapshot=${snapshotName}`,
       () =>
         daytona.create({
-          ...(snapshotName ? { snapshot: snapshotName } : {}),
+          snapshot: snapshotName,
           labels: this.getWorkspaceLabels(config, spec, persistent),
           envVars: {
             OPENCODE_SERVER_PASSWORD: spec?.serverPassword ?? "",
@@ -297,7 +306,7 @@ export class DaytonaProvider implements ComputeProvider {
     };
 
     provisionLogger.log(
-      `workspace-ready persistent=${persistent} editorAccess=${this.isEditorAccessWorkspace(spec)} region=${targetRegion} snapshot=${snapshotName ?? "default"}`,
+      `workspace-ready persistent=${persistent} editorAccess=${this.isEditorAccessWorkspace(spec)} region=${targetRegion} snapshot=${snapshotName}`,
     );
 
     if (!persistent) {
