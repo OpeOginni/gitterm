@@ -36,6 +36,7 @@ const WORKSPACE_ID_LABEL = "gitterm_workspace_id";
 const PERSISTENT_LABEL = "gitterm_persistent";
 const DAYTONA_WORKSPACE_DIR = "/workspace";
 const SSH_ACCESS_TTL_MINUTES = 120;
+const SSH_ACCESS_REUSE_BUFFER_MS = 5 * 60 * 1000;
 
 type DaytonaSandbox = Awaited<ReturnType<Daytona["get"]>>;
 
@@ -155,16 +156,19 @@ export class DaytonaProvider implements ComputeProvider {
     targetRegion: string,
     editorAccess: boolean,
   ): string {
-    // Editor/SSH workspaces use the higher-resource `server-ssh` snapshot.
-    // It shares the same base image, so it isn't tracked in image metadata -
-    // resolve it directly from the snapshot config.
-    if (editorAccess) {
-      return resolveDaytonaSnapshotName("server-ssh", targetRegion);
-    }
-
     const metadata = config.imageProviderMetadata?.daytona as
       | DaytonaImageProviderMetadata
       | undefined;
+
+    // Editor/SSH workspaces use the higher-resource `server-ssh` snapshot.
+    if (editorAccess) {
+      const sshRegionSnapshot = metadata?.sshSnapshotsByRegion?.[targetRegion];
+      return (
+        sshRegionSnapshot ??
+        metadata?.sshSnapshot ??
+        resolveDaytonaSnapshotName("server-ssh", targetRegion)
+      );
+    }
 
     const regionSnapshot = metadata?.snapshotsByRegion?.[targetRegion];
     const snapshot =
@@ -513,24 +517,48 @@ export class DaytonaProvider implements ComputeProvider {
   async getWorkspaceSSHAccess(
     config: WorkspaceSSHAccessConfig,
   ): Promise<WorkspaceSSHAccess> {
+    const existingToken = this.decryptRevocationToken(
+      config.existingConnection?.revocationToken,
+    );
+    const existingExpiresAt = config.existingConnection?.expiresAt;
+    if (
+      existingToken &&
+      existingExpiresAt &&
+      new Date(existingExpiresAt).getTime() >
+        Date.now() + SSH_ACCESS_REUSE_BUFFER_MS
+    ) {
+      return this.buildWorkspaceSSHAccess(
+        config,
+        existingToken,
+        existingExpiresAt,
+      );
+    }
+
     // Single-region key: always use the admin-configured default region.
     const daytona = await this.createClient();
     const sandbox = await daytona.get(config.externalServiceId);
 
-    // Revoke any previously-issued token so we never leave orphaned SSH access
-    // behind when the user regenerates credentials.
-    const previousToken = this.decryptRevocationToken(
-      config.existingConnection?.revocationToken,
-    );
-    if (previousToken) {
-      await sandbox.revokeSshAccess(previousToken).catch(() => undefined);
+    if (existingToken) {
+      await sandbox.revokeSshAccess(existingToken).catch(() => undefined);
     }
 
     const sshToken = await sandbox.createSshAccess(SSH_ACCESS_TTL_MINUTES);
+    const expiresAt = new Date(
+      Date.now() + SSH_ACCESS_TTL_MINUTES * 60 * 1000,
+    ).toISOString();
+
+    return this.buildWorkspaceSSHAccess(config, sshToken.token, expiresAt);
+  }
+
+  private buildWorkspaceSSHAccess(
+    config: WorkspaceSSHAccessConfig,
+    token: string,
+    expiresAt: string,
+  ): WorkspaceSSHAccess {
     const host = "ssh.app.daytona.io";
     // Daytona's SSH gateway authenticates by passing the access token as the
     // SSH username (i.e. `<token>@ssh.app.daytona.io`), so the token IS the user.
-    const user = sshToken.token;
+    const user = token;
     const port = 22;
     const hostAlias = buildHostAlias(config.subdomain);
 
@@ -550,16 +578,15 @@ export class DaytonaProvider implements ComputeProvider {
         user,
       }),
       projectPathHint: this.getProjectPathHint(config.projectPathHint),
-      expiresAt: new Date(
-        Date.now() + SSH_ACCESS_TTL_MINUTES * 60 * 1000,
-      ).toISOString(),
+      expiresAt,
       connection: {
         transportKind: "direct-ssh",
         host,
         port,
         // The Daytona SSH token doubles as the SSH user and is required to
         // revoke access later, so it is stored encrypted at rest.
-        revocationToken: getEncryptionService().encrypt(sshToken.token),
+        revocationToken: getEncryptionService().encrypt(token),
+        expiresAt,
       },
       notes: [
         "This short-lived SSH token expires after about two hours.",

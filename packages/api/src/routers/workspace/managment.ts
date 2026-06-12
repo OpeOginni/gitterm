@@ -76,7 +76,7 @@ import {
 } from "../../service/workspace-mutations";
 import {
   buildProjectPathHint,
-  normalizeProviderEditorAccessSupport,
+  normalizeProvidersshAccessSupport,
   pickWorkspaceImage,
   WORKSPACE_PROFILES,
   type WorkspaceProfile,
@@ -337,8 +337,8 @@ export const workspaceRouter = router({
             return {
               ...provider,
               regions,
-              editorAccessSupport: normalizeProviderEditorAccessSupport(
-                provider.editorAccessSupport,
+              sshAccessSupport: normalizeProvidersshAccessSupport(
+                provider.sshAccessSupport,
               ),
             };
           }),
@@ -1115,8 +1115,8 @@ export const workspaceRouter = router({
         const workspaceProfile = (input.workspaceProfile ??
           "standard") as WorkspaceProfile;
         const editorAccessEnabled = workspaceProfile === "ssh-enabled";
-        const providerEditorSupport = normalizeProviderEditorAccessSupport(
-          cloudProviderRecord.editorAccessSupport,
+        const providerEditorSupport = normalizeProvidersshAccessSupport(
+          cloudProviderRecord.sshAccessSupport,
         );
 
         if (editorAccessEnabled) {
@@ -1353,6 +1353,7 @@ export const workspaceRouter = router({
             where: and(
               eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
               eq(providerAgentImage.agentTypeId, input.agentTypeId),
+              sql`coalesce(${providerAgentImage.workspaceProfile}, 'standard') = ${workspaceProfile}`,
             ),
             with: {
               image: true,
@@ -1717,6 +1718,7 @@ export const workspaceRouter = router({
           workspaceId,
           workspaceAuthToken,
           workspaceApiUrl: WORKSPACE_API_URL,
+          workspaceProvider: providerKey,
           userEnv: userWorkspaceEnvironmentVariables
             ? (userWorkspaceEnvironmentVariables.environmentVariables as Record<
                 string,

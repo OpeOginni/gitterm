@@ -52,6 +52,7 @@ export interface WorkspaceSSHConnection {
   host: string;
   port: number;
   externalConnectionId?: string;
+  expiresAt?: string;
 }
 
 export const workspace = pgTable("workspace", {

@@ -5,7 +5,7 @@ import {
   image,
   providerAgentImage,
   region,
-  type CloudProviderEditorAccessSupport,
+  type CloudProvidersshAccessSupport,
   type ProviderSettlement,
 } from "./schema/cloud";
 import { modelProvider, model } from "./schema/model-credentials";
@@ -34,7 +34,7 @@ const seedCloudProviders: Array<{
   supportsRegions: boolean;
   allowUserRegionSelection?: boolean;
   supportServerOnly?: boolean;
-  editorAccessSupport?: CloudProviderEditorAccessSupport;
+  sshAccessSupport?: CloudProvidersshAccessSupport;
   creationSettlement?: ProviderSettlement;
   stopSettlement?: ProviderSettlement;
   restartSettlement?: ProviderSettlement;
@@ -45,7 +45,7 @@ const seedCloudProviders: Array<{
     providerKey: "railway",
     isEnabled: false,
     supportsRegions: true,
-    editorAccessSupport: {
+    sshAccessSupport: {
       supported: true,
       transportKind: "managed-ssh",
       label: "Managed SSH bridge",
@@ -72,7 +72,7 @@ const seedCloudProviders: Array<{
     autoPersistent: true,
     supportsRegions: false,
     supportServerOnly: true,
-    editorAccessSupport: {
+    sshAccessSupport: {
       supported: false,
       label: "Not supported",
       description: "This provider does not currently expose editor SSH access.",
@@ -90,7 +90,7 @@ const seedCloudProviders: Array<{
     autoPersistent: true,
     supportsRegions: false,
     supportServerOnly: true,
-    editorAccessSupport: {
+    sshAccessSupport: {
       supported: true,
       transportKind: "proxycommand-ssh",
       label: "SSH via ProxyCommand",
@@ -114,7 +114,7 @@ const seedCloudProviders: Array<{
     // region - the admin-configured defaultTargetRegion is always used.
     allowUserRegionSelection: false,
     supportServerOnly: true,
-    editorAccessSupport: {
+    sshAccessSupport: {
       supported: true,
       transportKind: "direct-ssh",
       label: "Native SSH",
@@ -157,6 +157,10 @@ const seedImages = [
         snapshotsByRegion: {
           eu: "gitterm-opencode-server-eu",
         },
+        sshSnapshot: "gitterm-opencode-server-ssh-eu",
+        sshSnapshotsByRegion: {
+          eu: "gitterm-opencode-server-ssh-eu",
+        },
       },
       aws: {
         cpu: 4096,
@@ -180,7 +184,10 @@ const seedImages = [
         snapshot: "gitterm-opencode-server-eu",
         snapshotsByRegion: {
           eu: "gitterm-opencode-server-eu",
-          us: "gitterm-opencode-server-us",
+        },
+        sshSnapshot: "gitterm-opencode-server-ssh-eu",
+        sshSnapshotsByRegion: {
+          eu: "gitterm-opencode-server-ssh-eu",
         },
       },
     },
@@ -492,7 +499,7 @@ export async function seedDatabase(): Promise<void> {
         provider.restartSettlement ?? "webhook";
       const targetProviderTerminationSettlement =
         provider.terminationSettlement ?? "webhook";
-      const targetEditorAccessSupport = provider.editorAccessSupport ?? {};
+      const targetsshAccessSupport = provider.sshAccessSupport ?? {};
 
       if (existing.providerKey !== provider.providerKey) {
         updates.providerKey = provider.providerKey;
@@ -538,10 +545,8 @@ export async function seedDatabase(): Promise<void> {
         updates.terminationSettlement = targetProviderTerminationSettlement;
       }
 
-      if (
-        !hasSameJson(existing.editorAccessSupport, targetEditorAccessSupport)
-      ) {
-        updates.editorAccessSupport = targetEditorAccessSupport;
+      if (!hasSameJson(existing.sshAccessSupport, targetsshAccessSupport)) {
+        updates.sshAccessSupport = targetsshAccessSupport;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -573,7 +578,7 @@ export async function seedDatabase(): Promise<void> {
           supportsRegions: provider.supportsRegions,
           allowUserRegionSelection: provider.allowUserRegionSelection ?? true,
           supportServerOnly: provider.supportServerOnly ?? false,
-          editorAccessSupport: provider.editorAccessSupport ?? {},
+          sshAccessSupport: provider.sshAccessSupport ?? {},
           creationSettlement: provider.creationSettlement ?? "webhook",
           stopSettlement: provider.stopSettlement ?? "webhook",
           restartSettlement: provider.restartSettlement ?? "webhook",

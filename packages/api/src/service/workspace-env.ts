@@ -122,6 +122,7 @@ export interface BuildWorkspaceEnvRuntimeParams {
   workspaceId: string;
   workspaceAuthToken: string;
   workspaceApiUrl: string;
+  workspaceProvider: string;
   /** User-defined env vars; reserved system keys are stripped before merge. */
   userEnv?: Record<string, string | undefined> | null;
 }
@@ -152,6 +153,7 @@ export function buildWorkspaceEnv(
     WORKSPACE_ID: runtime.workspaceId,
     WORKSPACE_AUTH_TOKEN: runtime.workspaceAuthToken,
     WORKSPACE_API_URL: runtime.workspaceApiUrl,
+    WORKSPACE_PROVIDER: runtime.workspaceProvider,
     WORKSPACE_PROFILE: spec.workspaceProfile,
     EDITOR_ACCESS_ENABLED: spec.editorAccessEnabled ? "true" : "false",
     USER_SSH_PUBLIC_KEY: spec.sshPublicKey,

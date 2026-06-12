@@ -146,7 +146,7 @@ REPO_DIR="/workspace/$REPO_NAME"
 GITTERM_CONTEXT_DIR="/workspace/.gitterm"
 AWS_RUNTIME_CONTEXT_FILE="$GITTERM_CONTEXT_DIR/aws-runtime-context.md"
 
-if [ -f /aws-agent-context.sh ]; then
+if [ "$WORKSPACE_PROVIDER" = "aws" ] && [ -f /aws-agent-context.sh ]; then
     echo "Generating OpenCode AWS runtime context at $AWS_RUNTIME_CONTEXT_FILE..."
     GITTERM_CONTEXT_DIR="$GITTERM_CONTEXT_DIR" sh /aws-agent-context.sh || echo "⚠ Failed to generate AWS runtime context"
 

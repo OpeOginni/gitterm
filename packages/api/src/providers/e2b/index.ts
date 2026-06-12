@@ -35,9 +35,7 @@ const SSH_BRIDGE_PORT = 8081;
 const SSH_USER = "user";
 const SSH_REQUIRED_BINARIES = ["websocat"] as const;
 const SSH_NOTES = [
-  "This connection uses your saved SSH public key, so make sure the matching private key is available locally.",
-  "Install websocat locally before connecting so OpenSSH can tunnel through E2B's WebSocket endpoint.",
-  "On macOS you can install it with `brew install websocat`.",
+  "Uses your saved SSH public key; keep the matching private key available locally.",
 ] as const;
 
 type E2BSandbox = Awaited<ReturnType<typeof Sandbox.connect>>;

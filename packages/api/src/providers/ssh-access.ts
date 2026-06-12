@@ -1,4 +1,4 @@
-import type { CloudProviderEditorAccessSupport } from "@gitterm/db/schema/cloud";
+import type { CloudProvidersshAccessSupport } from "@gitterm/db/schema/cloud";
 
 export const WORKSPACE_PROFILES = ["standard", "ssh-enabled"] as const;
 export type WorkspaceProfile = (typeof WORKSPACE_PROFILES)[number];
@@ -13,7 +13,7 @@ export const EDITOR_TRANSPORT_KINDS = [
 ] as const;
 export type EditorTransportKind = (typeof EDITOR_TRANSPORT_KINDS)[number];
 
-export interface ProviderEditorAccessSupport {
+export interface ProvidersshAccessSupport {
   supported: boolean;
   transportKind?: EditorTransportKind;
   label: string;
@@ -46,6 +46,8 @@ export interface WorkspaceSSHConnection {
    * before placing it here; it is never persisted in plaintext.
    */
   revocationToken?: string;
+  /** ISO timestamp for short-lived provider credentials. */
+  expiresAt?: string;
 }
 
 export interface WorkspaceSSHAccessCleanupConfig {
@@ -72,9 +74,9 @@ export interface WorkspaceSSHAccess {
   connection?: WorkspaceSSHConnection;
 }
 
-export function normalizeProviderEditorAccessSupport(
-  value?: CloudProviderEditorAccessSupport | null,
-): ProviderEditorAccessSupport {
+export function normalizeProvidersshAccessSupport(
+  value?: CloudProvidersshAccessSupport | null,
+): ProvidersshAccessSupport {
   return {
     supported: value?.supported === true,
     transportKind: value?.transportKind,
