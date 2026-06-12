@@ -315,6 +315,7 @@ export const anonRouter = router({
           WORKSPACE_ID: workspaceId,
           WORKSPACE_AUTH_TOKEN: workspaceAuthToken,
           WORKSPACE_API_URL,
+          WORKSPACE_PROVIDER: "e2b",
           WORKSPACE_PROFILE: "standard",
           EDITOR_ACCESS_ENABLED: "false",
         };
