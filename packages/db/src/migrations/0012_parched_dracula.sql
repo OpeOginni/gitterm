@@ -1,0 +1,1 @@
+ALTER TABLE "cloud_provider" ADD COLUMN "preferred_default" boolean DEFAULT false NOT NULL;

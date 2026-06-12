@@ -453,10 +453,11 @@ cd "$REPO_NAME"
 # All environment variables already set above
 # Scripts and shells can source /workspace/.env for consistency
 
-# Opencode is updated via image rebuilds, not runtime upgrades
 if ! command -v opencode >/dev/null 2>&1; then
     echo "❌ opencode not found in PATH: $PATH"
     exit 127
 fi
+
+echo "opencode version: $(opencode --version)"
 
 exec "$@"

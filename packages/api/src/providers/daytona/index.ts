@@ -289,6 +289,7 @@ export class DaytonaProvider implements ComputeProvider {
           labels: this.getWorkspaceLabels(config, spec, persistent),
           envVars: {
             OPENCODE_SERVER_PASSWORD: spec?.serverPassword ?? "",
+            OPENCODE_RUNTIME_UPGRADE: "1",
           },
         }),
     );

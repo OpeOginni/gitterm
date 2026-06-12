@@ -30,6 +30,7 @@ const seedCloudProviders: Array<{
   providerKey: string;
   isEnabled: boolean;
   isSandbox?: boolean;
+  preferredDefault?: boolean;
   autoPersistent?: boolean;
   supportsRegions: boolean;
   allowUserRegionSelection?: boolean;
@@ -509,6 +510,13 @@ export async function seedDatabase(): Promise<void> {
         updates.isSandbox = targetIsSandbox;
       }
 
+      if (
+        provider.preferredDefault !== undefined &&
+        existing.preferredDefault !== provider.preferredDefault
+      ) {
+        updates.preferredDefault = provider.preferredDefault;
+      }
+
       if (existing.autoPersistent !== targetAutoPersistent) {
         updates.autoPersistent = targetAutoPersistent;
       }
@@ -574,6 +582,7 @@ export async function seedDatabase(): Promise<void> {
           providerKey: provider.providerKey,
           isEnabled: provider.isEnabled,
           isSandbox: provider.isSandbox ?? false,
+          preferredDefault: provider.preferredDefault ?? false,
           autoPersistent: provider.autoPersistent ?? false,
           supportsRegions: provider.supportsRegions,
           allowUserRegionSelection: provider.allowUserRegionSelection ?? true,

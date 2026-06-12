@@ -46,6 +46,7 @@ export const cloudProvider = pgTable("cloud_provider", {
   ),
   isEnabled: boolean("is_enabled").notNull().default(true),
   isSandbox: boolean("is_sandbox").notNull().default(false),
+  preferredDefault: boolean("preferred_default").notNull().default(false),
   autoPersistent: boolean("auto_persistent").notNull().default(false),
   supportsRegions: boolean("supports_regions").notNull().default(true),
   allowUserRegionSelection: boolean("allow_user_region_selection")

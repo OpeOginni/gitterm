@@ -65,8 +65,8 @@ async function buildSnapshot(
 
   await deleteSnapshotIfExists(daytona, snapshotName);
 
-  await Bun.sleep(10_000);
-  console.log("[daytona-snapshot] waited for 10000ms");
+  await Bun.sleep(60_000);
+  console.log("[daytona-snapshot] waited for 60000ms");
 
   console.log(
     `[daytona-snapshot] creating ${snapshotName} kind=${definition.kind} region=${region} base=${DAYTONA_SNAPSHOT_BASE_IMAGES[definition.kind]}`,

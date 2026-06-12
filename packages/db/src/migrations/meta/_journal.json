@@ -85,6 +85,13 @@
       "when": 1781089567427,
       "tag": "0011_nappy_vector",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781273595180,
+      "tag": "0012_parched_dracula",
+      "breakpoints": true
     }
   ]
 }

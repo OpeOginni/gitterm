@@ -299,7 +299,7 @@ export const workspaceRouter = router({
               orderBy: [asc(region.name)],
             },
           },
-          orderBy: [asc(cloudProvider.name)],
+          orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
         });
 
         const providersWithEditorSupport = await Promise.all(

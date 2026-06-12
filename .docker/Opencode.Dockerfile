@@ -102,8 +102,6 @@ RUN chmod +x /entrypoint.sh
 # Expose the ttyd port
 ENV PORT=7681
 EXPOSE 7681
-# Git status server port
-EXPOSE 19418 
 
 # Define the entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
