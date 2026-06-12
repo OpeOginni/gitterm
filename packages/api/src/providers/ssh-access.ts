@@ -6,7 +6,11 @@ export type WorkspaceProfile = (typeof WORKSPACE_PROFILES)[number];
 export const EDITOR_TARGETS = ["vscode", "neovim"] as const;
 export type EditorTarget = (typeof EDITOR_TARGETS)[number];
 
-export const EDITOR_TRANSPORT_KINDS = ["direct-ssh", "proxycommand-ssh", "managed-ssh"] as const;
+export const EDITOR_TRANSPORT_KINDS = [
+  "direct-ssh",
+  "proxycommand-ssh",
+  "managed-ssh",
+] as const;
 export type EditorTransportKind = (typeof EDITOR_TRANSPORT_KINDS)[number];
 
 export interface ProviderEditorAccessSupport {
@@ -17,31 +21,41 @@ export interface ProviderEditorAccessSupport {
   requiresLocalBinaries?: string[];
 }
 
-export interface WorkspaceEditorAccessConfig {
+export interface WorkspaceSSHAccessConfig {
   workspaceId: string;
   userId: string;
   externalServiceId: string;
   subdomain: string;
   projectPathHint: string;
   regionIdentifier?: string;
-  existingConnection?: WorkspaceEditorConnection;
+  existingConnection?: WorkspaceSSHConnection;
 }
 
-export interface WorkspaceEditorConnection {
+export interface WorkspaceSSHConnection {
   transportKind: EditorTransportKind;
   host: string;
   port: number;
+  /**
+   * Non-secret provider resource handle used to tear down access later
+   * (e.g. a Railway TCP proxy id). Safe to store in plaintext.
+   */
   externalConnectionId?: string;
+  /**
+   * Encrypted secret required to revoke access later (e.g. a Daytona SSH
+   * access token). Providers that need a credential to revoke MUST encrypt it
+   * before placing it here; it is never persisted in plaintext.
+   */
+  revocationToken?: string;
 }
 
-export interface WorkspaceEditorAccessCleanupConfig {
+export interface WorkspaceSSHAccessCleanupConfig {
   workspaceId: string;
   externalServiceId: string;
-  connection: WorkspaceEditorConnection;
+  connection: WorkspaceSSHConnection;
   regionIdentifier?: string;
 }
 
-export interface WorkspaceEditorAccess {
+export interface WorkspaceSSHAccess {
   providerName: string;
   transportKind: EditorTransportKind;
   hostAlias: string;
@@ -55,7 +69,7 @@ export interface WorkspaceEditorAccess {
   expiresAt?: string;
   requiredLocalBinaries?: string[];
   notes: string[];
-  connection?: WorkspaceEditorConnection;
+  connection?: WorkspaceSSHConnection;
 }
 
 export function normalizeProviderEditorAccessSupport(
@@ -65,15 +79,22 @@ export function normalizeProviderEditorAccessSupport(
     supported: value?.supported === true,
     transportKind: value?.transportKind,
     label: value?.label ?? "Not supported",
-    description: value?.description ?? "This provider does not currently expose editor SSH access.",
+    description:
+      value?.description ??
+      "This provider does not currently expose editor SSH access.",
     requiresLocalBinaries: value?.requiresLocalBinaries,
   };
 }
 
-export function isEditorReadyImageName(name: string, imageId?: string): boolean {
+export function isEditorReadyImageName(
+  name: string,
+  imageId?: string,
+): boolean {
   const haystack = `${name} ${imageId ?? ""}`.toLowerCase();
   return (
-    haystack.includes("with-ssh") || haystack.includes("ssh-enabled") || haystack.includes("-ssh")
+    haystack.includes("with-ssh") ||
+    haystack.includes("ssh-enabled") ||
+    haystack.includes("-ssh")
   );
 }
 
@@ -89,7 +110,10 @@ export function pickWorkspaceImage<
   }
 
   if (profile === "ssh-enabled") {
-    return images.find((img) => isEditorReadyImageName(img.name, img.imageId)) ?? images[0];
+    return (
+      images.find((img) => isEditorReadyImageName(img.name, img.imageId)) ??
+      images[0]
+    );
   }
 
   return (

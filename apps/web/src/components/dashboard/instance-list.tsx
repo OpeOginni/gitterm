@@ -159,8 +159,8 @@ type Workspace = NonNullable<
 >["workspaces"][number];
 type CloudProvider =
   (typeof trpc.workspace.listCloudProviders)["~types"]["output"]["cloudProviders"][number];
-type WorkspaceEditorAccess =
-  (typeof trpc.workspace.getWorkspaceEditorAccess)["~types"]["output"]["access"];
+type WorkspaceSSHAccess =
+  (typeof trpc.workspace.getWorkspaceSSHAccess)["~types"]["output"]["access"];
 
 function InstanceCard({
   workspace,
@@ -323,7 +323,7 @@ function InstanceCard({
   const isPending = workspace.status === "pending";
 
   const editorAccessQuery = useQuery({
-    ...trpc.workspace.getWorkspaceEditorAccess.queryOptions({
+    ...trpc.workspace.getWorkspaceSSHAccess.queryOptions({
       workspaceId: workspace.id,
     }),
     enabled: showConnectDialog && workspace.editorAccessEnabled && isRunning,
@@ -367,7 +367,7 @@ function InstanceCard({
     return `${protocol}://vscode-remote/${authority}${projectPathHint}`;
   };
 
-  const renderEditorAccess = (access: WorkspaceEditorAccess) => {
+  const renderEditorAccess = (access: WorkspaceSSHAccess) => {
     const needsProxySetup = access.transportKind === "proxycommand-ssh";
     const remoteTarget = needsProxySetup
       ? access.hostAlias

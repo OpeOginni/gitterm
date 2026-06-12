@@ -308,6 +308,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     configSchema: z.object({
       apiKey: z.string().min(1, "API KEY is required"),
       defaultTargetRegion: z.enum(["us", "eu"], "region of eu or us is required"),
+      webhookSecret: z.string().optional(),
     }),
     fields: [
       {
@@ -329,6 +330,14 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         isRequired: true,
         isEncrypted: false,
         sortOrder: 2,
+      },
+      {
+        fieldName: "webhookSecret",
+        fieldLabel: "Webhook Signing Secret",
+        fieldType: "password",
+        isRequired: false,
+        isEncrypted: true,
+        sortOrder: 3,
       },
     ],
   },

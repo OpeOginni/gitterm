@@ -29,6 +29,11 @@ import { getAgentLoopService } from "../../service/agent-loop";
 import { deductRunFromQuota, refundRunToQuota } from "../../service/quotas/run-quota";
 import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/helpers";
 import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
+import {
+  daytonaWebhookSchema,
+  verifyDaytonaWebhookSignature,
+} from "../daytona/webhook";
+import type { DaytonaConfig } from "../../providers/daytona/types";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import {
@@ -842,6 +847,146 @@ export const internalRouter = router({
         );
 
         return { updated: updatedWorkspaces };
+      }
+
+      return { updated: [] };
+    }),
+
+  processDaytonaWebhook: internalProcedure
+    .input(
+      daytonaWebhookSchema.extend({
+        rawBody: z.string(),
+        webhookId: z.string(),
+        webhookTimestamp: z.string(),
+        webhookSignature: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const webhookId = input.webhookId;
+      const webhookTimestamp = input.webhookTimestamp;
+      const webhookSignature = input.webhookSignature;
+
+      if (!webhookId || !webhookTimestamp || !webhookSignature) {
+        console.error("No signature headers passed in for Daytona webhook");
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Daytona webhook signature headers required",
+        });
+      }
+
+      const dbConfig = (await getProviderConfigService().getProviderConfigForUse(
+        "daytona",
+      )) as DaytonaConfig | undefined;
+
+      if (!dbConfig) {
+        console.error("Daytona provider is not configured.");
+        throw new Error(
+          "Daytona provider is not configured. Please configure it in the admin panel.",
+        );
+      }
+
+      if (!dbConfig.webhookSecret) {
+        console.error("Daytona webhookSecret is not configured.");
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Daytona webhook secret is not configured.",
+        });
+      }
+
+      try {
+        verifyDaytonaWebhookSignature(dbConfig.webhookSecret, input.rawBody, {
+          webhookId,
+          webhookTimestamp,
+          webhookSignature,
+        });
+      } catch (error) {
+        console.error("Daytona webhook signature verification failed", error);
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Daytona webhook signature verification failed",
+        });
+      }
+
+      // We only act on sandbox state transitions. `sandbox.created` is a no-op
+      // because creation is settled synchronously by daytona.create().
+      if (input.event !== "sandbox.state.updated" || !input.newState) {
+        return { updated: [] };
+      }
+
+      const sandboxId = input.id;
+      const newState = input.newState.toLowerCase();
+      const eventDate = new Date(input.updatedAt ?? input.timestamp);
+
+      const [daytonaProvider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.providerKey, "daytona"));
+
+      if (!daytonaProvider) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Daytona provider not found in database",
+        });
+      }
+
+      // started -> running
+      if (newState === "started") {
+        const updated = await updateWorkspaceStatusAndInvalidate(
+          and(
+            eq(workspace.cloudProviderId, daytonaProvider.id),
+            eq(workspace.externalInstanceId, sandboxId),
+            or(eq(workspace.status, "stopped"), eq(workspace.status, "pending")),
+          ),
+          { status: "running", updatedAt: eventDate },
+        );
+        return { updated };
+      }
+
+      // stopped / archived -> stopped
+      if (newState === "stopped" || newState === "archived") {
+        const updated = await updateWorkspaceStatusAndInvalidate(
+          and(
+            eq(workspace.cloudProviderId, daytonaProvider.id),
+            eq(workspace.externalInstanceId, sandboxId),
+            eq(workspace.status, "running"),
+          ),
+          { status: "stopped", updatedAt: eventDate },
+        );
+
+        await Promise.all(
+          updated.map((updatedWorkspace) =>
+            deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+          ),
+        );
+        return { updated };
+      }
+
+      // destroying / destroyed -> terminated.
+      // We act on `destroying` (the started/stopped -> destroying transition) so
+      // termination is reflected as soon as teardown begins, then `destroyed`
+      // confirms it idempotently. No status filter, so this also covers
+      // destruction from a paused (stopped) sandbox.
+      if (newState === "destroying" || newState === "destroyed") {
+        const updated = await updateWorkspaceStatusAndInvalidate(
+          and(
+            eq(workspace.cloudProviderId, daytonaProvider.id),
+            eq(workspace.externalInstanceId, sandboxId),
+            // Don't churn already-terminated rows on the second event.
+            or(
+              eq(workspace.status, "running"),
+              eq(workspace.status, "stopped"),
+              eq(workspace.status, "pending"),
+            ),
+          ),
+          { status: "terminated", updatedAt: eventDate },
+        );
+
+        await Promise.all(
+          updated.map((updatedWorkspace) =>
+            deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+          ),
+        );
+        return { updated };
       }
 
       return { updated: [] };

@@ -106,6 +106,7 @@
     "graphql": "^16.12.0",
     "hono": "catalog:",
     "jsonwebtoken": "^9.0.2",
+    "svix": "^1.95.2",
     "wrangler": "^4.58.0",
     "zod": "^4.3.6"
   },

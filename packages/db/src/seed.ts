@@ -22,7 +22,8 @@ import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
  * - Never delete existing items
  */
 
-const hasSameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+const hasSameJson = (a: unknown, b: unknown): boolean =>
+  JSON.stringify(a) === JSON.stringify(b);
 
 const seedCloudProviders: Array<{
   name: string;
@@ -48,7 +49,8 @@ const seedCloudProviders: Array<{
       supported: true,
       transportKind: "managed-ssh",
       label: "Managed SSH bridge",
-      description: "Connect through the Gitterm-managed SSH bridge for Railway workspaces.",
+      description:
+        "Connect through the Gitterm-managed SSH bridge for Railway workspaces.",
     },
     creationSettlement: "webhook" as ProviderSettlement,
     stopSettlement: "webhook" as ProviderSettlement,
@@ -92,7 +94,8 @@ const seedCloudProviders: Array<{
       supported: true,
       transportKind: "proxycommand-ssh",
       label: "SSH via ProxyCommand",
-      description: "Connect over SSH using an SSH config snippet and a local websocat bridge.",
+      description:
+        "Connect over SSH using an SSH config snippet and a local websocat bridge.",
       requiresLocalBinaries: ["websocat"],
     },
     creationSettlement: "immediate" as ProviderSettlement,
@@ -107,6 +110,9 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: true,
+    // A Daytona API key is bound to a single region, so end users can't pick a
+    // region - the admin-configured defaultTargetRegion is always used.
+    allowUserRegionSelection: false,
     supportServerOnly: true,
     editorAccessSupport: {
       supported: true,
@@ -115,9 +121,9 @@ const seedCloudProviders: Array<{
       description: "Short-lived SSH access without any local proxy helper.",
     },
     creationSettlement: "immediate" as ProviderSettlement,
-    stopSettlement: "immediate" as ProviderSettlement,
-    restartSettlement: "immediate" as ProviderSettlement,
-    terminationSettlement: "immediate" as ProviderSettlement,
+    stopSettlement: "webhook" as ProviderSettlement,
+    restartSettlement: "webhook" as ProviderSettlement,
+    terminationSettlement: "webhook" as ProviderSettlement,
   },
 ];
 
@@ -147,7 +153,10 @@ const seedImages = [
     providerMetadata: {
       isDefault: true,
       daytona: {
-        snapshot: "gitterm/opencode-server",
+        snapshot: "gitterm-opencode-server-eu",
+        snapshotsByRegion: {
+          eu: "gitterm-opencode-server-eu",
+        },
       },
       aws: {
         cpu: 4096,
@@ -168,7 +177,11 @@ const seedImages = [
         sshTemplateId: "nxiezl38gnw32ufyloc0",
       },
       daytona: {
-        snapshot: "gitterm/opencode-server",
+        snapshot: "gitterm-opencode-server-eu",
+        snapshotsByRegion: {
+          eu: "gitterm-opencode-server-eu",
+          us: "gitterm-opencode-server-us",
+        },
       },
     },
   },
@@ -469,12 +482,16 @@ export async function seedDatabase(): Promise<void> {
       const targetIsSandbox = provider.isSandbox ?? false;
       const targetAutoPersistent = provider.autoPersistent ?? false;
       const targetSupportsRegions = provider.supportsRegions ?? true;
-      const targetAllowUserRegionSelection = provider.allowUserRegionSelection ?? true;
+      const targetAllowUserRegionSelection =
+        provider.allowUserRegionSelection ?? true;
       const targetSupportServerOnly = provider.supportServerOnly ?? false;
-      const targetProviderCreationSettlement = provider.creationSettlement ?? "webhook";
+      const targetProviderCreationSettlement =
+        provider.creationSettlement ?? "webhook";
       const targetProviderStopSettlement = provider.stopSettlement ?? "webhook";
-      const targetProviderRestartSettlement = provider.restartSettlement ?? "webhook";
-      const targetProviderTerminationSettlement = provider.terminationSettlement ?? "webhook";
+      const targetProviderRestartSettlement =
+        provider.restartSettlement ?? "webhook";
+      const targetProviderTerminationSettlement =
+        provider.terminationSettlement ?? "webhook";
       const targetEditorAccessSupport = provider.editorAccessSupport ?? {};
 
       if (existing.providerKey !== provider.providerKey) {
@@ -493,7 +510,9 @@ export async function seedDatabase(): Promise<void> {
         updates.supportsRegions = targetSupportsRegions;
       }
 
-      if (existing.allowUserRegionSelection !== targetAllowUserRegionSelection) {
+      if (
+        existing.allowUserRegionSelection !== targetAllowUserRegionSelection
+      ) {
         updates.allowUserRegionSelection = targetAllowUserRegionSelection;
       }
 
@@ -513,11 +532,15 @@ export async function seedDatabase(): Promise<void> {
         updates.restartSettlement = targetProviderRestartSettlement;
       }
 
-      if (existing.terminationSettlement !== targetProviderTerminationSettlement) {
+      if (
+        existing.terminationSettlement !== targetProviderTerminationSettlement
+      ) {
         updates.terminationSettlement = targetProviderTerminationSettlement;
       }
 
-      if (!hasSameJson(existing.editorAccessSupport, targetEditorAccessSupport)) {
+      if (
+        !hasSameJson(existing.editorAccessSupport, targetEditorAccessSupport)
+      ) {
         updates.editorAccessSupport = targetEditorAccessSupport;
       }
 
@@ -530,7 +553,9 @@ export async function seedDatabase(): Promise<void> {
           })
           .where(eq(cloudProvider.id, existing.id));
 
-        console.log(`[seed]   Updated provider metadata for "${provider.name}"`);
+        console.log(
+          `[seed]   Updated provider metadata for "${provider.name}"`,
+        );
       } else {
         console.log(`[seed]   Provider "${provider.name}" already exists`);
       }
@@ -580,7 +605,9 @@ export async function seedDatabase(): Promise<void> {
         });
         if (aliasRow) {
           existing = aliasRow;
-          console.log(`[seed]   Renaming agent type "${alias}" -> "${agent.name}"`);
+          console.log(
+            `[seed]   Renaming agent type "${alias}" -> "${agent.name}"`,
+          );
           break;
         }
       }
@@ -639,7 +666,9 @@ export async function seedDatabase(): Promise<void> {
     } else {
       const agentTypeId = agentTypeMap.get(img.agentTypeName);
       if (!agentTypeId) {
-        console.log(`[seed]   Skipping image "${img.name}" - agent type not found`);
+        console.log(
+          `[seed]   Skipping image "${img.name}" - agent type not found`,
+        );
         continue;
       }
 
@@ -724,7 +753,9 @@ export async function seedDatabase(): Promise<void> {
     } else {
       const providerId = providerMap.get(reg.providerName);
       if (!providerId) {
-        console.log(`[seed]   Skipping region "${reg.name}" - provider not found`);
+        console.log(
+          `[seed]   Skipping region "${reg.name}" - provider not found`,
+        );
         continue;
       }
 
@@ -809,7 +840,10 @@ export async function seedDatabase(): Promise<void> {
   console.log("[seed] Seeding provider types...");
   const providerTypeMap = new Map<string, string>(); // name -> id
 
-  const syncProviderConfigFields = async (providerTypeId: string, providerName: string) => {
+  const syncProviderConfigFields = async (
+    providerTypeId: string,
+    providerName: string,
+  ) => {
     let createdCount = 0;
     let updatedCount = 0;
 
@@ -896,7 +930,9 @@ export async function seedDatabase(): Promise<void> {
     let deletedCount = 0;
     for (const existing of allExistingFields) {
       if (!definedFieldNames.has(existing.fieldName)) {
-        await db.delete(providerConfigField).where(eq(providerConfigField.id, existing.id));
+        await db
+          .delete(providerConfigField)
+          .where(eq(providerConfigField.id, existing.id));
         deletedCount += 1;
       }
     }

@@ -18,10 +18,10 @@ import {
   buildSshCommand,
   buildSshConnectionString,
   buildStandardSshConfigSnippet,
-  type WorkspaceEditorAccess,
-  type WorkspaceEditorAccessCleanupConfig,
-  type WorkspaceEditorAccessConfig,
-} from "../editor-access";
+  type WorkspaceSSHAccess,
+  type WorkspaceSSHAccessCleanupConfig,
+  type WorkspaceSSHAccessConfig,
+} from "../ssh-access";
 import { createProvisionLogger } from "../provision-logger";
 import type { E2BConfig } from "./types";
 
@@ -515,9 +515,9 @@ export class E2BProvider implements ComputeProvider {
     };
   }
 
-  async getWorkspaceEditorAccess(
-    config: WorkspaceEditorAccessConfig,
-  ): Promise<WorkspaceEditorAccess> {
+  async getWorkspaceSSHAccess(
+    config: WorkspaceSSHAccessConfig,
+  ): Promise<WorkspaceSSHAccess> {
     const sandbox = await this.connectSandbox(config.externalServiceId);
     const trafficAccessToken = await this.getTrafficAccessToken(
       sandbox,
@@ -564,8 +564,8 @@ export class E2BProvider implements ComputeProvider {
     };
   }
 
-  async revokeWorkspaceEditorAccess(
-    _config: WorkspaceEditorAccessCleanupConfig,
+  async revokeWorkspaceSSHAccess(
+    _config: WorkspaceSSHAccessCleanupConfig,
   ): Promise<void> {}
 
   async removeExposedPortDomain(
