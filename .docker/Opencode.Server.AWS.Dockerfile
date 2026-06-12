@@ -21,7 +21,13 @@ RUN ./aws/install
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
-RUN npm install -g opencode-ai@latest
+ARG OPENCODE_VERSION=latest
+ARG OPENCODE_INSTALL_CACHE_BUST=manual
+RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
+    && npm cache clean --force \
+    && echo "npm latest opencode-ai: $(npm view opencode-ai@${OPENCODE_VERSION} version)" \
+    && npm install -g "opencode-ai@${OPENCODE_VERSION}" --prefer-online --no-audit --fund=false \
+    && echo "installed opencode: $(opencode --version)"
 
 # Set up working directory
 WORKDIR /workspace

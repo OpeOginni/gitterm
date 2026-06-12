@@ -4,13 +4,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     bash \
     curl \
+    unzip \
     ca-certificates \
     nodejs \
     npm \
     openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g opencode-ai@latest
+ARG OPENCODE_VERSION=latest
+ARG OPENCODE_INSTALL_CACHE_BUST=manual
+RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
+    && npm cache clean --force \
+    && echo "npm latest opencode-ai: $(npm view opencode-ai@${OPENCODE_VERSION} version)" \
+    && npm install -g "opencode-ai@${OPENCODE_VERSION}" --prefer-online --no-audit --fund=false \
+    && echo "installed opencode: $(opencode --version)"
 
 WORKDIR /workspace
 
