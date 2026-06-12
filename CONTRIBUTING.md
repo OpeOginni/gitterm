@@ -32,11 +32,8 @@ cp apps/worker/.env.example apps/worker/.env
 ### 3. Start Local Services
 
 ```bash
-# Start Postgres
-bun turbo db:start
-
-# Start Redis
-bun turbo redis:start
+# Start Postgres & Redis
+bun turbo infra:up
 ```
 
 ### 4. Set Up Database
