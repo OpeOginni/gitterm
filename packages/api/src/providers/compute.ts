@@ -4,15 +4,25 @@
  */
 
 import type {
-  WorkspaceEditorAccess,
-  WorkspaceEditorAccessCleanupConfig,
-  WorkspaceEditorAccessConfig,
-} from "./editor-access";
+  WorkspaceSSHAccess,
+  WorkspaceSSHAccessCleanupConfig,
+  WorkspaceSSHAccessConfig,
+} from "./ssh-access";
 import type { ImageProviderMetadata } from "@gitterm/db/schema/cloud";
 
 export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
 
-export interface WorkspaceEnvironmentVariables {
+/**
+ * System-owned workspace environment variables.
+ *
+ * These keys are assembled by GitTerm and are *reserved*: user-defined env vars
+ * can never override them (see `RESERVED_WORKSPACE_ENV_KEYS`).
+ *
+ * Adding a new system env key is a single edit here — the env builder
+ * (`buildWorkspaceEnv`) constructs this exact shape, so it fails to compile
+ * until the new key is supplied.
+ */
+export interface SystemWorkspaceEnv {
   REPO_URL?: string;
   REPO_BRANCH?: string;
   OPENCODE_CONFIG_BASE64: string;
@@ -27,7 +37,104 @@ export interface WorkspaceEnvironmentVariables {
   WORKSPACE_ID: string;
   WORKSPACE_AUTH_TOKEN: string;
   WORKSPACE_API_URL: string;
-  [key: string]: string | undefined;
+  WORKSPACE_PROVIDER: string;
+  WORKSPACE_PROFILE?: string;
+  EDITOR_ACCESS_ENABLED?: string;
+  USER_SSH_PUBLIC_KEY?: string;
+}
+
+/**
+ * The full set of system-owned env keys. Listed explicitly so it can be used at
+ * runtime to strip clashing user-defined vars. The `satisfies` clause rejects
+ * any key not on `SystemWorkspaceEnv`, and `_ensureAllSystemKeysListed` below
+ * rejects any system key missing from this list — keeping the two in sync at
+ * compile time.
+ */
+export const SYSTEM_WORKSPACE_ENV_KEYS = [
+  "REPO_URL",
+  "REPO_BRANCH",
+  "OPENCODE_CONFIG_BASE64",
+  "OPENCODE_CREDENTIALS_BASE64",
+  "OPENCODE_SERVER_PASSWORD",
+  "USER_GITHUB_USERNAME",
+  "GITHUB_APP_TOKEN",
+  "GITHUB_APP_TOKEN_EXPIRY",
+  "WORKSPACE_TOOLING_MANIFEST_BASE64",
+  "REPO_OWNER",
+  "REPO_NAME",
+  "WORKSPACE_ID",
+  "WORKSPACE_AUTH_TOKEN",
+  "WORKSPACE_API_URL",
+  "WORKSPACE_PROVIDER",
+  "WORKSPACE_PROFILE",
+  "EDITOR_ACCESS_ENABLED",
+  "USER_SSH_PUBLIC_KEY",
+] as const satisfies readonly (keyof SystemWorkspaceEnv)[];
+
+// Compile-time guard: every SystemWorkspaceEnv key must appear above.
+type _MissingSystemEnvKeys = Exclude<
+  keyof SystemWorkspaceEnv,
+  (typeof SYSTEM_WORKSPACE_ENV_KEYS)[number]
+>;
+const _ensureAllSystemKeysListed: _MissingSystemEnvKeys extends never
+  ? true
+  : never = true;
+void _ensureAllSystemKeysListed;
+
+/** Reserved keys that user-defined env vars must not override. */
+export const RESERVED_WORKSPACE_ENV_KEYS: ReadonlySet<string> = new Set(
+  SYSTEM_WORKSPACE_ENV_KEYS,
+);
+
+/**
+ * Final environment handed to a compute provider: the typed system keys plus
+ * any user-defined vars (arbitrary string keys, already stripped of reserved
+ * keys by the env builder).
+ */
+export type WorkspaceEnvironmentVariables = SystemWorkspaceEnv &
+  Record<string, string | undefined>;
+
+/**
+ * Repository to clone into a workspace, with optional git basic-auth.
+ */
+export interface WorkspaceRepoProvisioning {
+  /** Clone URL (providers append `.git` if missing). */
+  url: string;
+  branch?: string;
+  /** Repo name, used for the workspace directory and provider labels. */
+  name?: string;
+  /** Git basic-auth username (present only when a token is available). */
+  authUsername?: string;
+  /** Git basic-auth password / GitHub App token. */
+  authToken?: string;
+}
+
+/**
+ * Paradigm-agnostic description of how to provision a workspace's filesystem:
+ * what to clone and which opencode files to write.
+ *
+ * This is the single source of truth for provisioning. Container providers
+ * (Railway, AWS) serialize it to env for their Docker entrypoint via
+ * `buildWorkspaceEnv`; SDK providers (E2B, Daytona) apply it directly through
+ * their native clone + file APIs via `resolveProvisioningSpec`. The duplicated
+ * "decode base64 → write auth.json/opencode.json + clone" logic now lives in
+ * exactly one place per consumer.
+ */
+export interface WorkspaceProvisioningSpec {
+  /** Stringified opencode.json contents. */
+  opencodeConfigJson: string;
+  /** Stringified auth.json contents. */
+  opencodeCredentialsJson: string;
+  /** Repository to clone, when the workspace has one. */
+  repo?: WorkspaceRepoProvisioning;
+  /** Password for serverOnly workspaces. */
+  serverPassword?: string;
+  /** Normalized OpenSSH public key for ssh-enabled workspaces. */
+  sshPublicKey?: string;
+  /** Workspace profile, e.g. "standard" | "ssh-enabled". */
+  workspaceProfile: string;
+  /** Whether editor (SSH) access is enabled. */
+  editorAccessEnabled: boolean;
 }
 
 export interface WorkspaceConfig {
@@ -39,7 +146,17 @@ export interface WorkspaceConfig {
   repositoryUrl?: string;
   repositoryBranch?: string;
   regionIdentifier?: string;
+  /**
+   * Runtime + container-transport env. Always present; container providers pass
+   * it through to the Docker entrypoint, and it carries runtime vars (e.g.
+   * WORKSPACE_AUTH_TOKEN) for the in-workspace process.
+   */
   environmentVariables?: WorkspaceEnvironmentVariables;
+  /**
+   * Structured provisioning instructions. Preferred by SDK providers. When
+   * absent (legacy callers), providers derive it from `environmentVariables`.
+   */
+  provisioningSpec?: WorkspaceProvisioningSpec;
 }
 
 export interface UpstreamAccess {
@@ -82,7 +199,9 @@ export interface ComputeProvider {
   /**
    * Create a new persistent workspace instance (with a volume)
    */
-  createPersistentWorkspace(config: PersistentWorkspaceConfig): Promise<PersistentWorkspaceInfo>;
+  createPersistentWorkspace(
+    config: PersistentWorkspaceConfig,
+  ): Promise<PersistentWorkspaceInfo>;
 
   /**
    * Stop a workspace (scale to 0 replicas, but keep resources)
@@ -105,7 +224,10 @@ export interface ComputeProvider {
   /**
    * Permanently delete/terminate a workspace
    */
-  terminateWorkspace(externalServiceId: string, externalVolumeId?: string): Promise<void>;
+  terminateWorkspace(
+    externalServiceId: string,
+    externalVolumeId?: string,
+  ): Promise<void>;
 
   /**
    * Get current status of a workspace
@@ -118,17 +240,25 @@ export interface ComputeProvider {
   createOrGetExposedPortDomain(
     externalServiceId: string,
     port: number,
-  ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }>;
+  ): Promise<{
+    domain: string;
+    externalPortDomainId?: string;
+    upstreamAccess?: UpstreamAccess;
+  }>;
 
   /**
    * Build editor connection details for a running workspace.
    */
-  getWorkspaceEditorAccess(config: WorkspaceEditorAccessConfig): Promise<WorkspaceEditorAccess>;
+  getWorkspaceSSHAccess(
+    config: WorkspaceSSHAccessConfig,
+  ): Promise<WorkspaceSSHAccess>;
 
   /**
    * Revoke provider-managed editor access resources when no longer needed.
    */
-  revokeWorkspaceEditorAccess(config: WorkspaceEditorAccessCleanupConfig): Promise<void>;
+  revokeWorkspaceSSHAccess(
+    config: WorkspaceSSHAccessCleanupConfig,
+  ): Promise<void>;
 
   /**
    * Remove a domain for an exposed port

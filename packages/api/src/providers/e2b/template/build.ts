@@ -1,11 +1,15 @@
 import { Template, defaultBuildLogger } from "e2b";
-import { opencodeServerTemplate } from "./gitterm-opencode-server";
-import { opencodeServerWithSSHTemplate } from "./gitterm-opencode-server-with-ssh";
+import { createOpencodeServerTemplate } from "./gitterm-opencode-server";
+import { createOpencodeServerWithSSHTemplate } from "./gitterm-opencode-server-with-ssh";
+import { getLatestOpencodeVersion } from "../../opencode-version";
 import "dotenv/config";
 
 async function main() {
+  const opencodeVersion = await getLatestOpencodeVersion();
+  console.log(`[e2b-template] pinning opencode version ${opencodeVersion}`);
+
   const opencodeServerE2B = await Template.build(
-    opencodeServerTemplate,
+    createOpencodeServerTemplate(opencodeVersion),
     "gitterm-opencode-server",
     {
       cpuCount: 2,
@@ -16,7 +20,7 @@ async function main() {
   );
 
   const opencodeServerWithSSH_E2B = await Template.build(
-    opencodeServerWithSSHTemplate,
+    createOpencodeServerWithSSHTemplate(opencodeVersion),
     "gitterm-opencode-server-with-ssh",
     {
       cpuCount: 4,

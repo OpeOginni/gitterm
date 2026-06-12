@@ -1,9 +1,12 @@
 export type WorkspaceType = "cloud" | "agentic-loops";
 export type WorkspaceProfile = "standard" | "ssh-enabled";
 export type EditorTarget = "vscode" | "neovim";
-export type EditorTransportKind = "direct-ssh" | "proxycommand-ssh" | "managed-ssh";
+export type EditorTransportKind =
+  | "direct-ssh"
+  | "proxycommand-ssh"
+  | "managed-ssh";
 
-export interface EditorAccessSupport {
+export interface sshAccessSupport {
   supported: boolean;
   transportKind?: EditorTransportKind;
   label: string;
@@ -36,7 +39,7 @@ export interface CloudProvider {
   allowUserRegionSelection: boolean;
   autoPersistent?: boolean;
   regions?: Region[];
-  editorAccessSupport?: EditorAccessSupport;
+  sshAccessSupport?: sshAccessSupport;
 }
 
 export interface Region {
@@ -64,6 +67,7 @@ export interface Repository {
   private: boolean;
   defaultBranch: string;
   htmlUrl: string;
+  pushedAt?: string | null;
 }
 
 export interface Branch {
@@ -126,14 +130,24 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
         description: "Free tier model",
         requiresApiKey: false,
       },
-      { id: "gpt-5.2", name: "GPT 5.2", description: "Advanced reasoning", requiresApiKey: true },
+      {
+        id: "gpt-5.2",
+        name: "GPT 5.2",
+        description: "Advanced reasoning",
+        requiresApiKey: true,
+      },
     ],
   },
   {
     id: "openai",
     name: "OpenAI",
     models: [
-      { id: "gpt-5.2", name: "GPT 5.2", description: "Standard model", requiresApiKey: true },
+      {
+        id: "gpt-5.2",
+        name: "GPT 5.2",
+        description: "Standard model",
+        requiresApiKey: true,
+      },
       {
         id: "gpt-5.2-pro",
         name: "GPT 5.2 Pro",
@@ -151,7 +165,10 @@ export function getModelsForProvider(providerId: string): ModelOption[] {
 }
 
 // Helper to check if a model requires an API key
-export function modelRequiresApiKey(providerId: string, modelId: string): boolean {
+export function modelRequiresApiKey(
+  providerId: string,
+  modelId: string,
+): boolean {
   const models = getModelsForProvider(providerId);
   const model = models.find((m) => m.id === modelId);
   return model?.requiresApiKey !== false; // Default to true

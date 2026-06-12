@@ -134,6 +134,17 @@ export const e2bWebhookProcedure = t.procedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+export const daytonaWebhookProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.daytonaWebhookId || !ctx.daytonaWebhookTimestamp || !ctx.daytonaWebhookSignature) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Daytona webhook signature headers required",
+    });
+  }
+
+  return next({ ctx });
+});
+
 export const cloudflareWebhookProcedure = t.procedure.use(({ ctx, next }) => {
   const token = ctx.bearerToken;
 

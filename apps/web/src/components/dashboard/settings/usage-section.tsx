@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { Clock, FolderGit2, GitBranch, Infinity as InfinityIcon } from "lucide-react";
+import { Clock, FolderGit2, GitBranch, History, Infinity as InfinityIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/utils/trpc";
 
@@ -21,10 +22,6 @@ const historyTabsTriggerClassName =
 function UsageQuota() {
   const { data, isLoading } = useQuery(trpc.workspace.getDailyUsage.queryOptions());
 
-  if (isLoading) {
-    return null;
-  }
-
   const usage = data || { minutesUsed: 0, minutesRemaining: 60, dailyLimit: 60 };
 
   const isUnlimited =
@@ -33,76 +30,68 @@ function UsageQuota() {
     usage.minutesRemaining === Infinity ||
     usage.dailyLimit === Infinity;
 
-  if (isUnlimited) {
-    return (
-      <Card>
-        <CardContent className="py-6">
+  const percent = isUnlimited ? 0 : Math.min(100, (usage.minutesUsed / usage.dailyLimit) * 100);
+  const isExhausted = !isUnlimited && usage.minutesRemaining === 0;
+  const isLow = !isUnlimited && !isExhausted && usage.minutesRemaining < 15;
+  const barColor = isExhausted ? "bg-destructive" : isLow ? "bg-amber-500" : "bg-primary";
+
+  return (
+    <SettingsSection
+      eyebrow="01 / Quota"
+      icon={Clock}
+      title="Runtime today"
+      description="Cloud compute minutes used today. Resets daily at midnight UTC."
+    >
+      <SettingsSectionBody className="space-y-5">
+        {isLoading ? (
+          <Skeleton className="h-16 w-full bg-white/[0.04]" />
+        ) : isUnlimited ? (
           <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Runtime today</p>
-              <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
-                {usage.minutesUsed} <span className="text-base font-normal text-white/40">min</span>
-              </p>
-            </div>
+            <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
+              {usage.minutesUsed}
+              <span className="text-base font-normal text-white/40"> min</span>
+            </p>
             <div className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm text-primary">
               <InfinityIcon className="h-4 w-4" />
               Unlimited
             </div>
           </div>
-          <p className="mt-3 text-xs text-white/30">Quota resets daily at midnight UTC.</p>
-        </CardContent>
-      </Card>
-    );
-  }
+        ) : (
+          <>
+            <div className="flex items-end justify-between gap-4">
+              <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
+                {usage.minutesUsed}
+                <span className="text-base font-normal text-white/40">
+                  {" "}
+                  / {usage.dailyLimit} min
+                </span>
+              </p>
+              <p className="pb-1 font-mono text-[12px] tabular-nums text-white/45">
+                {usage.minutesRemaining} min left
+              </p>
+            </div>
 
-  const percent = Math.min(100, (usage.minutesUsed / usage.dailyLimit) * 100);
-  const isExhausted = usage.minutesRemaining === 0;
-  const isLow = !isExhausted && usage.minutesRemaining < 15;
+            <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                style={{ width: `${percent}%` }}
+              />
+            </div>
 
-  // Pick bar color based on quota health
-  const barColor = isExhausted ? "bg-destructive" : isLow ? "bg-amber-500" : "bg-primary";
-
-  return (
-    <Card>
-      <CardContent className="py-6 space-y-5">
-        {/* Headline row */}
-        <div className="flex items-end justify-between gap-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">Runtime today</p>
-            <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
-              {usage.minutesUsed}
-              <span className="text-base font-normal text-white/40"> / {usage.dailyLimit} min</span>
-            </p>
-          </div>
-          <p className="pb-1 text-sm tabular-nums text-white/50">
-            {usage.minutesRemaining} min left
-          </p>
-        </div>
-
-        {/* Progress bar */}
-        <div className="space-y-2">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-              style={{ width: `${percent}%` }}
-            />
-          </div>
-          <p className="text-xs text-white/30">Quota resets daily at midnight UTC.</p>
-        </div>
-
-        {/* Warning banners */}
-        {isExhausted && (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Daily limit reached. Your quota will reset at midnight UTC.
-          </div>
+            {isExhausted && (
+              <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                Daily limit reached. Your quota will reset at midnight UTC.
+              </div>
+            )}
+            {isLow && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                Running low on runtime. Consider wrapping up idle workspaces.
+              </div>
+            )}
+          </>
         )}
-        {isLow && (
-          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            Running low on runtime. Consider wrapping up idle workspaces.
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </SettingsSectionBody>
+    </SettingsSection>
   );
 }
 
@@ -127,21 +116,25 @@ function WorkspaceHistory() {
     }),
   );
 
-  if (isLoadingActive || isLoadingTerminated) {
-    return null;
-  }
-
   const activeWorkspaces = activeData?.workspaces ?? [];
   const terminatedWorkspaces = terminatedData?.workspaces ?? [];
   const terminatedTotal = terminatedData?.pagination.total ?? 0;
   const terminatedHasMore = terminatedData?.pagination.hasMore ?? false;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Workspace History</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <SettingsSection
+      eyebrow="02 / History"
+      icon={History}
+      title="Workspace history"
+      description="Active and terminated workspaces across all your providers."
+    >
+      <SettingsSectionBody>
+        {isLoadingActive || isLoadingTerminated ? (
+          <div className="space-y-2">
+            <Skeleton className="h-16 w-full bg-white/[0.04]" />
+            <Skeleton className="h-16 w-full bg-white/[0.04]" />
+          </div>
+        ) : (
         <Tabs defaultValue="active" className="w-full">
           <TabsList className={historyTabsListClassName}>
             <TabsTrigger value="active" className={historyTabsTriggerClassName}>
@@ -204,8 +197,9 @@ function WorkspaceHistory() {
             )}
           </TabsContent>
         </Tabs>
-      </CardContent>
-    </Card>
+        )}
+      </SettingsSectionBody>
+    </SettingsSection>
   );
 }
 
@@ -220,14 +214,15 @@ function WorkspaceList({
 }) {
   if (workspaces.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <p className="text-sm">{emptyMessage}</p>
+      <div className="flex flex-col items-center justify-center rounded-xl bg-input/40 px-6 py-10 text-center">
+        <FolderGit2 className="mb-3 h-8 w-8 text-white/25" />
+        <p className="text-sm text-white/65">{emptyMessage}</p>
       </div>
     );
   }
 
   return (
-    <div className={muted ? "space-y-3 opacity-60 transition-opacity" : "space-y-3"}>
+    <div className={muted ? "space-y-2 opacity-60 transition-opacity" : "space-y-2"}>
       {workspaces.map((ws) => {
         const repoLabel = ws.repositoryUrl
           ? ws.repositoryUrl.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/i, "")
@@ -236,7 +231,7 @@ function WorkspaceList({
         return (
           <div
             key={ws.id}
-            className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-secondary/20 hover:border-accent/30 transition-colors"
+            className="flex items-center justify-between gap-3 rounded-lg bg-input/60 px-4 py-3 transition-colors hover:bg-input"
           >
             <div className="space-y-1.5 min-w-0">
               <div className="flex items-center gap-2">

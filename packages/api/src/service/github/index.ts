@@ -861,6 +861,7 @@ export class GitHubAppService {
       private: boolean;
       defaultBranch: string;
       htmlUrl: string;
+      pushedAt: string | null;
     }[]
   > {
     try {
@@ -875,6 +876,7 @@ export class GitHubAppService {
         private: boolean;
         defaultBranch: string;
         htmlUrl: string;
+        pushedAt: string | null;
       }[] = [];
 
       let page = 1;
@@ -894,6 +896,7 @@ export class GitHubAppService {
           private: repo.private,
           defaultBranch: repo.default_branch,
           htmlUrl: repo.html_url,
+          pushedAt: repo.pushed_at ?? null,
         }));
 
         allRepos.push(...repos);
@@ -905,6 +908,14 @@ export class GitHubAppService {
 
         page++;
       }
+
+      // Sort by most recent activity (pushed_at) first so the picker surfaces
+      // the repos the user is most likely working on.
+      allRepos.sort((a, b) => {
+        const aTime = a.pushedAt ? new Date(a.pushedAt).getTime() : 0;
+        const bTime = b.pushedAt ? new Date(b.pushedAt).getTime() : 0;
+        return bTime - aTime;
+      });
 
       return allRepos.slice(0, maxRepos);
     } catch (error) {

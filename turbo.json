@@ -33,19 +33,15 @@
       "cache": false,
       "persistent": true
     },
-    "db:start": {
+    "infra:up": {
       "cache": false,
       "persistent": true
     },
-    "db:stop": {
+    "infra:stop": {
       "cache": false,
       "persistent": true
     },
-    "db:watch": {
-      "cache": false,
-      "persistent": true
-    },
-    "db:down": {
+    "infra:down": {
       "cache": false,
       "persistent": true
     },
@@ -54,18 +50,6 @@
       "persistent": true
     },
     "db:seed-admin": {
-      "cache": false,
-      "persistent": true
-    },
-    "redis:start": {
-      "cache": false,
-      "persistent": true
-    },
-    "redis:stop": {
-      "cache": false,
-      "persistent": true
-    },
-    "redis:down": {
       "cache": false,
       "persistent": true
     },

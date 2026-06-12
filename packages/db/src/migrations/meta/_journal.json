@@ -78,6 +78,13 @@
       "when": 1779783775167,
       "tag": "0010_chilly_gwen_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781089567427,
+      "tag": "0011_nappy_vector",
+      "breakpoints": true
     }
   ]
 }

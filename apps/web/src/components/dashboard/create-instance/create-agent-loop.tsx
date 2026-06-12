@@ -58,17 +58,25 @@ const getProviderLogo = (providerName: string): string => {
 };
 
 export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
-  // Fetch providers and models from the database
-  const { data: providersData, isLoading: isLoadingProviders } = useQuery(
-    trpc.modelCredentials.listProviders.queryOptions(),
-  );
-  const { data: modelsData, isLoading: isLoadingModels } = useQuery(
-    trpc.modelCredentials.listModels.queryOptions(),
-  );
-  const { data: credentialsData } = useQuery(
-    trpc.modelCredentials.listMyCredentials.queryOptions(),
-  );
-  const { data: quotaData } = useQuery(trpc.agentLoop.getUsage.queryOptions());
+  // Fetch providers and models from the database. staleTime lets the prefetched
+  // cache hydrate the dialog on open without a flicker.
+  const STALE_TIME = 5 * 60 * 1000;
+  const { data: providersData, isLoading: isLoadingProviders } = useQuery({
+    ...trpc.modelCredentials.listProviders.queryOptions(),
+    staleTime: STALE_TIME,
+  });
+  const { data: modelsData, isLoading: isLoadingModels } = useQuery({
+    ...trpc.modelCredentials.listModels.queryOptions(),
+    staleTime: STALE_TIME,
+  });
+  const { data: credentialsData } = useQuery({
+    ...trpc.modelCredentials.listMyCredentials.queryOptions(),
+    staleTime: STALE_TIME,
+  });
+  const { data: quotaData } = useQuery({
+    ...trpc.agentLoop.getUsage.queryOptions(),
+    staleTime: STALE_TIME,
+  });
 
   const providers = (providersData?.providers ?? []) as Provider[];
   const allModels = (modelsData?.models ?? []) as Model[];
@@ -127,10 +135,18 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   }, [selectedProviderId, allModels, selectedModelId, getDefaultModelForProvider]);
 
   // Data fetching
-  const { data: installationsData } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
-  const { data: cloudProvidersData } = useQuery(
-    trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true, sandboxOnly: true }),
-  );
+  const { data: installationsData } = useQuery({
+    ...trpc.workspace.listUserInstallations.queryOptions(),
+    staleTime: STALE_TIME,
+  });
+  const { data: cloudProvidersData } = useQuery({
+    ...trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true, sandboxOnly: true }),
+    staleTime: STALE_TIME,
+  });
+  const { data: defaultProviderData } = useQuery({
+    ...trpc.user.getDefaultCloudProvider.queryOptions(),
+    staleTime: STALE_TIME,
+  });
 
   const installations = installationsData?.installations;
   const hasInstallations = installations && installations.length > 0;
@@ -149,9 +165,13 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
 
   useEffect(() => {
     if (sandboxProviders.length > 0 && !selectedSandboxProviderId) {
-      setSelectedSandboxProviderId(sandboxProviders[0]?.id ?? "");
+      const preferredId = defaultProviderData?.cloudProviderId;
+      const preferred = preferredId
+        ? sandboxProviders.find((p) => p.id === preferredId)
+        : undefined;
+      setSelectedSandboxProviderId(preferred?.id ?? sandboxProviders[0]?.id ?? "");
     }
-  }, [sandboxProviders, selectedSandboxProviderId]);
+  }, [sandboxProviders, selectedSandboxProviderId, defaultProviderData?.cloudProviderId]);
 
   // Fetch repos and branches
   const { data: reposData, isLoading: isLoadingRepos } = useQuery({

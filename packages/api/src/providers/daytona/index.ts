@@ -3,6 +3,7 @@ import { Daytona } from "@daytonaio/sdk";
 import type { DaytonaImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import path from "path";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import { getEncryptionService } from "../../service/encryption";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -10,17 +11,20 @@ import type {
   UpstreamAccess,
   WorkspaceConfig,
   WorkspaceInfo,
+  WorkspaceProvisioningSpec,
   WorkspaceStatusResult,
 } from "../compute";
+import { resolveProvisioningSpec } from "../provisioning-spec";
+import { resolveDaytonaSnapshotName } from "./snapshot/config";
 import {
   buildHostAlias,
   buildSshCommand,
   buildSshConnectionString,
   buildStandardSshConfigSnippet,
-  type WorkspaceEditorAccess,
-  type WorkspaceEditorAccessCleanupConfig,
-  type WorkspaceEditorAccessConfig,
-} from "../editor-access";
+  type WorkspaceSSHAccess,
+  type WorkspaceSSHAccessCleanupConfig,
+  type WorkspaceSSHAccessConfig,
+} from "../ssh-access";
 import { createProvisionLogger } from "../provision-logger";
 import type { DaytonaConfig } from "./types";
 
@@ -30,7 +34,9 @@ const OPENCODE_SERVER_SESSION_ID = "gitterm-opencode-server";
 const REPO_NAME_LABEL = "gitterm_repo_name";
 const WORKSPACE_ID_LABEL = "gitterm_workspace_id";
 const PERSISTENT_LABEL = "gitterm_persistent";
-const DAYTONA_WORKSPACE_DIR = "/home/daytona/workspace";
+const DAYTONA_WORKSPACE_DIR = "/workspace";
+const SSH_ACCESS_TTL_MINUTES = 120;
+const SSH_ACCESS_REUSE_BUFFER_MS = 5 * 60 * 1000;
 
 type DaytonaSandbox = Awaited<ReturnType<Daytona["get"]>>;
 
@@ -44,11 +50,17 @@ function getTrafficAccessHeaders(token: string): UpstreamAccess {
 }
 
 function getWorkspaceDir(): string {
-  return "workspace";
+  return DAYTONA_WORKSPACE_DIR;
 }
 
 function getRepoDir(repoName?: string): string {
-  return repoName ? path.posix.join(getWorkspaceDir(), repoName) : getWorkspaceDir();
+  return repoName
+    ? path.posix.join(getWorkspaceDir(), repoName)
+    : getWorkspaceDir();
+}
+
+function toBase64(value: string): string {
+  return Buffer.from(value).toString("base64");
 }
 
 function toDate(value?: string | number | Date | null): Date {
@@ -70,7 +82,8 @@ export class DaytonaProvider implements ComputeProvider {
   readonly name = "daytona";
 
   async getConfig(): Promise<DaytonaConfig> {
-    const dbConfig = await getProviderConfigService().getProviderConfigForUse("daytona");
+    const dbConfig =
+      await getProviderConfigService().getProviderConfigForUse("daytona");
     if (!dbConfig) {
       console.error("Daytona provider is not configured.");
       throw new Error(
@@ -105,13 +118,17 @@ export class DaytonaProvider implements ComputeProvider {
         : `https://${subdomain}.${BASE_DOMAIN}`;
   }
 
-  private getWorkspaceLabels(config: WorkspaceConfig, persistent: boolean): Record<string, string> {
+  private getWorkspaceLabels(
+    config: WorkspaceConfig,
+    spec: WorkspaceProvisioningSpec | null,
+    persistent: boolean,
+  ): Record<string, string> {
     const labels: Record<string, string> = {
       [WORKSPACE_ID_LABEL]: config.workspaceId,
       [PERSISTENT_LABEL]: String(persistent),
     };
 
-    const repoName = config.environmentVariables?.REPO_NAME;
+    const repoName = spec?.repo?.name;
     if (repoName) {
       labels[REPO_NAME_LABEL] = repoName;
     }
@@ -119,19 +136,53 @@ export class DaytonaProvider implements ComputeProvider {
     return labels;
   }
 
-  private isEditorAccessWorkspace(config: WorkspaceConfig): boolean {
-    return config.environmentVariables?.EDITOR_ACCESS_ENABLED === "true";
+  private isEditorAccessWorkspace(
+    spec: WorkspaceProvisioningSpec | null,
+  ): boolean {
+    return spec?.editorAccessEnabled === true;
   }
 
-  private getTargetRegion(config: WorkspaceConfig, providerConfig: DaytonaConfig): string {
-    return config.regionIdentifier ?? providerConfig.defaultTargetRegion;
+  private getTargetRegion(
+    _config: WorkspaceConfig,
+    providerConfig: DaytonaConfig,
+  ): string {
+    // A Daytona API key is bound to a single region, so user-supplied region
+    // choice is ignored. We always use the region configured by the admin.
+    return providerConfig.defaultTargetRegion;
   }
 
-  private getSnapshotName(config: WorkspaceConfig): string | undefined {
+  private getSnapshotName(
+    config: WorkspaceConfig,
+    targetRegion: string,
+    editorAccess: boolean,
+  ): string {
     const metadata = config.imageProviderMetadata?.daytona as
       | DaytonaImageProviderMetadata
       | undefined;
-    return metadata?.snapshot;
+
+    // Editor/SSH workspaces use the higher-resource `server-ssh` snapshot.
+    if (editorAccess) {
+      const sshRegionSnapshot = metadata?.sshSnapshotsByRegion?.[targetRegion];
+      return (
+        sshRegionSnapshot ??
+        metadata?.sshSnapshot ??
+        resolveDaytonaSnapshotName("server-ssh", targetRegion)
+      );
+    }
+
+    const regionSnapshot = metadata?.snapshotsByRegion?.[targetRegion];
+    const snapshot =
+      regionSnapshot ??
+      metadata?.snapshot ??
+      resolveDaytonaSnapshotName("server", targetRegion);
+
+    if (!regionSnapshot && !metadata?.snapshot) {
+      console.warn(
+        `[daytona] no snapshot in image metadata for workspace ${config.workspaceId} (region=${targetRegion}); defaulting to ${snapshot}`,
+      );
+    }
+
+    return snapshot;
   }
 
   private getProjectPathHint(pathHint: string): string {
@@ -143,13 +194,15 @@ export class DaytonaProvider implements ComputeProvider {
     command: string,
     deleteOnError = false,
   ): Promise<void> {
-    const response = await sandbox.process.executeCommand(command).catch(async (err) => {
-      if (deleteOnError) {
-        await sandbox.delete().catch(() => undefined);
-      }
-      console.error("Daytona sandbox command failed:", err);
-      throw err;
-    });
+    const response = await sandbox.process
+      .executeCommand(command)
+      .catch(async (err) => {
+        if (deleteOnError) {
+          await sandbox.delete().catch(() => undefined);
+        }
+        console.error("Daytona sandbox command failed:", err);
+        throw err;
+      });
 
     if (response.exitCode !== 0) {
       if (deleteOnError) {
@@ -157,19 +210,26 @@ export class DaytonaProvider implements ComputeProvider {
       }
       console.error("Exit code:", response.exitCode);
       console.error("Error output:", response.result);
-      throw new Error(`Daytona command failed with exit code ${response.exitCode}`);
+      throw new Error(
+        `Daytona command failed with exit code ${response.exitCode}`,
+      );
     }
   }
 
-  private async startOpencodeServer(sandbox: DaytonaSandbox, repoName?: string): Promise<void> {
+  private async startOpencodeServer(
+    sandbox: DaytonaSandbox,
+    repoName?: string,
+  ): Promise<void> {
     const repoDir = getRepoDir(repoName);
 
-    await sandbox.process.createSession(OPENCODE_SERVER_SESSION_ID).catch((error) => {
-      console.error("Daytona Sandbox Error (createSession)", error);
-      throw new Error(
-        `Daytona Sandbox Error (createSession): ${error instanceof Error ? error.message : String(error)}`,
-      );
-    });
+    await sandbox.process
+      .createSession(OPENCODE_SERVER_SESSION_ID)
+      .catch((error) => {
+        console.error("Daytona Sandbox Error (createSession)", error);
+        throw new Error(
+          `Daytona Sandbox Error (createSession): ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
 
     await sandbox.process
       .executeSessionCommand(OPENCODE_SERVER_SESSION_ID, {
@@ -184,7 +244,8 @@ export class DaytonaProvider implements ComputeProvider {
 
     await sandbox.process
       .executeSessionCommand(OPENCODE_SERVER_SESSION_ID, {
-        command: "opencode serve --hostname 0.0.0.0 --port 4096 > /tmp/opencode.log 2>&1",
+        command:
+          "opencode serve --hostname 0.0.0.0 --port 4096 > /tmp/opencode.log 2>&1",
         runAsync: true,
       })
       .catch((error) => {
@@ -204,41 +265,53 @@ export class DaytonaProvider implements ComputeProvider {
     config: WorkspaceConfig,
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const provisionLogger = createProvisionLogger(this.name, config.workspaceId);
+    const provisionLogger = createProvisionLogger(
+      this.name,
+      config.workspaceId,
+    );
     const providerConfig = await this.getConfig();
     const targetRegion = this.getTargetRegion(config, providerConfig);
-    const snapshotName = this.getSnapshotName(config);
+    const spec = resolveProvisioningSpec(config);
+    const snapshotName = this.getSnapshotName(
+      config,
+      targetRegion,
+      this.isEditorAccessWorkspace(spec),
+    );
     const daytona = await this.createClient(targetRegion);
-    const repoName = config.environmentVariables?.REPO_NAME;
+    const repoName = spec?.repo?.name;
     const repoDir = getRepoDir(repoName);
 
     const sandbox = await provisionLogger.step(
-      snapshotName ? `create-sandbox snapshot=${snapshotName}` : "create-sandbox default-snapshot",
+      `create-sandbox snapshot=${snapshotName}`,
       () =>
         daytona.create({
-          ...(snapshotName ? { snapshot: snapshotName } : {}),
-          labels: this.getWorkspaceLabels(config, persistent),
+          snapshot: snapshotName,
+          labels: this.getWorkspaceLabels(config, spec, persistent),
           envVars: {
-            OPENCODE_SERVER_PASSWORD: config.environmentVariables?.OPENCODE_SERVER_PASSWORD ?? "",
+            OPENCODE_SERVER_PASSWORD: spec?.serverPassword ?? "",
           },
         }),
     );
 
-    if (config.repositoryUrl && config.environmentVariables) {
-      const parsedGitRepoUrl = config.repositoryUrl.endsWith(".git")
-        ? config.repositoryUrl
-        : `${config.repositoryUrl}.git`;
+    if (spec?.repo) {
+      const parsedGitRepoUrl = spec.repo.url.endsWith(".git")
+        ? spec.repo.url
+        : `${spec.repo.url}.git`;
 
-      const username = config.environmentVariables.GITHUB_APP_TOKEN
-        ? config.environmentVariables.USER_GITHUB_USERNAME
-        : undefined;
-      const password = config.environmentVariables.GITHUB_APP_TOKEN;
-      const repoBranch =
-        config.repositoryBranch?.trim() || config.environmentVariables.REPO_BRANCH?.trim();
+      const username = spec.repo.authToken ? spec.repo.authUsername : undefined;
+      const password = spec.repo.authToken;
+      const repoBranch = spec.repo.branch;
 
       await provisionLogger.step("clone-repository", () =>
         sandbox.git
-          .clone(parsedGitRepoUrl, repoDir, repoBranch, undefined, username, password)
+          .clone(
+            parsedGitRepoUrl,
+            repoDir,
+            repoBranch,
+            undefined,
+            username,
+            password,
+          )
           .catch(async (err) => {
             await sandbox.delete().catch(() => undefined);
             console.error("Daytona killed sandbox because of err:", err);
@@ -247,23 +320,27 @@ export class DaytonaProvider implements ComputeProvider {
       );
     }
 
-    if (config.environmentVariables?.OPENCODE_CONFIG_BASE64) {
+    if (spec?.opencodeConfigJson) {
       await provisionLogger.step("write-opencode-config", async () => {
         await this.executeCommand(sandbox, "mkdir -p ~/.config/opencode", true);
         await this.executeCommand(
           sandbox,
-          `echo "${config.environmentVariables?.OPENCODE_CONFIG_BASE64}" | base64 -d > ~/.config/opencode/opencode.json`,
+          `echo "${toBase64(spec.opencodeConfigJson)}" | base64 -d > ~/.config/opencode/opencode.json`,
           true,
         );
       });
     }
 
-    if (config.environmentVariables?.OPENCODE_CREDENTIALS_BASE64) {
+    if (spec?.opencodeCredentialsJson) {
       await provisionLogger.step("write-opencode-credentials", async () => {
-        await this.executeCommand(sandbox, "mkdir -p ~/.local/share/opencode", true);
         await this.executeCommand(
           sandbox,
-          `echo "${config.environmentVariables?.OPENCODE_CREDENTIALS_BASE64}" | base64 -d > ~/.local/share/opencode/auth.json`,
+          "mkdir -p ~/.local/share/opencode",
+          true,
+        );
+        await this.executeCommand(
+          sandbox,
+          `echo "${toBase64(spec.opencodeCredentialsJson)}" | base64 -d > ~/.local/share/opencode/auth.json`,
           true,
         );
       });
@@ -273,8 +350,9 @@ export class DaytonaProvider implements ComputeProvider {
       this.startOpencodeServer(sandbox, repoName),
     );
 
-    const previewUrlData = await provisionLogger.step("create-preview-link", () =>
-      sandbox.getPreviewLink(4096),
+    const previewUrlData = await provisionLogger.step(
+      "create-preview-link",
+      () => sandbox.getPreviewLink(4096),
     );
     const serviceCreatedAt = toDate(sandbox.createdAt);
 
@@ -289,7 +367,7 @@ export class DaytonaProvider implements ComputeProvider {
     };
 
     provisionLogger.log(
-      `workspace-ready persistent=${persistent} editorAccess=${this.isEditorAccessWorkspace(config)} region=${targetRegion} snapshot=${snapshotName ?? "default"}`,
+      `workspace-ready persistent=${persistent} editorAccess=${this.isEditorAccessWorkspace(spec)} region=${targetRegion} snapshot=${snapshotName}`,
     );
 
     if (!persistent) {
@@ -310,7 +388,10 @@ export class DaytonaProvider implements ComputeProvider {
   async createPersistentWorkspace(
     config: PersistentWorkspaceConfig,
   ): Promise<PersistentWorkspaceInfo> {
-    return (await this.provisionWorkspace(config, true)) as PersistentWorkspaceInfo;
+    return (await this.provisionWorkspace(
+      config,
+      true,
+    )) as PersistentWorkspaceInfo;
   }
 
   async stopWorkspace(
@@ -359,10 +440,16 @@ export class DaytonaProvider implements ComputeProvider {
       );
     });
 
-    await this.startOpencodeServer(sandbox, this.getRepoNameFromSandbox(sandbox));
+    await this.startOpencodeServer(
+      sandbox,
+      this.getRepoNameFromSandbox(sandbox),
+    );
   }
 
-  async terminateWorkspace(externalServiceId: string, _externalVolumeId?: string): Promise<void> {
+  async terminateWorkspace(
+    externalServiceId: string,
+    _externalVolumeId?: string,
+  ): Promise<void> {
     const daytona = await this.createClient();
     const sandbox = await daytona.get(externalServiceId);
 
@@ -381,7 +468,9 @@ export class DaytonaProvider implements ComputeProvider {
       const sandbox = await daytona.get(externalId);
       await sandbox.refreshData().catch(() => undefined);
 
-      const lastActiveAt = sandbox.updatedAt ? toDate(sandbox.updatedAt) : undefined;
+      const lastActiveAt = sandbox.updatedAt
+        ? toDate(sandbox.updatedAt)
+        : undefined;
 
       switch (sandbox.state) {
         case "started":
@@ -408,7 +497,11 @@ export class DaytonaProvider implements ComputeProvider {
   async createOrGetExposedPortDomain(
     externalServiceId: string,
     port: number,
-  ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }> {
+  ): Promise<{
+    domain: string;
+    externalPortDomainId?: string;
+    upstreamAccess?: UpstreamAccess;
+  }> {
     const daytona = await this.createClient();
     const sandbox = await daytona.get(externalServiceId);
     const previewUrlData = await sandbox.getPreviewLink(port);
@@ -421,14 +514,51 @@ export class DaytonaProvider implements ComputeProvider {
     };
   }
 
-  async getWorkspaceEditorAccess(
-    config: WorkspaceEditorAccessConfig,
-  ): Promise<WorkspaceEditorAccess> {
-    const daytona = await this.createClient(config.regionIdentifier);
+  async getWorkspaceSSHAccess(
+    config: WorkspaceSSHAccessConfig,
+  ): Promise<WorkspaceSSHAccess> {
+    const existingToken = this.decryptRevocationToken(
+      config.existingConnection?.revocationToken,
+    );
+    const existingExpiresAt = config.existingConnection?.expiresAt;
+    if (
+      existingToken &&
+      existingExpiresAt &&
+      new Date(existingExpiresAt).getTime() >
+        Date.now() + SSH_ACCESS_REUSE_BUFFER_MS
+    ) {
+      return this.buildWorkspaceSSHAccess(
+        config,
+        existingToken,
+        existingExpiresAt,
+      );
+    }
+
+    // Single-region key: always use the admin-configured default region.
+    const daytona = await this.createClient();
     const sandbox = await daytona.get(config.externalServiceId);
-    const sshToken = await sandbox.createSshAccess(120);
+
+    if (existingToken) {
+      await sandbox.revokeSshAccess(existingToken).catch(() => undefined);
+    }
+
+    const sshToken = await sandbox.createSshAccess(SSH_ACCESS_TTL_MINUTES);
+    const expiresAt = new Date(
+      Date.now() + SSH_ACCESS_TTL_MINUTES * 60 * 1000,
+    ).toISOString();
+
+    return this.buildWorkspaceSSHAccess(config, sshToken.token, expiresAt);
+  }
+
+  private buildWorkspaceSSHAccess(
+    config: WorkspaceSSHAccessConfig,
+    token: string,
+    expiresAt: string,
+  ): WorkspaceSSHAccess {
     const host = "ssh.app.daytona.io";
-    const user = sshToken.token;
+    // Daytona's SSH gateway authenticates by passing the access token as the
+    // SSH username (i.e. `<token>@ssh.app.daytona.io`), so the token IS the user.
+    const user = token;
     const port = 22;
     const hostAlias = buildHostAlias(config.subdomain);
 
@@ -441,9 +571,23 @@ export class DaytonaProvider implements ComputeProvider {
       user,
       sshConnectionString: buildSshConnectionString({ host, port, user }),
       sshCommand: buildSshCommand({ host, port, user }),
-      sshConfigSnippet: buildStandardSshConfigSnippet({ hostAlias, host, port, user }),
+      sshConfigSnippet: buildStandardSshConfigSnippet({
+        hostAlias,
+        host,
+        port,
+        user,
+      }),
       projectPathHint: this.getProjectPathHint(config.projectPathHint),
-      expiresAt: new Date(Date.now() + 120 * 60 * 1000).toISOString(),
+      expiresAt,
+      connection: {
+        transportKind: "direct-ssh",
+        host,
+        port,
+        // The Daytona SSH token doubles as the SSH user and is required to
+        // revoke access later, so it is stored encrypted at rest.
+        revocationToken: getEncryptionService().encrypt(token),
+        expiresAt,
+      },
       notes: [
         "This short-lived SSH token expires after about two hours.",
         "Use the generated host alias in VS Code Remote SSH, Cursor, Windsurf, or NeoVim.",
@@ -451,9 +595,35 @@ export class DaytonaProvider implements ComputeProvider {
     };
   }
 
-  async revokeWorkspaceEditorAccess(_config: WorkspaceEditorAccessCleanupConfig): Promise<void> {}
+  private decryptRevocationToken(token?: string): string | undefined {
+    if (!token) {
+      return undefined;
+    }
+    try {
+      return getEncryptionService().decrypt(token);
+    } catch (error) {
+      console.warn("Daytona: failed to decrypt stored SSH token", error);
+      return undefined;
+    }
+  }
 
-  async removeExposedPortDomain(_externalServiceDomainId: string): Promise<void> {
+  async revokeWorkspaceSSHAccess(
+    config: WorkspaceSSHAccessCleanupConfig,
+  ): Promise<void> {
+    const token = this.decryptRevocationToken(config.connection.revocationToken);
+    if (!token) {
+      return;
+    }
+
+    // Single-region key: always use the admin-configured default region.
+    const daytona = await this.createClient();
+    const sandbox = await daytona.get(config.externalServiceId);
+    await sandbox.revokeSshAccess(token);
+  }
+
+  async removeExposedPortDomain(
+    _externalServiceDomainId: string,
+  ): Promise<void> {
     // Daytona preview links are generated on demand and do not need explicit cleanup here.
   }
 }

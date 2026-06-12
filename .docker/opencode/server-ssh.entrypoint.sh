@@ -5,10 +5,6 @@ mkdir -p /workspace /run/sshd /etc/ssh/sshd_config.d /etc/ssh/authorized_keys
 
 SSH_PASSWORD_AUTH=no
 
-if command -v usermod >/dev/null 2>&1; then
-    usermod -d /workspace root || true
-fi
-
 if [ -n "$USER_SSH_PUBLIC_KEY" ]; then
     touch /etc/ssh/authorized_keys/root
     chmod 600 /etc/ssh/authorized_keys/root
@@ -30,7 +26,6 @@ AllowAgentForwarding yes
 X11Forwarding no
 ClientAliveInterval 30
 ClientAliveCountMax 6
-Subsystem sftp internal-sftp
 EOF
 
 ssh-keygen -A

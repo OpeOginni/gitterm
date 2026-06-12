@@ -11,7 +11,10 @@ import { publicProcedure, router } from "../../index";
 import { e2bProvider } from "../../providers";
 import type { WorkspaceEnvironmentVariables } from "../../providers";
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
-import { checkPublicGitHubRepository, parseGitHubRepoUrl } from "../../service/github";
+import {
+  checkPublicGitHubRepository,
+  parseGitHubRepoUrl,
+} from "../../service/github";
 import { getWorkspaceDomain } from "../../utils/routing";
 import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooling";
 import {
@@ -23,7 +26,10 @@ import {
   updateWorkspaceByIdReturningAndInvalidate,
 } from "../../service/workspace-mutations";
 import { logger } from "../../utils/logger";
-import { hashClientIp, getOrCreateAnonUser } from "../../service/anon/anon-user";
+import {
+  hashClientIp,
+  getOrCreateAnonUser,
+} from "../../service/anon/anon-user";
 import {
   ANON_TOKEN_TTL_SECONDS,
   buildAnonCookieClearHeader,
@@ -171,7 +177,8 @@ export const anonRouter = router({
       if (!repoUrl) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Paste a public GitHub repo URL or owner/name (e.g. vercel/next.js).",
+          message:
+            "Paste a public GitHub repo URL or owner/name (e.g. vercel/next.js).",
         });
       }
 
@@ -183,16 +190,23 @@ export const anonRouter = router({
       if (!slot.ok) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
-          message: "You've used your trial workspace. Sign in for unlimited workspaces.",
+          message:
+            "You've used your trial workspace. Sign in for unlimited workspaces.",
         });
       }
 
       try {
         // ── 2. Validate repo is public + exists ─────────────────────────
         try {
-          const validation = await checkPublicGitHubRepository(repoUrl, input.branch);
+          const validation = await checkPublicGitHubRepository(
+            repoUrl,
+            input.branch,
+          );
           if (!validation.valid) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid repository URL." });
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Invalid repository URL.",
+            });
           }
           if (!validation.exists) {
             throw new TRPCError({
@@ -202,7 +216,10 @@ export const anonRouter = router({
             });
           }
           if (!validation.canClone) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Repo cannot be cloned." });
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Repo cannot be cloned.",
+            });
           }
           if (input.branch && !validation.branchExists) {
             throw new TRPCError({
@@ -214,7 +231,8 @@ export const anonRouter = router({
           if (err instanceof TRPCError) throw err;
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Could not validate the repository. Make sure it's a public GitHub repo.",
+            message:
+              "Could not validate the repository. Make sure it's a public GitHub repo.",
           });
         }
 
@@ -225,19 +243,30 @@ export const anonRouter = router({
         const [providerRecord] = await db
           .select()
           .from(cloudProvider)
-          .where(and(eq(cloudProvider.providerKey, "e2b"), eq(cloudProvider.isEnabled, true)))
+          .where(
+            and(
+              eq(cloudProvider.providerKey, "e2b"),
+              eq(cloudProvider.isEnabled, true),
+            ),
+          )
           .limit(1);
         if (!providerRecord) {
           throw new TRPCError({
             code: "SERVICE_UNAVAILABLE",
-            message: "E2B is not configured. Anonymous sandboxes are temporarily offline.",
+            message:
+              "E2B is not configured. Anonymous sandboxes are temporarily offline.",
           });
         }
 
         const [agentRecord] = await db
           .select()
           .from(agentType)
-          .where(and(eq(agentType.name, variant.agentTypeName), eq(agentType.isEnabled, true)))
+          .where(
+            and(
+              eq(agentType.name, variant.agentTypeName),
+              eq(agentType.isEnabled, true),
+            ),
+          )
           .limit(1);
         if (!agentRecord) {
           throw new TRPCError({
@@ -276,7 +305,11 @@ export const anonRouter = router({
         const subdomain = await generateUniqueSubdomain();
         const domain = getWorkspaceDomain(subdomain);
 
-        const workspaceAuthToken = workspaceJWT.generateToken(workspaceId, anonUser.id, ["port:*"]);
+        const workspaceAuthToken = workspaceJWT.generateToken(
+          workspaceId,
+          anonUser.id,
+          ["port:*"],
+        );
 
         // ── 6. Build env vars ────────────────────────────────────────────
         // OpenCode ships with built-in free models, so we don't inject any
@@ -298,16 +331,22 @@ export const anonRouter = router({
           "https://api.gitterm.dev/trpc";
 
         const repoInfo = parseGitHubRepoUrl(repoUrl);
-        const toolingManifestBase64 = await buildWorkspaceToolingManifestBase64({
-          owner: repoInfo?.owner,
-          repo: repoInfo?.repo,
-        });
+        const toolingManifestBase64 = await buildWorkspaceToolingManifestBase64(
+          {
+            owner: repoInfo?.owner,
+            repo: repoInfo?.repo,
+          },
+        );
 
         const envVars: WorkspaceEnvironmentVariables = {
           REPO_URL: repoUrl,
           REPO_BRANCH: input.branch || undefined,
-          OPENCODE_CONFIG_BASE64: Buffer.from(JSON.stringify(opencodeConfig)).toString("base64"),
-          OPENCODE_CREDENTIALS_BASE64: Buffer.from(JSON.stringify({})).toString("base64"),
+          OPENCODE_CONFIG_BASE64: Buffer.from(
+            JSON.stringify(opencodeConfig),
+          ).toString("base64"),
+          OPENCODE_CREDENTIALS_BASE64: Buffer.from(JSON.stringify({})).toString(
+            "base64",
+          ),
           OPENCODE_SERVER_PASSWORD: serverPassword,
           WORKSPACE_TOOLING_MANIFEST_BASE64: toolingManifestBase64,
           REPO_OWNER: repoInfo?.owner,
@@ -353,7 +392,7 @@ export const anonRouter = router({
             workspaceProfile: "standard",
             editorAccessEnabled: false,
             editorTarget: null,
-            editorConnection: null,
+            sshConnection: null,
             // Plaintext: row is ephemeral (10 min) and the password is also
             // returned to the client in the same response.
             serverPassword,
@@ -375,7 +414,11 @@ export const anonRouter = router({
         }
 
         if (workspaceInfo.upstreamAccess?.headers) {
-          await upsertWorkspaceRouteAccess(workspaceId, null, workspaceInfo.upstreamAccess.headers);
+          await upsertWorkspaceRouteAccess(
+            workspaceId,
+            null,
+            workspaceInfo.upstreamAccess.headers,
+          );
         }
         await invalidateWorkspaceCacheAfterMutation(workspaceId, subdomain);
 
@@ -420,7 +463,9 @@ export const anonRouter = router({
           await anonRepo.releaseSlot(ipHash).catch(() => undefined);
         }
         if (!(err instanceof TRPCError)) {
-          logger.error(`[anon-try] launch failed: ${(err as Error)?.message ?? err}`);
+          logger.error(
+            `[anon-try] launch failed: ${(err as Error)?.message ?? err}`,
+          );
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to launch sandbox. Please try again in a moment.",
@@ -456,8 +501,12 @@ export const anonRouter = router({
         });
       }
 
-      const anonCookieRaw = readAnonCookie(ctx.honoContext.req.header("Cookie"));
-      const verified = anonCookieRaw ? verifyAnonAccessToken(anonCookieRaw, ws.subdomain) : null;
+      const anonCookieRaw = readAnonCookie(
+        ctx.honoContext.req.header("Cookie"),
+      );
+      const verified = anonCookieRaw
+        ? verifyAnonAccessToken(anonCookieRaw, ws.subdomain)
+        : null;
       if (!verified || verified.workspaceId !== ws.id) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -467,7 +516,9 @@ export const anonRouter = router({
 
       // Already dead — nothing to do
       if (ws.status === "terminated") {
-        ctx.honoContext.header("Set-Cookie", buildAnonCookieClearHeader(), { append: true });
+        ctx.honoContext.header("Set-Cookie", buildAnonCookieClearHeader(), {
+          append: true,
+        });
         return { success: true };
       }
 
@@ -484,7 +535,9 @@ export const anonRouter = router({
       }
 
       // Clean up route access
-      await deleteWorkspaceRouteAccess(input.workspaceId, null).catch(() => undefined);
+      await deleteWorkspaceRouteAccess(input.workspaceId, null).catch(
+        () => undefined,
+      );
 
       // Update workspace status
       const now = new Date();
@@ -497,10 +550,16 @@ export const anonRouter = router({
       });
 
       // Clear the anon cookie so the old token can't be replayed
-      ctx.honoContext.header("Set-Cookie", buildAnonCookieClearHeader(), { append: true });
+      ctx.honoContext.header("Set-Cookie", buildAnonCookieClearHeader(), {
+        append: true,
+      });
 
-      const ipHash = ctx.clientIp ? hashClientIp(ctx.clientIp).slice(0, 8) : "unknown";
-      logger.info(`[anon-kill] workspace=${input.workspaceId} ipHash=${ipHash}`);
+      const ipHash = ctx.clientIp
+        ? hashClientIp(ctx.clientIp).slice(0, 8)
+        : "unknown";
+      logger.info(
+        `[anon-kill] workspace=${input.workspaceId} ipHash=${ipHash}`,
+      );
 
       return { success: true };
     }),
