@@ -159,8 +159,8 @@ type Workspace = NonNullable<
 >["workspaces"][number];
 type CloudProvider =
   (typeof trpc.workspace.listCloudProviders)["~types"]["output"]["cloudProviders"][number];
-type WorkspaceEditorAccess =
-  (typeof trpc.workspace.getWorkspaceEditorAccess)["~types"]["output"]["access"];
+type WorkspaceSSHAccess =
+  (typeof trpc.workspace.getWorkspaceSSHAccess)["~types"]["output"]["access"];
 
 function InstanceCard({
   workspace,
@@ -323,7 +323,7 @@ function InstanceCard({
   const isPending = workspace.status === "pending";
 
   const editorAccessQuery = useQuery({
-    ...trpc.workspace.getWorkspaceEditorAccess.queryOptions({
+    ...trpc.workspace.getWorkspaceSSHAccess.queryOptions({
       workspaceId: workspace.id,
     }),
     enabled: showConnectDialog && workspace.editorAccessEnabled && isRunning,
@@ -367,78 +367,114 @@ function InstanceCard({
     return `${protocol}://vscode-remote/${authority}${projectPathHint}`;
   };
 
-  const renderEditorAccess = (access: WorkspaceEditorAccess) => {
+  const renderEditorAccess = (access: WorkspaceSSHAccess) => {
     const needsProxySetup = access.transportKind === "proxycommand-ssh";
-    const remoteTarget = needsProxySetup
+    const needsSshConfig = needsProxySetup || access.port !== 22;
+    const remoteTarget = needsSshConfig
       ? access.hostAlias
       : `${access.user}@${access.host}:${access.port}`;
+    const setupSteps = needsProxySetup
+      ? [
+          {
+            label: "Install websocat",
+            help: "Required locally so OpenSSH can tunnel through E2B.",
+            value: "brew install websocat",
+            copied: "Install command copied",
+          },
+          {
+            label: "Add this to ~/.ssh/config",
+            help: "Paste the snippet into the SSH config file on your machine.",
+            value: access.sshConfigSnippet,
+            copied: "SSH config copied",
+          },
+        ]
+      : [];
 
     return (
       <div className="grid gap-4">
-        {/* SSH command -- always shown, always copyable */}
-        <div className="grid gap-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            SSH command
-          </p>
-          <div
-            className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
-            onClick={() => copyValue(access.sshCommand, "SSH command copied")}
-          >
-            <code className="block text-sm font-medium text-foreground break-all pr-8">
-              {access.sshCommand}
-            </code>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 transition-opacity group-hover:opacity-100">
-              <Copy className="h-3.5 w-3.5" />
+        {!needsSshConfig && (
+          <div className="grid gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              SSH command
+            </p>
+            <div
+              className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
+              onClick={() => copyValue(access.sshCommand, "SSH command copied")}
+            >
+              <code className="block text-sm font-medium text-foreground break-all pr-8">
+                {access.sshCommand}
+              </code>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 transition-opacity group-hover:opacity-100">
+                <Copy className="h-3.5 w-3.5" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* ProxyCommand setup steps (only for providers that need it) */}
+        {!needsProxySetup && needsSshConfig && (
+          <div className="grid gap-2 rounded-xl border border-border/50 bg-secondary/15 p-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                One-time SSH config
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Railway uses a TCP proxy on port {access.port}. Add this to{" "}
+                <code>~/.ssh/config</code>, then use the editor buttons below.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="group relative w-full cursor-pointer rounded-md border border-border/40 bg-secondary/30 px-3 py-2 text-left transition-colors hover:bg-secondary/50"
+              onClick={() => copyValue(access.sshConfigSnippet, "SSH config copied")}
+            >
+              <code className="block max-h-24 overflow-y-auto whitespace-pre-wrap break-all pr-7 text-xs font-medium text-foreground">
+                {access.sshConfigSnippet}
+              </code>
+              <Copy className="absolute right-2.5 top-2.5 h-3.5 w-3.5 opacity-40 transition-opacity group-hover:opacity-100" />
+            </button>
+          </div>
+        )}
+
         {needsProxySetup && (
-          <>
-            <div className="rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5 text-xs text-muted-foreground">
-              This provider requires a local proxy. Install{" "}
-              <code>websocat</code> and add the SSH config snippet to{" "}
-              <code>~/.ssh/config</code> before connecting.
-            </div>
-            <div className="grid gap-2">
+          <div className="grid gap-2 rounded-xl border border-border/50 bg-secondary/15 p-3">
+            <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Install websocat
+                One-time local setup
               </p>
-              <div
-                className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
-                onClick={() =>
-                  copyValue("brew install websocat", "Install command copied")
-                }
-              >
-                <code className="block text-sm font-medium text-foreground break-all pr-8">
-                  brew install websocat
-                </code>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 transition-opacity group-hover:opacity-100">
-                  <Copy className="h-3.5 w-3.5" />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                SSH config snippet
+              <p className="mt-1 text-xs text-muted-foreground">
+                E2B needs a local proxy. Do these once, then use the editor
+                buttons below.
               </p>
-              <div
-                className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
-                onClick={() =>
-                  copyValue(access.sshConfigSnippet, "SSH config copied")
-                }
-              >
-                <code className="block text-xs font-medium text-foreground break-all whitespace-pre-wrap pr-8">
-                  {access.sshConfigSnippet}
-                </code>
-                <div className="absolute right-3 top-3 opacity-40 transition-opacity group-hover:opacity-100">
-                  <Copy className="h-3.5 w-3.5" />
-                </div>
-              </div>
             </div>
-          </>
+            {setupSteps.map((step, index) => (
+              <div
+                key={step.label}
+                className="grid gap-2 rounded-lg border border-border/40 bg-background/40 p-3"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">
+                      {step.label}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{step.help}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="group relative w-full cursor-pointer rounded-md border border-border/40 bg-secondary/30 px-3 py-2 text-left transition-colors hover:bg-secondary/50"
+                  onClick={() => copyValue(step.value, step.copied)}
+                >
+                  <code className="block max-h-24 overflow-y-auto whitespace-pre-wrap break-all pr-7 text-xs font-medium text-foreground">
+                    {step.value}
+                  </code>
+                  <Copy className="absolute right-2.5 top-2.5 h-3.5 w-3.5 opacity-40 transition-opacity group-hover:opacity-100" />
+                </button>
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Open in editor buttons */}
@@ -470,6 +506,24 @@ function InstanceCard({
             ))}
           </div>
         </div>
+
+        {needsSshConfig && (
+          <details className="group rounded-lg border border-border/40 bg-secondary/10 px-3 py-2 text-xs text-muted-foreground">
+            <summary className="cursor-pointer list-none font-medium text-muted-foreground transition-colors hover:text-foreground">
+              Manual SSH command
+            </summary>
+            <button
+              type="button"
+              className="group/copy relative mt-2 w-full cursor-pointer rounded-md border border-border/40 bg-secondary/30 px-3 py-2 text-left transition-colors hover:bg-secondary/50"
+              onClick={() => copyValue(access.sshCommand, "SSH command copied")}
+            >
+              <code className="block max-h-24 overflow-y-auto break-all pr-7 text-xs font-medium text-foreground">
+                {access.sshCommand}
+              </code>
+              <Copy className="absolute right-2.5 top-2.5 h-3.5 w-3.5 opacity-40 transition-opacity group-hover/copy:opacity-100" />
+            </button>
+          </details>
+        )}
 
         {/* Copy connection string for Neovim / other editors */}
         <div className="grid gap-2">
@@ -504,11 +558,8 @@ function InstanceCard({
           )}
         </p>
 
-        {(access.requiredLocalBinaries?.length || access.notes.length > 0) && (
+        {access.notes.length > 0 && (
           <div className="grid gap-1.5 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5 text-xs text-muted-foreground">
-            {access.requiredLocalBinaries?.length ? (
-              <p>Requires: {access.requiredLocalBinaries.join(", ")}.</p>
-            ) : null}
             {access.notes.map((note) => (
               <p key={note}>{note}</p>
             ))}
@@ -521,7 +572,7 @@ function InstanceCard({
   return (
     <>
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               Editor Connect

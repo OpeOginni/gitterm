@@ -71,10 +71,11 @@ export function CreateCloudInstance({
     ...trpc.workspace.listAgentTypes.queryOptions(),
     staleTime: STALE_TIME,
   });
-  const { data: cloudProvidersData, isLoading: isLoadingCloudProviders } = useQuery({
-    ...trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true }),
-    staleTime: STALE_TIME,
-  });
+  const { data: cloudProvidersData, isLoading: isLoadingCloudProviders } =
+    useQuery({
+      ...trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true }),
+      staleTime: STALE_TIME,
+    });
   const { data: installationsData } = useQuery({
     ...trpc.workspace.listUserInstallations.queryOptions(),
     staleTime: STALE_TIME,
@@ -233,8 +234,8 @@ export function CreateCloudInstance({
     return availableRegions[0]?.id ?? "";
   }, [isAwsGroup, awsProviders, userRegionId, availableRegions]);
 
-  const canEnableEditorAccess =
-    !!selectedCloudProvider?.editorAccessSupport?.supported &&
+  const canEnableSSHAccess =
+    !!selectedCloudProvider?.sshAccessSupport?.supported &&
     availableAgents.some(
       (agent) => agent.id === selectedAgentTypeId && agent.serverOnly,
     ) &&
@@ -352,10 +353,10 @@ export function CreateCloudInstance({
   };
 
   useEffect(() => {
-    if (workspaceProfile === "ssh-enabled" && !canEnableEditorAccess) {
+    if (workspaceProfile === "ssh-enabled" && !canEnableSSHAccess) {
       setWorkspaceProfile("standard");
     }
-  }, [workspaceProfile, canEnableEditorAccess]);
+  }, [workspaceProfile, canEnableSSHAccess]);
 
   const integrations = installationsData?.installations;
   const hasIntegrations = integrations && integrations.length > 0;
@@ -711,20 +712,20 @@ export function CreateCloudInstance({
             id="editor-access"
             checked={workspaceProfile === "ssh-enabled"}
             onCheckedChange={(checked) => handleProfileChange(checked === true)}
-            disabled={!canEnableEditorAccess}
+            disabled={!canEnableSSHAccess}
             className="data-[state=checked]:bg-primary data-[state=checked]:border-accent"
           />
           <Label
             htmlFor="editor-access"
             className={cn(
               "group flex flex-1 items-center gap-2 text-xs",
-              canEnableEditorAccess
+              canEnableSSHAccess
                 ? "cursor-pointer text-foreground/90"
                 : "cursor-default text-foreground/55",
             )}
           >
             <span>Editor Access (SSH)</span>
-            {canEnableEditorAccess ? (
+            {canEnableSSHAccess ? (
               <>
                 <span className="text-muted-foreground/40">
                   &mdash; opens in
@@ -755,7 +756,7 @@ export function CreateCloudInstance({
             ) : (
               <span className="text-foreground/55">
                 &mdash;{" "}
-                {!selectedCloudProvider?.editorAccessSupport?.supported ? (
+                {!selectedCloudProvider?.sshAccessSupport?.supported ? (
                   "not supported by this provider"
                 ) : !selectedAgent?.serverOnly ? (
                   "requires a server agent type"

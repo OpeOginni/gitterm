@@ -4,10 +4,10 @@
  */
 
 import type {
-  WorkspaceEditorAccess,
-  WorkspaceEditorAccessCleanupConfig,
-  WorkspaceEditorAccessConfig,
-} from "./editor-access";
+  WorkspaceSSHAccess,
+  WorkspaceSSHAccessCleanupConfig,
+  WorkspaceSSHAccessConfig,
+} from "./ssh-access";
 import type { ImageProviderMetadata } from "@gitterm/db/schema/cloud";
 
 export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
@@ -37,6 +37,7 @@ export interface SystemWorkspaceEnv {
   WORKSPACE_ID: string;
   WORKSPACE_AUTH_TOKEN: string;
   WORKSPACE_API_URL: string;
+  WORKSPACE_PROVIDER: string;
   WORKSPACE_PROFILE?: string;
   EDITOR_ACCESS_ENABLED?: string;
   USER_SSH_PUBLIC_KEY?: string;
@@ -64,6 +65,7 @@ export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "WORKSPACE_ID",
   "WORKSPACE_AUTH_TOKEN",
   "WORKSPACE_API_URL",
+  "WORKSPACE_PROVIDER",
   "WORKSPACE_PROFILE",
   "EDITOR_ACCESS_ENABLED",
   "USER_SSH_PUBLIC_KEY",
@@ -74,18 +76,23 @@ type _MissingSystemEnvKeys = Exclude<
   keyof SystemWorkspaceEnv,
   (typeof SYSTEM_WORKSPACE_ENV_KEYS)[number]
 >;
-const _ensureAllSystemKeysListed: _MissingSystemEnvKeys extends never ? true : never = true;
+const _ensureAllSystemKeysListed: _MissingSystemEnvKeys extends never
+  ? true
+  : never = true;
 void _ensureAllSystemKeysListed;
 
 /** Reserved keys that user-defined env vars must not override. */
-export const RESERVED_WORKSPACE_ENV_KEYS: ReadonlySet<string> = new Set(SYSTEM_WORKSPACE_ENV_KEYS);
+export const RESERVED_WORKSPACE_ENV_KEYS: ReadonlySet<string> = new Set(
+  SYSTEM_WORKSPACE_ENV_KEYS,
+);
 
 /**
  * Final environment handed to a compute provider: the typed system keys plus
  * any user-defined vars (arbitrary string keys, already stripped of reserved
  * keys by the env builder).
  */
-export type WorkspaceEnvironmentVariables = SystemWorkspaceEnv & Record<string, string | undefined>;
+export type WorkspaceEnvironmentVariables = SystemWorkspaceEnv &
+  Record<string, string | undefined>;
 
 /**
  * Repository to clone into a workspace, with optional git basic-auth.
@@ -192,7 +199,9 @@ export interface ComputeProvider {
   /**
    * Create a new persistent workspace instance (with a volume)
    */
-  createPersistentWorkspace(config: PersistentWorkspaceConfig): Promise<PersistentWorkspaceInfo>;
+  createPersistentWorkspace(
+    config: PersistentWorkspaceConfig,
+  ): Promise<PersistentWorkspaceInfo>;
 
   /**
    * Stop a workspace (scale to 0 replicas, but keep resources)
@@ -215,7 +224,10 @@ export interface ComputeProvider {
   /**
    * Permanently delete/terminate a workspace
    */
-  terminateWorkspace(externalServiceId: string, externalVolumeId?: string): Promise<void>;
+  terminateWorkspace(
+    externalServiceId: string,
+    externalVolumeId?: string,
+  ): Promise<void>;
 
   /**
    * Get current status of a workspace
@@ -228,17 +240,25 @@ export interface ComputeProvider {
   createOrGetExposedPortDomain(
     externalServiceId: string,
     port: number,
-  ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }>;
+  ): Promise<{
+    domain: string;
+    externalPortDomainId?: string;
+    upstreamAccess?: UpstreamAccess;
+  }>;
 
   /**
    * Build editor connection details for a running workspace.
    */
-  getWorkspaceEditorAccess(config: WorkspaceEditorAccessConfig): Promise<WorkspaceEditorAccess>;
+  getWorkspaceSSHAccess(
+    config: WorkspaceSSHAccessConfig,
+  ): Promise<WorkspaceSSHAccess>;
 
   /**
    * Revoke provider-managed editor access resources when no longer needed.
    */
-  revokeWorkspaceEditorAccess(config: WorkspaceEditorAccessCleanupConfig): Promise<void>;
+  revokeWorkspaceSSHAccess(
+    config: WorkspaceSSHAccessCleanupConfig,
+  ): Promise<void>;
 
   /**
    * Remove a domain for an exposed port

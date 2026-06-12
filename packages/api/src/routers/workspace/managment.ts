@@ -76,14 +76,17 @@ import {
 } from "../../service/workspace-mutations";
 import {
   buildProjectPathHint,
-  normalizeProviderEditorAccessSupport,
+  normalizeProvidersshAccessSupport,
   pickWorkspaceImage,
   WORKSPACE_PROFILES,
   type WorkspaceProfile,
-} from "../../providers/editor-access";
+} from "../../providers/ssh-access";
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
 import { imageSupportsProvider } from "../../providers/image-compat";
-import type { CloudProviderType, ImageProviderMetadata } from "@gitterm/db/schema/cloud";
+import type {
+  CloudProviderType,
+  ImageProviderMetadata,
+} from "@gitterm/db/schema/cloud";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -334,8 +337,8 @@ export const workspaceRouter = router({
             return {
               ...provider,
               regions,
-              editorAccessSupport: normalizeProviderEditorAccessSupport(
-                provider.editorAccessSupport,
+              sshAccessSupport: normalizeProvidersshAccessSupport(
+                provider.sshAccessSupport,
               ),
             };
           }),
@@ -464,7 +467,7 @@ export const workspaceRouter = router({
       }
     }),
 
-  getWorkspaceEditorAccess: protectedProcedure
+  getWorkspaceSSHAccess: protectedProcedure
     .input(
       z.object({
         workspaceId: z.uuid(),
@@ -540,21 +543,21 @@ export const workspaceRouter = router({
         const computeProvider = await getProviderByCloudProviderId(
           providerRecord.providerKey,
         );
-        const access = await computeProvider.getWorkspaceEditorAccess({
+        const access = await computeProvider.getWorkspaceSSHAccess({
           workspaceId: workspaceRecord.id,
           userId,
           externalServiceId: workspaceRecord.externalInstanceId,
           subdomain: workspaceRecord.subdomain ?? workspaceRecord.id,
           projectPathHint: buildProjectPathHint(workspaceRecord.repositoryUrl),
           regionIdentifier,
-          existingConnection: workspaceRecord.editorConnection ?? undefined,
+          existingConnection: workspaceRecord.sshConnection ?? undefined,
         });
 
         if (access.connection) {
           await db
             .update(workspace)
             .set({
-              editorConnection: access.connection,
+              sshConnection: access.connection,
               updatedAt: new Date(),
             })
             .where(eq(workspace.id, workspaceRecord.id));
@@ -1112,8 +1115,8 @@ export const workspaceRouter = router({
         const workspaceProfile = (input.workspaceProfile ??
           "standard") as WorkspaceProfile;
         const editorAccessEnabled = workspaceProfile === "ssh-enabled";
-        const providerEditorSupport = normalizeProviderEditorAccessSupport(
-          cloudProviderRecord.editorAccessSupport,
+        const providerEditorSupport = normalizeProvidersshAccessSupport(
+          cloudProviderRecord.sshAccessSupport,
         );
 
         if (editorAccessEnabled) {
@@ -1350,6 +1353,7 @@ export const workspaceRouter = router({
             where: and(
               eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
               eq(providerAgentImage.agentTypeId, input.agentTypeId),
+              sql`coalesce(${providerAgentImage.workspaceProfile}, 'standard') = ${workspaceProfile}`,
             ),
             with: {
               image: true,
@@ -1714,6 +1718,7 @@ export const workspaceRouter = router({
           workspaceId,
           workspaceAuthToken,
           workspaceApiUrl: WORKSPACE_API_URL,
+          workspaceProvider: providerKey,
           userEnv: userWorkspaceEnvironmentVariables
             ? (userWorkspaceEnvironmentVariables.environmentVariables as Record<
                 string,
@@ -1783,7 +1788,7 @@ export const workspaceRouter = router({
             workspaceProfile,
             editorAccessEnabled,
             editorTarget: null,
-            editorConnection: null,
+            sshConnection: null,
             serverPassword: encryptedServerPassword ?? null,
             upstreamUrl: workspaceInfo.upstreamUrl,
             status: initialWorkspaceStatus,
@@ -1957,12 +1962,12 @@ export const workspaceRouter = router({
         const computeProvider = await getProviderByCloudProviderId(
           provider.providerKey,
         );
-        if (existingWorkspace.editorConnection) {
+        if (existingWorkspace.sshConnection) {
           await computeProvider
-            .revokeWorkspaceEditorAccess({
+            .revokeWorkspaceSSHAccess({
               workspaceId: existingWorkspace.id,
               externalServiceId: existingWorkspace.externalInstanceId,
-              connection: existingWorkspace.editorConnection,
+              connection: existingWorkspace.sshConnection,
               regionIdentifier: workspaceRegion?.externalRegionIdentifier,
             })
             .catch((error) => {
@@ -1992,7 +1997,7 @@ export const workspaceRouter = router({
           {
             status: "stopped",
             stoppedAt: now,
-            editorConnection: null,
+            sshConnection: null,
             updatedAt: now,
           },
           existingWorkspace.subdomain,
@@ -2213,12 +2218,12 @@ export const workspaceRouter = router({
       const terminatedAt = new Date();
 
       const runTerminationCleanup = async () => {
-        if (fetchedWorkspace.editorConnection) {
+        if (fetchedWorkspace.sshConnection) {
           await computeProvider
-            .revokeWorkspaceEditorAccess({
+            .revokeWorkspaceSSHAccess({
               workspaceId: fetchedWorkspace.id,
               externalServiceId: fetchedWorkspace.externalInstanceId,
-              connection: fetchedWorkspace.editorConnection,
+              connection: fetchedWorkspace.sshConnection,
             })
             .catch((error) => {
               console.warn(
@@ -2266,7 +2271,7 @@ export const workspaceRouter = router({
           stoppedAt: terminatedAt,
           terminatedAt,
           exposedPorts: null,
-          editorConnection: null,
+          sshConnection: null,
           updatedAt: terminatedAt,
         });
 
