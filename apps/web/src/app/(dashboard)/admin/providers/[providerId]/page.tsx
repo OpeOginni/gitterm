@@ -25,13 +25,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, Lock, MapPin, RefreshCw, Trash2, Wand2 } from "lucide-react";
+import { Download, Loader2, Lock, MapPin, RefreshCw, Trash2, Wand2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import type { Route } from "next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { strToU8, zipSync } from "fflate";
 
 interface ProviderConfigField {
   fieldName: string;
@@ -289,6 +290,45 @@ export default function ProviderSettingsPage() {
   // display name, which is user-defined per region (e.g. "AWS EU (Frankfurt)").
   const isAwsProvider =
     providerKey.toLowerCase() === "aws" || selectedProviderType?.name?.toLowerCase() === "aws";
+
+  const isCloudflareProvider =
+    providerKey.toLowerCase() === "cloudflare" ||
+    selectedProviderType?.name?.toLowerCase() === "cloudflare";
+
+  const { data: cloudflareManualSetup } = useQuery({
+    queryKey: ["admin", "cloudflareManualSetup"],
+    queryFn: () => trpcClient.admin.cloudflare.manualSetup.query(),
+    enabled: isCloudflareProvider,
+  });
+
+  const { data: cloudflareWorkerFiles } = useQuery({
+    queryKey: ["admin", "cloudflareWorkerFiles"],
+    queryFn: () => trpcClient.admin.cloudflare.workerFiles.query(),
+    enabled: isCloudflareProvider,
+  });
+
+  const downloadWorkerZip = () => {
+    const files = cloudflareWorkerFiles ?? [];
+    if (files.length === 0) return;
+
+    const entries: Record<string, Uint8Array> = {};
+    for (const file of files) {
+      // Preserve folder structure (e.g. src/index.ts) so `wrangler deploy`
+      // resolves `main` correctly from the unzipped folder.
+      entries[file.path] = strToU8(file.contents);
+    }
+
+    const zipped = zipSync(entries, { level: 6 });
+    const blob = new Blob([zipped], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "gitterm-cloudflare-sandbox.zip";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const { data: selectedProviderFields, isLoading: isLoadingFields } = useQuery({
     queryKey: ["admin", "providerConfigFields", resolvedProviderTypeId],
@@ -1018,6 +1058,68 @@ export default function ProviderSettingsPage() {
                 <div className="mt-4 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4 text-sm text-muted-foreground">
                   No provider definition found for this entry. Make sure the provider key maps to a
                   registered provider type.
+                </div>
+              )}
+
+              {isCloudflareProvider && (
+                <div className="mt-4 space-y-3 rounded-xl border border-[#f6821f]/25 bg-gradient-to-b from-[#f6821f]/[0.06] to-transparent p-4">
+                  <div className="flex items-center gap-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/cloudflare.svg"
+                      alt="Cloudflare"
+                      className="h-4 w-auto"
+                    />
+                    <p className="text-sm font-medium text-foreground/90">
+                      Deploy the sandbox worker
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Cloudflare workspaces run behind a Worker you deploy into
+                    your own Cloudflare account. Follow the steps below, then
+                    paste the resulting Worker URL and the same Internal API Key
+                    into the fields below.
+                  </p>
+
+                  <ol className="space-y-2">
+                    {(cloudflareManualSetup?.steps ?? []).map((step, i) => (
+                      <li
+                        key={i}
+                        className="flex gap-2.5 text-xs text-muted-foreground"
+                      >
+                        <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#f6821f]/15 text-[10px] font-semibold text-[#f6821f]">
+                          {i + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+
+                  {cloudflareManualSetup?.command && (
+                    <div className="space-y-1">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#f6821f]/80">
+                        deploy command
+                      </p>
+                      <pre className="overflow-x-auto rounded-lg border border-[#f6821f]/20 bg-[#f6821f]/[0.04] px-3 py-2 text-[11px] leading-relaxed text-foreground/85">
+                        <code>{cloudflareManualSetup.command}</code>
+                      </pre>
+                    </div>
+                  )}
+
+                  <div className="pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={downloadWorkerZip}
+                      disabled={(cloudflareWorkerFiles?.length ?? 0) === 0}
+                      className="border-[#f6821f]/30 text-[#f6821f] hover:bg-[#f6821f]/10 hover:text-[#f6821f]"
+                    >
+                      <Download />
+                      Download setup ZIP
+                    </Button>
+                  </div>
                 </div>
               )}
 

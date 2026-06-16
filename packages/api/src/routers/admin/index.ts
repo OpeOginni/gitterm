@@ -16,11 +16,13 @@ import { infrastructureRouter } from "./infrastructure";
 import { usersRouter } from "./users";
 import { settingsRouter } from "./settings";
 import { awsRouter } from "../aws";
+import { cloudflareRouter } from "../cloudflare";
 import { isGitHubAuthEnabled, isEmailAuthEnabled } from "@gitterm/env/server";
 
 export const adminRouter = router({
   infrastructure: infrastructureRouter,
   aws: awsRouter,
+  cloudflare: cloudflareRouter,
   users: usersRouter,
   settings: settingsRouter,
 

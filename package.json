@@ -47,9 +47,10 @@
     "docker:opencode-server:build": "docker build --pull --no-cache --build-arg OPENCODE_VERSION=latest --build-arg OPENCODE_INSTALL_CACHE_BUST=$(date +%s) -f .docker/Opencode.Server.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-server:latest .docker && docker push opeoginni/gitterm-opencode-server:latest",
     "docker:opencode-server-ssh:build": "docker build --pull --no-cache --build-arg OPENCODE_VERSION=latest --build-arg OPENCODE_INSTALL_CACHE_BUST=$(date +%s) -f .docker/Opencode.Server.SSH.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-server-with-ssh:latest .docker && docker push opeoginni/gitterm-opencode-server-with-ssh:latest",
     "docker:opencode-aws-server:build": "docker build --pull --no-cache --build-arg OPENCODE_VERSION=latest --build-arg OPENCODE_INSTALL_CACHE_BUST=$(date +%s) -f .docker/Opencode.Server.AWS.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-aws-server:latest .docker && docker push opeoginni/gitterm-opencode-aws-server:latest",
+    "docker:cf-sandbox:build": "docker build --pull --no-cache --platform linux/amd64 -t opeoginni/gitterm-cf-sandbox:0.12.1 packages/api/src/providers/cloudflare/sandbox-worker && docker push opeoginni/gitterm-cf-sandbox:0.12.1",
     "e2b:template-build": "turbo -F @gitterm/api e2b:build",
     "daytona:snapshot-build": "turbo -F @gitterm/api daytona:snapshot-build",
-    "opencode-upgrade": "bun run docker:opencode:build && bun run docker:opencode-server:build && bun run docker:opencode-server-ssh:build && bun run docker:opencode-aws-server:build && bun run e2b:template-build && bun run daytona:snapshot-build"
+    "opencode-upgrade": "bun run docker:opencode:build && bun run docker:opencode-server:build && bun run docker:opencode-server-ssh:build && bun run docker:opencode-aws-server:build && bun run docker:cf-sandbox:build && bun run e2b:template-build && bun run daytona:snapshot-build"
   },
   "dependencies": {
     "@trpc/client": "^11.8.1",

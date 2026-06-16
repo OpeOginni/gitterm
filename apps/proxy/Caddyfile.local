@@ -72,7 +72,7 @@
 		forward_auth localhost:3000 {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
 
 			header_up Host {host}
 			header_up X-Internal-Key {$INTERNAL_API_KEY}
@@ -106,6 +106,9 @@
 					header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
 					header_up x-daytona-preview-token {header.x-daytona-preview-token}
 					header_up X-Daytona-Skip-Preview-Warning {header.X-Daytona-Skip-Preview-Warning}
+					header_up x-gitterm-cf-sandbox-id {header.x-gitterm-cf-sandbox-id}
+					header_up x-gitterm-cf-internal-key {header.x-gitterm-cf-internal-key}
+					header_up x-gitterm-cf-port {header.x-gitterm-cf-port}
 					header_up X-Real-IP {remote_ip}
 					header_up X-Forwarded-For {remote_ip}
 					header_up User-Agent {header.User-Agent}
@@ -134,6 +137,9 @@
 					header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
 					header_up x-daytona-preview-token {header.x-daytona-preview-token}
 					header_up X-Daytona-Skip-Preview-Warning {header.X-Daytona-Skip-Preview-Warning}
+					header_up x-gitterm-cf-sandbox-id {header.x-gitterm-cf-sandbox-id}
+					header_up x-gitterm-cf-internal-key {header.x-gitterm-cf-internal-key}
+					header_up x-gitterm-cf-port {header.x-gitterm-cf-port}
 					header_up X-Real-IP {remote_ip}
 					header_up X-Forwarded-For {remote_ip}
 					header_up User-Agent {header.User-Agent}

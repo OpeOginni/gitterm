@@ -1,4 +1,4 @@
-FROM docker.io/cloudflare/sandbox:0.6.10
+FROM docker.io/cloudflare/sandbox:0.12.1
 
 RUN npm install -g opencode-ai
 

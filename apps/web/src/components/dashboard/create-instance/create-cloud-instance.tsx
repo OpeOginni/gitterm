@@ -182,6 +182,18 @@ export function CreateCloudInstance({
 
   const selectedCloudProviderId = selectedCloudProvider?.id ?? "";
 
+  // Persistence capability for the selected provider. Some providers (e.g.
+  // Cloudflare sandboxes) cannot keep files between sessions at all.
+  const persistenceSupported =
+    selectedCloudProvider?.supportsPersistence !== false;
+  const isAutoPersistent =
+    persistenceSupported && !!selectedCloudProvider?.autoPersistent;
+  const effectivePersistent = persistenceSupported
+    ? isAutoPersistent
+      ? true
+      : persistent
+    : false;
+
   const availableRegions = useMemo((): Region[] => {
     if (isAwsGroup) {
       // Each AWS provider is pinned to one region. Surface every AWS provider's
@@ -283,7 +295,7 @@ export function CreateCloudInstance({
         );
         track(AnalyticsEvent.WorkspaceCreate, {
           provider: selectedCloudProvider?.providerKey,
-          persistent: selectedCloudProvider?.autoPersistent ? true : persistent,
+          persistent: effectivePersistent,
           profile: workspaceProfile,
         });
         onSuccess({
@@ -346,7 +358,7 @@ export function CreateCloudInstance({
         selectedGitIntegrationId === "none"
           ? undefined
           : selectedGitIntegrationId,
-      persistent: selectedCloudProvider?.autoPersistent ? true : persistent,
+      persistent: effectivePersistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
     });
@@ -778,14 +790,15 @@ export function CreateCloudInstance({
 
         {/* ── 5. Persistent storage ── */}
         {(() => {
-          const isAutoPersistent = !!selectedCloudProvider?.autoPersistent;
-          const effectivePersistent = isAutoPersistent ? true : persistent;
+          // Disabled when the provider forces it on (autoPersistent) or can't
+          // persist at all (supportsPersistence === false).
+          const locked = isAutoPersistent || !persistenceSupported;
           return (
             <div className="flex items-center gap-2">
               <Checkbox
                 id="persistent"
                 checked={effectivePersistent}
-                disabled={isAutoPersistent}
+                disabled={locked}
                 onCheckedChange={(checked) => setPersistent(checked as boolean)}
                 className="data-[state=checked]:bg-primary data-[state=checked]:border-accent disabled:opacity-100 disabled:cursor-not-allowed"
               />
@@ -793,7 +806,7 @@ export function CreateCloudInstance({
                 htmlFor="persistent"
                 className={cn(
                   "text-xs",
-                  isAutoPersistent
+                  locked
                     ? "cursor-not-allowed text-foreground/55"
                     : "cursor-pointer text-foreground/90",
                 )}
@@ -801,16 +814,16 @@ export function CreateCloudInstance({
                 Persistent storage
                 <span
                   className={cn(
-                    isAutoPersistent
-                      ? "text-foreground/45"
-                      : "text-foreground/55",
+                    locked ? "text-foreground/45" : "text-foreground/55",
                   )}
                 >
                   {" "}
                   &mdash;{" "}
-                  {isAutoPersistent
-                    ? `always on for ${selectedCloudProvider?.name ?? "this provider"}`
-                    : "keep files between sessions"}
+                  {!persistenceSupported
+                    ? `not supported on ${selectedCloudProvider?.name ?? "this provider"} — commit & push to save work`
+                    : isAutoPersistent
+                      ? `always on for ${selectedCloudProvider?.name ?? "this provider"}`
+                      : "keep files between sessions"}
                 </span>
               </Label>
             </div>

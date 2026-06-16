@@ -1,5 +1,6 @@
 import type { ComputeProvider } from "./compute";
 import { awsProvider } from "./aws";
+import { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 import { daytonaProvider } from "./daytona";
 import { e2bProvider } from "./e2b";
 import { railwayProvider } from "./railway";
@@ -8,6 +9,7 @@ export * from "./compute";
 export { awsProvider } from "./aws";
 export { railwayProvider } from "./railway";
 export { e2bProvider } from "./e2b";
+export { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 
 /**
  * All available provider implementations
@@ -20,6 +22,7 @@ const availableProviders: Record<string, ComputeProvider> = {
   railway: railwayProvider,
   e2b: e2bProvider,
   daytona: daytonaProvider,
+  cloudflare: cloudflareComputeProvider,
   // Future providers:
   // docker: dockerProvider,
   // kubernetes: kubernetesProvider,
