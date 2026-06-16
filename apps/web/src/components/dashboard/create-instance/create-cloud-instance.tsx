@@ -725,7 +725,7 @@ export function CreateCloudInstance({
             checked={workspaceProfile === "ssh-enabled"}
             onCheckedChange={(checked) => handleProfileChange(checked === true)}
             disabled={!canEnableSSHAccess}
-            className="data-[state=checked]:bg-primary data-[state=checked]:border-accent"
+            className="data-[state=checked]:bg-primary data-[state=checked]:border-accent disabled:opacity-100 disabled:cursor-not-allowed"
           />
           <Label
             htmlFor="editor-access"
