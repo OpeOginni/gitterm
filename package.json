@@ -7,7 +7,7 @@
       "packages/*"
     ],
     "catalog": {
-      "hono": "^4.8.2",
+      "hono": "^4.12.25",
       "@trpc/server": "^11.8.1",
       "better-auth": "^1.4.9",
       "dotenv": "^17.2.2",
