@@ -1815,7 +1815,7 @@ export const workspaceRouter = router({
         }
 
         workspaceCreateLogger.log(
-          `workspace-record-created provider=${providerKey} persistent=${input.persistent}`,
+          `workspace-record-created provider=${providerKey} persistent=${effectivePersistent}`,
         );
 
         if (workspaceInfo.upstreamAccess?.headers) {
@@ -1829,7 +1829,7 @@ export const workspaceRouter = router({
 
         // Create volume record (only for persistent workspaces)
         let newVolume = null;
-        if (input.persistent) {
+        if (effectivePersistent) {
           const persistentInfo = workspaceInfo as PersistentWorkspaceInfo;
           const [volumeRecord] = await db
             .insert(volume)
