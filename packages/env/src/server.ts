@@ -60,6 +60,7 @@ const baseSchema = z
     POLAR_ACCESS_TOKEN: optional,
     POLAR_WEBHOOK_SECRET: optional,
     POLAR_ENVIRONMENT: polarEnvironment,
+    POLAR_STARTER_PRODUCT_ID: optional,
     POLAR_PRO_PRODUCT_ID: optional,
     POLAR_RUN_PACK_50_PRODUCT_ID: optional,
     POLAR_RUN_PACK_100_PRODUCT_ID: optional,
@@ -112,6 +113,12 @@ const baseSchema = z
         errors.push({
           path: "POLAR_PRO_PRODUCT_ID",
           message: "POLAR_PRO_PRODUCT_ID is required in managed mode",
+        });
+      }
+      if (!data.POLAR_STARTER_PRODUCT_ID) {
+        errors.push({
+          path: "POLAR_STARTER_PRODUCT_ID",
+          message: "POLAR_STARTER_PRODUCT_ID is required in managed mode",
         });
       }
     }

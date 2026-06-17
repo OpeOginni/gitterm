@@ -32,16 +32,23 @@ import Link from "next/link";
 import type { Route } from "next";
 import { track } from "@/lib/analytics";
 
-type UserPlan = "free" | "pro";
+type UserPlan = "free" | "starter" | "pro";
+type PaidPlan = "starter" | "pro";
 
 interface BillingSectionProps {
   currentPlan: UserPlan;
 }
 
+const PLAN_PRICE: Record<PaidPlan, number> = {
+  starter: 10,
+  pro: 25,
+};
+
 interface QuotaRow {
   label: string;
   icon: typeof Clock;
   free: string | boolean;
+  starter: string | boolean;
   pro: string | boolean;
 }
 
@@ -50,23 +57,53 @@ const QUOTAS: QuotaRow[] = [
     label: "Cloud runtime",
     icon: Clock,
     free: "60 min / day",
-    pro: "Unlimited",
+    starter: "180 min / day",
+    pro: "480 min / day",
+  },
+  {
+    label: "Agent runs",
+    icon: Sparkles,
+    free: "10 / mo",
+    starter: "75 / mo",
+    pro: "250 / mo",
   },
   {
     label: "Workspaces",
     icon: Server,
-    free: "5 max",
+    free: "2 max",
+    starter: "5 max",
     pro: "15 max",
+  },
+  {
+    label: "Providers",
+    icon: Globe,
+    free: "E2B only",
+    starter: "All",
+    pro: "All",
+  },
+  {
+    label: "Persistent workspaces",
+    icon: Server,
+    free: false,
+    starter: true,
+    pro: true,
   },
   {
     label: "Custom subdomains",
     icon: Globe,
     free: false,
+    starter: true,
     pro: true,
   },
 ];
 
-function QuotaValue({ value, dim = false }: { value: string | boolean; dim?: boolean }) {
+function QuotaValue({
+  value,
+  dim = false,
+}: {
+  value: string | boolean;
+  dim?: boolean;
+}) {
   if (typeof value === "boolean") {
     return value ? (
       <Check className="h-4 w-4 text-emerald-400" />
@@ -76,7 +113,7 @@ function QuotaValue({ value, dim = false }: { value: string | boolean; dim?: boo
   }
   return (
     <span
-      className={`font-mono text-[12.5px] tabular-nums ${dim ? "text-white/40" : "text-white/85"}`}
+      className={`font-mono text-[11px] leading-tight tabular-nums sm:whitespace-nowrap sm:text-[12px] ${dim ? "text-white/40" : "text-white/85"}`}
     >
       {value}
     </span>
@@ -100,8 +137,9 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
             All features unlocked.
           </h3>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-white/50">
-            You're running GitTerm on your own infrastructure - no quotas, no plans, no Polar. Bring
-            as many keys, workspaces, and subdomains as your cluster can handle.
+            You're running GitTerm on your own infrastructure - no quotas, no
+            plans, no Polar. Bring as many keys, workspaces, and subdomains as
+            your cluster can handle.
           </p>
         </FormCardBody>
       </FormCard>
@@ -120,12 +158,12 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
     }
   };
 
-  const handleUpgrade = async () => {
+  const handleUpgrade = async (slug: PaidPlan) => {
     if (isCheckoutLoading) return;
-    track("upgrade_initiated", { plan: "pro", source: "settings_account" });
+    track("upgrade_initiated", { plan: slug, source: "settings_account" });
     setIsCheckoutLoading(true);
     try {
-      await initiateCheckout("pro");
+      await initiateCheckout(slug);
     } catch (error) {
       console.error("Checkout failed:", error);
     } finally {
@@ -133,24 +171,32 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
     }
   };
 
-  if (currentPlan === "pro") {
+  // Active paid plan (starter or pro): show the plan's quotas + manage button,
+  // plus an upgrade-to-Pro nudge for Starter customers.
+  if (currentPlan === "starter" || currentPlan === "pro") {
+    const planQuotaValue = (row: QuotaRow) =>
+      currentPlan === "pro" ? row.pro : row.starter;
+
     return (
       <FormCard tone="success">
         <FormCardHeader>
           <span>Plan</span>
-          <FormCardStatus tone="ready">pro · active</FormCardStatus>
+          <FormCardStatus tone="ready">{currentPlan} · active</FormCardStatus>
         </FormCardHeader>
 
         <FormCardBody className="space-y-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-semibold tracking-tight text-white">$20</span>
+                <span className="text-3xl font-semibold tracking-tight text-white">
+                  ${PLAN_PRICE[currentPlan]}
+                </span>
                 <span className="text-sm text-white/35">/ month</span>
               </div>
               <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-white/45">
-                Unlimited cloud runtime, 3× more workspaces, and custom subdomains. Your AI spending
-                stays with your provider - we never mark it up.
+                {currentPlan === "pro"
+                  ? "480 minutes/day, all providers, persistence, and custom subdomains. Your AI spending stays with your provider, we never mark it up."
+                  : "180 minutes/day, every provider, and persistent workspaces. Your AI spending stays with your provider, we never mark it up."}
               </p>
             </div>
 
@@ -183,17 +229,43 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
                     <Icon className="h-3.5 w-3.5 text-white/35" />
                     {row.label}
                   </span>
-                  <QuotaValue value={row.pro} />
+                  <QuotaValue value={planQuotaValue(row)} />
                 </div>
               );
             })}
           </div>
+
+          {currentPlan === "starter" && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.05] pt-4">
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/35">
+                Need more? Pro is $25 / month
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isCheckoutLoading}
+                onClick={() => handleUpgrade("pro")}
+                className="group gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em]"
+              >
+                {isCheckoutLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                Upgrade to Pro
+              </Button>
+            </div>
+          )}
         </FormCardBody>
 
         <FormCardFooter>
-          <span className="truncate">billed monthly · cancel any time in the portal</span>
+          <span className="truncate">
+            billed monthly · cancel any time in the portal
+          </span>
           {session?.user?.email && (
-            <span className="hidden shrink-0 sm:inline">{session.user.email}</span>
+            <span className="hidden shrink-0 sm:inline">
+              {session.user.email}
+            </span>
           )}
         </FormCardFooter>
       </FormCard>
@@ -210,37 +282,49 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
       <FormCardBody className="space-y-7">
         <div>
           <h3 className="text-xl font-semibold leading-tight tracking-tight text-white">
-            We just <span className="italic text-[color:var(--cream)]">run</span> the workspaces.
+            We just <span className="italic text-(--cream)">run</span> the
+            workspaces.
           </h3>
           <p className="mt-2.5 max-w-xl text-[13.5px] leading-relaxed text-white/50">
-            Bring your own AI keys. We don't mark them up. Pro pays for the workspace itself -
-            unlimited cloud time, 3× more workspaces, and custom subdomains.
+            Bring your own AI keys. We don't mark them up. Free runs on E2B
+            sandboxes - upgrade to unlock every provider, persistent workspaces,
+            and more runtime.
           </p>
         </div>
 
-        <div className="overflow-hidden rounded-xl bg-input/40">
-          <div className="grid grid-cols-[1fr_96px_96px] items-center gap-4 border-b border-white/[0.04] bg-white/[0.015] px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-            <span />
-            <span className="text-center">Free</span>
-            <span className="text-center text-primary/80">Pro</span>
+        <div className="overflow-hidden rounded-xl border border-white/[0.05] bg-input/40">
+          <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center border-b border-white/[0.06] bg-white/[0.015] font-mono text-[9px] uppercase tracking-[0.08em] text-white/35 sm:text-[10px] sm:tracking-[0.18em]">
+            <span className="px-3 py-2.5 sm:px-4" />
+            <span className="px-1.5 py-2.5 text-center sm:px-3">Free</span>
+            <span className="px-1.5 py-2.5 text-center text-primary/80 sm:px-3">
+              Starter
+            </span>
+            <span className="px-1.5 py-2.5 text-center text-primary/80 sm:px-3">
+              Pro
+            </span>
           </div>
           {QUOTAS.map((row, idx) => {
             const Icon = row.icon;
             return (
               <div
                 key={row.label}
-                className={`grid grid-cols-[1fr_96px_96px] items-center gap-4 px-4 py-3 ${
-                  idx < QUOTAS.length - 1 ? "border-b border-white/[0.03]" : ""
+                className={`grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center ${
+                  idx % 2 === 1 ? "bg-white/[0.012]" : ""
+                } ${
+                  idx < QUOTAS.length - 1 ? "border-b border-white/[0.04]" : ""
                 }`}
               >
-                <span className="flex items-center gap-2.5 text-[13.5px] text-white/75">
-                  <Icon className="h-3.5 w-3.5 text-white/35" />
+                <span className="flex items-center gap-2 px-3 py-3 text-[12px] text-white/75 sm:gap-2.5 sm:px-4 sm:text-[13px]">
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-white/35" />
                   {row.label}
                 </span>
-                <span className="flex justify-center">
+                <span className="flex justify-center px-1.5 py-3 text-center sm:px-3">
                   <QuotaValue value={row.free} dim />
                 </span>
-                <span className="flex justify-center">
+                <span className="flex justify-center px-1.5 py-3 text-center sm:px-3">
+                  <QuotaValue value={row.starter} />
+                </span>
+                <span className="flex justify-center px-1.5 py-3 text-center sm:px-3">
                   <QuotaValue value={row.pro} />
                 </span>
               </div>
@@ -248,28 +332,25 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
           })}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
+            asChild
             type="button"
-            disabled={isCheckoutLoading}
-            onClick={handleUpgrade}
             className="group font-mono text-[12px] font-bold uppercase tracking-[0.18em]"
           >
-            {isCheckoutLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
+            <Link href={"/pricing" as Route}>
               <Sparkles className="h-3.5 w-3.5" />
-            )}
-            {isCheckoutLoading ? "Redirecting…" : "Upgrade to Pro"}
+              Upgrade
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            </Link>
           </Button>
-          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/35">
-            $20 / month · cancel any time
-          </span>
         </div>
       </FormCardBody>
 
       <FormCardFooter>
-        <span className="truncate">questions about Pro?</span>
+        <a href="/pricing#questions" className="truncate">
+          questions about plans?
+        </a>
         <Link
           href={"/pricing" as Route}
           className="inline-flex shrink-0 items-center gap-1.5 text-white/55 hover:text-white"
@@ -285,7 +366,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
 /**
  * Plan badge for display in navigation/header
  */
-export function PlanBadge({ plan }: { plan: UserPlan }) {
+export function PlanBadge({ plan }: { plan: UserPlan | string }) {
   if (!isBillingEnabled || plan === "free") {
     return null;
   }

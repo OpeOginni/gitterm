@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import type { Route } from "next";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Star, Terminal } from "lucide-react";
+import { Menu, Star, Terminal, X } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { isBillingEnabled } from "@gitterm/env/web";
 
 export function LandingHeader() {
   const { data: session } = authClient.useSession();
   const showPricing = isBillingEnabled();
+  const [mobileOpen, setMobileOpen] = useState(false);
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-background/75 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6">
@@ -101,8 +103,64 @@ export function LandingHeader() {
               </Link>
             </>
           )}
+
+          <button
+            type="button"
+            aria-label="Toggle menu"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((open) => !open)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/8 text-white/60 transition-colors hover:border-primary hover:text-white/90 md:hidden"
+          >
+            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
         </div>
       </div>
+
+      {mobileOpen && (
+        <nav className="border-t border-white/[0.06] bg-background/95 backdrop-blur-xl md:hidden">
+          <div className="mx-auto flex max-w-[1200px] flex-col px-4 py-2 sm:px-6">
+            <Link
+              href="/#features"
+              onClick={() => setMobileOpen(false)}
+              className="py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90"
+            >
+              Features
+            </Link>
+            <Link
+              href="/#how-it-works"
+              onClick={() => setMobileOpen(false)}
+              className="border-t border-white/[0.04] py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90"
+            >
+              How it works
+            </Link>
+            {showPricing && (
+              <Link
+                href={"/pricing" as Route}
+                onClick={() => setMobileOpen(false)}
+                className="border-t border-white/[0.04] py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90"
+              >
+                Pricing
+              </Link>
+            )}
+            <Link
+              href={"/self-host" as Route}
+              onClick={() => setMobileOpen(false)}
+              className="border-t border-white/[0.04] py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90"
+            >
+              Self-host
+            </Link>
+            {!session && (
+              <Link
+                href="/login"
+                onClick={() => setMobileOpen(false)}
+                className="border-t border-white/[0.04] py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90 sm:hidden"
+              >
+                Log in
+              </Link>
+            )}
+          </div>
+        </nav>
+      )}
     </header>
   );
 }

@@ -61,6 +61,17 @@ export async function getWorkspaceLastActivity(workspaceId: string): Promise<Dat
 export async function filterIdleWorkspacesByRedisActivity<
   T extends { id: string; lastActiveAt: Date | null },
 >(workspaces: T[], idleThreshold: Date): Promise<T[]> {
+  return filterIdleWorkspacesByRedisActivityWith(workspaces, () => idleThreshold);
+}
+
+/**
+ * Like `filterIdleWorkspacesByRedisActivity` but resolves the idle threshold
+ * per-workspace. This lets callers apply per-plan idle timeouts while still
+ * honouring the fresher Redis activity timestamp over the (throttled) DB value.
+ */
+export async function filterIdleWorkspacesByRedisActivityWith<
+  T extends { id: string; lastActiveAt: Date | null },
+>(workspaces: T[], thresholdFor: (workspace: T) => Date): Promise<T[]> {
   if (workspaces.length === 0) return workspaces;
 
   try {
@@ -72,12 +83,12 @@ export async function filterIdleWorkspacesByRedisActivity<
     return workspaces.filter((candidate, index) => {
       const redisTimestamp = timestamps[index];
       const lastActiveAt = redisTimestamp ? new Date(redisTimestamp) : candidate.lastActiveAt;
-      return !lastActiveAt || lastActiveAt < idleThreshold;
+      return !lastActiveAt || lastActiveAt < thresholdFor(candidate);
     });
   } catch (error) {
     logActivityCacheError("idle filter", error);
     return workspaces.filter(
-      (candidate) => !candidate.lastActiveAt || candidate.lastActiveAt < idleThreshold,
+      (candidate) => !candidate.lastActiveAt || candidate.lastActiveAt < thresholdFor(candidate),
     );
   }
 }

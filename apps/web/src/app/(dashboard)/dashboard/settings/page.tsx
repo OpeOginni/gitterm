@@ -17,7 +17,7 @@ export default async function SettingsPage() {
     redirect("/login");
   }
 
-  const currentPlan = ((session.data.user as any).plan as "free" | "pro") || "free";
+  const currentPlan = ((session.data.user as any).plan as "free" | "starter" | "pro") || "free";
 
   return <SettingsShell currentPlan={currentPlan} />;
 }

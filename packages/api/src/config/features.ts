@@ -105,37 +105,94 @@ export const shouldNotifyDiscord = (): boolean => features.discordNotifications;
 /**
  * Available user plans
  *
- * - free: Basic access with limited cloud runtime and workspace count
- * - pro: Expanded workspace limits with unlimited cloud runtime
+ * - free: Basic trial access. E2B sandbox only, no persistence.
+ * - starter: Entry paid tier. All providers, persistence, higher quotas.
+ * - pro: Main paid tier. All providers, persistence, highest quotas, branding.
+ *
+ * NOTE: All paid plans have FINITE quotas in managed mode. Only self-hosted
+ * deployments are unlimited. There is intentionally no "unlimited" managed tier
+ * because every running workspace consumes provider compute we pay for.
  */
-export type UserPlan = "free" | "pro";
+export type UserPlan = "free" | "starter" | "pro";
+
+/**
+ * Order plans low -> high so we can compare tiers when gating features.
+ */
+export const PLAN_RANK: Record<UserPlan, number> = {
+  free: 0,
+  starter: 1,
+  pro: 2,
+};
 
 // ============================================================================
 // Plan Feature Matrix
 // ============================================================================
+//
+// This is the single source of truth for what each tier gets in managed mode.
+// Self-hosted deployments bypass these limits entirely (see guard functions).
+// Keep packages/auth/src/index.ts MONTHLY_RUN_QUOTAS in sync with this.
+
+export interface PlanLimits {
+  /** Monthly autonomous agent-loop runs. */
+  monthlyRuns: number;
+  /** Maximum total workspaces (running, pending, or stopped). */
+  workspaces: number;
+  /** Daily cloud runtime minutes before the workspace is stopped. */
+  dailyMinutes: number;
+  /** Minutes of inactivity before the idle reaper stops a workspace. */
+  idleTimeoutMinutes: number;
+  /** Whether the user can create persistent (volume-backed) workspaces. */
+  persistence: boolean;
+  /** Whether the user can reserve custom cloud subdomains for branding. */
+  customSubdomain: boolean;
+  /**
+   * Provider keys this plan may use. `null` means "all enabled providers".
+   * Free is intentionally restricted to E2B only.
+   */
+  allowedProviderKeys: string[] | null;
+}
+
+export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
+  free: {
+    monthlyRuns: 10,
+    workspaces: 2,
+    dailyMinutes: 60,
+    idleTimeoutMinutes: 10,
+    persistence: false,
+    customSubdomain: false,
+    allowedProviderKeys: ["e2b"],
+  },
+  starter: {
+    monthlyRuns: 75,
+    workspaces: 5,
+    dailyMinutes: 180,
+    idleTimeoutMinutes: 20,
+    persistence: true,
+    customSubdomain: true,
+    allowedProviderKeys: null,
+  },
+  pro: {
+    monthlyRuns: 250,
+    workspaces: 15,
+    dailyMinutes: 480,
+    idleTimeoutMinutes: 30,
+    persistence: true,
+    customSubdomain: true,
+    allowedProviderKeys: null,
+  },
+};
+
+const getPlanLimits = (plan: UserPlan | string): PlanLimits =>
+  PLAN_LIMITS[(plan as UserPlan)] ?? PLAN_LIMITS.free;
 
 /**
  * Monthly sandbox run quotas by plan
+ * @deprecated Prefer `getMonthlyRunQuota` / `PLAN_LIMITS`. Kept for compatibility.
  */
 export const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
-  free: 10,
-  pro: 100,
-};
-
-/**
- * Maximum number of workspaces per plan
- */
-const WORKSPACE_LIMITS: Record<UserPlan, number> = {
-  free: 5,
-  pro: 15,
-};
-
-/**
- * Daily cloud hosting minute quotas by plan (legacy, kept for compatibility)
- */
-const DAILY_MINUTE_QUOTAS: Record<UserPlan, number> = {
-  free: 60, // 1 hour
-  pro: Infinity,
+  free: PLAN_LIMITS.free.monthlyRuns,
+  starter: PLAN_LIMITS.starter.monthlyRuns,
+  pro: PLAN_LIMITS.pro.monthlyRuns,
 };
 
 // ============================================================================
@@ -149,24 +206,23 @@ const DAILY_MINUTE_QUOTAS: Record<UserPlan, number> = {
 export const getDailyMinuteQuota = (plan: UserPlan): number => {
   if (isSelfHosted()) return Infinity;
 
-  return DAILY_MINUTE_QUOTAS[plan] ?? DAILY_MINUTE_QUOTAS.free;
+  return getPlanLimits(plan).dailyMinutes;
 };
 
 /**
  * Get daily minute quota for a plan (async version)
- * Uses database config for free tier quota
+ * Uses database config for free tier quota so admins can tune it at runtime.
  * In self-hosted mode, returns Infinity (unlimited)
  */
 export const getDailyMinuteQuotaAsync = async (plan: UserPlan): Promise<number> => {
   if (isSelfHosted()) return Infinity;
 
-  // Pro has unlimited
-  if (plan === "pro") {
-    return Infinity;
+  // Free tier is admin-tunable via system config.
+  if (plan === "free") {
+    return getFreeTierDailyMinutes();
   }
 
-  // Free tier uses configurable quota from database
-  return getFreeTierDailyMinutes();
+  return getPlanLimits(plan).dailyMinutes;
 };
 
 /**
@@ -176,7 +232,17 @@ export const getDailyMinuteQuotaAsync = async (plan: UserPlan): Promise<number> 
 export const getMonthlyRunQuota = (plan: UserPlan): number => {
   if (isSelfHosted()) return Infinity;
 
-  return MONTHLY_RUN_QUOTAS[plan] ?? MONTHLY_RUN_QUOTAS.free;
+  return getPlanLimits(plan).monthlyRuns;
+};
+
+/**
+ * Get the idle timeout (minutes) that should apply to a plan's workspaces.
+ * Returns `null` in self-hosted mode, signalling callers to fall back to the
+ * single global system-config value (admin-tuned, plan-agnostic).
+ */
+export const getIdleTimeoutMinutesForPlan = (plan: UserPlan | string): number | null => {
+  if (isSelfHosted()) return null;
+  return getPlanLimits(plan).idleTimeoutMinutes;
 };
 
 /**
@@ -184,15 +250,42 @@ export const getMonthlyRunQuota = (plan: UserPlan): number => {
  */
 export const canUseCustomCloudSubdomain = (plan: UserPlan | string): boolean => {
   if (isSelfHosted()) return true;
-  return plan === "pro";
+  return getPlanLimits(plan).customSubdomain;
 };
 
 /**
- * Check if a plan has unlimited cloud minutes
+ * Check if a plan can create persistent (volume-backed) workspaces.
  */
-export const hasUnlimitedCloudMinutes = (plan: UserPlan | string): boolean => {
+export const canCreatePersistentWorkspace = (plan: UserPlan | string): boolean => {
   if (isSelfHosted()) return true;
-  return plan === "pro";
+  return getPlanLimits(plan).persistence;
+};
+
+/**
+ * Get the provider keys a plan is allowed to use.
+ * Returns `null` when the plan may use any enabled provider (all paid plans and
+ * self-hosted). Free is restricted to E2B only.
+ */
+export const getAllowedProviderKeys = (plan: UserPlan | string): string[] | null => {
+  if (isSelfHosted()) return null;
+  return getPlanLimits(plan).allowedProviderKeys;
+};
+
+/**
+ * Check whether a plan may use a specific provider key.
+ */
+export const canUseProvider = (plan: UserPlan | string, providerKey: string): boolean => {
+  const allowed = getAllowedProviderKeys(plan);
+  if (allowed === null) return true;
+  return allowed.includes(providerKey.toLowerCase());
+};
+
+/**
+ * Check if a plan has unlimited cloud minutes.
+ * Only self-hosted deployments are unlimited; no managed tier is unlimited.
+ */
+export const hasUnlimitedCloudMinutes = (_plan: UserPlan | string): boolean => {
+  return isSelfHosted();
 };
 
 /**
@@ -201,7 +294,7 @@ export const hasUnlimitedCloudMinutes = (plan: UserPlan | string): boolean => {
  */
 export const getWorkspaceLimit = (plan: UserPlan): number => {
   if (isSelfHosted()) return Infinity;
-  return WORKSPACE_LIMITS[plan] ?? WORKSPACE_LIMITS.free;
+  return getPlanLimits(plan).workspaces;
 };
 
 /**
@@ -217,11 +310,16 @@ export const getPlanInfo = (
   const planInfo: Record<UserPlan, ReturnType<typeof getPlanInfo>> = {
     free: {
       name: "Free",
-      description: "60 minutes/day with up to 5 workspaces",
+      description: "60 min/day on E2B sandboxes with up to 2 workspaces",
+    },
+    starter: {
+      name: "Starter",
+      description: "180 min/day, all providers, persistence, custom subdomains, up to 5 workspaces",
+      badge: "best-value",
     },
     pro: {
       name: "Pro",
-      description: "Unlimited cloud runtime with up to 15 workspaces",
+      description: "480 min/day, all providers, persistence, up to 15 workspaces",
       badge: "popular",
     },
   };

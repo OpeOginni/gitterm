@@ -27,7 +27,6 @@ import {
   updateLastActive,
   closeUsageSession,
   createUsageSession,
-  FREE_TIER_DAILY_MINUTES,
 } from "../../utils/metering";
 import {
   getProviderByCloudProviderId,
@@ -53,6 +52,9 @@ import {
 import { getWorkspaceDomain } from "../../utils/routing";
 import {
   canUseCustomCloudSubdomain,
+  canCreatePersistentWorkspace,
+  canUseProvider,
+  getDailyMinuteQuotaAsync,
   getWorkspaceLimit,
   type UserPlan,
 } from "../../config/features";
@@ -268,7 +270,7 @@ export const workspaceRouter = router({
         })
         .optional(),
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       let whereClause: SQL<unknown> | undefined = eq(
         cloudProvider.isEnabled,
         true,
@@ -299,11 +301,25 @@ export const workspaceRouter = router({
               orderBy: [asc(region.name)],
             },
           },
-          orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
+          orderBy: [
+            desc(cloudProvider.preferredDefault),
+            asc(cloudProvider.name),
+          ],
+        });
+
+        // Plan-based provider gating: free tier only sees E2B (and Local).
+        // Paid plans and self-hosted see everything. Done in-memory so the
+        // gating rules live in one place (config/features).
+        const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ??
+          "free") as UserPlan;
+        const planVisibleProviders = providers.filter((provider) => {
+          const providerKey = (provider.providerKey ?? "local").toLowerCase();
+          if (providerKey === "local") return true;
+          return canUseProvider(viewerPlan, providerKey);
         });
 
         const providersWithEditorSupport = await Promise.all(
-          providers.map(async (provider) => {
+          planVisibleProviders.map(async (provider) => {
             let regions = provider.regions;
 
             if (provider.providerKey === "aws") {
@@ -869,12 +885,15 @@ export const workspaceRouter = router({
     }
 
     try {
-      const usage = await getOrCreateDailyUsage(userId);
+      const plan = ((ctx.session.user as { plan?: UserPlan }).plan ??
+        "free") as UserPlan;
+      const usage = await getOrCreateDailyUsage(userId, plan);
+      const dailyQuota = await getDailyMinuteQuotaAsync(plan);
       return {
         success: true,
         minutesUsed: usage.minutesUsed,
         minutesRemaining: usage.minutesRemaining,
-        dailyLimit: FREE_TIER_DAILY_MINUTES,
+        dailyLimit: Number.isFinite(dailyQuota) ? dailyQuota : null,
       };
     } catch (error) {
       throw new TRPCError({
@@ -897,14 +916,17 @@ export const workspaceRouter = router({
     }
 
     try {
-      const canStart = await hasRemainingQuota(userId);
-      const usage = await getOrCreateDailyUsage(userId);
+      const plan = ((ctx.session.user as { plan?: UserPlan }).plan ??
+        "free") as UserPlan;
+      const canStart = await hasRemainingQuota(userId, plan);
+      const usage = await getOrCreateDailyUsage(userId, plan);
+      const dailyQuota = await getDailyMinuteQuotaAsync(plan);
 
       return {
         success: true,
         canStartWorkspace: canStart,
         minutesRemaining: usage.minutesRemaining,
-        dailyLimit: FREE_TIER_DAILY_MINUTES,
+        dailyLimit: Number.isFinite(dailyQuota) ? dailyQuota : null,
       };
     } catch (error) {
       throw new TRPCError({
@@ -1112,6 +1134,19 @@ export const workspaceRouter = router({
 
         // Determine if this is a local workspace
         const isLocal = providerKey === "local";
+
+        // Plan-based provider gating. Free tier may only use E2B; all paid
+        // plans (and self-hosted) may use any enabled provider. Local
+        // workspaces don't consume our managed compute, so they're exempt.
+        const planForGating = (fetchedUser.plan || "free") as UserPlan;
+        if (!isLocal && !canUseProvider(planForGating, providerKey)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message:
+              "The Free plan can only use E2B sandboxes. Upgrade to Starter or Pro to use this provider.",
+          });
+        }
+
         const workspaceProfile = (input.workspaceProfile ??
           "standard") as WorkspaceProfile;
         const editorAccessEnabled = workspaceProfile === "ssh-enabled";
@@ -1139,12 +1174,14 @@ export const workspaceRouter = router({
 
         // Check quota only for cloud workspaces (local doesn't use our resources)
         if (!isLocal) {
-          const hasQuota = await hasRemainingQuota(userId);
+          const hasQuota = await hasRemainingQuota(userId, planForGating);
           if (!hasQuota) {
             throw new TRPCError({
               code: "FORBIDDEN",
               message:
-                "Daily free tier limit reached. Please try again tomorrow.",
+                planForGating === "pro"
+                  ? "Daily cloud runtime limit reached. It resets at midnight UTC."
+                  : "Daily cloud runtime limit reached. It resets at midnight UTC, or upgrade for more runtime.",
             });
           }
         }
@@ -1168,12 +1205,17 @@ export const workspaceRouter = router({
         const workspaceLimit = getWorkspaceLimit(userPlanForLimit);
 
         if (runningWorkspaces.length >= workspaceLimit) {
-          const isFree = userPlanForLimit === "free";
+          const upgradeHint =
+            userPlanForLimit === "free"
+              ? ` Upgrade to Starter (5) or Pro (15) for more.`
+              : userPlanForLimit === "starter"
+                ? ` Upgrade to Pro for up to 15.`
+                : "";
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: isFree
-              ? "You've reached the Free plan limit of 5 workspaces. Upgrade to Pro for 15 workspaces."
-              : "You've reached your workspace limit. Delete some workspaces to create new ones.",
+            message:
+              `You've reached your plan limit of ${workspaceLimit} workspaces.` +
+              (upgradeHint || " Delete some workspaces to create new ones."),
           });
         }
 
@@ -1729,6 +1771,17 @@ export const workspaceRouter = router({
 
         // Get compute provider
         const computeProvider = await getProviderByCloudProviderId(providerKey);
+
+        // Plan-based persistence gating: free tier cannot create persistent
+        // (volume-backed) workspaces. Guard server-side even though the UI hides
+        // the toggle. Self-hosted and paid plans are allowed.
+        if (input.persistent && !canCreatePersistentWorkspace(planForGating)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message:
+              "Persistent workspaces require a Starter or Pro plan. Upgrade to keep your workspace state.",
+          });
+        }
 
         // Force ephemeral when the provider can't persist files (e.g. Cloudflare
         // sandboxes). The UI disables the toggle, but guard server-side too.

@@ -6,11 +6,19 @@ import {
   type SessionStopSource,
 } from "@gitterm/db/schema/workspace";
 import { logger } from "./logger";
-import { shouldEnforceQuota, shouldMeterUsage, getDailyMinuteQuotaAsync } from "../config/features";
+import {
+  shouldEnforceQuota,
+  shouldMeterUsage,
+  getDailyMinuteQuotaAsync,
+  getIdleTimeoutMinutesForPlan,
+  PLAN_LIMITS,
+  type UserPlan,
+} from "../config/features";
 import { isSelfHosted } from "../config/deployment";
+import { user } from "@gitterm/db/schema/auth";
 import { getIdleTimeoutMinutes, getFreeTierDailyMinutes } from "../service/config/system-config";
 import {
-  filterIdleWorkspacesByRedisActivity,
+  filterIdleWorkspacesByRedisActivityWith,
   recordWorkspaceActivity,
 } from "../service/workspace-activity";
 
@@ -34,14 +42,30 @@ export async function getConfiguredFreeTierMinutes(): Promise<number> {
 }
 
 /**
+ * Resolve a user's plan from the database.
+ * Falls back to "free" if the user can't be found.
+ */
+async function resolveUserPlan(userId: string): Promise<UserPlan> {
+  const [row] = await db
+    .select({ plan: user.plan })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+  return (row?.plan ?? "free") as UserPlan;
+}
+
+/**
  * Get or create daily usage record for a user
- * In self-hosted mode, this still tracks usage but won't enforce limits
+ * In self-hosted mode, this still tracks usage but won't enforce limits.
+ *
+ * `userPlan` is optional: when omitted it is resolved from the database. Pass it
+ * explicitly when you already have the user record to avoid an extra read.
  */
 export async function getOrCreateDailyUsage(
   userId: string,
-  userPlan: "free" | "pro" = "free",
+  userPlan?: UserPlan,
 ): Promise<{ minutesUsed: number; minutesRemaining: number }> {
-  // In self-hosted mode or for paid plans, return unlimited
+  // Self-hosted is always unlimited.
   if (isSelfHosted()) {
     return {
       minutesUsed: 0,
@@ -49,10 +73,11 @@ export async function getOrCreateDailyUsage(
     };
   }
 
-  const dailyQuota = await getDailyMinuteQuotaAsync(userPlan);
+  const plan = userPlan ?? (await resolveUserPlan(userId));
+  const dailyQuota = await getDailyMinuteQuotaAsync(plan);
 
-  // Paid plans have unlimited minutes
-  if (dailyQuota === Infinity) {
+  // Defensive: a 0 or unset free-tier config means "unlimited".
+  if (dailyQuota === Infinity || dailyQuota === 0) {
     return {
       minutesUsed: 0,
       minutesRemaining: Infinity,
@@ -95,15 +120,10 @@ export async function getOrCreateDailyUsage(
  */
 export async function hasRemainingQuota(
   userId: string,
-  userPlan: "free" | "pro" = "free",
+  userPlan?: UserPlan,
 ): Promise<boolean> {
   // Skip quota check if enforcement is disabled
   if (!shouldEnforceQuota()) {
-    return true;
-  }
-
-  // Paid plans have unlimited quota
-  if (userPlan !== "free") {
     return true;
   }
 
@@ -222,22 +242,49 @@ export async function updateLastActive(workspaceId: string): Promise<void> {
 export async function getIdleWorkspaces(): Promise<
   Array<{ id: string; externalInstanceId: string; userId: string; regionId: string | null }>
 > {
-  const idleTimeoutMinutes = await getConfiguredIdleTimeout();
-  const idleThreshold = new Date(Date.now() - idleTimeoutMinutes * 60 * 1000);
+  const globalIdleTimeoutMinutes = await getConfiguredIdleTimeout();
+  const now = Date.now();
 
-  const idleWorkspaces = await db
+  // Pre-filter the DB query with the TIGHTEST (smallest) timeout across all
+  // plans so we never miss an aggressively-reaped workspace (e.g. free = 10m).
+  // The precise per-plan threshold is then applied in memory below.
+  const planTimeouts = (Object.keys(PLAN_LIMITS) as UserPlan[])
+    .map((plan) => getIdleTimeoutMinutesForPlan(plan))
+    .filter((value): value is number => value !== null);
+  const minCandidateMinutes = Math.min(globalIdleTimeoutMinutes, ...planTimeouts);
+  const candidateThreshold = new Date(now - minCandidateMinutes * 60 * 1000);
+
+  // Join the owner's plan so we can apply per-plan idle timeouts in managed mode.
+  const runningWorkspaces = await db
     .select({
       id: workspace.id,
       externalInstanceId: workspace.externalInstanceId,
       userId: workspace.userId,
       regionId: workspace.regionId,
       lastActiveAt: workspace.lastActiveAt,
+      plan: user.plan,
     })
     .from(workspace)
-    .where(and(eq(workspace.status, "running"), sql`${workspace.lastActiveAt} < ${idleThreshold}`));
+    .leftJoin(user, eq(workspace.userId, user.id))
+    .where(
+      and(eq(workspace.status, "running"), sql`${workspace.lastActiveAt} < ${candidateThreshold}`),
+    );
 
-  const filtered = await filterIdleWorkspacesByRedisActivity(idleWorkspaces, idleThreshold);
-  return filtered.map(({ lastActiveAt: _lastActiveAt, ...idleWorkspace }) => idleWorkspace);
+  // Resolve the precise idle threshold for each workspace's owning plan. In
+  // self-hosted mode `getIdleTimeoutMinutesForPlan` returns null, so we fall
+  // back to the single global system-config value (plan-agnostic). This same
+  // per-workspace threshold is used for the Redis activity cross-check so that
+  // fresher Redis activity correctly spares looser-plan workspaces.
+  const thresholdFor = (ws: { plan: string | null }): Date => {
+    const planTimeout = getIdleTimeoutMinutesForPlan((ws.plan ?? "free") as UserPlan);
+    const timeoutMinutes = planTimeout ?? globalIdleTimeoutMinutes;
+    return new Date(now - timeoutMinutes * 60 * 1000);
+  };
+
+  const filtered = await filterIdleWorkspacesByRedisActivityWith(runningWorkspaces, thresholdFor);
+  return filtered.map(
+    ({ lastActiveAt: _lastActiveAt, plan: _plan, ...idleWorkspace }) => idleWorkspace,
+  );
 }
 
 /**

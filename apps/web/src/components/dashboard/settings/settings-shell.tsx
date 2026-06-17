@@ -47,7 +47,7 @@ const sidebarItems: SidebarItem[] = [
 ];
 
 interface SettingsShellProps {
-  currentPlan: "free" | "pro";
+  currentPlan: "free" | "starter" | "pro";
 }
 
 export function SettingsShell({ currentPlan }: SettingsShellProps) {
@@ -66,7 +66,7 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
 
       <div>
         {/* Mobile tab bar */}
-        <div className="-mx-1 flex gap-1 overflow-x-auto border-b border-white/[0.06] px-1 pb-3 lg:hidden">
+        <div className="grid grid-cols-4 gap-1 border-b border-white/[0.06] pb-3 lg:hidden">
           {sidebarItems.map((item) => {
             const isActive = activeSection === item.id;
             return (
@@ -74,7 +74,7 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
                 key={item.id}
                 onClick={() => handleSectionChange(item.id)}
                 className={cn(
-                  "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-colors",
+                  "flex flex-col items-center justify-center gap-1.5 rounded-lg px-1 py-2.5 text-xs font-medium transition-colors",
                   isActive
                     ? "bg-white/[0.08] text-white"
                     : "text-white/40 hover:bg-white/[0.04] hover:text-white/60",

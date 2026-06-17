@@ -30,7 +30,8 @@ export function UsageMetrics() {
     usage.minutesRemaining === Infinity ||
     usage.dailyLimit === Infinity;
 
-  const usagePercent = isUnlimited ? 0 : (usage.minutesUsed / usage.dailyLimit) * 100;
+  const usagePercent =
+    isUnlimited || !usage.dailyLimit ? 0 : (usage.minutesUsed / usage.dailyLimit) * 100;
 
   // In unlimited mode, show a simplified view
   if (isUnlimited) {
