@@ -95,7 +95,14 @@ export class GittermSandbox extends Sandbox<Env> {
   /** Persist the provisioning payload and build the workspace. */
   async gittermProvision(payload: ProvisionPayload): Promise<BootResult> {
     await this.ctx.storage.put(PROVISION_STORAGE_KEY, payload);
-    return this.gittermBoot();
+    const result = await this.gittermBoot();
+
+    if (!result.ready) {
+      await this.ctx.storage.delete(PROVISION_STORAGE_KEY).catch(() => undefined);
+      await this.destroy().catch(() => undefined);
+    }
+
+    return result;
   }
 
   /** Rebuild the workspace from the persisted payload (used on restart). */
