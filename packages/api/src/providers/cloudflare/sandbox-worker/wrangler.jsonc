@@ -1,0 +1,55 @@
+/**
+ * Wrangler config for the GitTerm Cloudflare compute sandbox worker.
+ *
+ * This worker fronts the normal opencode workspaces that run on Cloudflare
+ *
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "gitterm-sandbox",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      // Default: a public prebuilt image, so `wrangler deploy` needs NO Docker
+      // running locally - Cloudflare Containers pulls it directly.
+      "image": "docker.io/opeoginni/gitterm-cf-sandbox:0.12.1",
+      // Prefer building the image yourself instead of trusting ours? Comment the
+      // line above and uncomment the one below (the Dockerfile ships in this
+      // folder). This requires Docker running locally during `wrangler deploy`.
+      // "image": "./Dockerfile",
+      "instance_type": "standard-1",
+      // Max concurrent sandbox containers. Tune per account limits.
+      "max_instances": 100,
+    },
+  ],
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "Sandbox",
+        "name": "Sandbox",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["Sandbox"],
+      "tag": "v1",
+    },
+  ],
+  "vars": {
+    // The shared secret used to authenticate GitTerm -> worker control calls
+    // and proxied workspace traffic. OVERRIDE THIS before deploying (the
+    // automatic setup flow injects a generated value via `wrangler secret`).
+    "SANDBOX_LOG_LEVEL": "info",
+    "SANDBOX_LOG_FORMAT": "json",
+  },
+}

@@ -1,0 +1,15 @@
+{
+  "name": "gitterm-cloudflare-sandbox",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cloudflare/sandbox": "0.12.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260107.1",
+    "wrangler": "^4.100.0"
+  }
+}

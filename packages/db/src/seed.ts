@@ -32,6 +32,7 @@ const seedCloudProviders: Array<{
   isSandbox?: boolean;
   preferredDefault?: boolean;
   autoPersistent?: boolean;
+  supportsPersistence?: boolean;
   supportsRegions: boolean;
   allowUserRegionSelection?: boolean;
   supportServerOnly?: boolean;
@@ -70,7 +71,8 @@ const seedCloudProviders: Array<{
     providerKey: "cloudflare",
     isEnabled: false,
     isSandbox: true,
-    autoPersistent: true,
+    autoPersistent: false,
+    supportsPersistence: false,
     supportsRegions: false,
     supportServerOnly: true,
     sshAccessSupport: {
@@ -78,9 +80,9 @@ const seedCloudProviders: Array<{
       label: "Not supported",
       description: "This provider does not currently expose editor SSH access.",
     },
-    creationSettlement: "poll" as ProviderSettlement,
+    creationSettlement: "immediate" as ProviderSettlement,
     stopSettlement: "immediate" as ProviderSettlement,
-    restartSettlement: "poll" as ProviderSettlement,
+    restartSettlement: "immediate" as ProviderSettlement,
     terminationSettlement: "immediate" as ProviderSettlement,
   },
   {
@@ -190,6 +192,12 @@ const seedImages = [
         sshSnapshotsByRegion: {
           eu: "gitterm-opencode-server-ssh-eu",
         },
+      },
+      // The Cloudflare worker runs whatever this says inside the public
+      // gitterm-cf-sandbox image (which bakes in opencode).
+      cloudflare: {
+        startCommand: "opencode serve --hostname 0.0.0.0 --port 4096",
+        port: 4096,
       },
     },
   },
@@ -489,6 +497,7 @@ export async function seedDatabase(): Promise<void> {
       const updates: Partial<typeof cloudProvider.$inferInsert> = {};
       const targetIsSandbox = provider.isSandbox ?? false;
       const targetAutoPersistent = provider.autoPersistent ?? false;
+      const targetSupportsPersistence = provider.supportsPersistence ?? true;
       const targetSupportsRegions = provider.supportsRegions ?? true;
       const targetAllowUserRegionSelection =
         provider.allowUserRegionSelection ?? true;
@@ -519,6 +528,10 @@ export async function seedDatabase(): Promise<void> {
 
       if (existing.autoPersistent !== targetAutoPersistent) {
         updates.autoPersistent = targetAutoPersistent;
+      }
+
+      if (existing.supportsPersistence !== targetSupportsPersistence) {
+        updates.supportsPersistence = targetSupportsPersistence;
       }
 
       if (existing.supportsRegions !== targetSupportsRegions) {
@@ -584,6 +597,7 @@ export async function seedDatabase(): Promise<void> {
           isSandbox: provider.isSandbox ?? false,
           preferredDefault: provider.preferredDefault ?? false,
           autoPersistent: provider.autoPersistent ?? false,
+          supportsPersistence: provider.supportsPersistence ?? true,
           supportsRegions: provider.supportsRegions,
           allowUserRegionSelection: provider.allowUserRegionSelection ?? true,
           supportServerOnly: provider.supportServerOnly ?? false,

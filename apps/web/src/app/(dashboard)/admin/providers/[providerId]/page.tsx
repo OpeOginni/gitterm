@@ -25,13 +25,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, Lock, MapPin, RefreshCw, Trash2, Wand2 } from "lucide-react";
+import {
+  Download,
+  Loader2,
+  Lock,
+  MapPin,
+  RefreshCw,
+  Trash2,
+  Wand2,
+} from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import type { Route } from "next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { strToU8, zipSync } from "fflate";
 
 interface ProviderConfigField {
   fieldName: string;
@@ -56,18 +65,24 @@ export default function ProviderSettingsPage() {
     return Array.isArray(param) ? param[0] : param;
   }, [params]);
 
-  const { data: session, isPending: isSessionPending } = authClient.useSession();
+  const { data: session, isPending: isSessionPending } =
+    authClient.useSession();
   const queryClient = useQueryClient();
 
   const [providerName, setProviderName] = useState("");
-  const [allowUserRegionSelection, setAllowUserRegionSelection] = useState(true);
+  const [allowUserRegionSelection, setAllowUserRegionSelection] =
+    useState(true);
   const [selectedProviderTypeId, setSelectedProviderTypeId] = useState("");
   const [configForm, setConfigForm] = useState<Record<string, any>>({});
   const [configName, setConfigName] = useState("");
   const [configEnabled, setConfigEnabled] = useState(true);
-  const [awsSetupSummary, setAwsSetupSummary] = useState<AwsSetupSummary | null>(null);
-  const [awsActionDialog, setAwsActionDialog] = useState<"delete" | "reset" | null>(null);
-  const [isResettingAwsInfrastructure, setIsResettingAwsInfrastructure] = useState(false);
+  const [awsSetupSummary, setAwsSetupSummary] =
+    useState<AwsSetupSummary | null>(null);
+  const [awsActionDialog, setAwsActionDialog] = useState<
+    "delete" | "reset" | null
+  >(null);
+  const [isResettingAwsInfrastructure, setIsResettingAwsInfrastructure] =
+    useState(false);
   const [newRegion, setNewRegion] = useState({
     name: "",
     location: "",
@@ -76,14 +91,18 @@ export default function ProviderSettingsPage() {
 
   const refreshProviderQueries = () => {
     queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-    queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
+    queryClient.invalidateQueries({
+      queryKey: ["admin", "provider", providerId],
+    });
   };
 
   const preserveAwsEncryptedFields = (
     nextConfig: Record<string, any>,
     currentConfig: Record<string, any>,
   ) => {
-    if ((provider as { providerKey?: string } | undefined)?.providerKey !== "aws") {
+    if (
+      (provider as { providerKey?: string } | undefined)?.providerKey !== "aws"
+    ) {
       return nextConfig;
     }
 
@@ -112,7 +131,10 @@ export default function ProviderSettingsPage() {
 
   const { data: provider, isLoading: isLoadingProvider } = useQuery({
     queryKey: ["admin", "provider", providerId],
-    queryFn: () => trpcClient.admin.infrastructure.getProvider.query({ id: providerId as string }),
+    queryFn: () =>
+      trpcClient.admin.infrastructure.getProvider.query({
+        id: providerId as string,
+      }),
     enabled: !!providerId,
   });
 
@@ -165,18 +187,30 @@ export default function ProviderSettingsPage() {
   });
 
   const updateProviderConfig = useMutation({
-    mutationFn: (params: { id: string; name?: string; config?: Record<string, any> }) =>
-      trpcClient.admin.infrastructure.updateProviderConfig.mutate(params),
+    mutationFn: (params: {
+      id: string;
+      name?: string;
+      config?: Record<string, any>;
+    }) => trpcClient.admin.infrastructure.updateProviderConfig.mutate(params),
   });
 
   const toggleProviderConfig = useMutation({
     mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) =>
-      trpcClient.admin.infrastructure.toggleProviderConfig.mutate({ id, isEnabled }),
+      trpcClient.admin.infrastructure.toggleProviderConfig.mutate({
+        id,
+        isEnabled,
+      }),
   });
 
   const upsertProviderImageAssignment = useMutation({
-    mutationFn: (params: { cloudProviderId: string; agentTypeId: string; imageId: string }) =>
-      trpcClient.admin.infrastructure.upsertProviderImageAssignment.mutate(params),
+    mutationFn: (params: {
+      cloudProviderId: string;
+      agentTypeId: string;
+      imageId: string;
+    }) =>
+      trpcClient.admin.infrastructure.upsertProviderImageAssignment.mutate(
+        params,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["admin", "providerImageAssignments", providerId],
@@ -188,7 +222,9 @@ export default function ProviderSettingsPage() {
 
   const deleteProviderImageAssignment = useMutation({
     mutationFn: (params: { cloudProviderId: string; agentTypeId: string }) =>
-      trpcClient.admin.infrastructure.deleteProviderImageAssignment.mutate(params),
+      trpcClient.admin.infrastructure.deleteProviderImageAssignment.mutate(
+        params,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["admin", "providerImageAssignments", providerId],
@@ -219,8 +255,12 @@ export default function ProviderSettingsPage() {
       trpcClient.admin.aws.deleteInfrastructure.mutate(params),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-      queryClient.cancelQueries({ queryKey: ["admin", "provider", providerId] });
-      queryClient.removeQueries({ queryKey: ["admin", "provider", providerId] });
+      queryClient.cancelQueries({
+        queryKey: ["admin", "provider", providerId],
+      });
+      queryClient.removeQueries({
+        queryKey: ["admin", "provider", providerId],
+      });
       toast.success(
         data.deleted
           ? `AWS infrastructure and provider deleted (${data.stackName})`
@@ -240,7 +280,9 @@ export default function ProviderSettingsPage() {
     }) => trpcClient.admin.infrastructure.createRegion.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "provider", providerId],
+      });
       setNewRegion({ name: "", location: "", externalRegionIdentifier: "" });
       toast.success("Region created");
     },
@@ -252,7 +294,9 @@ export default function ProviderSettingsPage() {
       trpcClient.admin.infrastructure.toggleRegion.mutate({ id, isEnabled }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "provider", providerId],
+      });
       toast.success(`Region ${data.isEnabled ? "enabled" : "disabled"}`);
     },
     onError: (error) => toast.error(error.message),
@@ -260,23 +304,28 @@ export default function ProviderSettingsPage() {
 
   const findProviderTypeId = (providerNameValue: string) =>
     providerTypes?.find(
-      (type) => type.name.toLowerCase() === providerNameValue.trim().toLowerCase(),
+      (type) =>
+        type.name.toLowerCase() === providerNameValue.trim().toLowerCase(),
     )?.id ?? "";
 
   // Find a provider type by key (the canonical implementation identifier on
   // the cloud_provider row, e.g. "aws" for any AWS region-scoped provider).
   // Display names like "AWS EU (Frankfurt)" don't match a registered provider
   // type by name, so for region-scoped providers we must resolve via providerKey.
-  const findProviderTypeIdByKey = (providerKeyValue: string | undefined | null) => {
+  const findProviderTypeIdByKey = (
+    providerKeyValue: string | undefined | null,
+  ) => {
     if (!providerKeyValue) return "";
     return (
       providerTypes?.find(
-        (type) => type.name.toLowerCase() === providerKeyValue.trim().toLowerCase(),
+        (type) =>
+          type.name.toLowerCase() === providerKeyValue.trim().toLowerCase(),
       )?.id ?? ""
     );
   };
 
-  const providerKey = (provider as { providerKey?: string } | undefined)?.providerKey ?? "";
+  const providerKey =
+    (provider as { providerKey?: string } | undefined)?.providerKey ?? "";
 
   const resolvedProviderTypeId =
     selectedProviderTypeId ||
@@ -284,20 +333,64 @@ export default function ProviderSettingsPage() {
     findProviderTypeIdByKey(providerKey) ||
     findProviderTypeId(provider?.name ?? "");
 
-  const selectedProviderType = providerTypes?.find((type) => type.id === resolvedProviderTypeId);
+  const selectedProviderType = providerTypes?.find(
+    (type) => type.id === resolvedProviderTypeId,
+  );
   // Resolve AWS-ness from providerKey (data source of truth) rather than the
   // display name, which is user-defined per region (e.g. "AWS EU (Frankfurt)").
   const isAwsProvider =
-    providerKey.toLowerCase() === "aws" || selectedProviderType?.name?.toLowerCase() === "aws";
+    providerKey.toLowerCase() === "aws" ||
+    selectedProviderType?.name?.toLowerCase() === "aws";
 
-  const { data: selectedProviderFields, isLoading: isLoadingFields } = useQuery({
-    queryKey: ["admin", "providerConfigFields", resolvedProviderTypeId],
-    queryFn: () =>
-      trpcClient.admin.infrastructure.getProviderConfigFields.query({
-        providerTypeId: resolvedProviderTypeId,
-      }),
-    enabled: !!resolvedProviderTypeId,
+  const isCloudflareProvider =
+    providerKey.toLowerCase() === "cloudflare" ||
+    selectedProviderType?.name?.toLowerCase() === "cloudflare";
+
+  const { data: cloudflareManualSetup } = useQuery({
+    queryKey: ["admin", "cloudflareManualSetup"],
+    queryFn: () => trpcClient.admin.cloudflare.manualSetup.query(),
+    enabled: isCloudflareProvider,
   });
+
+  const { data: cloudflareWorkerFiles } = useQuery({
+    queryKey: ["admin", "cloudflareWorkerFiles"],
+    queryFn: () => trpcClient.admin.cloudflare.workerFiles.query(),
+    enabled: isCloudflareProvider,
+  });
+
+  const downloadWorkerZip = () => {
+    const files = cloudflareWorkerFiles ?? [];
+    if (files.length === 0) return;
+
+    const entries: Record<string, Uint8Array> = {};
+    for (const file of files) {
+      // Preserve folder structure (e.g. src/index.ts) so `wrangler deploy`
+      // resolves `main` correctly from the unzipped folder.
+      entries[file.path] = strToU8(file.contents);
+    }
+
+    const zipped = zipSync(entries, { level: 6 });
+    const blob = new Blob([zipped], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "gitterm-cloudflare-sandbox.zip";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const { data: selectedProviderFields, isLoading: isLoadingFields } = useQuery(
+    {
+      queryKey: ["admin", "providerConfigFields", resolvedProviderTypeId],
+      queryFn: () =>
+        trpcClient.admin.infrastructure.getProviderConfigFields.query({
+          providerTypeId: resolvedProviderTypeId,
+        }),
+      enabled: !!resolvedProviderTypeId,
+    },
+  );
 
   const isSavingConfig =
     createProviderConfig.isPending ||
@@ -309,10 +402,14 @@ export default function ProviderSettingsPage() {
   const isDeletingAwsInfrastructure = deleteAwsInfrastructure.isPending;
 
   const assignmentByAgentType = new Map(
-    providerImageAssignments?.map((assignment: any) => [assignment.agentTypeId, assignment]) ?? [],
+    providerImageAssignments?.map((assignment: any) => [
+      assignment.agentTypeId,
+      assignment,
+    ]) ?? [],
   );
 
-  const assignableAgentTypes = agentTypes?.filter((agent: any) => agent.isEnabled) ?? [];
+  const assignableAgentTypes =
+    agentTypes?.filter((agent: any) => agent.isEnabled) ?? [];
 
   useEffect(() => {
     if (!isSessionPending) {
@@ -334,7 +431,8 @@ export default function ProviderSettingsPage() {
 
     const pinnedAwsRegion =
       provider.providerKey === "aws"
-        ? (provider.regions?.find((region: any) => region.isEnabled) ?? provider.regions?.[0])
+        ? (provider.regions?.find((region: any) => region.isEnabled) ??
+          provider.regions?.[0])
         : undefined;
 
     setProviderName(provider.name ?? "");
@@ -390,7 +488,10 @@ export default function ProviderSettingsPage() {
     setConfigForm((current) => {
       const next = { ...current };
       selectedProviderFields.forEach((field) => {
-        if (next[field.fieldName] === undefined && field.defaultValue !== undefined) {
+        if (
+          next[field.fieldName] === undefined &&
+          field.defaultValue !== undefined
+        ) {
           next[field.fieldName] = field.defaultValue;
         }
       });
@@ -410,11 +511,18 @@ export default function ProviderSettingsPage() {
     }
     try {
       const newEnabledState = !provider.isEnabled;
-      await toggleProvider.mutateAsync({ id: provider.id, isEnabled: newEnabledState });
+      await toggleProvider.mutateAsync({
+        id: provider.id,
+        isEnabled: newEnabledState,
+      });
       toast.success(`Provider ${newEnabledState ? "enabled" : "disabled"}`);
-      queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "provider", providerId],
+      });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to toggle provider");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to toggle provider",
+      );
       console.error("Failed to toggle provider", error);
     }
   };
@@ -426,7 +534,9 @@ export default function ProviderSettingsPage() {
     }
 
     if (isAwsProvider) {
-      toast.error("Use the Simple Setup button to provision AWS infrastructure.");
+      toast.error(
+        "Use the Simple Setup button to provision AWS infrastructure.",
+      );
       return;
     }
 
@@ -457,7 +567,10 @@ export default function ProviderSettingsPage() {
       }
 
       if (configId && provider.providerConfig?.isEnabled !== configEnabled) {
-        await toggleProviderConfig.mutateAsync({ id: configId, isEnabled: configEnabled });
+        await toggleProviderConfig.mutateAsync({
+          id: configId,
+          isEnabled: configEnabled,
+        });
       }
 
       if (nextProviderName !== provider.name) {
@@ -475,10 +588,16 @@ export default function ProviderSettingsPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "provider", providerId],
+      });
       toast.success("Provider settings saved");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save provider settings");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to save provider settings",
+      );
     }
   };
 
@@ -491,7 +610,8 @@ export default function ProviderSettingsPage() {
 
   const renderField = (field: ProviderConfigField, readOnly = false) => {
     const value = configForm[field.fieldName] ?? field.defaultValue ?? "";
-    const encryptedFieldPreview = provider?.providerConfig?.configPreviews?.[field.fieldName] ?? "";
+    const encryptedFieldPreview =
+      provider?.providerConfig?.configPreviews?.[field.fieldName] ?? "";
     const hasSavedEncryptedValue =
       !!provider?.providerConfig &&
       field.isEncrypted &&
@@ -501,13 +621,20 @@ export default function ProviderSettingsPage() {
 
     if (field.fieldType === "password") {
       return (
-        <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
+        <div
+          key={field.fieldName}
+          className={cn("space-y-2", readOnly && "opacity-60")}
+        >
           <div className="flex items-center gap-2">
             <Label htmlFor={field.fieldName}>
               {field.fieldLabel}
-              {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
+              {field.isRequired && !readOnly && (
+                <span className="text-destructive">*</span>
+              )}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+            {field.isEncrypted && (
+              <Lock className="h-3 w-3 text-muted-foreground" />
+            )}
           </div>
           {hasSavedEncryptedValue && (
             <div className="rounded-md border border-border/70 bg-foreground/[0.02] px-3 py-2 font-mono text-xs text-muted-foreground">
@@ -517,17 +644,26 @@ export default function ProviderSettingsPage() {
           <Input
             id={field.fieldName}
             type="password"
-            placeholder={hasSavedEncryptedValue ? "Enter new value to replace" : field.fieldLabel}
+            placeholder={
+              hasSavedEncryptedValue
+                ? "Enter new value to replace"
+                : field.fieldLabel
+            }
             value={value}
-            onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
+            onChange={(e) =>
+              setConfigForm({
+                ...configForm,
+                [field.fieldName]: e.target.value,
+              })
+            }
             required={field.isRequired && !readOnly}
             readOnly={readOnly}
             className={cn(readOnly && "cursor-default")}
           />
           {hasSavedEncryptedValue && (
             <p className="text-xs text-muted-foreground">
-              Current value is masked above. Leave this blank to keep it, or enter a new one to
-              replace it.
+              Current value is masked above. Leave this blank to keep it, or
+              enter a new one to replace it.
             </p>
           )}
         </div>
@@ -536,20 +672,28 @@ export default function ProviderSettingsPage() {
 
     if (field.fieldType === "boolean") {
       return (
-        <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
+        <div
+          key={field.fieldName}
+          className={cn("space-y-2", readOnly && "opacity-60")}
+        >
           <div className="flex items-center gap-2">
             <Label htmlFor={field.fieldName}>
               {field.fieldLabel}
-              {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
+              {field.isRequired && !readOnly && (
+                <span className="text-destructive">*</span>
+              )}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+            {field.isEncrypted && (
+              <Lock className="h-3 w-3 text-muted-foreground" />
+            )}
           </div>
           <Switch
             id={field.fieldName}
             checked={value === true || value === "true"}
             disabled={readOnly}
             onCheckedChange={(checked) =>
-              !readOnly && setConfigForm({ ...configForm, [field.fieldName]: checked })
+              !readOnly &&
+              setConfigForm({ ...configForm, [field.fieldName]: checked })
             }
           />
         </div>
@@ -558,24 +702,35 @@ export default function ProviderSettingsPage() {
 
     if (field.fieldType === "select" && field.options) {
       return (
-        <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
+        <div
+          key={field.fieldName}
+          className={cn("space-y-2", readOnly && "opacity-60")}
+        >
           <div className="flex items-center gap-2">
             <Label htmlFor={field.fieldName}>
               {field.fieldLabel}
-              {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
+              {field.isRequired && !readOnly && (
+                <span className="text-destructive">*</span>
+              )}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+            {field.isEncrypted && (
+              <Lock className="h-3 w-3 text-muted-foreground" />
+            )}
           </div>
           {readOnly ? (
             <Input
-              value={field.options.find((o) => o.value === value)?.label ?? value}
+              value={
+                field.options.find((o) => o.value === value)?.label ?? value
+              }
               readOnly
               className="cursor-default"
             />
           ) : (
             <Select
               value={value}
-              onValueChange={(val) => setConfigForm({ ...configForm, [field.fieldName]: val })}
+              onValueChange={(val) =>
+                setConfigForm({ ...configForm, [field.fieldName]: val })
+              }
             >
               <SelectTrigger>
                 <SelectValue placeholder={`Select ${field.fieldLabel}`} />
@@ -600,7 +755,8 @@ export default function ProviderSettingsPage() {
       provider.regions.length > 0
     ) {
       const pinnedRegion =
-        provider.regions.find((region: any) => region.isEnabled) ?? provider.regions[0];
+        provider.regions.find((region: any) => region.isEnabled) ??
+        provider.regions[0];
 
       return (
         <div key={field.fieldName} className="space-y-2">
@@ -626,13 +782,20 @@ export default function ProviderSettingsPage() {
     }
 
     return (
-      <div key={field.fieldName} className={cn("space-y-2", readOnly && "opacity-60")}>
+      <div
+        key={field.fieldName}
+        className={cn("space-y-2", readOnly && "opacity-60")}
+      >
         <div className="flex items-center gap-2">
           <Label htmlFor={field.fieldName}>
             {field.fieldLabel}
-            {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
+            {field.isRequired && !readOnly && (
+              <span className="text-destructive">*</span>
+            )}
           </Label>
-          {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+          {field.isEncrypted && (
+            <Lock className="h-3 w-3 text-muted-foreground" />
+          )}
         </div>
         {hasSavedEncryptedValue && (
           <div className="rounded-md border border-border/70 bg-foreground/[0.02] px-3 py-2 font-mono text-xs text-muted-foreground">
@@ -642,17 +805,23 @@ export default function ProviderSettingsPage() {
         <Input
           id={field.fieldName}
           type={field.fieldType === "number" ? "number" : field.fieldType}
-          placeholder={hasSavedEncryptedValue ? "Enter new value to replace" : field.fieldLabel}
+          placeholder={
+            hasSavedEncryptedValue
+              ? "Enter new value to replace"
+              : field.fieldLabel
+          }
           value={value}
-          onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
+          onChange={(e) =>
+            setConfigForm({ ...configForm, [field.fieldName]: e.target.value })
+          }
           required={field.isRequired && !readOnly}
           readOnly={readOnly}
           className={cn(readOnly && "cursor-default")}
         />
         {hasSavedEncryptedValue && (
           <p className="text-xs text-muted-foreground">
-            Current value is masked above. Leave this blank to keep it, or enter a new one to
-            replace it.
+            Current value is masked above. Leave this blank to keep it, or enter
+            a new one to replace it.
           </p>
         )}
       </div>
@@ -664,7 +833,8 @@ export default function ProviderSettingsPage() {
   const awsDefaultRegion = String(configForm.defaultRegion ?? "").trim();
   const awsPublicSshEnabled = configForm.publicSshEnabled !== false;
   const hasSavedAwsCredentials = isAwsProvider && !!provider?.providerConfig;
-  const hasEnteredAwsCredentials = awsAccessKeyId.length > 0 && awsSecretAccessKey.length > 0;
+  const hasEnteredAwsCredentials =
+    awsAccessKeyId.length > 0 && awsSecretAccessKey.length > 0;
   const canRunAwsSimpleSetup =
     !!provider?.id &&
     awsDefaultRegion.length > 0 &&
@@ -674,7 +844,8 @@ export default function ProviderSettingsPage() {
   const canDeleteAwsInfrastructure =
     !!provider?.id && awsDefaultRegion.length > 0 && hasSavedAwsCredentials;
   const canResetAwsInfrastructure = hasExistingAwsSetup && canRunAwsSimpleSetup;
-  const isAwsActionPending = isDeletingAwsInfrastructure || isResettingAwsInfrastructure;
+  const isAwsActionPending =
+    isDeletingAwsInfrastructure || isResettingAwsInfrastructure;
 
   const handleAwsSimpleSetup = async () => {
     if (!provider?.id) {
@@ -724,7 +895,9 @@ export default function ProviderSettingsPage() {
 
     setIsResettingAwsInfrastructure(true);
     try {
-      await trpcClient.admin.aws.deleteInfrastructure.mutate({ providerId: provider.id });
+      await trpcClient.admin.aws.deleteInfrastructure.mutate({
+        providerId: provider.id,
+      });
       const bootstrapResult = await trpcClient.admin.aws.bootstrap.mutate({
         providerId: provider.id,
         configName: configName.trim() || `${provider.name} Default`,
@@ -735,16 +908,26 @@ export default function ProviderSettingsPage() {
       });
 
       applyAwsBootstrapState(bootstrapResult);
-      toast.success(`AWS infrastructure reset (${bootstrapResult.summary.stackName})`);
+      toast.success(
+        `AWS infrastructure reset (${bootstrapResult.summary.stackName})`,
+      );
       setAwsActionDialog(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to reset AWS infrastructure");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to reset AWS infrastructure",
+      );
     } finally {
       setIsResettingAwsInfrastructure(false);
     }
   };
 
-  if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
+  if (
+    isSessionPending ||
+    !session?.user ||
+    (session.user as any)?.role !== "admin"
+  ) {
     return (
       <DashboardShell>
         <div className="flex h-64 items-center justify-center">
@@ -787,14 +970,21 @@ export default function ProviderSettingsPage() {
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground/90">Provider</p>
+                  <p className="text-sm font-medium text-foreground/90">
+                    Provider
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     Update the display name and enablement for this provider.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Label className="text-sm text-muted-foreground">Enabled</Label>
-                  <Switch checked={provider?.isEnabled} onCheckedChange={handleToggleProvider} />
+                  <Label className="text-sm text-muted-foreground">
+                    Enabled
+                  </Label>
+                  <Switch
+                    checked={provider?.isEnabled}
+                    onCheckedChange={handleToggleProvider}
+                  />
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -809,7 +999,11 @@ export default function ProviderSettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Provider Type</Label>
-                  <Input value={selectedProviderType?.displayName ?? "Unknown"} disabled readOnly />
+                  <Input
+                    value={selectedProviderType?.displayName ?? "Unknown"}
+                    disabled
+                    readOnly
+                  />
                 </div>
               </div>
               {provider?.supportsRegions && (
@@ -825,7 +1019,9 @@ export default function ProviderSettingsPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label className="text-sm text-muted-foreground">Enabled</Label>
+                    <Label className="text-sm text-muted-foreground">
+                      Enabled
+                    </Label>
                     <Switch
                       checked={isAwsProvider ? false : allowUserRegionSelection}
                       disabled={isAwsProvider}
@@ -840,7 +1036,9 @@ export default function ProviderSettingsPage() {
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground/90">Credentials & Config</p>
+                  <p className="text-sm font-medium text-foreground/90">
+                    Credentials & Config
+                  </p>
                   <p
                     className={cn(
                       "text-xs",
@@ -867,7 +1065,9 @@ export default function ProviderSettingsPage() {
                     <span className="h-1 w-1 rounded-full bg-foreground/20" />
                     <span
                       className={
-                        hasExistingAwsSetup ? "text-emerald-300/80" : "text-muted-foreground"
+                        hasExistingAwsSetup
+                          ? "text-emerald-300/80"
+                          : "text-muted-foreground"
                       }
                     >
                       {hasExistingAwsSetup
@@ -881,9 +1081,17 @@ export default function ProviderSettingsPage() {
                       size="sm"
                       variant="outline"
                       onClick={handleAwsSimpleSetup}
-                      disabled={!canRunAwsSimpleSetup || isBootstrappingAws || isAwsActionPending}
+                      disabled={
+                        !canRunAwsSimpleSetup ||
+                        isBootstrappingAws ||
+                        isAwsActionPending
+                      }
                     >
-                      {isBootstrappingAws ? <Loader2 className="animate-spin" /> : <Wand2 />}
+                      {isBootstrappingAws ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <Wand2 />
+                      )}
                       {hasExistingAwsSetup ? "Apply" : "Provision"}
                     </Button>
                     <Button
@@ -892,7 +1100,9 @@ export default function ProviderSettingsPage() {
                       variant="outline"
                       onClick={() => setAwsActionDialog("reset")}
                       disabled={
-                        !canResetAwsInfrastructure || isBootstrappingAws || isAwsActionPending
+                        !canResetAwsInfrastructure ||
+                        isBootstrappingAws ||
+                        isAwsActionPending
                       }
                     >
                       {isResettingAwsInfrastructure ? (
@@ -908,7 +1118,9 @@ export default function ProviderSettingsPage() {
                       variant="destructive"
                       onClick={handleDeleteAwsInfrastructure}
                       disabled={
-                        !canDeleteAwsInfrastructure || isBootstrappingAws || isAwsActionPending
+                        !canDeleteAwsInfrastructure ||
+                        isBootstrappingAws ||
+                        isAwsActionPending
                       }
                     >
                       {isDeletingAwsInfrastructure ? (
@@ -929,7 +1141,11 @@ export default function ProviderSettingsPage() {
                 <DialogContent className="sm:max-w-xl">
                   <DialogHeader>
                     <div className="pb-1 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                      <span>{awsActionDialog === "reset" ? "aws.reset" : "aws.delete"}</span>
+                      <span>
+                        {awsActionDialog === "reset"
+                          ? "aws.reset"
+                          : "aws.delete"}
+                      </span>
                     </div>
                     <DialogTitle>
                       {awsActionDialog === "reset"
@@ -978,7 +1194,11 @@ export default function ProviderSettingsPage() {
                     <Button
                       type="button"
                       size="sm"
-                      variant={awsActionDialog === "reset" ? "secondary" : "destructive"}
+                      variant={
+                        awsActionDialog === "reset"
+                          ? "secondary"
+                          : "destructive"
+                      }
                       onClick={
                         awsActionDialog === "reset"
                           ? handleResetAwsInfrastructure
@@ -1016,8 +1236,69 @@ export default function ProviderSettingsPage() {
 
               {!resolvedProviderTypeId && (
                 <div className="mt-4 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4 text-sm text-muted-foreground">
-                  No provider definition found for this entry. Make sure the provider key maps to a
-                  registered provider type.
+                  No provider definition found for this entry. Make sure the
+                  provider key maps to a registered provider type.
+                </div>
+              )}
+
+              {isCloudflareProvider && (
+                <div className="mt-4 space-y-3 rounded-xl border border-[#f6821f]/25 bg-gradient-to-b from-[#f6821f]/[0.06] to-transparent p-4">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/cloudflare.svg"
+                      alt="Cloudflare"
+                      className="h-4 w-auto"
+                    />
+                    <p className="text-sm font-medium text-foreground/90">
+                      Deploy the sandbox worker
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Cloudflare workspaces run behind a Worker you deploy into
+                    your own Cloudflare account. Follow the steps below, then
+                    paste the resulting Worker URL and the same Internal API Key
+                    into the fields below.
+                  </p>
+
+                  <ol className="space-y-2">
+                    {(cloudflareManualSetup?.steps ?? []).map((step, i) => (
+                      <li
+                        key={i}
+                        className="flex gap-2.5 text-xs text-muted-foreground"
+                      >
+                        <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#f6821f]/15 text-[10px] font-semibold text-[#f6821f]">
+                          {i + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+
+                  {cloudflareManualSetup?.command && (
+                    <div className="space-y-1">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#f6821f]/80">
+                        deploy command
+                      </p>
+                      <pre className="overflow-x-auto rounded-lg border border-[#f6821f]/20 bg-[#f6821f]/[0.04] px-3 py-2 text-[11px] leading-relaxed text-foreground/85">
+                        <code>{cloudflareManualSetup.command}</code>
+                      </pre>
+                    </div>
+                  )}
+
+                  <div className="pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={downloadWorkerZip}
+                      disabled={(cloudflareWorkerFiles?.length ?? 0) === 0}
+                      className="border-[#f6821f]/30 text-[#f6821f] hover:bg-[#f6821f]/10 hover:text-[#f6821f]"
+                    >
+                      <Download />
+                      Download setup ZIP
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -1048,7 +1329,8 @@ export default function ProviderSettingsPage() {
                     .map((field) =>
                       renderField(
                         field,
-                        isAwsProvider && !AWS_EDITABLE_FIELDS.includes(field.fieldName),
+                        isAwsProvider &&
+                          !AWS_EDITABLE_FIELDS.includes(field.fieldName),
                       ),
                     )}
                 </div>
@@ -1058,9 +1340,12 @@ export default function ProviderSettingsPage() {
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground/90">Default Images</p>
+                  <p className="text-sm font-medium text-foreground/90">
+                    Default Images
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    Choose the container image this provider should use for each agent type.
+                    Choose the container image this provider should use for each
+                    agent type.
                   </p>
                 </div>
                 <Badge
@@ -1075,8 +1360,10 @@ export default function ProviderSettingsPage() {
                 {assignableAgentTypes.map((agent: any) => {
                   const assignment = assignmentByAgentType.get(agent.id) as any;
                   const compatibleImages =
-                    images?.filter((img: any) => img.agentTypeId === agent.id && img.isEnabled) ??
-                    [];
+                    images?.filter(
+                      (img: any) =>
+                        img.agentTypeId === agent.id && img.isEnabled,
+                    ) ?? [];
                   const selectedImageId = assignment?.imageId ?? "fallback";
 
                   return (
@@ -1086,7 +1373,9 @@ export default function ProviderSettingsPage() {
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-foreground/90">{agent.name}</p>
+                          <p className="text-sm font-medium text-foreground/90">
+                            {agent.name}
+                          </p>
                           {agent.serverOnly && (
                             <Badge
                               variant="outline"
@@ -1104,7 +1393,9 @@ export default function ProviderSettingsPage() {
 
                       <Select
                         value={selectedImageId}
-                        disabled={!provider?.id || compatibleImages.length === 0}
+                        disabled={
+                          !provider?.id || compatibleImages.length === 0
+                        }
                         onValueChange={(imageId) => {
                           if (!provider?.id) {
                             return;
@@ -1129,7 +1420,9 @@ export default function ProviderSettingsPage() {
                           <SelectValue placeholder="Select image" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="fallback">Global default</SelectItem>
+                          <SelectItem value="fallback">
+                            Global default
+                          </SelectItem>
                           {compatibleImages.map((img: any) => (
                             <SelectItem key={img.id} value={img.id}>
                               {img.name}
@@ -1153,7 +1446,9 @@ export default function ProviderSettingsPage() {
               <div className="rounded-2xl border border-border bg-card p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground/90">Regions</p>
+                    <p className="text-sm font-medium text-foreground/90">
+                      Regions
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       Enable, disable, or add regions for this provider.
                     </p>
@@ -1194,14 +1489,18 @@ export default function ProviderSettingsPage() {
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              {region.location} • {region.externalRegionIdentifier}
+                              {region.location} •{" "}
+                              {region.externalRegionIdentifier}
                             </p>
                           </div>
                         </div>
                         <Switch
                           checked={region.isEnabled}
                           onCheckedChange={(checked) =>
-                            toggleRegion.mutate({ id: region.id, isEnabled: checked })
+                            toggleRegion.mutate({
+                              id: region.id,
+                              isEnabled: checked,
+                            })
                           }
                         />
                       </div>
@@ -1214,14 +1513,18 @@ export default function ProviderSettingsPage() {
                 </div>
 
                 <div className="mt-5 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-5">
-                  <p className="text-sm font-medium text-foreground/90">Add Region</p>
+                  <p className="text-sm font-medium text-foreground/90">
+                    Add Region
+                  </p>
                   <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="space-y-2">
                       <Label htmlFor="region-name">Region Name</Label>
                       <Input
                         id="region-name"
                         value={newRegion.name}
-                        onChange={(e) => setNewRegion({ ...newRegion, name: e.target.value })}
+                        onChange={(e) =>
+                          setNewRegion({ ...newRegion, name: e.target.value })
+                        }
                         placeholder="e.g., US West"
                       />
                     </div>
@@ -1230,7 +1533,12 @@ export default function ProviderSettingsPage() {
                       <Input
                         id="location"
                         value={newRegion.location}
-                        onChange={(e) => setNewRegion({ ...newRegion, location: e.target.value })}
+                        onChange={(e) =>
+                          setNewRegion({
+                            ...newRegion,
+                            location: e.target.value,
+                          })
+                        }
                         placeholder="e.g., California"
                       />
                     </div>

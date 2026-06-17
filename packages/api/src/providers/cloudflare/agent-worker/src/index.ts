@@ -155,7 +155,7 @@ fi
 
   // Set up authentication based on credential type
   console.log(`Setting auth for provider ${providerId}...`);
-  const authResult = await setupAuth(sandbox, client as OpencodeClient, providerId, credential);
+  const authResult = await setupAuth(sandbox, client as unknown as OpencodeClient, providerId, credential);
 
   if (!authResult.success) {
     return {
@@ -166,7 +166,7 @@ fi
   }
 
   console.log("Creating session...");
-  const session = await (client as OpencodeClient).session.create({
+  const session = await (client as unknown as OpencodeClient).session.create({
     body: {
       title: `Agent Loop Iteration ${iteration}`,
     },
@@ -219,7 +219,7 @@ The agent-callback tool will automatically verify your commit. You do NOT need t
 ${prompt ? `ADDITIONAL INSTRUCTIONS:\n${prompt}\n` : ""}
 IMPORTANT: You MUST call the agent-callback tool ONLY after you have: 1) Made changes for the feature, 2) Committed them, and 3) Pushed the changes to the remote repository.`;
 
-  const result = await (client as OpencodeClient).session.prompt({
+  const result = await (client as unknown as OpencodeClient).session.prompt({
     path: { id: session.data.id },
     body: {
       model: { providerID: providerId, modelID: specificModel },
@@ -243,8 +243,8 @@ IMPORTANT: You MUST call the agent-callback tool ONLY after you have: 1) Made ch
 
     if ((error as NotFoundError).name === "NotFoundError") {
       errorMsg = (error as NotFoundError).data.message;
-    } else if ((error as BadRequestError).errors?.length > 0) {
-      errorMsg = (error as BadRequestError).errors.map((error) => error.message).join(", ");
+    } else if ((error as BadRequestError).name === "BadRequest") {
+      errorMsg = (error as BadRequestError).data.message;
     }
 
     return {

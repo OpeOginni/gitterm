@@ -1730,6 +1730,13 @@ export const workspaceRouter = router({
         // Get compute provider
         const computeProvider = await getProviderByCloudProviderId(providerKey);
 
+        // Force ephemeral when the provider can't persist files (e.g. Cloudflare
+        // sandboxes). The UI disables the toggle, but guard server-side too.
+        const effectivePersistent =
+          cloudProviderRecord.supportsPersistence === false
+            ? false
+            : input.persistent;
+
         // If immediate we send the intial workspace status to running
         const initialWorkspaceStatus =
           cloudProviderRecord.creationSettlement === "immediate"
@@ -1738,9 +1745,9 @@ export const workspaceRouter = router({
 
         // Create workspace via compute provider
         const workspaceInfo = await workspaceCreateLogger.step(
-          `provision-workspace provider=${providerKey} persistent=${input.persistent}`,
+          `provision-workspace provider=${providerKey} persistent=${effectivePersistent}`,
           () =>
-            input.persistent
+            effectivePersistent
               ? computeProvider.createPersistentWorkspace({
                   workspaceId,
                   userId,
@@ -1752,7 +1759,7 @@ export const workspaceRouter = router({
                   regionIdentifier: regionRecord?.externalRegionIdentifier,
                   environmentVariables: DEFAULT_DOCKER_ENV_VARS,
                   provisioningSpec,
-                  persistent: input.persistent,
+                  persistent: effectivePersistent,
                 })
               : computeProvider.createWorkspace({
                   workspaceId,
@@ -1778,7 +1785,7 @@ export const workspaceRouter = router({
             imageId: imageRecord.id,
             cloudProviderId: input.cloudProviderId,
             gitIntegrationId: input.gitIntegrationId ?? null,
-            persistent: input.persistent,
+            persistent: effectivePersistent,
             regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,
             repositoryBranch: input.branch ?? null,
@@ -1808,7 +1815,7 @@ export const workspaceRouter = router({
         }
 
         workspaceCreateLogger.log(
-          `workspace-record-created provider=${providerKey} persistent=${input.persistent}`,
+          `workspace-record-created provider=${providerKey} persistent=${effectivePersistent}`,
         );
 
         if (workspaceInfo.upstreamAccess?.headers) {
@@ -1822,7 +1829,7 @@ export const workspaceRouter = router({
 
         // Create volume record (only for persistent workspaces)
         let newVolume = null;
-        if (input.persistent) {
+        if (effectivePersistent) {
           const persistentInfo = workspaceInfo as PersistentWorkspaceInfo;
           const [volumeRecord] = await db
             .insert(volume)

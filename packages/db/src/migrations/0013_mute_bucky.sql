@@ -1,0 +1,1 @@
+ALTER TABLE "cloud_provider" ADD COLUMN "supports_persistence" boolean DEFAULT true NOT NULL;

@@ -26,7 +26,7 @@ const fraunces = Fraunces({
 
 const TITLE = "GitTerm · Cloud workspaces for coding agents";
 const DESCRIPTION =
-  "Run any coding agent (OpenCode, and more soon) in persistent cloud workspaces. One config, any cloud, any device.";
+  "Run any coding agent in persistent cloud workspaces. One config, any cloud, any device.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     siteName: "GitTerm",
     images: [
       {
-        url: "/og-card/og-card-reduced.png",
+        url: "/og-card/og-card.png",
         width: 1200,
         height: 630,
         alt: TITLE,
@@ -80,7 +80,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geist.variable} ${jetbrains.variable} ${fraunces.variable} antialiased`}>
+      <body
+        className={`${geist.variable} ${jetbrains.variable} ${fraunces.variable} antialiased`}
+      >
         <Providers>{children}</Providers>
         <Suspense fallback={null}>
           <PostHogProvider />

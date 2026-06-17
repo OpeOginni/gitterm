@@ -48,6 +48,7 @@ export const cloudProvider = pgTable("cloud_provider", {
   isSandbox: boolean("is_sandbox").notNull().default(false),
   preferredDefault: boolean("preferred_default").notNull().default(false),
   autoPersistent: boolean("auto_persistent").notNull().default(false),
+  supportsPersistence: boolean("supports_persistence").notNull().default(true),
   supportsRegions: boolean("supports_regions").notNull().default(true),
   allowUserRegionSelection: boolean("allow_user_region_selection")
     .notNull()
@@ -224,6 +225,21 @@ export interface AwsImageProviderMetadata {
   architecture?: "X86_64" | "ARM64";
 }
 
+/**
+ * Cloudflare-specific run details for an agent image. The Cloudflare worker is
+ * agent-agnostic: it runs whatever `startCommand` listens on `port`, after
+ * optionally running `setupCommands` (e.g. installing the agent binary on boot
+ * for agents not baked into the container image).
+ */
+export interface CloudflareImageProviderMetadata {
+  /** Command that starts the agent server, e.g. "opencode serve --port 4096". */
+  startCommand?: string;
+  /** Port the agent server listens on (workspace traffic is proxied here). */
+  port?: number;
+  /** Commands to run before starting the server (e.g. install the agent). */
+  setupCommands?: string[];
+}
+
 export interface ImageProviderMetadata {
   isDefault?: boolean;
   e2b?: {
@@ -232,6 +248,7 @@ export interface ImageProviderMetadata {
   };
   daytona?: DaytonaImageProviderMetadata;
   aws?: AwsImageProviderMetadata;
+  cloudflare?: CloudflareImageProviderMetadata;
   [provider: string]: unknown;
 }
 

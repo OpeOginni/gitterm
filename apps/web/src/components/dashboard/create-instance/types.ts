@@ -38,6 +38,7 @@ export interface CloudProvider {
   supportsRegions: boolean;
   allowUserRegionSelection: boolean;
   autoPersistent?: boolean;
+  supportsPersistence?: boolean;
   regions?: Region[];
   sshAccessSupport?: sshAccessSupport;
 }

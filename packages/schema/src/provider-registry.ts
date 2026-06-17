@@ -1,8 +1,16 @@
 import { z } from "zod";
 
 export const providerCategoryEnum = z.enum(["compute", "sandbox", "both"]);
-export const fieldTypeEnum = z.enum(["text", "password", "number", "select", "url", "boolean"]);
-export const DEFAULT_RAILWAY_API_URL = "https://backboard.railway.app/graphql/v2";
+export const fieldTypeEnum = z.enum([
+  "text",
+  "password",
+  "number",
+  "select",
+  "url",
+  "boolean",
+]);
+export const DEFAULT_RAILWAY_API_URL =
+  "https://backboard.railway.app/graphql/v2";
 
 export interface ProviderConfigField {
   fieldName: string;
@@ -86,7 +94,10 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
           { value: "us-east4-eqdc4a", label: "US East Metal (Virginia)" },
           { value: "us-west2", label: "US West Metal (California)" },
           { value: "europe-west4-drams3a", label: "EU West Metal (Amsterdam)" },
-          { value: "asia-southeast1-eqsg3a", label: "Southeast Asia Metal (Singapore)" },
+          {
+            value: "asia-southeast1-eqsg3a",
+            label: "Southeast Asia Metal (Singapore)",
+          },
         ],
         sortOrder: 5,
       },
@@ -112,10 +123,14 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       clusterArn: z.string().min(1, "ECS cluster ARN is required"),
       vpcId: z.string().min(1, "VPC ID is required"),
       subnetIds: z.string().min(1, "At least one subnet ID is required"),
-      securityGroupIds: z.string().min(1, "At least one security group ID is required"),
+      securityGroupIds: z
+        .string()
+        .min(1, "At least one security group ID is required"),
       albListenerArn: z.string().min(1, "ALB listener ARN is required"),
       albBaseUrl: z.url("Must be a valid URL"),
-      taskExecutionRoleArn: z.string().min(1, "Task execution role ARN is required"),
+      taskExecutionRoleArn: z
+        .string()
+        .min(1, "Task execution role ARN is required"),
       taskRoleArn: z.string().min(1, "Task role ARN is required"),
       assignPublicIp: z.boolean().optional(),
       publicSshEnabled: z.boolean().optional(),
@@ -252,9 +267,15 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     displayName: "Cloudflare Sandbox",
     category: "sandbox",
     configSchema: z.object({
-      workerUrl: z.url("Must be a valid URL"),
-      callbackSecret: z.string().min(1, "Callback secret is required"),
+      workerUrl: z.url("Must be a valid URL").optional().or(z.literal("")),
+      internalApiKey: z.string().optional(),
+      workerName: z.string().optional(),
+      apiToken: z.string().optional(),
+      accountId: z.string().optional(),
     }),
+    // The worker is deployed manually (see the setup instructions on the
+    // provider page). GitTerm only needs to know where it lives and the shared
+    // secret to talk to it, so those are the only fields surfaced here.
     fields: [
       {
         fieldName: "workerUrl",
@@ -265,8 +286,8 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         sortOrder: 1,
       },
       {
-        fieldName: "callbackSecret",
-        fieldLabel: "Callback Secret",
+        fieldName: "internalApiKey",
+        fieldLabel: "Internal API Key",
         fieldType: "password",
         isRequired: true,
         isEncrypted: true,
@@ -307,7 +328,10 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     category: "sandbox",
     configSchema: z.object({
       apiKey: z.string().min(1, "API KEY is required"),
-      defaultTargetRegion: z.enum(["us", "eu"], "region of eu or us is required"),
+      defaultTargetRegion: z.enum(
+        ["us", "eu"],
+        "region of eu or us is required",
+      ),
       webhookSecret: z.string().optional(),
     }),
     fields: [
@@ -343,7 +367,9 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
   },
 };
 
-export function getProviderDefinition(providerName: string): ProviderDefinition | undefined {
+export function getProviderDefinition(
+  providerName: string,
+): ProviderDefinition | undefined {
   return PROVIDER_DEFINITIONS[providerName];
 }
 
