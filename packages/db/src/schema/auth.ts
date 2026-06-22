@@ -9,9 +9,8 @@ import {
 
 export const userPlanEnum = pgEnum("user_plan", [
   "free",
-  "tunnel",
+  "starter",
   "pro",
-  "enterprise",
 ] as const);
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"] as const);
 

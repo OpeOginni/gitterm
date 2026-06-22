@@ -4,7 +4,7 @@ import { BillingSection } from "@/components/dashboard/billing-section";
 import { DeleteAccountSection } from "@/components/dashboard/delete-account";
 
 interface AccountSectionProps {
-  currentPlan: "free" | "pro";
+  currentPlan: "free" | "starter" | "pro";
 }
 
 export function AccountSection({ currentPlan }: AccountSectionProps) {

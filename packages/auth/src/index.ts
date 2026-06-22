@@ -42,12 +42,15 @@ function inferBaseUrlOrigin(): string {
 // Plan Types and Product Mapping
 // ============================================================================
 
-type UserPlan = "free" | "pro";
+type UserPlan = "free" | "starter" | "pro";
 
 /**
  * Maps Polar product IDs to plan names (for subscriptions)
  */
 const PRODUCT_TO_PLAN: Record<string, UserPlan> = {
+  ...(env.POLAR_STARTER_PRODUCT_ID
+    ? { [env.POLAR_STARTER_PRODUCT_ID]: "starter" as const }
+    : {}),
   ...(env.POLAR_PRO_PRODUCT_ID ? { [env.POLAR_PRO_PRODUCT_ID]: "pro" as const } : {}),
 };
 
@@ -68,9 +71,11 @@ const RUN_PACK_TO_RUNS_MAP: Record<"run_pack_50" | "run_pack_100", number> = {
   run_pack_100: 100,
 };
 
+// Keep in sync with PLAN_LIMITS in packages/api/src/config/features.ts
 const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
   free: 10,
-  pro: 100,
+  starter: 75,
+  pro: 250,
 };
 
 /**
@@ -97,6 +102,9 @@ const polarClient = checkBillingEnabled()
 
 // Product configurations for checkout (subscriptions and one-time purchases)
 const POLAR_PRODUCTS = [
+  ...(env.POLAR_STARTER_PRODUCT_ID
+    ? [{ productId: env.POLAR_STARTER_PRODUCT_ID, slug: "starter" as const }]
+    : []),
   ...(env.POLAR_PRO_PRODUCT_ID
     ? [{ productId: env.POLAR_PRO_PRODUCT_ID, slug: "pro" as const }]
     : []),
@@ -280,7 +288,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       plan: {
-        type: ["free", "pro"],
+        type: ["free", "starter", "pro"],
         required: false,
         defaultValue: "free",
         input: false, // don't allow user to set plan
@@ -355,7 +363,7 @@ export const auth = betterAuth({
 
                         await updateUserPlan(userId, plan);
 
-                        if (plan === "pro") {
+                        if (plan !== "free") {
                           const billingEnd = payload.data.currentPeriodEnd
                             ? new Date(payload.data.currentPeriodEnd)
                             : addMonths(new Date(), 1);

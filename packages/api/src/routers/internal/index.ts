@@ -18,8 +18,13 @@ import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
   closeUsageSession,
   getConfiguredIdleTimeout,
-  getConfiguredFreeTierMinutes,
 } from "../../utils/metering";
+import {
+  getIdleTimeoutMinutesForPlan,
+  getDailyMinuteQuotaAsync,
+  PLAN_LIMITS,
+  type UserPlan,
+} from "../../config/features";
 import { auth } from "@gitterm/auth";
 import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { logger } from "../../utils/logger";
@@ -41,7 +46,7 @@ import {
   updateWorkspaceStatusAndInvalidate,
 } from "../../service/workspace-mutations";
 import {
-  filterIdleWorkspacesByRedisActivity,
+  filterIdleWorkspacesByRedisActivityWith,
   recordWorkspaceActivity,
 } from "../../service/workspace-activity";
 import type { E2BConfig } from "../../providers/e2b";
@@ -105,8 +110,17 @@ export const internalRouter = router({
 
   // Get idle workspaces (for worker)
   getIdleWorkspaces: internalProcedure.query(async () => {
-    const idleTimeoutMinutes = await getConfiguredIdleTimeout();
-    const idleThreshold = new Date(Date.now() - idleTimeoutMinutes * 60 * 1000);
+    const globalIdleTimeoutMinutes = await getConfiguredIdleTimeout();
+    const now = Date.now();
+
+    // Pre-filter with the TIGHTEST timeout across all plans so aggressively
+    // reaped plans (e.g. free = 10m) are never missed; the precise per-plan
+    // threshold is applied in memory below.
+    const planTimeouts = (Object.keys(PLAN_LIMITS) as UserPlan[])
+      .map((plan) => getIdleTimeoutMinutesForPlan(plan))
+      .filter((value): value is number => value !== null);
+    const minCandidateMinutes = Math.min(globalIdleTimeoutMinutes, ...planTimeouts);
+    const candidateThreshold = new Date(now - minCandidateMinutes * 60 * 1000);
 
     const idleCandidates = await db
       .select({
@@ -117,19 +131,31 @@ export const internalRouter = router({
         cloudProviderId: workspace.cloudProviderId,
         domain: workspace.domain,
         lastActiveAt: workspace.lastActiveAt,
+        plan: user.plan,
       })
       .from(workspace)
-      .where(and(eq(workspace.status, "running"), lt(workspace.lastActiveAt, idleThreshold)));
+      .leftJoin(user, eq(workspace.userId, user.id))
+      .where(and(eq(workspace.status, "running"), lt(workspace.lastActiveAt, candidateThreshold)));
 
-    const idleWorkspaces = await filterIdleWorkspacesByRedisActivity(idleCandidates, idleThreshold);
+    // Resolve the precise idle threshold per workspace based on its owner's
+    // plan. Self-hosted returns null -> fall back to the global value.
+    const thresholdFor = (ws: { plan: string | null }): Date => {
+      const planTimeout = getIdleTimeoutMinutesForPlan((ws.plan ?? "free") as UserPlan);
+      const timeoutMinutes = planTimeout ?? globalIdleTimeoutMinutes;
+      return new Date(now - timeoutMinutes * 60 * 1000);
+    };
 
-    return idleWorkspaces.map(({ lastActiveAt: _lastActiveAt, ...idleWorkspace }) => idleWorkspace);
+    const idleWorkspaces = await filterIdleWorkspacesByRedisActivityWith(idleCandidates, thresholdFor);
+
+    return idleWorkspaces.map(
+      ({ lastActiveAt: _lastActiveAt, plan: _plan, ...idleWorkspace }) => idleWorkspace,
+    );
   }),
 
   getQuotaExceededWorkspaces: internalProcedure.query(async () => {
     const today = new Date().toISOString().split("T")[0]!;
 
-    // Get all running cloud workspaces with their users' daily usage
+    // Get all running cloud workspaces with their users' daily usage + plan.
     // Local workspaces don't count towards quota since they don't use our resources
     const workspacesWithUsage = await db
       .select({
@@ -140,19 +166,38 @@ export const internalRouter = router({
         cloudProviderId: workspace.cloudProviderId,
         domain: workspace.domain,
         minutesUsed: dailyUsage.minutesUsed,
+        plan: user.plan,
       })
       .from(workspace)
+      .leftJoin(user, eq(workspace.userId, user.id))
       .leftJoin(
         dailyUsage,
         and(eq(workspace.userId, dailyUsage.userId), eq(dailyUsage.date, today)),
       )
       .where(and(eq(workspace.status, "running")));
 
-    // Filter workspaces where user has exceeded quota
-    // If no usage record exists (null), they haven't exceeded (0 minutes used)
-    const freeTierDailyMinutes = await getConfiguredFreeTierMinutes();
-    const quotaExceededWorkspaces = workspacesWithUsage.filter(
-      (ws) => (ws.minutesUsed ?? 0) >= freeTierDailyMinutes,
+    // Resolve each plan's daily minute quota once (free reads DB config). A
+    // non-finite quota (self-hosted) means "never exceeded".
+    const planQuotaCache = new Map<UserPlan, number>();
+    const quotaForPlan = async (plan: UserPlan): Promise<number> => {
+      const cached = planQuotaCache.get(plan);
+      if (cached !== undefined) return cached;
+      const quota = await getDailyMinuteQuotaAsync(plan);
+      planQuotaCache.set(plan, quota);
+      return quota;
+    };
+
+    // Filter workspaces where the user has exceeded their plan's daily quota.
+    // If no usage record exists (null), they haven't exceeded (0 minutes used).
+    const exceededChecks = await Promise.all(
+      workspacesWithUsage.map(async (ws) => {
+        const quota = await quotaForPlan((ws.plan ?? "free") as UserPlan);
+        if (!Number.isFinite(quota)) return null;
+        return (ws.minutesUsed ?? 0) >= quota ? ws : null;
+      }),
+    );
+    const quotaExceededWorkspaces = exceededChecks.filter(
+      (ws): ws is (typeof workspacesWithUsage)[number] => ws !== null,
     );
 
     logger.info(`Found ${quotaExceededWorkspaces.length} workspaces with exceeded quota`, {

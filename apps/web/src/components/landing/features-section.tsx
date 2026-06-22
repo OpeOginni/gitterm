@@ -53,18 +53,22 @@ export function FeaturesSection() {
           </h2>
         </div>
 
-        <div className="grid gap-x-8 gap-y-0 md:grid-cols-2">
+        <div className="grid grid-cols-2 gap-x-5 gap-y-0 sm:gap-x-8">
           {features.map((feature) => (
             <div
               key={feature.title}
-              className="flex items-start gap-4 border-t border-white/[0.06] py-6"
+              className="flex flex-col gap-3 border-t border-white/[0.06] py-6 sm:flex-row sm:items-start sm:gap-4"
             >
-              <div className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
+              <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] sm:mt-0.5">
                 <feature.icon className="h-[18px] w-[18px] text-primary/80" />
               </div>
               <div>
-                <h3 className="text-[15px] font-semibold text-white/85">{feature.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-white/45">{feature.description}</p>
+                <h3 className="text-[14px] font-semibold text-white/85 sm:text-[15px]">
+                  {feature.title}
+                </h3>
+                <p className="mt-1 text-[13px] leading-relaxed text-white/45 sm:text-sm">
+                  {feature.description}
+                </p>
               </div>
             </div>
           ))}

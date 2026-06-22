@@ -15,7 +15,7 @@ import { TRPCError } from "@trpc/server";
 import { getAgentLoopService } from "../../service/agent-loop";
 import { deductRunFromQuota, refundRunToQuota } from "../../service/quotas/run-quota";
 import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/helpers";
-import { MONTHLY_RUN_QUOTAS } from "../../config";
+import { MONTHLY_RUN_QUOTAS, canUseProvider, type UserPlan } from "../../config";
 import { addMonths } from "date-fns";
 
 export const agentLoopCreateSchema = z.object({
@@ -64,6 +64,17 @@ export const agentLoopRouter = router({
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "No sandbox provider configured. Please contact support.",
+      });
+    }
+
+    // Plan-based provider gating: free tier may only use E2B sandboxes.
+    const loopPlan = (ctx.session.user.plan ?? "free") as UserPlan;
+    const sandboxProviderKey = (sandboxProvider.providerKey ?? "local").toLowerCase();
+    if (!canUseProvider(loopPlan, sandboxProviderKey)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "The Free plan can only use E2B sandboxes. Upgrade to Starter or Pro to use this provider.",
       });
     }
 

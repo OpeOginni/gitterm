@@ -38,7 +38,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
 
-type UserPlan = "free" | "pro";
+type UserPlan = "free" | "starter" | "pro";
 type UserRole = "user" | "admin";
 
 interface CreateUserForm {
@@ -248,6 +248,7 @@ export default function UsersPage() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="free">Free</SelectItem>
+                              <SelectItem value="starter">Starter</SelectItem>
                               <SelectItem value="pro">Pro</SelectItem>
                             </SelectContent>
                           </Select>
@@ -424,6 +425,7 @@ export default function UsersPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="free">Free</SelectItem>
+                      <SelectItem value="starter">Starter</SelectItem>
                       <SelectItem value="pro">Pro</SelectItem>
                     </SelectContent>
                   </Select>

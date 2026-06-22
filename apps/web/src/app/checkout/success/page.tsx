@@ -33,6 +33,7 @@ function CheckoutSuccessContent() {
 
   const userPlan = checkoutPlan || (session?.user as any)?.plan || "free";
   const planName = userPlan.charAt(0).toUpperCase() + userPlan.slice(1);
+  const isPaidPlan = userPlan === "pro" || userPlan === "starter";
 
   return (
     <div className="flex min-h-screen flex-col bg-background landing-grid dark">
@@ -78,7 +79,7 @@ function CheckoutSuccessContent() {
               <span
                 className={cn(
                   "rounded-full border px-3 py-0.5 font-mono text-xs font-bold uppercase tracking-wider",
-                  userPlan === "pro"
+                  isPaidPlan
                     ? "border-primary/30 bg-primary/10 text-primary"
                     : "border-white/[0.08] text-white/50",
                 )}
@@ -101,8 +102,10 @@ function CheckoutSuccessContent() {
             {[
               "Your plan benefits are now active",
               ...(userPlan === "pro"
-                ? ["Unlimited cloud runtime is enabled", "Custom subdomains for all workspaces"]
-                : []),
+                ? ["480 min/day runtime + all providers", "Custom subdomains for all workspaces"]
+                : userPlan === "starter"
+                  ? ["180 min/day runtime + all providers", "Persistent workspaces unlocked"]
+                  : []),
               "Manage your subscription anytime from Settings",
             ].map((item) => (
               <div key={item} className="flex items-start gap-2.5 text-sm text-white/50">
