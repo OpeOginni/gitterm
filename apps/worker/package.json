@@ -6,8 +6,7 @@
     "build": "tsdown",
     "check-types": "tsc -b",
     "start": "bun run dist/idle-reaper.mjs",
-    "idle-reaper": "bun run src/idle-reaper.ts",
-    "daily-reset": "bun run src/daily-reset.ts"
+    "idle-reaper": "bun run src/idle-reaper.ts"
   },
   "dependencies": {
     "@gitterm/api": "workspace:*",

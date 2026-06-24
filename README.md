@@ -40,7 +40,6 @@ Worker cron jobs:
 | Worker         | Schedule       | Purpose                                   |
 | -------------- | -------------- | ----------------------------------------- |
 | `idle-reaper`  | `*/10 * * * *` | Stops idle workspaces and enforces quotas |
-| `daily-reset`  | `0 0 * * *`    | Logs daily usage stats once per day       |
 
 ## Routing
 

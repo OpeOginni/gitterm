@@ -22,5 +22,5 @@ WORKDIR /app
 # Copy built worker output only
 COPY --from=builder /app/apps/worker/dist ./dist
 
-# Default to idle-reaper (can be overridden to run daily-reset.mjs)
+# Runs the idle-reaper worker
 CMD ["bun", "run", "dist/idle-reaper.mjs"]

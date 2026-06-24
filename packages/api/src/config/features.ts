@@ -141,6 +141,11 @@ export interface PlanLimits {
   dailyMinutes: number;
   /** Minutes of inactivity before the idle reaper stops a workspace. */
   idleTimeoutMinutes: number;
+  /**
+   * Days of inactivity before the reaper terminates (deletes) a workspace,
+   * tearing down any persisted volume. Higher tiers keep instances longer.
+   */
+  retentionDays: number;
   /** Whether the user can create persistent (volume-backed) workspaces. */
   persistence: boolean;
   /** Whether the user can reserve custom cloud subdomains for branding. */
@@ -158,6 +163,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     workspaces: 2,
     dailyMinutes: 60,
     idleTimeoutMinutes: 10,
+    retentionDays: 2,
     persistence: false,
     customSubdomain: false,
     allowedProviderKeys: ["e2b"],
@@ -167,6 +173,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     workspaces: 5,
     dailyMinutes: 180,
     idleTimeoutMinutes: 20,
+    retentionDays: 7,
     persistence: true,
     customSubdomain: true,
     allowedProviderKeys: null,
@@ -176,6 +183,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     workspaces: 15,
     dailyMinutes: 480,
     idleTimeoutMinutes: 30,
+    retentionDays: 15,
     persistence: true,
     customSubdomain: true,
     allowedProviderKeys: null,
@@ -243,6 +251,16 @@ export const getMonthlyRunQuota = (plan: UserPlan): number => {
 export const getIdleTimeoutMinutesForPlan = (plan: UserPlan | string): number | null => {
   if (isSelfHosted()) return null;
   return getPlanLimits(plan).idleTimeoutMinutes;
+};
+
+/**
+ * Get the retention window (days of inactivity) before the reaper terminates a
+ * plan's workspaces. Returns `null` in self-hosted mode, signalling callers
+ * that managed retention does not apply (self-hosted instances are not reaped).
+ */
+export const getRetentionDaysForPlan = (plan: UserPlan | string): number | null => {
+  if (isSelfHosted()) return null;
+  return getPlanLimits(plan).retentionDays;
 };
 
 /**

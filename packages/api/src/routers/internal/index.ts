@@ -3,7 +3,6 @@ import { internalProcedure, router } from "../../index";
 import { db, eq, and, sql, gt, lt, or } from "@gitterm/db";
 import {
   workspace,
-  usageSession,
   dailyUsage,
   type SessionStopSource,
   volume,
@@ -21,6 +20,7 @@ import {
 } from "../../utils/metering";
 import {
   getIdleTimeoutMinutesForPlan,
+  getRetentionDaysForPlan,
   getDailyMinuteQuotaAsync,
   PLAN_LIMITS,
   type UserPlan,
@@ -441,8 +441,25 @@ export const internalRouter = router({
   }),
 
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
-    const fourDays = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000); // 4 Days ago
-    const longTermInactiveWorkspaces = await db
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    // Pre-filter with the LONGEST retention across all plans so we never miss a
+    // workspace; the precise per-plan threshold is applied in memory below.
+    // Self-hosted returns null for every plan -> nothing is reaped.
+    const planRetentions = (Object.keys(PLAN_LIMITS) as UserPlan[])
+      .map((plan) => getRetentionDaysForPlan(plan))
+      .filter((value): value is number => value !== null);
+
+    if (planRetentions.length === 0) {
+      // Self-hosted (or no managed plans): never terminate on inactivity.
+      return [];
+    }
+
+    const maxRetentionDays = Math.max(...planRetentions);
+    const candidateThreshold = new Date(now - maxRetentionDays * dayMs);
+
+    const candidates = await db
       .select({
         id: workspace.id,
         externalInstanceId: workspace.externalInstanceId,
@@ -453,56 +470,31 @@ export const internalRouter = router({
         status: workspace.status,
         hostingType: workspace.hostingType,
         lastActiveAt: workspace.lastActiveAt,
+        plan: user.plan,
       })
       .from(workspace)
+      .leftJoin(user, eq(workspace.userId, user.id))
       .where(
         and(
           or(eq(workspace.status, "running"), eq(workspace.status, "stopped")),
           eq(workspace.hostingType, "cloud"),
-          lt(workspace.lastActiveAt, fourDays), // 4 days ago
+          lt(workspace.lastActiveAt, candidateThreshold),
         ),
       );
 
-    return longTermInactiveWorkspaces;
+    // Apply the precise per-plan retention window for each workspace. A null
+    // retention (self-hosted) means the workspace is never terminated.
+    const longTermInactiveWorkspaces = candidates.filter((ws) => {
+      const retentionDays = getRetentionDaysForPlan((ws.plan ?? "free") as UserPlan);
+      if (retentionDays === null) return false;
+      const threshold = new Date(now - retentionDays * dayMs);
+      return ws.lastActiveAt !== null && ws.lastActiveAt < threshold;
+    });
+
+    return longTermInactiveWorkspaces.map(
+      ({ plan: _plan, ...ws }) => ws,
+    );
   }),
-  // Get daily stats (for worker/analytics)
-  getDailyStats: internalProcedure
-    .input(z.object({ date: z.string() }))
-    .query(async ({ input }) => {
-      const stats = await db
-        .select({
-          totalUsers: sql<number>`count(distinct ${dailyUsage.userId})`,
-          totalMinutes: sql<number>`coalesce(sum(${dailyUsage.minutesUsed}), 0)`,
-        })
-        .from(dailyUsage)
-        .where(sql`${dailyUsage.date} = ${input.date}`);
-
-      const sessionStats = await db
-        .select({
-          totalSessions: sql<number>`count(*)`,
-          avgDuration: sql<number>`coalesce(avg(${usageSession.durationMinutes}), 0)`,
-          manualStops: sql<number>`count(*) filter (where ${usageSession.stopSource} = 'manual')`,
-          idleStops: sql<number>`count(*) filter (where ${usageSession.stopSource} = 'idle')`,
-          quotaStops: sql<number>`count(*) filter (where ${usageSession.stopSource} = 'quota_exhausted')`,
-        })
-        .from(usageSession)
-        .where(sql`date(${usageSession.createdAt}) = ${input.date}`);
-
-      return {
-        date: input.date,
-        users: {
-          total: stats[0]?.totalUsers ?? 0,
-          totalMinutes: stats[0]?.totalMinutes ?? 0,
-        },
-        sessions: {
-          total: sessionStats[0]?.totalSessions ?? 0,
-          avgDuration: Math.round(Number(sessionStats[0]?.avgDuration) || 0),
-          manualStops: sessionStats[0]?.manualStops ?? 0,
-          idleStops: sessionStats[0]?.idleStops ?? 0,
-          quotaStops: sessionStats[0]?.quotaStops ?? 0,
-        },
-      };
-    }),
 
   // Fork repository (called from workspace)
   forkRepository: internalProcedure

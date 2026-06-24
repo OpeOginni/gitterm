@@ -75,6 +75,13 @@ const QUOTAS: QuotaRow[] = [
     pro: "15 max",
   },
   {
+    label: "Idle workspace retention",
+    icon: Clock,
+    free: "2 days",
+    starter: "7 days",
+    pro: "15 days",
+  },
+  {
     label: "Providers",
     icon: Globe,
     free: "E2B only",

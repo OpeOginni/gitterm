@@ -134,20 +134,21 @@ async function main() {
     }
 
     // ========================================================================
-    // 3. Terminate workspaces that have not been reached or used in 4 days
+    // 3. Terminate workspaces inactive beyond their plan's retention window
+    //    (free 2d / starter 7d / pro 15d; self-hosted never).
     // ========================================================================
     if (features.idleReaping) {
       console.log(
-        "[idle-reaper] Checking for workspaces that have not been reached or used in 4 days...",
+        "[idle-reaper] Checking for workspaces inactive beyond their plan's retention window...",
       );
       const workspaces = await internalClient.internal.getLongTermInactiveWorkspaces.query();
       if (workspaces.length === 0) {
         console.log(
-          "[idle-reaper] No workspaces found that have not been reached or used in 4 days",
+          "[idle-reaper] No workspaces found beyond their plan's retention window",
         );
       } else {
         console.log(
-          `[idle-reaper] Found ${workspaces.length} workspace(s) that have not been reached or used in 4 days`,
+          `[idle-reaper] Found ${workspaces.length} workspace(s) beyond their plan's retention window`,
         );
       }
       for (const ws of workspaces) {
