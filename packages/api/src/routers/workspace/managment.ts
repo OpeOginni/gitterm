@@ -1772,10 +1772,20 @@ export const workspaceRouter = router({
         // Get compute provider
         const computeProvider = await getProviderByCloudProviderId(providerKey);
 
-        // Plan-based persistence gating: free tier cannot create persistent
+        // Plan-based persistence gating: free tier cannot opt into persistent
         // (volume-backed) workspaces. Guard server-side even though the UI hides
         // the toggle. Self-hosted and paid plans are allowed.
-        if (input.persistent && !canCreatePersistentWorkspace(planForGating)) {
+        //
+        // Exception: when the provider is auto-persistent (e.g. E2B), persistence
+        // is inherent to the provider and cannot be disabled, so we allow it for
+        // every plan. We only block opt-in persistence on providers that don't
+        // force it on — otherwise free users couldn't use auto-persistent
+        // providers at all.
+        if (
+          input.persistent &&
+          !cloudProviderRecord.autoPersistent &&
+          !canCreatePersistentWorkspace(planForGating)
+        ) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message:
