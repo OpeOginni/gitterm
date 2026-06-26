@@ -24,6 +24,7 @@ import {
 } from "../ssh-access";
 import { createProvisionLogger } from "../provision-logger";
 import type { E2BConfig } from "./types";
+import { getWorkspaceIdleTimeoutMs } from "../../service/workspace-timeouts";
 
 export type { E2BConfig } from "./types";
 
@@ -136,9 +137,11 @@ export class E2BProvider implements ComputeProvider {
     onTimeout: "pause" | "kill",
     sshEnabled: boolean,
   ): Promise<E2BSandbox> {
+    const timeoutMs = await getWorkspaceIdleTimeoutMs(config.userId);
+
     return Sandbox.create(this.getTemplateId(config, sshEnabled), {
       apiKey: await this.getApiKey(),
-      timeoutMs: 10 * 60 * 1_000,
+      timeoutMs,
       network: {
         allowPublicTraffic: false,
       },
@@ -493,6 +496,12 @@ export class E2BProvider implements ComputeProvider {
       );
       return { status: "terminated" };
     }
+  }
+
+  async keepAliveWorkspace(externalId: string, timeoutMs: number): Promise<void> {
+    await Sandbox.setTimeout(externalId, timeoutMs, {
+      apiKey: await this.getApiKey(),
+    });
   }
 
   async createOrGetExposedPortDomain(

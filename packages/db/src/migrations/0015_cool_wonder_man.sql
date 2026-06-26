@@ -1,0 +1,1 @@
+ALTER TYPE "public"."session_stop_source" ADD VALUE 'provider_auto' BEFORE 'error';

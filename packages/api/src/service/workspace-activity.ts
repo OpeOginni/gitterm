@@ -1,5 +1,10 @@
 import { getRedisClient, RedisKeys } from "@gitterm/redis";
+import { db, eq, and } from "@gitterm/db";
+import { workspace } from "@gitterm/db/schema/workspace";
+import { cloudProvider } from "@gitterm/db/schema/cloud";
+import { getProviderByCloudProviderId } from "../providers";
 import { updateWorkspaceByIdAndInvalidate } from "./workspace-mutations";
+import { getWorkspaceIdleTimeoutMs } from "./workspace-timeouts";
 
 const LAST_ACTIVE_TTL_SECONDS = 7 * 24 * 60 * 60;
 const LAST_ACTIVE_DB_PERSIST_THROTTLE_SECONDS = 5 * 60;
@@ -7,6 +12,33 @@ const LAST_ACTIVE_DB_PERSIST_THROTTLE_SECONDS = 5 * 60;
 function logActivityCacheError(action: string, error: unknown) {
   if (process.env.DEBUG_PROXY_RESOLVE === "true") {
     console.warn(`[WORKSPACE-ACTIVITY] ${action} failed`, error);
+  }
+}
+
+async function keepProviderWorkspaceAlive(workspaceId: string): Promise<void> {
+  try {
+    const [ws] = await db
+      .select({
+        externalInstanceId: workspace.externalInstanceId,
+        userId: workspace.userId,
+        providerKey: cloudProvider.providerKey,
+      })
+      .from(workspace)
+      .innerJoin(cloudProvider, eq(workspace.cloudProviderId, cloudProvider.id))
+      .where(and(eq(workspace.id, workspaceId), eq(workspace.status, "running")))
+      .limit(1);
+
+    if (!ws) return;
+
+    const provider = await getProviderByCloudProviderId(ws.providerKey);
+    if (!provider.keepAliveWorkspace) return;
+
+    await provider.keepAliveWorkspace(
+      ws.externalInstanceId,
+      await getWorkspaceIdleTimeoutMs(ws.userId),
+    );
+  } catch (error) {
+    logActivityCacheError("provider keep-alive", error);
   }
 }
 
@@ -38,6 +70,7 @@ export async function recordWorkspaceActivity(
         lastActiveAt: now,
         updatedAt: now,
       });
+      await keepProviderWorkspaceAlive(workspaceId);
     }
   } catch (error) {
     logActivityCacheError("record", error);

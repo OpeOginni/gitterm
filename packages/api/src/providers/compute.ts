@@ -235,6 +235,11 @@ export interface ComputeProvider {
   getStatus(externalId: string): Promise<WorkspaceStatusResult>;
 
   /**
+   * Refresh provider-side TTL for providers that automatically stop workspaces.
+   */
+  keepAliveWorkspace?(externalId: string, timeoutMs: number): Promise<void>;
+
+  /**
    * Create or get a domain for an exposed port
    */
   createOrGetExposedPortDomain(

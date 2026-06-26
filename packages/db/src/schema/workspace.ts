@@ -30,6 +30,7 @@ export const sessionStopSourceEnum = pgEnum("session_stop_source", [
   "manual",
   "idle",
   "quota_exhausted",
+  "provider_auto",
   "error",
 ] as const);
 export const workspaceHostingTypeEnum = pgEnum("workspace_hosting_type", [

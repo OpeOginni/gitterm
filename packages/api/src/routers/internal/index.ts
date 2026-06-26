@@ -851,7 +851,10 @@ export const internalRouter = router({
 
         await Promise.all(
           updatedWorkspaces.map((updatedWorkspace) =>
-            deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            Promise.all([
+              closeUsageSession(updatedWorkspace.id, "provider_auto"),
+              deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            ]),
           ),
         );
         return { updated: updatedWorkspaces };
@@ -881,6 +884,15 @@ export const internalRouter = router({
             status: "terminated",
             updatedAt: new Date(input.timestamp),
           },
+        );
+
+        await Promise.all(
+          updatedWorkspaces.map((updatedWorkspace) =>
+            Promise.all([
+              closeUsageSession(updatedWorkspace.id, "provider_auto"),
+              deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            ]),
+          ),
         );
 
         return { updated: updatedWorkspaces };
@@ -992,7 +1004,10 @@ export const internalRouter = router({
 
         await Promise.all(
           updated.map((updatedWorkspace) =>
-            deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            Promise.all([
+              closeUsageSession(updatedWorkspace.id, "provider_auto"),
+              deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            ]),
           ),
         );
         return { updated };
@@ -1020,7 +1035,10 @@ export const internalRouter = router({
 
         await Promise.all(
           updated.map((updatedWorkspace) =>
-            deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            Promise.all([
+              closeUsageSession(updatedWorkspace.id, "provider_auto"),
+              deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            ]),
           ),
         );
         return { updated };
