@@ -21,7 +21,6 @@ import {
   X,
   Settings,
   Shield,
-  Repeat,
   Share2,
 } from "lucide-react";
 import { useState } from "react";
