@@ -16,6 +16,7 @@ import * as modelCredentialsSchema from "./schema/model-credentials";
 import * as syncSchema from "./schema/sync";
 import * as providerConfigSchema from "./schema/provider-config";
 import * as workspaceRouteAccessSchema from "./schema/workspace-route-access";
+import * as workspaceAccessSchema from "./schema/workspace-access";
 
 export const db = drizzle(process.env.DATABASE_URL || "", {
   schema: {
@@ -28,6 +29,7 @@ export const db = drizzle(process.env.DATABASE_URL || "", {
     ...syncSchema,
     ...providerConfigSchema,
     ...workspaceRouteAccessSchema,
+    ...workspaceAccessSchema,
   },
 });
 

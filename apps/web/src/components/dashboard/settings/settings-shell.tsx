@@ -3,14 +3,27 @@
 import { useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { DashboardShell, DashboardHeader } from "@/components/dashboard/shell";
-import { BarChart3, CreditCard, Shield, Wrench, type LucideIcon } from "lucide-react";
+import {
+  BarChart3,
+  CreditCard,
+  Shield,
+  UsersRound,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 
 import { UsageSection } from "./usage-section";
 import { WorkspaceSection } from "./workspace-section";
 import { AccountSection } from "./account-section";
 import { PrivacySection } from "./privacy-section";
+import { TeamsSection } from "./teams-section";
 
-type SettingsSection = "usage" | "workspace" | "account" | "privacy";
+type SettingsSection =
+  | "usage"
+  | "workspace"
+  | "teams"
+  | "account"
+  | "privacy";
 
 interface SidebarItem {
   id: SettingsSection;
@@ -33,6 +46,12 @@ const sidebarItems: SidebarItem[] = [
     description: "SSH, credentials, and config",
   },
   {
+    id: "teams",
+    label: "Teams",
+    icon: UsersRound,
+    description: "Collaborators and shared access",
+  },
+  {
     id: "account",
     label: "Account",
     icon: CreditCard,
@@ -46,12 +65,27 @@ const sidebarItems: SidebarItem[] = [
   },
 ];
 
-interface SettingsShellProps {
-  currentPlan: "free" | "starter" | "pro";
+const SECTION_IDS: SettingsSection[] = [
+  "usage",
+  "workspace",
+  "teams",
+  "account",
+  "privacy",
+];
+
+function isSettingsSection(value: string | undefined): value is SettingsSection {
+  return !!value && SECTION_IDS.includes(value as SettingsSection);
 }
 
-export function SettingsShell({ currentPlan }: SettingsShellProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection>("usage");
+interface SettingsShellProps {
+  currentPlan: "free" | "starter" | "pro";
+  initialSection?: string;
+}
+
+export function SettingsShell({ currentPlan, initialSection }: SettingsShellProps) {
+  const [activeSection, setActiveSection] = useState<SettingsSection>(
+    isSettingsSection(initialSection) ? initialSection : "usage",
+  );
 
   const handleSectionChange = useCallback((section: SettingsSection) => {
     setActiveSection(section);
@@ -66,7 +100,7 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
 
       <div>
         {/* Mobile tab bar */}
-        <div className="grid grid-cols-4 gap-1 border-b border-white/[0.06] pb-3 lg:hidden">
+        <div className="grid grid-cols-5 gap-1 border-b border-white/[0.06] pb-3 lg:hidden">
           {sidebarItems.map((item) => {
             const isActive = activeSection === item.id;
             return (
@@ -166,6 +200,7 @@ export function SettingsShell({ currentPlan }: SettingsShellProps) {
             <div className="space-y-6">
               {activeSection === "usage" && <UsageSection />}
               {activeSection === "workspace" && <WorkspaceSection />}
+              {activeSection === "teams" && <TeamsSection />}
               {activeSection === "account" && <AccountSection currentPlan={currentPlan} />}
               {activeSection === "privacy" && <PrivacySection />}
             </div>
