@@ -89,20 +89,12 @@ export function ShareWorkspaceDialog({
       queryKey: trpc.workspaceShare.list.queryKey({ workspaceId }),
     });
 
-  const copyLink = async (url: string) => {
-    await navigator.clipboard.writeText(url);
-    toast.success("Invite link copied to clipboard");
-  };
-
   const inviteUserMutation = useMutation(
     trpc.workspaceShare.inviteUser.mutationOptions({
       onSuccess: async (data) => {
         toast.success(`Invitation sent to ${data.invite.email}`);
         setEmail("");
         await invalidateShare();
-        if (data.inviteUrl) {
-          void copyLink(data.inviteUrl);
-        }
       },
       onError: (error) => toast.error(error.message),
     }),
@@ -177,9 +169,9 @@ export function ShareWorkspaceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-display">
+          <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-4 w-4 text-primary" />
             Share workspace
           </DialogTitle>

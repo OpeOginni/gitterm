@@ -23,6 +23,7 @@ export interface InviteEmailProps {
   /** The thing being shared: a workspace or team name. */
   subjectName: string;
   inviterName: string;
+  inviterEmail: string;
   /** Workspace-only: shown as a role pill. */
   role?: string;
   /** Workspace-only: repo chip with the GitHub mark. */
@@ -60,6 +61,7 @@ export function InviteEmail(props: InviteEmailProps) {
     eyebrow,
     subjectName,
     inviterName,
+    inviterEmail,
     role,
     repositoryUrl,
     blurb,
@@ -79,7 +81,7 @@ export function InviteEmail(props: InviteEmailProps) {
           className="font-sans"
           style={{ backgroundColor: EMAIL_CANVAS, margin: 0, padding: 0 }}
         >
-          <Container className="mx-auto w-full max-w-[500px] px-4 py-10">
+          <Container className="mx-auto w-full max-w-[560px] px-4 py-10">
             <Section className="overflow-hidden rounded-2xl border border-solid border-border bg-background">
               {/* Brand header */}
               <Section className="bg-popover px-8 py-5">
@@ -134,7 +136,8 @@ export function InviteEmail(props: InviteEmailProps) {
                       Invited by{" "}
                       <span className="font-semibold text-foreground">
                         {inviterName}
-                      </span>
+                      </span>{" "}
+                      <span className="text-faint">({inviterEmail})</span>
                     </Text>
                   </Column>
                 </Row>

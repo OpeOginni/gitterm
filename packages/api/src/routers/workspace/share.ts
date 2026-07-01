@@ -189,6 +189,7 @@ export const workspaceShareRouter = router({
       const acceptUrl = buildInviteUrl({ token, type: "workspace" });
       const emailContent = await renderWorkspaceInviteEmail({
         inviterName: ctx.session.user.name,
+        inviterEmail: ctx.session.user.email,
         workspaceName: ownerWorkspace.name ?? "a workspace",
         repositoryUrl: ownerWorkspace.repositoryUrl,
         role: input.role,
@@ -197,7 +198,7 @@ export const workspaceShareRouter = router({
       });
       await sendEmail({ to: email, ...emailContent });
 
-      return { success: true, invite, inviteUrl: acceptUrl };
+      return { success: true, invite };
     }),
 
   acceptWorkspaceInvite: protectedProcedure
@@ -289,9 +290,12 @@ export const workspaceShareRouter = router({
             status: workspaceShareTeamInvite.status,
             expiresAt: workspaceShareTeamInvite.expiresAt,
             teamName: workspaceShareTeam.name,
+            inviterName: user.name,
+            inviterEmail: user.email,
           })
           .from(workspaceShareTeamInvite)
           .innerJoin(workspaceShareTeam, eq(workspaceShareTeam.id, workspaceShareTeamInvite.teamId))
+          .innerJoin(user, eq(user.id, workspaceShareTeamInvite.inviterId))
           .where(eq(workspaceShareTeamInvite.tokenHash, tokenHash))
           .limit(1);
 
@@ -307,9 +311,12 @@ export const workspaceShareRouter = router({
           expiresAt: workspaceShareInvite.expiresAt,
           workspaceName: workspace.name,
           repositoryUrl: workspace.repositoryUrl,
+          inviterName: user.name,
+          inviterEmail: user.email,
         })
         .from(workspaceShareInvite)
         .innerJoin(workspace, eq(workspace.id, workspaceShareInvite.workspaceId))
+        .innerJoin(user, eq(user.id, workspaceShareInvite.inviterId))
         .where(eq(workspaceShareInvite.tokenHash, tokenHash))
         .limit(1);
 
@@ -326,6 +333,39 @@ export const workspaceShareRouter = router({
           and(
             eq(workspaceUserAccess.workspaceId, input.workspaceId),
             eq(workspaceUserAccess.userId, input.userId),
+          ),
+        );
+      return { success: true };
+    }),
+
+  leaveSharedWorkspace: protectedProcedure
+    .input(z.object({ workspaceId: z.uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      const [access] = await db
+        .select({ id: workspaceUserAccess.id })
+        .from(workspaceUserAccess)
+        .where(
+          and(
+            eq(workspaceUserAccess.workspaceId, input.workspaceId),
+            eq(workspaceUserAccess.userId, userId),
+          ),
+        )
+        .limit(1);
+
+      if (!access) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "You don't have direct access to this workspace",
+        });
+      }
+
+      await db
+        .delete(workspaceUserAccess)
+        .where(
+          and(
+            eq(workspaceUserAccess.workspaceId, input.workspaceId),
+            eq(workspaceUserAccess.userId, userId),
           ),
         );
       return { success: true };
@@ -379,6 +419,7 @@ export const workspaceShareRouter = router({
         name: workspaceShareTeam.name,
         creatorId: workspaceShareTeam.creatorId,
         createdAt: workspaceShareTeam.createdAt,
+        role: workspaceShareTeamMember.role,
       })
       .from(workspaceShareTeam)
       .innerJoin(workspaceShareTeamMember, eq(workspaceShareTeamMember.teamId, workspaceShareTeam.id))
@@ -484,13 +525,14 @@ export const workspaceShareRouter = router({
       const acceptUrl = buildInviteUrl({ token, type: "team" });
       const emailContent = await renderTeamInviteEmail({
         inviterName: ctx.session.user.name,
+        inviterEmail: ctx.session.user.email,
         teamName: team.name,
         acceptUrl,
         expiresAt: invite.expiresAt,
       });
       await sendEmail({ to: email, ...emailContent });
 
-      return { success: true, invite, inviteUrl: acceptUrl };
+      return { success: true, invite };
     }),
 
   acceptTeamInvite: protectedProcedure

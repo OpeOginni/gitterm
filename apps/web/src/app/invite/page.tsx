@@ -117,7 +117,7 @@ function InviteContent() {
     return (
       <Shell>
         <InviteCard eyebrow="Invitation">
-          <h1 className="font-display text-2xl text-white">Invalid link</h1>
+          <h1 className="text-2xl text-white">Invalid link</h1>
           <p className="mt-2 text-sm text-white/40">
             This invitation link is missing required information.
           </p>
@@ -142,7 +142,7 @@ function InviteContent() {
     return (
       <Shell>
         <InviteCard eyebrow="Invitation">
-          <h1 className="font-display text-2xl text-white">
+          <h1 className="text-2xl text-white">
             Invitation not found
           </h1>
           <p className="mt-2 text-sm text-white/40">
@@ -163,6 +163,10 @@ function InviteContent() {
   const repositoryUrl =
     "repositoryUrl" in invite ? invite.repositoryUrl : null;
   const teamName = "teamName" in invite ? invite.teamName : null;
+  const inviterName =
+    "inviterName" in invite ? invite.inviterName : null;
+  const inviterEmail =
+    "inviterEmail" in invite ? invite.inviterEmail : null;
 
   const accept = () => {
     if (isTeam) acceptTeam.mutate({ token });
@@ -180,7 +184,7 @@ function InviteContent() {
     return (
       <Shell>
         <InviteCard eyebrow={isTeam ? "Team invitation" : "Workspace invitation"}>
-          <h1 className="font-display text-2xl text-white">
+          <h1 className="text-2xl text-white">
             Invitation {invite.status}
           </h1>
           <p className="mt-2 text-sm text-white/40">
@@ -198,7 +202,7 @@ function InviteContent() {
     return (
       <Shell>
         <InviteCard eyebrow={isTeam ? "Team invitation" : "Workspace invitation"}>
-          <h1 className="font-display text-2xl text-white">
+          <h1 className="text-2xl text-white">
             Invitation expired
           </h1>
           <p className="mt-2 text-sm text-white/40">
@@ -227,7 +231,7 @@ function InviteContent() {
             )}
           </div>
           <div className="min-w-0">
-            <h1 className="truncate font-display text-xl text-white">
+            <h1 className="truncate text-xl text-white">
               {isTeam ? teamName : (workspaceName ?? "A workspace")}
             </h1>
             <p className="text-sm text-white/40">
@@ -237,6 +241,21 @@ function InviteContent() {
             </p>
           </div>
         </div>
+
+        {inviterEmail ? (
+          <p className="mb-5 text-sm text-white/50">
+            Invited by{" "}
+            <span className="font-medium text-white/85">
+              {inviterName ?? inviterEmail}
+            </span>
+            {inviterName ? (
+              <>
+                {" "}
+                <span className="text-white/35">({inviterEmail})</span>
+              </>
+            ) : null}
+          </p>
+        ) : null}
 
         {!isTeam && repositoryUrl ? (
           <div className="mb-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 font-mono text-xs text-white/50">

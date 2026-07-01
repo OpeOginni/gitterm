@@ -30,6 +30,7 @@ import {
   UsersRound,
   User,
   Shield,
+  LogOut,
 } from "lucide-react";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
@@ -208,6 +209,20 @@ export function InstanceCard({
     }),
   );
 
+  const leaveSharedMutation = useMutation(
+    trpc.workspaceShare.leaveSharedWorkspace.mutationOptions({
+      onSuccess: () => {
+        toast.success("You've left this workspace");
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspaceShare.listSharedWorkspaces.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
   const stopWorkspaceMutation = useMutation(
     trpc.workspace.stopWorkspace.mutationOptions({
       onSuccess: () => {
@@ -316,6 +331,14 @@ export function InstanceCard({
       .replace(".git", "");
     const branch = workspace.repositoryBranch;
     return branch ? `${name}:${branch}` : name;
+  };
+
+  const getRepoHref = () => {
+    if (!workspace.repositoryUrl) return null;
+    const base = workspace.repositoryUrl.replace(/\.git$/i, "");
+    if (!/^https?:\/\//i.test(base)) return null;
+    const branch = workspace.repositoryBranch;
+    return branch ? `${base}/tree/${encodeURIComponent(branch)}` : base;
   };
 
   const getRegionInfo = () => {
@@ -727,17 +750,32 @@ export function InstanceCard({
               </div>
               {getStatusBadge(workspace.status)}
             </div>
-            {getRepoName() && (
-              <div className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12">
-                <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                <span
-                  className="truncate font-mono"
-                  title={workspace.repositoryUrl || ""}
+            {getRepoName() &&
+              (getRepoHref() ? (
+                <a
+                  href={getRepoHref() as string}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Open ${workspace.repositoryUrl} on GitHub`}
+                  className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12 transition-colors hover:text-white/60"
                 >
-                  {getRepoName()}
-                </span>
-              </div>
-            )}
+                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate font-mono underline decoration-white/15 underline-offset-2 hover:decoration-white/40">
+                    {getRepoName()}
+                  </span>
+                </a>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12">
+                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                  <span
+                    className="truncate font-mono"
+                    title={workspace.repositoryUrl || ""}
+                  >
+                    {getRepoName()}
+                  </span>
+                </div>
+              ))}
           </div>
         </div>
         <div className="pb-4 px-5 flex-1">
@@ -1059,6 +1097,25 @@ export function InstanceCard({
               className="h-9 flex-1 text-xs border-border/50 opacity-70"
             >
               {isStopped ? "Workspace stopped" : "Workspace not running"}
+            </Button>
+          )}
+
+          {isShared && shared?.via.kind === "user" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
+              disabled={leaveSharedMutation.isPending}
+              onClick={() =>
+                leaveSharedMutation.mutate({ workspaceId: workspace.id })
+              }
+              aria-label="Leave shared workspace"
+            >
+              {leaveSharedMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
             </Button>
           )}
         </div>

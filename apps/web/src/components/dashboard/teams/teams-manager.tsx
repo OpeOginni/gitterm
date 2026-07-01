@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Crown,
   Loader2,
@@ -13,13 +15,23 @@ import {
   X,
 } from "lucide-react";
 import { trpc, queryClient } from "@/utils/trpc";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+type TeamFilter = "all" | "owned" | "joined";
+
+const TEAMS_PER_PAGE = 6;
+
 export function TeamsManager() {
   const [teamName, setTeamName] = useState("");
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<TeamFilter>("all");
+  const [page, setPage] = useState(0);
+
+  const { data: session } = authClient.useSession();
+  const currentUserId = session?.user?.id;
 
   const teamsQuery = useQuery(trpc.workspaceShare.listTeams.queryOptions());
 
@@ -41,6 +53,37 @@ export function TeamsManager() {
   );
 
   const teams = teamsQuery.data?.teams ?? [];
+
+  const ownedCount = useMemo(
+    () => teams.filter((t) => t.creatorId === currentUserId).length,
+    [teams, currentUserId],
+  );
+
+  const filteredTeams = useMemo(() => {
+    if (filter === "owned")
+      return teams.filter((t) => t.creatorId === currentUserId);
+    if (filter === "joined")
+      return teams.filter((t) => t.creatorId !== currentUserId);
+    return teams;
+  }, [teams, filter, currentUserId]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredTeams.length / TEAMS_PER_PAGE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pagedTeams = filteredTeams.slice(
+    safePage * TEAMS_PER_PAGE,
+    safePage * TEAMS_PER_PAGE + TEAMS_PER_PAGE,
+  );
+
+  const selectFilter = (next: TeamFilter) => {
+    setFilter(next);
+    setPage(0);
+  };
+
+  const filterCounts: Record<TeamFilter, number> = {
+    all: teams.length,
+    owned: ownedCount,
+    joined: teams.length - ownedCount,
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
@@ -83,15 +126,50 @@ export function TeamsManager() {
         </form>
 
         <div className="space-y-2">
+          {teams.length > 0 && (
+            <div className="flex items-center justify-between px-1 pb-1">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-white/40">
+                Teams
+              </span>
+              <div className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-wider">
+                {(["all", "owned", "joined"] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => selectFilter(key)}
+                    className={`transition-colors ${
+                      filter === key
+                        ? "text-primary"
+                        : "text-white/30 hover:text-white/60"
+                    }`}
+                  >
+                    {key}
+                    <span className="ml-1 text-white/25">
+                      {filterCounts[key]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {teamsQuery.isLoading ? (
             <div className="h-16 animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.02]" />
           ) : teams.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] px-4 py-8 text-center text-sm text-white/35">
               No teams yet. Create one to start grouping collaborators.
             </div>
+          ) : filteredTeams.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] px-4 py-8 text-center text-sm text-white/35">
+              {filter === "owned"
+                ? "You haven't created any teams yet."
+                : "You haven't joined any teams created by others."}
+            </div>
           ) : (
-            teams.map((team) => {
+            pagedTeams.map((team) => {
               const isActive = team.id === activeTeamId;
+              const isOwner = team.creatorId === currentUserId;
+              const isManager = !isOwner && team.role === "manager";
               return (
                 <button
                   key={team.id}
@@ -106,7 +184,7 @@ export function TeamsManager() {
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.04]">
                     <UsersRound className="h-4 w-4 text-white/60" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-white/85">
                       {team.name}
                     </p>
@@ -114,9 +192,45 @@ export function TeamsManager() {
                       Team
                     </p>
                   </div>
+                  {isOwner ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
+                      <Crown className="h-2.5 w-2.5" />
+                      Owner
+                    </span>
+                  ) : isManager ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.12] bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/55">
+                      Manager
+                    </span>
+                  ) : null}
                 </button>
               );
             })
+          )}
+
+          {pageCount > 1 && (
+            <div className="flex items-center justify-end gap-3 px-1 pt-1 font-mono text-[10px] uppercase tracking-wider text-white/40">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                aria-label="Previous page"
+                className="rounded-md p-1 transition-colors hover:text-white/70 disabled:opacity-30 disabled:hover:text-white/40"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <span>
+                {safePage + 1} / {pageCount}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                disabled={safePage === pageCount - 1}
+                aria-label="Next page"
+                className="rounded-md p-1 transition-colors hover:text-white/70 disabled:opacity-30 disabled:hover:text-white/40"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
         </div>
       </div>

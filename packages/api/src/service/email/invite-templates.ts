@@ -22,6 +22,7 @@ async function renderInviteEmail(
 
 interface WorkspaceInviteEmailInput {
   inviterName: string;
+  inviterEmail: string;
   workspaceName: string;
   repositoryUrl?: string | null;
   role: string;
@@ -31,15 +32,24 @@ interface WorkspaceInviteEmailInput {
 
 interface TeamInviteEmailInput {
   inviterName: string;
+  inviterEmail: string;
   teamName: string;
   acceptUrl: string;
   expiresAt: Date;
 }
 
+const PROD_WEB_URL = "https://gitterm.dev";
+
 function publicWebUrl(): string {
-  const base = env.CORS_ORIGIN || env.BASE_URL;
-  if (base) return base.replace(/\/$/, "");
-  return `https://${env.BASE_DOMAIN}`;
+  return (env.BASE_URL ?? "").replace(/\/$/, "");
+}
+
+function assetOrigin(): string {
+  const base = env.BASE_URL;
+  if (base && !base.includes("localhost") && !base.includes("127.0.0.1")) {
+    return base.replace(/\/$/, "");
+  }
+  return PROD_WEB_URL;
 }
 
 export function buildInviteUrl(params: {
@@ -61,11 +71,11 @@ function formatExpiry(expiresAt: Date): string {
 }
 
 function logoUrl(): string {
-  return `${publicWebUrl()}/favicon_io/apple-touch-icon.png`;
+  return `${assetOrigin()}/favicon_io/apple-touch-icon.png`;
 }
 
 function githubIconUrl(): string {
-  return `${publicWebUrl()}/github-mark-white.png`;
+  return `${assetOrigin()}/github-mark-white.png`;
 }
 
 export async function renderWorkspaceInviteEmail(
@@ -76,6 +86,7 @@ export async function renderWorkspaceInviteEmail(
     eyebrow: "Workspace invite",
     subjectName: input.workspaceName,
     inviterName: input.inviterName,
+    inviterEmail: input.inviterEmail,
     role: input.role,
     repositoryUrl: input.repositoryUrl,
     blurb: "Accept to open this workspace and start working in it.",
@@ -101,6 +112,7 @@ export async function renderTeamInviteEmail(
     eyebrow: "Team invite",
     subjectName: input.teamName,
     inviterName: input.inviterName,
+    inviterEmail: input.inviterEmail,
     blurb:
       "Joining gives you access to every workspace shared with this team. You only need to accept once.",
     ctaLabel: "Accept invite",
