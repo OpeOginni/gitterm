@@ -94,7 +94,7 @@ export function GitHubOnboarding() {
       <button
         onClick={handleDismiss}
         aria-label="Dismiss"
-        className="absolute right-3.5 top-3.5 z-10 flex h-7 w-7 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/70"
+        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/70"
       >
         <X className="h-3.5 w-3.5" />
       </button>

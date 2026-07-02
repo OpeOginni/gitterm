@@ -4,14 +4,17 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  ArrowRight,
   Clock,
   Link2,
   Loader2,
   Mail,
+  Sparkles,
   Trash2,
   UsersRound,
 } from "lucide-react";
 import { trpc, queryClient } from "@/utils/trpc";
+import { authClient, isBillingEnabled } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -67,6 +70,10 @@ export function ShareWorkspaceDialog({
 }) {
   const [email, setEmail] = useState("");
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
+
+  const { data: session } = authClient.useSession();
+  const plan = session?.user?.plan ?? "free";
+  const sharingLocked = isBillingEnabled && plan === "free";
 
   const shareQuery = useQuery({
     ...trpc.workspaceShare.list.queryOptions({ workspaceId }),
@@ -189,31 +196,35 @@ export function ShareWorkspaceDialog({
 
           {/* People */}
           <TabsContent value="people" className="space-y-5">
-            <form onSubmit={submitInvite} className="space-y-3">
-              <Label
-                htmlFor="invite-email"
-                className="font-mono text-[11px] uppercase tracking-wider text-white/40"
-              >
-                Invite by email
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="teammate@company.com"
-                  className="flex-1"
-                />
-                <Button type="submit" disabled={inviteUserMutation.isPending}>
-                  {inviteUserMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Invite"
-                  )}
-                </Button>
-              </div>
-            </form>
+            {sharingLocked ? (
+              <ShareUpgradeNotice message="Invite teammates to your workspaces by email." />
+            ) : (
+              <form onSubmit={submitInvite} className="space-y-3">
+                <Label
+                  htmlFor="invite-email"
+                  className="font-mono text-[11px] uppercase tracking-wider text-white/40"
+                >
+                  Invite by email
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="teammate@company.com"
+                    className="flex-1"
+                  />
+                  <Button type="submit" disabled={inviteUserMutation.isPending}>
+                    {inviteUserMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Invite"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )}
 
             <div className="space-y-2">
               {shareQuery.isLoading ? (
@@ -279,9 +290,11 @@ export function ShareWorkspaceDialog({
                     />
                   ))}
 
-                  {users.length === 0 && pendingInvites.length === 0 && (
-                    <EmptyState text="No collaborators yet. Invite someone by email." />
-                  )}
+                  {!sharingLocked &&
+                    users.length === 0 &&
+                    pendingInvites.length === 0 && (
+                      <EmptyState text="No collaborators yet. Invite someone by email." />
+                    )}
                 </>
               )}
             </div>
@@ -289,6 +302,9 @@ export function ShareWorkspaceDialog({
 
           {/* Teams */}
           <TabsContent value="teams" className="space-y-5">
+            {sharingLocked ? (
+              <ShareUpgradeNotice message="Grant whole teams access to your workspaces at once." />
+            ) : (
             <div className="space-y-3">
               <Label className="font-mono text-[11px] uppercase tracking-wider text-white/40">
                 Give a team access
@@ -340,12 +356,15 @@ export function ShareWorkspaceDialog({
                 </div>
               )}
             </div>
+            )}
 
             <div className="space-y-2">
               {shareQuery.isLoading ? (
                 <RowSkeleton />
               ) : teamsWithAccess.length === 0 ? (
-                <EmptyState text="No teams have access to this workspace." />
+                sharingLocked ? null : (
+                  <EmptyState text="No teams have access to this workspace." />
+                )
               ) : (
                 teamsWithAccess.map((team) => (
                   <Row
@@ -457,6 +476,26 @@ function RowSkeleton() {
           className="h-[58px] animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.02]"
         />
       ))}
+    </div>
+  );
+}
+
+function ShareUpgradeNotice({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-dashed border-primary/20 bg-primary/[0.03] px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 space-y-1">
+        <p className="text-sm font-medium text-white/85">
+          Upgrade to share workspaces
+        </p>
+        <p className="text-xs leading-relaxed text-white/45">{message}</p>
+      </div>
+      <a
+        href="/pricing"
+        className="group/cta inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110"
+      >
+        Upgrade plan
+        <ArrowRight className="h-4 w-4 transition-transform group-hover/cta:translate-x-0.5" />
+      </a>
     </div>
   );
 }

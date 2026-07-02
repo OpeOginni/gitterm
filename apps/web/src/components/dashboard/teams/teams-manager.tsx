@@ -12,11 +12,12 @@ import {
   LogOut,
   Mail,
   Plus,
+  Sparkles,
   UsersRound,
   X,
 } from "lucide-react";
 import { trpc, queryClient } from "@/utils/trpc";
-import { authClient } from "@/lib/auth-client";
+import { authClient, isBillingEnabled } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +35,10 @@ export function TeamsManager() {
 
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
+  // Creating/managing teams is a paid feature; joined members can still view
+  // and leave teams they already belong to.
+  const plan = session?.user?.plan ?? "free";
+  const sharingLocked = isBillingEnabled && plan === "free";
 
   const teamsQuery = useQuery(trpc.workspaceShare.listTeams.queryOptions());
 
@@ -91,41 +96,68 @@ export function TeamsManager() {
     <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
       {/* Left: create + list */}
       <div className="space-y-5">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const name = teamName.trim();
-            if (!name) {
-              toast.error("Enter a team name");
-              return;
-            }
-            createTeamMutation.mutate({ name });
-          }}
-          className="rounded-2xl border border-white/[0.06] bg-card p-5"
-        >
-          <Label
-            htmlFor="team-name"
-            className="font-mono text-[11px] uppercase tracking-wider text-white/40"
-          >
-            New team
-          </Label>
-          <div className="mt-3 flex gap-2">
-            <Input
-              id="team-name"
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              placeholder="e.g. Engineering"
-              maxLength={80}
-            />
-            <Button type="submit" disabled={createTeamMutation.isPending}>
-              {createTeamMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-            </Button>
+        {sharingLocked ? (
+          <div className="rounded-2xl border border-primary/20 bg-primary/[0.06] p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+                <Sparkles className="h-4 w-4 text-primary" />
+              </div>
+              <div className="min-w-0 space-y-2">
+                <p className="text-sm font-medium text-white/85">
+                  Teams are a paid feature
+                </p>
+                <p className="text-xs leading-relaxed text-white/50">
+                  Upgrade to Starter or Pro to create teams and grant whole
+                  groups access to your workspaces. You can still join and leave
+                  teams you&rsquo;ve been invited to.
+                </p>
+                <a
+                  href="/pricing"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Upgrade plan
+                </a>
+              </div>
+            </div>
           </div>
-        </form>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = teamName.trim();
+              if (!name) {
+                toast.error("Enter a team name");
+                return;
+              }
+              createTeamMutation.mutate({ name });
+            }}
+            className="rounded-2xl border border-white/[0.06] bg-card p-5"
+          >
+            <Label
+              htmlFor="team-name"
+              className="font-mono text-[11px] uppercase tracking-wider text-white/40"
+            >
+              New team
+            </Label>
+            <div className="mt-3 flex gap-2">
+              <Input
+                id="team-name"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="e.g. Engineering"
+                maxLength={80}
+              />
+              <Button type="submit" disabled={createTeamMutation.isPending}>
+                {createTeamMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </form>
+        )}
 
         <div className="space-y-2">
           {teams.length > 0 && (

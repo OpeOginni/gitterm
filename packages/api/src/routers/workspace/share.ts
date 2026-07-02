@@ -20,6 +20,7 @@ import {
 } from "../../service/email/invite-templates";
 import { sendEmail } from "../../service/email/mailer";
 import { decryptWorkspacePassword } from "../../utils/workspace-password";
+import { canShareWorkspaces, type UserPlan } from "../../config";
 
 const roleSchema = z.enum(["viewer", "editor", "admin"]);
 const INVITE_TTL_DAYS = 7;
@@ -27,6 +28,23 @@ const MAX_COLLABORATORS = 10;
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+/**
+ * Sharing (inviting collaborators, creating teams, granting team access) is a
+ * paid feature (Starter and Pro). Only the "granting" side is gated here -
+ * accepting an invite, listing/leaving shared workspaces, and revoking access
+ * are always allowed so free recipients keep working and downgraded owners can
+ * still clean up.
+ */
+function requireSharingEntitlement(plan: UserPlan | string | null | undefined) {
+  if (!canShareWorkspaces(plan ?? "free")) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        "Sharing workspaces requires a paid plan. Upgrade to Starter or Pro to invite collaborators and create teams.",
+    });
+  }
 }
 
 function createInviteToken() {
@@ -227,6 +245,7 @@ export const workspaceShareRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      requireSharingEntitlement(ctx.session.user.plan);
       const inviterId = ctx.session.user.id;
       const email = normalizeEmail(input.email);
       const ownerWorkspace = await requireOwnedWorkspace(input.workspaceId, inviterId);
@@ -551,6 +570,7 @@ export const workspaceShareRouter = router({
   createTeam: protectedProcedure
     .input(z.object({ name: z.string().trim().min(1).max(80) }))
     .mutation(async ({ input, ctx }) => {
+      requireSharingEntitlement(ctx.session.user.plan);
       const [team] = await db
         .insert(workspaceShareTeam)
         .values({ creatorId: ctx.session.user.id, name: input.name })
@@ -727,6 +747,7 @@ export const workspaceShareRouter = router({
   inviteTeamMember: protectedProcedure
     .input(z.object({ teamId: z.uuid(), email: z.email() }))
     .mutation(async ({ input, ctx }) => {
+      requireSharingEntitlement(ctx.session.user.plan);
       const team = await requireManagedTeam(input.teamId, ctx.session.user.id);
       const email = normalizeEmail(input.email);
       const [targetUser] = await db.select().from(user).where(eq(user.email, email)).limit(1);
@@ -887,6 +908,7 @@ export const workspaceShareRouter = router({
   addTeamToWorkspace: protectedProcedure
     .input(z.object({ workspaceId: z.uuid(), teamId: z.uuid(), role: roleSchema.default("viewer") }))
     .mutation(async ({ input, ctx }) => {
+      requireSharingEntitlement(ctx.session.user.plan);
       await requireOwnedWorkspace(input.workspaceId, ctx.session.user.id);
       await requireManagedTeam(input.teamId, ctx.session.user.id);
 
