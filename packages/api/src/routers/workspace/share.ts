@@ -278,6 +278,7 @@ export const workspaceShareRouter = router({
             eq(workspaceShareInvite.workspaceId, input.workspaceId),
             eq(workspaceShareInvite.email, email),
             eq(workspaceShareInvite.status, "pending"),
+            gt(workspaceShareInvite.expiresAt, new Date()),
           ),
         )) > 0;
 
@@ -362,6 +363,28 @@ export const workspaceShareRouter = router({
       }
 
       await db.transaction(async (tx) => {
+        const [acceptedInvite] = await tx
+          .update(workspaceShareInvite)
+          .set({
+            status: "accepted",
+            invitedUserId: ctx.session.user.id,
+            acceptedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(workspaceShareInvite.id, invite.id),
+              eq(workspaceShareInvite.tokenHash, tokenHash),
+              eq(workspaceShareInvite.status, "pending"),
+              gt(workspaceShareInvite.expiresAt, new Date()),
+            ),
+          )
+          .returning({ id: workspaceShareInvite.id });
+
+        if (!acceptedInvite) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Invite not found or expired" });
+        }
+
         await tx
           .insert(workspaceUserAccess)
           .values({
@@ -374,16 +397,6 @@ export const workspaceShareRouter = router({
             target: [workspaceUserAccess.workspaceId, workspaceUserAccess.userId],
             set: { role: invite.role, updatedAt: new Date() },
           });
-
-        await tx
-          .update(workspaceShareInvite)
-          .set({
-            status: "accepted",
-            invitedUserId: ctx.session.user.id,
-            acceptedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(workspaceShareInvite.id, invite.id));
       });
 
       return { success: true, workspaceId: invite.workspaceId };
@@ -840,14 +853,7 @@ export const workspaceShareRouter = router({
       );
 
       await db.transaction(async (tx) => {
-        await tx
-          .insert(workspaceShareTeamMember)
-          .values({ teamId: invite.teamId, userId: ctx.session.user.id })
-          .onConflictDoNothing({
-            target: [workspaceShareTeamMember.teamId, workspaceShareTeamMember.userId],
-          });
-
-        await tx
+        const [acceptedInvite] = await tx
           .update(workspaceShareTeamInvite)
           .set({
             status: "accepted",
@@ -855,7 +861,26 @@ export const workspaceShareRouter = router({
             acceptedAt: new Date(),
             updatedAt: new Date(),
           })
-          .where(eq(workspaceShareTeamInvite.id, invite.id));
+          .where(
+            and(
+              eq(workspaceShareTeamInvite.id, invite.id),
+              eq(workspaceShareTeamInvite.tokenHash, tokenHash),
+              eq(workspaceShareTeamInvite.status, "pending"),
+              gt(workspaceShareTeamInvite.expiresAt, new Date()),
+            ),
+          )
+          .returning({ id: workspaceShareTeamInvite.id });
+
+        if (!acceptedInvite) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Invite not found or expired" });
+        }
+
+        await tx
+          .insert(workspaceShareTeamMember)
+          .values({ teamId: invite.teamId, userId: ctx.session.user.id })
+          .onConflictDoNothing({
+            target: [workspaceShareTeamMember.teamId, workspaceShareTeamMember.userId],
+          });
       });
 
       return { success: true, teamId: invite.teamId };
