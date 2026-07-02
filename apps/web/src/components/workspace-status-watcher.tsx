@@ -4,7 +4,7 @@ import React, { createContext, useCallback, useContext, useMemo, useRef } from "
 import { listenerTrpc, queryClient, trpc } from "@/utils/trpc";
 import { toast } from "sonner";
 
-type WatchParams = { workspaceId: string; userId: string };
+type WatchParams = { workspaceId: string };
 
 type SubscriptionHandle = { unsubscribe: () => void };
 
@@ -26,7 +26,7 @@ export function WorkspaceStatusWatcherProvider({ children }: { children: React.R
     }
   }, []);
 
-  const watchWorkspaceStatus = useCallback(({ workspaceId, userId }: WatchParams) => {
+  const watchWorkspaceStatus = useCallback(({ workspaceId }: WatchParams) => {
     // Ensure only one active subscription per workspace.
     if (subsRef.current.has(workspaceId)) return;
 
@@ -34,7 +34,7 @@ export function WorkspaceStatusWatcherProvider({ children }: { children: React.R
     let lastStatus: string | null = null;
 
     const sub = listenerTrpc.workspace.status.subscribe(
-      { workspaceId, userId },
+      { workspaceId },
       {
         onData: (payload) => {
           const isInitialStatus = isInitialEvent;

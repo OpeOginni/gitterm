@@ -41,6 +41,7 @@ import {
 import type { DaytonaConfig } from "../../providers/daytona/types";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import { userCanAccessWorkspace } from "../workspace/share";
 import {
   updateWorkspaceByIdAndInvalidate,
   updateWorkspaceStatusAndInvalidate,
@@ -1077,7 +1078,8 @@ export const internalRouter = router({
         });
       }
 
-      if (ws.userId !== input.userId) {
+      const canAccess = await userCanAccessWorkspace(input.workspaceId, input.userId);
+      if (!canAccess) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "You are not authorized to access this workspace",

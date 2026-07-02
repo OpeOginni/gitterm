@@ -178,6 +178,16 @@ app.use(
     createContext: (_opts, context) => {
       return createContext({ context });
     },
+    onError: ({ path, type, error, req }) => {
+      const cause = error.cause ?? error;
+      console.error(
+        `[tRPC] ${type} "${path ?? "<unknown>"}" → ${error.code}: ${error.message}`,
+        "\n  cause:",
+        cause instanceof Error ? `${cause.name}: ${cause.message}\n${cause.stack}` : cause,
+        "\n  url:",
+        req.url,
+      );
+    },
   }),
 );
 

@@ -1,5 +1,5 @@
 import z from "zod";
-import { publicProcedure, router } from "../../index";
+import { protectedProcedure, router } from "../../index";
 import { TRPCError } from "@trpc/server";
 import { getInternalClient } from "../../client/internal";
 import {
@@ -10,22 +10,22 @@ import {
 import { on } from "node:events";
 
 export const workspaceEventsRouter = router({
-  status: publicProcedure
+  status: protectedProcedure
     .input(
       z.object({
         workspaceId: z.string(),
-        userId: z.string(),
       }),
     )
-    .subscription(async function* ({ input, signal }) {
+    .subscription(async function* ({ input, ctx, signal }) {
       // Validate workspace access via server's internal API
       const client = getInternalClient();
+      const userId = ctx.session.user.id;
 
       let initialState: WorkspaceStatusEvent;
       try {
         const response = await client.internal.validateWorkspaceAccess.query({
           workspaceId: input.workspaceId,
-          userId: input.userId,
+          userId,
         });
 
         // Convert string date back to Date object (tRPC JSON serialization)
@@ -68,7 +68,14 @@ export const workspaceEventsRouter = router({
 
       for await (const [payload] of iterable) {
         if (payload.workspaceId !== input.workspaceId) continue;
-        if (payload.userId !== input.userId) continue;
+        try {
+          await client.internal.validateWorkspaceAccess.query({
+            workspaceId: input.workspaceId,
+            userId,
+          });
+        } catch {
+          break;
+        }
         yield payload;
       }
     }),

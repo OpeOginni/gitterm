@@ -113,9 +113,9 @@ bun run dev
 bun run build
 bun run check-types
 bun run db:push
-bun run db:studio
+bun run db:studio:dev
 bun run db:generate
-bun run db:migrate
+bun run db:migrate:dev
 ```
 
 ## Links

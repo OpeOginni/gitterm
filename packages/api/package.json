@@ -98,6 +98,8 @@
     "@octokit/webhooks": "^14.2.0",
     "@opencode-ai/plugin": "^1.17.7",
     "@opencode-ai/sdk": "^1.17.7",
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.0.9",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
     "discord.js": "^14.25.1",
@@ -107,6 +109,10 @@
     "graphql": "^16.12.0",
     "hono": "catalog:",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.10.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "resend": "^4.8.0",
     "svix": "^1.95.2",
     "wrangler": "^4.100.0",
     "zod": "^4.3.6"
@@ -117,7 +123,10 @@
     "@graphql-codegen/typescript": "^5.0.5",
     "@graphql-codegen/typescript-generic-sdk": "^4.0.2",
     "@graphql-codegen/typescript-operations": "^5.0.5",
-    "@types/jsonwebtoken": "^9.0.7"
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/nodemailer": "^6.4.17",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
   },
   "peerDependencies": {
     "typescript": "^5"

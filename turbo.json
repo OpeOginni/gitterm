@@ -21,11 +21,19 @@
       "cache": false,
       "persistent": true
     },
-    "db:studio": {
+    "db:studio:dev": {
       "cache": false,
       "persistent": true
     },
-    "db:migrate": {
+    "db:studio:prod": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:migrate:dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:migrate:prod": {
       "cache": false,
       "persistent": true
     },

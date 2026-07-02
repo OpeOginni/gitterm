@@ -88,6 +88,11 @@ function resolveClientIp(context: HonoContext): string | null {
 }
 
 export async function createListenerContext({ context }: CreateContextOptions) {
+  const { auth } = await import("@gitterm/auth");
+  const session = await auth.api.getSession({
+    headers: context.req.raw.headers,
+  });
+
   const internalApiKey = context.req.raw.headers.get("x-internal-key");
   const authHeader = context.req.raw.headers.get("authorization");
   const bearerToken = authHeader?.startsWith("Bearer ")
@@ -125,7 +130,7 @@ export async function createListenerContext({ context }: CreateContextOptions) {
       : "";
 
   return {
-    session: null,
+    session,
     internalApiKey,
     bearerToken,
     githubEvent,

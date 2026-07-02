@@ -82,6 +82,38 @@ const baseSchema = z
     DISCORD_TOKEN: optional,
     DISCORD_DM_CHANNEL_ID: optional,
 
+    // Email — transactional mail. Optional: falls back to logging when no provider is configured.
+    // EMAIL_PROVIDER: "auto" (default) picks SMTP when SMTP_HOST is set, else Resend when
+    // RESEND_API_KEY is set, else logs. Set explicitly to "smtp" or "resend" to force one.
+    EMAIL_PROVIDER: z.enum(["auto", "smtp", "resend"]).default("auto"),
+    RESEND_API_KEY: optional,
+    EMAIL_FROM: z.string().default("GitTerm <no-reply@gitterm.dev>"),
+    EMAIL_REPLY_TO: optional,
+    // SMTP (nodemailer). SMTP_SECURE unset → auto by port (465 TLS, 587 STARTTLS).
+    SMTP_HOST: optional,
+    SMTP_PORT: z
+      .string()
+      .default("587")
+      .transform((val, ctx) => {
+        const port = parseInt(val, 10);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "SMTP_PORT must be an integer between 1 and 65535",
+          });
+          return z.NEVER;
+        }
+        return port;
+      }),
+    SMTP_SECURE: z
+      .string()
+      .optional()
+      .transform((val) =>
+        val === undefined ? undefined : ["true", "1", "yes"].includes(val.trim().toLowerCase()),
+      ),
+    SMTP_USER: optional,
+    SMTP_PASS: optional,
+
     // Feature flags (for self-hosted customization)
     ENABLE_QUOTA_ENFORCEMENT: boolWithDefault(false),
     ENABLE_IDLE_REAPING: boolWithDefault(true),
@@ -173,6 +205,20 @@ const baseSchema = z
       errors.push({
         path: "ADMIN_EMAIL",
         message: "Both ADMIN_EMAIL and ADMIN_PASSWORD must be set together (or neither)",
+      });
+    }
+
+    // Email provider: explicit selection requires matching credentials
+    if (data.EMAIL_PROVIDER === "smtp" && !data.SMTP_HOST) {
+      errors.push({
+        path: "SMTP_HOST",
+        message: "SMTP_HOST is required when EMAIL_PROVIDER is 'smtp'",
+      });
+    }
+    if (data.EMAIL_PROVIDER === "resend" && !data.RESEND_API_KEY) {
+      errors.push({
+        path: "RESEND_API_KEY",
+        message: "RESEND_API_KEY is required when EMAIL_PROVIDER is 'resend'",
       });
     }
 
