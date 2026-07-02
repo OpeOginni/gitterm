@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import z from "zod";
 import { protectedProcedure, publicProcedure, router } from "../../index";
-import { and, db, eq, inArray, ne, or } from "@gitterm/db";
+import { and, db, eq, gt, inArray, ne, or } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
 import { workspace } from "@gitterm/db/schema/workspace";
 import {
@@ -121,6 +121,51 @@ async function requireManagedTeam(teamId: string, userId: string) {
   return team;
 }
 
+async function getWorkspaceCollaboratorCount(workspaceId: string, extraUserIds: string[] = []) {
+  const now = new Date();
+  const [directRows, teamRows, pendingRows] = await Promise.all([
+    db
+      .select({ userId: workspaceUserAccess.userId })
+      .from(workspaceUserAccess)
+      .where(eq(workspaceUserAccess.workspaceId, workspaceId)),
+    db
+      .select({ userId: workspaceShareTeamMember.userId })
+      .from(workspaceTeamAccess)
+      .innerJoin(
+        workspaceShareTeamMember,
+        eq(workspaceShareTeamMember.teamId, workspaceTeamAccess.teamId),
+      )
+      .where(eq(workspaceTeamAccess.workspaceId, workspaceId)),
+    db
+      .select({ email: workspaceShareInvite.email })
+      .from(workspaceShareInvite)
+      .where(
+        and(
+          eq(workspaceShareInvite.workspaceId, workspaceId),
+          eq(workspaceShareInvite.status, "pending"),
+          gt(workspaceShareInvite.expiresAt, now),
+        ),
+      ),
+  ]);
+
+  return new Set([
+    ...directRows.map((row) => row.userId),
+    ...teamRows.map((row) => row.userId),
+    ...pendingRows.map((row) => `invite:${normalizeEmail(row.email)}`),
+    ...extraUserIds,
+  ]).size;
+}
+
+async function assertWorkspaceCollaboratorCapacity(workspaceId: string, extraUserIds: string[] = []) {
+  const count = await getWorkspaceCollaboratorCount(workspaceId, extraUserIds);
+  if (count > MAX_COLLABORATORS) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `This workspace has reached the limit of ${MAX_COLLABORATORS} collaborators`,
+    });
+  }
+}
+
 export const workspaceShareRouter = router({
   list: protectedProcedure
     .input(z.object({ workspaceId: z.uuid() }))
@@ -152,9 +197,22 @@ export const workspaceShareRouter = router({
           .innerJoin(workspaceShareTeam, eq(workspaceShareTeam.id, workspaceTeamAccess.teamId))
           .where(eq(workspaceTeamAccess.workspaceId, input.workspaceId)),
         db
-          .select()
+          .select({
+            id: workspaceShareInvite.id,
+            email: workspaceShareInvite.email,
+            role: workspaceShareInvite.role,
+            status: workspaceShareInvite.status,
+            expiresAt: workspaceShareInvite.expiresAt,
+            createdAt: workspaceShareInvite.createdAt,
+          })
           .from(workspaceShareInvite)
-          .where(eq(workspaceShareInvite.workspaceId, input.workspaceId)),
+          .where(
+            and(
+              eq(workspaceShareInvite.workspaceId, input.workspaceId),
+              eq(workspaceShareInvite.status, "pending"),
+              gt(workspaceShareInvite.expiresAt, new Date()),
+            ),
+          ),
       ]);
 
       return { success: true, users, teams, invites };
@@ -205,20 +263,8 @@ export const workspaceShareRouter = router({
         )) > 0;
 
       if (!alreadyInvolved) {
-        const [accessCount, pendingCount] = await Promise.all([
-          db.$count(
-            workspaceUserAccess,
-            eq(workspaceUserAccess.workspaceId, input.workspaceId),
-          ),
-          db.$count(
-            workspaceShareInvite,
-            and(
-              eq(workspaceShareInvite.workspaceId, input.workspaceId),
-              eq(workspaceShareInvite.status, "pending"),
-            ),
-          ),
-        ]);
-        if (accessCount + pendingCount >= MAX_COLLABORATORS) {
+        const collaboratorCount = await getWorkspaceCollaboratorCount(input.workspaceId);
+        if (collaboratorCount >= MAX_COLLABORATORS) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: `This workspace has reached the limit of ${MAX_COLLABORATORS} collaborators`,
@@ -227,6 +273,7 @@ export const workspaceShareRouter = router({
       }
 
       const { token, tokenHash } = createInviteToken();
+      const acceptUrl = buildInviteUrl({ token, type: "workspace" });
       const [invite] = await db
         .insert(workspaceShareInvite)
         .values({
@@ -261,7 +308,6 @@ export const workspaceShareRouter = router({
         });
       }
 
-      const acceptUrl = buildInviteUrl({ token, type: "workspace" });
       const emailContent = await renderWorkspaceInviteEmail({
         inviterName: ctx.session.user.name,
         inviterEmail: ctx.session.user.email,
@@ -581,6 +627,49 @@ export const workspaceShareRouter = router({
       return { success: true };
     }),
 
+  deleteTeam: protectedProcedure
+    .input(z.object({ teamId: z.uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const deleted = await db
+        .delete(workspaceShareTeam)
+        .where(
+          and(
+            eq(workspaceShareTeam.id, input.teamId),
+            eq(workspaceShareTeam.creatorId, ctx.session.user.id),
+          ),
+        )
+        .returning({ id: workspaceShareTeam.id });
+
+      if (deleted.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      }
+      return { success: true };
+    }),
+
+  removeTeamMember: protectedProcedure
+    .input(z.object({ teamId: z.uuid(), userId: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const team = await requireManagedTeam(input.teamId, ctx.session.user.id);
+      if (input.userId === team.creatorId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Team creator cannot be removed" });
+      }
+
+      const removed = await db
+        .delete(workspaceShareTeamMember)
+        .where(
+          and(
+            eq(workspaceShareTeamMember.teamId, input.teamId),
+            eq(workspaceShareTeamMember.userId, input.userId),
+          ),
+        )
+        .returning({ id: workspaceShareTeamMember.id });
+
+      if (removed.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Team member not found" });
+      }
+      return { success: true };
+    }),
+
   getTeam: protectedProcedure
     .input(z.object({ teamId: z.uuid() }))
     .query(async ({ input, ctx }) => {
@@ -642,6 +731,19 @@ export const workspaceShareRouter = router({
       const email = normalizeEmail(input.email);
       const [targetUser] = await db.select().from(user).where(eq(user.email, email)).limit(1);
       const { token, tokenHash } = createInviteToken();
+      const acceptUrl = buildInviteUrl({ token, type: "team" });
+
+      if (targetUser) {
+        const attachedWorkspaces = await db
+          .select({ workspaceId: workspaceTeamAccess.workspaceId })
+          .from(workspaceTeamAccess)
+          .where(eq(workspaceTeamAccess.teamId, input.teamId));
+        await Promise.all(
+          attachedWorkspaces.map((row) =>
+            assertWorkspaceCollaboratorCapacity(row.workspaceId, [targetUser.id]),
+          ),
+        );
+      }
 
       const [invite] = await db
         .insert(workspaceShareTeamInvite)
@@ -675,7 +777,6 @@ export const workspaceShareRouter = router({
         });
       }
 
-      const acceptUrl = buildInviteUrl({ token, type: "team" });
       const emailContent = await renderTeamInviteEmail({
         inviterName: ctx.session.user.name,
         inviterEmail: ctx.session.user.email,
@@ -706,6 +807,16 @@ export const workspaceShareRouter = router({
       if (normalizeEmail(invite.email) !== email) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Invite email does not match your account" });
       }
+
+      const attachedWorkspaces = await db
+        .select({ workspaceId: workspaceTeamAccess.workspaceId })
+        .from(workspaceTeamAccess)
+        .where(eq(workspaceTeamAccess.teamId, invite.teamId));
+      await Promise.all(
+        attachedWorkspaces.map((row) =>
+          assertWorkspaceCollaboratorCapacity(row.workspaceId, [ctx.session.user.id]),
+        ),
+      );
 
       await db.transaction(async (tx) => {
         await tx
@@ -778,6 +889,15 @@ export const workspaceShareRouter = router({
     .mutation(async ({ input, ctx }) => {
       await requireOwnedWorkspace(input.workspaceId, ctx.session.user.id);
       await requireManagedTeam(input.teamId, ctx.session.user.id);
+
+      const memberRows = await db
+        .select({ userId: workspaceShareTeamMember.userId })
+        .from(workspaceShareTeamMember)
+        .where(eq(workspaceShareTeamMember.teamId, input.teamId));
+      await assertWorkspaceCollaboratorCapacity(
+        input.workspaceId,
+        memberRows.map((row) => row.userId),
+      );
 
       const [access] = await db
         .insert(workspaceTeamAccess)

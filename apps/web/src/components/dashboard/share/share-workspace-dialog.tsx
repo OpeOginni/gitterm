@@ -44,7 +44,7 @@ function Avatar({ label }: { label: string }) {
   );
 }
 
-async function copyInviteLink(url: string | undefined) {
+export async function copyInviteLink(url: string | undefined) {
   if (!url) return;
   try {
     await navigator.clipboard.writeText(url);
@@ -149,7 +149,7 @@ export function ShareWorkspaceDialog({
     [teamsWithAccess],
   );
   const availableTeams = (teamsQuery.data?.teams ?? []).filter(
-    (t) => !accessTeamIds.has(t.id),
+    (t) => !accessTeamIds.has(t.id) && t.role === "manager",
   );
 
   const submitInvite = (e: React.FormEvent) => {

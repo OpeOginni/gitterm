@@ -2,6 +2,7 @@ import { createElement } from "react";
 import env from "@gitterm/env/server";
 import { render } from "@react-email/components";
 import { InviteEmail, type InviteEmailProps } from "./templates/invite-email";
+import { getBaseUrl } from "../../utils/routing";
 
 export interface RenderedEmail {
   subject: string;
@@ -41,7 +42,7 @@ interface TeamInviteEmailInput {
 const PROD_WEB_URL = "https://gitterm.dev";
 
 function publicWebUrl(): string {
-  return (env.BASE_URL ?? "").replace(/\/$/, "");
+  return getBaseUrl().replace(/\/$/, "");
 }
 
 function assetOrigin(): string {

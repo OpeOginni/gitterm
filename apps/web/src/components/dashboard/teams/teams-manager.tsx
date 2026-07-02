@@ -20,6 +20,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { copyInviteLink } from "../share/share-workspace-dialog";
 
 type TeamFilter = "all" | "owned" | "joined";
 
@@ -293,15 +294,35 @@ function TeamDetail({
     }),
   );
 
+  const deleteTeamMutation = useMutation(
+    trpc.workspaceShare.deleteTeam.mutationOptions({
+      onSuccess: async () => {
+        toast.success("Team deleted");
+        onLeave();
+        await queryClient.invalidateQueries({
+          queryKey: trpc.workspaceShare.listTeams.queryKey(),
+        });
+      },
+      onError: (error) => toast.error(error.message),
+    }),
+  );
+
+  const removeMemberMutation = useMutation(
+    trpc.workspaceShare.removeTeamMember.mutationOptions({
+      onSuccess: async () => {
+        toast.success("Member removed");
+        await invalidateTeam();
+      },
+      onError: (error) => toast.error(error.message),
+    }),
+  );
+
   const inviteMutation = useMutation(
     trpc.workspaceShare.inviteTeamMember.mutationOptions({
       onSuccess: async (data) => {
         toast.success(`Invitation sent to ${data.invite.email}`);
         setEmail("");
-        if (data.inviteUrl) {
-          await navigator.clipboard.writeText(data.inviteUrl);
-          toast.success("Invite link copied to clipboard");
-        }
+        await copyInviteLink(data.inviteUrl);
         await invalidateTeam();
       },
       onError: (error) => toast.error(error.message),
@@ -346,7 +367,24 @@ function TeamDetail({
             {invites.length > 0 ? ` · ${invites.length} pending` : ""}
           </p>
         </div>
-        {!isOwner && (
+        {isOwner ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-border/50 hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+            disabled={deleteTeamMutation.isPending}
+            onClick={() => deleteTeamMutation.mutate({ teamId })}
+          >
+            {deleteTeamMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <X className="h-3.5 w-3.5" />
+                Delete
+              </>
+            )}
+          </Button>
+        ) : (
           <Button
             variant="outline"
             size="sm"
@@ -423,12 +461,33 @@ function TeamDetail({
                 </p>
               </div>
             </div>
-            {member.role === "manager" && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
-                <Crown className="h-2.5 w-2.5" />
-                Manager
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {member.role === "manager" && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
+                  <Crown className="h-2.5 w-2.5" />
+                  Manager
+                </span>
+              )}
+              {data.isManager && member.userId !== data.team.creatorId && (
+                <button
+                  type="button"
+                  onClick={() => removeMemberMutation.mutate({ teamId, userId: member.userId })}
+                  disabled={
+                    removeMemberMutation.isPending &&
+                    removeMemberMutation.variables?.userId === member.userId
+                  }
+                  aria-label="Remove member"
+                  className="shrink-0 rounded-md p-1.5 text-white/40 transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
+                >
+                  {removeMemberMutation.isPending &&
+                  removeMemberMutation.variables?.userId === member.userId ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <X className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         ))}
 
