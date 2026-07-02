@@ -151,6 +151,13 @@ export interface PlanLimits {
   /** Whether the user can reserve custom cloud subdomains for branding. */
   customSubdomain: boolean;
   /**
+   * Whether the user can SHARE their own workspaces - i.e. invite collaborators,
+   * create teams, and grant team access. This gates the "granting" side only.
+   * Being invited to / accepting access to someone else's workspace is always
+   * free (see share router: accept/list/leave procedures are never gated).
+   */
+  sharing: boolean;
+  /**
    * Provider keys this plan may use. `null` means "all enabled providers".
    * Free is intentionally restricted to E2B only.
    */
@@ -166,6 +173,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     retentionDays: 2,
     persistence: false,
     customSubdomain: false,
+    sharing: false,
     allowedProviderKeys: ["e2b"],
   },
   starter: {
@@ -176,6 +184,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     retentionDays: 7,
     persistence: true,
     customSubdomain: true,
+    sharing: true,
     allowedProviderKeys: null,
   },
   pro: {
@@ -186,6 +195,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     retentionDays: 15,
     persistence: true,
     customSubdomain: true,
+    sharing: true,
     allowedProviderKeys: null,
   },
 };
@@ -277,6 +287,17 @@ export const canUseCustomCloudSubdomain = (plan: UserPlan | string): boolean => 
 export const canCreatePersistentWorkspace = (plan: UserPlan | string): boolean => {
   if (isSelfHosted()) return true;
   return getPlanLimits(plan).persistence;
+};
+
+/**
+ * Check whether a plan may SHARE its own workspaces (invite collaborators,
+ * create teams, grant team access). Available on all paid plans (Starter, Pro).
+ * Receiving/accepting access to a shared workspace is always allowed and is
+ * never routed through this guard. Self-hosted deployments can always share.
+ */
+export const canShareWorkspaces = (plan: UserPlan | string): boolean => {
+  if (isSelfHosted()) return true;
+  return getPlanLimits(plan).sharing;
 };
 
 /**

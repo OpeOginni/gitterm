@@ -11,9 +11,11 @@
   },
   "scripts": {
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio",
+    "db:studio:dev": "drizzle-kit studio",
+    "db:studio:prod": "drizzle-kit studio --config=drizzle.prod.config.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate:dev": "drizzle-kit migrate",
+    "db:migrate:prod": "drizzle-kit migrate --config=drizzle.prod.config.ts",
     "db:seed": "bun run ./src/seed-cli.ts"
   },
   "dependencies": {

@@ -19,6 +19,7 @@ import {
 import { recordWorkspaceActivity } from "../../service/workspace-activity";
 import { extractWorkspaceSubdomain } from "../../utils/routing";
 import { readAnonCookie, verifyAnonAccessToken } from "../../service/anon/anon-access-token";
+import { userCanAccessWorkspace } from "../workspace/share";
 
 const DEBUG_PROXY_RESOLVE = process.env.DEBUG_PROXY_RESOLVE === "true";
 
@@ -521,7 +522,8 @@ export const proxyResolverRouter = async (c: Context) => {
       return htmlError(c, "unavailable", 403);
     }
 
-    if (ws.userId !== session.user?.id) {
+    const canAccess = await userCanAccessWorkspace(ws.id, session.user.id);
+    if (!canAccess) {
       return htmlError(c, "unavailable", 403);
     }
 

@@ -68,7 +68,14 @@ export const workspaceEventsRouter = router({
 
       for await (const [payload] of iterable) {
         if (payload.workspaceId !== input.workspaceId) continue;
-        if (payload.userId !== input.userId) continue;
+        try {
+          await client.internal.validateWorkspaceAccess.query({
+            workspaceId: input.workspaceId,
+            userId: input.userId,
+          });
+        } catch {
+          break;
+        }
         yield payload;
       }
     }),

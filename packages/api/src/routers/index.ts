@@ -1,6 +1,7 @@
 import { protectedProcedure, publicProcedure, router } from "../index";
 import { workspaceRouter } from "./workspace/managment";
 import { workspaceOperationsRouter } from "./workspace/operations";
+import { workspaceShareRouter } from "./workspace/share";
 import { internalRouter } from "./internal";
 import { githubRouter } from "./github/github";
 import { proxyResolverRouter } from "./proxy";
@@ -32,6 +33,7 @@ export const appRouter = router({
   agentLoop: agentLoopRouter,
   modelCredentials: modelCredentialsRouter,
   workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
+  workspaceShare: workspaceShareRouter,
   anon: anonRouter,
 });
 export type AppRouter = typeof appRouter;

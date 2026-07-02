@@ -26,6 +26,11 @@ import {
   Plus,
   KeyRound,
   SquareArrowOutUpRight,
+  UserPlus,
+  UsersRound,
+  User,
+  Shield,
+  LogOut,
 } from "lucide-react";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
@@ -50,6 +55,7 @@ import {
   getWorkspaceOpenPortUrl,
 } from "@/lib/utils";
 import Link from "next/link";
+import { ShareWorkspaceDialog } from "@/components/dashboard/share/share-workspace-dialog";
 
 const ITEMS_PER_PAGE = 6;
 
@@ -162,14 +168,25 @@ type CloudProvider =
 type WorkspaceSSHAccess =
   (typeof trpc.workspace.getWorkspaceSSHAccess)["~types"]["output"]["access"];
 
-function InstanceCard({
+export type SharedAccess = {
+  role: string;
+  via: { kind: "user" } | { kind: "team"; teamName: string };
+  owner: { name: string; email: string } | null;
+};
+
+export function InstanceCard({
   workspace,
   providers,
+  shared,
 }: {
   workspace: Workspace;
   providers: CloudProvider[];
+  /** When set, renders a read-only card for a workspace shared with the user. */
+  shared?: SharedAccess;
 }) {
+  const isShared = !!shared;
   const [showConnectDialog, setShowConnectDialog] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const [showOpenPortDialog, setShowOpenPortDialog] = useState(false);
   const [openPortForm, setOpenPortForm] = useState({ name: "", port: "" });
   const [closingPort, setClosingPort] = useState<number | null>(null);
@@ -188,6 +205,20 @@ function InstanceCard({
       },
       onError: (error) => {
         toast.error(`Failed to terminate workspace: ${error.message}`);
+      },
+    }),
+  );
+
+  const leaveSharedMutation = useMutation(
+    trpc.workspaceShare.leaveSharedWorkspace.mutationOptions({
+      onSuccess: () => {
+        toast.success("You've left this workspace");
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspaceShare.listSharedWorkspaces.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
       },
     }),
   );
@@ -300,6 +331,14 @@ function InstanceCard({
       .replace(".git", "");
     const branch = workspace.repositoryBranch;
     return branch ? `${name}:${branch}` : name;
+  };
+
+  const getRepoHref = () => {
+    if (!workspace.repositoryUrl) return null;
+    const base = workspace.repositoryUrl.replace(/\.git$/i, "");
+    if (!/^https?:\/\//i.test(base)) return null;
+    const branch = workspace.repositoryBranch;
+    return branch ? `${base}/tree/${encodeURIComponent(branch)}` : base;
   };
 
   const getRegionInfo = () => {
@@ -571,6 +610,17 @@ function InstanceCard({
 
   return (
     <>
+      {!isShared && (
+        <ShareWorkspaceDialog
+          workspaceId={workspace.id}
+          workspaceName={
+            workspace.name || getRepoName() || "Untitled workspace"
+          }
+          open={showShareDialog}
+          onOpenChange={setShowShareDialog}
+        />
+      )}
+
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
         <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
@@ -700,21 +750,63 @@ function InstanceCard({
               </div>
               {getStatusBadge(workspace.status)}
             </div>
-            {getRepoName() && (
-              <div className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12">
-                <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                <span
-                  className="truncate font-mono"
-                  title={workspace.repositoryUrl || ""}
+            {getRepoName() &&
+              (getRepoHref() ? (
+                <a
+                  href={getRepoHref() as string}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Open ${workspace.repositoryUrl} on GitHub`}
+                  className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12 transition-colors hover:text-white/60"
                 >
-                  {getRepoName()}
-                </span>
-              </div>
-            )}
+                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate font-mono underline decoration-white/15 underline-offset-2 hover:decoration-white/40">
+                    {getRepoName()}
+                  </span>
+                </a>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12">
+                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                  <span
+                    className="truncate font-mono"
+                    title={workspace.repositoryUrl || ""}
+                  >
+                    {getRepoName()}
+                  </span>
+                </div>
+              ))}
           </div>
         </div>
         <div className="pb-4 px-5 flex-1">
           <div className="grid gap-2.5 text-xs text-white/35 pl-12">
+            {shared && (
+              <div className="flex items-center gap-2 min-w-0">
+                {shared.via.kind === "team" ? (
+                  <>
+                    <UsersRound className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+                    <span className="truncate text-primary/70">
+                      Via team {shared.via.teamName} · {shared.role}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+                    <span className="truncate text-primary/70">
+                      Shared directly with you · {shared.role}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+            {shared?.owner && (
+              <div className="flex items-center gap-2 min-w-0">
+                <User className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate" title={shared.owner.email}>
+                  Created by {shared.owner.name}
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <MapPin className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
@@ -793,9 +885,10 @@ function InstanceCard({
                 </span>
               </div>
             )}
-            {((workspace.exposedPorts &&
-              Object.keys(workspace.exposedPorts).length > 0) ||
-              isRunning) && (
+            {!isShared &&
+              ((workspace.exposedPorts &&
+                Object.keys(workspace.exposedPorts).length > 0) ||
+                isRunning) && (
               <div className="flex items-start gap-2 mt-0.5 min-w-0">
                 <EthernetPort className="h-3.5 w-3.5 shrink-0 mt-px" />
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -825,30 +918,32 @@ function InstanceCard({
                                   : "(Port)"}
                               </span>
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setClosingPort(portNum);
-                                closeWorkspacePortMutation.mutate({
-                                  workspaceId: workspace.id,
-                                  port: portNum,
-                                });
-                              }}
-                              disabled={isClosing}
-                              className="shrink-0 p-0.5 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
-                              aria-label={`Remove port ${port}`}
-                            >
-                              {isClosing ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <X className="h-3 w-3" />
-                              )}
-                            </button>
+                            {!isShared && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setClosingPort(portNum);
+                                  closeWorkspacePortMutation.mutate({
+                                    workspaceId: workspace.id,
+                                    port: portNum,
+                                  });
+                                }}
+                                disabled={isClosing}
+                                className="shrink-0 p-0.5 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
+                                aria-label={`Remove port ${port}`}
+                              >
+                                {isClosing ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <X className="h-3 w-3" />
+                                )}
+                              </button>
+                            )}
                           </div>
                         );
                       },
                     )}
-                  {isRunning && (
+                  {isRunning && !isShared && (
                     <button
                       type="button"
                       onClick={() => {
@@ -895,7 +990,7 @@ function InstanceCard({
                   <Copy className="h-3.5 w-3.5" />
                   Copy Attach
                 </Button>
-                {workspace.editorAccessEnabled && (
+                {!isShared && workspace.editorAccessEnabled && (
                   <Button
                     size="sm"
                     className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
@@ -928,7 +1023,7 @@ function InstanceCard({
                 </a>
               </Button>
             ))}
-          {isStopped && (
+          {!isShared && isStopped && (
             <Button
               size="sm"
               className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
@@ -946,7 +1041,7 @@ function InstanceCard({
             </Button>
           )}
 
-          {(isPending || isRunning) && (
+          {!isShared && (isPending || isRunning) && (
             <Button
               variant="outline"
               size="sm"
@@ -964,21 +1059,65 @@ function InstanceCard({
             </Button>
           )}
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
-            disabled={deleteServiceMutation.isPending}
-            onClick={() =>
-              deleteServiceMutation.mutate({ workspaceId: workspace.id })
-            }
-          >
-            {deleteServiceMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
-          </Button>
+          {!isShared && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-3 border-border/50 hover:text-primary hover:border-primary/30"
+              onClick={() => setShowShareDialog(true)}
+              aria-label="Share workspace"
+            >
+              <UserPlus className="h-4 w-4" />
+            </Button>
+          )}
+
+          {!isShared && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
+              disabled={deleteServiceMutation.isPending}
+              onClick={() =>
+                deleteServiceMutation.mutate({ workspaceId: workspace.id })
+              }
+            >
+              {deleteServiceMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+
+          {isShared && !(isRunning && workspaceUrl) && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled
+              className="h-9 flex-1 text-xs border-border/50 opacity-70"
+            >
+              {isStopped ? "Workspace stopped" : "Workspace not running"}
+            </Button>
+          )}
+
+          {isShared && shared?.via.kind === "user" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
+              disabled={leaveSharedMutation.isPending}
+              onClick={() =>
+                leaveSharedMutation.mutate({ workspaceId: workspace.id })
+              }
+              aria-label="Leave shared workspace"
+            >
+              {leaveSharedMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </>
