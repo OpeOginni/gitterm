@@ -8,7 +8,6 @@ import {
   Link2,
   Loader2,
   Mail,
-  Shield,
   Trash2,
   UsersRound,
 } from "lucide-react";
@@ -32,13 +31,9 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type ShareRole = "viewer" | "editor" | "admin";
-
-const ROLE_LABELS: Record<ShareRole, string> = {
-  viewer: "Viewer",
-  editor: "Editor",
-  admin: "Admin",
-};
+// Roles are stored server-side but not yet enforced, so every share is granted
+// as "viewer" and the role picker is intentionally hidden from the UI.
+const DEFAULT_SHARE_ROLE = "viewer" as const;
 
 function Avatar({ label }: { label: string }) {
   const initials = label.trim().slice(0, 2).toUpperCase() || "?";
@@ -49,13 +44,14 @@ function Avatar({ label }: { label: string }) {
   );
 }
 
-function RolePill({ role }: { role: string }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
-      <Shield className="h-2.5 w-2.5" />
-      {ROLE_LABELS[role as ShareRole] ?? role}
-    </span>
-  );
+async function copyInviteLink(url: string | undefined) {
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success("Invite link copied to clipboard");
+  } catch {
+    // Clipboard can be unavailable (insecure context); the email still carries the link.
+  }
 }
 
 export function ShareWorkspaceDialog({
@@ -70,9 +66,7 @@ export function ShareWorkspaceDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<ShareRole>("viewer");
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
-  const [teamRole, setTeamRole] = useState<ShareRole>("viewer");
 
   const shareQuery = useQuery({
     ...trpc.workspaceShare.list.queryOptions({ workspaceId }),
@@ -94,6 +88,7 @@ export function ShareWorkspaceDialog({
       onSuccess: async (data) => {
         toast.success(`Invitation sent to ${data.invite.email}`);
         setEmail("");
+        await copyInviteLink(data.inviteUrl);
         await invalidateShare();
       },
       onError: (error) => toast.error(error.message),
@@ -164,7 +159,7 @@ export function ShareWorkspaceDialog({
       toast.error("Enter a valid email address");
       return;
     }
-    inviteUserMutation.mutate({ workspaceId, email: trimmed, role });
+    inviteUserMutation.mutate({ workspaceId, email: trimmed, role: DEFAULT_SHARE_ROLE });
   };
 
   return (
@@ -210,19 +205,6 @@ export function ShareWorkspaceDialog({
                   placeholder="teammate@company.com"
                   className="flex-1"
                 />
-                <Select
-                  value={role}
-                  onValueChange={(v) => setRole(v as ShareRole)}
-                >
-                  <SelectTrigger className="w-[110px]" size="default">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                    <SelectItem value="editor">Editor</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
                 <Button type="submit" disabled={inviteUserMutation.isPending}>
                   {inviteUserMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -246,7 +228,6 @@ export function ShareWorkspaceDialog({
                       subtitle={member.email}
                       right={
                         <div className="flex items-center gap-2">
-                          <RolePill role={member.role} />
                           <RowAction
                             pending={
                               removeUserMutation.isPending &&
@@ -340,26 +321,13 @@ export function ShareWorkspaceDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select
-                    value={teamRole}
-                    onValueChange={(v) => setTeamRole(v as ShareRole)}
-                  >
-                    <SelectTrigger className="w-[110px]" size="default">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="viewer">Viewer</SelectItem>
-                      <SelectItem value="editor">Editor</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
                   <Button
                     disabled={!selectedTeamId || addTeamMutation.isPending}
                     onClick={() =>
                       addTeamMutation.mutate({
                         workspaceId,
                         teamId: selectedTeamId,
-                        role: teamRole,
+                        role: DEFAULT_SHARE_ROLE,
                       })
                     }
                   >
@@ -387,7 +355,6 @@ export function ShareWorkspaceDialog({
                     subtitle="Team"
                     right={
                       <div className="flex items-center gap-2">
-                        <RolePill role={team.role} />
                         <RowAction
                           pending={
                             removeTeamMutation.isPending &&

@@ -94,11 +94,23 @@ const baseSchema = z
     SMTP_PORT: z
       .string()
       .default("587")
-      .transform((val) => parseInt(val, 10)),
+      .transform((val, ctx) => {
+        const port = parseInt(val, 10);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "SMTP_PORT must be an integer between 1 and 65535",
+          });
+          return z.NEVER;
+        }
+        return port;
+      }),
     SMTP_SECURE: z
       .string()
       .optional()
-      .transform((val) => (val === undefined ? undefined : val === "true")),
+      .transform((val) =>
+        val === undefined ? undefined : ["true", "1", "yes"].includes(val.trim().toLowerCase()),
+      ),
     SMTP_USER: optional,
     SMTP_PASS: optional,
 

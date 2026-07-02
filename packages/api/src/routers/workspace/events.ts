@@ -67,8 +67,10 @@ export const workspaceEventsRouter = router({
       }) as AsyncIterableIterator<[WorkspaceStatusEvent]>;
 
       for await (const [payload] of iterable) {
+        // Access is authorized above via validateWorkspaceAccess; events are
+        // scoped by workspace so shared collaborators (not just the owner)
+        // receive status updates for workspaces shared with them.
         if (payload.workspaceId !== input.workspaceId) continue;
-        if (payload.userId !== input.userId) continue;
         yield payload;
       }
     }),

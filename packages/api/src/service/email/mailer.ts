@@ -75,14 +75,22 @@ export async function sendEmail(message: OutgoingEmail): Promise<void> {
   }
 
   if (provider === "smtp") {
-    const info = await getSmtpTransporter().sendMail({
-      from: env.EMAIL_FROM,
-      to: message.to,
-      replyTo: env.EMAIL_REPLY_TO ?? undefined,
-      subject: message.subject,
-      html: message.html,
-      text: message.text,
-    });
+    let info;
+    try {
+      info = await getSmtpTransporter().sendMail({
+        from: env.EMAIL_FROM,
+        to: message.to,
+        replyTo: env.EMAIL_REPLY_TO ?? undefined,
+        subject: message.subject,
+        html: message.html,
+        text: message.text,
+      });
+    } catch (error) {
+      // Log full details server-side only; surface a generic message so raw
+      // SMTP responses (host, auth user, server greeting) never reach clients.
+      console.error(`[email] SMTP delivery failed → ${message.to}:`, error);
+      throw new Error("Email delivery failed");
+    }
 
     if (info.rejected.length > 0) {
       console.error(

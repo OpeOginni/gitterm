@@ -23,6 +23,7 @@ import { decryptWorkspacePassword } from "../../utils/workspace-password";
 
 const roleSchema = z.enum(["viewer", "editor", "admin"]);
 const INVITE_TTL_DAYS = 7;
+const MAX_COLLABORATORS = 10;
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -39,6 +40,37 @@ function hashInviteToken(token: string) {
 
 function inviteExpiresAt() {
   return new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Sends an invite email without failing the mutation. The invite link is also
+ * returned to the caller (copy-to-clipboard), so delivery is best-effort and a
+ * provider outage must not orphan the already-persisted invite row.
+ */
+async function sendInviteEmailSafe(message: Parameters<typeof sendEmail>[0]) {
+  try {
+    await sendEmail(message);
+  } catch (error) {
+    console.error(`[share] Failed to send invite email to ${message.to}:`, error);
+  }
+}
+
+/**
+ * Strips inviter/workspace PII from an invite once it is no longer actionable
+ * (resolved or expired). `getInvite` is public, so only live invites expose
+ * details needed to render the accept screen.
+ */
+function redactResolvedInvite<
+  T extends { email: string; status: string; expiresAt: Date },
+>(invite: T | undefined): T | undefined {
+  if (!invite) return invite;
+  const expired = invite.expiresAt < new Date();
+  if (invite.status === "pending" && !expired) return invite;
+  return {
+    email: invite.email,
+    status: invite.status,
+    expiresAt: invite.expiresAt,
+  } as T;
 }
 
 async function requireOwnedWorkspace(workspaceId: string, userId: string) {
@@ -151,6 +183,49 @@ export const workspaceShareRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace owner already has access" });
       }
 
+      // Cap direct collaborators (accepted access + outstanding pending invites).
+      // Re-inviting an existing collaborator/invitee is always allowed.
+      const alreadyInvolved =
+        (targetUser
+          ? await db.$count(
+              workspaceUserAccess,
+              and(
+                eq(workspaceUserAccess.workspaceId, input.workspaceId),
+                eq(workspaceUserAccess.userId, targetUser.id),
+              ),
+            )
+          : 0) > 0 ||
+        (await db.$count(
+          workspaceShareInvite,
+          and(
+            eq(workspaceShareInvite.workspaceId, input.workspaceId),
+            eq(workspaceShareInvite.email, email),
+            eq(workspaceShareInvite.status, "pending"),
+          ),
+        )) > 0;
+
+      if (!alreadyInvolved) {
+        const [accessCount, pendingCount] = await Promise.all([
+          db.$count(
+            workspaceUserAccess,
+            eq(workspaceUserAccess.workspaceId, input.workspaceId),
+          ),
+          db.$count(
+            workspaceShareInvite,
+            and(
+              eq(workspaceShareInvite.workspaceId, input.workspaceId),
+              eq(workspaceShareInvite.status, "pending"),
+            ),
+          ),
+        ]);
+        if (accessCount + pendingCount >= MAX_COLLABORATORS) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `This workspace has reached the limit of ${MAX_COLLABORATORS} collaborators`,
+          });
+        }
+      }
+
       const { token, tokenHash } = createInviteToken();
       const [invite] = await db
         .insert(workspaceShareInvite)
@@ -196,9 +271,9 @@ export const workspaceShareRouter = router({
         acceptUrl,
         expiresAt: invite.expiresAt,
       });
-      await sendEmail({ to: email, ...emailContent });
+      await sendInviteEmailSafe({ to: email, ...emailContent });
 
-      return { success: true, invite };
+      return { success: true, invite, inviteUrl: acceptUrl };
     }),
 
   acceptWorkspaceInvite: protectedProcedure
@@ -299,7 +374,7 @@ export const workspaceShareRouter = router({
           .where(eq(workspaceShareTeamInvite.tokenHash, tokenHash))
           .limit(1);
 
-        return { success: true, invite };
+        return { success: true, invite: redactResolvedInvite(invite) };
       }
 
       const [invite] = await db
@@ -320,21 +395,60 @@ export const workspaceShareRouter = router({
         .where(eq(workspaceShareInvite.tokenHash, tokenHash))
         .limit(1);
 
-      return { success: true, invite };
+      return { success: true, invite: redactResolvedInvite(invite) };
     }),
 
   removeUser: protectedProcedure
     .input(z.object({ workspaceId: z.uuid(), userId: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       await requireOwnedWorkspace(input.workspaceId, ctx.session.user.id);
-      await db
+      const removed = await db
         .delete(workspaceUserAccess)
         .where(
           and(
             eq(workspaceUserAccess.workspaceId, input.workspaceId),
             eq(workspaceUserAccess.userId, input.userId),
           ),
-        );
+        )
+        .returning({ id: workspaceUserAccess.id });
+
+      if (removed.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "No direct access to remove. This user may have access via a team \u2014 remove the team instead.",
+        });
+      }
+      return { success: true };
+    }),
+
+  updateMemberRole: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.uuid(),
+        userId: z.string().min(1),
+        role: roleSchema,
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await requireOwnedWorkspace(input.workspaceId, ctx.session.user.id);
+      const updated = await db
+        .update(workspaceUserAccess)
+        .set({ role: input.role, updatedAt: new Date() })
+        .where(
+          and(
+            eq(workspaceUserAccess.workspaceId, input.workspaceId),
+            eq(workspaceUserAccess.userId, input.userId),
+          ),
+        )
+        .returning({ id: workspaceUserAccess.id });
+
+      if (updated.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This user does not have direct access to the workspace",
+        });
+      }
       return { success: true };
     }),
 
@@ -427,6 +541,45 @@ export const workspaceShareRouter = router({
 
     return { success: true, teams };
   }),
+
+  leaveTeam: protectedProcedure
+    .input(z.object({ teamId: z.uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      const [team] = await db
+        .select({ creatorId: workspaceShareTeam.creatorId })
+        .from(workspaceShareTeam)
+        .where(eq(workspaceShareTeam.id, input.teamId))
+        .limit(1);
+
+      if (!team) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      }
+      if (team.creatorId === userId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Team creators cannot leave their own team; delete the team instead",
+        });
+      }
+
+      const removed = await db
+        .delete(workspaceShareTeamMember)
+        .where(
+          and(
+            eq(workspaceShareTeamMember.teamId, input.teamId),
+            eq(workspaceShareTeamMember.userId, userId),
+          ),
+        )
+        .returning({ id: workspaceShareTeamMember.id });
+
+      if (removed.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "You are not a member of this team",
+        });
+      }
+      return { success: true };
+    }),
 
   getTeam: protectedProcedure
     .input(z.object({ teamId: z.uuid() }))
@@ -530,9 +683,9 @@ export const workspaceShareRouter = router({
         acceptUrl,
         expiresAt: invite.expiresAt,
       });
-      await sendEmail({ to: email, ...emailContent });
+      await sendInviteEmailSafe({ to: email, ...emailContent });
 
-      return { success: true, invite };
+      return { success: true, invite, inviteUrl: acceptUrl };
     }),
 
   acceptTeamInvite: protectedProcedure

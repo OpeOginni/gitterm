@@ -9,6 +9,7 @@ import {
   Clock,
   Crown,
   Loader2,
+  LogOut,
   Mail,
   Plus,
   UsersRound,
@@ -238,7 +239,14 @@ export function TeamsManager() {
       {/* Right: detail */}
       <div>
         {activeTeamId ? (
-          <TeamDetail teamId={activeTeamId} />
+          <TeamDetail
+            teamId={activeTeamId}
+            isOwner={
+              teams.find((t) => t.id === activeTeamId)?.creatorId ===
+              currentUserId
+            }
+            onLeave={() => setActiveTeamId(null)}
+          />
         ) : (
           <div className="flex h-full min-h-[280px] items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.01] p-8 text-center">
             <p className="max-w-xs text-sm text-white/35">
@@ -252,7 +260,15 @@ export function TeamsManager() {
   );
 }
 
-function TeamDetail({ teamId }: { teamId: string }) {
+function TeamDetail({
+  teamId,
+  isOwner,
+  onLeave,
+}: {
+  teamId: string;
+  isOwner: boolean;
+  onLeave: () => void;
+}) {
   const [email, setEmail] = useState("");
 
   const teamQuery = useQuery(
@@ -263,6 +279,19 @@ function TeamDetail({ teamId }: { teamId: string }) {
     queryClient.invalidateQueries({
       queryKey: trpc.workspaceShare.getTeam.queryKey({ teamId }),
     });
+
+  const leaveTeamMutation = useMutation(
+    trpc.workspaceShare.leaveTeam.mutationOptions({
+      onSuccess: async () => {
+        toast.success("You left the team");
+        onLeave();
+        await queryClient.invalidateQueries({
+          queryKey: trpc.workspaceShare.listTeams.queryKey(),
+        });
+      },
+      onError: (error) => toast.error(error.message),
+    }),
+  );
 
   const inviteMutation = useMutation(
     trpc.workspaceShare.inviteTeamMember.mutationOptions({
@@ -309,12 +338,32 @@ function TeamDetail({ teamId }: { teamId: string }) {
 
   return (
     <div className="space-y-6 rounded-2xl border border-white/[0.06] bg-card p-6">
-      <div className="border-b border-white/[0.06] pb-5">
-        <h2 className="font-display text-xl text-white">{data.team.name}</h2>
-        <p className="mt-1 text-sm text-white/40">
-          {members.length} member{members.length === 1 ? "" : "s"}
-          {invites.length > 0 ? ` · ${invites.length} pending` : ""}
-        </p>
+      <div className="flex items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+        <div>
+          <h2 className="font-display text-xl text-white">{data.team.name}</h2>
+          <p className="mt-1 text-sm text-white/40">
+            {members.length} member{members.length === 1 ? "" : "s"}
+            {invites.length > 0 ? ` · ${invites.length} pending` : ""}
+          </p>
+        </div>
+        {!isOwner && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-border/50 hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+            disabled={leaveTeamMutation.isPending}
+            onClick={() => leaveTeamMutation.mutate({ teamId })}
+          >
+            {leaveTeamMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <LogOut className="h-3.5 w-3.5" />
+                Leave
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       {data.isManager && (
