@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -12,7 +13,6 @@ import {
   LogOut,
   Mail,
   Plus,
-  Sparkles,
   UsersRound,
   X,
 } from "lucide-react";
@@ -97,29 +97,23 @@ export function TeamsManager() {
       {/* Left: create + list */}
       <div className="space-y-5">
         {sharingLocked ? (
-          <div className="rounded-2xl border border-primary/20 bg-primary/[0.06] p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
-                <Sparkles className="h-4 w-4 text-primary" />
-              </div>
-              <div className="min-w-0 space-y-2">
-                <p className="text-sm font-medium text-white/85">
-                  Teams are a paid feature
-                </p>
-                <p className="text-xs leading-relaxed text-white/50">
-                  Upgrade to Starter or Pro to create teams and grant whole
-                  groups access to your workspaces. You can still join and leave
-                  teams you&rsquo;ve been invited to.
-                </p>
-                <a
-                  href="/pricing"
-                  className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Upgrade plan
-                </a>
-              </div>
+          <div className="flex flex-col gap-4 rounded-xl border border-dashed border-primary/20 bg-primary/[0.03] px-5 py-5">
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium text-white/85">
+                Upgrade to create teams
+              </p>
+              <p className="text-xs leading-relaxed text-white/45">
+                Group collaborators and grant whole teams access at once. You can
+                still join and leave teams you&rsquo;ve been invited to.
+              </p>
             </div>
+            <a
+              href="/pricing"
+              className="group/cta inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110"
+            >
+              Upgrade plan
+              <ArrowRight className="h-4 w-4 transition-transform group-hover/cta:translate-x-0.5" />
+            </a>
           </div>
         ) : (
           <form
