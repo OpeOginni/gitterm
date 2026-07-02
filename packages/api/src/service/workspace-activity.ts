@@ -2,9 +2,11 @@ import { getRedisClient, RedisKeys } from "@gitterm/redis";
 import { db, eq, and } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
+import { user } from "@gitterm/db/schema/auth";
 import { getProviderByCloudProviderId } from "../providers";
 import { updateWorkspaceByIdAndInvalidate } from "./workspace-mutations";
 import { getWorkspaceIdleTimeoutMs } from "./workspace-timeouts";
+import { isAnonEmail } from "./anon/anon-user";
 
 const LAST_ACTIVE_TTL_SECONDS = 7 * 24 * 60 * 60;
 const LAST_ACTIVE_DB_PERSIST_THROTTLE_SECONDS = 5 * 60;
@@ -22,13 +24,21 @@ async function keepProviderWorkspaceAlive(workspaceId: string): Promise<void> {
         externalInstanceId: workspace.externalInstanceId,
         userId: workspace.userId,
         providerKey: cloudProvider.providerKey,
+        email: user.email,
       })
       .from(workspace)
       .innerJoin(cloudProvider, eq(workspace.cloudProviderId, cloudProvider.id))
+      .leftJoin(user, eq(workspace.userId, user.id))
       .where(and(eq(workspace.id, workspaceId), eq(workspace.status, "running")))
       .limit(1);
 
     if (!ws) return;
+
+    // Anon "try gitterm" sandboxes run with a hard E2B kill-on-timeout lease
+    // (see `providers/e2b/index.ts` → `createEphemeralAnonWorkspace`). Extending
+    // their timeout on every interaction would defeat the 10-minute cap, so we
+    // skip the provider keep-alive for them entirely.
+    if (isAnonEmail(ws.email)) return;
 
     const provider = await getProviderByCloudProviderId(ws.providerKey);
     if (!provider.keepAliveWorkspace) return;

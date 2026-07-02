@@ -26,7 +26,17 @@ export interface AnonUser {
   ipHash: string;
 }
 
-const ANON_EMAIL_DOMAIN = "anon.gitterm.local";
+export const ANON_EMAIL_DOMAIN = "anon.gitterm.local";
+
+/**
+ * Returns true if the given email belongs to a synthetic anon user created
+ * by the "try gitterm" homepage flow. Used to gate keep-alive / idle logic
+ * so anon sandboxes honour their hard E2B timeout instead of being kept
+ * alive by proxy interactions.
+ */
+export function isAnonEmail(email: string | null | undefined): boolean {
+  return !!email && email.endsWith(`@${ANON_EMAIL_DOMAIN}`);
+}
 
 /**
  * Hash a raw client IP with a server-side salt. Returns 32 hex chars.
