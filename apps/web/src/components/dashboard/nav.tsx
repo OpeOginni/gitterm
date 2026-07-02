@@ -21,7 +21,7 @@ import {
   X,
   Settings,
   Shield,
-  Repeat,
+  Share2,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ type UserPlan = "free" | "starter" | "pro";
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
   // { href: "/dashboard/loops", label: "Agent Loops", icon: Repeat },
+  { href: "/dashboard/shared", label: "Shared", icon: Share2 },
   { href: "/dashboard/integrations", label: "Integrations", icon: Link2 },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
@@ -50,7 +51,10 @@ export function DashboardNav() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
+          <Link
+            href="/"
+            className="flex items-center gap-2.5 transition-opacity hover:opacity-70"
+          >
             <Terminal className="h-5 w-5 text-primary" />
             <span className="font-mono text-sm font-bold uppercase tracking-wider text-white/90">
               GitTerm
@@ -98,7 +102,11 @@ export function DashboardNav() {
                     <span className="max-w-[100px] truncate font-mono text-xs">
                       {session?.user?.name}
                     </span>
-                    <PlanBadge plan={((session?.user as any)?.plan as UserPlan) || "free"} />
+                    <PlanBadge
+                      plan={
+                        ((session?.user as any)?.plan as UserPlan) || "free"
+                      }
+                    />
                     <ChevronDown className="h-3 w-3 text-white/30" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -139,7 +147,11 @@ export function DashboardNav() {
               className="text-white/50 hover:bg-white/[0.04] hover:text-white/80 md:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
             </Button>
           </div>
         </div>
@@ -182,7 +194,9 @@ export function DashboardNav() {
                 </Link>
               )}
               <button
-                onClick={() => authClient.signOut().then(() => router.push("/"))}
+                onClick={() =>
+                  authClient.signOut().then(() => router.push("/"))
+                }
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-400/70 transition-colors hover:bg-red-500/10"
               >
                 <LogOut className="h-4 w-4" />

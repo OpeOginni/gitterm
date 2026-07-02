@@ -3,14 +3,19 @@ import { inferAdditionalFields } from "better-auth/client/plugins";
 import { polarClient } from "@polar-sh/better-auth/client";
 import env from "@gitterm/env/web";
 
-// Define the additional fields type inline to avoid importing @gitterm/auth
-// which has server-side database dependencies
-type AuthAdditionalFields = {
-  user: {
-    plan: "free" | "starter" | "pro";
-    role: "user" | "admin";
-  };
-};
+// Mirror the server's `user.additionalFields` (packages/auth/src/index.ts) so
+// the client infers them on `session.user`. We use the runtime-config form of
+// `inferAdditionalFields` (not the `<typeof auth>` generic) to avoid importing
+// @gitterm/auth, which carries server-side database dependencies. The enum
+// `type` arrays produce literal unions (e.g. `"free" | "starter" | "pro"`),
+// matching the server config exactly.
+const additionalFields = () =>
+  inferAdditionalFields({
+    user: {
+      plan: { type: ["free", "starter", "pro"], input: false },
+      role: { type: ["user", "admin"], input: false },
+    },
+  });
 
 const isBillingEnabled = env.NEXT_PUBLIC_ENABLE_BILLING;
 const authBaseUrl =
@@ -24,7 +29,7 @@ const authBaseUrl =
 const createStandardAuthClient = () =>
   createAuthClient({
     baseURL: authBaseUrl,
-    plugins: [inferAdditionalFields<AuthAdditionalFields>()],
+    plugins: [additionalFields()],
   });
 
 /**
@@ -40,11 +45,22 @@ const createStandardAuthClient = () =>
 const createBillingAuthClient = () =>
   createAuthClient({
     baseURL: authBaseUrl,
-    plugins: [inferAdditionalFields<AuthAdditionalFields>(), polarClient()],
+    plugins: [additionalFields(), polarClient()],
   });
 
+// Both factories register `inferAdditionalFields<AuthAdditionalFields>()`, so
+// either client resolves `session.user.plan`/`role`. We pin the export to a
+// single concrete client type (instead of a `A | B` union of the two
+// factories) so TypeScript can actually infer the additional fields on
+// `useSession()`/`getSession()` - a union collapses them back to the base
+// better-auth `User`. Polar-only methods are accessed via `(authClient as any)`
+// below, so narrowing the public type to the standard client loses nothing.
+type AppAuthClient = ReturnType<typeof createStandardAuthClient>;
+
 // Export the appropriate client based on billing status
-export const authClient = isBillingEnabled ? createBillingAuthClient() : createStandardAuthClient();
+export const authClient: AppAuthClient = (
+  isBillingEnabled ? createBillingAuthClient() : createStandardAuthClient()
+) as unknown as AppAuthClient;
 
 // ============================================================================
 // Polar Billing Helpers (only work when billing is enabled)

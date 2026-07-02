@@ -40,7 +40,7 @@ bun turbo infra:up
 
 ```bash
 # Migrate schema to database
-bun run db:migrate
+bun run db:migrate:dev
 ```
 
 ### 5. Run Development Servers

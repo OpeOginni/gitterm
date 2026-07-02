@@ -42,7 +42,6 @@ export function CreateInstanceDialog() {
         case "workspace":
           watchWorkspaceStatus({
             workspaceId: result.workspaceId,
-            userId: result.userId,
           });
           setOpen(false);
           break;

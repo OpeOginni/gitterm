@@ -50,6 +50,7 @@ const PLAN_TIERS: PlanTier[] = [
       "2 existing workspaces",
       "E2B sandbox provider only",
       "Idle workspaces kept 2 days",
+      "Collaborate on workspaces shared with you",
       "Bring-your-own API keys",
     ],
     actionLabel: "Get Started",
@@ -68,6 +69,7 @@ const PLAN_TIERS: PlanTier[] = [
       "Persistent workspaces",
       "Idle workspaces kept 7 days",
       "Custom subdomains for branding",
+      "Share workspaces & create teams",
       "Bring-your-own API keys",
     ],
     popular: true,
@@ -86,6 +88,7 @@ const PLAN_TIERS: PlanTier[] = [
       "Persistent workspaces",
       "Idle workspaces kept 15 days",
       "Custom subdomains for branding",
+      "Share workspaces & create teams",
       "Priority provisioning & support",
       "Bring-your-own API keys",
     ],
@@ -160,6 +163,20 @@ const COMPARISON_ROWS: Array<{
   },
   {
     label: "Custom subdomains",
+    free: false,
+    starter: true,
+    pro: true,
+    selfHosted: true,
+  },
+  {
+    label: "Join workspaces shared with you",
+    free: true,
+    starter: true,
+    pro: true,
+    selfHosted: true,
+  },
+  {
+    label: "Share workspaces & teams",
     free: false,
     starter: true,
     pro: true,
@@ -355,7 +372,7 @@ function PricingPageContent() {
     return null;
   }
 
-  const currentPlan = ((session?.user as any)?.plan as UserPlan) || "free";
+  const currentPlan: UserPlan = session?.user?.plan ?? "free";
 
   const handleUpgrade = async (slug: CheckoutPlanSlug) => {
     if (!isBillingEnabled) {

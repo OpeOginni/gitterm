@@ -3,7 +3,7 @@ set -e
 
 echo "[entrypoint] Running migrations..."
 cd /app/packages/db
-bun run db:migrate
+bun run db:migrate:prod
 
 echo "[entrypoint] Running seed..."
 bun run db:seed
