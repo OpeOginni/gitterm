@@ -1,0 +1,38 @@
+{
+  "name": "@gitterm/sdk",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/index.d.ts"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node --format esm --external @trpc/client && cp src/index.d.ts dist/index.d.ts",
+    "prepublishOnly": "bun run check-types && bun run build",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@trpc/client": "^11.8.1"
+  },
+  "devDependencies": {
+    "@gitterm/api": "workspace:*",
+    "@gitterm/config": "workspace:*",
+    "@trpc/server": "catalog:",
+    "@types/bun": "^1.2.6",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
