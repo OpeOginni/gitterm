@@ -35,7 +35,7 @@ export function SshKeySection() {
 
   return (
     <SettingsSection
-      eyebrow="03 / Editor access"
+      eyebrow="04 / Editor access"
       icon={KeyRound}
       title="SSH public key"
       description="Used for editor SSH on Railway and E2B workspaces. Daytona keeps using its native short-lived SSH token flow."

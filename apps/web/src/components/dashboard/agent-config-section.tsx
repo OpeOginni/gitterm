@@ -435,7 +435,7 @@ export function AgentConfigSection() {
   return (
     <>
       <SettingsSection
-        eyebrow="02 / Agents"
+        eyebrow="03 / Agents"
         icon={Settings}
         title="Agent configurations"
         description="Save named opencode.json presets and apply them when creating new workspaces."

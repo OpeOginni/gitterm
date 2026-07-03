@@ -7,7 +7,13 @@ import { Clock, FolderGit2, GitBranch, History, Infinity as InfinityIcon } from 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
+import {
+  SettingsEmptyState,
+  SettingsRow,
+  SettingsRowList,
+  SettingsSection,
+  SettingsSectionBody,
+} from "@/components/ui/form-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/utils/trpc";
 
@@ -216,26 +222,18 @@ function WorkspaceList({
   muted?: boolean;
 }) {
   if (workspaces.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl bg-input/40 px-6 py-10 text-center">
-        <FolderGit2 className="mb-3 h-8 w-8 text-white/25" />
-        <p className="text-sm text-white/65">{emptyMessage}</p>
-      </div>
-    );
+    return <SettingsEmptyState icon={FolderGit2} title={emptyMessage} />;
   }
 
   return (
-    <div className={muted ? "space-y-2 opacity-60 transition-opacity" : "space-y-2"}>
+    <SettingsRowList className={muted ? "opacity-60 transition-opacity" : undefined}>
       {workspaces.map((ws) => {
         const repoLabel = ws.repositoryUrl
           ? ws.repositoryUrl.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/i, "")
           : null;
 
         return (
-          <div
-            key={ws.id}
-            className="flex items-center justify-between gap-3 rounded-lg bg-input/60 px-4 py-3 transition-colors hover:bg-input"
-          >
+          <SettingsRow key={ws.id}>
             <div className="space-y-1.5 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-medium truncate">{ws.name ?? ws.subdomain}</p>
@@ -259,7 +257,7 @@ function WorkspaceList({
                 </div>
               )}
             </div>
-            <div className="text-right text-xs text-muted-foreground space-y-1 shrink-0 pl-4">
+            <div className="text-right text-xs text-muted-foreground space-y-1 shrink-0 sm:pl-4">
               <div className="flex items-center gap-1.5 justify-end">
                 <Clock className="h-3 w-3" />
                 <span>
@@ -270,10 +268,10 @@ function WorkspaceList({
                 <p>Stopped {formatDistanceToNow(new Date(ws.stoppedAt), { addSuffix: true })}</p>
               )}
             </div>
-          </div>
+          </SettingsRow>
         );
       })}
-    </div>
+    </SettingsRowList>
   );
 }
 
