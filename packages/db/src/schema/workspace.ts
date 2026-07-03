@@ -60,12 +60,9 @@ export const workspace = pgTable("workspace", {
   id: uuid("id").primaryKey().defaultRandom(),
   externalInstanceId: text("external_instance_id").notNull(),
   externalRunningDeploymentId: text("external_running_deployment_id"),
-  gitIntegrationId: uuid("git_integration_id").references(
-    () => gitIntegration.id,
-    {
-      onDelete: "set null",
-    },
-  ),
+  gitIntegrationId: uuid("git_integration_id").references(() => gitIntegration.id, {
+    onDelete: "set null",
+  }),
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
@@ -86,21 +83,13 @@ export const workspace = pgTable("workspace", {
   status: workspaceStatusEnum("status").notNull(),
   persistent: boolean("persistent").notNull().default(false),
   serverOnly: boolean("server_only").notNull().default(false),
-  workspaceProfile: workspaceProfileEnum("workspace_profile")
-    .notNull()
-    .default("standard"),
-  editorAccessEnabled: boolean("editor_access_enabled")
-    .notNull()
-    .default(false),
+  workspaceProfile: workspaceProfileEnum("workspace_profile").notNull().default("standard"),
+  editorAccessEnabled: boolean("editor_access_enabled").notNull().default(false),
   editorTarget: workspaceEditorTargetEnum("editor_target"),
-  sshConnection: jsonb(
-    "editor_connection",
-  ).$type<WorkspaceSSHConnection | null>(),
+  sshConnection: jsonb("editor_connection").$type<WorkspaceSSHConnection | null>(),
 
   // Workspace hosting configuration
-  hostingType: workspaceHostingTypeEnum("hosting_type")
-    .notNull()
-    .default("cloud"),
+  hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"),
   name: text("name"), // Display name for the workspace
   reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
   exposedPorts: jsonb("exposed_ports").$type<
@@ -180,21 +169,18 @@ export const agentWorkspaceConfig = pgTable("workspace_config", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const workspaceEnvironmentVariables = pgTable(
-  "workspace_environment_variables",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    agentTypeId: uuid("agent_type_id")
-      .notNull()
-      .references(() => agentType.id, { onDelete: "cascade" }),
-    environmentVariables: jsonb("environment_variables").notNull(),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  },
-);
+export const workspaceEnvironmentVariables = pgTable("workspace_environment_variables", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  agentTypeId: uuid("agent_type_id")
+    .notNull()
+    .references(() => agentType.id, { onDelete: "cascade" }),
+  environmentVariables: jsonb("environment_variables").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 export const workspaceRelations = relations(workspace, ({ one, many }) => ({
   region: one(region, {
@@ -241,14 +227,11 @@ export const volumeRelations = relations(volume, ({ one }) => ({
 export type NewWorkspace = typeof workspace.$inferInsert;
 export type Workspace = typeof workspace.$inferSelect;
 export type NewAgentWorkspaceConfig = typeof agentWorkspaceConfig.$inferInsert;
-export type NewWorkspaceEnvironmentVariables =
-  typeof workspaceEnvironmentVariables.$inferInsert;
+export type NewWorkspaceEnvironmentVariables = typeof workspaceEnvironmentVariables.$inferInsert;
 export type AgentWorkspaceConfig = typeof agentWorkspaceConfig.$inferSelect;
-export type WorkspaceEnvironmentVariables =
-  typeof workspaceEnvironmentVariables.$inferSelect;
+export type WorkspaceEnvironmentVariables = typeof workspaceEnvironmentVariables.$inferSelect;
 export type NewUsageSession = typeof usageSession.$inferInsert;
 export type UsageSession = typeof usageSession.$inferSelect;
 export type NewDailyUsage = typeof dailyUsage.$inferInsert;
 export type DailyUsage = typeof dailyUsage.$inferSelect;
-export type SessionStopSource =
-  (typeof sessionStopSourceEnum.enumValues)[number];
+export type SessionStopSource = (typeof sessionStopSourceEnum.enumValues)[number];

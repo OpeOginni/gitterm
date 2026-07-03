@@ -138,68 +138,68 @@ function WorkspaceHistory() {
             <Skeleton className="h-16 w-full bg-white/[0.04]" />
           </div>
         ) : (
-        <Tabs defaultValue="active" className="w-full">
-          <TabsList className={historyTabsListClassName}>
-            <TabsTrigger value="active" className={historyTabsTriggerClassName}>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
-                  Active
-                </span>
-                <span className="rounded-full border border-border/70 bg-background/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors group-data-[state=active]:border-foreground/15 group-data-[state=active]:text-foreground/80">
-                  {activeData?.pagination.total ?? activeWorkspaces.length}
-                </span>
-              </div>
-            </TabsTrigger>
-            <TabsTrigger value="terminated" className={historyTabsTriggerClassName}>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
-                  Terminated
-                </span>
-              </div>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="active" className="mt-4">
-            <WorkspaceList
-              workspaces={activeWorkspaces as any[]}
-              emptyMessage="No active workspaces"
-            />
-          </TabsContent>
-
-          <TabsContent value="terminated" className="mt-4 space-y-3">
-            <WorkspaceList
-              workspaces={terminatedWorkspaces as any[]}
-              emptyMessage="No terminated workspaces"
-              muted={isFetchingTerminated}
-            />
-
-            {terminatedTotal > TERMINATED_PAGE_SIZE && (
-              <div className="flex items-center justify-between pt-1">
-                <p className="text-xs text-muted-foreground">
-                  Page {terminatedPage + 1} of {Math.ceil(terminatedTotal / TERMINATED_PAGE_SIZE)}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={terminatedPage === 0 || isFetchingTerminated}
-                    onClick={() => setTerminatedPage((p) => Math.max(0, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!terminatedHasMore || isFetchingTerminated}
-                    onClick={() => setTerminatedPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
+          <Tabs defaultValue="active" className="w-full">
+            <TabsList className={historyTabsListClassName}>
+              <TabsTrigger value="active" className={historyTabsTriggerClassName}>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
+                    Active
+                  </span>
+                  <span className="rounded-full border border-border/70 bg-background/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors group-data-[state=active]:border-foreground/15 group-data-[state=active]:text-foreground/80">
+                    {activeData?.pagination.total ?? activeWorkspaces.length}
+                  </span>
                 </div>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+              </TabsTrigger>
+              <TabsTrigger value="terminated" className={historyTabsTriggerClassName}>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
+                    Terminated
+                  </span>
+                </div>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="active" className="mt-4">
+              <WorkspaceList
+                workspaces={activeWorkspaces as any[]}
+                emptyMessage="No active workspaces"
+              />
+            </TabsContent>
+
+            <TabsContent value="terminated" className="mt-4 space-y-3">
+              <WorkspaceList
+                workspaces={terminatedWorkspaces as any[]}
+                emptyMessage="No terminated workspaces"
+                muted={isFetchingTerminated}
+              />
+
+              {terminatedTotal > TERMINATED_PAGE_SIZE && (
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-xs text-muted-foreground">
+                    Page {terminatedPage + 1} of {Math.ceil(terminatedTotal / TERMINATED_PAGE_SIZE)}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={terminatedPage === 0 || isFetchingTerminated}
+                      onClick={() => setTerminatedPage((p) => Math.max(0, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!terminatedHasMore || isFetchingTerminated}
+                      onClick={() => setTerminatedPage((p) => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
       </SettingsSectionBody>
     </SettingsSection>

@@ -136,7 +136,7 @@ export default function ProvidersPage() {
         return;
       }
     }
-  }, [session?.user, isSessionPending]);
+  }, [session?.user, isSessionPending, router]);
 
   const [newProviderName, setNewProviderName] = useState("");
   const [newProviderKey, setNewProviderKey] = useState("");

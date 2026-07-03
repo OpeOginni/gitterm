@@ -8,10 +8,10 @@ E2B is configured from the GitTerm admin panel and the [E2B dashboard](https://e
 
 Open the admin panel and set these values:
 
-| Field            | Required | Notes                                  |
-| ---------------- | -------- | -------------------------------------- |
-| `API Key`        | Yes      | E2B API key                            |
-| `Webhook Secret` | Yes      | Shared secret for webhook signatures   |
+| Field            | Required | Notes                                |
+| ---------------- | -------- | ------------------------------------ |
+| `API Key`        | Yes      | E2B API key                          |
+| `Webhook Secret` | Yes      | Shared secret for webhook signatures |
 
 ## Webhook
 

@@ -3,16 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  ArrowRight,
-  Clock,
-  Link2,
-  Loader2,
-  Mail,
-  Sparkles,
-  Trash2,
-  UsersRound,
-} from "lucide-react";
+import { ArrowRight, Clock, Link2, Loader2, Mail, Trash2, UsersRound } from "lucide-react";
 import { trpc, queryClient } from "@/utils/trpc";
 import { authClient, isBillingEnabled } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -146,8 +137,7 @@ export function ShareWorkspaceDialog({
   const users = shareQuery.data?.users ?? [];
   const teamsWithAccess = shareQuery.data?.teams ?? [];
   const pendingInvites = useMemo(
-    () =>
-      (shareQuery.data?.invites ?? []).filter((i) => i.status === "pending"),
+    () => (shareQuery.data?.invites ?? []).filter((i) => i.status === "pending"),
     [shareQuery.data?.invites],
   );
 
@@ -242,8 +232,7 @@ export function ShareWorkspaceDialog({
                           <RowAction
                             pending={
                               removeUserMutation.isPending &&
-                              removeUserMutation.variables?.userId ===
-                                member.userId
+                              removeUserMutation.variables?.userId === member.userId
                             }
                             onClick={() =>
                               removeUserMutation.mutate({
@@ -274,8 +263,7 @@ export function ShareWorkspaceDialog({
                           <RowAction
                             pending={
                               cancelInviteMutation.isPending &&
-                              cancelInviteMutation.variables?.inviteId ===
-                                invite.id
+                              cancelInviteMutation.variables?.inviteId === invite.id
                             }
                             onClick={() =>
                               cancelInviteMutation.mutate({
@@ -290,11 +278,9 @@ export function ShareWorkspaceDialog({
                     />
                   ))}
 
-                  {!sharingLocked &&
-                    users.length === 0 &&
-                    pendingInvites.length === 0 && (
-                      <EmptyState text="No collaborators yet. Invite someone by email." />
-                    )}
+                  {!sharingLocked && users.length === 0 && pendingInvites.length === 0 && (
+                    <EmptyState text="No collaborators yet. Invite someone by email." />
+                  )}
                 </>
               )}
             </div>
@@ -305,57 +291,54 @@ export function ShareWorkspaceDialog({
             {sharingLocked ? (
               <ShareUpgradeNotice message="Grant whole teams access to your workspaces at once." />
             ) : (
-            <div className="space-y-3">
-              <Label className="font-mono text-[11px] uppercase tracking-wider text-white/40">
-                Give a team access
-              </Label>
-              {availableTeams.length === 0 ? (
-                <p className="text-sm text-white/40">
-                  No teams available.{" "}
-                  <a
-                    href="/dashboard/settings?section=teams"
-                    className="text-primary underline-offset-2 hover:underline"
-                  >
-                    Create a team
-                  </a>{" "}
-                  to share with a group.
-                </p>
-              ) : (
-                <div className="flex gap-2">
-                  <Select
-                    value={selectedTeamId}
-                    onValueChange={setSelectedTeamId}
-                  >
-                    <SelectTrigger className="flex-1" size="default">
-                      <SelectValue placeholder="Select a team" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableTeams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          {team.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    disabled={!selectedTeamId || addTeamMutation.isPending}
-                    onClick={() =>
-                      addTeamMutation.mutate({
-                        workspaceId,
-                        teamId: selectedTeamId,
-                        role: DEFAULT_SHARE_ROLE,
-                      })
-                    }
-                  >
-                    {addTeamMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Add"
-                    )}
-                  </Button>
-                </div>
-              )}
-            </div>
+              <div className="space-y-3">
+                <Label className="font-mono text-[11px] uppercase tracking-wider text-white/40">
+                  Give a team access
+                </Label>
+                {availableTeams.length === 0 ? (
+                  <p className="text-sm text-white/40">
+                    No teams available.{" "}
+                    <a
+                      href="/dashboard/settings?section=teams"
+                      className="text-primary underline-offset-2 hover:underline"
+                    >
+                      Create a team
+                    </a>{" "}
+                    to share with a group.
+                  </p>
+                ) : (
+                  <div className="flex gap-2">
+                    <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                      <SelectTrigger className="flex-1" size="default">
+                        <SelectValue placeholder="Select a team" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableTeams.map((team) => (
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      disabled={!selectedTeamId || addTeamMutation.isPending}
+                      onClick={() =>
+                        addTeamMutation.mutate({
+                          workspaceId,
+                          teamId: selectedTeamId,
+                          role: DEFAULT_SHARE_ROLE,
+                        })
+                      }
+                    >
+                      {addTeamMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Add"
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="space-y-2">
@@ -426,14 +409,8 @@ function Row({
           <Avatar label={avatar ?? title} />
         )}
         <div className="min-w-0">
-          <p
-            className={`truncate text-sm ${muted ? "text-white/60" : "text-white/85"}`}
-          >
-            {title}
-          </p>
-          {subtitle ? (
-            <p className="truncate text-xs text-white/35">{subtitle}</p>
-          ) : null}
+          <p className={`truncate text-sm ${muted ? "text-white/60" : "text-white/85"}`}>{title}</p>
+          {subtitle ? <p className="truncate text-xs text-white/35">{subtitle}</p> : null}
         </div>
       </div>
       {right}
@@ -484,9 +461,7 @@ function ShareUpgradeNotice({ message }: { message: string }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-dashed border-primary/20 bg-primary/[0.03] px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
-        <p className="text-sm font-medium text-white/85">
-          Upgrade to share workspaces
-        </p>
+        <p className="text-sm font-medium text-white/85">Upgrade to share workspaces</p>
         <p className="text-xs leading-relaxed text-white/45">{message}</p>
       </div>
       <a

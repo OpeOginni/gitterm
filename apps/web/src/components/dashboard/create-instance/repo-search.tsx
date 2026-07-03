@@ -76,7 +76,7 @@ export function RepoSearch({
         };
       })
       .filter((item) => item.match && item.score > 0)
-      .sort((a, b) => b.score - a.score);
+      .toSorted((a, b) => b.score - a.score);
 
     return scored.map((item) => item.repo).slice(0, 20);
   }, [repos, query]);

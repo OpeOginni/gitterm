@@ -42,9 +42,7 @@ function getSmtpTransporter(): SmtpTransporter {
       // SMTP_SECURE unset → infer from port (465 = implicit TLS, 587 = STARTTLS upgrade).
       secure: env.SMTP_SECURE ?? env.SMTP_PORT === 465,
       auth:
-        env.SMTP_USER && env.SMTP_PASS
-          ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
-          : undefined,
+        env.SMTP_USER && env.SMTP_PASS ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
     });
   }
   return transporter;
@@ -68,9 +66,7 @@ export async function sendEmail(message: OutgoingEmail): Promise<void> {
   const provider = resolveProvider();
 
   if (provider === "none") {
-    console.info(
-      `[email] (no provider configured) → ${message.to}: ${message.subject}`,
-    );
+    console.info(`[email] (no provider configured) → ${message.to}: ${message.subject}`);
     return;
   }
 
@@ -89,14 +85,11 @@ export async function sendEmail(message: OutgoingEmail): Promise<void> {
       // Log full details server-side only; surface a generic message so raw
       // SMTP responses (host, auth user, server greeting) never reach clients.
       console.error(`[email] SMTP delivery failed → ${message.to}:`, error);
-      throw new Error("Email delivery failed");
+      throw new Error("Email delivery failed", { cause: error });
     }
 
     if (info.rejected.length > 0) {
-      console.error(
-        `[email] SMTP delivery rejected → ${message.to}:`,
-        info.rejected,
-      );
+      console.error(`[email] SMTP delivery rejected → ${message.to}:`, info.rejected);
       throw new Error(`Email delivery rejected for ${message.to}`);
     }
     return;

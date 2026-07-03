@@ -2,15 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  AlertCircle,
-  Check,
-  ChevronDown,
-  GitBranch,
-  Loader2,
-  Lock,
-  Search,
-} from "lucide-react";
+import { AlertCircle, Check, ChevronDown, GitBranch, Loader2, Lock, Search } from "lucide-react";
 import { GitHub as Github } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
@@ -63,13 +55,10 @@ function filterRepos(repos: Repository[], query: string): Repository[] {
   return repos
     .map((repo) => ({
       repo,
-      score: Math.max(
-        scoreRepoMatch(trimmed, repo.fullName),
-        scoreRepoMatch(trimmed, repo.name),
-      ),
+      score: Math.max(scoreRepoMatch(trimmed, repo.fullName), scoreRepoMatch(trimmed, repo.name)),
     }))
     .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .toSorted((a, b) => b.score - a.score)
     .slice(0, 20)
     .map((item) => item.repo);
 }
@@ -90,15 +79,10 @@ export function GitHubRepositoryBranchField({
   const repoFieldRef = useRef<HTMLDivElement>(null);
   const branchFieldRef = useRef<HTMLDivElement>(null);
 
-  const branchSourceRef = useRef<"empty" | "default" | "manual" | "url">(
-    "empty",
-  );
+  const branchSourceRef = useRef<"empty" | "default" | "manual" | "url">("empty");
   const repoIdentityRef = useRef("");
 
-  const parsedRepository = useMemo(
-    () => parseGitHubRepositoryInput(repoUrl),
-    [repoUrl],
-  );
+  const parsedRepository = useMemo(() => parseGitHubRepositoryInput(repoUrl), [repoUrl]);
   const hasGitHubUrl = repoUrl.trim().length > 0;
   const accessMode = integration ? "integration" : "public";
 
@@ -118,7 +102,7 @@ export function GitHubRepositoryBranchField({
 
   const filteredRepos = useMemo(
     () => filterRepos(accessibleRepos, repoUrl),
-    [accessibleRepos, repoUrl],
+    [repoUrl, accessibleRepos],
   );
 
   const repositoryQuery = useQuery({
@@ -148,11 +132,7 @@ export function GitHubRepositoryBranchField({
   });
 
   const filteredBranches = useMemo(
-    () =>
-      filterBranches(
-        (branchesQuery.data?.branches ?? []) as Branch[],
-        branchQuery,
-      ),
+    () => filterBranches((branchesQuery.data?.branches ?? []) as Branch[], branchQuery),
     [branchesQuery.data?.branches, branchQuery],
   );
 
@@ -174,19 +154,10 @@ export function GitHubRepositoryBranchField({
     if (branch !== nextBranch) {
       onBranchChange(nextBranch);
     }
-  }, [
-    branch,
-    onBranchChange,
-    parsedRepository?.branchFromUrl,
-    repositoryIdentity,
-  ]);
+  }, [branch, onBranchChange, parsedRepository?.branchFromUrl, repositoryIdentity]);
 
   useEffect(() => {
-    if (
-      !integration ||
-      !resolvedRepository?.defaultBranch ||
-      parsedRepository?.branchFromUrl
-    ) {
+    if (!integration || !resolvedRepository?.defaultBranch || parsedRepository?.branchFromUrl) {
       return;
     }
     if (branchSourceRef.current === "manual") {
@@ -214,10 +185,7 @@ export function GitHubRepositoryBranchField({
   useEffect(() => {
     if (!isRepoListOpen) return;
     const handleClick = (event: MouseEvent) => {
-      if (
-        repoFieldRef.current &&
-        !repoFieldRef.current.contains(event.target as Node)
-      ) {
+      if (repoFieldRef.current && !repoFieldRef.current.contains(event.target as Node)) {
         setIsRepoListOpen(false);
       }
     };
@@ -229,10 +197,7 @@ export function GitHubRepositoryBranchField({
   useEffect(() => {
     if (!isBranchListOpen) return;
     const handleClick = (event: MouseEvent) => {
-      if (
-        branchFieldRef.current &&
-        !branchFieldRef.current.contains(event.target as Node)
-      ) {
+      if (branchFieldRef.current && !branchFieldRef.current.contains(event.target as Node)) {
         setIsBranchListOpen(false);
       }
     };
@@ -246,10 +211,7 @@ export function GitHubRepositoryBranchField({
   };
 
   const activeBranch =
-    branch ||
-    parsedRepository?.branchFromUrl ||
-    resolvedRepository?.defaultBranch ||
-    "";
+    branch || parsedRepository?.branchFromUrl || resolvedRepository?.defaultBranch || "";
 
   const handleManualBranchChange = (value: string) => {
     branchSourceRef.current = value.trim() ? "manual" : "empty";
@@ -257,8 +219,7 @@ export function GitHubRepositoryBranchField({
   };
 
   const handleBranchSelect = (value: string) => {
-    branchSourceRef.current =
-      value === resolvedRepository?.defaultBranch ? "default" : "manual";
+    branchSourceRef.current = value === resolvedRepository?.defaultBranch ? "default" : "manual";
     onBranchChange(value);
     setIsBranchListOpen(false);
     setBranchQuery("");
@@ -268,10 +229,8 @@ export function GitHubRepositoryBranchField({
 
   const showBranchPicker = !!parsedRepository;
   const branchFromUrl = parsedRepository?.branchFromUrl;
-  const isResolvingRepo =
-    !!integration && !!parsedRepository && repositoryQuery.isLoading;
-  const resolveError =
-    !!integration && !!parsedRepository && repositoryQuery.error;
+  const isResolvingRepo = !!integration && !!parsedRepository && repositoryQuery.isLoading;
+  const resolveError = !!integration && !!parsedRepository && repositoryQuery.error;
   const canPickBranch = !!integration && !!resolvedRepository && !branchFromUrl;
 
   return (
@@ -285,9 +244,7 @@ export function GitHubRepositoryBranchField({
           <Input
             id="repo"
             placeholder={
-              integration
-                ? "Search your repos or paste a URL"
-                : "https://github.com/owner/repo"
+              integration ? "Search your repos or paste a URL" : "https://github.com/owner/repo"
             }
             value={repoUrl}
             onChange={(event) => {
@@ -385,9 +342,7 @@ export function GitHubRepositoryBranchField({
             /* branch pinned from URL */
             <div className="flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm">
               <GitBranch className="h-4 w-4 text-emerald-400" />
-              <span className="font-medium text-emerald-200">
-                {branchFromUrl}
-              </span>
+              <span className="font-medium text-emerald-200">{branchFromUrl}</span>
               <span className="text-xs text-emerald-200/60">from URL</span>
             </div>
           ) : isResolvingRepo ? (
@@ -406,9 +361,7 @@ export function GitHubRepositoryBranchField({
               <Input
                 placeholder="main"
                 value={branch}
-                onChange={(event) =>
-                  handleManualBranchChange(event.target.value)
-                }
+                onChange={(event) => handleManualBranchChange(event.target.value)}
                 disabled={disabled}
               />
             </div>
@@ -425,14 +378,9 @@ export function GitHubRepositoryBranchField({
               >
                 <span className="flex items-center gap-2">
                   <GitBranch className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-foreground">
-                    {activeBranch}
-                  </span>
-                  {(!branch ||
-                    branch === resolvedRepository?.defaultBranch) && (
-                    <span className="text-xs text-muted-foreground">
-                      default
-                    </span>
+                  <span className="font-medium text-foreground">{activeBranch}</span>
+                  {(!branch || branch === resolvedRepository?.defaultBranch) && (
+                    <span className="text-xs text-muted-foreground">default</span>
                   )}
                 </span>
                 <ChevronDown
@@ -490,9 +438,7 @@ export function GitHubRepositoryBranchField({
                       })
                     ) : (
                       <p className="py-6 text-center text-sm text-muted-foreground">
-                        {branchQuery
-                          ? `No branches match "${branchQuery}"`
-                          : "No branches found"}
+                        {branchQuery ? `No branches match "${branchQuery}"` : "No branches found"}
                       </p>
                     )}
                   </div>

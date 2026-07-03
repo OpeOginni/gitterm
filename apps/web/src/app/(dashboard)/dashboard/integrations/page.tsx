@@ -4,8 +4,6 @@ import { headers } from "next/headers";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { GitHubConnection } from "@/components/dashboard/github-connection";
 import { IntegrationCallbackHandler } from "@/components/dashboard/integrations/integration-callback-handler";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GitBranch, Lock } from "lucide-react";
 import { authClient } from "@/lib/auth-client";

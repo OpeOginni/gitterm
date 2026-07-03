@@ -35,12 +35,10 @@ export function PrivacySection() {
           ) : (
             <div className="flex items-start justify-between gap-4 rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white/90">
-                  Share anonymous usage data
-                </p>
+                <p className="text-sm font-medium text-white/90">Share anonymous usage data</p>
                 <p className="mt-1 text-[13px] leading-relaxed text-white/50">
-                  Page views and feature events. No content from your workspaces, no
-                  selling of data, no advertising.
+                  Page views and feature events. No content from your workspaces, no selling of
+                  data, no advertising.
                 </p>
               </div>
               <Switch

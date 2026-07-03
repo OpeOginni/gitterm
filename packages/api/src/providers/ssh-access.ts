@@ -6,11 +6,7 @@ export type WorkspaceProfile = (typeof WORKSPACE_PROFILES)[number];
 export const EDITOR_TARGETS = ["vscode", "neovim"] as const;
 export type EditorTarget = (typeof EDITOR_TARGETS)[number];
 
-export const EDITOR_TRANSPORT_KINDS = [
-  "direct-ssh",
-  "proxycommand-ssh",
-  "managed-ssh",
-] as const;
+export const EDITOR_TRANSPORT_KINDS = ["direct-ssh", "proxycommand-ssh", "managed-ssh"] as const;
 export type EditorTransportKind = (typeof EDITOR_TRANSPORT_KINDS)[number];
 
 export interface ProvidersshAccessSupport {
@@ -81,22 +77,15 @@ export function normalizeProvidersshAccessSupport(
     supported: value?.supported === true,
     transportKind: value?.transportKind,
     label: value?.label ?? "Not supported",
-    description:
-      value?.description ??
-      "This provider does not currently expose editor SSH access.",
+    description: value?.description ?? "This provider does not currently expose editor SSH access.",
     requiresLocalBinaries: value?.requiresLocalBinaries,
   };
 }
 
-export function isEditorReadyImageName(
-  name: string,
-  imageId?: string,
-): boolean {
+export function isEditorReadyImageName(name: string, imageId?: string): boolean {
   const haystack = `${name} ${imageId ?? ""}`.toLowerCase();
   return (
-    haystack.includes("with-ssh") ||
-    haystack.includes("ssh-enabled") ||
-    haystack.includes("-ssh")
+    haystack.includes("with-ssh") || haystack.includes("ssh-enabled") || haystack.includes("-ssh")
   );
 }
 
@@ -112,10 +101,7 @@ export function pickWorkspaceImage<
   }
 
   if (profile === "ssh-enabled") {
-    return (
-      images.find((img) => isEditorReadyImageName(img.name, img.imageId)) ??
-      images[0]
-    );
+    return images.find((img) => isEditorReadyImageName(img.name, img.imageId)) ?? images[0];
   }
 
   return (

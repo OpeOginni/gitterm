@@ -6,14 +6,14 @@ Runs GitTerm workspaces as Railway services inside a project and environment you
 
 Open the admin panel and set these values:
 
-| Field                    | Required | Notes                                          |
-| ------------------------ | -------- | ---------------------------------------------- |
+| Field                    | Required | Notes                                                  |
+| ------------------------ | -------- | ------------------------------------------------------ |
 | `API URL`                | No       | Defaults to `https://backboard.railway.app/graphql/v2` |
-| `API Token`              | Yes      | Railway account or team token                  |
-| `Project ID`             | Yes      | Project that hosts the workspaces              |
-| `Environment ID`         | Yes      | Environment inside that project                |
-| `Default Region`         | No       | Pick a Railway metal region                    |
-| `Public Railway Domains` | No       | Generate public Railway domains for workspaces |
+| `API Token`              | Yes      | Railway account or team token                          |
+| `Project ID`             | Yes      | Project that hosts the workspaces                      |
+| `Environment ID`         | Yes      | Environment inside that project                        |
+| `Default Region`         | No       | Pick a Railway metal region                            |
+| `Public Railway Domains` | No       | Generate public Railway domains for workspaces         |
 
 ## Webhook
 

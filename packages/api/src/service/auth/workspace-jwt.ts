@@ -47,12 +47,12 @@ export class WorkspaceJWTService {
       return decoded;
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
-        throw new Error("Workspace token expired");
+        throw new Error("Workspace token expired", { cause: error });
       }
       if (error instanceof jwt.JsonWebTokenError) {
-        throw new Error("Invalid workspace token");
+        throw new Error("Invalid workspace token", { cause: error });
       }
-      throw new Error("Token verification failed");
+      throw new Error("Token verification failed", { cause: error });
     }
   }
 

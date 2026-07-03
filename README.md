@@ -37,9 +37,9 @@ Required services:
 
 Worker cron jobs:
 
-| Worker         | Schedule       | Purpose                                   |
-| -------------- | -------------- | ----------------------------------------- |
-| `idle-reaper`  | `*/10 * * * *` | Stops idle workspaces and enforces quotas |
+| Worker        | Schedule       | Purpose                                   |
+| ------------- | -------------- | ----------------------------------------- |
+| `idle-reaper` | `*/10 * * * *` | Stops idle workspaces and enforces quotas |
 
 ## Routing
 
@@ -59,12 +59,12 @@ Open a port on a running workspace to get a live, shareable URL like `https://{p
 
 GitTerm can run workspaces on any of these providers. Configure each one in the admin panel before users create workspaces. Click a provider for its full setup guide.
 
-| Provider                                                          | Type    | Webhook | Setup guide                                            |
-| ---------------------------------------------------------------- | ------- | ------- | ------------------------------------------------------ |
-| [Railway](https://railway.com)                                   | Compute | Yes     | [Guide](packages/api/src/providers/railway/README.md)  |
-| [AWS](https://aws.amazon.com/)                                   | Compute | No      | [Guide](packages/api/src/providers/aws/README.md)      |
-| [E2B](https://e2b.dev/)                                          | Sandbox | Yes     | [Guide](packages/api/src/providers/e2b/README.md)      |
-| [Daytona](https://daytona.io/)                                   | Sandbox | No      | [Guide](packages/api/src/providers/daytona/README.md)  |
+| Provider                                                         | Type    | Webhook | Setup guide                                              |
+| ---------------------------------------------------------------- | ------- | ------- | -------------------------------------------------------- |
+| [Railway](https://railway.com)                                   | Compute | Yes     | [Guide](packages/api/src/providers/railway/README.md)    |
+| [AWS](https://aws.amazon.com/)                                   | Compute | No      | [Guide](packages/api/src/providers/aws/README.md)        |
+| [E2B](https://e2b.dev/)                                          | Sandbox | Yes     | [Guide](packages/api/src/providers/e2b/README.md)        |
+| [Daytona](https://daytona.io/)                                   | Sandbox | No      | [Guide](packages/api/src/providers/daytona/README.md)    |
 | [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) | Sandbox | No      | [Guide](packages/api/src/providers/cloudflare/README.md) |
 
 [![SPONSORED BY E2B FOR STARTUPS](https://img.shields.io/badge/SPONSORED%20BY-E2B%20FOR%20STARTUPS-ff8800?style=for-the-badge)](https://e2b.dev/startups)

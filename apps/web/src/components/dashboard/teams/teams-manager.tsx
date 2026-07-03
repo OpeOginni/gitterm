@@ -63,16 +63,14 @@ export function TeamsManager() {
 
   const ownedCount = useMemo(
     () => teams.filter((t) => t.creatorId === currentUserId).length,
-    [teams, currentUserId],
+    [currentUserId, teams],
   );
 
   const filteredTeams = useMemo(() => {
-    if (filter === "owned")
-      return teams.filter((t) => t.creatorId === currentUserId);
-    if (filter === "joined")
-      return teams.filter((t) => t.creatorId !== currentUserId);
+    if (filter === "owned") return teams.filter((t) => t.creatorId === currentUserId);
+    if (filter === "joined") return teams.filter((t) => t.creatorId !== currentUserId);
     return teams;
-  }, [teams, filter, currentUserId]);
+  }, [filter, currentUserId, teams]);
 
   const pageCount = Math.max(1, Math.ceil(filteredTeams.length / TEAMS_PER_PAGE));
   const safePage = Math.min(page, pageCount - 1);
@@ -99,12 +97,10 @@ export function TeamsManager() {
         {sharingLocked ? (
           <div className="flex flex-col gap-4 rounded-xl border border-dashed border-primary/20 bg-primary/[0.03] px-5 py-5">
             <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium text-white/85">
-                Upgrade to create teams
-              </p>
+              <p className="text-sm font-medium text-white/85">Upgrade to create teams</p>
               <p className="text-xs leading-relaxed text-white/45">
-                Group collaborators and grant whole teams access at once. You can
-                still join and leave teams you&rsquo;ve been invited to.
+                Group collaborators and grant whole teams access at once. You can still join and
+                leave teams you&rsquo;ve been invited to.
               </p>
             </div>
             <a
@@ -166,15 +162,11 @@ export function TeamsManager() {
                     type="button"
                     onClick={() => selectFilter(key)}
                     className={`transition-colors ${
-                      filter === key
-                        ? "text-primary"
-                        : "text-white/30 hover:text-white/60"
+                      filter === key ? "text-primary" : "text-white/30 hover:text-white/60"
                     }`}
                   >
                     {key}
-                    <span className="ml-1 text-white/25">
-                      {filterCounts[key]}
-                    </span>
+                    <span className="ml-1 text-white/25">{filterCounts[key]}</span>
                   </button>
                 ))}
               </div>
@@ -213,9 +205,7 @@ export function TeamsManager() {
                     <UsersRound className="h-4 w-4 text-white/60" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-white/85">
-                      {team.name}
-                    </p>
+                    <p className="truncate text-sm text-white/85">{team.name}</p>
                     <p className="font-mono text-[10px] uppercase tracking-wider text-white/35">
                       Team
                     </p>
@@ -268,17 +258,13 @@ export function TeamsManager() {
         {activeTeamId ? (
           <TeamDetail
             teamId={activeTeamId}
-            isOwner={
-              teams.find((t) => t.id === activeTeamId)?.creatorId ===
-              currentUserId
-            }
+            isOwner={teams.find((t) => t.id === activeTeamId)?.creatorId === currentUserId}
             onLeave={() => setActiveTeamId(null)}
           />
         ) : (
           <div className="flex h-full min-h-[280px] items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.01] p-8 text-center">
             <p className="max-w-xs text-sm text-white/35">
-              Select a team to manage its members, or create a new one to get
-              started.
+              Select a team to manage its members, or create a new one to get started.
             </p>
           </div>
         )}
@@ -298,9 +284,7 @@ function TeamDetail({
 }) {
   const [email, setEmail] = useState("");
 
-  const teamQuery = useQuery(
-    trpc.workspaceShare.getTeam.queryOptions({ teamId }),
-  );
+  const teamQuery = useQuery(trpc.workspaceShare.getTeam.queryOptions({ teamId }));
 
   const invalidateTeam = () =>
     queryClient.invalidateQueries({
@@ -479,12 +463,8 @@ function TeamDetail({
                 {(member.name || member.email).slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm text-white/85">
-                  {member.name || member.email}
-                </p>
-                <p className="truncate text-xs text-white/35">
-                  {member.email}
-                </p>
+                <p className="truncate text-sm text-white/85">{member.name || member.email}</p>
+                <p className="truncate text-xs text-white/35">{member.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -536,9 +516,7 @@ function TeamDetail({
               {data.isManager && (
                 <button
                   type="button"
-                  onClick={() =>
-                    cancelInviteMutation.mutate({ teamId, inviteId: invite.id })
-                  }
+                  onClick={() => cancelInviteMutation.mutate({ teamId, inviteId: invite.id })}
                   disabled={
                     cancelInviteMutation.isPending &&
                     cancelInviteMutation.variables?.inviteId === invite.id

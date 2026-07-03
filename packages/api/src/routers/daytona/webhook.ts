@@ -10,10 +10,7 @@ import { getInternalClient } from "../../client";
 // See https://www.daytona.io/docs/en/webhooks/
 //
 // sandbox.state.updated:  { event, timestamp, id, organizationId, oldState, newState, updatedAt }
-export const daytonaWebhookEvent = z.enum([
-  "sandbox.created",
-  "sandbox.state.updated",
-]);
+export const daytonaWebhookEvent = z.enum(["sandbox.created", "sandbox.state.updated"]);
 
 // Full set of Daytona sandbox states (mirrors @daytonaio/api-client SandboxState).
 export const daytonaSandboxState = z.enum([
@@ -105,10 +102,7 @@ export const daytonaWebhookRouter = router({
           event: input.event,
           id: input.id,
           newState: input.newState,
-          error:
-            error instanceof Error
-              ? `${error.name}: ${error.message}`
-              : String(error),
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
         });
 
         if (error instanceof TRPCError) throw error;

@@ -78,9 +78,9 @@ async function sendInviteEmailSafe(message: Parameters<typeof sendEmail>[0]) {
  * (resolved or expired). `getInvite` is public, so only live invites expose
  * details needed to render the accept screen.
  */
-function redactResolvedInvite<
-  T extends { email: string; status: string; expiresAt: Date },
->(invite: T | undefined): T | undefined {
+function redactResolvedInvite<T extends { email: string; status: string; expiresAt: Date }>(
+  invite: T | undefined,
+): T | undefined {
   if (!invite) return invite;
   const expired = invite.expiresAt < new Date();
   if (invite.status === "pending" && !expired) return invite;
@@ -124,10 +124,7 @@ async function requireManagedTeam(teamId: string, userId: string) {
     .where(
       and(
         eq(workspaceShareTeam.id, teamId),
-        or(
-          eq(workspaceShareTeam.creatorId, userId),
-          eq(workspaceShareTeamMember.userId, userId),
-        ),
+        or(eq(workspaceShareTeam.creatorId, userId), eq(workspaceShareTeamMember.userId, userId)),
       ),
     )
     .limit(1);
@@ -174,7 +171,10 @@ async function getWorkspaceCollaboratorCount(workspaceId: string, extraUserIds: 
   ]).size;
 }
 
-async function assertWorkspaceCollaboratorCapacity(workspaceId: string, extraUserIds: string[] = []) {
+async function assertWorkspaceCollaboratorCapacity(
+  workspaceId: string,
+  extraUserIds: string[] = [],
+) {
   const count = await getWorkspaceCollaboratorCount(workspaceId, extraUserIds);
   if (count > MAX_COLLABORATORS) {
     throw new TRPCError({
@@ -359,7 +359,10 @@ export const workspaceShareRouter = router({
       }
 
       if (normalizeEmail(invite.email) !== email) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Invite email does not match your account" });
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Invite email does not match your account",
+        });
       }
 
       await db.transaction(async (tx) => {
@@ -419,7 +422,10 @@ export const workspaceShareRouter = router({
       }
 
       if (normalizeEmail(invite.email) !== email) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Invite email does not match your account" });
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Invite email does not match your account",
+        });
       }
 
       await db
@@ -615,7 +621,10 @@ export const workspaceShareRouter = router({
         role: workspaceShareTeamMember.role,
       })
       .from(workspaceShareTeam)
-      .innerJoin(workspaceShareTeamMember, eq(workspaceShareTeamMember.teamId, workspaceShareTeam.id))
+      .innerJoin(
+        workspaceShareTeamMember,
+        eq(workspaceShareTeamMember.teamId, workspaceShareTeam.id),
+      )
       .where(eq(workspaceShareTeamMember.userId, ctx.session.user.id));
 
     return { success: true, teams };
@@ -727,8 +736,7 @@ export const workspaceShareRouter = router({
         .where(eq(workspaceShareTeam.id, input.teamId))
         .limit(1);
 
-      const isManager =
-        membership.role === "manager" || team?.creatorId === ctx.session.user.id;
+      const isManager = membership.role === "manager" || team?.creatorId === ctx.session.user.id;
 
       const [members, invites] = await Promise.all([
         db
@@ -839,7 +847,10 @@ export const workspaceShareRouter = router({
       }
 
       if (normalizeEmail(invite.email) !== email) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Invite email does not match your account" });
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Invite email does not match your account",
+        });
       }
 
       const attachedWorkspaces = await db
@@ -902,7 +913,10 @@ export const workspaceShareRouter = router({
       }
 
       if (normalizeEmail(invite.email) !== email) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Invite email does not match your account" });
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Invite email does not match your account",
+        });
       }
 
       await db
@@ -931,7 +945,9 @@ export const workspaceShareRouter = router({
     }),
 
   addTeamToWorkspace: protectedProcedure
-    .input(z.object({ workspaceId: z.uuid(), teamId: z.uuid(), role: roleSchema.default("viewer") }))
+    .input(
+      z.object({ workspaceId: z.uuid(), teamId: z.uuid(), role: roleSchema.default("viewer") }),
+    )
     .mutation(async ({ input, ctx }) => {
       requireSharingEntitlement(ctx.session.user.plan);
       await requireOwnedWorkspace(input.workspaceId, ctx.session.user.id);
@@ -1000,10 +1016,7 @@ export const workspaceShareRouter = router({
         workspaceTeamAccess,
         eq(workspaceTeamAccess.teamId, workspaceShareTeamMember.teamId),
       )
-      .innerJoin(
-        workspaceShareTeam,
-        eq(workspaceShareTeam.id, workspaceShareTeamMember.teamId),
-      )
+      .innerJoin(workspaceShareTeam, eq(workspaceShareTeam.id, workspaceShareTeamMember.teamId))
       .where(eq(workspaceShareTeamMember.userId, userId));
 
     // Resolve access context per workspace; direct access wins over team access.
@@ -1027,10 +1040,7 @@ export const workspaceShareRouter = router({
     }
 
     const rows = await db.query.workspace.findMany({
-      where: and(
-        inArray(workspace.id, ids),
-        ne(workspace.status, "terminated"),
-      ),
+      where: and(inArray(workspace.id, ids), ne(workspace.status, "terminated")),
       with: { image: { with: { agentType: true } } },
       orderBy: (workspace, { desc }) => [desc(workspace.startedAt)],
     });
@@ -1074,7 +1084,10 @@ export async function userCanAccessWorkspace(workspaceId: string, userId: string
     .from(workspace)
     .leftJoin(
       workspaceUserAccess,
-      and(eq(workspaceUserAccess.workspaceId, workspace.id), eq(workspaceUserAccess.userId, userId)),
+      and(
+        eq(workspaceUserAccess.workspaceId, workspace.id),
+        eq(workspaceUserAccess.userId, userId),
+      ),
     )
     .leftJoin(workspaceTeamAccess, eq(workspaceTeamAccess.workspaceId, workspace.id))
     .leftJoin(

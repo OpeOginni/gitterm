@@ -43,7 +43,7 @@ export default function SettingsPage() {
         return;
       }
     }
-  }, [session?.user, isSessionPending]);
+  }, [session?.user, isSessionPending, router]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "settings"],

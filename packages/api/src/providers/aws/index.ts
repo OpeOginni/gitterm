@@ -37,10 +37,7 @@ import {
   EFSClient,
   TagResourceCommand,
 } from "@aws-sdk/client-efs";
-import {
-  DescribeNetworkInterfacesCommand,
-  EC2Client,
-} from "@aws-sdk/client-ec2";
+import { DescribeNetworkInterfacesCommand, EC2Client } from "@aws-sdk/client-ec2";
 import env from "@gitterm/env/server";
 import { db, eq } from "@gitterm/db";
 import type { AwsImageProviderMetadata } from "@gitterm/db/schema/cloud";
@@ -65,11 +62,7 @@ import {
   type WorkspaceSSHAccessCleanupConfig,
   type WorkspaceSSHAccessConfig,
 } from "../ssh-access";
-import type {
-  AwsConfig,
-  AwsExternalPortDomainId,
-  AwsExternalServiceId,
-} from "./types";
+import type { AwsConfig, AwsExternalPortDomainId, AwsExternalServiceId } from "./types";
 
 export type { AwsConfig } from "./types";
 
@@ -190,6 +183,7 @@ function parseExternalServiceId(externalId: string): AwsExternalServiceId {
   } catch (error) {
     throw new Error(
       `Invalid AWS external service id: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
 }
@@ -198,29 +192,23 @@ function serializeExternalPortDomainId(value: AwsExternalPortDomainId): string {
   return JSON.stringify(value);
 }
 
-function parseExternalPortDomainId(
-  externalId: string,
-): AwsExternalPortDomainId {
+function parseExternalPortDomainId(externalId: string): AwsExternalPortDomainId {
   try {
     const parsed = JSON.parse(externalId) as AwsExternalPortDomainId;
-    if (
-      !parsed?.region ||
-      !parsed?.listenerRuleArn ||
-      !parsed?.targetGroupArn
-    ) {
+    if (!parsed?.region || !parsed?.listenerRuleArn || !parsed?.targetGroupArn) {
       throw new Error("Invalid AWS exposed port handle");
     }
     return parsed;
   } catch (error) {
     throw new Error(
       `Invalid AWS external port domain id: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
 }
 
 function getRuleTargetGroupArn(rule?: Rule): string | undefined {
-  return rule?.Actions?.find((action) => action.Type === "forward")
-    ?.TargetGroupArn;
+  return rule?.Actions?.find((action) => action.Type === "forward")?.TargetGroupArn;
 }
 
 function buildWorkspaceTags(
@@ -265,11 +253,7 @@ function isManagedWorkspaceResource(
 ): boolean {
   const managedBy = getTagValue(tags, "ManagedBy");
   const workspaceId = getTagValue(tags, "WorkspaceId");
-  return (
-    managedBy === AWS_MANAGED_BY_TAG &&
-    !!workspaceId &&
-    !activeWorkspaceIds.has(workspaceId)
-  );
+  return managedBy === AWS_MANAGED_BY_TAG && !!workspaceId && !activeWorkspaceIds.has(workspaceId);
 }
 
 function isGitTermServiceArn(serviceArn: string): boolean {
@@ -277,9 +261,7 @@ function isGitTermServiceArn(serviceArn: string): boolean {
 }
 
 function isGitTermTaskDefinitionArn(taskDefinitionArn: string): boolean {
-  return taskDefinitionArn.includes(
-    `task-definition/${AWS_TASK_FAMILY_PREFIX}`,
-  );
+  return taskDefinitionArn.includes(`task-definition/${AWS_TASK_FAMILY_PREFIX}`);
 }
 
 function isGitTermTargetGroupArn(targetGroupArn: string): boolean {
@@ -324,9 +306,7 @@ function matchesAwsError(error: unknown, ...needles: string[]): boolean {
     awsError.message,
     awsError.Message,
   ]
-    .filter(
-      (value): value is string => typeof value === "string" && value.length > 0,
-    )
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
     .map((value) => value.toLowerCase());
 
   return needles.some((needle) =>
@@ -355,14 +335,8 @@ export function normalizeAwsConfig(config: Record<string, any>): AwsConfig {
     defaultRegion: String(config.defaultRegion ?? "").trim(),
   };
 
-  if (
-    !normalized.accessKeyId ||
-    !normalized.secretAccessKey ||
-    !normalized.defaultRegion
-  ) {
-    throw new Error(
-      "AWS access key, secret key, and default region are required.",
-    );
+  if (!normalized.accessKeyId || !normalized.secretAccessKey || !normalized.defaultRegion) {
+    throw new Error("AWS access key, secret key, and default region are required.");
   }
 
   return normalized;
@@ -391,10 +365,9 @@ export class AwsProvider implements ComputeProvider {
       );
 
       if (matched?.providerConfigId) {
-        const configRecord =
-          await getProviderConfigService().getProviderConfigById(
-            matched.providerConfigId,
-          );
+        const configRecord = await getProviderConfigService().getProviderConfigById(
+          matched.providerConfigId,
+        );
         if (configRecord && configRecord.isEnabled) {
           return normalizeAwsConfig(configRecord.config);
         }
@@ -402,13 +375,10 @@ export class AwsProvider implements ComputeProvider {
     }
 
     // Fallback for callers without explicit region context (e.g. sweeps).
-    const config =
-      await getProviderConfigService().getProviderConfigForUse("aws");
+    const config = await getProviderConfigService().getProviderConfigForUse("aws");
 
     if (!config) {
-      throw new Error(
-        "AWS provider is not configured. Please configure it in the admin panel.",
-      );
+      throw new Error("AWS provider is not configured. Please configure it in the admin panel.");
     }
 
     return normalizeAwsConfig(config);
@@ -485,9 +455,7 @@ export class AwsProvider implements ComputeProvider {
   }
 
   private getHealthCheckPath(config: WorkspaceConfig): string {
-    return (
-      getImageMetadata(config).healthCheckPath ?? DEFAULT_HEALTH_CHECK_PATH
-    );
+    return getImageMetadata(config).healthCheckPath ?? DEFAULT_HEALTH_CHECK_PATH;
   }
 
   private getUpstreamAccessHeaders(routingValue: string): UpstreamAccess {
@@ -504,9 +472,7 @@ export class AwsProvider implements ComputeProvider {
     region?: string,
   ): Promise<Rule | null> {
     const { elbv2 } = await this.createClients(region);
-    const response = await elbv2.send(
-      new DescribeRulesCommand({ ListenerArn: listenerArn }),
-    );
+    const response = await elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
 
     return (
       response.Rules?.find((rule) =>
@@ -521,14 +487,9 @@ export class AwsProvider implements ComputeProvider {
     );
   }
 
-  private async allocateRulePriority(
-    listenerArn: string,
-    region?: string,
-  ): Promise<number> {
+  private async allocateRulePriority(listenerArn: string, region?: string): Promise<number> {
     const { elbv2 } = await this.createClients(region);
-    const response = await elbv2.send(
-      new DescribeRulesCommand({ ListenerArn: listenerArn }),
-    );
+    const response = await elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
     const priorities = new Set(
       (response.Rules ?? [])
         .map((rule) => Number(rule.Priority))
@@ -541,15 +502,10 @@ export class AwsProvider implements ComputeProvider {
       }
     }
 
-    throw new Error(
-      "No available ALB listener rule priority for AWS workspace routing",
-    );
+    throw new Error("No available ALB listener rule priority for AWS workspace routing");
   }
 
-  private async describeService(
-    externalId: AwsExternalServiceId,
-    region?: string,
-  ) {
+  private async describeService(externalId: AwsExternalServiceId, region?: string) {
     const { ecs } = await this.createClients(region);
     const response = await ecs.send(
       new DescribeServicesCommand({
@@ -561,10 +517,7 @@ export class AwsProvider implements ComputeProvider {
     return response.services?.[0] ?? null;
   }
 
-  private async waitForTargetGroupHealthy(
-    targetGroupArn: string,
-    region?: string,
-  ): Promise<void> {
+  private async waitForTargetGroupHealthy(targetGroupArn: string, region?: string): Promise<void> {
     const deadline = Date.now() + SERVICE_STABILIZATION_TIMEOUT_MS;
     let lastObservedState = "";
 
@@ -594,8 +547,7 @@ export class AwsProvider implements ComputeProvider {
       if (
         targetDescriptions.length > 0 &&
         targetDescriptions.every(
-          (description) =>
-            description.TargetHealth?.State?.toLowerCase() === "healthy",
+          (description) => description.TargetHealth?.State?.toLowerCase() === "healthy",
         )
       ) {
         return;
@@ -613,9 +565,7 @@ export class AwsProvider implements ComputeProvider {
       },
       error: "no target health observed",
     });
-    throw new Error(
-      `Timed out waiting for target group ${targetGroupArn} to become healthy`,
-    );
+    throw new Error(`Timed out waiting for target group ${targetGroupArn} to become healthy`);
   }
 
   private async waitForServiceDeleted(
@@ -633,15 +583,10 @@ export class AwsProvider implements ComputeProvider {
       await sleep(SERVICE_POLL_INTERVAL_MS);
     }
 
-    throw new Error(
-      `Timed out waiting for AWS service ${externalId.serviceName} to be deleted`,
-    );
+    throw new Error(`Timed out waiting for AWS service ${externalId.serviceName} to be deleted`);
   }
 
-  private async resolveTaskIp(
-    externalId: AwsExternalServiceId,
-    region?: string,
-  ): Promise<string> {
+  private async resolveTaskIp(externalId: AwsExternalServiceId, region?: string): Promise<string> {
     const { ecs, ec2 } = await this.createClients(region);
     const listedTasks = await ecs.send(
       new ListTasksCommand({
@@ -653,9 +598,7 @@ export class AwsProvider implements ComputeProvider {
     const taskArn = listedTasks.taskArns?.[0];
 
     if (!taskArn) {
-      throw new Error(
-        `No running ECS task found for AWS workspace ${externalId.serviceName}`,
-      );
+      throw new Error(`No running ECS task found for AWS workspace ${externalId.serviceName}`);
     }
 
     const describedTasks = await ecs.send(
@@ -666,8 +609,7 @@ export class AwsProvider implements ComputeProvider {
     );
     const task = describedTasks.tasks?.[0];
     const attachmentDetails =
-      task?.attachments?.flatMap((attachment) => attachment.details ?? []) ??
-      [];
+      task?.attachments?.flatMap((attachment) => attachment.details ?? []) ?? [];
     const privateIp = attachmentDetails.find(
       (detail) => detail.name === "privateIPv4Address",
     )?.value;
@@ -681,9 +623,7 @@ export class AwsProvider implements ComputeProvider {
     )?.value;
 
     if (!networkInterfaceId) {
-      throw new Error(
-        `No network interface found for AWS workspace ${externalId.serviceName}`,
-      );
+      throw new Error(`No network interface found for AWS workspace ${externalId.serviceName}`);
     }
 
     const networkInterfaces = await ec2.send(
@@ -691,13 +631,10 @@ export class AwsProvider implements ComputeProvider {
         NetworkInterfaceIds: [networkInterfaceId],
       }),
     );
-    const resolvedPrivateIp =
-      networkInterfaces.NetworkInterfaces?.[0]?.PrivateIpAddress;
+    const resolvedPrivateIp = networkInterfaces.NetworkInterfaces?.[0]?.PrivateIpAddress;
 
     if (!resolvedPrivateIp) {
-      throw new Error(
-        `No private IP found for AWS workspace ${externalId.serviceName}`,
-      );
+      throw new Error(`No private IP found for AWS workspace ${externalId.serviceName}`);
     }
 
     return resolvedPrivateIp;
@@ -725,9 +662,7 @@ export class AwsProvider implements ComputeProvider {
     const taskArn = listedTasks.taskArns?.[0];
 
     if (!taskArn) {
-      throw new Error(
-        `No running ECS task found for AWS workspace ${externalId.serviceName}`,
-      );
+      throw new Error(`No running ECS task found for AWS workspace ${externalId.serviceName}`);
     }
 
     const describedTasks = await ecs.send(
@@ -738,16 +673,13 @@ export class AwsProvider implements ComputeProvider {
     );
     const task = describedTasks.tasks?.[0];
     const attachmentDetails =
-      task?.attachments?.flatMap((attachment) => attachment.details ?? []) ??
-      [];
+      task?.attachments?.flatMap((attachment) => attachment.details ?? []) ?? [];
     const networkInterfaceId = attachmentDetails.find(
       (detail) => detail.name === "networkInterfaceId",
     )?.value;
 
     if (!networkInterfaceId) {
-      throw new Error(
-        `No network interface found for AWS workspace ${externalId.serviceName}`,
-      );
+      throw new Error(`No network interface found for AWS workspace ${externalId.serviceName}`);
     }
 
     const networkInterfaces = await ec2.send(
@@ -755,13 +687,10 @@ export class AwsProvider implements ComputeProvider {
         NetworkInterfaceIds: [networkInterfaceId],
       }),
     );
-    const publicIp =
-      networkInterfaces.NetworkInterfaces?.[0]?.Association?.PublicIp;
+    const publicIp = networkInterfaces.NetworkInterfaces?.[0]?.Association?.PublicIp;
 
     if (!publicIp) {
-      throw new Error(
-        `No public IP found for AWS workspace ${externalId.serviceName}`,
-      );
+      throw new Error(`No public IP found for AWS workspace ${externalId.serviceName}`);
     }
 
     return publicIp;
@@ -801,10 +730,7 @@ export class AwsProvider implements ComputeProvider {
     );
   }
 
-  private async configureTargetGroup(
-    targetGroupArn: string,
-    region?: string,
-  ): Promise<void> {
+  private async configureTargetGroup(targetGroupArn: string, region?: string): Promise<void> {
     const { elbv2 } = await this.createClients(region);
     await elbv2.send(
       new ModifyTargetGroupAttributesCommand({
@@ -819,25 +745,17 @@ export class AwsProvider implements ComputeProvider {
     );
   }
 
-  private async deleteRuleIfExists(
-    ruleArn: string,
-    region?: string,
-  ): Promise<void> {
+  private async deleteRuleIfExists(ruleArn: string, region?: string): Promise<void> {
     const { elbv2 } = await this.createClients(region);
 
-    await elbv2
-      .send(new DeleteRuleCommand({ RuleArn: ruleArn }))
-      .catch((error) => {
-        if (!matchesAwsError(error, "RuleNotFound", "not found")) {
-          throw error;
-        }
-      });
+    await elbv2.send(new DeleteRuleCommand({ RuleArn: ruleArn })).catch((error) => {
+      if (!matchesAwsError(error, "RuleNotFound", "not found")) {
+        throw error;
+      }
+    });
   }
 
-  private async deleteTargetGroupIfExists(
-    targetGroupArn: string,
-    region?: string,
-  ): Promise<void> {
+  private async deleteTargetGroupIfExists(targetGroupArn: string, region?: string): Promise<void> {
     const { elbv2 } = await this.createClients(region);
 
     await elbv2
@@ -849,10 +767,7 @@ export class AwsProvider implements ComputeProvider {
       });
   }
 
-  private async deleteAccessPointIfExists(
-    accessPointId: string,
-    region?: string,
-  ): Promise<void> {
+  private async deleteAccessPointIfExists(accessPointId: string, region?: string): Promise<void> {
     const { efs } = await this.createClients(region);
 
     await efs
@@ -952,18 +867,13 @@ export class AwsProvider implements ComputeProvider {
 
     const taskDefinitionArn = response.taskDefinition?.taskDefinitionArn;
     if (!taskDefinitionArn) {
-      throw new Error(
-        `Failed to register ECS task definition for workspace ${config.workspaceId}`,
-      );
+      throw new Error(`Failed to register ECS task definition for workspace ${config.workspaceId}`);
     }
 
     return taskDefinitionArn;
   }
 
-  private async createMainTargetGroup(
-    config: WorkspaceConfig,
-    region?: string,
-  ): Promise<string> {
+  private async createMainTargetGroup(config: WorkspaceConfig, region?: string): Promise<string> {
     const { elbv2, config: providerConfig } = await this.createClients(region);
     const response = await elbv2.send(
       new CreateTargetGroupCommand({
@@ -980,9 +890,7 @@ export class AwsProvider implements ComputeProvider {
     const targetGroupArn = response.TargetGroups?.[0]?.TargetGroupArn;
 
     if (!targetGroupArn) {
-      throw new Error(
-        `Failed to create ALB target group for workspace ${config.workspaceId}`,
-      );
+      throw new Error(`Failed to create ALB target group for workspace ${config.workspaceId}`);
     }
 
     await this.tagLoadBalancerResources(
@@ -1030,10 +938,7 @@ export class AwsProvider implements ComputeProvider {
         );
         break;
       } catch (error) {
-        if (
-          attempt < 5 &&
-          matchesAwsError(error, "PriorityInUse", "priority")
-        ) {
+        if (attempt < 5 && matchesAwsError(error, "PriorityInUse", "priority")) {
           await sleep(100 * attempt);
           continue;
         }
@@ -1043,17 +948,13 @@ export class AwsProvider implements ComputeProvider {
     }
 
     if (!response) {
-      throw new Error(
-        `Failed to create ALB listener rule for routing value ${routingValue}`,
-      );
+      throw new Error(`Failed to create ALB listener rule for routing value ${routingValue}`);
     }
 
     const ruleArn = response.Rules?.[0]?.RuleArn;
 
     if (!ruleArn) {
-      throw new Error(
-        `Failed to create ALB listener rule for routing value ${routingValue}`,
-      );
+      throw new Error(`Failed to create ALB listener rule for routing value ${routingValue}`);
     }
 
     await this.tagLoadBalancerResources(
@@ -1065,16 +966,11 @@ export class AwsProvider implements ComputeProvider {
     return ruleArn;
   }
 
-  private async createEfsAccessPoint(
-    config: WorkspaceConfig,
-    region?: string,
-  ): Promise<string> {
+  private async createEfsAccessPoint(config: WorkspaceConfig, region?: string): Promise<string> {
     const { efs, config: providerConfig } = await this.createClients(region);
 
     if (!providerConfig.efsFileSystemId) {
-      throw new Error(
-        "AWS persistent workspaces require an EFS file system ID",
-      );
+      throw new Error("AWS persistent workspaces require an EFS file system ID");
     }
 
     const response = await efs.send(
@@ -1097,9 +993,7 @@ export class AwsProvider implements ComputeProvider {
     const accessPointId = response.AccessPointId;
 
     if (!accessPointId) {
-      throw new Error(
-        `Failed to create EFS access point for workspace ${config.workspaceId}`,
-      );
+      throw new Error(`Failed to create EFS access point for workspace ${config.workspaceId}`);
     }
 
     if (response.AccessPointArn) {
@@ -1120,8 +1014,7 @@ export class AwsProvider implements ComputeProvider {
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
     const providerRegion = config.regionIdentifier;
-    const { ecs, config: providerConfig } =
-      await this.createClients(providerRegion);
+    const { ecs, config: providerConfig } = await this.createClients(providerRegion);
     const workspaceHost = buildWorkspaceHost(config.workspaceId);
     logger.info("AWS workspace provisioning started", {
       workspaceId: config.workspaceId,
@@ -1137,10 +1030,7 @@ export class AwsProvider implements ComputeProvider {
       region: providerRegion,
       action: "create_target_group",
     });
-    const targetGroupArn = await this.createMainTargetGroup(
-      config,
-      providerRegion,
-    );
+    const targetGroupArn = await this.createMainTargetGroup(config, providerRegion);
     logger.info("AWS create main target group succeeded", {
       workspaceId: config.workspaceId,
       provider: this.name,
@@ -1181,11 +1071,7 @@ export class AwsProvider implements ComputeProvider {
         region: providerRegion,
         action: "register_task_definition",
       });
-      taskDefinitionArn = await this.registerTaskDefinition(
-        config,
-        providerRegion,
-        accessPointId,
-      );
+      taskDefinitionArn = await this.registerTaskDefinition(config, providerRegion, accessPointId);
       await this.tagEcsResource(
         taskDefinitionArn,
         buildWorkspaceTags(config.workspaceId, "workspace-task-definition", {
@@ -1246,9 +1132,7 @@ export class AwsProvider implements ComputeProvider {
             awsvpcConfiguration: {
               subnets: parseCsv(providerConfig.subnetIds),
               securityGroups: parseCsv(providerConfig.securityGroupIds),
-              assignPublicIp: providerConfig.assignPublicIp
-                ? "ENABLED"
-                : "DISABLED",
+              assignPublicIp: providerConfig.assignPublicIp ? "ENABLED" : "DISABLED",
             },
           },
           loadBalancers: [
@@ -1283,9 +1167,7 @@ export class AwsProvider implements ComputeProvider {
       });
 
       if (!serviceArn || !listenerRuleArn || !taskDefinitionArn) {
-        throw new Error(
-          `Failed to create AWS ECS service for workspace ${config.workspaceId}`,
-        );
+        throw new Error(`Failed to create AWS ECS service for workspace ${config.workspaceId}`);
       }
 
       const externalId: AwsExternalServiceId = {
@@ -1360,15 +1242,10 @@ export class AwsProvider implements ComputeProvider {
       }
 
       if (listenerRuleArn) {
-        await this.deleteRuleIfExists(listenerRuleArn, providerRegion).catch(
-          () => undefined,
-        );
+        await this.deleteRuleIfExists(listenerRuleArn, providerRegion).catch(() => undefined);
       }
 
-      await this.deleteTargetGroupIfExists(
-        targetGroupArn,
-        providerRegion,
-      ).catch(() => undefined);
+      await this.deleteTargetGroupIfExists(targetGroupArn, providerRegion).catch(() => undefined);
 
       if (taskDefinitionArn) {
         await ecs
@@ -1381,10 +1258,7 @@ export class AwsProvider implements ComputeProvider {
       }
 
       if (accessPointId) {
-        await this.deleteAccessPointIfExists(
-          accessPointId,
-          providerRegion,
-        ).catch(() => undefined);
+        await this.deleteAccessPointIfExists(accessPointId, providerRegion).catch(() => undefined);
       }
 
       throw error;
@@ -1398,10 +1272,7 @@ export class AwsProvider implements ComputeProvider {
   async createPersistentWorkspace(
     config: PersistentWorkspaceConfig,
   ): Promise<PersistentWorkspaceInfo> {
-    return (await this.provisionWorkspace(
-      config,
-      true,
-    )) as PersistentWorkspaceInfo;
+    return (await this.provisionWorkspace(config, true)) as PersistentWorkspaceInfo;
   }
 
   async stopWorkspace(
@@ -1441,16 +1312,11 @@ export class AwsProvider implements ComputeProvider {
     await this.waitForTargetGroupHealthy(handle.targetGroupArn, targetRegion);
   }
 
-  async terminateWorkspace(
-    externalServiceId: string,
-    externalVolumeId?: string,
-  ): Promise<void> {
+  async terminateWorkspace(externalServiceId: string, externalVolumeId?: string): Promise<void> {
     const handle = parseExternalServiceId(externalServiceId);
     const { ecs } = await this.createClients(handle.region);
 
-    await this.deleteRuleIfExists(handle.listenerRuleArn, handle.region).catch(
-      () => undefined,
-    );
+    await this.deleteRuleIfExists(handle.listenerRuleArn, handle.region).catch(() => undefined);
 
     await ecs
       .send(
@@ -1475,13 +1341,10 @@ export class AwsProvider implements ComputeProvider {
         }
       });
 
-    await this.waitForServiceDeleted(handle, handle.region).catch(
+    await this.waitForServiceDeleted(handle, handle.region).catch(() => undefined);
+    await this.deleteTargetGroupIfExists(handle.targetGroupArn, handle.region).catch(
       () => undefined,
     );
-    await this.deleteTargetGroupIfExists(
-      handle.targetGroupArn,
-      handle.region,
-    ).catch(() => undefined);
 
     await ecs
       .send(
@@ -1492,10 +1355,7 @@ export class AwsProvider implements ComputeProvider {
       .catch(() => undefined);
 
     if (externalVolumeId) {
-      await this.deleteAccessPointIfExists(
-        externalVolumeId,
-        handle.region,
-      ).catch(() => undefined);
+      await this.deleteAccessPointIfExists(externalVolumeId, handle.region).catch(() => undefined);
     }
   }
 
@@ -1561,9 +1421,7 @@ export class AwsProvider implements ComputeProvider {
       );
       targetGroupArn = targetGroupResponse.TargetGroups?.[0]?.TargetGroupArn;
       if (!targetGroupArn) {
-        throw new Error(
-          `Failed to create AWS exposed port target group for port ${port}`,
-        );
+        throw new Error(`Failed to create AWS exposed port target group for port ${port}`);
       }
 
       await this.tagLoadBalancerResources(
@@ -1578,12 +1436,7 @@ export class AwsProvider implements ComputeProvider {
     }
 
     const taskIp = await this.resolveTaskIp(handle, handle.region);
-    await this.refreshTargetGroupRegistration(
-      targetGroupArn,
-      taskIp,
-      port,
-      handle.region,
-    );
+    await this.refreshTargetGroupRegistration(targetGroupArn, taskIp, port, handle.region);
 
     if (!listenerRuleArn) {
       listenerRuleArn = await this.createListenerRule(
@@ -1609,14 +1462,9 @@ export class AwsProvider implements ComputeProvider {
     };
   }
 
-  async getWorkspaceSSHAccess(
-    config: WorkspaceSSHAccessConfig,
-  ): Promise<WorkspaceSSHAccess> {
+  async getWorkspaceSSHAccess(config: WorkspaceSSHAccessConfig): Promise<WorkspaceSSHAccess> {
     const handle = parseExternalServiceId(config.externalServiceId);
-    const host = await this.resolveTaskPublicIp(
-      handle,
-      config.regionIdentifier ?? handle.region,
-    );
+    const host = await this.resolveTaskPublicIp(handle, config.regionIdentifier ?? handle.region);
     const hostAlias = buildHostAlias(config.subdomain);
 
     return {
@@ -1646,21 +1494,14 @@ export class AwsProvider implements ComputeProvider {
     };
   }
 
-  async revokeWorkspaceSSHAccess(
-    _config: WorkspaceSSHAccessCleanupConfig,
-  ): Promise<void> {}
+  async revokeWorkspaceSSHAccess(_config: WorkspaceSSHAccessCleanupConfig): Promise<void> {}
 
-  async removeExposedPortDomain(
-    externalServiceDomainId: string,
-  ): Promise<void> {
+  async removeExposedPortDomain(externalServiceDomainId: string): Promise<void> {
     const handle = parseExternalPortDomainId(externalServiceDomainId);
-    await this.deleteRuleIfExists(handle.listenerRuleArn, handle.region).catch(
+    await this.deleteRuleIfExists(handle.listenerRuleArn, handle.region).catch(() => undefined);
+    await this.deleteTargetGroupIfExists(handle.targetGroupArn, handle.region).catch(
       () => undefined,
     );
-    await this.deleteTargetGroupIfExists(
-      handle.targetGroupArn,
-      handle.region,
-    ).catch(() => undefined);
   }
 
   async sweepOrphanedResources(
@@ -1764,9 +1605,7 @@ export class AwsProvider implements ComputeProvider {
           nextToken: taskDefinitionNextToken,
         }),
       );
-      taskDefinitionArns.push(
-        ...(taskDefinitionsResponse.taskDefinitionArns ?? []),
-      );
+      taskDefinitionArns.push(...(taskDefinitionsResponse.taskDefinitionArns ?? []));
       taskDefinitionNextToken = taskDefinitionsResponse.nextToken;
     } while (taskDefinitionNextToken);
 
@@ -1815,17 +1654,13 @@ export class AwsProvider implements ComputeProvider {
       .map((rule) => rule.RuleArn as string);
 
     for (const ruleArnBatch of chunk(taggedRuleArns, 20)) {
-      const tagResponse = await elbv2.send(
-        new DescribeTagsCommand({ ResourceArns: ruleArnBatch }),
-      );
+      const tagResponse = await elbv2.send(new DescribeTagsCommand({ ResourceArns: ruleArnBatch }));
       for (const description of tagResponse.TagDescriptions ?? []) {
         if (
           isManagedWorkspaceResource(description.Tags, activeWorkspaceIdSet) &&
           description.ResourceArn
         ) {
-          await this.deleteRuleIfExists(description.ResourceArn, region).catch(
-            () => undefined,
-          );
+          await this.deleteRuleIfExists(description.ResourceArn, region).catch(() => undefined);
           rulesDeleted += 1;
         }
       }
@@ -1855,10 +1690,9 @@ export class AwsProvider implements ComputeProvider {
           isGitTermTargetGroupArn(description.ResourceArn) &&
           isManagedWorkspaceResource(description.Tags, activeWorkspaceIdSet)
         ) {
-          await this.deleteTargetGroupIfExists(
-            description.ResourceArn,
-            region,
-          ).catch(() => undefined);
+          await this.deleteTargetGroupIfExists(description.ResourceArn, region).catch(
+            () => undefined,
+          );
           targetGroupsDeleted += 1;
         }
       }
@@ -1893,13 +1727,10 @@ export class AwsProvider implements ComputeProvider {
 
         for (const accessPoint of accessPointResponse.AccessPoints ?? []) {
           const taggedWorkspaceId = getTagValue(
-            (accessPoint as { Tags?: Array<{ Key?: string; Value?: string }> })
-              .Tags,
+            (accessPoint as { Tags?: Array<{ Key?: string; Value?: string }> }).Tags,
             "WorkspaceId",
           );
-          const pathWorkspaceId = accessPoint.RootDirectory?.Path?.startsWith(
-            "/gitterm/",
-          )
+          const pathWorkspaceId = accessPoint.RootDirectory?.Path?.startsWith("/gitterm/")
             ? accessPoint.RootDirectory.Path.replace("/gitterm/", "")
             : null;
           const workspaceId = taggedWorkspaceId ?? pathWorkspaceId;
@@ -1919,10 +1750,9 @@ export class AwsProvider implements ComputeProvider {
             !activeWorkspaceIdSet.has(workspaceId) &&
             accessPoint.AccessPointId
           ) {
-            await this.deleteAccessPointIfExists(
-              accessPoint.AccessPointId,
-              region,
-            ).catch(() => undefined);
+            await this.deleteAccessPointIfExists(accessPoint.AccessPointId, region).catch(
+              () => undefined,
+            );
             accessPointsDeleted += 1;
           }
         }

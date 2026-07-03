@@ -101,7 +101,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
     const recommended = providers.find((p) => p.isRecommended);
     if (recommended) return recommended;
     return providers[0];
-  }, [providers]);
+  }, [providers.length, providers]);
 
   // Get the best default model for a provider (prefer recommended)
   const getDefaultModelForProvider = useCallback(
@@ -123,7 +123,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
         setSelectedProviderId(defaultProvider.id);
       }
     }
-  }, [providers, selectedProviderId, getDefaultProvider]);
+  }, [selectedProviderId, getDefaultProvider, providers.length]);
 
   useEffect(() => {
     if (selectedProviderId && allModels.length > 0 && !selectedModelId) {
@@ -132,7 +132,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
         setSelectedModelId(defaultModel.id);
       }
     }
-  }, [selectedProviderId, allModels, selectedModelId, getDefaultModelForProvider]);
+  }, [selectedProviderId, selectedModelId, getDefaultModelForProvider, allModels.length]);
 
   // Data fetching
   const { data: installationsData } = useQuery({
@@ -171,7 +171,12 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
         : undefined;
       setSelectedSandboxProviderId(preferred?.id ?? sandboxProviders[0]?.id ?? "");
     }
-  }, [sandboxProviders, selectedSandboxProviderId, defaultProviderData?.cloudProviderId]);
+  }, [
+    selectedSandboxProviderId,
+    defaultProviderData?.cloudProviderId,
+    sandboxProviders,
+    sandboxProviders.length,
+  ]);
 
   // Fetch repos and branches
   const { data: reposData, isLoading: isLoadingRepos } = useQuery({
@@ -193,7 +198,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
   // Computed values
   const availableModels = useMemo(
     () => allModels.filter((m) => m.provider.id === selectedProviderId),
-    [allModels, selectedProviderId],
+    [selectedProviderId, allModels],
   );
 
   const selectedProvider = providers.find((p) => p.id === selectedProviderId);
@@ -487,7 +492,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
             </SelectTrigger>
             <SelectContent>
               {[...providers]
-                .sort((a, b) => {
+                .toSorted((a, b) => {
                   if (a.isRecommended && !b.isRecommended) return -1;
                   if (!a.isRecommended && b.isRecommended) return 1;
                   return a.displayName.localeCompare(b.displayName);
@@ -537,7 +542,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
             </SelectTrigger>
             <SelectContent>
               {[...availableModels]
-                .sort((a, b) => {
+                .toSorted((a, b) => {
                   if (a.isRecommended && !b.isRecommended) return -1;
                   if (!a.isRecommended && b.isRecommended) return 1;
                   return a.displayName.localeCompare(b.displayName);

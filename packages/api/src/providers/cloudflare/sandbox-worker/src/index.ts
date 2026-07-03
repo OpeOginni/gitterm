@@ -107,9 +107,7 @@ export class GittermSandbox extends Sandbox<Env> {
 
   /** Rebuild the workspace from the persisted payload (used on restart). */
   async gittermBoot(): Promise<BootResult> {
-    const payload = await this.ctx.storage.get<ProvisionPayload>(
-      PROVISION_STORAGE_KEY,
-    );
+    const payload = await this.ctx.storage.get<ProvisionPayload>(PROVISION_STORAGE_KEY);
 
     if (!payload) {
       return {
@@ -152,17 +150,11 @@ export class GittermSandbox extends Sandbox<Env> {
 
   /** Report whether the agent server port is reachable. */
   async gittermStatus(): Promise<{ running: boolean }> {
-    const payload = await this.ctx.storage.get<ProvisionPayload>(
-      PROVISION_STORAGE_KEY,
-    );
+    const payload = await this.ctx.storage.get<ProvisionPayload>(PROVISION_STORAGE_KEY);
     const port = payload?.port ?? DEFAULT_PROXY_PORT;
 
     try {
-      const response = await this.containerFetch(
-        `http://localhost:${port}/`,
-        {},
-        port,
-      );
+      const response = await this.containerFetch(`http://localhost:${port}/`, {}, port);
       return { running: response.status < 500 };
     } catch {
       return { running: false };
@@ -182,10 +174,7 @@ export class GittermSandbox extends Sandbox<Env> {
   private async writeOpencodeFiles(payload: ProvisionPayload): Promise<void> {
     if (payload.opencodeConfigJson) {
       await this.mkdir("/root/.config/opencode", { recursive: true });
-      await this.writeFile(
-        "/root/.config/opencode/opencode.json",
-        payload.opencodeConfigJson,
-      );
+      await this.writeFile("/root/.config/opencode/opencode.json", payload.opencodeConfigJson);
     }
 
     if (payload.opencodeCredentialsJson) {
@@ -197,10 +186,7 @@ export class GittermSandbox extends Sandbox<Env> {
     }
   }
 
-  private async cloneRepo(
-    payload: ProvisionPayload,
-    repoDir: string,
-  ): Promise<void> {
+  private async cloneRepo(payload: ProvisionPayload, repoDir: string): Promise<void> {
     const repo = payload.repo;
 
     if (!repo) {
@@ -210,14 +196,12 @@ export class GittermSandbox extends Sandbox<Env> {
 
     // Commit as the authenticated GitHub user, not a generic bot identity.
     const githubUsername =
-      payload.environmentVariables?.USER_GITHUB_USERNAME?.trim() ||
-      repo.authUsername?.trim();
+      payload.environmentVariables?.USER_GITHUB_USERNAME?.trim() || repo.authUsername?.trim();
 
     // Configure git identity + credential helper so the agent can push.
     if (repo.authToken) {
       const helperPath = "/workspace/.git-credential-helper.sh";
-      const credentialUsername =
-        repo.authUsername || githubUsername || "x-access-token";
+      const credentialUsername = repo.authUsername || githubUsername || "x-access-token";
       await this.writeFile(
         helperPath,
         [
@@ -238,9 +222,7 @@ export class GittermSandbox extends Sandbox<Env> {
     if (githubUsername) {
       // GitHub's privacy-preserving noreply address keeps commits attributed to
       // the user without exposing a real email.
-      await this.exec(
-        `git config --global user.name '${githubUsername.replace(/'/g, "")}'`,
-      );
+      await this.exec(`git config --global user.name '${githubUsername.replace(/'/g, "")}'`);
       await this.exec(
         `git config --global user.email '${githubUsername.replace(/'/g, "")}@users.noreply.github.com'`,
       );
@@ -259,33 +241,24 @@ export class GittermSandbox extends Sandbox<Env> {
   }
 
   /** Run any agent-specific setup (e.g. installing the binary) before start. */
-  private async runSetupCommands(
-    payload: ProvisionPayload,
-    repoDir: string,
-  ): Promise<void> {
+  private async runSetupCommands(payload: ProvisionPayload, repoDir: string): Promise<void> {
     for (const command of payload.setupCommands ?? []) {
       const result = await this.exec(command, { cwd: repoDir });
       if (result.exitCode !== 0) {
-        throw new Error(
-          `Setup command failed (exit ${result.exitCode}): ${command}`,
-        );
+        throw new Error(`Setup command failed (exit ${result.exitCode}): ${command}`);
       }
     }
   }
 
   /** Start the agent server and wait until its port is accepting connections. */
-  private async startAgentServer(
-    payload: ProvisionPayload,
-    repoDir: string,
-  ): Promise<void> {
+  private async startAgentServer(payload: ProvisionPayload, repoDir: string): Promise<void> {
     const passwordPrefix = payload.serverPassword
       ? `OPENCODE_SERVER_PASSWORD='${payload.serverPassword}' `
       : "";
 
-    const proc = await this.startProcess(
-      `${passwordPrefix}${payload.startCommand}`,
-      { cwd: repoDir },
-    );
+    const proc = await this.startProcess(`${passwordPrefix}${payload.startCommand}`, {
+      cwd: repoDir,
+    });
 
     // Only report ready once the server is actually listening, so GitTerm's
     // "running" state is truthful (creation settlement is immediate).
@@ -297,25 +270,16 @@ export class GittermSandbox extends Sandbox<Env> {
 export { GittermSandbox as Sandbox };
 
 function unauthorized(): Response {
-  return Response.json(
-    { success: false, error: "Unauthorized" },
-    { status: 401 },
-  );
+  return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
 }
 
 function bearerToken(request: Request): string | undefined {
   const authorization = request.headers.get("Authorization");
-  return authorization?.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length)
-    : undefined;
+  return authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : undefined;
 }
 
 /** Handle GitTerm -> worker control-plane requests. */
-async function handleControl(
-  request: Request,
-  env: Env,
-  path: string,
-): Promise<Response> {
+async function handleControl(request: Request, env: Env, path: string): Promise<Response> {
   if (bearerToken(request) !== env.INTERNAL_API_KEY) {
     return unauthorized();
   }
@@ -326,10 +290,7 @@ async function handleControl(
 
   const sandboxId = body.sandboxId;
   if (!sandboxId) {
-    return Response.json(
-      { success: false, error: "Missing sandboxId" },
-      { status: 400 },
-    );
+    return Response.json({ success: false, error: "Missing sandboxId" }, { status: 400 });
   }
 
   const sandbox = getSandbox(env.Sandbox, sandboxId, { normalizeId: true });
@@ -367,10 +328,7 @@ async function handleControl(
     }
 
     default:
-      return Response.json(
-        { success: false, error: "Not found" },
-        { status: 404 },
-      );
+      return Response.json({ success: false, error: "Not found" }, { status: 404 });
   }
 }
 
@@ -407,10 +365,7 @@ export default {
 
     if (url.pathname.startsWith("/__gitterm/")) {
       if (request.method !== "POST") {
-        return Response.json(
-          { success: false, error: "Method not allowed" },
-          { status: 405 },
-        );
+        return Response.json({ success: false, error: "Method not allowed" }, { status: 405 });
       }
       return handleControl(request, env, url.pathname);
     }

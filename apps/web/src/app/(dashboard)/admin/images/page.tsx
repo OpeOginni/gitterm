@@ -68,7 +68,7 @@ export default function ImagesPage() {
         return;
       }
     }
-  }, [session?.user, isSessionPending]);
+  }, [session?.user, isSessionPending, router]);
   const [newImage, setNewImage] = useState({
     name: "",
     imageId: "",

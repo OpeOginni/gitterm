@@ -63,7 +63,7 @@ export default function AgentTypesPage() {
         return;
       }
     }
-  }, [session?.user, isSessionPending]);
+  }, [session?.user, isSessionPending, router]);
   const [newAgent, setNewAgent] = useState({ name: "", description: "", serverOnly: false });
 
   const { data: agentTypes, isLoading } = useQuery({
@@ -253,7 +253,6 @@ export default function AgentTypesPage() {
                             Disabled
                           </Badge>
                         )}
-
                       </div>
                       {agent.description && (
                         <p className="text-xs text-white/55 mt-1 max-w-2xl leading-snug">

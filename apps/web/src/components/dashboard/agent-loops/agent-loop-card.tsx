@@ -12,7 +12,6 @@ import {
   Pause,
   Archive,
   CheckCircle,
-  XCircle,
   Loader2,
   ChevronRight,
   FileText,

@@ -2,22 +2,8 @@
 
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
-import {
-  initiateCheckout,
-  isBillingEnabled,
-  authClient,
-} from "@/lib/auth-client";
-import {
-  Check,
-  X,
-  Terminal,
-  ExternalLink,
-  ArrowRight,
-  Loader2,
-  Globe,
-  KeyRound,
-  Mail,
-} from "lucide-react";
+import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
+import { Check, X, Terminal, ExternalLink, ArrowRight, Loader2, Globe, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
@@ -59,8 +45,7 @@ const PLAN_TIERS: PlanTier[] = [
     name: "Starter",
     slug: "starter",
     price: 10,
-    description:
-      "For occasional builders who want every provider and persistence",
+    description: "For occasional builders who want every provider and persistence",
     features: [
       "180 minutes/day cloud runtime",
       "75 agent runs/month",
@@ -96,8 +81,7 @@ const PLAN_TIERS: PlanTier[] = [
   },
   {
     name: "Self-Hosted",
-    description:
-      "Full control with unlimited everything on your own infrastructure",
+    description: "Full control with unlimited everything on your own infrastructure",
     features: [
       "Unlimited cloud runtime & workspaces",
       "Deploy on Railway, AWS, or bare metal",
@@ -412,16 +396,13 @@ function PricingPageContent() {
               <span className="marker">Pricing · plain &amp; predictable</span>
             </div>
             <h1 className="font-display text-[clamp(2rem,7vw,5rem)] font-light leading-[1] tracking-tight text-white sm:leading-[0.98]">
-              We just{" "}
-              <span className="font-display-italic text-[color:var(--cream)]">
-                run
-              </span>{" "}
-              the workspaces.
+              We just <span className="font-display-italic text-[color:var(--cream)]">run</span> the
+              workspaces.
             </h1>
             <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-white/55 sm:mt-6 sm:text-[17px] sm:leading-[1.65]">
-              You bring your model API keys. We don't resell them. GitTerm only
-              charges for the cloud workspace itself (compute, storage, and
-              networking) so your AI bill stays with your provider, not us.
+              You bring your model API keys. We don't resell them. GitTerm only charges for the
+              cloud workspace itself (compute, storage, and networking) so your AI bill stays with
+              your provider, not us.
             </p>
           </div>
 
@@ -449,9 +430,8 @@ function PricingPageContent() {
                 </h2>
               </div>
               <p className="max-w-md text-sm leading-relaxed text-white/40">
-                Workspace counts mean existing cloud workspaces, whether paused
-                or live. Runtime is only consumed while managed workspaces are
-                active.
+                Workspace counts mean existing cloud workspaces, whether paused or live. Runtime is
+                only consumed while managed workspaces are active.
               </p>
             </div>
 
@@ -461,21 +441,14 @@ function PricingPageContent() {
                   <tr className="border-b border-white/[0.06] bg-white/[0.02] font-mono text-[10px] uppercase tracking-[0.2em] text-white/35">
                     <th className="px-5 py-3 text-left font-medium">Feature</th>
                     <th className="px-4 py-3 text-center font-medium">Free</th>
-                    <th className="px-4 py-3 text-center font-medium text-primary">
-                      Starter
-                    </th>
+                    <th className="px-4 py-3 text-center font-medium text-primary">Starter</th>
                     <th className="px-4 py-3 text-center font-medium">Pro</th>
-                    <th className="px-4 py-3 text-center font-medium">
-                      Self-hosted
-                    </th>
+                    <th className="px-4 py-3 text-center font-medium">Self-hosted</th>
                   </tr>
                 </thead>
                 <tbody>
                   {COMPARISON_ROWS.map((row) => (
-                    <tr
-                      key={row.label}
-                      className="border-b border-white/[0.035] last:border-b-0"
-                    >
+                    <tr key={row.label} className="border-b border-white/[0.035] last:border-b-0">
                       <td className="px-5 py-4 text-white/75">{row.label}</td>
                       <td className="px-4 py-4 text-center">
                         <ComparisonValue value={row.free} />
@@ -508,10 +481,9 @@ function PricingPageContent() {
                   No AI markup. No middleman.
                 </h3>
                 <p className="text-sm leading-relaxed text-white/50">
-                  GitTerm never resells AI model access. You bring your own
-                  Anthropic, OpenAI, or Copilot credentials and we inject them
-                  into your workspaces. Your AI spending is between you and the
-                  provider. We don't take a cut.
+                  GitTerm never resells AI model access. You bring your own Anthropic, OpenAI, or
+                  Copilot credentials and we inject them into your workspaces. Your AI spending is
+                  between you and the provider. We don't take a cut.
                 </p>
               </div>
               <div>
@@ -519,12 +491,10 @@ function PricingPageContent() {
                   What your plan actually covers.
                 </h3>
                 <p className="text-sm leading-relaxed text-white/50">
-                  Paid plans pay for cloud workspace infrastructure: compute
-                  time, persistent storage, subdomain hosting, and our
-                  multi-cloud orchestration layer. Think of it as renting a
-                  purpose-built VM fleet for your agents, not a SaaS
-                  subscription with hidden AI fees. Free runs on E2B sandboxes;
-                  Starter and Pro unlock every provider.
+                  Paid plans pay for cloud workspace infrastructure: compute time, persistent
+                  storage, subdomain hosting, and our multi-cloud orchestration layer. Think of it
+                  as renting a purpose-built VM fleet for your agents, not a SaaS subscription with
+                  hidden AI fees. Free runs on E2B sandboxes; Starter and Pro unlock every provider.
                 </p>
               </div>
             </div>
@@ -534,11 +504,7 @@ function PricingPageContent() {
           <div className="mt-14 border-t border-white/[0.06] pt-12 sm:mt-20 sm:pt-16">
             <div className="mb-10 flex items-baseline gap-3">
               <h2 className="font-display text-2xl font-light tracking-tight text-white md:text-3xl">
-                Why{" "}
-                <span className="font-display-italic text-[color:var(--cream)]">
-                  upgrade
-                </span>
-                ?
+                Why <span className="font-display-italic text-[color:var(--cream)]">upgrade</span>?
               </h2>
             </div>
             <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
@@ -548,35 +514,28 @@ function PricingPageContent() {
                 </div>
                 <h3 className="mb-2 font-medium text-white">Every Provider</h3>
                 <p className="text-sm text-white/40">
-                  Free is limited to E2B sandboxes. Starter and Pro unlock
-                  Daytona, Cloudflare, and Railway so you can pick the right
-                  runtime per project.
+                  Free is limited to E2B sandboxes. Starter and Pro unlock Daytona, Cloudflare, and
+                  Railway so you can pick the right runtime per project.
                 </p>
               </div>
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <Terminal className="h-5 w-5 text-primary" />
                 </div>
-                <h3 className="mb-2 font-medium text-white">
-                  More Runtime & Runs
-                </h3>
+                <h3 className="mb-2 font-medium text-white">More Runtime & Runs</h3>
                 <p className="text-sm text-white/40">
-                  Up to 480 minutes/day and 250 agent runs/month on Pro. Room to
-                  actually live in your workspaces instead of watching a
-                  60-minute clock.
+                  Up to 480 minutes/day and 250 agent runs/month on Pro. Room to actually live in
+                  your workspaces instead of watching a 60-minute clock.
                 </p>
               </div>
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <Globe className="h-5 w-5 text-primary" />
                 </div>
-                <h3 className="mb-2 font-medium text-white">
-                  Persistence & Branding
-                </h3>
+                <h3 className="mb-2 font-medium text-white">Persistence & Branding</h3>
                 <p className="text-sm text-white/40">
-                  Paid plans keep persistent workspaces across restarts. Pro
-                  adds custom subdomains like{" "}
-                  <code className="text-white/60">yourname.gitterm.dev</code>.
+                  Paid plans keep persistent workspaces across restarts. Pro adds custom subdomains
+                  like <code className="text-white/60">yourname.gitterm.dev</code>.
                 </p>
               </div>
             </div>

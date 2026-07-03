@@ -15,17 +15,13 @@ export async function createContext({ context }: CreateContextOptions) {
 
   // Extract workspace JWT token from Authorization header
   const authHeader = context.req.raw.headers.get("authorization");
-  const bearerToken = authHeader?.startsWith("Bearer ")
-    ? authHeader.substring(7)
-    : undefined;
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined;
 
   const githubEvent = context.req.raw.headers.get("X-GitHub-Event");
   const githubInstallationTargetId = context.req.raw.headers.get(
     "X-GitHub-Hook-Installation-Target-ID",
   );
-  const githubXHubSignature256 = context.req.raw.headers.get(
-    "x-hub-signature-256",
-  );
+  const githubXHubSignature256 = context.req.raw.headers.get("x-hub-signature-256");
 
   const e2bSignature = context.req.raw.headers.get("e2b-signature");
 
@@ -35,14 +31,10 @@ export async function createContext({ context }: CreateContextOptions) {
   const daytonaWebhookTimestamp = context.req.raw.headers.get("svix-timestamp");
   const daytonaWebhookSignature = context.req.raw.headers.get("svix-signature");
   const hasDaytonaWebhook =
-    !!daytonaWebhookId &&
-    !!daytonaWebhookTimestamp &&
-    !!daytonaWebhookSignature;
+    !!daytonaWebhookId && !!daytonaWebhookTimestamp && !!daytonaWebhookSignature;
 
   const rawBody =
-    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook
-      ? await context.req.text()
-      : "";
+    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook ? await context.req.text() : "";
 
   // Resolve the originating client IP (proxy hops). Falls back to the socket
   // address for local development. Used by the anonymous "try gitterm" flow
@@ -95,24 +87,19 @@ export async function createListenerContext({ context }: CreateContextOptions) {
 
   const internalApiKey = context.req.raw.headers.get("x-internal-key");
   const authHeader = context.req.raw.headers.get("authorization");
-  const bearerToken = authHeader?.startsWith("Bearer ")
-    ? authHeader.substring(7)
-    : undefined;
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined;
 
   const githubEvent = context.req.raw.headers.get("X-GitHub-Event");
   const githubInstallationTargetId = context.req.raw.headers.get(
     "X-GitHub-Hook-Installation-Target-ID",
   );
-  const githubXHubSignature256 = context.req.raw.headers.get(
-    "x-hub-signature-256",
-  );
+  const githubXHubSignature256 = context.req.raw.headers.get("x-hub-signature-256");
   const e2bSignature = context.req.raw.headers.get("e2b-signature");
 
   // Daytona webhooks are delivered via Svix and carry these headers.
   // Svix emits either `svix-*` (default) or `webhook-*` (white-labeled) headers.
   const daytonaWebhookId =
-    context.req.raw.headers.get("webhook-id") ??
-    context.req.raw.headers.get("svix-id");
+    context.req.raw.headers.get("webhook-id") ?? context.req.raw.headers.get("svix-id");
   const daytonaWebhookTimestamp =
     context.req.raw.headers.get("webhook-timestamp") ??
     context.req.raw.headers.get("svix-timestamp");
@@ -120,14 +107,10 @@ export async function createListenerContext({ context }: CreateContextOptions) {
     context.req.raw.headers.get("webhook-signature") ??
     context.req.raw.headers.get("svix-signature");
   const hasDaytonaWebhook =
-    !!daytonaWebhookId &&
-    !!daytonaWebhookTimestamp &&
-    !!daytonaWebhookSignature;
+    !!daytonaWebhookId && !!daytonaWebhookTimestamp && !!daytonaWebhookSignature;
 
   const rawBody =
-    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook
-      ? await context.req.text()
-      : "";
+    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook ? await context.req.text() : "";
 
   return {
     session,

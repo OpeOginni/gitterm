@@ -141,7 +141,10 @@ export function HeroSection() {
           )}
         </p>
 
-        <div className="rise mx-auto mt-8 max-w-2xl text-left sm:mt-11" style={{ animationDelay: "260ms" }}>
+        <div
+          className="rise mx-auto mt-8 max-w-2xl text-left sm:mt-11"
+          style={{ animationDelay: "260ms" }}
+        >
           {anonEnabled ? (
             <>
               {result ? (

@@ -10,14 +10,9 @@ export interface RenderedEmail {
   text: string;
 }
 
-async function renderInviteEmail(
-  props: InviteEmailProps,
-): Promise<{ html: string; text: string }> {
+async function renderInviteEmail(props: InviteEmailProps): Promise<{ html: string; text: string }> {
   const element = createElement(InviteEmail, props);
-  const [html, text] = await Promise.all([
-    render(element),
-    render(element, { plainText: true }),
-  ]);
+  const [html, text] = await Promise.all([render(element), render(element, { plainText: true })]);
   return { html, text };
 }
 
@@ -53,10 +48,7 @@ function assetOrigin(): string {
   return PROD_WEB_URL;
 }
 
-export function buildInviteUrl(params: {
-  token: string;
-  type: "workspace" | "team";
-}): string {
+export function buildInviteUrl(params: { token: string; type: "workspace" | "team" }): string {
   const url = new URL(`${publicWebUrl()}/invite`);
   url.searchParams.set("token", params.token);
   url.searchParams.set("type", params.type);
@@ -105,9 +97,7 @@ export async function renderWorkspaceInviteEmail(
   };
 }
 
-export async function renderTeamInviteEmail(
-  input: TeamInviteEmailInput,
-): Promise<RenderedEmail> {
+export async function renderTeamInviteEmail(input: TeamInviteEmailInput): Promise<RenderedEmail> {
   const { html, text } = await renderInviteEmail({
     preheader: `${input.inviterName} invited you to the ${input.teamName} team on GitTerm.`,
     eyebrow: "Team invite",

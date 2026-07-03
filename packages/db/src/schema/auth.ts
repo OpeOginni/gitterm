@@ -1,17 +1,6 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  boolean,
-  pgEnum,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, pgEnum, uuid } from "drizzle-orm/pg-core";
 
-export const userPlanEnum = pgEnum("user_plan", [
-  "free",
-  "starter",
-  "pro",
-] as const);
+export const userPlanEnum = pgEnum("user_plan", ["free", "starter", "pro"] as const);
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"] as const);
 
 export const user = pgTable("user", {

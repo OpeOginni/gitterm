@@ -58,9 +58,9 @@ const createBillingAuthClient = () =>
 type AppAuthClient = ReturnType<typeof createStandardAuthClient>;
 
 // Export the appropriate client based on billing status
-export const authClient: AppAuthClient = (
-  isBillingEnabled ? createBillingAuthClient() : createStandardAuthClient()
-) as unknown as AppAuthClient;
+export const authClient: AppAuthClient = (isBillingEnabled
+  ? createBillingAuthClient()
+  : createStandardAuthClient()) as unknown as AppAuthClient;
 
 // ============================================================================
 // Polar Billing Helpers (only work when billing is enabled)

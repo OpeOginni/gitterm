@@ -34,7 +34,7 @@ export function RunNextIterationDialog({ open, onOpenChange, loop }: RunNextIter
   const credentialForProvider = useMemo(() => {
     if (!loop.modelProvider?.name) return null;
     return credentials.find((c) => c.providerName === loop.modelProvider?.name && c.isActive);
-  }, [credentials, loop.modelProvider?.name]);
+  }, [loop.modelProvider?.name, credentials]);
 
   const hasValidCredential = !!credentialForProvider;
   const isFreeModel = loop.model?.isFree ?? false;

@@ -143,9 +143,7 @@ async function main() {
       );
       const workspaces = await internalClient.internal.getLongTermInactiveWorkspaces.query();
       if (workspaces.length === 0) {
-        console.log(
-          "[idle-reaper] No workspaces found beyond their plan's retention window",
-        );
+        console.log("[idle-reaper] No workspaces found beyond their plan's retention window");
       } else {
         console.log(
           `[idle-reaper] Found ${workspaces.length} workspace(s) beyond their plan's retention window`,

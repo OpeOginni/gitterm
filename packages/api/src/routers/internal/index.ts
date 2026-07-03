@@ -14,10 +14,7 @@ import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
-import {
-  closeUsageSession,
-  getConfiguredIdleTimeout,
-} from "../../utils/metering";
+import { closeUsageSession, getConfiguredIdleTimeout } from "../../utils/metering";
 import {
   getIdleTimeoutMinutesForPlan,
   getRetentionDaysForPlan,
@@ -34,10 +31,7 @@ import { getAgentLoopService } from "../../service/agent-loop";
 import { deductRunFromQuota, refundRunToQuota } from "../../service/quotas/run-quota";
 import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/helpers";
 import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
-import {
-  daytonaWebhookSchema,
-  verifyDaytonaWebhookSignature,
-} from "../daytona/webhook";
+import { daytonaWebhookSchema, verifyDaytonaWebhookSignature } from "../daytona/webhook";
 import type { DaytonaConfig } from "../../providers/daytona/types";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
@@ -146,7 +140,10 @@ export const internalRouter = router({
       return new Date(now - timeoutMinutes * 60 * 1000);
     };
 
-    const idleWorkspaces = await filterIdleWorkspacesByRedisActivityWith(idleCandidates, thresholdFor);
+    const idleWorkspaces = await filterIdleWorkspacesByRedisActivityWith(
+      idleCandidates,
+      thresholdFor,
+    );
 
     return idleWorkspaces.map(
       ({ lastActiveAt: _lastActiveAt, plan: _plan, ...idleWorkspace }) => idleWorkspace,
@@ -492,9 +489,7 @@ export const internalRouter = router({
       return ws.lastActiveAt !== null && ws.lastActiveAt < threshold;
     });
 
-    return longTermInactiveWorkspaces.map(
-      ({ plan: _plan, ...ws }) => ws,
-    );
+    return longTermInactiveWorkspaces.map(({ plan: _plan, ...ws }) => ws);
   }),
 
   // Fork repository (called from workspace)
@@ -924,9 +919,9 @@ export const internalRouter = router({
         });
       }
 
-      const dbConfig = (await getProviderConfigService().getProviderConfigForUse(
-        "daytona",
-      )) as DaytonaConfig | undefined;
+      const dbConfig = (await getProviderConfigService().getProviderConfigForUse("daytona")) as
+        | DaytonaConfig
+        | undefined;
 
       if (!dbConfig) {
         console.error("Daytona provider is not configured.");

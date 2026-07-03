@@ -43,7 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { RunNextIterationDialog } from "./run-next-iteration-dialog";
 import type { AgentLoopRun, RunStatus } from "./types";

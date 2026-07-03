@@ -42,7 +42,10 @@ export function ProblemSection() {
 
         <div className="grid gap-px bg-white/[0.06] md:grid-cols-3">
           {capabilities.map((item, idx) => (
-            <div key={idx} className="group bg-background p-5 transition-colors hover:bg-card sm:p-7">
+            <div
+              key={idx}
+              className="group bg-background p-5 transition-colors hover:bg-card sm:p-7"
+            >
               <div className="mb-6 flex items-center justify-between">
                 <span className="marker">
                   <span className="text-white/55">01.{idx + 1}</span>

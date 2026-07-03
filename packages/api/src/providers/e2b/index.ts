@@ -53,13 +53,10 @@ export class E2BProvider implements ComputeProvider {
   readonly name = "e2b";
 
   async getConfig(): Promise<E2BConfig> {
-    const config =
-      await getProviderConfigService().getProviderConfigForUse("e2b");
+    const config = await getProviderConfigService().getProviderConfigForUse("e2b");
 
     if (!config) {
-      throw new Error(
-        "E2B provider is not configured. Please configure it in the admin panel.",
-      );
+      throw new Error("E2B provider is not configured. Please configure it in the admin panel.");
     }
 
     return config as E2BConfig;
@@ -88,8 +85,7 @@ export class E2BProvider implements ComputeProvider {
   }
 
   private getSandboxEnvs(config: WorkspaceConfig): Record<string, string> {
-    const envs = (config.environmentVariables ??
-      {}) as WorkspaceEnvironmentVariables;
+    const envs = (config.environmentVariables ?? {}) as WorkspaceEnvironmentVariables;
 
     return Object.fromEntries(
       Object.entries(envs).filter(([, value]) => value !== undefined),
@@ -105,9 +101,7 @@ export class E2BProvider implements ComputeProvider {
     return pathHint.replace(/^\/workspace/, WORKSPACE_DIR);
   }
 
-  private isSshEnabledWorkspace(
-    spec: WorkspaceProvisioningSpec | null,
-  ): boolean {
+  private isSshEnabledWorkspace(spec: WorkspaceProvisioningSpec | null): boolean {
     return spec?.workspaceProfile === "ssh-enabled";
   }
 
@@ -118,18 +112,14 @@ export class E2BProvider implements ComputeProvider {
       : e2bMetadata?.templateId;
 
     if (!templateId) {
-      throw new Error(
-        `No E2B template ID configured for image ${config.imageId}`,
-      );
+      throw new Error(`No E2B template ID configured for image ${config.imageId}`);
     }
 
     return templateId;
   }
 
   private getRepositoryUrl(repositoryUrl: string): string {
-    return repositoryUrl.endsWith(".git")
-      ? repositoryUrl
-      : `${repositoryUrl}.git`;
+    return repositoryUrl.endsWith(".git") ? repositoryUrl : `${repositoryUrl}.git`;
   }
 
   private async createSandbox(
@@ -176,18 +166,10 @@ export class E2BProvider implements ComputeProvider {
     spec: WorkspaceProvisioningSpec | null,
     repoDir: string,
   ): Promise<void> {
-    await this.runCommand(
-      sandbox,
-      `mkdir -p ${WORKSPACE_DIR}`,
-      "mkdir workspace",
-    );
+    await this.runCommand(sandbox, `mkdir -p ${WORKSPACE_DIR}`, "mkdir workspace");
 
     if (!spec?.repo) {
-      await this.runCommand(
-        sandbox,
-        `mkdir -p ${repoDir}`,
-        "mkdir empty repo dir",
-      );
+      await this.runCommand(sandbox, `mkdir -p ${repoDir}`, "mkdir empty repo dir");
       return;
     }
 
@@ -210,11 +192,7 @@ export class E2BProvider implements ComputeProvider {
     spec: WorkspaceProvisioningSpec | null,
   ): Promise<void> {
     if (spec?.opencodeConfigJson) {
-      await this.runCommand(
-        sandbox,
-        "mkdir -p ~/.config/opencode",
-        "mkdir config dir",
-      );
+      await this.runCommand(sandbox, "mkdir -p ~/.config/opencode", "mkdir config dir");
       await this.runCommand(
         sandbox,
         `echo "${this.toBase64(spec.opencodeConfigJson)}" | base64 -d > ~/.config/opencode/opencode.json`,
@@ -223,11 +201,7 @@ export class E2BProvider implements ComputeProvider {
     }
 
     if (spec?.opencodeCredentialsJson) {
-      await this.runCommand(
-        sandbox,
-        "mkdir -p ~/.local/share/opencode",
-        "mkdir auth dir",
-      );
+      await this.runCommand(sandbox, "mkdir -p ~/.local/share/opencode", "mkdir auth dir");
       await this.runCommand(
         sandbox,
         `echo "${this.toBase64(spec.opencodeCredentialsJson)}" | base64 -d > ~/.local/share/opencode/auth.json`,
@@ -300,10 +274,7 @@ export class E2BProvider implements ComputeProvider {
     throw new Error("E2B SSH bridge did not become ready in time.");
   }
 
-  private async getTrafficAccessToken(
-    sandbox: E2BSandbox,
-    errorContext: string,
-  ): Promise<string> {
+  private async getTrafficAccessToken(sandbox: E2BSandbox, errorContext: string): Promise<string> {
     const token = sandbox.trafficAccessToken;
 
     if (!token) {
@@ -313,10 +284,7 @@ export class E2BProvider implements ComputeProvider {
     return token;
   }
 
-  private async startOpencodeServer(
-    sandbox: E2BSandbox,
-    repoDir: string,
-  ): Promise<void> {
+  private async startOpencodeServer(sandbox: E2BSandbox, repoDir: string): Promise<void> {
     await sandbox.commands
       .run(
         `cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port ${OPENCODE_PORT} > /tmp/opencode.log 2>&1`,
@@ -338,10 +306,7 @@ export class E2BProvider implements ComputeProvider {
     onTimeout: "pause" | "kill",
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const provisionLogger = createProvisionLogger(
-      this.name,
-      config.workspaceId,
-    );
+    const provisionLogger = createProvisionLogger(this.name, config.workspaceId);
     const spec = resolveProvisioningSpec(config);
     const sandbox = await provisionLogger.step("create-sandbox", () =>
       this.createSandbox(config, onTimeout, this.isSshEnabledWorkspace(spec)),
@@ -361,17 +326,12 @@ export class E2BProvider implements ComputeProvider {
       this.startOpencodeServer(sandbox, repoDir),
     );
 
-    const trafficAccessToken = await provisionLogger.step(
-      "resolve-traffic-access-token",
-      () => this.getTrafficAccessToken(sandbox, "workspace traffic"),
+    const trafficAccessToken = await provisionLogger.step("resolve-traffic-access-token", () =>
+      this.getTrafficAccessToken(sandbox, "workspace traffic"),
     );
     const host = sandbox.getHost(OPENCODE_PORT);
     const startedAt = new Date(
-      (
-        await provisionLogger.step("fetch-sandbox-info", () =>
-          sandbox.getInfo(),
-        )
-      ).startedAt,
+      (await provisionLogger.step("fetch-sandbox-info", () => sandbox.getInfo())).startedAt,
     );
 
     const workspaceInfo: WorkspaceInfo = {
@@ -398,11 +358,7 @@ export class E2BProvider implements ComputeProvider {
   }
 
   async createWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
-    return (await this.provisionWorkspace(
-      config,
-      "pause",
-      false,
-    )) as WorkspaceInfo;
+    return (await this.provisionWorkspace(config, "pause", false)) as WorkspaceInfo;
   }
 
   /**
@@ -412,24 +368,14 @@ export class E2BProvider implements ComputeProvider {
    * expires. There's no signed-in user to ever resume an anon workspace, so
    * pausing would just leave a zombie.
    */
-  async createEphemeralAnonWorkspace(
-    config: WorkspaceConfig,
-  ): Promise<WorkspaceInfo> {
-    return (await this.provisionWorkspace(
-      config,
-      "kill",
-      false,
-    )) as WorkspaceInfo;
+  async createEphemeralAnonWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
+    return (await this.provisionWorkspace(config, "kill", false)) as WorkspaceInfo;
   }
 
   async createPersistentWorkspace(
     config: PersistentWorkspaceConfig,
   ): Promise<PersistentWorkspaceInfo> {
-    return (await this.provisionWorkspace(
-      config,
-      "kill",
-      true,
-    )) as PersistentWorkspaceInfo;
+    return (await this.provisionWorkspace(config, "kill", true)) as PersistentWorkspaceInfo;
   }
 
   async stopWorkspace(
@@ -439,12 +385,10 @@ export class E2BProvider implements ComputeProvider {
   ): Promise<void> {
     const sandbox = await this.connectSandbox(externalId);
 
-    await sandbox
-      .pause({ apiKey: await this.getApiKey() })
-      .catch((error: Error) => {
-        console.error("E2B Sandbox Error (Sandbox.pause)", error.message);
-        throw new Error(`E2B Sandbox Error (Sandbox.pause): ${error.message}`);
-      });
+    await sandbox.pause({ apiKey: await this.getApiKey() }).catch((error: Error) => {
+      console.error("E2B Sandbox Error (Sandbox.pause)", error.message);
+      throw new Error(`E2B Sandbox Error (Sandbox.pause): ${error.message}`);
+    });
   }
 
   async restartWorkspace(
@@ -453,20 +397,12 @@ export class E2BProvider implements ComputeProvider {
     _externalRunningDeploymentId?: string,
   ): Promise<void> {
     await this.connectSandbox(externalId).catch((error: Error) => {
-      console.error(
-        "E2B Sandbox Error while restarting (Sandbox.connect)",
-        error.message,
-      );
-      throw new Error(
-        `E2B Sandbox Error while restarting (Sandbox.connect): ${error.message}`,
-      );
+      console.error("E2B Sandbox Error while restarting (Sandbox.connect)", error.message);
+      throw new Error(`E2B Sandbox Error while restarting (Sandbox.connect): ${error.message}`);
     });
   }
 
-  async terminateWorkspace(
-    externalServiceId: string,
-    _externalVolumeId?: string,
-  ): Promise<void> {
+  async terminateWorkspace(externalServiceId: string, _externalVolumeId?: string): Promise<void> {
     const sandbox = await this.connectSandbox(externalServiceId);
 
     await sandbox.kill().catch((error: Error) => {
@@ -522,16 +458,10 @@ export class E2BProvider implements ComputeProvider {
     };
   }
 
-  async getWorkspaceSSHAccess(
-    config: WorkspaceSSHAccessConfig,
-  ): Promise<WorkspaceSSHAccess> {
+  async getWorkspaceSSHAccess(config: WorkspaceSSHAccessConfig): Promise<WorkspaceSSHAccess> {
     const sandbox = await this.connectSandbox(config.externalServiceId);
-    const trafficAccessToken = await this.getTrafficAccessToken(
-      sandbox,
-      "SSH access",
-    );
-    const bridgeHost =
-      config.existingConnection?.host ?? (await this.waitForSshBridge(sandbox));
+    const trafficAccessToken = await this.getTrafficAccessToken(sandbox, "SSH access");
+    const bridgeHost = config.existingConnection?.host ?? (await this.waitForSshBridge(sandbox));
     const hostAlias = buildHostAlias(config.subdomain);
     const proxyCommand = `websocat --binary -B 65536 -H='e2b-traffic-access-token: ${trafficAccessToken}' - wss://${bridgeHost}`;
 
@@ -571,13 +501,9 @@ export class E2BProvider implements ComputeProvider {
     };
   }
 
-  async revokeWorkspaceSSHAccess(
-    _config: WorkspaceSSHAccessCleanupConfig,
-  ): Promise<void> {}
+  async revokeWorkspaceSSHAccess(_config: WorkspaceSSHAccessCleanupConfig): Promise<void> {}
 
-  async removeExposedPortDomain(
-    _externalServiceDomainId: string,
-  ): Promise<void> {
+  async removeExposedPortDomain(_externalServiceDomainId: string): Promise<void> {
     // E2B does not expose a separate delete step for public port hosts.
   }
 }

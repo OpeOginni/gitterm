@@ -9,7 +9,7 @@ export default tool({
       .describe("Whether you successfully implemented and committed the feature"),
     error: tool.schema.string().optional().describe("If success=false, describe what went wrong"),
   },
-  async execute(args, context) {
+  async execute(args, _context) {
     let commitSha = "";
     let commitMessage = "";
     let actualSuccess = args.success;

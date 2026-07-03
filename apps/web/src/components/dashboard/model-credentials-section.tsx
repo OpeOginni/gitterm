@@ -30,7 +30,6 @@ import {
   Trash2,
   RefreshCw,
   Copy,
-  FileJson,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -143,7 +142,7 @@ export function ModelCredentialsSection() {
     const recommended = providers.find((p) => p.isRecommended);
     if (recommended) return recommended;
     return providers[0];
-  }, [providers]);
+  }, [providers, providers.length]);
 
   // Set default provider when data loads
   useEffect(() => {
@@ -153,7 +152,7 @@ export function ModelCredentialsSection() {
         setSelectedProviderId(defaultProvider.id);
       }
     }
-  }, [providers, selectedProviderId, getDefaultProvider]);
+  }, [selectedProviderId, getDefaultProvider, providers.length]);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -535,7 +534,7 @@ export function ModelCredentialsSection() {
             </Label>
             <div className="flex flex-wrap gap-2">
               {[...providers]
-                .sort((a, b) => {
+                .toSorted((a, b) => {
                   if (a.isRecommended && !b.isRecommended) return -1;
                   if (!a.isRecommended && b.isRecommended) return 1;
                   return a.displayName.localeCompare(b.displayName);

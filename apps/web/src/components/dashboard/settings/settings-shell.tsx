@@ -3,14 +3,7 @@
 import { useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { DashboardShell, DashboardHeader } from "@/components/dashboard/shell";
-import {
-  BarChart3,
-  CreditCard,
-  Shield,
-  UsersRound,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react";
+import { BarChart3, CreditCard, Shield, UsersRound, Wrench, type LucideIcon } from "lucide-react";
 
 import { UsageSection } from "./usage-section";
 import { WorkspaceSection } from "./workspace-section";
@@ -18,12 +11,7 @@ import { AccountSection } from "./account-section";
 import { PrivacySection } from "./privacy-section";
 import { TeamsSection } from "./teams-section";
 
-type SettingsSection =
-  | "usage"
-  | "workspace"
-  | "teams"
-  | "account"
-  | "privacy";
+type SettingsSection = "usage" | "workspace" | "teams" | "account" | "privacy";
 
 interface SidebarItem {
   id: SettingsSection;
@@ -65,13 +53,7 @@ const sidebarItems: SidebarItem[] = [
   },
 ];
 
-const SECTION_IDS: SettingsSection[] = [
-  "usage",
-  "workspace",
-  "teams",
-  "account",
-  "privacy",
-];
+const SECTION_IDS: SettingsSection[] = ["usage", "workspace", "teams", "account", "privacy"];
 
 function isSettingsSection(value: string | undefined): value is SettingsSection {
   return !!value && SECTION_IDS.includes(value as SettingsSection);
@@ -163,9 +145,7 @@ export function SettingsShell({ currentPlan, initialSection }: SettingsShellProp
                         <item.icon
                           className={cn(
                             "h-4 w-4 transition-colors",
-                            isActive
-                              ? "text-primary"
-                              : "text-white/35 group-hover:text-white/55",
+                            isActive ? "text-primary" : "text-white/35 group-hover:text-white/55",
                           )}
                         />
                       </span>

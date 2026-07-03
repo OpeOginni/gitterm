@@ -53,13 +53,8 @@ export function getDaytonaSnapshotName(
   return `${DAYTONA_SNAPSHOT_BASE_NAMES[kind]}-${region}`;
 }
 
-export function resolveDaytonaSnapshotName(
-  kind: DaytonaSnapshotKind,
-  region: string,
-): string {
-  const resolvedRegion = isKnownRegion(region)
-    ? region
-    : DAYTONA_SNAPSHOT_REGIONS[0];
+export function resolveDaytonaSnapshotName(kind: DaytonaSnapshotKind, region: string): string {
+  const resolvedRegion = isKnownRegion(region) ? region : DAYTONA_SNAPSHOT_REGIONS[0];
   return getDaytonaSnapshotName(kind, resolvedRegion);
 }
 
@@ -67,9 +62,6 @@ export function getDaytonaRegionSnapshots(
   kind: DaytonaSnapshotKind,
 ): Record<DaytonaSnapshotRegion, string> {
   return Object.fromEntries(
-    DAYTONA_SNAPSHOT_REGIONS.map((region) => [
-      region,
-      getDaytonaSnapshotName(kind, region),
-    ]),
+    DAYTONA_SNAPSHOT_REGIONS.map((region) => [region, getDaytonaSnapshotName(kind, region)]),
   ) as Record<DaytonaSnapshotRegion, string>;
 }

@@ -8,10 +8,10 @@ Daytona is configured from the GitTerm admin panel.
 
 Open the admin panel and set these values:
 
-| Field                  | Required | Notes               |
-| ---------------------- | -------- | ------------------- |
-| `API Key`              | Yes      | Daytona API key     |
-| `Default Target Region`| Yes      | `us` or `eu`        |
+| Field                   | Required | Notes           |
+| ----------------------- | -------- | --------------- |
+| `API Key`               | Yes      | Daytona API key |
+| `Default Target Region` | Yes      | `us` or `eu`    |
 
 ## Webhook
 

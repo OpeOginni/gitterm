@@ -155,7 +155,12 @@ fi
 
   // Set up authentication based on credential type
   console.log(`Setting auth for provider ${providerId}...`);
-  const authResult = await setupAuth(sandbox, client as unknown as OpencodeClient, providerId, credential);
+  const authResult = await setupAuth(
+    sandbox,
+    client as unknown as OpencodeClient,
+    providerId,
+    credential,
+  );
 
   if (!authResult.success) {
     return {

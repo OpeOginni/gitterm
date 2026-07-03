@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import {
   Body,
   Button,
@@ -134,9 +135,7 @@ export function InviteEmail(props: InviteEmailProps) {
                   <Column className="align-middle">
                     <Text className="m-0 text-[14px] text-muted-foreground">
                       Invited by{" "}
-                      <span className="font-semibold text-foreground">
-                        {inviterName}
-                      </span>{" "}
+                      <span className="font-semibold text-foreground">{inviterName}</span>{" "}
                       <span className="text-faint">({inviterEmail})</span>
                     </Text>
                   </Column>
@@ -203,8 +202,8 @@ export function InviteEmail(props: InviteEmailProps) {
                 <Hr className="my-7 border-border-soft" />
 
                 <Text className="m-0 mb-1.5 text-[12px] leading-[1.6] text-faint">
-                  This invite expires {expiresLabel}. If the button doesn't
-                  work, copy and paste this link:
+                  This invite expires {expiresLabel}. If the button doesn't work, copy and paste
+                  this link:
                 </Text>
                 <Link
                   href={ctaUrl}
@@ -218,8 +217,7 @@ export function InviteEmail(props: InviteEmailProps) {
             {/* Footer */}
             <Section className="px-6 pt-5 text-center">
               <Text className="m-0 text-[12px] leading-[1.6] text-faint">
-                Not expecting this? You can ignore this email and nothing will
-                happen.
+                Not expecting this? You can ignore this email and nothing will happen.
               </Text>
             </Section>
           </Container>

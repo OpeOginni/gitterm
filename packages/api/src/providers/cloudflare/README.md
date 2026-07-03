@@ -4,10 +4,10 @@ Runs GitTerm workspaces on [Cloudflare Sandbox](https://developers.cloudflare.co
 
 There are **two** workers in this directory:
 
-| Worker                  | Path                     | Purpose                                                                 |
-| ----------------------- | ------------------------ | ----------------------------------------------------------------------- |
-| Compute sandbox worker  | `sandbox-worker/`        | Backs normal opencode workspaces (the `ComputeProvider`).               |
-| Agent-loop worker       | `agent-worker/`          | Legacy autonomous agent-loop runner (`CloudflareSandboxProvider`).      |
+| Worker                 | Path              | Purpose                                                            |
+| ---------------------- | ----------------- | ------------------------------------------------------------------ |
+| Compute sandbox worker | `sandbox-worker/` | Backs normal opencode workspaces (the `ComputeProvider`).          |
+| Agent-loop worker      | `agent-worker/`   | Legacy autonomous agent-loop runner (`CloudflareSandboxProvider`). |
 
 Both share one Cloudflare provider config row (`providerKey = "cloudflare"`).
 
@@ -19,7 +19,7 @@ Both share one Cloudflare provider config row (`providerKey = "cloudflare"`).
   `internalApiKey`). The worker creates a sandbox, clones the repo, writes the
   opencode config/credentials, and starts `opencode serve` on port `4096`.
 - The provisioning payload is persisted in the sandbox's **Durable Object
-  storage**, so it survives container sleep. Container *filesystem* state does
+  storage**, so it survives container sleep. Container _filesystem_ state does
   not survive sleep, so `restartWorkspace` calls `POST /__gitterm/restart`,
   which re-clones the repo and restarts opencode from the stored payload
   (ephemeral + reclone model).
@@ -105,10 +105,10 @@ during deploy).
 
 Then in the admin panel set:
 
-| Field            | Required | Notes                                            |
-| ---------------- | -------- | ------------------------------------------------ |
-| `Worker URL`     | Yes      | The deployed `*.workers.dev` (or custom) URL     |
-| `Internal API Key` | Yes    | Must match the `INTERNAL_API_KEY` you deployed   |
+| Field              | Required | Notes                                          |
+| ------------------ | -------- | ---------------------------------------------- |
+| `Worker URL`       | Yes      | The deployed `*.workers.dev` (or custom) URL   |
+| `Internal API Key` | Yes      | Must match the `INTERNAL_API_KEY` you deployed |
 
 `admin.cloudflare.manualSetup` returns the exact command + steps for the UI.
 

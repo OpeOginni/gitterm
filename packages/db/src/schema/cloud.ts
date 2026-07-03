@@ -13,11 +13,7 @@ import { relations, sql } from "drizzle-orm";
 import { volume, workspace } from "./workspace";
 import { providerConfig } from "./provider-config";
 
-export const settlementEnum = pgEnum("settlement_enum", [
-  "immediate",
-  "webhook",
-  "poll",
-] as const);
+export const settlementEnum = pgEnum("settlement_enum", ["immediate", "webhook", "poll"] as const);
 
 export const cloudAccount = pgTable("cloud_account", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -38,21 +34,16 @@ export const cloudProvider = pgTable("cloud_provider", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
   providerKey: text("provider_key").notNull().default("local"),
-  providerConfigId: uuid("provider_config_id").references(
-    () => providerConfig.id,
-    {
-      onDelete: "set null",
-    },
-  ),
+  providerConfigId: uuid("provider_config_id").references(() => providerConfig.id, {
+    onDelete: "set null",
+  }),
   isEnabled: boolean("is_enabled").notNull().default(true),
   isSandbox: boolean("is_sandbox").notNull().default(false),
   preferredDefault: boolean("preferred_default").notNull().default(false),
   autoPersistent: boolean("auto_persistent").notNull().default(false),
   supportsPersistence: boolean("supports_persistence").notNull().default(true),
   supportsRegions: boolean("supports_regions").notNull().default(true),
-  allowUserRegionSelection: boolean("allow_user_region_selection")
-    .notNull()
-    .default(true),
+  allowUserRegionSelection: boolean("allow_user_region_selection").notNull().default(true),
   supportServerOnly: boolean("support_server_only").notNull().default(false),
   sshAccessSupport: jsonb("editor_access_support")
     .$type<CloudProvidersshAccessSupport>()
@@ -61,9 +52,7 @@ export const cloudProvider = pgTable("cloud_provider", {
   creationSettlement: settlementEnum("creation_settlement").default("webhook"),
   stopSettlement: settlementEnum("stop_settlement").default("webhook"),
   restartSettlement: settlementEnum("restart_settlement").default("webhook"),
-  terminationSettlement: settlementEnum("termination_settlement").default(
-    "webhook",
-  ),
+  terminationSettlement: settlementEnum("termination_settlement").default("webhook"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -154,18 +143,15 @@ export const cloudAccountRelations = relations(cloudAccount, ({ one }) => ({
   }),
 }));
 
-export const cloudProviderRelations = relations(
-  cloudProvider,
-  ({ one, many }) => ({
-    providerConfig: one(providerConfig, {
-      fields: [cloudProvider.providerConfigId],
-      references: [providerConfig.id],
-    }),
-    regions: many(region),
-    cloudAccounts: many(cloudAccount),
-    volumes: many(volume),
+export const cloudProviderRelations = relations(cloudProvider, ({ one, many }) => ({
+  providerConfig: one(providerConfig, {
+    fields: [cloudProvider.providerConfigId],
+    references: [providerConfig.id],
   }),
-);
+  regions: many(region),
+  cloudAccounts: many(cloudAccount),
+  volumes: many(volume),
+}));
 
 export const regionRelations = relations(region, ({ one, many }) => ({
   cloudProvider: one(cloudProvider, {
@@ -183,23 +169,20 @@ export const imageRelations = relations(image, ({ one }) => ({
   }),
 }));
 
-export const providerAgentImageRelations = relations(
-  providerAgentImage,
-  ({ one }) => ({
-    cloudProvider: one(cloudProvider, {
-      fields: [providerAgentImage.cloudProviderId],
-      references: [cloudProvider.id],
-    }),
-    agentType: one(agentType, {
-      fields: [providerAgentImage.agentTypeId],
-      references: [agentType.id],
-    }),
-    image: one(image, {
-      fields: [providerAgentImage.imageId],
-      references: [image.id],
-    }),
+export const providerAgentImageRelations = relations(providerAgentImage, ({ one }) => ({
+  cloudProvider: one(cloudProvider, {
+    fields: [providerAgentImage.cloudProviderId],
+    references: [cloudProvider.id],
   }),
-);
+  agentType: one(agentType, {
+    fields: [providerAgentImage.agentTypeId],
+    references: [agentType.id],
+  }),
+  image: one(image, {
+    fields: [providerAgentImage.imageId],
+    references: [image.id],
+  }),
+}));
 
 export interface CloudProvidersshAccessSupport {
   supported?: boolean;

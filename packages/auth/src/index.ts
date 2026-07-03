@@ -48,9 +48,7 @@ type UserPlan = "free" | "starter" | "pro";
  * Maps Polar product IDs to plan names (for subscriptions)
  */
 const PRODUCT_TO_PLAN: Record<string, UserPlan> = {
-  ...(env.POLAR_STARTER_PRODUCT_ID
-    ? { [env.POLAR_STARTER_PRODUCT_ID]: "starter" as const }
-    : {}),
+  ...(env.POLAR_STARTER_PRODUCT_ID ? { [env.POLAR_STARTER_PRODUCT_ID]: "starter" as const } : {}),
   ...(env.POLAR_PRO_PRODUCT_ID ? { [env.POLAR_PRO_PRODUCT_ID]: "pro" as const } : {}),
 };
 

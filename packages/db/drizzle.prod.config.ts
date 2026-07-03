@@ -9,7 +9,9 @@ if (!process.env.DATABASE_URL && existsSync(envPath)) {
 }
 
 if (!process.env.DATABASE_URL) {
-  throw new Error(`DATABASE_URL is required for prod migrations. Expected it in ${envPath} or the environment.`);
+  throw new Error(
+    `DATABASE_URL is required for prod migrations. Expected it in ${envPath} or the environment.`,
+  );
 }
 
 export default defineConfig({

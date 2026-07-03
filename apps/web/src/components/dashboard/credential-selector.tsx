@@ -70,7 +70,7 @@ export function CredentialSelector({
   // Memoize filtered credentials to avoid unnecessary recalculations
   const providerCredentials = useMemo(
     () => allCredentials.filter((c) => c.providerName === providerName && c.isActive),
-    [allCredentials, providerName],
+    [providerName, allCredentials],
   );
 
   const hasStoredCredentials = providerCredentials.length > 0;

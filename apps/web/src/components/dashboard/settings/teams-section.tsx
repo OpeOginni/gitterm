@@ -1,10 +1,7 @@
 "use client";
 
 import { UsersRound } from "lucide-react";
-import {
-  SettingsSection,
-  SettingsSectionBody,
-} from "@/components/ui/form-card";
+import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
 import { TeamsManager } from "@/components/dashboard/teams/teams-manager";
 
 export function TeamsSection() {

@@ -18,12 +18,8 @@ export interface CloudflareWorkerFile {
  * migration), so it must be deployed with `wrangler deploy` using these files -
  * dropping a single file into the Cloudflare dashboard is not sufficient.
  */
-export async function getCloudflareWorkerFiles(): Promise<
-  CloudflareWorkerFile[]
-> {
-  const base = fileURLToPath(
-    new URL("./sandbox-worker/", import.meta.url).href,
-  );
+export async function getCloudflareWorkerFiles(): Promise<CloudflareWorkerFile[]> {
+  const base = fileURLToPath(new URL("./sandbox-worker/", import.meta.url).href);
   const targets: Array<{ name: string; path: string; rel: string }> = [
     { name: "package.json", path: "package.json", rel: "package.json" },
     { name: "wrangler.jsonc", path: "wrangler.jsonc", rel: "wrangler.jsonc" },
@@ -50,8 +46,7 @@ export function getCloudflareManualSetupInstructions(): {
   command: string;
 } {
   return {
-    command:
-      "npm install\nnpx wrangler deploy\nnpx wrangler secret put INTERNAL_API_KEY",
+    command: "npm install\nnpx wrangler deploy\nnpx wrangler secret put INTERNAL_API_KEY",
     steps: [
       "Download the setup ZIP below and unzip it.",
       "In the unzipped folder, run the commands below (install pulls the worker dependency). When `secret put` prompts, enter a strong value for INTERNAL_API_KEY.",

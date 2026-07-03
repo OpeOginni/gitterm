@@ -458,7 +458,7 @@ class ProviderConfigService {
           undefined,
         sortOrder: definitionFields.get(field.fieldName)?.sortOrder ?? field.sortOrder,
       }))
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+      .toSorted((a, b) => a.sortOrder - b.sortOrder);
   }
 
   async getMissingRequiredFields(config: DecryptedProviderConfig): Promise<string[]> {

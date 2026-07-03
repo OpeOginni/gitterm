@@ -1,16 +1,8 @@
 import { z } from "zod";
 
 export const providerCategoryEnum = z.enum(["compute", "sandbox", "both"]);
-export const fieldTypeEnum = z.enum([
-  "text",
-  "password",
-  "number",
-  "select",
-  "url",
-  "boolean",
-]);
-export const DEFAULT_RAILWAY_API_URL =
-  "https://backboard.railway.app/graphql/v2";
+export const fieldTypeEnum = z.enum(["text", "password", "number", "select", "url", "boolean"]);
+export const DEFAULT_RAILWAY_API_URL = "https://backboard.railway.app/graphql/v2";
 
 export interface ProviderConfigField {
   fieldName: string;
@@ -123,14 +115,10 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       clusterArn: z.string().min(1, "ECS cluster ARN is required"),
       vpcId: z.string().min(1, "VPC ID is required"),
       subnetIds: z.string().min(1, "At least one subnet ID is required"),
-      securityGroupIds: z
-        .string()
-        .min(1, "At least one security group ID is required"),
+      securityGroupIds: z.string().min(1, "At least one security group ID is required"),
       albListenerArn: z.string().min(1, "ALB listener ARN is required"),
       albBaseUrl: z.url("Must be a valid URL"),
-      taskExecutionRoleArn: z
-        .string()
-        .min(1, "Task execution role ARN is required"),
+      taskExecutionRoleArn: z.string().min(1, "Task execution role ARN is required"),
       taskRoleArn: z.string().min(1, "Task role ARN is required"),
       assignPublicIp: z.boolean().optional(),
       publicSshEnabled: z.boolean().optional(),
@@ -328,10 +316,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     category: "sandbox",
     configSchema: z.object({
       apiKey: z.string().min(1, "API KEY is required"),
-      defaultTargetRegion: z.enum(
-        ["us", "eu"],
-        "region of eu or us is required",
-      ),
+      defaultTargetRegion: z.enum(["us", "eu"], "region of eu or us is required"),
       webhookSecret: z.string().optional(),
     }),
     fields: [
@@ -367,9 +352,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
   },
 };
 
-export function getProviderDefinition(
-  providerName: string,
-): ProviderDefinition | undefined {
+export function getProviderDefinition(providerName: string): ProviderDefinition | undefined {
   return PROVIDER_DEFINITIONS[providerName];
 }
 

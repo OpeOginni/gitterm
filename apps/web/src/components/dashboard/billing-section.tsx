@@ -104,13 +104,7 @@ const QUOTAS: QuotaRow[] = [
   },
 ];
 
-function QuotaValue({
-  value,
-  dim = false,
-}: {
-  value: string | boolean;
-  dim?: boolean;
-}) {
+function QuotaValue({ value, dim = false }: { value: string | boolean; dim?: boolean }) {
   if (typeof value === "boolean") {
     return value ? (
       <Check className="h-4 w-4 text-emerald-400" />
@@ -144,9 +138,8 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
             All features unlocked.
           </h3>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-white/50">
-            You're running GitTerm on your own infrastructure - no quotas, no
-            plans, no Polar. Bring as many keys, workspaces, and subdomains as
-            your cluster can handle.
+            You're running GitTerm on your own infrastructure - no quotas, no plans, no Polar. Bring
+            as many keys, workspaces, and subdomains as your cluster can handle.
           </p>
         </FormCardBody>
       </FormCard>
@@ -181,8 +174,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
   // Active paid plan (starter or pro): show the plan's quotas + manage button,
   // plus an upgrade-to-Pro nudge for Starter customers.
   if (currentPlan === "starter" || currentPlan === "pro") {
-    const planQuotaValue = (row: QuotaRow) =>
-      currentPlan === "pro" ? row.pro : row.starter;
+    const planQuotaValue = (row: QuotaRow) => (currentPlan === "pro" ? row.pro : row.starter);
 
     return (
       <FormCard tone="success">
@@ -266,13 +258,9 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
         </FormCardBody>
 
         <FormCardFooter>
-          <span className="truncate">
-            billed monthly · cancel any time in the portal
-          </span>
+          <span className="truncate">billed monthly · cancel any time in the portal</span>
           {session?.user?.email && (
-            <span className="hidden shrink-0 sm:inline">
-              {session.user.email}
-            </span>
+            <span className="hidden shrink-0 sm:inline">{session.user.email}</span>
           )}
         </FormCardFooter>
       </FormCard>
@@ -289,13 +277,11 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
       <FormCardBody className="space-y-7">
         <div>
           <h3 className="text-xl font-semibold leading-tight tracking-tight text-white">
-            We just <span className="italic text-(--cream)">run</span> the
-            workspaces.
+            We just <span className="italic text-(--cream)">run</span> the workspaces.
           </h3>
           <p className="mt-2.5 max-w-xl text-[13.5px] leading-relaxed text-white/50">
-            Bring your own AI keys. We don't mark them up. Free runs on E2B
-            sandboxes - upgrade to unlock every provider, persistent workspaces,
-            and more runtime.
+            Bring your own AI keys. We don't mark them up. Free runs on E2B sandboxes - upgrade to
+            unlock every provider, persistent workspaces, and more runtime.
           </p>
         </div>
 
@@ -303,12 +289,8 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
           <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center border-b border-white/[0.06] bg-white/[0.015] font-mono text-[9px] uppercase tracking-[0.08em] text-white/35 sm:text-[10px] sm:tracking-[0.18em]">
             <span className="px-3 py-2.5 sm:px-4" />
             <span className="px-1.5 py-2.5 text-center sm:px-3">Free</span>
-            <span className="px-1.5 py-2.5 text-center text-primary/80 sm:px-3">
-              Starter
-            </span>
-            <span className="px-1.5 py-2.5 text-center text-primary/80 sm:px-3">
-              Pro
-            </span>
+            <span className="px-1.5 py-2.5 text-center text-primary/80 sm:px-3">Starter</span>
+            <span className="px-1.5 py-2.5 text-center text-primary/80 sm:px-3">Pro</span>
           </div>
           {QUOTAS.map((row, idx) => {
             const Icon = row.icon;
@@ -317,9 +299,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
                 key={row.label}
                 className={`grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center ${
                   idx % 2 === 1 ? "bg-white/[0.012]" : ""
-                } ${
-                  idx < QUOTAS.length - 1 ? "border-b border-white/[0.04]" : ""
-                }`}
+                } ${idx < QUOTAS.length - 1 ? "border-b border-white/[0.04]" : ""}`}
               >
                 <span className="flex items-center gap-2 px-3 py-3 text-[12px] text-white/75 sm:gap-2.5 sm:px-4 sm:text-[13px]">
                   <Icon className="h-3.5 w-3.5 shrink-0 text-white/35" />

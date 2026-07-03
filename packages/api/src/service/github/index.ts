@@ -40,7 +40,7 @@ function decodePrivateKey(key: string): string {
       const decoded = Buffer.from(key, "base64").toString("utf-8");
       return decoded;
     } catch (error) {
-      throw new Error("Invalid GitHub App private key format");
+      throw new Error("Invalid GitHub App private key format", { cause: error });
     }
   }
 
@@ -145,7 +145,7 @@ export class GitHubAppService {
         }
 
         return { valid: true, exists: true, canClone: true, branchExists: true };
-      } catch (e: unknown) {
+      } catch {
         logger.warn(`checkIfValidRepository: unauthenticated request failed for ${owner}/${repo}`, {
           action: "check_if_valid_repo",
         });
@@ -342,7 +342,7 @@ export class GitHubAppService {
       });
     } catch (error) {
       logger.error("Failed to cleanup stale installation", { userId }, error as Error);
-      throw new Error("Failed to cleanup stale GitHub installation");
+      throw new Error("Failed to cleanup stale GitHub installation", { cause: error });
     }
   }
 
@@ -767,7 +767,7 @@ export class GitHubAppService {
         { userId: data.userId, action: "store_installation" },
         error as Error,
       );
-      throw new Error("Failed to store GitHub App installation");
+      throw new Error("Failed to store GitHub App installation", { cause: error });
     }
   }
 
@@ -1171,7 +1171,7 @@ export class GitHubAppService {
         },
         error as Error,
       );
-      throw new Error("Failed to remove GitHub App installation via webhook");
+      throw new Error("Failed to remove GitHub App installation via webhook", { cause: error });
     }
   }
 
@@ -1246,13 +1246,13 @@ export function parseGitHubRepoUrl(url: string): { owner: string; repo: string }
     .replace(/\/+$/, "");
 
   const httpsMatch = cleaned.match(
-    /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?(?:\/(?:tree|blob)\/.+)?$/i,
+    /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/(?:tree|blob)\/.+)?$/i,
   );
   if (httpsMatch) {
     return { owner: httpsMatch[1]!, repo: httpsMatch[2]! };
   }
 
-  const sshMatch = cleaned.match(/^git@github\.com:([^\/]+)\/([^\/]+?)(?:\.git)?$/i);
+  const sshMatch = cleaned.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i);
   if (sshMatch) {
     return { owner: sshMatch[1]!, repo: sshMatch[2]! };
   }

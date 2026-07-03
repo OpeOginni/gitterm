@@ -12,11 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogFooter } from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -45,24 +41,16 @@ interface CreateCloudInstanceProps {
   onCancel: () => void;
 }
 
-export function CreateCloudInstance({
-  onSuccess,
-  onCancel,
-}: CreateCloudInstanceProps) {
+export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstanceProps) {
   const [repoUrl, setRepoUrl] = useState("");
   const [branch, setBranch] = useState("");
   const [subdomain, setSubdomain] = useState("");
   const [userAgentTypeId, setUserAgentTypeId] = useState<string | null>(null);
-  const [userCloudProviderId, setUserCloudProviderId] = useState<string | null>(
-    null,
-  );
+  const [userCloudProviderId, setUserCloudProviderId] = useState<string | null>(null);
   const [userRegionId, setUserRegionId] = useState<string | null>(null);
-  const [userGitIntegrationId, setuserGitIntegrationId] = useState<
-    string | null
-  >(null);
+  const [userGitIntegrationId, setuserGitIntegrationId] = useState<string | null>(null);
   const [persistent, setPersistent] = useState(true);
-  const [workspaceProfile, setWorkspaceProfile] =
-    useState<WorkspaceProfile>("standard");
+  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
 
   // Data fetching -- staleTime keeps the prefetched cache from refetching on
   // open so the dialog renders fully populated without a flicker or resize.
@@ -71,11 +59,10 @@ export function CreateCloudInstance({
     ...trpc.workspace.listAgentTypes.queryOptions(),
     staleTime: STALE_TIME,
   });
-  const { data: cloudProvidersData, isLoading: isLoadingCloudProviders } =
-    useQuery({
-      ...trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true }),
-      staleTime: STALE_TIME,
-    });
+  const { data: cloudProvidersData, isLoading: isLoadingCloudProviders } = useQuery({
+    ...trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true }),
+    staleTime: STALE_TIME,
+  });
   const { data: installationsData } = useQuery({
     ...trpc.workspace.listUserInstallations.queryOptions(),
     staleTime: STALE_TIME,
@@ -122,17 +109,14 @@ export function CreateCloudInstance({
   type CloudGroupKey = string; // "aws" | <providerId>
 
   const hasAwsGroup = awsProviders.length > 0;
-  const hasNoProviders =
-    !isLoadingCloudProviders && cloudProviders.length === 0;
+  const hasNoProviders = !isLoadingCloudProviders && cloudProviders.length === 0;
 
   const { data: session } = authClient.useSession();
-  const isAdmin =
-    (session?.user as { role?: string } | undefined)?.role === "admin";
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
 
   const defaultGroupKey: CloudGroupKey | "" = useMemo(() => {
     if (defaultCloudProviderId) {
-      if (awsProviders.some((p) => p.id === defaultCloudProviderId))
-        return "aws";
+      if (awsProviders.some((p) => p.id === defaultCloudProviderId)) return "aws";
       if (nonAwsProviders.some((p) => p.id === defaultCloudProviderId)) {
         return defaultCloudProviderId;
       }
@@ -140,8 +124,7 @@ export function CreateCloudInstance({
     return hasAwsGroup ? "aws" : (nonAwsProviders[0]?.id ?? "");
   }, [defaultCloudProviderId, awsProviders, nonAwsProviders, hasAwsGroup]);
 
-  const [userCloudGroupKey, setUserCloudGroupKey] =
-    useState<CloudGroupKey | null>(null);
+  const [userCloudGroupKey, setUserCloudGroupKey] = useState<CloudGroupKey | null>(null);
   const selectedCloudGroupKey = userCloudGroupKey ?? defaultGroupKey;
   const isAwsGroup = selectedCloudGroupKey === "aws";
 
@@ -163,36 +146,21 @@ export function CreateCloudInstance({
       // Prefer the explicitly chosen AWS region-provider, otherwise default to
       // the first AWS provider available.
       const matched = awsProviders.find((p) => p.id === userCloudProviderId);
-      return (
-        ((matched ?? awsProviders[0]) as CloudProvider | undefined) ?? null
-      );
+      return ((matched ?? awsProviders[0]) as CloudProvider | undefined) ?? null;
     }
     return (
-      (nonAwsProviders.find((p) => p.id === selectedCloudGroupKey) as
-        | CloudProvider
-        | undefined) ?? null
+      (nonAwsProviders.find((p) => p.id === selectedCloudGroupKey) as CloudProvider | undefined) ??
+      null
     );
-  }, [
-    isAwsGroup,
-    awsProviders,
-    nonAwsProviders,
-    selectedCloudGroupKey,
-    userCloudProviderId,
-  ]);
+  }, [isAwsGroup, awsProviders, nonAwsProviders, selectedCloudGroupKey, userCloudProviderId]);
 
   const selectedCloudProviderId = selectedCloudProvider?.id ?? "";
 
   // Persistence capability for the selected provider. Some providers (e.g.
   // Cloudflare sandboxes) cannot keep files between sessions at all.
-  const persistenceSupported =
-    selectedCloudProvider?.supportsPersistence !== false;
-  const isAutoPersistent =
-    persistenceSupported && !!selectedCloudProvider?.autoPersistent;
-  const effectivePersistent = persistenceSupported
-    ? isAutoPersistent
-      ? true
-      : persistent
-    : false;
+  const persistenceSupported = selectedCloudProvider?.supportsPersistence !== false;
+  const isAutoPersistent = persistenceSupported && !!selectedCloudProvider?.autoPersistent;
+  const effectivePersistent = persistenceSupported ? (isAutoPersistent ? true : persistent) : false;
 
   const availableRegions = useMemo((): Region[] => {
     if (isAwsGroup) {
@@ -231,9 +199,7 @@ export function CreateCloudInstance({
       // For AWS, the composite "providerId::regionId" doubles as the picker
       // value; we resolve the provider row separately.
       const fallback = awsProviders[0]?.regions?.[0];
-      const fallbackComposite = fallback
-        ? `${awsProviders[0].id}::${fallback.id}`
-        : "";
+      const fallbackComposite = fallback ? `${awsProviders[0].id}::${fallback.id}` : "";
       if (userRegionId && availableRegions.some((r) => r.id === userRegionId)) {
         return userRegionId;
       }
@@ -248,16 +214,11 @@ export function CreateCloudInstance({
 
   const canEnableSSHAccess =
     !!selectedCloudProvider?.sshAccessSupport?.supported &&
-    availableAgents.some(
-      (agent) => agent.id === selectedAgentTypeId && agent.serverOnly,
-    ) &&
-    (selectedCloudProvider?.providerKey === "daytona" ||
-      sshPublicKeyData?.hasPublicKey === true);
+    availableAgents.some((agent) => agent.id === selectedAgentTypeId && agent.serverOnly) &&
+    (selectedCloudProvider?.providerKey === "daytona" || sshPublicKeyData?.hasPublicKey === true);
 
   const requiresUserSshKey = selectedCloudProvider?.providerKey !== "daytona";
-  const selectedAgent = availableAgents.find(
-    (agent) => agent.id === selectedAgentTypeId,
-  );
+  const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
 
   const handleCloudGroupChange = (groupKey: CloudGroupKey) => {
     setUserCloudGroupKey(groupKey);
@@ -290,9 +251,7 @@ export function CreateCloudInstance({
   const { mutateAsync: createWorkspace, isPending: isSubmitting } = useMutation(
     trpc.workspace.createWorkspace.mutationOptions({
       onSuccess: (data) => {
-        queryClient.invalidateQueries(
-          trpc.workspace.listWorkspaces.queryOptions(),
-        );
+        queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
         track(AnalyticsEvent.WorkspaceCreate, {
           provider: selectedCloudProvider?.providerKey,
           persistent: effectivePersistent,
@@ -354,10 +313,7 @@ export function CreateCloudInstance({
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: resolvedCloudProviderId,
       regionId: resolvedRegionId,
-      gitIntegrationId:
-        selectedGitIntegrationId === "none"
-          ? undefined
-          : selectedGitIntegrationId,
+      gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
@@ -380,8 +336,7 @@ export function CreateCloudInstance({
       return null;
     }
     const match = integrations.find(
-      (installation) =>
-        installation.git_integration.id === selectedGitIntegrationId,
+      (installation) => installation.git_integration.id === selectedGitIntegrationId,
     );
     if (!match) {
       return null;
@@ -408,24 +363,14 @@ export function CreateCloudInstance({
 
         {/* ── 2. Subdomain ── */}
         <div className="grid gap-1.5">
-          <Label
-            htmlFor="cloud-subdomain"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Subdomain{" "}
-            <span className="font-normal text-muted-foreground/50">
-              (optional)
-            </span>
+          <Label htmlFor="cloud-subdomain" className="text-xs font-medium text-muted-foreground">
+            Subdomain <span className="font-normal text-muted-foreground/50">(optional)</span>
           </Label>
           <Input
             id="cloud-subdomain"
             placeholder="my-workspace"
             value={subdomain}
-            onChange={(e) =>
-              setSubdomain(
-                e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
-              )
-            }
+            onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
             disabled={!subdomainPermissions?.canUseCustomCloudSubdomain}
             className="h-9"
           />
@@ -461,13 +406,8 @@ export function CreateCloudInstance({
         {/* ── 3. Agent + Cloud (+ Region) ── */}
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">
-              Agent
-            </Label>
-            <Select
-              value={selectedAgentTypeId}
-              onValueChange={setUserAgentTypeId}
-            >
+            <Label className="text-xs font-medium text-muted-foreground">Agent</Label>
+            <Select value={selectedAgentTypeId} onValueChange={setUserAgentTypeId}>
               <SelectTrigger className="h-9">
                 {selectedAgent ? (
                   <div className="flex items-center gap-2 min-w-0">
@@ -528,11 +468,7 @@ export function CreateCloudInstance({
                 disabled={hasNoProviders}
               >
                 <SelectTrigger className="h-9 shrink-0">
-                  <SelectValue
-                    placeholder={
-                      hasNoProviders ? "No providers" : "Select cloud"
-                    }
-                  />
+                  <SelectValue placeholder={hasNoProviders ? "No providers" : "Select cloud"} />
                 </SelectTrigger>
                 {isLoadingCloudProviders ? (
                   <SelectContent>
@@ -587,9 +523,7 @@ export function CreateCloudInstance({
                 >
                   <SelectTrigger className="h-9 min-w-0 [&>span]:truncate">
                     <SelectValue
-                      placeholder={
-                        availableRegions.length > 0 ? "Region" : "No regions"
-                      }
+                      placeholder={availableRegions.length > 0 ? "Region" : "No regions"}
                     />
                   </SelectTrigger>
                   <SelectContent>
@@ -625,9 +559,7 @@ export function CreateCloudInstance({
               className="h-8 w-8 shrink-0 opacity-80"
             />
             <div className="min-w-0 flex-1">
-              <span className="text-sm font-medium text-foreground/90">
-                {selectedAgent.name}
-              </span>
+              <span className="text-sm font-medium text-foreground/90">{selectedAgent.name}</span>
               <p className="mt-0.5 text-[11px] leading-snug text-foreground/65">
                 {selectedAgent.description}
               </p>
@@ -640,12 +572,8 @@ export function CreateCloudInstance({
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Key className="h-3.5 w-3.5" />
             <span>
-              <span className="font-medium text-foreground">
-                {activeCredentialCount}
-              </span>{" "}
-              Provider{" "}
-              {activeCredentialCount === 1 ? "credential" : "credentials"}{" "}
-              configured
+              <span className="font-medium text-foreground">{activeCredentialCount}</span> Provider{" "}
+              {activeCredentialCount === 1 ? "credential" : "credentials"} configured
             </span>
           </div>
           <Link
@@ -666,20 +594,11 @@ export function CreateCloudInstance({
                   GitHub Connection
                 </span>
               </TooltipTrigger>
-              <TooltipContent
-                side="top"
-                align="start"
-                sideOffset={6}
-                className="max-w-xs text-xs"
-              >
-                Connect a GitHub account to enable commit, push, fork and
-                private repo access.
+              <TooltipContent side="top" align="start" sideOffset={6} className="max-w-xs text-xs">
+                Connect a GitHub account to enable commit, push, fork and private repo access.
               </TooltipContent>
             </Tooltip>
-            <Link
-              href="/dashboard/integrations"
-              className="text-primary hover:text-foreground/70"
-            >
+            <Link href="/dashboard/integrations" className="text-primary hover:text-foreground/70">
               <ArrowUpRight className="h-3 w-3" />
             </Link>
           </Label>
@@ -689,11 +608,7 @@ export function CreateCloudInstance({
             disabled={!hasIntegrations}
           >
             <SelectTrigger className="h-9">
-              <SelectValue
-                placeholder={
-                  hasIntegrations ? "Select account" : "No integrations"
-                }
-              />
+              <SelectValue placeholder={hasIntegrations ? "Select account" : "No integrations"} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None (public repos only)</SelectItem>
@@ -739,9 +654,7 @@ export function CreateCloudInstance({
             <span>Editor Access (SSH)</span>
             {canEnableSSHAccess ? (
               <>
-                <span className="text-muted-foreground/40">
-                  &mdash; opens in
-                </span>
+                <span className="text-muted-foreground/40">&mdash; opens in</span>
                 <span className="flex items-center gap-2 px-1.5 py-0.5 transition-colors">
                   {[
                     { src: "/vscode.svg", alt: "VS Code" },
@@ -757,9 +670,7 @@ export function CreateCloudInstance({
                       height={11}
                       className={cn(
                         "transition-opacity group-hover:opacity-100",
-                        workspaceProfile === "ssh-enabled"
-                          ? "opacity-100"
-                          : "opacity-60",
+                        workspaceProfile === "ssh-enabled" ? "opacity-100" : "opacity-60",
                       )}
                     />
                   ))}
@@ -812,11 +723,7 @@ export function CreateCloudInstance({
                 )}
               >
                 Persistent storage
-                <span
-                  className={cn(
-                    locked ? "text-foreground/45" : "text-foreground/55",
-                  )}
-                >
+                <span className={cn(locked ? "text-foreground/45" : "text-foreground/55")}>
                   {" "}
                   &mdash;{" "}
                   {!persistenceSupported

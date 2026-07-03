@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  CONSENT_EVENT,
-  getConsent,
-  hasConsentDecision,
-  type ConsentState,
-} from "@/lib/consent";
+import { CONSENT_EVENT, getConsent, hasConsentDecision, type ConsentState } from "@/lib/consent";
 
 interface UseConsent {
   consent: ConsentState;

@@ -6,15 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Check,
-  Clock,
-  GitBranch,
-  Loader2,
-  Terminal,
-  UsersRound,
-  X,
-} from "lucide-react";
+import { Check, Clock, GitBranch, Loader2, Terminal, UsersRound, X } from "lucide-react";
 import { trpc } from "@/utils/trpc";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -26,10 +18,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col bg-background landing-grid dark">
       <header className="border-b border-white/[0.06] bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 transition-opacity hover:opacity-70"
-          >
+          <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
             <span className="font-mono text-sm font-bold uppercase tracking-wider text-white/90">
               GitTerm
@@ -44,13 +33,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function InviteCard({
-  children,
-  eyebrow,
-}: {
-  children: React.ReactNode;
-  eyebrow: string;
-}) {
+function InviteCard({ children, eyebrow }: { children: React.ReactNode; eyebrow: string }) {
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-surface-2 p-8 shadow-2xl">
       <p className="mb-5 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
@@ -67,8 +50,7 @@ function InviteContent() {
   const token = searchParams.get("token") ?? "";
   const type = (searchParams.get("type") as InviteType) ?? "workspace";
 
-  const { data: session, isPending: sessionPending } =
-    authClient.useSession();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
 
   const inviteQuery = useQuery({
     ...trpc.workspaceShare.getInvite.queryOptions({ token, type }),
@@ -142,9 +124,7 @@ function InviteContent() {
     return (
       <Shell>
         <InviteCard eyebrow="Invitation">
-          <h1 className="text-2xl text-white">
-            Invitation not found
-          </h1>
+          <h1 className="text-2xl text-white">Invitation not found</h1>
           <p className="mt-2 text-sm text-white/40">
             This invitation may have been revoked or already used.
           </p>
@@ -158,15 +138,11 @@ function InviteContent() {
   const isTeam = type === "team";
 
   // Narrow the union for workspace-specific fields.
-  const workspaceName =
-    "workspaceName" in invite ? invite.workspaceName : null;
-  const repositoryUrl =
-    "repositoryUrl" in invite ? invite.repositoryUrl : null;
+  const workspaceName = "workspaceName" in invite ? invite.workspaceName : null;
+  const repositoryUrl = "repositoryUrl" in invite ? invite.repositoryUrl : null;
   const teamName = "teamName" in invite ? invite.teamName : null;
-  const inviterName =
-    "inviterName" in invite ? invite.inviterName : null;
-  const inviterEmail =
-    "inviterEmail" in invite ? invite.inviterEmail : null;
+  const inviterName = "inviterName" in invite ? invite.inviterName : null;
+  const inviterEmail = "inviterEmail" in invite ? invite.inviterEmail : null;
 
   const accept = () => {
     if (isTeam) acceptTeam.mutate({ token });
@@ -184,9 +160,7 @@ function InviteContent() {
     return (
       <Shell>
         <InviteCard eyebrow={isTeam ? "Team invitation" : "Workspace invitation"}>
-          <h1 className="text-2xl text-white">
-            Invitation {invite.status}
-          </h1>
+          <h1 className="text-2xl text-white">Invitation {invite.status}</h1>
           <p className="mt-2 text-sm text-white/40">
             This invitation has already been {invite.status}.
           </p>
@@ -202,12 +176,8 @@ function InviteContent() {
     return (
       <Shell>
         <InviteCard eyebrow={isTeam ? "Team invitation" : "Workspace invitation"}>
-          <h1 className="text-2xl text-white">
-            Invitation expired
-          </h1>
-          <p className="mt-2 text-sm text-white/40">
-            Ask the sender to invite you again.
-          </p>
+          <h1 className="text-2xl text-white">Invitation expired</h1>
+          <p className="mt-2 text-sm text-white/40">Ask the sender to invite you again.</p>
         </InviteCard>
       </Shell>
     );
@@ -216,8 +186,7 @@ function InviteContent() {
   const target = `/invite?token=${encodeURIComponent(token)}&type=${type}`;
   const isLoggedIn = !!session?.user;
   const emailMismatch =
-    isLoggedIn &&
-    session.user.email.toLowerCase() !== invite.email.toLowerCase();
+    isLoggedIn && session.user.email.toLowerCase() !== invite.email.toLowerCase();
 
   return (
     <Shell>
@@ -245,9 +214,7 @@ function InviteContent() {
         {inviterEmail ? (
           <p className="mb-5 text-sm text-white/50">
             Invited by{" "}
-            <span className="font-medium text-white/85">
-              {inviterName ?? inviterEmail}
-            </span>
+            <span className="font-medium text-white/85">{inviterName ?? inviterEmail}</span>
             {inviterName ? (
               <>
                 {" "}
@@ -271,9 +238,8 @@ function InviteContent() {
         {!isLoggedIn ? (
           <div className="space-y-3">
             <p className="text-sm text-white/50">
-              Sign in as{" "}
-              <span className="font-medium text-white/80">{invite.email}</span>{" "}
-              to respond to this invitation.
+              Sign in as <span className="font-medium text-white/80">{invite.email}</span> to
+              respond to this invitation.
             </p>
             <Button asChild className="w-full">
               <Link href={`/login?redirect=${encodeURIComponent(target)}`}>
@@ -283,10 +249,8 @@ function InviteContent() {
           </div>
         ) : emailMismatch ? (
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-            This invitation was sent to{" "}
-            <span className="font-medium">{invite.email}</span>, but you're
-            signed in as{" "}
-            <span className="font-medium">{session.user.email}</span>. Sign in
+            This invitation was sent to <span className="font-medium">{invite.email}</span>, but
+            you're signed in as <span className="font-medium">{session.user.email}</span>. Sign in
             with the invited account to accept.
           </div>
         ) : (
@@ -306,11 +270,7 @@ function InviteContent() {
                 </>
               )}
             </Button>
-            <Button
-              className="flex-1"
-              disabled={isAccepting || isDeclining}
-              onClick={accept}
-            >
+            <Button className="flex-1" disabled={isAccepting || isDeclining} onClick={accept}>
               {isAccepting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

@@ -2,13 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ArrowUpRight,
-  GitCommitHorizontal,
-  Loader2,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { ArrowUpRight, GitCommitHorizontal, Loader2, ShieldCheck, X } from "lucide-react";
 import { GitHub as Github } from "@/components/logos/Github";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/utils/trpc";
@@ -36,9 +30,7 @@ export function GitHubOnboarding() {
   const [dismissed, setDismissed] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const { data, isLoading } = useQuery(
-    trpc.workspace.listUserInstallations.queryOptions(),
-  );
+  const { data, isLoading } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
 
   const hasIntegration = (data?.installations?.length ?? 0) > 0;
 
@@ -105,13 +97,12 @@ export function GitHubOnboarding() {
           <span className="marker">GT / GET STARTED</span>
 
           <h2 className="mt-3 text-balance text-xl font-bold tracking-tight text-white sm:text-2xl">
-            Build from your repo,{" "}
-            <span className="text-primary">not an empty shell.</span>
+            Build from your repo, <span className="text-primary">not an empty shell.</span>
           </h2>
 
           <p className="mt-2.5 max-w-md text-sm leading-relaxed text-white/45">
-            Connect GitHub so every workspace can clone your repositories,
-            commit, push, and open pull requests
+            Connect GitHub so every workspace can clone your repositories, commit, push, and open
+            pull requests
           </p>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -155,9 +146,7 @@ export function GitHubOnboarding() {
                 <step.icon className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white/85">
-                  {step.label}
-                </p>
+                <p className="text-sm font-medium text-white/85">{step.label}</p>
                 <p className="text-xs text-white/40">{step.desc}</p>
               </div>
               <span className="ml-auto font-mono text-[10px] tracking-[0.2em] text-white/20">

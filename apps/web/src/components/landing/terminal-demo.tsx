@@ -47,7 +47,7 @@ function CloudProvisionDemo() {
           {steps.map((step, index) => {
             const isActive = activeStep === index;
             const isComplete = activeStep > index;
-            const isPending = activeStep < index;
+
             const StepIcon = step.icon;
 
             return (

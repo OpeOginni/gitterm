@@ -35,9 +35,7 @@ function isBrowser() {
 
 function readCookie(name: string): string | null {
   if (!isBrowser()) return null;
-  const match = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith(`${name}=`));
+  const match = document.cookie.split("; ").find((row) => row.startsWith(`${name}=`));
   return match ? decodeURIComponent(match.split("=")[1] ?? "") : null;
 }
 
@@ -66,10 +64,7 @@ export function hasConsentDecision(): boolean {
 }
 
 export function setConsent(state: ConsentState) {
-  writeCookie(
-    CONSENT_COOKIE_NAME,
-    JSON.stringify({ v: CONSENT_VERSION, ...state }),
-  );
+  writeCookie(CONSENT_COOKIE_NAME, JSON.stringify({ v: CONSENT_VERSION, ...state }));
   if (isBrowser()) {
     window.dispatchEvent(new CustomEvent(CONSENT_EVENT, { detail: state }));
   }

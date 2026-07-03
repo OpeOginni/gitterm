@@ -90,8 +90,7 @@ export class CloudflareComputeProvider implements ComputeProvider {
 
   async getConfig(): Promise<CloudflareConfig | null> {
     try {
-      const config =
-        await getProviderConfigService().getProviderConfigForUse("cloudflare");
+      const config = await getProviderConfigService().getProviderConfigForUse("cloudflare");
       return (config as CloudflareConfig) ?? null;
     } catch (error) {
       console.warn("[CloudflareComputeProvider] Failed to load config:", error);
@@ -236,9 +235,7 @@ export class CloudflareComputeProvider implements ComputeProvider {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
-      throw new Error(
-        `Cloudflare sandbox provisioning failed (${response.status}): ${detail}`,
-      );
+      throw new Error(`Cloudflare sandbox provisioning failed (${response.status}): ${detail}`);
     }
 
     const handle: CloudflareExternalServiceId = {
@@ -250,11 +247,7 @@ export class CloudflareComputeProvider implements ComputeProvider {
     const workspaceInfo: WorkspaceInfo = {
       externalServiceId: serializeHandle(handle),
       upstreamUrl: workerUrl,
-      upstreamAccess: this.getUpstreamAccess(
-        sandboxId,
-        internalApiKey,
-        runtime.port,
-      ),
+      upstreamAccess: this.getUpstreamAccess(sandboxId, internalApiKey, runtime.port),
       domain: this.getDomain(config.subdomain),
       serviceCreatedAt: new Date(),
     };
@@ -279,10 +272,7 @@ export class CloudflareComputeProvider implements ComputeProvider {
   async createPersistentWorkspace(
     config: PersistentWorkspaceConfig,
   ): Promise<PersistentWorkspaceInfo> {
-    return (await this.provisionWorkspace(
-      config,
-      true,
-    )) as PersistentWorkspaceInfo;
+    return (await this.provisionWorkspace(config, true)) as PersistentWorkspaceInfo;
   }
 
   async stopWorkspace(externalId: string): Promise<void> {
@@ -305,21 +295,16 @@ export class CloudflareComputeProvider implements ComputeProvider {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
-      throw new Error(
-        `Cloudflare sandbox restart failed (${response.status}): ${detail}`,
-      );
+      throw new Error(`Cloudflare sandbox restart failed (${response.status}): ${detail}`);
     }
   }
 
   async terminateWorkspace(externalServiceId: string): Promise<void> {
     const handle = parseHandle(externalServiceId);
     const { internalApiKey } = await this.requireConfig();
-    await this.callControl(
-      handle.workerUrl,
-      internalApiKey,
-      "/__gitterm/terminate",
-      { sandboxId: handle.sandboxId },
-    ).catch(() => undefined);
+    await this.callControl(handle.workerUrl, internalApiKey, "/__gitterm/terminate", {
+      sandboxId: handle.sandboxId,
+    }).catch(() => undefined);
   }
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
@@ -358,25 +343,15 @@ export class CloudflareComputeProvider implements ComputeProvider {
 
     return {
       domain: this.getDomain(`${port}-${handle.subdomain}`),
-      upstreamAccess: this.getUpstreamAccess(
-        handle.sandboxId,
-        internalApiKey,
-        port,
-      ),
+      upstreamAccess: this.getUpstreamAccess(handle.sandboxId, internalApiKey, port),
     };
   }
 
-  async getWorkspaceSSHAccess(
-    _config: WorkspaceSSHAccessConfig,
-  ): Promise<WorkspaceSSHAccess> {
-    throw new Error(
-      "Cloudflare sandboxes do not currently support editor SSH access.",
-    );
+  async getWorkspaceSSHAccess(_config: WorkspaceSSHAccessConfig): Promise<WorkspaceSSHAccess> {
+    throw new Error("Cloudflare sandboxes do not currently support editor SSH access.");
   }
 
-  async revokeWorkspaceSSHAccess(
-    _config: WorkspaceSSHAccessCleanupConfig,
-  ): Promise<void> {}
+  async revokeWorkspaceSSHAccess(_config: WorkspaceSSHAccessCleanupConfig): Promise<void> {}
 
   async removeExposedPortDomain(_externalServiceDomainId: string): Promise<void> {
     // Exposed-port routing is header-based and stateless on the worker side;

@@ -1,10 +1,7 @@
 export type WorkspaceType = "cloud" | "agentic-loops";
 export type WorkspaceProfile = "standard" | "ssh-enabled";
 export type EditorTarget = "vscode" | "neovim";
-export type EditorTransportKind =
-  | "direct-ssh"
-  | "proxycommand-ssh"
-  | "managed-ssh";
+export type EditorTransportKind = "direct-ssh" | "proxycommand-ssh" | "managed-ssh";
 
 export interface sshAccessSupport {
   supported: boolean;
@@ -166,10 +163,7 @@ export function getModelsForProvider(providerId: string): ModelOption[] {
 }
 
 // Helper to check if a model requires an API key
-export function modelRequiresApiKey(
-  providerId: string,
-  modelId: string,
-): boolean {
+export function modelRequiresApiKey(providerId: string, modelId: string): boolean {
   const models = getModelsForProvider(providerId);
   const model = models.find((m) => m.id === modelId);
   return model?.requiresApiKey !== false; // Default to true

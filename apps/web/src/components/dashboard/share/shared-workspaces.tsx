@@ -6,12 +6,8 @@ import { trpc } from "@/utils/trpc";
 import { InstanceCard } from "@/components/dashboard/instance-list";
 
 export function SharedWorkspaces() {
-  const sharedQuery = useQuery(
-    trpc.workspaceShare.listSharedWorkspaces.queryOptions(),
-  );
-  const providersQuery = useQuery(
-    trpc.workspace.listCloudProviders.queryOptions(),
-  );
+  const sharedQuery = useQuery(trpc.workspaceShare.listSharedWorkspaces.queryOptions());
+  const providersQuery = useQuery(trpc.workspace.listCloudProviders.queryOptions());
 
   if (sharedQuery.isLoading || providersQuery.isLoading) {
     return (
@@ -30,12 +26,9 @@ export function SharedWorkspaces() {
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03]">
           <UsersRound className="h-7 w-7 text-white/30" />
         </div>
-        <h3 className="mt-5 text-lg font-medium text-white/80">
-          Nothing shared with you yet
-        </h3>
+        <h3 className="mt-5 text-lg font-medium text-white/80">Nothing shared with you yet</h3>
         <p className="mt-2 max-w-sm text-sm text-white/35">
-          When a teammate shares a workspace with you or your team, it will show
-          up here.
+          When a teammate shares a workspace with you or your team, it will show up here.
         </p>
       </div>
     );

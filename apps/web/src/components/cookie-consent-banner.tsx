@@ -79,8 +79,8 @@ export function CookieConsentBanner() {
           </div>
 
           <p className="mt-1.5 text-sm text-white/75">
-            We use cookies to keep you signed in and, with your permission, anonymous
-            product analytics to improve GitTerm. We don't sell your data or run ads.
+            We use cookies to keep you signed in and, with your permission, anonymous product
+            analytics to improve GitTerm. We don't sell your data or run ads.
           </p>
 
           {showDetails ? (

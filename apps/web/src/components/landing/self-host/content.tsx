@@ -204,8 +204,7 @@ export function SelfHostContent() {
 
                   <div>
                     <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
-                      Company / project{" "}
-                      <span className="text-white/20">(optional)</span>
+                      Company / project <span className="text-white/20">(optional)</span>
                     </label>
                     <Input
                       name="company"

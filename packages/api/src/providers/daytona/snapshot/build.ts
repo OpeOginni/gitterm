@@ -37,15 +37,11 @@ function getApiKey(): string {
 async function deleteSnapshotIfExists(daytona: Daytona, snapshotName: string) {
   try {
     const snapshot = await daytona.snapshot.get(snapshotName);
-    console.log(
-      `[daytona-snapshot] deleting existing snapshot ${snapshotName}`,
-    );
+    console.log(`[daytona-snapshot] deleting existing snapshot ${snapshotName}`);
     await daytona.snapshot.delete(snapshot);
   } catch (error) {
     const message =
-      error instanceof Error
-        ? error.message.toLowerCase()
-        : String(error).toLowerCase();
+      error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
 
     if (message.includes("not found")) {
       return;

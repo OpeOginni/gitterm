@@ -80,9 +80,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geist.variable} ${jetbrains.variable} ${fraunces.variable} antialiased`}
-      >
+      <body className={`${geist.variable} ${jetbrains.variable} ${fraunces.variable} antialiased`}>
         <Providers>{children}</Providers>
         <Suspense fallback={null}>
           <PostHogProvider />

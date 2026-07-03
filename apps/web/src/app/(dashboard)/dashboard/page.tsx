@@ -7,7 +7,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { cookies } from "next/headers";
 
 function InstanceListSkeleton() {
   return (

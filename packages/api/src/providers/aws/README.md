@@ -8,12 +8,12 @@ The recommended path is simple setup. You only provide credentials and a region,
 
 Open the admin panel and set these values:
 
-| Field              | Required | Notes                         |
-| ------------------ | -------- | ----------------------------- |
-| `Access Key ID`    | Yes      | Control-plane IAM credentials |
-| `Secret Access Key`| Yes      | Control-plane IAM credentials |
-| `Default Region`   | Yes      | Defaults to `us-east-1`       |
-| `Allow Public SSH` | No       | Enable public SSH on tasks    |
+| Field               | Required | Notes                         |
+| ------------------- | -------- | ----------------------------- |
+| `Access Key ID`     | Yes      | Control-plane IAM credentials |
+| `Secret Access Key` | Yes      | Control-plane IAM credentials |
+| `Default Region`    | Yes      | Defaults to `us-east-1`       |
+| `Allow Public SSH`  | No       | Enable public SSH on tasks    |
 
 GitTerm then creates a CloudFormation stack named `gitterm-<region>` with the ECS cluster, ALB and listener, security groups, task roles, CloudWatch log group, and EFS filesystem, and saves the resolved values back into the provider config.
 

@@ -85,7 +85,7 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
 
     const pinnedRegion =
       provider.regions.find((region) => region.isEnabled) ??
-      [...provider.regions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+      [...provider.regions].toSorted((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
 
     if (!pinnedRegion?.externalRegionIdentifier) {
       continue;

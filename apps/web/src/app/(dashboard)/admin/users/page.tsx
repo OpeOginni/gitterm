@@ -75,7 +75,7 @@ export default function UsersPage() {
         return;
       }
     }
-  }, [session?.user, isSessionPending]);
+  }, [session?.user, isSessionPending, router]);
   const [page, setPage] = useState(0);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);

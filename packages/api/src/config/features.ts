@@ -201,7 +201,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
 };
 
 const getPlanLimits = (plan: UserPlan | string): PlanLimits =>
-  PLAN_LIMITS[(plan as UserPlan)] ?? PLAN_LIMITS.free;
+  PLAN_LIMITS[plan as UserPlan] ?? PLAN_LIMITS.free;
 
 /**
  * Monthly sandbox run quotas by plan

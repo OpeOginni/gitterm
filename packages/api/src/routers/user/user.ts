@@ -17,10 +17,7 @@ import { validateAgentConfig } from "@gitterm/schema";
 import { polarClient, isBillingEnabled } from "@gitterm/auth";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { updateWorkspaceByIdAndInvalidate } from "../../service/workspace-mutations";
-import {
-  isValidSshPublicKey,
-  normalizeSshPublicKey,
-} from "../../utils/ssh-public-key";
+import { isValidSshPublicKey, normalizeSshPublicKey } from "../../utils/ssh-public-key";
 
 export const userRouter = router({
   getSshPublicKey: protectedProcedure.query(async ({ ctx }) => {
@@ -58,9 +55,7 @@ export const userRouter = router({
         });
       }
 
-      const normalized = input.publicKey
-        ? normalizeSshPublicKey(input.publicKey)
-        : "";
+      const normalized = input.publicKey ? normalizeSshPublicKey(input.publicKey) : "";
       if (normalized && !isValidSshPublicKey(normalized)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -104,10 +99,7 @@ export const userRouter = router({
     }
 
     const provider = await db.query.cloudProvider.findFirst({
-      where: and(
-        eq(cloudProvider.id, storedId),
-        eq(cloudProvider.isEnabled, true),
-      ),
+      where: and(eq(cloudProvider.id, storedId), eq(cloudProvider.isEnabled, true)),
       columns: { id: true },
     });
 
@@ -196,14 +188,10 @@ export const userRouter = router({
           if (provider) {
             // Terminate the workspace via compute provider
             try {
-              const computeProvider = await getProviderByCloudProviderId(
-                provider.providerKey,
-              );
+              const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
               await computeProvider.terminateWorkspace(
                 ws.externalInstanceId,
-                ws.persistent && ws.volume
-                  ? ws.volume.externalVolumeId
-                  : undefined,
+                ws.persistent && ws.volume ? ws.volume.externalVolumeId : undefined,
               );
             } catch (error) {
               // Log but continue - workspace might already be terminated
@@ -239,12 +227,7 @@ export const userRouter = router({
       const openSessions = await db
         .select()
         .from(usageSession)
-        .where(
-          and(
-            eq(usageSession.userId, userId),
-            sql`${usageSession.stoppedAt} IS NULL`,
-          ),
-        );
+        .where(and(eq(usageSession.userId, userId), sql`${usageSession.stoppedAt} IS NULL`));
 
       for (const session of openSessions) {
         try {
@@ -265,9 +248,7 @@ export const userRouter = router({
               : undefined;
 
           if (statusCode === 404) {
-            console.warn(
-              `[polar] No customer found for user ${userId}, skipping delete`,
-            );
+            console.warn(`[polar] No customer found for user ${userId}, skipping delete`);
           } else {
             throw error;
           }
@@ -316,10 +297,7 @@ export const userRouter = router({
         });
       }
 
-      const validationResult = await validateAgentConfig(
-        fetchedAgentType.name,
-        input.config,
-      );
+      const validationResult = await validateAgentConfig(fetchedAgentType.name, input.config);
 
       if (!validationResult.success) {
         throw new TRPCError({
@@ -363,10 +341,7 @@ export const userRouter = router({
 
       // Verify ownership
       const existing = await db.query.agentWorkspaceConfig.findFirst({
-        where: and(
-          eq(agentWorkspaceConfig.id, input.id),
-          eq(agentWorkspaceConfig.userId, userId),
-        ),
+        where: and(eq(agentWorkspaceConfig.id, input.id), eq(agentWorkspaceConfig.userId, userId)),
       });
 
       if (!existing) {
@@ -387,14 +362,8 @@ export const userRouter = router({
         });
       }
 
-      console.log(
-        "Validating configuration for agent type:",
-        fetchedAgentType.name,
-      );
-      const validationResult = await validateAgentConfig(
-        fetchedAgentType.name,
-        input.config,
-      );
+      console.log("Validating configuration for agent type:", fetchedAgentType.name);
+      const validationResult = await validateAgentConfig(fetchedAgentType.name, input.config);
       console.log("Validation result:", validationResult);
 
       if (!validationResult.success) {
@@ -464,10 +433,7 @@ export const userRouter = router({
 
       // Verify ownership before deleting
       const existing = await db.query.agentWorkspaceConfig.findFirst({
-        where: and(
-          eq(agentWorkspaceConfig.id, input.id),
-          eq(agentWorkspaceConfig.userId, userId),
-        ),
+        where: and(eq(agentWorkspaceConfig.id, input.id), eq(agentWorkspaceConfig.userId, userId)),
       });
 
       if (!existing) {
@@ -477,9 +443,7 @@ export const userRouter = router({
         });
       }
 
-      await db
-        .delete(agentWorkspaceConfig)
-        .where(eq(agentWorkspaceConfig.id, input.id));
+      await db.delete(agentWorkspaceConfig).where(eq(agentWorkspaceConfig.id, input.id));
 
       return { success: true };
     }),
@@ -501,9 +465,7 @@ export const userRouter = router({
       }
 
       try {
-        sendAdminMessage(
-          `**Feedback submitted by ${userEmail}:**\n\n${input.feedback}`,
-        );
+        sendAdminMessage(`**Feedback submitted by ${userEmail}:**\n\n${input.feedback}`);
       } catch (error) {
         console.error("Failed to send admin message", { error });
       }

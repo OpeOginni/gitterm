@@ -46,11 +46,7 @@ export async function getConfiguredFreeTierMinutes(): Promise<number> {
  * Falls back to "free" if the user can't be found.
  */
 async function resolveUserPlan(userId: string): Promise<UserPlan> {
-  const [row] = await db
-    .select({ plan: user.plan })
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
+  const [row] = await db.select({ plan: user.plan }).from(user).where(eq(user.id, userId)).limit(1);
   return (row?.plan ?? "free") as UserPlan;
 }
 
@@ -118,10 +114,7 @@ export async function getOrCreateDailyUsage(
  * Check if user has remaining daily quota
  * Always returns true in self-hosted mode or when quota enforcement is disabled
  */
-export async function hasRemainingQuota(
-  userId: string,
-  userPlan?: UserPlan,
-): Promise<boolean> {
+export async function hasRemainingQuota(userId: string, userPlan?: UserPlan): Promise<boolean> {
   // Skip quota check if enforcement is disabled
   if (!shouldEnforceQuota()) {
     return true;
