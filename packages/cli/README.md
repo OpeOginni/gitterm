@@ -29,16 +29,16 @@ gitterm workspace restart <workspaceId>
 
 ## Commands
 
-| Command | Description |
-| --- | --- |
-| `gitterm login [--server <url>]` | Sign in via device-code flow |
-| `gitterm logout` | Clear saved credentials |
-| `gitterm auth status [--json]` | Show the logged-in account |
-| `gitterm workspace list [--status <active\|all\|terminated>] [--limit <n>] [--json]` | List your workspaces |
-| `gitterm workspace get <workspaceId> [--json]` | Show details for a workspace |
-| `gitterm workspace stop <workspaceId> [--json]` | Stop a running workspace |
-| `gitterm workspace restart <workspaceId> [--json]` | Restart a stopped workspace |
-| `gitterm workspace terminate <workspaceId> [--yes] [--json]` | Terminate a workspace permanently |
+| Command                                                                              | Description                       |
+| ------------------------------------------------------------------------------------ | --------------------------------- |
+| `gitterm login [--server <url>]`                                                     | Sign in via device-code flow      |
+| `gitterm logout`                                                                     | Clear saved credentials           |
+| `gitterm auth status [--json]`                                                       | Show the logged-in account        |
+| `gitterm workspace list [--status <active\|all\|terminated>] [--limit <n>] [--json]` | List your workspaces              |
+| `gitterm workspace get <workspaceId> [--json]`                                       | Show details for a workspace      |
+| `gitterm workspace stop <workspaceId> [--json]`                                      | Stop a running workspace          |
+| `gitterm workspace restart <workspaceId> [--json]`                                   | Restart a stopped workspace       |
+| `gitterm workspace terminate <workspaceId> [--yes] [--json]`                         | Terminate a workspace permanently |
 
 `ws` works as a shorthand for `workspace`. All read/write commands accept `--json`
 for machine-readable output (errors are emitted as JSON on stderr too), which makes
