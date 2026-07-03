@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "plugins": ["typescript", "react", "nextjs", "import", "unicorn", "oxc"],
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/.next/**",
+    "**/node_modules/**",
+    ".docker/**",
+    "packages/db/drizzle/**",
+    "packages/api/worker-configuration.d.ts"
+  ],
+  "rules": {
+    "no-console": "off",
+    "react/react-in-jsx-scope": "off",
+    "react-hooks/exhaustive-deps": "warn",
+    "nextjs/no-img-element": "warn",
+    "nextjs/no-html-link-for-pages": "warn"
+  }
+}

@@ -25,7 +25,7 @@
     "dev:local": "bun --hot src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "prepublishOnly": "bun run build",
-    "check-types": "tsc -p tsconfig.json --noEmit"
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.1.24",

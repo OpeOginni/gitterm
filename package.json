@@ -23,6 +23,10 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "check-types": "turbo check-types",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format:check": "oxfmt --check",
+    "prepare": "husky",
     "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
@@ -44,7 +48,7 @@
     "infra:down": "docker-compose down",
     "db:seed": "turbo -F @gitterm/db db:seed",
     "db:seed-admin": "turbo -F server db:seed-admin",
-    "format": "bunx oxfmt@latest",
+    "format": "oxfmt",
     "docker:opencode:build": "docker build --pull --no-cache --build-arg OPENCODE_VERSION=latest --build-arg OPENCODE_INSTALL_CACHE_BUST=$(date +%s) -f .docker/Opencode.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode:latest .docker && docker push opeoginni/gitterm-opencode:latest",
     "docker:opencode-server:build": "docker build --pull --no-cache --build-arg OPENCODE_VERSION=latest --build-arg OPENCODE_INSTALL_CACHE_BUST=$(date +%s) -f .docker/Opencode.Server.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-server:latest .docker && docker push opeoginni/gitterm-opencode-server:latest",
     "docker:opencode-server-ssh:build": "docker build --pull --no-cache --build-arg OPENCODE_VERSION=latest --build-arg OPENCODE_INSTALL_CACHE_BUST=$(date +%s) -f .docker/Opencode.Server.SSH.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-server-with-ssh:latest .docker && docker push opeoginni/gitterm-opencode-server-with-ssh:latest",
@@ -61,18 +65,27 @@
     "dotenv": "^17.2.2",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
-    "oxfmt": "^0.37.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/bun": "^1.2.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
+    "oxfmt": "^0.57.0",
+    "oxlint": "^1.72.0",
     "turbo": "^2.9.6"
   },
   "overrides": {
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
     "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3"
+    "@types/react-dom": "19.2.3",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "oxfmt",
+      "oxlint"
+    ]
   },
   "packageManager": "bun@1.3.2"
 }

@@ -10,6 +10,7 @@
     }
   },
   "scripts": {
+    "check-types": "tsc -b",
     "db:push": "drizzle-kit push",
     "db:studio:dev": "drizzle-kit studio",
     "db:studio:prod": "drizzle-kit studio --config=drizzle.prod.config.ts",

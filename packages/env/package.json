@@ -24,12 +24,15 @@
       "default": "./src/auth.ts"
     }
   },
-  "scripts": {},
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
   "dependencies": {
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@gitterm/config": "workspace:*"
+    "@gitterm/config": "workspace:*",
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "typescript": "^5"

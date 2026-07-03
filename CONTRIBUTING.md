@@ -69,3 +69,15 @@ We use Caddy to route services through a single domain and path.
 - Include tests or reproduction steps when fixing bugs.
 - Keep changes aligned with existing code style and conventions.
 - Add or update documentation when behavior changes.
+
+## Code Quality
+
+Formatting ([oxfmt](https://oxc.rs)), linting ([oxlint](https://oxc.rs)), and typechecking run in CI on every PR, and a pre-commit hook (husky + lint-staged) formats and lints staged files automatically.
+
+```bash
+bun run format        # format all files with oxfmt
+bun run format:check  # verify formatting (what CI runs)
+bun run lint          # lint with oxlint
+bun run lint:fix      # lint and auto-fix
+bun run check-types   # typecheck every workspace via turbo
+```
