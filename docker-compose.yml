@@ -2,7 +2,7 @@ name: gitterm
 
 services:
   postgres:
-    image: postgres
+    image: postgres:18
     container_name: gitterm-postgres
     environment:
       POSTGRES_DB: gitterm
