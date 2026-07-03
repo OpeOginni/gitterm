@@ -444,6 +444,67 @@ export const workspaceRouter = router({
       }
     }),
 
+  getWorkspace: protectedProcedure
+    .input(z.object({ workspaceId: z.uuid() }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      if (!userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
+
+      try {
+        const workspaceRecord = await db.query.workspace.findFirst({
+          where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
+          with: {
+            image: {
+              with: {
+                agentType: true,
+              },
+            },
+          },
+        });
+
+        if (!workspaceRecord) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workspace not found",
+          });
+        }
+
+        let workspaceWithPassword = workspaceRecord;
+        if (workspaceRecord.serverPassword && workspaceRecord.serverOnly) {
+          try {
+            workspaceWithPassword = {
+              ...workspaceRecord,
+              serverPassword: decryptWorkspacePassword(workspaceRecord.serverPassword),
+            };
+          } catch (error) {
+            console.error(`Failed to decrypt password for workspace ${workspaceRecord.id}:`, error);
+            workspaceWithPassword = {
+              ...workspaceRecord,
+              serverPassword: null,
+            };
+          }
+        }
+
+        return {
+          success: true,
+          workspace: workspaceWithPassword,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch workspace",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
   getWorkspaceSSHAccess: protectedProcedure
     .input(
       z.object({
@@ -1682,7 +1743,7 @@ export const workspaceRouter = router({
         // Exception: when the provider is auto-persistent (e.g. E2B), persistence
         // is inherent to the provider and cannot be disabled, so we allow it for
         // every plan. We only block opt-in persistence on providers that don't
-        // force it on — otherwise free users couldn't use auto-persistent
+        // force it on; otherwise free users couldn't use auto-persistent
         // providers at all.
         if (
           input.persistent &&
