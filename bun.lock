@@ -240,6 +240,7 @@
         "zod": "^3.23.0",
       },
       "devDependencies": {
+        "@gitterm/config": "workspace:*",
         "@types/bun": "^1.2.6",
         "typescript": "^5.0.0",
       },
