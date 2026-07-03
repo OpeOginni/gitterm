@@ -1,4 +1,13 @@
-import { Layers, KeyRound, MonitorSmartphone, Save, GitBranch, Globe } from "lucide-react";
+import {
+  Layers,
+  KeyRound,
+  MonitorSmartphone,
+  Save,
+  GitBranch,
+  Globe,
+  Share2,
+  TerminalSquare,
+} from "lucide-react";
 
 const features = [
   {
@@ -35,6 +44,18 @@ const features = [
     title: "Preview your app live.",
     description:
       "Expose any workspace port behind a shareable URL. Test a dev server or share a running app while your agent keeps building.",
+  },
+  {
+    icon: Share2,
+    title: "Bring your team in.",
+    description:
+      "Invite collaborators into a workspace, or grant a whole team access at once. Everyone lands in the same session, with roles you control.",
+  },
+  {
+    icon: TerminalSquare,
+    title: "Scriptable from day one.",
+    description:
+      "Drive workspaces from the gitterm CLI or @gitterm/sdk with revocable API tokens. List, stop, and spin up workspaces from your terminal, CI, or code.",
   },
 ];
 
