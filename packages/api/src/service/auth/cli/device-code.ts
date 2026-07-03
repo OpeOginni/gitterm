@@ -1,8 +1,11 @@
 import { DeviceCodeRepository } from "@gitterm/redis";
-import type { DeviceCodeState } from "@gitterm/redis";
 import env from "@gitterm/env/server";
+import { createApiToken } from "../api-token";
 
 const DEFAULT_POLL_INTERVAL_SECONDS = 5;
+
+/** Device-code logins mint a standard revocable API token with this lifetime. */
+const DEVICE_LOGIN_TOKEN_EXPIRY_DAYS = 30;
 
 export class DeviceCodeService {
   private repo = new DeviceCodeRepository();
@@ -18,9 +21,27 @@ export class DeviceCodeService {
     };
   }
 
-  async poll(deviceCode: string): Promise<{ status: DeviceCodeState; userId?: string }> {
-    const session = await this.repo.getByDeviceCode(deviceCode);
-    if (!session) return { status: "expired" };
-    return { status: session.status, userId: session.userId };
+  /**
+   * Exchange an approved device code for a user API token (`gt_...`).
+   * The token is identical to one created from the dashboard: DB-backed,
+   * revocable from Settings -> Account -> API tokens.
+   */
+  async exchangeDeviceCode(deviceCode: string): Promise<{
+    token: string;
+    expiresInSeconds: number;
+  } | null> {
+    const consumed = await this.repo.consumeApprovedDeviceCode(deviceCode);
+    if (!consumed) return null;
+
+    const { token } = await createApiToken({
+      userId: consumed.userId,
+      name: "CLI device login",
+      expiresInDays: DEVICE_LOGIN_TOKEN_EXPIRY_DAYS,
+    });
+
+    return {
+      token,
+      expiresInSeconds: DEVICE_LOGIN_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
+    };
   }
 }

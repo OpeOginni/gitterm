@@ -5,7 +5,6 @@ import { createContext } from "@gitterm/api/context";
 import { appRouter, proxyResolverRouter } from "@gitterm/api/routers/index";
 import { auth } from "@gitterm/auth";
 import { DeviceCodeService } from "@gitterm/api/service/auth/cli/device-code";
-import { CLIAutheService } from "@gitterm/api/service/auth/cli/cli-auth";
 import { getGitHubAppService } from "@gitterm/api/service/github";
 import { workspaceJWT } from "@gitterm/api/service/auth/workspace-jwt";
 import { updateLastActive, hasRemainingQuota } from "@gitterm/api/utils/metering";
@@ -17,7 +16,6 @@ import { cors } from "hono/cors";
 
 const app = new Hono();
 const deviceCodeService = new DeviceCodeService();
-const agentAuthService = new CLIAutheService();
 
 // app.use(logger());
 app.use(
@@ -112,13 +110,13 @@ app.post("/api/device/token", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { deviceCode?: string };
   if (!body.deviceCode) return c.json({ error: "invalid_request" }, 400);
 
-  const result = await agentAuthService.exchangeDeviceCode(body.deviceCode);
+  const result = await deviceCodeService.exchangeDeviceCode(body.deviceCode);
   if (!result) return c.json({ error: "authorization_pending" }, 428);
 
   return c.json({
-    accessToken: result.cliToken,
+    accessToken: result.token,
     tokenType: "Bearer",
-    expiresInSeconds: 30 * 24 * 60 * 60,
+    expiresInSeconds: result.expiresInSeconds,
   });
 });
 
