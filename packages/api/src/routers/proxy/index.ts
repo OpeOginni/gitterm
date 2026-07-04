@@ -1,4 +1,5 @@
 import { auth } from "@gitterm/auth";
+import { timingSafeEqual } from "crypto";
 import { db, eq, and } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
 import type { Context } from "hono";
@@ -20,6 +21,7 @@ import { recordWorkspaceActivity } from "../../service/workspace-activity";
 import { extractWorkspaceSubdomain } from "../../utils/routing";
 import { readAnonCookie, verifyAnonAccessToken } from "../../service/anon/anon-access-token";
 import { userCanAccessWorkspace } from "../workspace/share";
+import { decryptWorkspacePassword } from "../../utils/workspace-password";
 
 const DEBUG_PROXY_RESOLVE = process.env.DEBUG_PROXY_RESOLVE === "true";
 
@@ -318,6 +320,50 @@ function buildProxyResolveHeaders(
   return responseHeaders;
 }
 
+function constantTimeEquals(a: string, b: string) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function getBasicAuthPassword(authorizationHeader: string | undefined) {
+  if (!authorizationHeader?.startsWith("Basic ")) return null;
+
+  try {
+    const decoded = Buffer.from(authorizationHeader.slice("Basic ".length), "base64").toString(
+      "utf8",
+    );
+    const separatorIndex = decoded.indexOf(":");
+    if (separatorIndex === -1) return null;
+    return decoded.slice(separatorIndex + 1);
+  } catch {
+    return null;
+  }
+}
+
+async function hasValidServerOnlyBasicAuth(
+  workspaceId: string,
+  authorizationHeader: string | undefined,
+) {
+  const password = getBasicAuthPassword(authorizationHeader);
+  if (!password) return false;
+
+  const [workspaceRecord] = await db
+    .select({ serverPassword: workspace.serverPassword })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+
+  if (!workspaceRecord?.serverPassword) return false;
+
+  try {
+    return constantTimeEquals(password, decryptWorkspacePassword(workspaceRecord.serverPassword));
+  } catch (error) {
+    console.error(`Failed to decrypt server password for workspace ${workspaceId}:`, error);
+    return false;
+  }
+}
+
 export const proxyResolverRouter = async (c: Context) => {
   debugProxyResolve("[PROXY-RESOLVE] Request received");
 
@@ -471,27 +517,38 @@ export const proxyResolverRouter = async (c: Context) => {
       }
     }
 
-    // Server-only workspaces skip auth
-    if (ws.serverOnly) {
+    // Validate auth for user-owned workspaces. Server-only/OpenCode desktop
+    // workspaces may be reached without cookies by CLI clients, but only with
+    // the workspace's server password via Basic auth.
+    // Use 403 here to avoid colliding with upstream Basic Auth 401 challenges.
+    const session = await auth.api.getSession({
+      headers: c.req.raw.headers,
+    });
+
+    if (!session) {
+      if (
+        !ws.serverOnly ||
+        extractedPort ||
+        !(await hasValidServerOnlyBasicAuth(ws.id, c.req.header("Authorization")))
+      ) {
+        return htmlError(c, "unavailable", 403);
+      }
+
       if (!ws.upstreamUrl) {
         return htmlError(c, "error", 500);
       }
+
       let upstreamUrl = new URL(ws.upstreamUrl);
       let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
-
       if (extractedPort && portUpstream) {
-        // portUpstream validated above (404 if null)
         const portUrl = new URL(portUpstream);
         port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
         upstreamUrl = portUrl;
       }
 
-      debugProxyResolve("[PROXY-RESOLVE] Server-only workspace response:", {
-        "X-Upstream-URL": ws.upstreamUrl,
-        "X-Container-Host": upstreamUrl.hostname,
-        "X-Container-Port": port,
-        "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
-        hasUpStreamAccessHeader: upstreamAccessHeaders !== null,
+      debugProxyResolve("[PROXY-RESOLVE] Server-only basic auth routing:", {
+        id: ws.id,
+        subdomain: ws.subdomain,
       });
 
       await recordWorkspaceActivity(ws.id);
@@ -505,21 +562,11 @@ export const proxyResolverRouter = async (c: Context) => {
             "X-Container-Host": upstreamUrl.hostname,
             "X-Container-Port": port,
             "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
-            "X-Hosting-Type": "cloud",
+            "X-Hosting-Type": ws.hostingType,
           },
           upstreamAccessHeaders,
         ),
       );
-    }
-
-    // Validate auth for non-server-only
-    // Use 403 here to avoid colliding with upstream Basic Auth 401 challenges.
-    const session = await auth.api.getSession({
-      headers: c.req.raw.headers,
-    });
-
-    if (!session) {
-      return htmlError(c, "unavailable", 403);
     }
 
     const canAccess = await userCanAccessWorkspace(ws.id, session.user.id);
