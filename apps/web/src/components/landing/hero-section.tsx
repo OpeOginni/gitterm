@@ -433,12 +433,15 @@ function ResultCard({
                 Password
               </span>
               <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-white/85">
-                {showPassword ? result.serverPassword : "••••••••••••"}
+                <span className="sm:hidden">••••••••••••</span>
+                <span className="hidden sm:inline">
+                  {showPassword ? result.serverPassword : "••••••••••••"}
+                </span>
               </span>
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-white/40 transition-colors hover:text-white/80"
+                className="hidden h-7 w-7 shrink-0 items-center justify-center text-white/40 transition-colors hover:text-white/80 sm:inline-flex"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
