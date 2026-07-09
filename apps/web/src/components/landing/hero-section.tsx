@@ -9,7 +9,7 @@ import {
   Loader2,
   Copy,
   ExternalLink,
-  RefreshCw,
+  Square,
   Globe,
   Terminal,
   Monitor,
@@ -48,6 +48,13 @@ interface AnonResult {
   startedAt: string;
   expiresAt: string;
   expiresInSeconds: number;
+}
+
+function copyText(value: string, message: string) {
+  navigator.clipboard.writeText(value).then(
+    () => toast.success(message),
+    () => toast.error("Couldn't copy"),
+  );
 }
 
 export function HeroSection() {
@@ -365,13 +372,6 @@ function ResultCard({
   const remainingSec = Math.floor((remainingMs % 60000) / 1000);
   const expired = remainingMs === 0;
 
-  function copyText(value: string, message: string) {
-    navigator.clipboard.writeText(value).then(
-      () => toast.success(message),
-      () => toast.error("Couldn't copy"),
-    );
-  }
-
   function handleOpen() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
@@ -379,13 +379,13 @@ function ResultCard({
   return (
     <FormCard tone="success" className="scanlines">
       <FormCardHeader>
-        <span>sandbox.live · OpenCode server / app</span>
+        <span>Live sandbox</span>
         <FormCardStatus tone={expired ? "expired" : "ready"}>
           {expired ? "expired" : "ready"}
         </FormCardStatus>
       </FormCardHeader>
 
-      <div className="space-y-5 p-5 pt-3">
+      <div className="space-y-4 p-4 pt-3 sm:space-y-5 sm:p-5 sm:pt-3">
         {/* Workspace URL */}
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
@@ -406,26 +406,23 @@ function ResultCard({
 
         {/* Credentials */}
         <div>
-          <div className="mb-1.5 flex items-baseline justify-between">
+          <div className="mb-1.5">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
               Credentials
             </p>
-            <span className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-white/25">
-              for CLI · desktop · web prompt
-            </span>
           </div>
           <div className="grid gap-1.5">
             <div className="flex items-center gap-3 rounded-lg bg-input/70 px-3.5 py-2">
               <span className="w-[72px] shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
                 Username
               </span>
-              <span className="flex-1 truncate font-mono text-[13px] text-white/85">
+              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-white/85">
                 {result.serverUsername}
               </span>
               <button
                 type="button"
                 onClick={() => copyText(result.serverUsername, "Username copied")}
-                className="text-white/40 transition-colors hover:text-white/80"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-white/40 transition-colors hover:text-white/80"
                 aria-label="Copy username"
               >
                 <Copy className="h-3 w-3" />
@@ -435,13 +432,13 @@ function ResultCard({
               <span className="w-[72px] shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
                 Password
               </span>
-              <span className="flex-1 truncate font-mono text-[13px] text-white/85">
-                {showPassword ? result.serverPassword : "•".repeat(result.serverPassword.length)}
+              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-white/85">
+                {showPassword ? result.serverPassword : "••••••••••••"}
               </span>
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="text-white/40 transition-colors hover:text-white/80"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-white/40 transition-colors hover:text-white/80"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -449,7 +446,7 @@ function ResultCard({
               <button
                 type="button"
                 onClick={() => copyText(result.serverPassword, "Password copied")}
-                className="text-white/40 transition-colors hover:text-white/80"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-white/40 transition-colors hover:text-white/80"
                 aria-label="Copy password"
               >
                 <Copy className="h-3 w-3" />
@@ -474,8 +471,8 @@ function ResultCard({
                 <Globe className="h-3.5 w-3.5 text-white/60" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-white/85">Web UI</p>
-                <p className="text-[11.5px] text-white/40">Open the workspace in your browser.</p>
+                <p className="text-[13px] font-medium text-white/85">Browser</p>
+                <p className="text-[11.5px] text-white/40">Open the workspace.</p>
               </div>
               <button
                 type="button"
@@ -494,7 +491,7 @@ function ResultCard({
                 <Terminal className="h-3.5 w-3.5 text-white/60" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-white/85">OpenCode CLI</p>
+                <p className="text-[13px] font-medium text-white/85">CLI</p>
                 <p className="truncate font-mono text-[11.5px] text-white/40">{attachDisplay}</p>
               </div>
               <button
@@ -513,10 +510,8 @@ function ResultCard({
                 <Monitor className="h-3.5 w-3.5 text-white/60" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-white/85">Desktop App</p>
-                <p className="text-[11.5px] text-white/40">
-                  Use the URL and credentials above to connect to the desktop app.
-                </p>
+                <p className="text-[13px] font-medium text-white/85">Desktop</p>
+                <p className="text-[11.5px] text-white/40">Use the credentials above.</p>
               </div>
             </div>
           </div>
@@ -533,9 +528,9 @@ function ResultCard({
           {isResetting ? (
             <Loader2 className="mr-2 h-3 w-3 animate-spin" />
           ) : (
-            <RefreshCw className="mr-2 h-3 w-3" />
+            <Square className="mr-2 h-3 w-3 fill-current" />
           )}
-          {isResetting ? "Stopping..." : "End sandbox"}
+          {isResetting ? "Stopping..." : "Stop sandbox"}
         </Button>
       </div>
 
