@@ -48,7 +48,7 @@ export type AuthStatus = {
   authMethod: "session" | "apiToken";
 };
 
-export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
+export type WorkspaceStatus = "pending" | "running" | "paused" | "terminated";
 export type WorkspaceHostingType = "cloud" | "local";
 
 export type Workspace = {
@@ -57,6 +57,8 @@ export type Workspace = {
   status: WorkspaceStatus;
   repositoryUrl: string | null;
   repositoryBranch: string | null;
+  baseCommit: string | null;
+  checkoutRef: string | null;
   domain: string;
   subdomain: string | null;
   persistent: boolean;
@@ -71,6 +73,27 @@ export type Workspace = {
   terminatedAt: string | null;
   lastActiveAt: string | null;
   updatedAt: string | null;
+};
+
+export type WorkspaceRuntimeAccess = {
+  workspaceId: string;
+  status: WorkspaceStatus;
+  url: string | null;
+  headers?: Record<string, string>;
+  password?: string;
+  directory: string;
+  repo: string | null;
+  branch: string | null;
+  baseCommit: string | null;
+  checkoutRef: string | null;
+  persistent: boolean;
+  recoverable: boolean;
+  providerKey: string | null;
+};
+
+export type WorkspaceCreateResult = {
+  workspace: Workspace;
+  runtime: WorkspaceRuntimeAccess;
 };
 
 export type WorkspaceListOptions = {
@@ -93,6 +116,8 @@ export type WorkspaceCreateInput = {
   name?: string;
   repo?: string;
   branch?: string;
+  baseCommit?: string;
+  checkoutRef?: string;
   subdomain?: string;
   agentTypeId: string;
   cloudProviderId: string;
@@ -103,10 +128,15 @@ export type WorkspaceCreateInput = {
 };
 
 export type WorkspaceStopResult = { durationMinutes: number };
+export type WorkspacePauseResult = WorkspaceStopResult;
 export type WorkspaceRestartResult = { status: WorkspaceStatus };
 export type WorkspaceTerminateResult = {
   workspace: Workspace | null;
   cleanupInBackground: boolean;
+};
+export type WorkspaceEnsureRunningResult = {
+  workspace: Workspace;
+  runtime: WorkspaceRuntimeAccess;
 };
 
 export type AgentType = {
@@ -134,10 +164,16 @@ export type GittermClient = {
   workspaces: {
     list(input?: WorkspaceListOptions): Promise<WorkspaceListResult>;
     get(workspaceId: string): Promise<Workspace>;
-    stop(workspaceId: string): Promise<WorkspaceStopResult>;
+    getRuntimeAccess(workspaceId: string): Promise<WorkspaceRuntimeAccess>;
+    ensureRunning(
+      workspaceId: string,
+      options?: { timeoutMs?: number; pollIntervalMs?: number },
+    ): Promise<WorkspaceEnsureRunningResult>;
+    pause(workspaceId: string): Promise<WorkspacePauseResult>;
     restart(workspaceId: string): Promise<WorkspaceRestartResult>;
     terminate(workspaceId: string): Promise<WorkspaceTerminateResult>;
-    create(input: WorkspaceCreateInput): Promise<Workspace>;
+    create(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
+    createSandbox(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;

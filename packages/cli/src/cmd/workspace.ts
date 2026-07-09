@@ -63,10 +63,10 @@ export async function runWorkspaceGet(args: JsonArgs & { workspaceId: string }) 
   }
 }
 
-export async function runWorkspaceStop(args: JsonArgs & { workspaceId: string }) {
-  const spin = startSpinner("Stopping workspace...", args.json);
+export async function runWorkspacePause(args: JsonArgs & { workspaceId: string }) {
+  const spin = startSpinner("Pausing workspace...", args.json);
   try {
-    const result = await createGittermClient().workspaces.stop(args.workspaceId);
+    const result = await createGittermClient().workspaces.pause(args.workspaceId);
     spin?.stop();
 
     if (args.json) {
@@ -74,12 +74,15 @@ export async function runWorkspaceStop(args: JsonArgs & { workspaceId: string })
       return;
     }
 
-    success(`Workspace stopped (ran for ${result.durationMinutes} min).`);
+    success(`Workspace paused (ran for ${result.durationMinutes} min).`);
   } catch (err) {
     spin?.stop();
     handleError(err, args.json);
   }
 }
+
+/** @deprecated use runWorkspacePause */
+export const runWorkspaceStop = runWorkspacePause;
 
 export async function runWorkspaceRestart(args: JsonArgs & { workspaceId: string }) {
   const spin = startSpinner("Restarting workspace...", args.json);

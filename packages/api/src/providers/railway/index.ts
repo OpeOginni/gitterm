@@ -30,15 +30,24 @@ export class RailwayProvider implements ComputeProvider {
   private buildEnvironmentVariables(
     config: WorkspaceConfig | PersistentWorkspaceConfig,
   ): Record<string, string | undefined> | undefined {
-    if (!config.environmentVariables && !config.repositoryBranch) {
+    if (
+      !config.environmentVariables &&
+      !config.repositoryBranch &&
+      !config.repositoryBaseCommit &&
+      !config.repositoryCheckoutRef
+    ) {
       return config.environmentVariables;
     }
 
     const repositoryBranch = config.repositoryBranch?.trim();
+    const repositoryBaseCommit = config.repositoryBaseCommit?.trim();
+    const repositoryCheckoutRef = config.repositoryCheckoutRef?.trim();
 
     return {
       ...config.environmentVariables,
       REPO_BRANCH: repositoryBranch || config.environmentVariables?.REPO_BRANCH,
+      REPO_BASE_COMMIT: repositoryBaseCommit || config.environmentVariables?.REPO_BASE_COMMIT,
+      REPO_CHECKOUT_REF: repositoryCheckoutRef || config.environmentVariables?.REPO_CHECKOUT_REF,
     };
   }
 

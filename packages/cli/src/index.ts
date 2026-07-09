@@ -7,8 +7,8 @@ import { runAuthStatus, runLogin, runLogout } from "./cmd/auth.js";
 import {
   runWorkspaceGet,
   runWorkspaceList,
+  runWorkspacePause,
   runWorkspaceRestart,
-  runWorkspaceStop,
   runWorkspaceTerminate,
 } from "./cmd/workspace.js";
 import { handleError } from "./ui.js";
@@ -93,19 +93,30 @@ yargs(hideBin(process.argv))
         },
       )
       .command(
-        "stop <workspaceId>",
-        "Stop a running workspace",
+        "pause <workspaceId>",
+        "Pause a running workspace",
         (builder) =>
           builder
             .positional("workspaceId", { type: "string", demandOption: true })
             .options(jsonOption),
         async (argv) => {
-          await runWorkspaceStop({ json: argv.json, workspaceId: argv.workspaceId });
+          await runWorkspacePause({ json: argv.json, workspaceId: argv.workspaceId });
+        },
+      )
+      .command(
+        "stop <workspaceId>",
+        "Alias for pause",
+        (builder) =>
+          builder
+            .positional("workspaceId", { type: "string", demandOption: true })
+            .options(jsonOption),
+        async (argv) => {
+          await runWorkspacePause({ json: argv.json, workspaceId: argv.workspaceId });
         },
       )
       .command(
         "restart <workspaceId>",
-        "Restart a stopped workspace",
+        "Restart a paused workspace",
         (builder) =>
           builder
             .positional("workspaceId", { type: "string", demandOption: true })

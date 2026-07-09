@@ -23,7 +23,11 @@ export async function runLogin(args: { serverUrl: string }) {
     });
     spin?.stop();
 
-    await saveConfig({ serverUrl: args.serverUrl, token, createdAt: Date.now() });
+    await saveConfig({
+      serverUrl: args.serverUrl,
+      token,
+      createdAt: Date.now(),
+    });
 
     // Best-effort identity lookup so the success message names the account.
     try {

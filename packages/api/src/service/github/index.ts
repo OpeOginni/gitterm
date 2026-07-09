@@ -212,6 +212,81 @@ export class GitHubAppService {
   }
 
   /**
+   * Resolve the full commit SHA for a branch (or HEAD) on a repository.
+   * Uses authenticated access when options are provided; falls back to public API.
+   */
+  async resolveBranchHeadSha(
+    repositoryUrl: string,
+    branch?: string,
+    options?: { userId: string; gitIntegrationId: string; installationId?: string },
+  ): Promise<string | null> {
+    const parsed = this.parseRepoUrl(repositoryUrl);
+    if (!parsed) return null;
+    const { owner, repo } = parsed;
+
+    const resolveWithOctokit = async (octokit: Octokit): Promise<string | null> => {
+      try {
+        if (branch) {
+          const { data } = await octokit.repos.getBranch({ owner, repo, branch });
+          return data.commit.sha ?? null;
+        }
+        const { data } = await octokit.repos.get({ owner, repo });
+        const defaultBranch = data.default_branch;
+        if (!defaultBranch) return null;
+        const branchData = await octokit.repos.getBranch({
+          owner,
+          repo,
+          branch: defaultBranch,
+        });
+        return branchData.data.commit.sha ?? null;
+      } catch {
+        return null;
+      }
+    };
+
+    if (options?.installationId) {
+      try {
+        const { token } = await this.getUserToServerToken(options.installationId);
+        return resolveWithOctokit(new Octokit({ auth: token }));
+      } catch {
+        // fall through
+      }
+    }
+
+    if (options?.userId && options?.gitIntegrationId) {
+      const [integration] = await db
+        .select()
+        .from(gitIntegration)
+        .where(
+          and(
+            eq(gitIntegration.id, options.gitIntegrationId),
+            eq(gitIntegration.userId, options.userId),
+            eq(gitIntegration.provider, "github"),
+          ),
+        )
+        .limit(1);
+
+      if (integration) {
+        const installation = await this.getUserInstallation(
+          options.userId,
+          integration.providerInstallationId,
+        );
+        if (installation) {
+          try {
+            const { token } = await this.getUserToServerToken(installation.installationId);
+            const sha = await resolveWithOctokit(new Octokit({ auth: token }));
+            if (sha) return sha;
+          } catch {
+            // fall through to public
+          }
+        }
+      }
+    }
+
+    return resolveWithOctokit(new Octokit());
+  }
+
+  /**
    * Get a user-to-server access token for a specific installation
    * This token is short-lived (1 hour) and scoped to the installation's permissions
    */

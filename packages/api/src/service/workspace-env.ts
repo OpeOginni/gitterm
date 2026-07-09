@@ -141,6 +141,8 @@ export function buildWorkspaceEnv(
   const system: SystemWorkspaceEnv = {
     REPO_URL: spec.repo?.url,
     REPO_BRANCH: spec.repo?.branch,
+    REPO_BASE_COMMIT: spec.repo?.baseCommit,
+    REPO_CHECKOUT_REF: spec.repo?.checkoutRef,
     OPENCODE_CONFIG_BASE64: toBase64(spec.opencodeConfigJson),
     OPENCODE_CREDENTIALS_BASE64: toBase64(spec.opencodeCredentialsJson),
     OPENCODE_SERVER_PASSWORD: spec.serverPassword,

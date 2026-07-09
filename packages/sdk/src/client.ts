@@ -8,10 +8,13 @@ import type {
   CloudProvider,
   Workspace,
   WorkspaceCreateInput,
+  WorkspaceCreateResult,
+  WorkspaceEnsureRunningResult,
   WorkspaceListOptions,
   WorkspaceListResult,
   WorkspaceRestartResult,
-  WorkspaceStopResult,
+  WorkspaceRuntimeAccess,
+  WorkspacePauseResult,
   WorkspaceTerminateResult,
 } from "./types.js";
 
@@ -35,6 +38,10 @@ type RawWorkspace = {
   status: Workspace["status"];
   repositoryUrl: string | null;
   repositoryBranch: string | null;
+  repositoryBaseCommit?: string | null;
+  repositoryCheckoutRef?: string | null;
+  baseCommit?: string | null;
+  checkoutRef?: string | null;
   domain: string;
   subdomain: string | null;
   persistent: boolean;
@@ -53,6 +60,22 @@ type RawWorkspace = {
   terminatedAt: Date | string | null;
   lastActiveAt: Date | string | null;
   updatedAt: Date | string | null;
+};
+
+type RawRuntimeAccess = {
+  workspaceId: string;
+  status: Workspace["status"];
+  url: string | null;
+  headers?: Record<string, string>;
+  password?: string;
+  directory: string;
+  repo: string | null;
+  branch: string | null;
+  baseCommit: string | null;
+  checkoutRef: string | null;
+  persistent: boolean;
+  recoverable: boolean;
+  providerKey: string | null;
 };
 
 function envValue(name: string): string | undefined {
@@ -81,6 +104,13 @@ function toIso(value: Date | string | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : value;
 }
 
+function normalizeBaseCommit(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return /^[0-9a-f]{40}([0-9a-f]{24})?$/i.test(trimmed) ? trimmed.toLowerCase() : trimmed;
+}
+
 function normalizeWorkspace(workspace: RawWorkspace | null | undefined): Workspace | null {
   if (!workspace) return null;
   return {
@@ -89,6 +119,8 @@ function normalizeWorkspace(workspace: RawWorkspace | null | undefined): Workspa
     status: workspace.status,
     repositoryUrl: workspace.repositoryUrl,
     repositoryBranch: workspace.repositoryBranch,
+    baseCommit: normalizeBaseCommit(workspace.baseCommit ?? workspace.repositoryBaseCommit ?? null),
+    checkoutRef: workspace.checkoutRef ?? workspace.repositoryCheckoutRef ?? null,
     domain: workspace.domain,
     subdomain: workspace.subdomain,
     persistent: workspace.persistent,
@@ -115,6 +147,24 @@ function normalizeWorkspace(workspace: RawWorkspace | null | undefined): Workspa
     terminatedAt: toIso(workspace.terminatedAt),
     lastActiveAt: toIso(workspace.lastActiveAt),
     updatedAt: toIso(workspace.updatedAt),
+  };
+}
+
+function normalizeRuntime(runtime: RawRuntimeAccess): WorkspaceRuntimeAccess {
+  return {
+    workspaceId: runtime.workspaceId,
+    status: runtime.status,
+    url: runtime.url,
+    headers: runtime.headers,
+    password: runtime.password,
+    directory: runtime.directory,
+    repo: runtime.repo,
+    branch: runtime.branch,
+    baseCommit: normalizeBaseCommit(runtime.baseCommit),
+    checkoutRef: runtime.checkoutRef,
+    persistent: runtime.persistent,
+    recoverable: runtime.recoverable,
+    providerKey: runtime.providerKey,
   };
 }
 
@@ -180,6 +230,29 @@ export function createGittermClient(options: GittermClientOptions = {}) {
 
   const run = <T>(operation: () => Promise<T>) => runWithServer(credentials.serverUrl, operation);
 
+  const createWorkspace = (input: WorkspaceCreateInput) =>
+    run(async (): Promise<WorkspaceCreateResult> => {
+      const result = await trpc.workspace.createWorkspace.mutate(input);
+      const workspace = normalizeWorkspace(result.workspace as RawWorkspace);
+      if (!workspace) throw new GittermError("SERVER_ERROR", "Workspace creation failed");
+      const runtime = result.runtime
+        ? normalizeRuntime(result.runtime)
+        : {
+            workspaceId: workspace.id,
+            status: workspace.status,
+            url: null,
+            directory: "/workspace",
+            repo: workspace.repositoryUrl,
+            branch: workspace.repositoryBranch,
+            baseCommit: workspace.baseCommit,
+            checkoutRef: workspace.checkoutRef,
+            persistent: workspace.persistent,
+            recoverable: workspace.status !== "terminated",
+            providerKey: null,
+          };
+      return { workspace, runtime };
+    });
+
   return {
     serverUrl: credentials.serverUrl,
     auth: {
@@ -214,9 +287,31 @@ export function createGittermClient(options: GittermClientOptions = {}) {
           if (!workspace) throw new GittermError("NOT_FOUND", "Workspace not found");
           return workspace;
         }),
-      stop: (workspaceId: string) =>
-        run(async (): Promise<WorkspaceStopResult> => {
-          const result = await trpc.workspace.stopWorkspace.mutate({ workspaceId });
+      getRuntimeAccess: (workspaceId: string) =>
+        run(async (): Promise<WorkspaceRuntimeAccess> => {
+          const result = await trpc.workspace.getRuntimeAccess.query({ workspaceId });
+          return normalizeRuntime(result);
+        }),
+      ensureRunning: (
+        workspaceId: string,
+        options?: { timeoutMs?: number; pollIntervalMs?: number },
+      ) =>
+        run(async (): Promise<WorkspaceEnsureRunningResult> => {
+          const result = await trpc.workspace.ensureRunning.mutate({
+            workspaceId,
+            timeoutMs: options?.timeoutMs,
+            pollIntervalMs: options?.pollIntervalMs,
+          });
+          const workspace = normalizeWorkspace(result.workspace as RawWorkspace);
+          if (!workspace) throw new GittermError("SERVER_ERROR", "ensureRunning failed");
+          return {
+            workspace,
+            runtime: normalizeRuntime(result.runtime),
+          };
+        }),
+      pause: (workspaceId: string) =>
+        run(async (): Promise<WorkspacePauseResult> => {
+          const result = await trpc.workspace.pauseWorkspace.mutate({ workspaceId });
           return { durationMinutes: result.durationMinutes };
         }),
       restart: (workspaceId: string) =>
@@ -232,13 +327,9 @@ export function createGittermClient(options: GittermClientOptions = {}) {
             cleanupInBackground: result.cleanupInBackground,
           };
         }),
-      create: (input: WorkspaceCreateInput) =>
-        run(async (): Promise<Workspace> => {
-          const result = await trpc.workspace.createWorkspace.mutate(input);
-          const workspace = normalizeWorkspace(result.workspace);
-          if (!workspace) throw new GittermError("SERVER_ERROR", "Workspace creation failed");
-          return workspace;
-        }),
+      create: createWorkspace,
+      /** Alias for create — preferred name for sandbox/plugin callers. */
+      createSandbox: createWorkspace,
     },
     catalog: {
       agentTypes: (input?: { serverOnly?: boolean }): Promise<AgentType[]> =>

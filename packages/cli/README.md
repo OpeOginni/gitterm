@@ -23,7 +23,7 @@ gitterm login
 gitterm workspace list
 
 # 3. Manage a workspace
-gitterm workspace stop <workspaceId>
+gitterm workspace pause <workspaceId>
 gitterm workspace restart <workspaceId>
 ```
 
@@ -36,8 +36,8 @@ gitterm workspace restart <workspaceId>
 | `gitterm auth status [--json]`                                                       | Show the logged-in account        |
 | `gitterm workspace list [--status <active\|all\|terminated>] [--limit <n>] [--json]` | List your workspaces              |
 | `gitterm workspace get <workspaceId> [--json]`                                       | Show details for a workspace      |
-| `gitterm workspace stop <workspaceId> [--json]`                                      | Stop a running workspace          |
-| `gitterm workspace restart <workspaceId> [--json]`                                   | Restart a stopped workspace       |
+| `gitterm workspace pause <workspaceId> [--json]`                                     | Pause a running workspace         |
+| `gitterm workspace restart <workspaceId> [--json]`                                   | Restart a paused workspace        |
 | `gitterm workspace terminate <workspaceId> [--yes] [--json]`                         | Terminate a workspace permanently |
 
 `ws` works as a shorthand for `workspace`. All read/write commands accept `--json`

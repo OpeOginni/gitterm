@@ -10,7 +10,7 @@ import type {
 } from "./ssh-access";
 import type { ImageProviderMetadata } from "@gitterm/db/schema/cloud";
 
-export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
+export type WorkspaceStatus = "pending" | "running" | "paused" | "terminated";
 
 /**
  * System-owned workspace environment variables.
@@ -25,6 +25,10 @@ export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
 export interface SystemWorkspaceEnv {
   REPO_URL?: string;
   REPO_BRANCH?: string;
+  /** Exact commit SHA to check out after clone (full SHA preferred). */
+  REPO_BASE_COMMIT?: string;
+  /** Optional checkout ref when distinct from display branch. */
+  REPO_CHECKOUT_REF?: string;
   OPENCODE_CONFIG_BASE64: string;
   OPENCODE_CREDENTIALS_BASE64: string;
   OPENCODE_SERVER_PASSWORD?: string;
@@ -53,6 +57,8 @@ export interface SystemWorkspaceEnv {
 export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "REPO_URL",
   "REPO_BRANCH",
+  "REPO_BASE_COMMIT",
+  "REPO_CHECKOUT_REF",
   "OPENCODE_CONFIG_BASE64",
   "OPENCODE_CREDENTIALS_BASE64",
   "OPENCODE_SERVER_PASSWORD",
@@ -96,6 +102,10 @@ export interface WorkspaceRepoProvisioning {
   /** Clone URL (providers append `.git` if missing). */
   url: string;
   branch?: string;
+  /** Exact commit SHA the workspace should check out. */
+  baseCommit?: string;
+  /** Optional checkout ref (branch/tag) when providers need a named ref. */
+  checkoutRef?: string;
   /** Repo name, used for the workspace directory and provider labels. */
   name?: string;
   /** Git basic-auth username (present only when a token is available). */
@@ -140,6 +150,8 @@ export interface WorkspaceConfig {
   subdomain: string;
   repositoryUrl?: string;
   repositoryBranch?: string;
+  repositoryBaseCommit?: string;
+  repositoryCheckoutRef?: string;
   regionIdentifier?: string;
   /**
    * Runtime + container-transport env. Always present; container providers pass

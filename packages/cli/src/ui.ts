@@ -27,8 +27,8 @@ export function colorStatus(status: string): string {
       return chalk.green(status);
     case "pending":
       return chalk.yellow(status);
-    case "stopped":
-      return chalk.dim(status);
+    case "paused":
+      return chalk.yellow(status);
     case "terminated":
       return chalk.red(status);
     default:

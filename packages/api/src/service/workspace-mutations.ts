@@ -7,7 +7,7 @@ type WorkspaceUpdate = Partial<typeof workspace.$inferInsert>;
 
 export type WorkspaceStatusUpdateResult = {
   id: string;
-  status: "pending" | "running" | "stopped" | "terminated";
+  status: "pending" | "running" | "paused" | "terminated";
   updatedAt: Date;
   userId: string;
   workspaceDomain: string;

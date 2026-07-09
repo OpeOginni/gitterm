@@ -13,7 +13,7 @@ export type AuthStatus = {
   authMethod: "session" | "apiToken";
 };
 
-export type WorkspaceStatus = "pending" | "running" | "stopped" | "terminated";
+export type WorkspaceStatus = "pending" | "running" | "paused" | "terminated";
 export type WorkspaceHostingType = "cloud" | "local";
 
 export type Workspace = {
@@ -22,6 +22,8 @@ export type Workspace = {
   status: WorkspaceStatus;
   repositoryUrl: string | null;
   repositoryBranch: string | null;
+  baseCommit: string | null;
+  checkoutRef: string | null;
   domain: string;
   subdomain: string | null;
   persistent: boolean;
@@ -38,6 +40,27 @@ export type Workspace = {
   updatedAt: string | null;
 };
 
+export type WorkspaceRuntimeAccess = {
+  workspaceId: string;
+  status: WorkspaceStatus;
+  url: string | null;
+  headers?: Record<string, string>;
+  password?: string;
+  directory: string;
+  repo: string | null;
+  branch: string | null;
+  baseCommit: string | null;
+  checkoutRef: string | null;
+  persistent: boolean;
+  recoverable: boolean;
+  providerKey: string | null;
+};
+
+export type WorkspaceCreateResult = {
+  workspace: Workspace;
+  runtime: WorkspaceRuntimeAccess;
+};
+
 export type WorkspaceListOptions = NonNullable<RouterInputs["workspace"]["listWorkspaces"]>;
 export type WorkspaceListResult = {
   workspaces: Workspace[];
@@ -46,12 +69,18 @@ export type WorkspaceListResult = {
 export type WorkspaceCreateInput = RouterInputs["workspace"]["createWorkspace"];
 export type WorkspaceRestartResult = Pick<RouterOutputs["workspace"]["restartWorkspace"], "status">;
 export type WorkspaceStopResult = Pick<
-  RouterOutputs["workspace"]["stopWorkspace"],
+  RouterOutputs["workspace"]["pauseWorkspace"],
   "durationMinutes"
 >;
+/** @deprecated use WorkspaceStopResult — same shape for pauseWorkspace */
+export type WorkspacePauseResult = WorkspaceStopResult;
 export type WorkspaceTerminateResult = {
   workspace: Workspace | null;
   cleanupInBackground: boolean;
+};
+export type WorkspaceEnsureRunningResult = {
+  workspace: Workspace;
+  runtime: WorkspaceRuntimeAccess;
 };
 
 export type AgentType = RouterOutputs["workspace"]["listAgentTypes"]["agentTypes"][number];

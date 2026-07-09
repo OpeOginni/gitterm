@@ -211,16 +211,16 @@ export function InstanceCard({
     }),
   );
 
-  const stopWorkspaceMutation = useMutation(
-    trpc.workspace.stopWorkspace.mutationOptions({
+  const pauseWorkspaceMutation = useMutation(
+    trpc.workspace.pauseWorkspace.mutationOptions({
       onSuccess: () => {
-        toast.success("Workspace stopped successfully");
+        toast.success("Workspace paused successfully");
         queryClient.invalidateQueries({
           queryKey: trpc.workspace.listWorkspaces.queryKey(),
         });
       },
       onError: (error) => {
-        toast.error(`Failed to stop workspace: ${error.message}`);
+        toast.error(`Failed to pause workspace: ${error.message}`);
       },
     }),
   );
@@ -290,10 +290,10 @@ export function InstanceCard({
             Pending
           </span>
         );
-      case "stopped":
+      case "paused":
         return (
           <span className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/40">
-            Stopped
+            Paused
           </span>
         );
       case "terminated":
@@ -343,7 +343,7 @@ export function InstanceCard({
 
   const regionInfo = getRegionInfo();
   const isRunning = workspace.status === "running";
-  const isStopped = workspace.status === "stopped";
+  const isPaused = workspace.status === "paused";
   const isPending = workspace.status === "pending";
 
   const editorAccessQuery = useQuery({
@@ -986,10 +986,10 @@ export function InstanceCard({
               variant="outline"
               size="sm"
               className="h-9 px-3 text-xs"
-              disabled={stopWorkspaceMutation.isPending}
-              onClick={() => stopWorkspaceMutation.mutate({ workspaceId: workspace.id })}
+              disabled={pauseWorkspaceMutation.isPending}
+              onClick={() => pauseWorkspaceMutation.mutate({ workspaceId: workspace.id })}
             >
-              {stopWorkspaceMutation.isPending ? (
+              {pauseWorkspaceMutation.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <PauseIcon className="h-3.5 w-3.5" />
@@ -1032,7 +1032,7 @@ export function InstanceCard({
               disabled
               className="h-9 flex-1 text-xs border-border/50 opacity-70"
             >
-              {isStopped ? "Workspace stopped" : "Workspace not running"}
+              {isPaused ? "Workspace paused" : "Workspace not running"}
             </Button>
           )}
 

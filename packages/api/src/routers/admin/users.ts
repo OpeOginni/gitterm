@@ -325,7 +325,7 @@ export const usersRouter = router({
       .select({
         total: sql<number>`count(*)`,
         running: sql<number>`count(*) FILTER (WHERE ${workspace.status} = 'running')`,
-        stopped: sql<number>`count(*) FILTER (WHERE ${workspace.status} = 'stopped')`,
+        paused: sql<number>`count(*) FILTER (WHERE ${workspace.status} = 'paused')`,
       })
       .from(workspace)
       .innerJoin(user, eq(workspace.userId, user.id))
@@ -341,7 +341,9 @@ export const usersRouter = router({
       workspaces: {
         total: Number(workspaceStats?.total ?? 0),
         running: Number(workspaceStats?.running ?? 0),
-        stopped: Number(workspaceStats?.stopped ?? 0),
+        paused: Number(workspaceStats?.paused ?? 0),
+        /** @deprecated use paused */
+        stopped: Number(workspaceStats?.paused ?? 0),
       },
     };
   }),

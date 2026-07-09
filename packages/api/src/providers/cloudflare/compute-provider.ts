@@ -320,13 +320,13 @@ export class CloudflareComputeProvider implements ComputeProvider {
       );
 
       if (!response.ok) {
-        return { status: "stopped" };
+        return { status: "paused" };
       }
 
       const data = (await response.json()) as { running?: boolean };
-      return { status: data.running ? "running" : "stopped" };
+      return { status: data.running ? "running" : "paused" };
     } catch {
-      return { status: "stopped" };
+      return { status: "paused" };
     }
   }
 

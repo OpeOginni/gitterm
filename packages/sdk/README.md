@@ -47,7 +47,7 @@ const status = await client.auth.status();
 client.auth.status();                 // -> { userId, email, name, plan, authMethod }
 client.workspaces.list(options?);     // -> { workspaces, pagination }
 client.workspaces.get(workspaceId);
-client.workspaces.stop(workspaceId);
+client.workspaces.pause(workspaceId);
 client.workspaces.restart(workspaceId);
 client.workspaces.terminate(workspaceId);
 client.workspaces.create(input);      // needs agentTypeId + cloudProviderId, see catalog

@@ -285,9 +285,9 @@ function StatusBadge({ status }: { status: string }) {
       className: "bg-secondary text-secondary-foreground border-border/50",
       label: "Pending",
     },
-    stopped: {
+    paused: {
       className: "bg-secondary text-muted-foreground border-border/50",
-      label: "Stopped",
+      label: "Paused",
     },
     terminated: {
       className: "bg-destructive/10 text-destructive border-destructive/20",
