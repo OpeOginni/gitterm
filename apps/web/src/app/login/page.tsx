@@ -9,6 +9,7 @@ import Link from "next/link";
 function LoginContent() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
+  const error = searchParams.get("error");
 
   return (
     <div className="flex min-h-screen flex-col bg-background landing-grid dark">
@@ -41,7 +42,7 @@ function LoginContent() {
           </div>
 
           {/* Auth Form */}
-          <AuthForm redirectUrl={redirect ?? undefined} />
+          <AuthForm redirectUrl={redirect ?? undefined} authError={error} />
 
           {/* Footer text */}
           <p className="text-center text-xs text-white/30">

@@ -12,14 +12,23 @@ import { ANALYTICS_ENABLED } from "@/lib/analytics";
 
 interface AuthFormProps {
   redirectUrl?: string;
+  authError?: string | null;
 }
 
-export function AuthForm({ redirectUrl }: AuthFormProps) {
+const authErrorMessages: Record<string, string> = {
+  unable_to_get_user_info:
+    "We couldn't access your GitHub account details. Sign out of GitHub in this browser, then try again with the account you want to use.",
+};
+
+export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
   const { isPending } = authClient.useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const displayedError =
+    error ||
+    (authError ? authErrorMessages[authError] || "GitHub sign-in failed. Please try again." : null);
 
   const emailAuthEnabled = isEmailAuthEnabled();
   const githubAuthEnabled = isGitHubAuthEnabled();
@@ -161,7 +170,7 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
               />
             </div>
 
-            {error && <p className="text-sm text-red-400/80">{error}</p>}
+            {displayedError && <p className="text-sm text-red-400/80">{displayedError}</p>}
 
             <Button
               type="submit"
@@ -178,6 +187,12 @@ export function AuthForm({ redirectUrl }: AuthFormProps) {
             Want to sign up? Contact the administrator.
           </button>
         </>
+      )}
+
+      {!emailAuthEnabled && displayedError && (
+        <p className="rounded-lg border border-red-400/20 bg-red-400/5 px-4 py-3 text-sm leading-relaxed text-red-300/90">
+          {displayedError}
+        </p>
       )}
 
       {/* Footer */}

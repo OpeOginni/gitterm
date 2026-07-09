@@ -271,6 +271,9 @@ export const auth = betterAuth({
     schema: schema,
   }),
   trustedOrigins: env.CORS_ORIGIN ? [env.CORS_ORIGIN] : undefined,
+  onAPIError: {
+    errorURL: `${(env.CORS_ORIGIN || inferBaseUrlOrigin()).replace(/\/$/, "")}/login`,
+  },
   crossSubDomainCookies: isProduction() ? { enabled: true, domain: SUBDOMAIN_DOMAIN } : undefined,
   emailAndPassword: {
     enabled: true,
