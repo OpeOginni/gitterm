@@ -41,13 +41,6 @@ export function Footer() {
               Self-host
             </Link>
             <Link
-              href="https://github.com/OpeOginni/gitterm"
-              target="_blank"
-              className="uppercase tracking-widest transition-colors hover:text-white/70"
-            >
-              GitHub
-            </Link>
-            <Link
               href={"/privacy" as Route}
               className="uppercase tracking-widest transition-colors hover:text-white/70"
             >
@@ -62,7 +55,7 @@ export function Footer() {
           </nav>
 
           <p className="text-xs text-white/30">
-            Built by{" "}
+            MIT-licensed open source · Built by{" "}
             <Link
               href="https://github.com/opeoginni"
               target="_blank"

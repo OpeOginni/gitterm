@@ -23,12 +23,9 @@ export function LandingHeader() {
           <span className="font-mono text-sm font-bold tracking-[0.18em] uppercase text-white/90">
             GitTerm
           </span>
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.25em] text-white/30 sm:inline">
-            / cloud workspaces
-          </span>
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="hidden items-center gap-8 lg:flex">
           <Link
             href="/#features"
             className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
@@ -36,10 +33,10 @@ export function LandingHeader() {
             Features
           </Link>
           <Link
-            href="/#how-it-works"
+            href="/#faq"
             className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
           >
-            How it works
+            FAQ
           </Link>
           {showPricing && (
             <Link
@@ -83,25 +80,14 @@ export function LandingHeader() {
               </Button>
             </Link>
           ) : (
-            <>
-              <Link href="/login" className="hidden sm:inline-flex">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 font-mono text-xs text-white/50 hover:text-white/80"
-                >
-                  Log in
-                </Button>
-              </Link>
-              <Link href="/dashboard">
-                <Button
-                  size="sm"
-                  className="h-8 bg-primary px-3 font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary-foreground hover:bg-primary/85 sm:px-4"
-                >
-                  Get Started
-                </Button>
-              </Link>
-            </>
+            <Link href="/dashboard">
+              <Button
+                size="sm"
+                className="h-8 bg-primary px-3 font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary-foreground hover:bg-primary/85 sm:px-4"
+              >
+                Get Started
+              </Button>
+            </Link>
           )}
 
           <button
@@ -109,7 +95,7 @@ export function LandingHeader() {
             aria-label="Toggle menu"
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((open) => !open)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/8 text-white/60 transition-colors hover:border-primary hover:text-white/90 md:hidden"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/8 text-white/60 transition-colors hover:border-primary hover:text-white/90 lg:hidden"
           >
             {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
@@ -117,7 +103,7 @@ export function LandingHeader() {
       </div>
 
       {mobileOpen && (
-        <nav className="border-t border-white/[0.06] bg-background/95 backdrop-blur-xl md:hidden">
+        <nav className="border-t border-white/[0.06] bg-background/95 backdrop-blur-xl lg:hidden">
           <div className="mx-auto flex max-w-[1200px] flex-col px-4 py-2 sm:px-6">
             <Link
               href="/#features"
@@ -127,11 +113,11 @@ export function LandingHeader() {
               Features
             </Link>
             <Link
-              href="/#how-it-works"
+              href="/#faq"
               onClick={() => setMobileOpen(false)}
               className="border-t border-white/[0.04] py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90"
             >
-              How it works
+              FAQ
             </Link>
             {showPricing && (
               <Link
@@ -149,15 +135,6 @@ export function LandingHeader() {
             >
               Self-host
             </Link>
-            {!session && (
-              <Link
-                href="/login"
-                onClick={() => setMobileOpen(false)}
-                className="border-t border-white/[0.04] py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90 sm:hidden"
-              >
-                Log in
-              </Link>
-            )}
           </div>
         </nav>
       )}

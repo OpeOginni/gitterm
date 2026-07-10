@@ -3,18 +3,18 @@ import { Cpu, MonitorSmartphone, Network } from "lucide-react";
 const capabilities = [
   {
     icon: Cpu,
-    title: "Massive projects on real compute.",
-    body: "Hand giant monorepos and long agent loops to cloud-grade hardware. Run things your laptop simply isn't sized for, without listening to the fans spin.",
+    title: "Real compute, on demand.",
+    body: "Hand giant monorepos and long agent loops to cloud hardware your laptop can't match.",
   },
   {
     icon: MonitorSmartphone,
-    title: "Pick up on any device, securely.",
-    body: "Move from your desk to your iPad to a borrowed laptop. Browser terminal or SSH from any editor. Same workspace, same context, password-protected end-to-end.",
+    title: "Any device, same session.",
+    body: "Move from desk to iPad to a borrowed laptop — browser terminal or SSH, always the same workspace.",
   },
   {
     icon: Network,
-    title: "Run things you wouldn't dare locally.",
-    body: "Try unfamiliar repos, expose dev servers to teammates, let an agent loose on generated code. Sandboxed workspaces with one-click port exposure keep your machine out of the blast radius.",
+    title: "Nothing runs on your machine.",
+    body: "Try unknown repos, expose dev servers, let agents loose — all sandboxed, far from your laptop.",
   },
 ];
 
@@ -35,8 +35,7 @@ export function ProblemSection() {
             <span className="font-display-italic text-[color:var(--cream)]">alone</span>.
           </h2>
           <p className="mt-5 max-w-xl text-base leading-[1.65] text-white/55 sm:text-[17px]">
-            GitTerm extends your local agent setup with cloud workspaces. Same OpenCode, same
-            configs: bigger compute, any device, safer experiments.
+            Cloud workspaces that pick up where your laptop stops.
           </p>
         </div>
 

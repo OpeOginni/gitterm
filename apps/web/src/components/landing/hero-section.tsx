@@ -112,7 +112,7 @@ export function HeroSection() {
           style={{ animationDelay: "0ms" }}
         >
           <span className="h-px w-10 bg-white/[0.08]" />
-          <span className="marker">Cloud workspaces for coding agents</span>
+          <span className="marker">Open-source cloud workspaces for coding agents</span>
           <span className="h-px w-10 bg-white/[0.08]" />
         </div>
 
@@ -133,7 +133,8 @@ export function HeroSection() {
         >
           {anonEnabled ? (
             <>
-              Try a public GitHub repo in a 10-minute{" "}
+              Persistent workspaces on the cloud you choose, with your own keys. Try one free in a
+              10-minute{" "}
               <Link
                 href="https://opencode.ai/"
                 target="_blank"
@@ -141,10 +142,10 @@ export function HeroSection() {
               >
                 OpenCode
               </Link>{" "}
-              sandbox. Sign in for persistent workspaces, your own keys, and cloud choice.
+              sandbox — no signup.
             </>
           ) : (
-            "Sign in for persistent workspaces, your own keys, and cloud choice."
+            "Persistent workspaces on the cloud you choose, with your own keys. Open source, self-hostable."
           )}
         </p>
 
@@ -191,7 +192,7 @@ export function HeroSection() {
                 </Button>
               </Link>
               <span className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-white/35">
-                bring your own keys · pick your cloud · no card required
+                open source · bring your own keys · pick your cloud · no card required
               </span>
             </div>
           )}

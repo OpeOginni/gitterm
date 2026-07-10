@@ -3,38 +3,33 @@ import { Layers, KeyRound, MonitorSmartphone, Save, GitBranch, Globe } from "luc
 const features = [
   {
     icon: Layers,
-    title: "Your laptop, off the hook.",
-    description:
-      "Workspaces run on E2B, Daytona, Railway, or Cloudflare. Pick the cloud that fits your workload.",
+    title: "Any cloud you want.",
+    description: "Run on E2B, Daytona, Railway, AWS, or Cloudflare — pick what fits.",
   },
   {
     icon: KeyRound,
     title: "Configure once.",
-    description:
-      "Add your model keys, SSH key, and agent config. Every new workspace inherits the setup.",
+    description: "Set your model keys, SSH, and agent config once; every workspace inherits them.",
   },
   {
     icon: MonitorSmartphone,
-    title: "Securely resume from any device.",
-    description:
-      "Browser terminal, attach to any supported agent client or open in your favourite SSH-aware editor. Same workspace, any screen.",
+    title: "Resume from any device.",
+    description: "Browser terminal, SSH editor, or agent client — same workspace, any screen.",
   },
   {
     icon: Save,
     title: "Persistent state.",
-    description: "Files, context, and checkpoints survive restarts. Stop today, pick up tomorrow.",
+    description: "Files, context, and checkpoints survive restarts. Stop today, resume tomorrow.",
   },
   {
     icon: GitBranch,
     title: "Your repos, your commits.",
-    description:
-      "Connect your GitHub account and work with your repos directly. Clone, commit, push, and open pull requests from the workspace terminal.",
+    description: "Connect GitHub and clone, commit, push, and open PRs straight from the terminal.",
   },
   {
     icon: Globe,
     title: "Preview your app live.",
-    description:
-      "Expose any workspace port behind a shareable URL. Test a dev server or share a running app while your agent keeps building.",
+    description: "Expose any port behind a shareable URL to preview or share your running app.",
   },
 ];
 
