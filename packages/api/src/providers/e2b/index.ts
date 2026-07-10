@@ -173,18 +173,27 @@ export class E2BProvider implements ComputeProvider {
       return;
     }
 
+    const cloneBranch = spec.repo.checkoutRef || spec.repo.branch;
     await sandbox.git
       .clone(this.getRepositoryUrl(spec.repo.url), {
         path: repoDir,
         username: spec.repo.authToken ? spec.repo.authUsername : undefined,
         password: spec.repo.authToken,
-        branch: spec.repo.branch,
+        branch: cloneBranch,
       })
       .catch(async (error) => {
         await sandbox.kill().catch(() => undefined);
         console.error("E2B Sandbox Error (git.clone)", error);
         throw error;
       });
+
+    if (spec.repo.baseCommit) {
+      await this.runCommand(
+        sandbox,
+        `git -C ${repoDir} fetch --depth 1 origin ${spec.repo.baseCommit} && git -C ${repoDir} checkout --detach ${spec.repo.baseCommit}`,
+        "checkout base commit",
+      );
+    }
   }
 
   private async writeOpencodeFiles(
@@ -417,7 +426,7 @@ export class E2BProvider implements ComputeProvider {
       const info = (await sandbox.getInfo()) as { state?: string };
 
       if (info.state === "paused") {
-        return { status: "stopped" };
+        return { status: "paused" };
       }
 
       if (info.state === "running") {

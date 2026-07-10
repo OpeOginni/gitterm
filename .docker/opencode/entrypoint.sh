@@ -95,21 +95,31 @@ if [ ! -f ".initialized" ]; then
             echo "Cloning repo: $REPO_URL into $REPO_DIR_NAME"
         fi
         
+        # Prefer named checkout ref, then branch, for the initial clone.
+        CLONE_REF="${REPO_CHECKOUT_REF:-$REPO_BRANCH}"
+
         # If GitHub App token is available, use authenticated URL
         if [ ! -z "$GITHUB_APP_TOKEN" ] && [ ! -z "$REPO_OWNER" ] && [ ! -z "$REPO_NAME" ]; then
             AUTH_URL="https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${REPO_OWNER}/${REPO_NAME}.git"
-            if [ -n "$REPO_BRANCH" ]; then
-                git clone --branch "$REPO_BRANCH" --single-branch "$AUTH_URL" "$REPO_DIR_NAME"
+            if [ -n "$CLONE_REF" ]; then
+                git clone --branch "$CLONE_REF" --single-branch "$AUTH_URL" "$REPO_DIR_NAME"
             else
                 git clone "$AUTH_URL" "$REPO_DIR_NAME"
             fi
         else
             # Fallback to original URL (public repos only)
-            if [ -n "$REPO_BRANCH" ]; then
-                git clone --branch "$REPO_BRANCH" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
+            if [ -n "$CLONE_REF" ]; then
+                git clone --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
             else
                 git clone "$REPO_URL" "$REPO_DIR_NAME"
             fi
+        fi
+
+        # Pin to exact base commit when provided (detached HEAD).
+        if [ -n "$REPO_BASE_COMMIT" ]; then
+            echo "Checking out base commit: $REPO_BASE_COMMIT"
+            git -C "$REPO_DIR_NAME" fetch --depth 1 origin "$REPO_BASE_COMMIT"
+            git -C "$REPO_DIR_NAME" checkout --detach "$REPO_BASE_COMMIT"
         fi
         
         echo "$REPO_OWNER" > .repo_owner

@@ -46,6 +46,8 @@ interface Env {
 interface ProvisionRepo {
   url: string;
   branch?: string;
+  baseCommit?: string;
+  checkoutRef?: string;
   name?: string;
   authUsername?: string;
   authToken?: string;
@@ -229,7 +231,7 @@ export class GittermSandbox extends Sandbox<Env> {
     }
 
     const checkout = await this.gitCheckout(normalizeRepoUrl(repo.url), {
-      branch: repo.branch,
+      branch: repo.checkoutRef || repo.branch,
       targetDir: repoDir,
     });
 
@@ -237,6 +239,16 @@ export class GittermSandbox extends Sandbox<Env> {
       throw new Error(
         `Failed to clone ${repo.url}${repo.branch ? ` (branch ${repo.branch})` : ""}`,
       );
+    }
+
+    if (repo.baseCommit) {
+      const pin = await this.exec(
+        `git fetch --depth 1 origin ${repo.baseCommit} && git checkout --detach ${repo.baseCommit}`,
+        { cwd: repoDir },
+      );
+      if (pin.exitCode !== 0) {
+        throw new Error(`Failed to checkout base commit ${repo.baseCommit} for ${repo.url}`);
+      }
     }
   }
 

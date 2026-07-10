@@ -9,13 +9,10 @@ import {
   FormCardFooter,
   FormCardHeader,
   FormCardStatus,
+  SettingsRow,
+  SettingsRowList,
 } from "@/components/ui/form-card";
-import {
-  initiateCheckout,
-  openCustomerPortal,
-  isBillingEnabled,
-  authClient,
-} from "@/lib/auth-client";
+import { initiateCheckout, openCustomerPortal, isBillingEnabled } from "@/lib/auth-client";
 import {
   ArrowRight,
   Check,
@@ -124,7 +121,6 @@ function QuotaValue({ value, dim = false }: { value: string | boolean; dim?: boo
 export function BillingSection({ currentPlan }: BillingSectionProps) {
   const [isPortalLoading, setIsPortalLoading] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
-  const { data: session } = authClient.useSession();
 
   if (!isBillingEnabled) {
     return (
@@ -216,23 +212,20 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
             </Button>
           </div>
 
-          <div className="grid gap-1.5">
+          <SettingsRowList>
             {QUOTAS.map((row) => {
               const Icon = row.icon;
               return (
-                <div
-                  key={row.label}
-                  className="flex items-center justify-between rounded-lg bg-input/60 px-3.5 py-2.5"
-                >
+                <SettingsRow key={row.label} className="flex-row items-center py-2.5">
                   <span className="flex items-center gap-2.5 text-[13px] text-white/65">
                     <Icon className="h-3.5 w-3.5 text-white/35" />
                     {row.label}
                   </span>
                   <QuotaValue value={planQuotaValue(row)} />
-                </div>
+                </SettingsRow>
               );
             })}
-          </div>
+          </SettingsRowList>
 
           {currentPlan === "starter" && (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.05] pt-4">
@@ -259,9 +252,6 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
 
         <FormCardFooter>
           <span className="truncate">billed monthly · cancel any time in the portal</span>
-          {session?.user?.email && (
-            <span className="hidden shrink-0 sm:inline">{session.user.email}</span>
-          )}
         </FormCardFooter>
       </FormCard>
     );
@@ -335,9 +325,9 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
       </FormCardBody>
 
       <FormCardFooter>
-        <a href="/pricing#questions" className="truncate">
+        <Link href={"/pricing#questions" as Route} className="truncate">
           questions about plans?
-        </a>
+        </Link>
         <Link
           href={"/pricing" as Route}
           className="inline-flex shrink-0 items-center gap-1.5 text-white/55 hover:text-white"

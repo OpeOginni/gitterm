@@ -8,6 +8,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Check, Cloud, Loader2, MapPin, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { queryClient, trpc } from "@/utils/trpc";
+import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
 import { getIcon } from "@/components/dashboard/create-instance/types";
@@ -21,6 +22,7 @@ interface CloudProviderOption {
 }
 
 export function DefaultCloudProviderSection() {
+  const { data: session } = authClient.useSession();
   const { data: providersData, isLoading: isLoadingProviders } = useQuery(
     trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true }),
   );
@@ -95,13 +97,15 @@ export function DefaultCloudProviderSection() {
         ) : !hasProviders ? (
           <div className="flex flex-col items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.015] px-4 py-6">
             <p className="text-sm text-white/55">No cloud providers are enabled yet.</p>
-            <Link
-              href={"/admin/providers" as Route}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              Manage providers
-              <ArrowUpRight className="h-3 w-3" />
-            </Link>
+            {session?.user.role === "admin" && (
+              <Link
+                href={"/admin/providers" as Route}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Manage providers
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            )}
           </div>
         ) : (
           <>

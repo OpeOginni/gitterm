@@ -2,7 +2,9 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context } from "./context";
 import { workspaceJWT } from "./service/auth/workspace-jwt";
 import env from "@gitterm/env/server";
-import { cliJWT } from "./service/auth/cli/cli-jwt";
+import { verifyApiToken } from "./service/auth/api-token";
+import { db, eq } from "@gitterm/db";
+import { user } from "@gitterm/db/schema/auth";
 
 // Internal service API key for service-to-service communication
 const INTERNAL_API_KEY = env.INTERNAL_API_KEY;
@@ -29,7 +31,52 @@ export const publicProcedure = t.procedure;
 // Export AppRouter type for clients
 export type { AppRouter } from "./routers/index";
 
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+  if (ctx.session) {
+    return next({
+      ctx: {
+        ...ctx,
+        session: ctx.session,
+        authMethod: "session" as const,
+      },
+    });
+  }
+
+  const token = ctx.bearerToken;
+  if (token) {
+    // User API tokens (`gt_...`): DB-backed and revocable, created from the
+    // web UI (Settings -> Account -> API tokens) or the CLI device-code flow.
+    const verified = await verifyApiToken(token);
+
+    if (verified) {
+      const [apiUser] = await db.select().from(user).where(eq(user.id, verified.userId)).limit(1);
+
+      if (apiUser) {
+        return next({
+          ctx: {
+            ...ctx,
+            session: { user: apiUser } as unknown as NonNullable<Context["session"]>,
+            authMethod: "apiToken" as const,
+          },
+        });
+      }
+    }
+  }
+
+  throw new TRPCError({
+    code: "UNAUTHORIZED",
+    message: "Authentication required",
+    cause: "No session or valid API token",
+  });
+});
+
+/**
+ * Session-only procedure - requires a browser session (better-auth cookie) and
+ * never accepts user API tokens. Use for security-sensitive routes where a
+ * long-lived API token must not be sufficient, e.g. approving device-code
+ * logins (which mints new API tokens) or admin operations.
+ */
+export const sessionProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.session) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
@@ -41,14 +88,17 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
     ctx: {
       ...ctx,
       session: ctx.session,
+      authMethod: "session" as const,
     },
   });
 });
 
 /**
- * Admin procedure - requires authenticated user with admin role
+ * Admin procedure - requires authenticated user with admin role.
+ * Built on sessionProcedure: admin actions require a browser session and are
+ * not reachable with a user API token.
  */
-export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+export const adminProcedure = sessionProcedure.use(({ ctx, next }) => {
   // Check if user has admin role
   const userRole = (ctx.session.user as any).role;
 
@@ -200,33 +250,6 @@ export const workspaceAuthProcedure = t.procedure.use(({ ctx, next }) => {
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: error instanceof Error ? error.message : "Invalid workspace token",
-    });
-  }
-});
-
-export const cliAuthProcedure = t.procedure.use(({ ctx, next }) => {
-  const token = ctx.bearerToken;
-
-  if (!token) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "CLI authentication token required",
-    });
-  }
-
-  try {
-    const payload = cliJWT.verifyToken(token);
-
-    return next({
-      ctx: {
-        ...ctx,
-        cliAuth: payload,
-      },
-    });
-  } catch (error) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: error instanceof Error ? error.message : "Invalid CLI token",
     });
   }
 });

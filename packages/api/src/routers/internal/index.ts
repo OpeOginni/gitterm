@@ -287,7 +287,7 @@ export const internalRouter = router({
       // Update workspace status
       const now = new Date();
       await updateWorkspaceByIdAndInvalidate(input.workspaceId, {
-        status: "stopped",
+        status: "paused",
         stoppedAt: now,
         updatedAt: now,
       });
@@ -295,7 +295,7 @@ export const internalRouter = router({
       // Emit status event
       WORKSPACE_EVENTS.emitStatus({
         workspaceId: input.workspaceId,
-        status: "stopped",
+        status: "paused",
         updatedAt: now,
         userId: ws.userId,
         workspaceDomain: ws.domain,
@@ -474,7 +474,7 @@ export const internalRouter = router({
       .leftJoin(user, eq(workspace.userId, user.id))
       .where(
         and(
-          or(eq(workspace.status, "running"), eq(workspace.status, "stopped")),
+          or(eq(workspace.status, "running"), eq(workspace.status, "paused")),
           eq(workspace.hostingType, "cloud"),
           lt(workspace.lastActiveAt, candidateThreshold),
         ),
@@ -740,7 +740,7 @@ export const internalRouter = router({
             eq(workspace.externalInstanceId, serviceId),
           ),
           {
-            status: "stopped",
+            status: "paused",
             updatedAt: new Date(input.timestamp),
           },
         );
@@ -807,7 +807,7 @@ export const internalRouter = router({
           and(
             eq(workspace.cloudProviderId, e2bProvider.id),
             eq(workspace.externalInstanceId, serviceId),
-            or(eq(workspace.status, "stopped"), eq(workspace.status, "pending")),
+            or(eq(workspace.status, "paused"), eq(workspace.status, "pending")),
           ),
           {
             status: "running",
@@ -840,7 +840,7 @@ export const internalRouter = router({
             eq(workspace.status, "running"),
           ),
           {
-            status: "stopped",
+            status: "paused",
             updatedAt: new Date(input.timestamp),
           },
         );
@@ -980,14 +980,14 @@ export const internalRouter = router({
           and(
             eq(workspace.cloudProviderId, daytonaProvider.id),
             eq(workspace.externalInstanceId, sandboxId),
-            or(eq(workspace.status, "stopped"), eq(workspace.status, "pending")),
+            or(eq(workspace.status, "paused"), eq(workspace.status, "pending")),
           ),
           { status: "running", updatedAt: eventDate },
         );
         return { updated };
       }
 
-      // stopped / archived -> stopped
+      // Daytona stopped/archived -> workspace paused
       if (newState === "stopped" || newState === "archived") {
         const updated = await updateWorkspaceStatusAndInvalidate(
           and(
@@ -995,7 +995,7 @@ export const internalRouter = router({
             eq(workspace.externalInstanceId, sandboxId),
             eq(workspace.status, "running"),
           ),
-          { status: "stopped", updatedAt: eventDate },
+          { status: "paused", updatedAt: eventDate },
         );
 
         await Promise.all(
@@ -1010,10 +1010,10 @@ export const internalRouter = router({
       }
 
       // destroying / destroyed -> terminated.
-      // We act on `destroying` (the started/stopped -> destroying transition) so
+      // We act on `destroying` (the started/paused -> destroying transition) so
       // termination is reflected as soon as teardown begins, then `destroyed`
       // confirms it idempotently. No status filter, so this also covers
-      // destruction from a paused (stopped) sandbox.
+      // destruction from a paused sandbox.
       if (newState === "destroying" || newState === "destroyed") {
         const updated = await updateWorkspaceStatusAndInvalidate(
           and(
@@ -1022,7 +1022,7 @@ export const internalRouter = router({
             // Don't churn already-terminated rows on the second event.
             or(
               eq(workspace.status, "running"),
-              eq(workspace.status, "stopped"),
+              eq(workspace.status, "paused"),
               eq(workspace.status, "pending"),
             ),
           ),

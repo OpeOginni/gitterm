@@ -4,7 +4,8 @@
     "module": "NodeNext",
     "noEmit": true,
     "types": ["bun"],
-    "moduleResolution": "nodenext"
+    "moduleResolution": "nodenext",
+    "resolveJsonModule": true
   },
   "include": ["src"]
 }

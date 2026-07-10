@@ -76,6 +76,12 @@ import {
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
 import { imageSupportsProvider } from "../../providers/image-compat";
 import type { CloudProviderType, ImageProviderMetadata } from "@gitterm/db/schema/cloud";
+import { normalizeBaseCommit } from "../../utils/workspace-base-commit";
+import {
+  buildWorkspaceRuntimeAccess,
+  isResumableWorkspaceStatus,
+} from "../../service/workspace-runtime";
+import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -375,7 +381,7 @@ export const workspaceRouter = router({
                   or(
                     eq(workspace.status, "running"),
                     eq(workspace.status, "pending"),
-                    eq(workspace.status, "stopped"),
+                    eq(workspace.status, "paused"),
                   ),
                 );
 
@@ -439,6 +445,67 @@ export const workspaceRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fetch workspaces",
+          cause: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }),
+
+  getWorkspace: protectedProcedure
+    .input(z.object({ workspaceId: z.uuid() }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      if (!userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
+
+      try {
+        const workspaceRecord = await db.query.workspace.findFirst({
+          where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
+          with: {
+            image: {
+              with: {
+                agentType: true,
+              },
+            },
+          },
+        });
+
+        if (!workspaceRecord) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workspace not found",
+          });
+        }
+
+        let workspaceWithPassword = workspaceRecord;
+        if (workspaceRecord.serverPassword && workspaceRecord.serverOnly) {
+          try {
+            workspaceWithPassword = {
+              ...workspaceRecord,
+              serverPassword: decryptWorkspacePassword(workspaceRecord.serverPassword),
+            };
+          } catch (error) {
+            console.error(`Failed to decrypt password for workspace ${workspaceRecord.id}:`, error);
+            workspaceWithPassword = {
+              ...workspaceRecord,
+              serverPassword: null,
+            };
+          }
+        }
+
+        return {
+          success: true,
+          workspace: workspaceWithPassword,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch workspace",
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }
@@ -973,6 +1040,14 @@ export const workspaceRouter = router({
           .max(255)
           .regex(/^[A-Za-z0-9._/-]+$/)
           .optional(),
+        baseCommit: z.string().trim().min(1).max(64).optional(),
+        checkoutRef: z
+          .string()
+          .trim()
+          .min(1)
+          .max(255)
+          .regex(/^[A-Za-z0-9._/-]+$/)
+          .optional(),
         subdomain: z
           .union([
             z
@@ -1002,6 +1077,17 @@ export const workspaceRouter = router({
           message: "User not authenticated",
         });
       }
+
+      let resolvedBaseCommit: string | null = null;
+      try {
+        resolvedBaseCommit = normalizeBaseCommit(input.baseCommit);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: error instanceof Error ? error.message : "Invalid baseCommit",
+        });
+      }
+      const resolvedCheckoutRef = input.checkoutRef?.trim() || null;
 
       const [fetchedUser] = await db.select().from(user).where(eq(user.id, userId));
 
@@ -1132,7 +1218,7 @@ export const workspaceRouter = router({
               or(
                 eq(workspace.status, "running"),
                 eq(workspace.status, "pending"),
-                eq(workspace.status, "stopped"),
+                eq(workspace.status, "paused"),
               ),
             ),
           );
@@ -1504,6 +1590,28 @@ export const workspaceRouter = router({
         // Parse repo URL to get owner/name (only for cloud workspaces)
         const repoInfo = input.repo ? parseGitHubRepoUrl(input.repo) : null;
 
+        // Resolve exact base commit when not provided by the caller.
+        if (input.repo && !resolvedBaseCommit) {
+          try {
+            const headSha = await getGitHubAppService().resolveBranchHeadSha(
+              input.repo,
+              input.branch,
+              selectedGitIntegration
+                ? {
+                    userId,
+                    gitIntegrationId: selectedGitIntegration.id,
+                    installationId: githubInstallationId,
+                  }
+                : undefined,
+            );
+            if (headSha) {
+              resolvedBaseCommit = normalizeBaseCommit(headSha);
+            }
+          } catch (error) {
+            console.warn("Failed to resolve baseCommit from branch head:", error);
+          }
+        }
+
         // Generate or validate subdomain
         let subdomain: string;
         const userPlan = (fetchedUser.plan || "free") as UserPlan;
@@ -1637,6 +1745,8 @@ export const workspaceRouter = router({
             ? {
                 url: input.repo,
                 branch: input.branch?.trim() || undefined,
+                baseCommit: resolvedBaseCommit ?? undefined,
+                checkoutRef: resolvedCheckoutRef ?? undefined,
                 name: repoInfo?.repo,
                 authUsername: githubAppToken ? githubUsername : undefined,
                 authToken: githubAppToken,
@@ -1682,7 +1792,7 @@ export const workspaceRouter = router({
         // Exception: when the provider is auto-persistent (e.g. E2B), persistence
         // is inherent to the provider and cannot be disabled, so we allow it for
         // every plan. We only block opt-in persistence on providers that don't
-        // force it on — otherwise free users couldn't use auto-persistent
+        // force it on; otherwise free users couldn't use auto-persistent
         // providers at all.
         if (
           input.persistent &&
@@ -1718,6 +1828,8 @@ export const workspaceRouter = router({
                   subdomain,
                   repositoryUrl: input.repo,
                   repositoryBranch: input.branch,
+                  repositoryBaseCommit: resolvedBaseCommit ?? undefined,
+                  repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
                   regionIdentifier: regionRecord?.externalRegionIdentifier,
                   environmentVariables: DEFAULT_DOCKER_ENV_VARS,
                   provisioningSpec,
@@ -1731,6 +1843,8 @@ export const workspaceRouter = router({
                   subdomain,
                   repositoryUrl: input.repo,
                   repositoryBranch: input.branch,
+                  repositoryBaseCommit: resolvedBaseCommit ?? undefined,
+                  repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
                   regionIdentifier: regionRecord?.externalRegionIdentifier,
                   environmentVariables: DEFAULT_DOCKER_ENV_VARS,
                   provisioningSpec,
@@ -1751,6 +1865,8 @@ export const workspaceRouter = router({
             regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,
             repositoryBranch: input.branch ?? null,
+            repositoryBaseCommit: resolvedBaseCommit,
+            repositoryCheckoutRef: resolvedCheckoutRef,
             domain,
             subdomain,
             serverOnly: agentTypeRecord.serverOnly,
@@ -1838,11 +1954,23 @@ export const workspaceRouter = router({
           upstreamUrl: newWorkspace.upstreamUrl,
         });
 
+        const workspaceForRuntime = {
+          ...newWorkspace,
+          serverPassword: serverPassword ?? newWorkspace.serverPassword,
+        };
+        const runtime = buildWorkspaceRuntimeAccess({
+          workspace: workspaceForRuntime,
+          headers: workspaceInfo.upstreamAccess?.headers ?? null,
+          password: serverPassword ?? null,
+          providerKey,
+        });
+
         return {
           success: true,
           message: "Workspace created successfully",
           workspace: newWorkspace,
           volume: newVolume,
+          runtime,
         };
       } catch (error) {
         console.error("createWorkspace failed:", error);
@@ -1857,8 +1985,226 @@ export const workspaceRouter = router({
       }
     }),
 
-  // Stop a running workspace
-  stopWorkspace: protectedProcedure
+  getRuntimeAccess: protectedProcedure
+    .input(z.object({ workspaceId: z.uuid() }))
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      if (!userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
+
+      const workspaceRecord = await db.query.workspace.findFirst({
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
+      });
+
+      if (!workspaceRecord) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      const [provider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, workspaceRecord.cloudProviderId));
+
+      let password: string | null = null;
+      if (workspaceRecord.serverPassword && workspaceRecord.serverOnly) {
+        try {
+          password = decryptWorkspacePassword(workspaceRecord.serverPassword);
+        } catch (error) {
+          console.error(`Failed to decrypt password for workspace ${workspaceRecord.id}:`, error);
+        }
+      }
+
+      const headers = await getWorkspaceRouteAccess(workspaceRecord.id, null);
+
+      return buildWorkspaceRuntimeAccess({
+        workspace: workspaceRecord,
+        headers,
+        password,
+        providerKey: provider?.providerKey ?? null,
+      });
+    }),
+
+  ensureRunning: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.uuid(),
+        /** Max time to wait for runtime URL after restart (ms). */
+        timeoutMs: z.number().int().min(1_000).max(300_000).default(120_000).optional(),
+        /** Poll interval while waiting for running status (ms). */
+        pollIntervalMs: z.number().int().min(250).max(10_000).default(2_000).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      if (!userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
+
+      const timeoutMs = input.timeoutMs ?? 120_000;
+      const pollIntervalMs = input.pollIntervalMs ?? 2_000;
+
+      const loadOwnedWorkspace = async () => {
+        const [row] = await db
+          .select()
+          .from(workspace)
+          .where(and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)));
+        return row ?? null;
+      };
+
+      let existingWorkspace = await loadOwnedWorkspace();
+      if (!existingWorkspace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      if (existingWorkspace.status === "terminated") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Workspace is terminated and cannot be restarted",
+        });
+      }
+
+      if (isResumableWorkspaceStatus(existingWorkspace.status)) {
+        const hasQuota = await hasRemainingQuota(userId);
+        if (!hasQuota) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Daily free tier limit reached. Please try again tomorrow.",
+          });
+        }
+
+        const [provider] = await db
+          .select()
+          .from(cloudProvider)
+          .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
+
+        if (!provider) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Cloud provider not found",
+          });
+        }
+
+        let workspaceRegion;
+        if (provider.supportsRegions && existingWorkspace.regionId) {
+          [workspaceRegion] = await db
+            .select()
+            .from(region)
+            .where(eq(region.id, existingWorkspace.regionId));
+        }
+
+        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+        await computeProvider.restartWorkspace(
+          existingWorkspace.externalInstanceId,
+          workspaceRegion?.externalRegionIdentifier,
+          existingWorkspace.externalRunningDeploymentId ?? undefined,
+        );
+
+        const restartWorkspaceStatus =
+          provider.restartSettlement === "immediate" ? "running" : "pending";
+        const now = new Date();
+        await updateWorkspaceByIdAndInvalidate(
+          input.workspaceId,
+          {
+            status: restartWorkspaceStatus,
+            stoppedAt: null,
+            lastActiveAt: now,
+            updatedAt: now,
+          },
+          existingWorkspace.subdomain,
+        );
+
+        await createUsageSession(input.workspaceId, userId);
+
+        WORKSPACE_EVENTS.emitStatus({
+          workspaceId: input.workspaceId,
+          status: restartWorkspaceStatus,
+          updatedAt: now,
+          userId,
+          workspaceDomain: existingWorkspace.domain,
+        });
+
+        existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
+      }
+
+      // Wait until running (or timeout) when still pending after restart/create.
+      if (existingWorkspace.status === "pending" || existingWorkspace.status === "running") {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
+          if (existingWorkspace.status === "running" && existingWorkspace.subdomain) {
+            break;
+          }
+          if (existingWorkspace.status === "terminated") {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Workspace terminated while waiting to become running",
+            });
+          }
+          if (existingWorkspace.status === "running") break;
+          if (existingWorkspace.status !== "pending") break;
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        }
+      }
+
+      existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
+      if (!existingWorkspace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      if (existingWorkspace.status !== "running") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Workspace is ${existingWorkspace.status}; runtime is not available yet`,
+        });
+      }
+
+      const [provider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
+
+      let password: string | null = null;
+      if (existingWorkspace.serverPassword && existingWorkspace.serverOnly) {
+        try {
+          password = decryptWorkspacePassword(existingWorkspace.serverPassword);
+        } catch (error) {
+          console.error(`Failed to decrypt password for workspace ${existingWorkspace.id}:`, error);
+        }
+      }
+
+      const headers = await getWorkspaceRouteAccess(existingWorkspace.id, null);
+      const runtime = buildWorkspaceRuntimeAccess({
+        workspace: existingWorkspace,
+        headers,
+        password,
+        providerKey: provider?.providerKey ?? null,
+      });
+
+      return {
+        success: true,
+        workspace: existingWorkspace,
+        runtime,
+      };
+    }),
+
+  // Pause a running workspace (compute down, recoverable)
+  pauseWorkspace: protectedProcedure
     .input(
       z.object({
         workspaceId: z.uuid(),
@@ -1946,7 +2292,7 @@ export const workspaceRouter = router({
         await updateWorkspaceByIdAndInvalidate(
           input.workspaceId,
           {
-            status: "stopped",
+            status: "paused",
             stoppedAt: now,
             sshConnection: null,
             updatedAt: now,
@@ -1957,7 +2303,7 @@ export const workspaceRouter = router({
         // Emit status event
         WORKSPACE_EVENTS.emitStatus({
           workspaceId: input.workspaceId,
-          status: "stopped",
+          status: "paused",
           updatedAt: now,
           userId,
           workspaceDomain: existingWorkspace.domain,
@@ -1965,20 +2311,20 @@ export const workspaceRouter = router({
 
         return {
           success: true,
-          message: "Workspace stopped successfully",
+          message: "Workspace paused successfully",
           durationMinutes,
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to stop workspace",
+          message: "Failed to pause workspace",
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }
     }),
 
-  // Restart a stopped workspace
+  // Restart a paused workspace
   restartWorkspace: protectedProcedure
     .input(
       z.object({
@@ -2011,10 +2357,10 @@ export const workspaceRouter = router({
           });
         }
 
-        if (existingWorkspace.status !== "stopped") {
+        if (existingWorkspace.status !== "paused") {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Workspace is not stopped",
+            message: "Workspace is not paused",
           });
         }
 
@@ -2071,6 +2417,8 @@ export const workspaceRouter = router({
           },
           existingWorkspace.subdomain,
         );
+
+        await createUsageSession(input.workspaceId, userId);
 
         // Emit status event
         WORKSPACE_EVENTS.emitStatus({

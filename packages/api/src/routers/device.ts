@@ -1,5 +1,5 @@
 import z from "zod";
-import { protectedProcedure, router } from "../index";
+import { sessionProcedure, router } from "../index";
 import { DeviceCodeRepository } from "@gitterm/redis";
 
 const deviceRepo = new DeviceCodeRepository();
@@ -10,8 +10,12 @@ export const deviceRouter = router({
    *
    * This is used by the web UI when a user wants to approve/deny
    * a CLI device that's trying to authenticate via the device code flow.
+   *
+   * Session-only on purpose: approving a device code mints a new API token,
+   * so an existing API token must never be able to approve one (that would
+   * let a leaked token renew itself indefinitely).
    */
-  approve: protectedProcedure
+  approve: sessionProcedure
     .input(
       z.object({
         userCode: z.string().min(1),

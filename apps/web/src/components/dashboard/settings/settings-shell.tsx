@@ -3,15 +3,24 @@
 import { useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { DashboardShell, DashboardHeader } from "@/components/dashboard/shell";
-import { BarChart3, CreditCard, Shield, UsersRound, Wrench, type LucideIcon } from "lucide-react";
+import {
+  BarChart3,
+  CreditCard,
+  KeySquare,
+  Shield,
+  UsersRound,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 
 import { UsageSection } from "./usage-section";
 import { WorkspaceSection } from "./workspace-section";
 import { AccountSection } from "./account-section";
+import { ApiSection } from "./api-section";
 import { PrivacySection } from "./privacy-section";
 import { TeamsSection } from "./teams-section";
 
-type SettingsSection = "usage" | "workspace" | "teams" | "account" | "privacy";
+type SettingsSection = "usage" | "workspace" | "teams" | "account" | "api" | "privacy";
 
 interface SidebarItem {
   id: SettingsSection;
@@ -43,7 +52,13 @@ const sidebarItems: SidebarItem[] = [
     id: "account",
     label: "Account",
     icon: CreditCard,
-    description: "Plan and account management",
+    description: "Profile, plan, and billing",
+  },
+  {
+    id: "api",
+    label: "API",
+    icon: KeySquare,
+    description: "Tokens for CLI, SDK, and integrations",
   },
   {
     id: "privacy",
@@ -53,7 +68,7 @@ const sidebarItems: SidebarItem[] = [
   },
 ];
 
-const SECTION_IDS: SettingsSection[] = ["usage", "workspace", "teams", "account", "privacy"];
+const SECTION_IDS: SettingsSection[] = ["usage", "workspace", "teams", "account", "api", "privacy"];
 
 function isSettingsSection(value: string | undefined): value is SettingsSection {
   return !!value && SECTION_IDS.includes(value as SettingsSection);
@@ -82,7 +97,7 @@ export function SettingsShell({ currentPlan, initialSection }: SettingsShellProp
 
       <div>
         {/* Mobile tab bar */}
-        <div className="grid grid-cols-5 gap-1 border-b border-white/[0.06] pb-3 lg:hidden">
+        <div className="grid grid-cols-3 gap-1 border-b border-white/[0.06] pb-3 lg:hidden">
           {sidebarItems.map((item) => {
             const isActive = activeSection === item.id;
             return (
@@ -182,6 +197,7 @@ export function SettingsShell({ currentPlan, initialSection }: SettingsShellProp
               {activeSection === "workspace" && <WorkspaceSection />}
               {activeSection === "teams" && <TeamsSection />}
               {activeSection === "account" && <AccountSection currentPlan={currentPlan} />}
+              {activeSection === "api" && <ApiSection />}
               {activeSection === "privacy" && <PrivacySection />}
             </div>
           </div>

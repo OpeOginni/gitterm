@@ -147,8 +147,8 @@ export default function AdminPage() {
           isLoading={isLoading}
         />
         <StatCell
-          label="Stopped"
-          value={stats?.workspaces.stopped ?? 0}
+          label="Paused"
+          value={stats?.workspaces.paused ?? stats?.workspaces.stopped ?? 0}
           sub="can resume"
           isLoading={isLoading}
         />

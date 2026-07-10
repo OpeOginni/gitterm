@@ -276,7 +276,7 @@ export class DaytonaProvider implements ComputeProvider {
 
       const username = spec.repo.authToken ? spec.repo.authUsername : undefined;
       const password = spec.repo.authToken;
-      const repoBranch = spec.repo.branch;
+      const repoBranch = spec.repo.checkoutRef || spec.repo.branch;
 
       await provisionLogger.step("clone-repository", () =>
         sandbox.git
@@ -287,6 +287,20 @@ export class DaytonaProvider implements ComputeProvider {
             throw err;
           }),
       );
+
+      if (spec.repo.baseCommit) {
+        await provisionLogger.step("checkout-base-commit", () =>
+          this.executeCommand(
+            sandbox,
+            `git -C ${repoDir} fetch --depth 1 origin ${spec.repo!.baseCommit} && git -C ${repoDir} checkout --detach ${spec.repo!.baseCommit}`,
+            true,
+          ).catch(async (err) => {
+            await sandbox.delete().catch(() => undefined);
+            console.error("Daytona killed sandbox because of err:", err);
+            throw err;
+          }),
+        );
+      }
     }
 
     if (spec?.opencodeConfigJson) {
@@ -430,7 +444,7 @@ export class DaytonaProvider implements ComputeProvider {
           return { status: "running", lastActiveAt };
         case "stopped":
         case "archived":
-          return { status: "stopped", lastActiveAt };
+          return { status: "paused", lastActiveAt };
         case "creating":
         case "starting":
         case "stopping":

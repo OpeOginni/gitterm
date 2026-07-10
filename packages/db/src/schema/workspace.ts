@@ -17,13 +17,13 @@ import { gitIntegration } from "./integrations";
 export const instanceStatusEnum = pgEnum("instance_status", [
   "pending",
   "running",
-  "stopped",
+  "paused",
   "terminated",
 ] as const);
 export const workspaceStatusEnum = pgEnum("workspace_status", [
   "pending",
   "running",
-  "stopped",
+  "paused",
   "terminated",
 ] as const);
 export const sessionStopSourceEnum = pgEnum("session_stop_source", [
@@ -77,6 +77,10 @@ export const workspace = pgTable("workspace", {
   }),
   repositoryUrl: text("repository_url"),
   repositoryBranch: text("repository_branch"),
+  /** Exact git commit the workspace was created from (full SHA when available). */
+  repositoryBaseCommit: text("repository_base_commit"),
+  /** Optional provider checkout ref (branch/tag) when distinct from display branch. */
+  repositoryCheckoutRef: text("repository_checkout_ref"),
   domain: text("domain").notNull(), // Full domain: {uuid}.gitterm.dev or just {uuid} in path mode
   subdomain: text("subdomain"), // The workspace URL identifier (UUID format)
   upstreamUrl: text("upstream_url"), // URL to proxy requests to (cloud container or tunnel endpoint)

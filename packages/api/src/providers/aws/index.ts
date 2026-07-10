@@ -1369,7 +1369,7 @@ export class AwsProvider implements ComputeProvider {
 
     if ((service.desiredCount ?? 0) === 0) {
       return {
-        status: "stopped",
+        status: "paused",
         lastActiveAt: service.createdAt,
       };
     }

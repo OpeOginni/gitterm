@@ -8,7 +8,7 @@ export function TeamsSection() {
   return (
     <div className="space-y-6">
       <SettingsSection
-        eyebrow="Teams"
+        eyebrow="01 / Collaboration"
         title="Teams"
         description="Group collaborators and grant whole teams access to workspaces at once. Members accept one invite to join."
         icon={UsersRound}

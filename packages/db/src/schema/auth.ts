@@ -32,6 +32,27 @@ export const systemConfig = pgTable("system_config", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/**
+ * User API tokens (personal access tokens).
+ *
+ * Only a SHA-256 hash of the token is stored; the plaintext (`gt_...`) is
+ * shown to the user exactly once at creation. `tokenPrefix` keeps the first
+ * few characters so the UI can help users tell tokens apart.
+ */
+export const apiToken = pgTable("api_token", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  tokenPrefix: text("token_prefix").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at"),
+  lastUsedAt: timestamp("last_used_at"),
+  revokedAt: timestamp("revoked_at"),
+});
+
 export const session = pgTable("session", {
   id: text("id").primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),

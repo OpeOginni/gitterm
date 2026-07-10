@@ -12,6 +12,7 @@ import { adminRouter } from "./admin";
 import { agentLoopRouter } from "./agent-loop";
 import { modelCredentialsRouter } from "./model-credentials";
 import { anonRouter } from "./anon";
+import { apiTokensRouter } from "./api-tokens";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -35,6 +36,7 @@ export const appRouter = router({
   workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
   workspaceShare: workspaceShareRouter,
   anon: anonRouter,
+  apiTokens: apiTokensRouter,
 });
 export type AppRouter = typeof appRouter;
 

@@ -1,116 +1,117 @@
-# gitterm
+# @gitterm/cli
 
-A lightweight tunnel agent that securely exposes **local development ports** through your **gitterm.dev** workspace URL.
+Command-line interface for [GitTerm](https://gitterm.dev) to manage your cloud
+workspaces from the terminal.
 
 ## Installation
 
 ```bash
-# Run directly with npx (recommended)
-npx gitterm
+# Run directly with npx
+npx @gitterm/cli --help
 
 # Or install globally
-npm install -g gitterm
+npm install -g @gitterm/cli
 ```
 
 ## Quick Start
 
-### 1. Login to GitTerm
-
 ```bash
-npx gitterm login
+# 1. Sign in (device-code flow: visit the printed URL and enter the code)
+gitterm login
+
+# 2. List your workspaces
+gitterm workspace list
+
+# 3. Manage a workspace
+gitterm workspace pause <workspaceId>
+gitterm workspace restart <workspaceId>
 ```
 
-This will open a browser for authentication. Once logged in, your credentials are saved locally.
+## Switching servers (hosted vs self-hosted)
 
-### 2. Connect Your Local Server
+By default the CLI talks to the hosted GitTerm API at `https://api.gitterm.dev`.
+If you run your own GitTerm instance, point the CLI at that server instead.
+
+### Option 1: Login with `--server`
 
 ```bash
-# Start your local server first
-opencode serve --port 3000  # or whatever starts your server on port 3000
+# Hosted (default)
+gitterm login
 
-# Then connect it to your gitterm workspace
-npx gitterm tunnel --workspace-id "your-workspace-id" --port 3000
+# Self-hosted
+gitterm login --server https://gitterm.example.com
+
+# Local development
+gitterm login --server http://localhost:3000
 ```
 
-That's it! Your local server is now accessible at `https://your-subdomain.gitterm.dev`.
+The chosen URL is saved in `~/.config/gitterm/cli.json` and used by later commands.
+
+### Option 2: Environment variables
+
+Env vars override the saved config (useful for CI or one-off commands):
+
+```bash
+export GITTERM_SERVER_URL=https://gitterm.example.com
+export GITTERM_API_TOKEN=gt_...   # from Settings → Account → API tokens
+
+gitterm auth status
+gitterm workspace list
+```
+
+| Variable             | Purpose                                 |
+| -------------------- | --------------------------------------- |
+| `GITTERM_SERVER_URL` | API base URL (no trailing path)         |
+| `GITTERM_API_TOKEN`  | `gt_...` token; skips device-code login |
+
+Resolution order for each request: **explicit options / env vars → saved CLI config → default hosted URL** (for login only).
+
+Check which server you are on:
+
+```bash
+gitterm auth status
+# Server: http://localhost:3000
+```
 
 ## Commands
 
-### `login`
+| Command                                                                              | Description                       |
+| ------------------------------------------------------------------------------------ | --------------------------------- |
+| `gitterm login [--server <url>]`                                                     | Sign in via device-code flow      |
+| `gitterm logout`                                                                     | Clear saved credentials           |
+| `gitterm auth status [--json]`                                                       | Show the logged-in account        |
+| `gitterm workspace list [--status <active\|all\|terminated>] [--limit <n>] [--json]` | List your workspaces              |
+| `gitterm workspace get <workspaceId> [--json]`                                       | Show details for a workspace      |
+| `gitterm workspace pause <workspaceId> [--json]`                                     | Pause a running workspace         |
+| `gitterm workspace restart <workspaceId> [--json]`                                   | Restart a paused workspace        |
+| `gitterm workspace terminate <workspaceId> [--yes] [--json]`                         | Terminate a workspace permanently |
 
-Sign in via device-code flow.
+`ws` works as a shorthand for `workspace`. All read/write commands accept `--json`
+for machine-readable output (errors are emitted as JSON on stderr too), which makes
+the CLI easy to drive from scripts and editor plugins.
 
-```bash
-npx gitterm login
-```
+## Authentication
 
-### `logout`
+`gitterm login` uses a device-code flow: it prints a verification URL and a short
+code, you approve the device in your browser, and the CLI receives a user API token.
 
-Clear saved credentials.
-
-```bash
-npx gitterm logout
-```
-
-### `connect`
-
-Connect a local port to your gitterm workspace.
-
-```bash
-npx gitterm connect --workspace-id <id> --port <number>
-```
-
-**Required options:**
-
-- `--workspace-id <id>` - Your workspace ID
-- `--port <number>` - Local port to expose
-
-**Optional:**
-
-- `--expose <name=port>` - Expose additional ports (repeatable)
-- `--ws-url <url>` - Custom tunnel proxy URL (default: wss://tunnel.gitterm.dev/tunnel/connect)
-- `--server-url <url>` - Custom API server URL (default: https://api.gitterm.dev)
-- `--token <jwt>` - Tunnel JWT (overrides saved login)
-
-## Examples
-
-### Basic Usage
-
-```bash
-# Expose a local dev server
-npx gitterm connect --workspace-id "ws_abc123" --port 3000
-```
-
-### Multiple Ports
-
-Expose additional services as subdomains:
-
-```bash
-npx gitterm connect \
-  --workspace-id "ws_abc123" \
-  --port 3000 \
-  --expose api=3001 \
-  --expose docs=4000
-```
-
-This maps:
-
-- `https://your-subdomain.gitterm.dev` -> `localhost:3000`
-- `https://your-subdomain-api.gitterm.dev` -> `localhost:3001`
-- `https://your-subdomain-docs.gitterm.dev` -> `localhost:4000`
-
-## How It Works
-
-1. The agent opens an outbound WebSocket connection to the GitTerm tunnel proxy
-2. Authenticates using your saved credentials or a provided JWT
-3. Proxies HTTP requests from your `*.gitterm.dev` URL to your local port
-4. Supports streaming responses (SSE, WebSocket upgrades coming soon)
-
-## Notes
-
-- This tool does **not** start servers for you. Run your local server first, then connect.
 - Credentials are stored in `~/.config/gitterm/cli.json`
-- The tunnel stays open until you press Ctrl+C
+- The same token works with [`@gitterm/sdk`](https://www.npmjs.com/package/@gitterm/sdk)
+  and other GitTerm integrations
+- Create revocable tokens in the dashboard under **Settings → Account → API tokens**
+  and pass them via `GITTERM_API_TOKEN` (with optional `GITTERM_SERVER_URL`)
+
+## Programmatic use
+
+This CLI is a thin layer over `@gitterm/sdk`. If you are building an integration,
+use the SDK directly:
+
+```ts
+import { createGittermClient } from "@gitterm/sdk";
+
+const client = createGittermClient(); // reads the CLI's saved login
+const { workspaces } = await client.workspaces.list();
+```
 
 ## License
 

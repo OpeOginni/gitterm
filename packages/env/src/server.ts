@@ -69,7 +69,6 @@ const baseSchema = z
     LISTENER_URL: optional,
 
     // Tunnel
-    CLI_JWT_SECRET: optional,
     WORKSPACE_JWT_SECRET: optional,
 
     // Encryption (for storing API keys/credentials)
@@ -82,7 +81,7 @@ const baseSchema = z
     DISCORD_TOKEN: optional,
     DISCORD_DM_CHANNEL_ID: optional,
 
-    // Email — transactional mail. Optional: falls back to logging when no provider is configured.
+    // Email: transactional mail. Optional: falls back to logging when no provider is configured.
     // EMAIL_PROVIDER: "auto" (default) picks SMTP when SMTP_HOST is set, else Resend when
     // RESEND_API_KEY is set, else logs. Set explicitly to "smtp" or "resend" to force one.
     EMAIL_PROVIDER: z.enum(["auto", "smtp", "resend"]).default("auto"),

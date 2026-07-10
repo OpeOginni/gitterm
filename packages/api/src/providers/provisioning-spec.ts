@@ -28,6 +28,10 @@ export function resolveProvisioningSpec(config: WorkspaceConfig): WorkspaceProvi
     ? {
         url: config.repositoryUrl,
         branch: config.repositoryBranch?.trim() || env.REPO_BRANCH?.trim() || undefined,
+        baseCommit:
+          config.repositoryBaseCommit?.trim() || env.REPO_BASE_COMMIT?.trim() || undefined,
+        checkoutRef:
+          config.repositoryCheckoutRef?.trim() || env.REPO_CHECKOUT_REF?.trim() || undefined,
         name: env.REPO_NAME,
         authUsername: env.GITHUB_APP_TOKEN ? env.USER_GITHUB_USERNAME : undefined,
         authToken: env.GITHUB_APP_TOKEN,
