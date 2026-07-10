@@ -25,7 +25,7 @@ export function CTASection() {
               <span className="font-display-italic text-[color:var(--cream)]">Your keys.</span>
             </h2>
             <p className="mx-auto mb-9 max-w-md text-base leading-[1.65] text-white/50">
-              Use the hosted version, or run the whole thing on your own infra.
+              Hosted or self-hosted. No lock-in.
             </p>
 
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">

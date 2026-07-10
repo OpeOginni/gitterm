@@ -122,9 +122,9 @@ export function HeroSection() {
           }`}
           style={{ animationDelay: "80ms" }}
         >
-          Run your coding agent
+          Cloud workspaces
           <br />
-          in the <span className="font-display-italic text-primary">cloud.</span>
+          for coding <span className="font-display-italic text-primary">agents.</span>
         </h1>
 
         <p
@@ -133,7 +133,7 @@ export function HeroSection() {
         >
           {anonEnabled ? (
             <>
-              Persistent workspaces on the cloud you choose, with your own keys. Try one free in a
+              For heavy runs, temporary sandboxes, or any cloud you pick. Your keys. Try free in a
               10-minute{" "}
               <Link
                 href="https://opencode.ai/"
@@ -145,7 +145,7 @@ export function HeroSection() {
               sandbox. No signup.
             </>
           ) : (
-            "Persistent workspaces on the cloud you choose, with your own keys. Open source, self-hostable."
+            "For heavy runs, temporary sandboxes, or any cloud you pick. Your keys. Open source, self-hostable."
           )}
         </p>
 
@@ -173,7 +173,7 @@ export function HeroSection() {
 
               {!result && (
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12.5px] text-white/40">
-                  <span>Want more workspaces, persistence, SSH, and your own keys?</span>
+                  <span>Want persistence, SSH, and your own keys?</span>
                   <Link
                     href="/dashboard"
                     className="inline-flex items-center gap-1 font-mono uppercase tracking-[0.18em] text-primary/90 underline decoration-primary/30 underline-offset-4 hover:decoration-primary"
@@ -192,7 +192,7 @@ export function HeroSection() {
                 </Button>
               </Link>
               <span className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-white/35">
-                open source · bring your own keys · pick your cloud · no card required
+                open source · your keys · any cloud · no card required
               </span>
             </div>
           )}

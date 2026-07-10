@@ -3,33 +3,33 @@ import { Layers, KeyRound, MonitorSmartphone, Save, GitBranch, Globe } from "luc
 const features = [
   {
     icon: Layers,
-    title: "Any cloud you want.",
-    description: "Run on E2B, Daytona, Railway, AWS, or Cloudflare. Pick what fits.",
+    title: "Pick your cloud.",
+    description: "E2B, Daytona, Railway, AWS, or Cloudflare. No lock-in.",
   },
   {
     icon: KeyRound,
-    title: "Configure once.",
-    description: "Set your model keys, SSH, and agent config once; every workspace inherits them.",
+    title: "Set keys once.",
+    description: "Model keys, SSH, agent config. Ready in every workspace.",
   },
   {
     icon: MonitorSmartphone,
-    title: "Resume from any device.",
-    description: "Browser terminal, SSH editor, or agent client. Same workspace, any screen.",
+    title: "Any device.",
+    description: "Browser, SSH, or agent client. Same session, any screen.",
   },
   {
     icon: Save,
-    title: "Persistent state.",
-    description: "Files, context, and checkpoints survive restarts. Stop today, resume tomorrow.",
+    title: "Stays saved.",
+    description: "Files, context, checkpoints. Stop today, resume tomorrow.",
   },
   {
     icon: GitBranch,
-    title: "Your repos, your commits.",
-    description: "Connect GitHub and clone, commit, push, and open PRs straight from the terminal.",
+    title: "Your GitHub.",
+    description: "Clone, commit, push, open PRs from the terminal.",
   },
   {
     icon: Globe,
-    title: "Preview your app live.",
-    description: "Expose any port behind a shareable URL to preview or share your running app.",
+    title: "Live previews.",
+    description: "Expose a port. Share a URL.",
   },
 ];
 
@@ -43,8 +43,8 @@ export function FeaturesSection() {
             <span className="marker">What you get</span>
           </div>
           <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
-            A real <span className="font-display-italic text-[color:var(--cream)]">home</span> for
-            your agent.
+            Built for how you actually{" "}
+            <span className="font-display-italic text-[color:var(--cream)]">work</span>.
           </h2>
         </div>
 

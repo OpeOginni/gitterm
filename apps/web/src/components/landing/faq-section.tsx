@@ -5,28 +5,20 @@ import { ChevronDown } from "lucide-react";
 
 const faqs = [
   {
-    q: "Is GitTerm open source?",
-    a: "Yes. GitTerm is MIT-licensed and built in the open. The full stack is on GitHub.",
-  },
-  {
-    q: "Can I self-host it?",
-    a: "Yes. Deploy the whole stack to your own infrastructure in one click on Railway, or run it with Docker anywhere. Your instance, your data.",
-  },
-  {
-    q: "Which clouds can workspaces run on?",
-    a: "E2B, Daytona, Railway, AWS, or Cloudflare. Configure the providers you want and pick one per workspace.",
+    q: "Is this meant to replace my laptop?",
+    a: "No. Use it for heavier runs, temporary sandboxes, or agents you want off your machine but still reachable.",
   },
   {
     q: "Do I bring my own model keys?",
-    a: "Yes. Add your own Anthropic, OpenAI, or other provider keys. They are encrypted, reused across every workspace, and never marked up.",
+    a: "Yes. Your Anthropic, OpenAI, or other keys. Encrypted, reused across workspaces, never marked up.",
   },
   {
-    q: "Which coding agent does it run?",
-    a: "OpenCode today, with more on the way. Connect from the browser terminal, SSH into your editor, or run opencode attach.",
+    q: "Which clouds can workspaces run on?",
+    a: "E2B, Daytona, Railway, AWS, or Cloudflare. Configure the ones you want and pick per workspace. No lock-in.",
   },
   {
-    q: "How do I try it?",
-    a: "Paste a public GitHub repo for a free 10-minute sandbox. No signup required. Sign in to create persistent workspaces with your own keys.",
+    q: "Is it open source? Can I self-host?",
+    a: "Yes. MIT-licensed, full stack on GitHub. One-click on Railway, or Docker anywhere.",
   },
 ];
 

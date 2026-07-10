@@ -1,20 +1,20 @@
-import { Cpu, MonitorSmartphone, Network } from "lucide-react";
+import { Cpu, GitBranch, Network } from "lucide-react";
 
 const capabilities = [
   {
     icon: Cpu,
-    title: "Real compute, on demand.",
-    body: "Hand giant monorepos and long agent loops to cloud hardware your laptop can't match.",
-  },
-  {
-    icon: MonitorSmartphone,
-    title: "Any device, same session.",
-    body: "Move from desk to iPad to a borrowed laptop. Browser terminal or SSH, always the same workspace.",
+    title: "More power.",
+    body: "Big repos and long agent runs on cloud hardware. Keep light work on your laptop.",
   },
   {
     icon: Network,
-    title: "Nothing runs on your machine.",
-    body: "Try unknown repos, expose dev servers, let agents loose. All sandboxed, far from your laptop.",
+    title: "Safe sandboxes.",
+    body: "Try a repo, open a port, shut it down. Off your machine, still reachable from your devices.",
+  },
+  {
+    icon: GitBranch,
+    title: "Same workflow.",
+    body: "Branch, commit, and push to GitHub like you would locally. Cloud machine, laptop habits.",
   },
 ];
 
@@ -28,14 +28,14 @@ export function ProblemSection() {
         <div className="mb-10 max-w-2xl sm:mb-12">
           <div className="mb-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-white/[0.08]" />
-            <span className="marker">Beyond local development</span>
+            <span className="marker">Why GitTerm</span>
           </div>
           <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
-            Some things your laptop can&apos;t do{" "}
-            <span className="font-display-italic text-[color:var(--cream)]">alone</span>.
+            When your laptop needs{" "}
+            <span className="font-display-italic text-[color:var(--cream)]">backup</span>.
           </h2>
           <p className="mt-5 max-w-xl text-base leading-[1.65] text-white/55 sm:text-[17px]">
-            Cloud workspaces that pick up where your laptop stops.
+            More power. Safer sandboxes. Any cloud you choose.
           </p>
         </div>
 
