@@ -1,4 +1,4 @@
-# gitterm
+# @gitterm/cli
 
 Command-line interface for [GitTerm](https://gitterm.dev) to manage your cloud
 workspaces from the terminal.
@@ -7,10 +7,10 @@ workspaces from the terminal.
 
 ```bash
 # Run directly with npx
-npx gitterm --help
+npx @gitterm/cli --help
 
 # Or install globally
-npm install -g gitterm
+npm install -g @gitterm/cli
 ```
 
 ## Quick Start
@@ -25,6 +25,52 @@ gitterm workspace list
 # 3. Manage a workspace
 gitterm workspace pause <workspaceId>
 gitterm workspace restart <workspaceId>
+```
+
+## Switching servers (hosted vs self-hosted)
+
+By default the CLI talks to the hosted GitTerm API at `https://api.gitterm.dev`.
+If you run your own GitTerm instance, point the CLI at that server instead.
+
+### Option 1: Login with `--server`
+
+```bash
+# Hosted (default)
+gitterm login
+
+# Self-hosted
+gitterm login --server https://gitterm.example.com
+
+# Local development
+gitterm login --server http://localhost:3000
+```
+
+The chosen URL is saved in `~/.config/gitterm/cli.json` and used by later commands.
+
+### Option 2: Environment variables
+
+Env vars override the saved config (useful for CI or one-off commands):
+
+```bash
+export GITTERM_SERVER_URL=https://gitterm.example.com
+export GITTERM_API_TOKEN=gt_...   # from Settings → Account → API tokens
+
+gitterm auth status
+gitterm workspace list
+```
+
+| Variable             | Purpose                                      |
+| -------------------- | -------------------------------------------- |
+| `GITTERM_SERVER_URL` | API base URL (no trailing path)              |
+| `GITTERM_API_TOKEN`  | `gt_...` token; skips device-code login      |
+
+Resolution order for each request: **explicit options / env vars → saved CLI config → default hosted URL** (for login only).
+
+Check which server you are on:
+
+```bash
+gitterm auth status
+# Server: http://localhost:3000
 ```
 
 ## Commands
@@ -52,9 +98,8 @@ code, you approve the device in your browser, and the CLI receives a user API to
 - Credentials are stored in `~/.config/gitterm/cli.json`
 - The same token works with [`@gitterm/sdk`](https://www.npmjs.com/package/@gitterm/sdk)
   and other GitTerm integrations
-- `GITTERM_API_TOKEN` / `GITTERM_SERVER_URL` environment variables override the
-  saved config, useful with revocable tokens created in the dashboard under
-  **Settings → Account → API tokens** (e.g. for CI)
+- Create revocable tokens in the dashboard under **Settings → Account → API tokens**
+  and pass them via `GITTERM_API_TOKEN` (with optional `GITTERM_SERVER_URL`)
 
 ## Programmatic use
 
