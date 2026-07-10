@@ -26,7 +26,7 @@ const fraunces = Fraunces({
 
 const TITLE = "GitTerm · Cloud workspaces for coding agents";
 const DESCRIPTION =
-  "Run any coding agent in persistent cloud workspaces. One config, any cloud, any device.";
+  "Cloud workspaces for coding agents. Heavy runs, temporary sandboxes, any cloud. Your keys. Open source.";
 
 export const metadata: Metadata = {
   title: TITLE,

@@ -12,38 +12,33 @@ import {
 const features = [
   {
     icon: Layers,
-    title: "Your laptop, off the hook.",
-    description:
-      "Workspaces run on E2B, Daytona, Railway, or Cloudflare. Pick the cloud that fits your workload.",
+    title: "Pick your cloud.",
+    description: "E2B, Daytona, Railway, AWS, or Cloudflare. No lock-in.",
   },
   {
     icon: KeyRound,
-    title: "Configure once.",
-    description:
-      "Add your model keys, SSH key, and agent config. Every new workspace inherits the setup.",
+    title: "Set keys once.",
+    description: "Model keys, SSH, agent config. Ready in every workspace.",
   },
   {
     icon: MonitorSmartphone,
-    title: "Securely resume from any device.",
-    description:
-      "Browser terminal, attach to any supported agent client or open in your favourite SSH-aware editor. Same workspace, any screen.",
+    title: "Any device.",
+    description: "Browser, SSH, or agent client. Same session, any screen.",
   },
   {
     icon: Save,
-    title: "Persistent state.",
-    description: "Files, context, and checkpoints survive restarts. Stop today, pick up tomorrow.",
+    title: "Stays saved.",
+    description: "Files, context, checkpoints. Stop today, resume tomorrow.",
   },
   {
     icon: GitBranch,
-    title: "Your repos, your commits.",
-    description:
-      "Connect your GitHub account and work with your repos directly. Clone, commit, push, and open pull requests from the workspace terminal.",
+    title: "Your GitHub.",
+    description: "Clone, commit, push, open PRs from the terminal.",
   },
   {
     icon: Globe,
-    title: "Preview your app live.",
-    description:
-      "Expose any workspace port behind a shareable URL. Test a dev server or share a running app while your agent keeps building.",
+    title: "Live previews.",
+    description: "Expose a port. Share a URL.",
   },
   {
     icon: Share2,
@@ -69,8 +64,8 @@ export function FeaturesSection() {
             <span className="marker">What you get</span>
           </div>
           <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
-            A real <span className="font-display-italic text-[color:var(--cream)]">home</span> for
-            your agent.
+            Built for how you actually{" "}
+            <span className="font-display-italic text-[color:var(--cream)]">work</span>.
           </h2>
         </div>
 

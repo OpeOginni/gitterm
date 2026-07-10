@@ -1,20 +1,20 @@
-import { Cpu, MonitorSmartphone, Network } from "lucide-react";
+import { Cpu, GitBranch, Network } from "lucide-react";
 
 const capabilities = [
   {
     icon: Cpu,
-    title: "Massive projects on real compute.",
-    body: "Hand giant monorepos and long agent loops to cloud-grade hardware. Run things your laptop simply isn't sized for, without listening to the fans spin.",
-  },
-  {
-    icon: MonitorSmartphone,
-    title: "Pick up on any device, securely.",
-    body: "Move from your desk to your iPad to a borrowed laptop. Browser terminal or SSH from any editor. Same workspace, same context, password-protected end-to-end.",
+    title: "More power.",
+    body: "Big repos and long agent runs on cloud hardware. Keep light work on your laptop.",
   },
   {
     icon: Network,
-    title: "Run things you wouldn't dare locally.",
-    body: "Try unfamiliar repos, expose dev servers to teammates, let an agent loose on generated code. Sandboxed workspaces with one-click port exposure keep your machine out of the blast radius.",
+    title: "Safe sandboxes.",
+    body: "Try a repo, open a port, shut it down. Off your machine, still reachable from your devices.",
+  },
+  {
+    icon: GitBranch,
+    title: "Same workflow.",
+    body: "Branch, commit, and push to GitHub like you would locally. Cloud machine, laptop habits.",
   },
 ];
 
@@ -28,15 +28,14 @@ export function ProblemSection() {
         <div className="mb-10 max-w-2xl sm:mb-12">
           <div className="mb-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-white/[0.08]" />
-            <span className="marker">Beyond local development</span>
+            <span className="marker">Why GitTerm</span>
           </div>
           <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
-            Some things your laptop can&apos;t do{" "}
-            <span className="font-display-italic text-[color:var(--cream)]">alone</span>.
+            When your laptop needs{" "}
+            <span className="font-display-italic text-[color:var(--cream)]">backup</span>.
           </h2>
           <p className="mt-5 max-w-xl text-base leading-[1.65] text-white/55 sm:text-[17px]">
-            GitTerm extends your local agent setup with cloud workspaces. Same OpenCode, same
-            configs: bigger compute, any device, safer experiments.
+            More power. Safer sandboxes. Any cloud you choose.
           </p>
         </div>
 

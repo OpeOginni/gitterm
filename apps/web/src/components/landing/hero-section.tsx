@@ -112,7 +112,7 @@ export function HeroSection() {
           style={{ animationDelay: "0ms" }}
         >
           <span className="h-px w-10 bg-white/[0.08]" />
-          <span className="marker">Cloud workspaces for coding agents</span>
+          <span className="marker">Open-source cloud workspaces for coding agents</span>
           <span className="h-px w-10 bg-white/[0.08]" />
         </div>
 
@@ -122,9 +122,9 @@ export function HeroSection() {
           }`}
           style={{ animationDelay: "80ms" }}
         >
-          Run your coding agent
+          Cloud workspaces
           <br />
-          in the <span className="font-display-italic text-primary">cloud.</span>
+          for coding <span className="font-display-italic text-primary">agents.</span>
         </h1>
 
         <p
@@ -133,7 +133,8 @@ export function HeroSection() {
         >
           {anonEnabled ? (
             <>
-              Try a public GitHub repo in a 10-minute{" "}
+              For heavy runs, temporary sandboxes, or any cloud you pick. Your keys. Try free in a
+              10-minute{" "}
               <Link
                 href="https://opencode.ai/"
                 target="_blank"
@@ -141,10 +142,10 @@ export function HeroSection() {
               >
                 OpenCode
               </Link>{" "}
-              sandbox. Sign in for persistent workspaces, your own keys, and cloud choice.
+              sandbox. No signup.
             </>
           ) : (
-            "Sign in for persistent workspaces, your own keys, and cloud choice."
+            "For heavy runs, temporary sandboxes, or any cloud you pick. Your keys. Open source, self-hostable."
           )}
         </p>
 
@@ -172,7 +173,7 @@ export function HeroSection() {
 
               {!result && (
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12.5px] text-white/40">
-                  <span>Want more workspaces, persistence, SSH, and your own keys?</span>
+                  <span>Want persistence, SSH, and your own keys?</span>
                   <Link
                     href="/dashboard"
                     className="inline-flex items-center gap-1 font-mono uppercase tracking-[0.18em] text-primary/90 underline decoration-primary/30 underline-offset-4 hover:decoration-primary"
@@ -191,7 +192,7 @@ export function HeroSection() {
                 </Button>
               </Link>
               <span className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-white/35">
-                bring your own keys · pick your cloud · no card required
+                open source · your keys · any cloud · no card required
               </span>
             </div>
           )}
@@ -200,31 +201,31 @@ export function HeroSection() {
         <div className="mt-14 text-left sm:mt-20">
           <div className="hairline" />
 
-          <div className="py-7">
-            <div className="mb-4 flex items-baseline justify-between">
-              <span className="marker">
+          <div className="py-8">
+            <div className="mb-5 flex items-baseline justify-between">
+              <span className="marker text-[12px] tracking-[0.22em]">
                 <span className="text-white/55">01</span>
                 <span className="mx-2 text-white/20">/</span>
                 Run on
               </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/25">
+              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/25">
                 pick your cloud
               </span>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 sm:gap-x-9">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3.5 sm:gap-x-10">
               {clouds.map((c) => (
                 <div
                   key={c.label}
-                  className="group flex items-center gap-2 text-white/60 transition-colors hover:text-white/90"
+                  className="group flex items-center gap-2.5 text-white/60 transition-colors hover:text-white/90"
                 >
                   <Image
                     src={c.src}
                     alt={c.label}
-                    width={18}
-                    height={18}
-                    className="h-[18px] w-[18px] opacity-80 transition-opacity group-hover:opacity-100"
+                    width={22}
+                    height={22}
+                    className="h-[22px] w-[22px] opacity-80 transition-opacity group-hover:opacity-100"
                   />
-                  <span className="font-sans text-[13.5px]">{c.label}</span>
+                  <span className="font-sans text-[15px] sm:text-[15.5px]">{c.label}</span>
                 </div>
               ))}
             </div>
@@ -232,27 +233,27 @@ export function HeroSection() {
 
           <div className="hairline" />
 
-          <div className="py-7">
-            <div className="mb-4 flex items-baseline justify-between">
-              <span className="marker">
+          <div className="py-8">
+            <div className="mb-5 flex items-baseline justify-between">
+              <span className="marker text-[12px] tracking-[0.22em]">
                 <span className="text-white/55">02</span>
                 <span className="mx-2 text-white/20">/</span>
                 Powered by
               </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/25">
+              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/25">
                 more soon
               </span>
             </div>
-            <div className="flex items-center justify-center gap-2 text-white/85">
+            <div className="flex items-center justify-center gap-2.5 text-white/85">
               <Image
                 src="/opencode.svg"
                 alt="OpenCode"
-                width={20}
-                height={20}
-                className="h-5 w-5"
+                width={24}
+                height={24}
+                className="h-6 w-6"
               />
-              <span className="font-sans text-[14px]">OpenCode</span>
-              <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-primary/85">
+              <span className="font-sans text-[15.5px] sm:text-base">OpenCode</span>
+              <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary/85">
                 live
               </span>
             </div>
