@@ -14,6 +14,7 @@ CREATE TABLE "api_token" (
 DROP TYPE "public"."instance_status";--> statement-breakpoint
 CREATE TYPE "public"."instance_status" AS ENUM('pending', 'running', 'paused', 'terminated');--> statement-breakpoint
 ALTER TABLE "workspace" ALTER COLUMN "status" SET DATA TYPE text;--> statement-breakpoint
+UPDATE "workspace" SET "status" = 'paused' WHERE "status" = 'stopped';--> statement-breakpoint
 DROP TYPE "public"."workspace_status";--> statement-breakpoint
 CREATE TYPE "public"."workspace_status" AS ENUM('pending', 'running', 'paused', 'terminated');--> statement-breakpoint
 ALTER TABLE "workspace" ALTER COLUMN "status" SET DATA TYPE "public"."workspace_status" USING "status"::"public"."workspace_status";--> statement-breakpoint

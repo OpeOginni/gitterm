@@ -66,6 +66,24 @@ export function resolveProjectDirectory(
   return hint;
 }
 
+/** Control-plane secrets that must never leave the server. */
+const SERVER_ONLY_UPSTREAM_HEADERS = new Set(["x-gitterm-cf-internal-key"]);
+
+/**
+ * Strip control-plane credentials from upstream headers before returning them
+ * to workspace owners / SDK clients. Server-side proxy still uses the full
+ * encrypted route-access headers.
+ */
+export function toClientUpstreamHeaders(
+  headers?: Record<string, string> | null,
+): Record<string, string> | undefined {
+  if (!headers) return undefined;
+  const filtered = Object.fromEntries(
+    Object.entries(headers).filter(([key]) => !SERVER_ONLY_UPSTREAM_HEADERS.has(key.toLowerCase())),
+  );
+  return Object.keys(filtered).length > 0 ? filtered : undefined;
+}
+
 export function buildWorkspaceRuntimeAccess(options: {
   workspace: WorkspaceRuntimeSource;
   headers?: Record<string, string> | null;
@@ -76,8 +94,7 @@ export function buildWorkspaceRuntimeAccess(options: {
   const providerKey = options.providerKey ?? workspace.providerKey ?? null;
   const status = workspace.status as PublicWorkspaceStatus;
   const url = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
-  const headers =
-    options.headers && Object.keys(options.headers).length > 0 ? options.headers : undefined;
+  const headers = toClientUpstreamHeaders(options.headers);
   const password = options.password ?? undefined;
 
   return {

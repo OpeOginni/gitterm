@@ -38,6 +38,8 @@ interface CloudflareExternalServiceId {
 interface ProvisionRepo {
   url: string;
   branch?: string;
+  baseCommit?: string;
+  checkoutRef?: string;
   name?: string;
   authUsername?: string;
   authToken?: string;
@@ -186,6 +188,8 @@ export class CloudflareComputeProvider implements ComputeProvider {
         ? {
             url: spec.repo.url,
             branch: spec.repo.branch,
+            baseCommit: spec.repo.baseCommit,
+            checkoutRef: spec.repo.checkoutRef,
             name: spec.repo.name,
             authUsername: spec.repo.authUsername,
             authToken: spec.repo.authToken,

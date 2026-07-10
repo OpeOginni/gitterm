@@ -2126,6 +2126,8 @@ export const workspaceRouter = router({
           existingWorkspace.subdomain,
         );
 
+        await createUsageSession(input.workspaceId, userId);
+
         WORKSPACE_EVENTS.emitStatus({
           workspaceId: input.workspaceId,
           status: restartWorkspaceStatus,
@@ -2415,6 +2417,8 @@ export const workspaceRouter = router({
           },
           existingWorkspace.subdomain,
         );
+
+        await createUsageSession(input.workspaceId, userId);
 
         // Emit status event
         WORKSPACE_EVENTS.emitStatus({

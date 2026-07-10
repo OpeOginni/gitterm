@@ -61,6 +61,34 @@ describe("workspace runtime helpers", () => {
     expect(runtime.url).toContain("abc123");
   });
 
+  test("buildWorkspaceRuntimeAccess strips Cloudflare control-plane key", () => {
+    const runtime = buildWorkspaceRuntimeAccess({
+      workspace: {
+        id: "ws-cf",
+        status: "running",
+        subdomain: "cf123",
+        repositoryUrl: "https://github.com/acme/demo",
+        repositoryBranch: "main",
+        repositoryBaseCommit: null,
+        repositoryCheckoutRef: null,
+        persistent: true,
+        serverOnly: false,
+        serverPassword: null,
+      },
+      headers: {
+        "x-gitterm-cf-sandbox-id": "sandbox-1",
+        "x-gitterm-cf-internal-key": "global-secret",
+        "x-gitterm-cf-port": "4096",
+      },
+      providerKey: "cloudflare",
+    });
+
+    expect(runtime.headers).toEqual({
+      "x-gitterm-cf-sandbox-id": "sandbox-1",
+      "x-gitterm-cf-port": "4096",
+    });
+  });
+
   test("terminated runtime is not recoverable", () => {
     const runtime = buildWorkspaceRuntimeAccess({
       workspace: {
