@@ -59,10 +59,10 @@ gitterm auth status
 gitterm workspace list
 ```
 
-| Variable             | Purpose                                      |
-| -------------------- | -------------------------------------------- |
-| `GITTERM_SERVER_URL` | API base URL (no trailing path)              |
-| `GITTERM_API_TOKEN`  | `gt_...` token; skips device-code login      |
+| Variable             | Purpose                                 |
+| -------------------- | --------------------------------------- |
+| `GITTERM_SERVER_URL` | API base URL (no trailing path)         |
+| `GITTERM_API_TOKEN`  | `gt_...` token; skips device-code login |
 
 Resolution order for each request: **explicit options / env vars → saved CLI config → default hosted URL** (for login only).
 

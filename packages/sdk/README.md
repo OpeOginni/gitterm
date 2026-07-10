@@ -17,11 +17,11 @@ npm install @gitterm/sdk
 The default API is the hosted service at `https://api.gitterm.dev`. Self-hosted
 instances use the same SDK — pass your instance’s base URL as `serverUrl`.
 
-| Deployment   | Example `serverUrl`              |
-| ------------ | -------------------------------- |
-| Hosted       | `https://api.gitterm.dev`        |
-| Self-hosted  | `https://gitterm.example.com`    |
-| Local dev    | `http://localhost:3000`          |
+| Deployment  | Example `serverUrl`           |
+| ----------- | ----------------------------- |
+| Hosted      | `https://api.gitterm.dev`     |
+| Self-hosted | `https://gitterm.example.com` |
+| Local dev   | `http://localhost:3000`       |
 
 ### Explicit client (recommended for apps)
 
