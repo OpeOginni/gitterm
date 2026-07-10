@@ -142,7 +142,7 @@ export function HeroSection() {
               >
                 OpenCode
               </Link>{" "}
-              sandbox — no signup.
+              sandbox. No signup.
             </>
           ) : (
             "Persistent workspaces on the cloud you choose, with your own keys. Open source, self-hostable."

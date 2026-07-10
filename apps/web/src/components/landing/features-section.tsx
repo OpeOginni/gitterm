@@ -4,7 +4,7 @@ const features = [
   {
     icon: Layers,
     title: "Any cloud you want.",
-    description: "Run on E2B, Daytona, Railway, AWS, or Cloudflare — pick what fits.",
+    description: "Run on E2B, Daytona, Railway, AWS, or Cloudflare. Pick what fits.",
   },
   {
     icon: KeyRound,
@@ -14,7 +14,7 @@ const features = [
   {
     icon: MonitorSmartphone,
     title: "Resume from any device.",
-    description: "Browser terminal, SSH editor, or agent client — same workspace, any screen.",
+    description: "Browser terminal, SSH editor, or agent client. Same workspace, any screen.",
   },
   {
     icon: Save,

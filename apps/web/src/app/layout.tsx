@@ -26,7 +26,7 @@ const fraunces = Fraunces({
 
 const TITLE = "GitTerm · Open-source cloud workspaces for coding agents";
 const DESCRIPTION =
-  "Run coding agents in persistent cloud workspaces you control. Open source, self-hostable, bring your own model keys — on E2B, Daytona, Railway, AWS, or Cloudflare.";
+  "Run coding agents in persistent cloud workspaces you control. Open source, self-hostable, bring your own model keys. Works on E2B, Daytona, Railway, AWS, or Cloudflare.";
 
 export const metadata: Metadata = {
   title: TITLE,

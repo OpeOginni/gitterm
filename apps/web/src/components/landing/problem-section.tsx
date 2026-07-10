@@ -9,12 +9,12 @@ const capabilities = [
   {
     icon: MonitorSmartphone,
     title: "Any device, same session.",
-    body: "Move from desk to iPad to a borrowed laptop — browser terminal or SSH, always the same workspace.",
+    body: "Move from desk to iPad to a borrowed laptop. Browser terminal or SSH, always the same workspace.",
   },
   {
     icon: Network,
     title: "Nothing runs on your machine.",
-    body: "Try unknown repos, expose dev servers, let agents loose — all sandboxed, far from your laptop.",
+    body: "Try unknown repos, expose dev servers, let agents loose. All sandboxed, far from your laptop.",
   },
 ];
 

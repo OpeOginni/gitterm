@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 const faqs = [
   {
     q: "Is GitTerm open source?",
-    a: "Yes. GitTerm is MIT-licensed and built in the open — the full stack is on GitHub.",
+    a: "Yes. GitTerm is MIT-licensed and built in the open. The full stack is on GitHub.",
   },
   {
     q: "Can I self-host it?",
@@ -18,7 +18,7 @@ const faqs = [
   },
   {
     q: "Do I bring my own model keys?",
-    a: "Yes. Add your own Anthropic, OpenAI, or other provider keys — encrypted, reused across every workspace, and never marked up.",
+    a: "Yes. Add your own Anthropic, OpenAI, or other provider keys. They are encrypted, reused across every workspace, and never marked up.",
   },
   {
     q: "Which coding agent does it run?",
@@ -26,7 +26,7 @@ const faqs = [
   },
   {
     q: "How do I try it?",
-    a: "Paste a public GitHub repo for a free 10-minute sandbox — no signup. Sign in to create persistent workspaces with your own keys.",
+    a: "Paste a public GitHub repo for a free 10-minute sandbox. No signup required. Sign in to create persistent workspaces with your own keys.",
   },
 ];
 
