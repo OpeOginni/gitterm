@@ -124,15 +124,8 @@
     {
       "idx": 17,
       "version": "7",
-      "when": 1783080602283,
-      "tag": "0017_right_queen_noir",
-      "breakpoints": true
-    },
-    {
-      "idx": 18,
-      "version": "7",
-      "when": 1783602922164,
-      "tag": "0018_absent_rattler",
+      "when": 1783673675905,
+      "tag": "0017_fuzzy_carmella_unuscione",
       "breakpoints": true
     }
   ]
