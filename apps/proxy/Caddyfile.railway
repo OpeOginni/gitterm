@@ -129,12 +129,6 @@
 
 			handle @cloud_workspace_https {
 				reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
-					header_up Upgrade {header.Upgrade}
-					header_up Connection {header.Connection}
-					header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-					header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-					header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-					header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 					header_up Host {header.X-Container-Host}
 					header_up X-Forwarded-Host {host}
 					header_up X-Forwarded-Proto https
@@ -166,12 +160,6 @@
 
 			handle {
 				reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
-					header_up Upgrade {header.Upgrade}
-					header_up Connection {header.Connection}
-					header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-					header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-					header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-					header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 					header_up Host {header.X-Container-Host}
 					header_up X-Forwarded-Host {host}
 					header_up X-Forwarded-Proto https
@@ -237,12 +225,6 @@
 		route @cloud_workspace {
 			handle @cloud_workspace_https {
 				reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
-					header_up Upgrade {header.Upgrade}
-					header_up Connection {header.Connection}
-					header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-					header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-					header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-					header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 					header_up Host {header.X-Container-Host}
 					header_up X-Forwarded-Host {host}
 					header_up X-Forwarded-Proto https
@@ -272,12 +254,6 @@
 
 			handle {
 				reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
-					header_up Upgrade {header.Upgrade}
-					header_up Connection {header.Connection}
-					header_up Sec-WebSocket-Key {header.Sec-WebSocket-Key}
-					header_up Sec-WebSocket-Version {header.Sec-WebSocket-Version}
-					header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
-					header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 					header_up Host {header.X-Container-Host}
 					header_up X-Forwarded-Host {host}
 					header_up X-Forwarded-Proto https
