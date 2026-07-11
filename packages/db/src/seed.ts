@@ -160,14 +160,9 @@ const seedImages = [
     providerMetadata: {
       isDefault: true,
       daytona: {
-        snapshot: "gitterm-opencode-server-eu",
-        snapshotsByRegion: {
-          eu: "gitterm-opencode-server-eu",
-        },
-        sshSnapshot: "gitterm-opencode-server-ssh-eu",
-        sshSnapshotsByRegion: {
-          eu: "gitterm-opencode-server-ssh-eu",
-        },
+        image: "opeoginni/gitterm-opencode-server:latest",
+        resources: { cpu: 2, memory: 4 },
+        editorResources: { cpu: 4, memory: 8 },
       },
       aws: {
         cpu: 4096,
@@ -188,14 +183,9 @@ const seedImages = [
         sshTemplateId: "nxiezl38gnw32ufyloc0",
       },
       daytona: {
-        snapshot: "gitterm-opencode-server-eu",
-        snapshotsByRegion: {
-          eu: "gitterm-opencode-server-eu",
-        },
-        sshSnapshot: "gitterm-opencode-server-ssh-eu",
-        sshSnapshotsByRegion: {
-          eu: "gitterm-opencode-server-ssh-eu",
-        },
+        image: "opeoginni/gitterm-opencode-server:latest",
+        resources: { cpu: 2, memory: 4 },
+        editorResources: { cpu: 4, memory: 8 },
       },
       // The Cloudflare worker runs whatever this says inside the public
       // gitterm-cf-sandbox image (which bakes in opencode).
@@ -224,15 +214,14 @@ const seedImages = [
     agentTypeName: "T3Code",
     providerMetadata: {
       isDefault: true,
-      // Built by `bun run e2b:template-build` (alias gitterm-t3code-server).
+      // Built by E2B template job in Build Agent Images workflow (alias gitterm-t3code-server).
       e2b: {
         templateId: "gfu36xk02swjo0s9turi",
       },
       daytona: {
-        snapshot: "gitterm-t3code-server-eu",
-        snapshotsByRegion: {
-          eu: "gitterm-t3code-server-eu",
-        },
+        image: "opeoginni/gitterm-t3code-server:latest",
+        resources: { cpu: 2, memory: 4 },
+        editorResources: { cpu: 4, memory: 8 },
       },
       aws: {
         cpu: 4096,

@@ -1,5 +1,4 @@
 FROM node:20-bookworm-slim
-# FROM ghcr.io/anomalyco/opencode:latest
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -14,13 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install AWS CLI
-
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-RUN unzip awscliv2.zip
-RUN ./aws/install
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+    && unzip awscliv2.zip \
+    && ./aws/install \
+    && rm -rf awscliv2.zip aws
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
-# /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
 ARG OPENCODE_VERSION=latest
 ARG OPENCODE_INSTALL_CACHE_BUST=manual
 RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
@@ -29,11 +27,8 @@ RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
     && npm install -g "opencode-ai@${OPENCODE_VERSION}" --prefer-online --no-audit --fund=false \
     && echo "installed opencode: $(opencode --version)"
 
-# Set up working directory
 WORKDIR /workspace
 
-# Set environment variables for persistence
-# These ensure all tools store data in /workspace by default
 ENV HOME=/workspace \
     XDG_CONFIG_HOME=/workspace/.config \
     XDG_DATA_HOME=/workspace/.local/share \
@@ -47,25 +42,14 @@ ENV HOME=/workspace \
     HISTFILE=/workspace/.bash_history \
     PATH=/workspace/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Copy and set up entrypoint script
-COPY ./opencode/server.entrypoint.sh /server-entrypoint.sh
-COPY ./opencode/server-ssh.entrypoint.sh /entrypoint.sh
+COPY ./opencode/server.entrypoint.sh /entrypoint.sh
 COPY ./opencode/aws-agent-context.sh /aws-agent-context.sh
-RUN chmod +x /server-entrypoint.sh /entrypoint.sh /aws-agent-context.sh
+RUN chmod +x /entrypoint.sh /aws-agent-context.sh
 
-# Expose the ttyd port
 ENV PORT=7681
 EXPOSE 22
 EXPOSE 7681
 
-# Define the entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
 
-# Default command
-
-# IPv6 support
 CMD ["opencode", "serve", "--port", "7681", "--hostname", "[::]"]
-
-# docker build -f ./Opencode.Server.AWS.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-aws-server:latest .
-
-# docker push opeoginni/gitterm-opencode-aws-server:latest

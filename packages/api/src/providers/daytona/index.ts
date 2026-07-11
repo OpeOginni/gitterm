@@ -1,5 +1,5 @@
 import env from "@gitterm/env/server";
-import { Daytona } from "@daytonaio/sdk";
+import { Daytona, Image } from "@daytonaio/sdk";
 import type { DaytonaImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import path from "path";
 import { getProviderConfigService } from "../../service/config/provider-config";
@@ -15,7 +15,7 @@ import type {
   WorkspaceStatusResult,
 } from "../compute";
 import { resolveProvisioningSpec } from "../provisioning-spec";
-import { resolveDaytonaSnapshotName } from "./snapshot/config";
+import { DAYTONA_DEFAULT_RESOURCES } from "./resources";
 import {
   buildHostAlias,
   buildSshCommand,
@@ -153,36 +153,34 @@ export class DaytonaProvider implements ComputeProvider {
     return providerConfig.defaultTargetRegion;
   }
 
-  private getSnapshotName(
+  private getImageCreateParams(
     config: WorkspaceConfig,
-    targetRegion: string,
     editorAccess: boolean,
-  ): string {
+  ): {
+    imageRef: string;
+    resources: { cpu: number; memory: number; disk?: number };
+  } {
     const metadata = config.imageProviderMetadata?.daytona as
       | DaytonaImageProviderMetadata
       | undefined;
 
-    // Editor/SSH workspaces use the higher-resource `server-ssh` snapshot.
-    if (editorAccess) {
-      const sshRegionSnapshot = metadata?.sshSnapshotsByRegion?.[targetRegion];
-      return (
-        sshRegionSnapshot ??
-        metadata?.sshSnapshot ??
-        resolveDaytonaSnapshotName("server-ssh", targetRegion)
-      );
-    }
+    const imageRef =
+      metadata?.image ??
+      (config.imageId.includes(":") ? config.imageId : `${config.imageId}:latest`);
 
-    const regionSnapshot = metadata?.snapshotsByRegion?.[targetRegion];
-    const snapshot =
-      regionSnapshot ?? metadata?.snapshot ?? resolveDaytonaSnapshotName("server", targetRegion);
+    const defaults = editorAccess
+      ? DAYTONA_DEFAULT_RESOURCES.editor
+      : DAYTONA_DEFAULT_RESOURCES.server;
+    const override = editorAccess ? metadata?.editorResources : metadata?.resources;
 
-    if (!regionSnapshot && !metadata?.snapshot) {
-      console.warn(
-        `[daytona] no snapshot in image metadata for workspace ${config.workspaceId} (region=${targetRegion}); defaulting to ${snapshot}`,
-      );
-    }
-
-    return snapshot;
+    return {
+      imageRef,
+      resources: {
+        cpu: override?.cpu ?? defaults.cpu,
+        memory: override?.memory ?? defaults.memory,
+        ...(override?.disk != null ? { disk: override.disk } : {}),
+      },
+    };
   }
 
   private getProjectPathHint(pathHint: string): string {
@@ -309,26 +307,34 @@ export class DaytonaProvider implements ComputeProvider {
     const providerConfig = await this.getConfig();
     const targetRegion = this.getTargetRegion(config, providerConfig);
     const spec = resolveProvisioningSpec(config);
-    const snapshotName = this.getSnapshotName(
-      config,
-      targetRegion,
-      this.isEditorAccessWorkspace(spec),
-    );
+    const editorAccess = this.isEditorAccessWorkspace(spec);
+    const { imageRef, resources } = this.getImageCreateParams(config, editorAccess);
     const daytona = await this.createClient(targetRegion);
     const repoName = spec?.repo?.name;
     const repoDir = getRepoDir(repoName);
 
-    const sandbox = await provisionLogger.step(`create-sandbox snapshot=${snapshotName}`, () =>
-      daytona.create({
-        snapshot: snapshotName,
-        labels: this.getWorkspaceLabels(config, spec, persistent),
-        envVars: {
-          ...spec?.agent.env,
-          // Daytona snapshots go stale between rebuilds; opt into the image's
-          // self-upgrade hook (a no-op for images that don't implement it).
-          AGENT_RUNTIME_UPGRADE: "1",
-        },
-      }),
+    const image = Image.base(imageRef).entrypoint(["sleep", "infinity"]);
+
+    const sandbox = await provisionLogger.step(
+      `create-sandbox image=${imageRef} cpu=${resources.cpu} mem=${resources.memory}`,
+      () =>
+        daytona.create(
+          {
+            image,
+            resources,
+            labels: this.getWorkspaceLabels(config, spec, persistent),
+            envVars: {
+              ...spec?.agent.env,
+              AGENT_RUNTIME_UPGRADE: "1",
+            },
+          },
+          {
+            timeout: 300,
+            onSnapshotCreateLogs: (chunk) => {
+              process.stdout.write(chunk);
+            },
+          },
+        ),
     );
 
     if (spec?.repo) {
@@ -408,7 +414,7 @@ export class DaytonaProvider implements ComputeProvider {
     };
 
     provisionLogger.log(
-      `workspace-ready persistent=${persistent} editorAccess=${this.isEditorAccessWorkspace(spec)} region=${targetRegion} snapshot=${snapshotName}`,
+      `workspace-ready persistent=${persistent} editorAccess=${editorAccess} region=${targetRegion} image=${imageRef}`,
     );
 
     if (!persistent) {

@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
+    openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
 # Install T3 Code plus the agent CLIs it drives (Claude Code, Codex, OpenCode).
@@ -56,8 +57,8 @@ ENV HOME=/workspace \
 COPY ./t3code/server.entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Expose the server port
 ENV PORT=7681
+EXPOSE 22
 EXPOSE 7681
 
 # Define the entrypoint

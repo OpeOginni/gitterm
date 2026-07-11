@@ -193,10 +193,9 @@ export interface CloudProvidersshAccessSupport {
 }
 
 export interface DaytonaImageProviderMetadata {
-  snapshot?: string;
-  snapshotsByRegion?: Record<string, string | undefined>;
-  sshSnapshot?: string;
-  sshSnapshotsByRegion?: Record<string, string | undefined>;
+  image?: string;
+  resources?: { cpu?: number; memory?: number; disk?: number };
+  editorResources?: { cpu?: number; memory?: number; disk?: number };
 }
 
 export interface AwsImageProviderMetadata {
