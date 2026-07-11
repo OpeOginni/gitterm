@@ -1811,6 +1811,7 @@ export const workspaceRouter = router({
         const agentProvisioning = getAgentProvisioner(agentTypeRecord.name).provision({
           userId,
           userDisplayName: fetchedUser.name,
+          workspaceHostname: `${subdomain}.${process.env.BASE_DOMAIN ?? "gitterm.dev"}`,
           agentTypeName: agentTypeRecord.name,
           serverOnly: agentTypeRecord.serverOnly,
           agentConfigs,

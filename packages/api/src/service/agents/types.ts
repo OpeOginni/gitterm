@@ -13,6 +13,7 @@ export type AgentConfigByKind = Partial<
 export interface AgentProvisionerContext {
   userId: string;
   userDisplayName: string;
+  workspaceHostname: string;
   agentTypeName: string;
   serverOnly: boolean;
   agentConfigs?: AgentConfigByKind;

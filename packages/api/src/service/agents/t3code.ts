@@ -133,7 +133,10 @@ export const t3codeProvisioner: AgentProvisioner = {
       files,
       env,
       serve: {
-        command: `t3 serve --host 0.0.0.0 --port ${T3_SERVE_PORT} --no-browser --auto-bootstrap-project-from-cwd`,
+        command:
+          `printf 'PRETTY_HOSTNAME=%s\\n' '${ctx.workspaceHostname}'` +
+          ` | sudo tee /etc/machine-info >/dev/null` +
+          ` && t3 serve --host 0.0.0.0 --port ${T3_SERVE_PORT} --no-browser --auto-bootstrap-project-from-cwd`,
         port: T3_SERVE_PORT,
         accessCredentialCommand: T3_PAIRING_CREATE_COMMAND,
       },
