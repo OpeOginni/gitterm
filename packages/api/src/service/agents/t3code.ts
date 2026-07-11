@@ -17,6 +17,8 @@ const CODEX_CONFIG_PATH = "~/.codex/config.json";
 const CLAUDE_OAUTH_SCOPES = ["user:inference", "user:profile"];
 
 export const T3_PAIRING_CREATE_COMMAND =
+  `i=0; until curl -fsS http://127.0.0.1:${T3_SERVE_PORT}/.well-known/t3/environment >/dev/null; do ` +
+  `i=$((i+1)); [ "$i" -ge 60 ] && exit 1; sleep 1; done; ` +
   `t3 auth pairing create --label gitterm --ttl 30d --json` +
   ` | node -e "let d='';process.stdin.on('data',(c)=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).credential))"`;
 
@@ -134,9 +136,9 @@ export const t3codeProvisioner: AgentProvisioner = {
       env,
       serve: {
         command:
-          `printf 'PRETTY_HOSTNAME=%s\\n' '${ctx.workspaceHostname}'` +
-          ` | sudo tee /etc/machine-info >/dev/null` +
-          ` && t3 serve --host 0.0.0.0 --port ${T3_SERVE_PORT} --no-browser --auto-bootstrap-project-from-cwd`,
+          `(printf 'PRETTY_HOSTNAME=%s\\n' '${ctx.workspaceHostname}'` +
+          ` | sudo -n tee /etc/machine-info >/dev/null 2>&1 || true);` +
+          ` exec t3 serve --host 0.0.0.0 --port ${T3_SERVE_PORT} --no-browser --auto-bootstrap-project-from-cwd`,
         port: T3_SERVE_PORT,
         accessCredentialCommand: T3_PAIRING_CREATE_COMMAND,
       },
