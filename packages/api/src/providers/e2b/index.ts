@@ -307,8 +307,10 @@ export class E2BProvider implements ComputeProvider {
       return;
     }
 
+    const command = serve.command.replace(/'/g, `'"'"'`);
+
     await sandbox.commands
-      .run(`nohup setsid ${serve.command} > /tmp/agent-server.log 2>&1 </dev/null &`, {
+      .run(`nohup setsid bash -lc '${command}' > /tmp/agent-server.log 2>&1 </dev/null &`, {
         cwd: repoDir,
       })
       .catch(async (error) => {
