@@ -5,10 +5,21 @@
     <meta name="viewport" content="width=1200" />
     <title>GitTerm OG Card</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      * { box-sizing: border-box; }
-      html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+      }
       body {
         position: relative;
         padding: 52px 62px;
@@ -20,51 +31,157 @@
         content: "";
         position: absolute;
         inset: 0;
-        background-image: radial-gradient(rgba(255,255,255,.055) 1px, transparent 1px);
+        background-image: radial-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px);
         background-size: 28px 28px;
         mask-image: linear-gradient(to bottom, black, transparent 78%);
       }
-      .card { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; }
-      header { display: flex; align-items: center; justify-content: space-between; }
-      .brand { display: flex; align-items: center; gap: 12px; }
-      .brand img { width: 31px; height: 31px; }
-      .brand span { font: 700 16px "Space Mono", monospace; letter-spacing: .18em; text-transform: uppercase; }
-      .url { color: rgba(255,255,255,.45); font: 12px "Space Mono", monospace; }
-      main { display: grid; grid-template-columns: 1.1fr .9fr; align-items: center; flex: 1; gap: 58px; }
-      .kicker { margin-bottom: 15px; color: #c8a44e; font: 700 10px "Space Mono", monospace; letter-spacing: .22em; text-transform: uppercase; }
-      h1 { margin: 0; max-width: 600px; font-size: 55px; line-height: 1.04; letter-spacing: -.035em; }
-      h1 span { color: #c8a44e; }
-      .subtitle { margin: 20px 0 0; max-width: 530px; color: rgba(255,255,255,.62); font-size: 17px; line-height: 1.55; }
-      .agents { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+      .card {
+        position: relative;
+        z-index: 1;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .brand img {
+        width: 31px;
+        height: 31px;
+      }
+      .brand span {
+        font:
+          700 16px "Space Mono",
+          monospace;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+      .url {
+        color: rgba(255, 255, 255, 0.45);
+        font:
+          12px "Space Mono",
+          monospace;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        align-items: center;
+        flex: 1;
+        gap: 58px;
+      }
+      .kicker {
+        margin-bottom: 15px;
+        color: #c8a44e;
+        font:
+          700 10px "Space Mono",
+          monospace;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 0;
+        max-width: 600px;
+        font-size: 55px;
+        line-height: 1.04;
+        letter-spacing: -0.035em;
+      }
+      h1 span {
+        color: #c8a44e;
+      }
+      .subtitle {
+        margin: 20px 0 0;
+        max-width: 530px;
+        color: rgba(255, 255, 255, 0.62);
+        font-size: 17px;
+        line-height: 1.55;
+      }
+      .agents {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 13px;
+      }
       .agent {
-        display: flex; align-items: center; gap: 13px; height: 76px; padding: 0 18px;
-        border: 1px solid rgba(255,255,255,.11); border-radius: 14px;
-        background: rgba(255,255,255,.035);
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        height: 76px;
+        padding: 0 18px;
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.035);
       }
-      .agent img { width: 31px; height: 31px; object-fit: contain; }
-      .agent span { font-size: 14px; font-weight: 600; }
-      .agent:first-child { border-color: rgba(200,164,78,.4); background: rgba(200,164,78,.07); }
+      .agent img {
+        width: 31px;
+        height: 31px;
+        object-fit: contain;
+      }
+      .agent span {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .agent:first-child {
+        border-color: rgba(200, 164, 78, 0.4);
+        background: rgba(200, 164, 78, 0.07);
+      }
       footer {
-        display: flex; align-items: center; justify-content: space-between;
-        min-height: 86px; padding: 0 4px; border-top: 1px solid rgba(255,255,255,.09);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 86px;
+        padding: 0 4px;
+        border-top: 1px solid rgba(255, 255, 255, 0.09);
       }
-      .providers-label { color: rgba(255,255,255,.38); font: 10px "Space Mono", monospace; letter-spacing: .19em; text-transform: uppercase; }
-      .providers { display: flex; align-items: center; gap: 28px; }
-      .provider { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.7); font-size: 12px; font-weight: 500; }
-      .provider img { width: 20px; height: 20px; object-fit: contain; }
+      .providers-label {
+        color: rgba(255, 255, 255, 0.38);
+        font:
+          10px "Space Mono",
+          monospace;
+        letter-spacing: 0.19em;
+        text-transform: uppercase;
+      }
+      .providers {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+      }
+      .provider {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .provider img {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
+      }
     </style>
   </head>
   <body>
     <div class="card">
       <header>
-        <div class="brand"><img src="/gitterm-railway.svg" alt="GitTerm" /><span>GitTerm</span></div>
+        <div class="brand">
+          <img src="/gitterm-railway.svg" alt="GitTerm" /><span>GitTerm</span>
+        </div>
         <span class="url">gitterm.dev</span>
       </header>
       <main>
         <section>
           <div class="kicker">Cloud workspaces for coding agents</div>
           <h1>Your agents.<br />Your cloud. <span>Anywhere.</span></h1>
-          <p class="subtitle">Secure, stateful workspaces for the coding agents you already use, on the infrastructure you choose.</p>
+          <p class="subtitle">
+            Secure, stateful workspaces for the coding agents you already use, on the infrastructure
+            you choose.
+          </p>
         </section>
         <section class="agents" aria-label="Supported coding agents">
           <div class="agent"><img src="/opencode.svg" alt="" /><span>OpenCode</span></div>

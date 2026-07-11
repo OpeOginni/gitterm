@@ -1,6 +1,7 @@
 import { auth } from "@gitterm/auth";
 import { timingSafeEqual } from "crypto";
 import { db, eq, and } from "@gitterm/db";
+import { agentType, image } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -428,9 +429,12 @@ export const proxyResolverRouter = async (c: Context) => {
           hostingType: workspace.hostingType,
           status: workspace.status,
           serverOnly: workspace.serverOnly,
+          agentTypeName: agentType.name,
           exposedPorts: workspace.exposedPorts,
         })
         .from(workspace)
+        .innerJoin(image, eq(workspace.imageId, image.id))
+        .innerJoin(agentType, eq(image.agentTypeId, agentType.id))
         .where(and(eq(workspace.subdomain, subdomain), eq(workspace.status, "running")))
         .limit(1);
 
@@ -474,6 +478,34 @@ export const proxyResolverRouter = async (c: Context) => {
       status: ws.status,
       userId: ws.userId,
     });
+
+    // T3 authenticates clients with its own pairing credentials. GitTerm must
+    // let the primary endpoint through so discovery, pairing, and API traffic
+    // can reach T3; separately exposed workspace ports remain protected.
+    if (!extractedPort && ws.agentTypeName?.trim().toLowerCase().startsWith("t3code")) {
+      if (!ws.upstreamUrl) {
+        return htmlError(c, "error", 500);
+      }
+
+      const upstreamUrl = new URL(ws.upstreamUrl);
+      const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
+      await recordWorkspaceActivity(ws.id);
+
+      return c.text(
+        "OK",
+        200,
+        buildProxyResolveHeaders(
+          {
+            "X-Upstream-URL": upstreamUrl.toString(),
+            "X-Container-Host": upstreamUrl.hostname,
+            "X-Container-Port": port,
+            "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+            "X-Hosting-Type": ws.hostingType,
+          },
+          upstreamAccessHeaders,
+        ),
+      );
+    }
 
     // Visitors of the homepage anon flow get a short-lived HMAC-signed
     // cookie (see `service/anon/anon-access-token.ts`) scoped to a single

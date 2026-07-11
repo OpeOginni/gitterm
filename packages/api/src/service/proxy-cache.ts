@@ -18,9 +18,15 @@ export type ProxyWorkspaceCacheEntry = {
   hostingType: "cloud" | "local";
   status: "running";
   serverOnly: boolean;
+  agentTypeName?: string;
   exposedPorts?: Record<
     string,
-    { port: number; name?: string; upstreamUrl?: string; externalPortDomainId?: string }
+    {
+      port: number;
+      name?: string;
+      upstreamUrl?: string;
+      externalPortDomainId?: string;
+    }
   > | null;
 };
 
