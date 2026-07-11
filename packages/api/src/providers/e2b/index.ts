@@ -320,11 +320,7 @@ export class E2BProvider implements ComputeProvider {
       });
   }
 
-  /**
-   * Run the agent's access-credential command (e.g. `t3 auth pairing create`)
-   * once the server is up, retrying while it boots. Non-fatal on failure: the
-   * workspace still works, the dashboard just can't show a pairing link.
-   */
+  /** Run the agent's access-credential command before starting its server. */
   private async captureAccessCredential(
     sandbox: E2BSandbox,
     spec: WorkspaceProvisioningSpec | null,
@@ -335,17 +331,14 @@ export class E2BProvider implements ComputeProvider {
       return undefined;
     }
 
-    for (let attempt = 0; attempt < 15; attempt += 1) {
-      try {
-        const result = await sandbox.commands.run(`cd ${repoDir} && ${command}`);
-        const credential = result.stdout.trim();
-        if (result.exitCode === 0 && credential) {
-          return credential;
-        }
-      } catch {
-        // Server may still be starting; retry.
+    try {
+      const result = await sandbox.commands.run(`cd ${repoDir} && ${command}`);
+      const credential = result.stdout.trim();
+      if (result.exitCode === 0 && credential) {
+        return credential;
       }
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    } catch {
+      // Credential capture is non-fatal; the workspace can still start.
     }
 
     console.error("E2B Sandbox Error (capture access credential): command never succeeded");
@@ -371,11 +364,11 @@ export class E2BProvider implements ComputeProvider {
     await provisionLogger.step("configure-ssh-runtime", () =>
       this.configureSshRuntime(sandbox, spec),
     );
-    await provisionLogger.step("start-agent-server", () =>
-      this.startAgentServer(sandbox, spec, repoDir),
-    );
     const accessCredential = await provisionLogger.step("capture-access-credential", () =>
       this.captureAccessCredential(sandbox, spec, repoDir),
+    );
+    await provisionLogger.step("start-agent-server", () =>
+      this.startAgentServer(sandbox, spec, repoDir),
     );
 
     const trafficAccessToken = await provisionLogger.step("resolve-traffic-access-token", () =>

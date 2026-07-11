@@ -248,11 +248,7 @@ export class DaytonaProvider implements ComputeProvider {
       });
   }
 
-  /**
-   * Run the agent's access-credential command (e.g. `t3 auth pairing create`)
-   * once the server is up, retrying while it boots. Non-fatal on failure: the
-   * workspace still works, the dashboard just can't show a pairing link.
-   */
+  /** Run the agent's access-credential command before starting its server. */
   private async captureAccessCredential(
     sandbox: DaytonaSandbox,
     spec: WorkspaceProvisioningSpec | null,
@@ -265,17 +261,14 @@ export class DaytonaProvider implements ComputeProvider {
 
     const repoDir = getRepoDir(repoName);
 
-    for (let attempt = 0; attempt < 15; attempt += 1) {
-      try {
-        const response = await sandbox.process.executeCommand(`cd "${repoDir}" && ${command}`);
-        const credential = response.result?.trim();
-        if (response.exitCode === 0 && credential) {
-          return credential;
-        }
-      } catch {
-        // Server may still be starting; retry.
+    try {
+      const response = await sandbox.process.executeCommand(`cd "${repoDir}" && ${command}`);
+      const credential = response.result?.trim();
+      if (response.exitCode === 0 && credential) {
+        return credential;
       }
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    } catch {
+      // Credential capture is non-fatal; the workspace can still start.
     }
 
     console.error("Daytona Sandbox Error (capture access credential): command never succeeded");
@@ -389,12 +382,12 @@ export class DaytonaProvider implements ComputeProvider {
 
     const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
 
-    await provisionLogger.step("start-agent-server", () =>
-      this.startAgentServer(sandbox, repoName, serve),
-    );
-
     const accessCredential = await provisionLogger.step("capture-access-credential", () =>
       this.captureAccessCredential(sandbox, spec, repoName),
+    );
+
+    await provisionLogger.step("start-agent-server", () =>
+      this.startAgentServer(sandbox, repoName, serve),
     );
 
     const previewUrlData = await provisionLogger.step("create-preview-link", () =>

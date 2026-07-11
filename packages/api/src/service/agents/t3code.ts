@@ -17,8 +17,6 @@ const CODEX_CONFIG_PATH = "~/.codex/config.json";
 const CLAUDE_OAUTH_SCOPES = ["user:inference", "user:profile"];
 
 export const T3_PAIRING_CREATE_COMMAND =
-  `i=0; until curl -fsS http://127.0.0.1:${T3_SERVE_PORT}/.well-known/t3/environment >/dev/null; do ` +
-  `i=$((i+1)); [ "$i" -ge 60 ] && exit 1; sleep 1; done; ` +
   `t3 auth pairing create --label gitterm --ttl 30d --json` +
   ` | node -e "let d='';process.stdin.on('data',(c)=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).credential))"`;
 
