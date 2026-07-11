@@ -46,10 +46,12 @@ export interface CredentialMetadata {
   providerId: string;
   providerName: string;
   providerDisplayName: string;
+  logicalProviderKey: string;
   authType: string;
   label: string | null;
   keyHash: string;
   isActive: boolean;
+  isDefault: boolean;
   lastUsedAt: Date | null;
   oauthExpiresAt: Date | null;
   createdAt: Date;
@@ -183,11 +185,21 @@ export class ModelCredentialsService {
     const keyHash = this.encryption.hashForAudit(apiKey);
 
     // Store in database
+    const existingDefault = await db.query.userModelCredential.findFirst({
+      where: and(
+        eq(userModelCredential.userId, userId),
+        eq(userModelCredential.logicalProviderKey, provider.logicalProviderKey),
+        eq(userModelCredential.isActive, true),
+        eq(userModelCredential.isDefault, true),
+      ),
+    });
     const results = await db
       .insert(userModelCredential)
       .values({
         userId,
         providerId: provider.id,
+        logicalProviderKey: provider.logicalProviderKey,
+        isDefault: !existingDefault,
         encryptedCredential,
         keyHash,
         label: label || null,
@@ -239,11 +251,21 @@ export class ModelCredentialsService {
     const oauthExpiresAt = expiresAt ? new Date(expiresAt) : null;
 
     // Store in database
+    const existingDefault = await db.query.userModelCredential.findFirst({
+      where: and(
+        eq(userModelCredential.userId, userId),
+        eq(userModelCredential.logicalProviderKey, provider.logicalProviderKey),
+        eq(userModelCredential.isActive, true),
+        eq(userModelCredential.isDefault, true),
+      ),
+    });
     const results = await db
       .insert(userModelCredential)
       .values({
         userId,
         providerId: provider.id,
+        logicalProviderKey: provider.logicalProviderKey,
+        isDefault: !existingDefault,
         encryptedCredential,
         keyHash,
         oauthExpiresAt,
@@ -279,10 +301,12 @@ export class ModelCredentialsService {
       providerId: cred.providerId,
       providerName: cred.provider.name,
       providerDisplayName: cred.provider.displayName,
+      logicalProviderKey: cred.logicalProviderKey,
       authType: cred.provider.authType,
       label: cred.label,
       keyHash: cred.keyHash,
       isActive: cred.isActive,
+      isDefault: cred.isDefault,
       lastUsedAt: cred.lastUsedAt,
       oauthExpiresAt: cred.oauthExpiresAt,
       createdAt: cred.createdAt,
@@ -370,8 +394,10 @@ export class ModelCredentialsService {
 
     await db
       .update(userModelCredential)
-      .set({ isActive: false, updatedAt: new Date() })
+      .set({ isActive: false, isDefault: false, updatedAt: new Date() })
       .where(eq(userModelCredential.id, credentialId));
+
+    if (cred.isDefault) await this.promoteOldestCredential(userId, cred.logicalProviderKey);
 
     await this.logAudit(credentialId, userId, "revoked", cred.keyHash);
   }
@@ -392,6 +418,49 @@ export class ModelCredentialsService {
     await this.logAudit(null, userId, "deleted", cred.keyHash);
 
     await db.delete(userModelCredential).where(eq(userModelCredential.id, credentialId));
+    if (cred.isDefault) await this.promoteOldestCredential(userId, cred.logicalProviderKey);
+  }
+
+  async setDefaultCredential(credentialId: string, userId: string): Promise<void> {
+    const credential = await db.query.userModelCredential.findFirst({
+      where: and(
+        eq(userModelCredential.id, credentialId),
+        eq(userModelCredential.userId, userId),
+        eq(userModelCredential.isActive, true),
+      ),
+    });
+    if (!credential) throw new Error("Active credential not found");
+
+    await db
+      .update(userModelCredential)
+      .set({ isDefault: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(userModelCredential.userId, userId),
+          eq(userModelCredential.logicalProviderKey, credential.logicalProviderKey),
+        ),
+      );
+    await db
+      .update(userModelCredential)
+      .set({ isDefault: true, updatedAt: new Date() })
+      .where(eq(userModelCredential.id, credentialId));
+  }
+
+  private async promoteOldestCredential(userId: string, logicalProviderKey: string): Promise<void> {
+    const replacement = await db.query.userModelCredential.findFirst({
+      where: and(
+        eq(userModelCredential.userId, userId),
+        eq(userModelCredential.logicalProviderKey, logicalProviderKey),
+        eq(userModelCredential.isActive, true),
+      ),
+      orderBy: (credential, { asc }) => [asc(credential.createdAt), asc(credential.id)],
+    });
+    if (replacement) {
+      await db
+        .update(userModelCredential)
+        .set({ isDefault: true, updatedAt: new Date() })
+        .where(eq(userModelCredential.id, replacement.id));
+    }
   }
 
   /**

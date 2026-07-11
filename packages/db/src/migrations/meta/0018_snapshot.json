@@ -1,5 +1,5 @@
 {
-  "id": "f0bf70e5-6bbf-44e4-9351-a8237a3a2452",
+  "id": "0533fbfa-9794-40a5-b12e-dc23ff46bdf4",
   "prevId": "5245f49c-5fbc-407d-88ed-583c752f7a57",
   "version": "7",
   "dialect": "postgresql",
@@ -2493,6 +2493,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "logical_provider_key": {
+          "name": "logical_provider_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "auth_type": {
           "name": "auth_type",
           "type": "text",
@@ -2572,6 +2578,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "logical_provider_key": {
+          "name": "logical_provider_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "encrypted_credential": {
           "name": "encrypted_credential",
           "type": "text",
@@ -2603,6 +2615,13 @@
           "notNull": true,
           "default": true
         },
+        "is_default": {
+          "name": "is_default",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "last_used_at": {
           "name": "last_used_at",
           "type": "timestamp",
@@ -2624,7 +2643,30 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "user_model_credential_default_logical_provider": {
+          "name": "user_model_credential_default_logical_provider",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "logical_provider_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"user_model_credential\".\"is_default\" = true and \"user_model_credential\".\"is_active\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "user_model_credential_user_id_user_id_fk": {
           "name": "user_model_credential_user_id_user_id_fk",
@@ -4517,6 +4559,13 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
+        },
+        "model_credential_ids": {
+          "name": "model_credential_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         },
         "hosting_type": {
           "name": "hosting_type",

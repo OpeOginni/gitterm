@@ -193,6 +193,13 @@ export const modelCredentialsRouter = router({
       }
     }),
 
+  setDefaultCredential: protectedProcedure
+    .input(z.object({ credentialId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await credentialsService.setDefaultCredential(input.credentialId, ctx.session.user.id);
+      return { success: true };
+    }),
+
   /**
    * Permanently delete a credential
    */

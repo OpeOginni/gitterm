@@ -835,7 +835,12 @@ export async function seedDatabase(): Promise<void> {
   if (legacyOpenAIOAuthProvider) {
     await db
       .update(modelProvider)
-      .set({ name: "openai-oauth", displayName: "OpenAI", plugin: "oauth" })
+      .set({
+        name: "openai-oauth",
+        displayName: "OpenAI",
+        plugin: "oauth",
+        logicalProviderKey: "openai",
+      })
       .where(eq(modelProvider.id, legacyOpenAIOAuthProvider.id));
     console.log('[seed]   Renamed model provider "openai-codex" to "openai-oauth"');
   }
@@ -846,6 +851,10 @@ export async function seedDatabase(): Promise<void> {
     });
 
     if (existing) {
+      await db
+        .update(modelProvider)
+        .set({ logicalProviderKey: provider.name === "openai-oauth" ? "openai" : provider.name })
+        .where(eq(modelProvider.id, existing.id));
       console.log(`[seed]   Model provider "${provider.name}" already exists`);
       modelProviderMap.set(provider.name, existing.id);
     } else {
@@ -854,6 +863,7 @@ export async function seedDatabase(): Promise<void> {
         .values({
           name: provider.name,
           displayName: provider.displayName,
+          logicalProviderKey: provider.name === "openai-oauth" ? "openai" : provider.name,
           authType: provider.authType,
           plugin: provider.plugin,
           oauthConfig: provider.oauthConfig,

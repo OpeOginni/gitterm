@@ -26,6 +26,7 @@ import {
   MoreHorizontal,
   Plus,
   Shield,
+  Star,
   Trash2,
   RefreshCw,
   Copy,
@@ -61,6 +62,8 @@ interface Credential {
   label: string | null;
   keyHash: string;
   isActive: boolean;
+  isDefault: boolean;
+  logicalProviderKey: string;
   lastUsedAt: string | null;
   oauthExpiresAt: string | null;
   createdAt: string;
@@ -271,6 +274,16 @@ export function ModelCredentialsSection() {
       onError: (error) => {
         toast.error(`Failed to revoke: ${error.message}`);
       },
+    }),
+  );
+
+  const setDefaultCredentialMutation = useMutation(
+    trpc.modelCredentials.setDefaultCredential.mutationOptions({
+      onSuccess: () => {
+        toast.success("Default credential updated");
+        invalidateCredentials();
+      },
+      onError: (error) => toast.error(`Failed to update default: ${error.message}`),
     }),
   );
 
@@ -657,6 +670,12 @@ export function ModelCredentialsSection() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{credential.providerDisplayName}</p>
+                          {credential.isDefault && credential.isActive && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-primary/[0.08] px-1.5 py-0.5 text-[10px] font-medium text-primary/80">
+                              <Star className="h-2.5 w-2.5 fill-current" />
+                              Default
+                            </span>
+                          )}
                           {credential.label && (
                             <Badge variant="outline" className="text-xs">
                               {credential.label}
@@ -694,14 +713,28 @@ export function ModelCredentialsSection() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="border-border/90">
                         {credential.isActive && (
-                          <DropdownMenuItem
-                            onClick={() =>
-                              revokeCredentialMutation.mutate({ credentialId: credential.id })
-                            }
-                          >
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            Revoke
-                          </DropdownMenuItem>
+                          <>
+                            {!credential.isDefault && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setDefaultCredentialMutation.mutate({
+                                    credentialId: credential.id,
+                                  })
+                                }
+                              >
+                                <Star className="mr-2 h-4 w-4" />
+                                Make default
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={() =>
+                                revokeCredentialMutation.mutate({ credentialId: credential.id })
+                              }
+                            >
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Revoke
+                            </DropdownMenuItem>
+                          </>
                         )}
                         <DropdownMenuItem
                           onClick={() => handleDeleteClick(credential.id)}

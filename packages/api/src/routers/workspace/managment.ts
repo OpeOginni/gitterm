@@ -1143,6 +1143,7 @@ export const workspaceRouter = router({
         gitIntegrationId: z.string().optional(),
         persistent: z.boolean(),
         workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
+        modelCredentialIds: z.array(z.uuid()).max(50).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -1815,7 +1816,7 @@ export const workspaceRouter = router({
           agentConfigs,
           serverPassword,
           credentials: await workspaceCreateLogger.step("fetch-model-credentials", () =>
-            getUserProviderCredentials(userId),
+            getUserProviderCredentials(userId, input.modelCredentialIds),
           ),
         });
 
@@ -1951,6 +1952,7 @@ export const workspaceRouter = router({
             imageId: imageRecord.id,
             cloudProviderId: input.cloudProviderId,
             gitIntegrationId: input.gitIntegrationId ?? null,
+            modelCredentialIds: input.modelCredentialIds ?? [],
             persistent: effectivePersistent,
             regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,
