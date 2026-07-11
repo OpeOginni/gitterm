@@ -308,11 +308,9 @@ export class E2BProvider implements ComputeProvider {
     }
 
     await sandbox.commands
-      .run(`${serve.command} > /tmp/agent-server.log 2>&1`, {
-        background: true,
+      .run(`nohup setsid ${serve.command} > /tmp/agent-server.log 2>&1 </dev/null &`, {
         cwd: repoDir,
       })
-      .then((command) => command.disconnect())
       .catch(async (error) => {
         await sandbox.kill().catch(() => undefined);
         console.error("E2B Sandbox Error (start agent server)", error);
