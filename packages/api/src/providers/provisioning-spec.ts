@@ -1,9 +1,5 @@
+import { decodeAgentFiles } from "../service/workspace-env";
 import type { WorkspaceConfig, WorkspaceProvisioningSpec } from "./compute";
-
-function decodeBase64(value: string | undefined): string {
-  if (!value) return "";
-  return Buffer.from(value, "base64").toString("utf8");
-}
 
 /**
  * Resolve the provisioning spec a provider should apply.
@@ -38,11 +34,23 @@ export function resolveProvisioningSpec(config: WorkspaceConfig): WorkspaceProvi
       }
     : undefined;
 
+  const serverPassword =
+    typeof env.OPENCODE_SERVER_PASSWORD === "string" ? env.OPENCODE_SERVER_PASSWORD : undefined;
+
   return {
-    opencodeConfigJson: decodeBase64(env.OPENCODE_CONFIG_BASE64),
-    opencodeCredentialsJson: decodeBase64(env.OPENCODE_CREDENTIALS_BASE64),
+    agent: {
+      files: decodeAgentFiles(env.AGENT_FILES_BASE64),
+      env: serverPassword ? { OPENCODE_SERVER_PASSWORD: serverPassword } : {},
+      // The only env-only caller is the anon "try" flow, which is always an
+      // OpenCode workspace.
+      serve: {
+        command: "opencode serve --hostname 0.0.0.0 --port 4096",
+        port: 4096,
+      },
+      usesServerPassword: true,
+    },
     repo,
-    serverPassword: env.OPENCODE_SERVER_PASSWORD,
+    serverPassword,
     sshPublicKey: env.USER_SSH_PUBLIC_KEY,
     workspaceProfile: env.WORKSPACE_PROFILE ?? "standard",
     editorAccessEnabled: env.EDITOR_ACCESS_ENABLED === "true",

@@ -64,10 +64,20 @@ export function getAttachCommand(
   return `opencode attach ${url}${passwordFlag}`;
 }
 
-/**
- * Get display text for a workspace URL
- * Shows the URL without protocol for cleaner display
- */
+export function isT3Agent(agentName: string): boolean {
+  return agentName.trim().toLowerCase().startsWith("t3code");
+}
+
+export function getT3PairingUrl(subdomain: string, token: string): string {
+  const host = encodeURIComponent(getWorkspaceUrl(subdomain));
+  return `https://app.t3.codes/pair?host=${host}#token=${encodeURIComponent(token)}`;
+}
+
+export function getT3DesktopPairingUrl(subdomain: string, token: string): string {
+  const host = encodeURIComponent(getWorkspaceUrl(subdomain));
+  return `t3code://app/pair?host=${host}#token=${encodeURIComponent(token)}`;
+}
+
 export function getWorkspaceDisplayUrl(subdomain: string): string {
   if (env.NEXT_PUBLIC_ROUTING_MODE === "path") {
     return `${env.NEXT_PUBLIC_BASE_DOMAIN}/ws/${subdomain}`;

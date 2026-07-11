@@ -9,11 +9,11 @@ import {
   usageSession,
   agentWorkspaceConfig,
 } from "@gitterm/db/schema/workspace";
-import { cloudProvider, agentType } from "@gitterm/db/schema/cloud";
+import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { sendAdminMessage } from "../../utils/discord";
 import { closeUsageSession } from "../../utils/metering";
 import { getProviderByCloudProviderId } from "../../providers";
-import { validateAgentConfig } from "@gitterm/schema";
+import { agentConfigKindSchema, validateAgentConfig } from "@gitterm/schema";
 import { polarClient, isBillingEnabled } from "@gitterm/auth";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { updateWorkspaceByIdAndInvalidate } from "../../service/workspace-mutations";
@@ -273,7 +273,7 @@ export const userRouter = router({
     .input(
       z.object({
         name: z.string().min(1).max(100),
-        agentTypeId: z.string().min(1),
+        kind: agentConfigKindSchema,
         config: z.record(z.string(), z.any()),
       }),
     )
@@ -286,18 +286,7 @@ export const userRouter = router({
         });
       }
 
-      const fetchedAgentType = await db.query.agentType.findFirst({
-        where: eq(agentType.id, input.agentTypeId),
-      });
-
-      if (!fetchedAgentType) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent type not found",
-        });
-      }
-
-      const validationResult = await validateAgentConfig(fetchedAgentType.name, input.config);
+      const validationResult = validateAgentConfig(input.kind, input.config);
 
       if (!validationResult.success) {
         throw new TRPCError({
@@ -314,7 +303,7 @@ export const userRouter = router({
         .values({
           userId,
           name: input.name,
-          agentTypeId: input.agentTypeId,
+          kind: input.kind,
           config: input.config,
         })
         .returning();
@@ -351,29 +340,18 @@ export const userRouter = router({
         });
       }
 
-      const fetchedAgentType = await db.query.agentType.findFirst({
-        where: eq(agentType.id, existing.agentTypeId),
-      });
+      if (input.config) {
+        const validationResult = validateAgentConfig(existing.kind, input.config);
 
-      if (!fetchedAgentType) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent type not found",
-        });
-      }
-
-      console.log("Validating configuration for agent type:", fetchedAgentType.name);
-      const validationResult = await validateAgentConfig(fetchedAgentType.name, input.config);
-      console.log("Validation result:", validationResult);
-
-      if (!validationResult.success) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Invalid configuration format",
-          cause: validationResult.error.issues
-            .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-            .join("; "),
-        });
+        if (!validationResult.success) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid configuration format",
+            cause: validationResult.error.issues
+              .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+              .join("; "),
+          });
+        }
       }
 
       const [updated] = await db
@@ -402,14 +380,12 @@ export const userRouter = router({
       .select({
         id: agentWorkspaceConfig.id,
         name: agentWorkspaceConfig.name,
-        agentTypeId: agentWorkspaceConfig.agentTypeId,
-        agentTypeName: agentType.name,
+        kind: agentWorkspaceConfig.kind,
         config: agentWorkspaceConfig.config,
         createdAt: agentWorkspaceConfig.createdAt,
         updatedAt: agentWorkspaceConfig.updatedAt,
       })
       .from(agentWorkspaceConfig)
-      .leftJoin(agentType, eq(agentWorkspaceConfig.agentTypeId, agentType.id))
       .where(eq(agentWorkspaceConfig.userId, userId))
       .orderBy(desc(agentWorkspaceConfig.updatedAt));
 

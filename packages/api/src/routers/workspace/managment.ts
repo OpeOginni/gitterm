@@ -38,6 +38,7 @@ import { sendWorkspaceCreatedNotification } from "../../utils/discord";
 import {
   generateAndEncryptPassword,
   decryptWorkspacePassword,
+  encryptWorkspacePassword,
 } from "../../utils/workspace-password";
 import { getWorkspaceDomain } from "../../utils/routing";
 import {
@@ -50,11 +51,11 @@ import {
 } from "../../config/features";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooling";
-import {
-  buildOpencodeCredentialsJson,
-  buildWorkspaceEnv,
-  buildWorkspaceProvisioningSpec,
-} from "../../service/workspace-env";
+import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "../../service/workspace-env";
+import { getAgentProvisioner, getUserProviderCredentials } from "../../service/agents";
+import type { AgentConfigByKind } from "../../service/agents/types";
+import { T3_PAIRING_CREATE_COMMAND } from "../../service/agents/t3code";
+import { configKindsForAgentType, type AgentConfigKind } from "@gitterm/schema";
 import {
   deleteAllWorkspaceRouteAccess,
   deleteWorkspaceRouteAccess,
@@ -509,6 +510,84 @@ export const workspaceRouter = router({
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }
+    }),
+
+  /**
+   * Mint a fresh agent access credential (e.g. a T3 pairing token — they are
+   * one-time, so pairing a second device needs a new one). Only supported for
+   * agents that issue their own credentials, on providers that can exec.
+   */
+  regenerateAccessCredential: protectedProcedure
+    .input(z.object({ workspaceId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const workspaceRecord = await db.query.workspace.findFirst({
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
+        with: {
+          image: {
+            with: {
+              agentType: true,
+            },
+          },
+        },
+      });
+
+      if (!workspaceRecord) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      }
+
+      if (workspaceRecord.status !== "running") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Workspace must be running to generate a new pairing link",
+        });
+      }
+
+      const agentTypeName = workspaceRecord.image?.agentType?.name ?? "";
+      if (!agentTypeName.trim().toLowerCase().startsWith("t3code")) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This agent does not issue pairing credentials",
+        });
+      }
+
+      const [provider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, workspaceRecord.cloudProviderId));
+
+      if (!provider) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Cloud provider not found" });
+      }
+
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+
+      if (!computeProvider.execCommand) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This provider cannot generate new pairing links; restart the workspace instead",
+        });
+      }
+
+      const result = await computeProvider.execCommand(
+        workspaceRecord.externalInstanceId,
+        T3_PAIRING_CREATE_COMMAND,
+      );
+
+      const credential = result.stdout.trim();
+      if (result.exitCode !== 0 || !credential) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to generate a new pairing token",
+        });
+      }
+
+      await updateWorkspaceByIdAndInvalidate(input.workspaceId, {
+        serverPassword: encryptWorkspacePassword(credential),
+      });
+
+      return { success: true, credential };
     }),
 
   getWorkspaceSSHAccess: protectedProcedure
@@ -1064,6 +1143,7 @@ export const workspaceRouter = router({
         gitIntegrationId: z.string().optional(),
         persistent: z.boolean(),
         workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
+        modelCredentialIds: z.array(z.uuid()).max(50).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -1438,16 +1518,22 @@ export const workspaceRouter = router({
           });
         }
 
-        // Fetch user's agent configuration
-        const [agentConfig] = await db
-          .select()
-          .from(agentWorkspaceConfig)
-          .where(
-            and(
-              eq(agentWorkspaceConfig.userId, userId),
-              eq(agentWorkspaceConfig.agentTypeId, input.agentTypeId),
-            ),
-          );
+        const applicableKinds = configKindsForAgentType(agentTypeRecord.name);
+        const agentConfigs: AgentConfigByKind = {};
+        if (applicableKinds.length > 0) {
+          const rows = await db
+            .select()
+            .from(agentWorkspaceConfig)
+            .where(eq(agentWorkspaceConfig.userId, userId))
+            .orderBy(desc(agentWorkspaceConfig.updatedAt));
+
+          for (const kind of applicableKinds) {
+            const row = rows.find((r) => r.kind === kind);
+            if (row) {
+              agentConfigs[kind as AgentConfigKind] = row.config as Record<string, unknown>;
+            }
+          }
+        }
 
         // Fetch user's workspace environment variables
         const [userWorkspaceEnvironmentVariables] = await db
@@ -1702,22 +1788,6 @@ export const workspaceRouter = router({
         // In subdomain mode: returns subdomain.baseDomain
         const domain = getWorkspaceDomain(subdomain);
 
-        const DEFAULT_OPENCODE_CONFIG = {
-          $schema: "https://opencode.ai/config.json",
-          username: `Gitterm: ${fetchedUser.name}`,
-        };
-
-        const opencodeCredentialsJson = await buildOpencodeCredentialsJson(userId);
-
-        const opencodeConfigJson = JSON.stringify(
-          agentConfig
-            ? {
-                ...(agentConfig.config as Record<string, any>),
-                username: `Gitterm: ${fetchedUser.name}`,
-              }
-            : DEFAULT_OPENCODE_CONFIG,
-        );
-
         const WORKSPACE_TOOLING_MANIFEST_BASE64 = await workspaceCreateLogger.step(
           "build-tooling-manifest",
           () =>
@@ -1738,9 +1808,24 @@ export const workspaceRouter = router({
           encryptedServerPassword = passwordData.encryptedPassword;
         }
 
+        const agentProvisioning = getAgentProvisioner(agentTypeRecord.name).provision({
+          userId,
+          userDisplayName: fetchedUser.name,
+          agentTypeName: agentTypeRecord.name,
+          serverOnly: agentTypeRecord.serverOnly,
+          agentConfigs,
+          serverPassword,
+          credentials: await workspaceCreateLogger.step("fetch-model-credentials", () =>
+            getUserProviderCredentials(userId, input.modelCredentialIds),
+          ),
+        });
+
+        if (!agentProvisioning.usesServerPassword) {
+          encryptedServerPassword = undefined;
+        }
+
         const provisioningSpec = buildWorkspaceProvisioningSpec({
-          opencodeConfigJson,
-          opencodeCredentialsJson,
+          agent: agentProvisioning,
           repo: input.repo
             ? {
                 url: input.repo,
@@ -1851,6 +1936,12 @@ export const workspaceRouter = router({
                 }),
         );
 
+        // SDK providers may have captured the agent's own access credential
+        // (e.g. a T3 pairing token); it takes the server password's place.
+        if (workspaceInfo.accessCredential) {
+          encryptedServerPassword = encryptWorkspacePassword(workspaceInfo.accessCredential);
+        }
+
         // Save workspace to database
         const [newWorkspace] = await db
           .insert(workspace)
@@ -1861,6 +1952,7 @@ export const workspaceRouter = router({
             imageId: imageRecord.id,
             cloudProviderId: input.cloudProviderId,
             gitIntegrationId: input.gitIntegrationId ?? null,
+            modelCredentialIds: input.modelCredentialIds ?? [],
             persistent: effectivePersistent,
             regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,

@@ -45,7 +45,9 @@ const DEFAULT_PROVIDER_METADATA = `{
     "sshTemplateId": ""
   },
   "daytona": {
-    "snapshot": ""
+    "image": "",
+    "resources": { "cpu": 2, "memory": 4 },
+    "editorResources": { "cpu": 4, "memory": 8 }
   }
 }`;
 
@@ -242,7 +244,7 @@ export default function ImagesPage() {
                   />
                   <p className="text-xs text-white/40">
                     Optional provider-specific config such as AWS resources, E2B templates, or
-                    Daytona snapshots.
+                    Daytona image/resources.
                   </p>
                 </div>
               </div>

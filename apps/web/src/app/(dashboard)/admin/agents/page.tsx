@@ -167,7 +167,7 @@ export default function AgentTypesPage() {
                     id="name"
                     value={newAgent.name}
                     onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
-                    placeholder="e.g., OpenCode Terminal"
+                    placeholder="e.g., OpenCode (TTYD)"
                   />
                 </div>
                 <div className="space-y-2">
@@ -231,7 +231,9 @@ export default function AgentTypesPage() {
               const enabledAgentImages = agentImages.filter((image) => image.isEnabled);
               const defaultImage = enabledAgentImages.find(isDefaultImage);
               const isSeeded =
-                agent.name === "OpenCode Terminal" || agent.name === "OpenCode Server";
+                agent.name === "OpenCode (TTYD)" ||
+                agent.name === "OpenCode" ||
+                agent.name === "T3Code";
 
               return (
                 <div

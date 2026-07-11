@@ -5,4 +5,4 @@
  */
 
 export * from "./github-copilot";
-export * from "./openai-codex";
+export * from "./openai-oauth";

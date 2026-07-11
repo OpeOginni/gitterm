@@ -95,20 +95,12 @@ export function pickWorkspaceImage<
     imageId: string;
     providerMetadata?: { isDefault?: boolean } | null;
   },
->(images: T[], profile: WorkspaceProfile): T | undefined {
+>(images: T[], _profile: WorkspaceProfile): T | undefined {
   if (images.length === 0) {
     return undefined;
   }
 
-  if (profile === "ssh-enabled") {
-    return images.find((img) => isEditorReadyImageName(img.name, img.imageId)) ?? images[0];
-  }
-
-  return (
-    images.find((img) => img.providerMetadata?.isDefault === true) ??
-    images.find((img) => !isEditorReadyImageName(img.name, img.imageId)) ??
-    images[0]
-  );
+  return images.find((img) => img.providerMetadata?.isDefault === true) ?? images[0];
 }
 
 export function buildHostAlias(subdomain: string): string {

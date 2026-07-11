@@ -75,8 +75,7 @@
     "wrangler:cf-typegen": "wrangler types",
     "wrangler:sandbox:deploy": "wrangler deploy --config ./src/providers/cloudflare/sandbox-worker/wrangler.jsonc",
     "wrangler:sandbox:dev": "wrangler dev --config ./src/providers/cloudflare/sandbox-worker/wrangler.jsonc",
-    "e2b:build": "bun run ./src/providers/e2b/template/build.ts",
-    "daytona:snapshot-build": "bun run ./src/providers/daytona/snapshot/build.ts"
+    "e2b:build": "bun run ./src/providers/e2b/template/build.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cloudformation": "^3.1032.0",

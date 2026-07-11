@@ -75,8 +75,8 @@ user's host). Run it from the repo root, either on its own or as part of the
 full agent image refresh:
 
 ```bash
-bun run docker:cf-sandbox:build   # builds + pushes opeoginni/gitterm-cf-sandbox:0.12.1
-bun run opencode-upgrade          # rebuilds all agent images, including cf-sandbox
+bun run docker:agent cf-sandbox   # local build + push (or use GH Actions)
+bun run opencode-upgrade          # triggers Build Agent Images workflow
 ```
 
 Keep the image tag in sync with the `@cloudflare/sandbox` npm version.

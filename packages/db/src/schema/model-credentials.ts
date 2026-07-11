@@ -1,4 +1,14 @@
-import { pgTable, text, timestamp, uuid, boolean, jsonb, unique } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  boolean,
+  jsonb,
+  unique,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
 import { user } from "./auth";
 
@@ -12,6 +22,7 @@ export const modelProvider = pgTable("model_provider", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(), // "anthropic", "openai", "github-copilot"
   displayName: text("display_name").notNull(), // "Anthropic", "GitHub Copilot"
+  logicalProviderKey: text("logical_provider_key").notNull(),
   authType: text("auth_type").notNull(), // "api_key" | "oauth"
   oauthConfig: jsonb("oauth_config"), // OAuth endpoints, client_id, scopes, etc.
   plugin: text("plugin"), // Optional: plugin name required (e.g., "copilot-auth")
@@ -64,6 +75,7 @@ export const userModelCredential = pgTable(
     providerId: uuid("provider_id")
       .notNull()
       .references(() => modelProvider.id),
+    logicalProviderKey: text("logical_provider_key").notNull(),
 
     // Encrypted credential (AES-256-GCM, base64 encoded)
     encryptedCredential: text("encrypted_credential").notNull(),
@@ -78,6 +90,7 @@ export const userModelCredential = pgTable(
     label: text("label"),
 
     isActive: boolean("is_active").notNull().default(true),
+    isDefault: boolean("is_default").notNull().default(false),
     lastUsedAt: timestamp("last_used_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -89,6 +102,9 @@ export const userModelCredential = pgTable(
       table.providerId,
       table.label,
     ),
+    uniqueIndex("user_model_credential_default_logical_provider")
+      .on(table.userId, table.logicalProviderKey)
+      .where(sql`${table.isDefault} = true and ${table.isActive} = true`),
   ],
 );
 

@@ -11,6 +11,8 @@ import { publicProcedure, router } from "../../index";
 import { e2bProvider } from "../../providers";
 import type { WorkspaceEnvironmentVariables } from "../../providers";
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
+import { encodeAgentFiles } from "../../service/workspace-env";
+import { OPENCODE_AUTH_PATH, OPENCODE_CONFIG_PATH } from "../../service/agents/opencode";
 import { checkPublicGitHubRepository, parseGitHubRepoUrl } from "../../service/github";
 import { getWorkspaceDomain } from "../../utils/routing";
 import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooling";
@@ -62,7 +64,7 @@ const ANON_AGENT_CHOICES: Record<
 > = {
   // OpenCode's desktop UI served at the workspace root over HTTP.
   app: {
-    agentTypeName: "OpenCode Server",
+    agentTypeName: "OpenCode",
     imageName: "gitterm-opencode-server",
     serverOnly: true,
   },
@@ -312,8 +314,17 @@ export const anonRouter = router({
         const envVars: WorkspaceEnvironmentVariables = {
           REPO_URL: repoUrl,
           REPO_BRANCH: input.branch || undefined,
-          OPENCODE_CONFIG_BASE64: Buffer.from(JSON.stringify(opencodeConfig)).toString("base64"),
-          OPENCODE_CREDENTIALS_BASE64: Buffer.from(JSON.stringify({})).toString("base64"),
+          AGENT_FILES_BASE64: encodeAgentFiles([
+            {
+              path: OPENCODE_CONFIG_PATH,
+              contentBase64: Buffer.from(JSON.stringify(opencodeConfig)).toString("base64"),
+            },
+            {
+              path: OPENCODE_AUTH_PATH,
+              contentBase64: Buffer.from(JSON.stringify({})).toString("base64"),
+            },
+          ]),
+          // Read by `opencode serve` itself to enforce basic auth.
           OPENCODE_SERVER_PASSWORD: serverPassword,
           WORKSPACE_TOOLING_MANIFEST_BASE64: toolingManifestBase64,
           REPO_OWNER: repoInfo?.owner,

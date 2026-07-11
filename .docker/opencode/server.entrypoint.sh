@@ -15,10 +15,53 @@ mkdir -p "$WORKSPACE"
 mkdir -p "$RUNTIME_DIR"
 cd "$WORKSPACE"
 
+ssh_enabled=0
+case "${EDITOR_ACCESS_ENABLED}" in
+  1|true|TRUE|yes|YES) ssh_enabled=1 ;;
+esac
+if [ -n "$USER_SSH_PUBLIC_KEY" ]; then
+  ssh_enabled=1
+fi
+
+if [ "$ssh_enabled" = "1" ] && command -v sshd >/dev/null 2>&1; then
+  mkdir -p /run/sshd /etc/ssh/sshd_config.d /etc/ssh/authorized_keys
+
+  if [ -n "$USER_SSH_PUBLIC_KEY" ]; then
+    touch /etc/ssh/authorized_keys/root
+    chmod 600 /etc/ssh/authorized_keys/root
+    chown root:root /etc/ssh/authorized_keys/root
+    if ! grep -qxF "$USER_SSH_PUBLIC_KEY" /etc/ssh/authorized_keys/root 2>/dev/null; then
+      printf '%s\n' "$USER_SSH_PUBLIC_KEY" >> /etc/ssh/authorized_keys/root
+    fi
+  fi
+
+  cat > /etc/ssh/sshd_config.d/gitterm.conf <<EOF
+PubkeyAuthentication yes
+AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin prohibit-password
+UsePAM no
+AllowTcpForwarding yes
+AllowAgentForwarding yes
+X11Forwarding no
+ClientAliveInterval 30
+ClientAliveCountMax 6
+EOF
+
+  ssh-keygen -A
+  echo "Starting sshd on port 22..."
+  /usr/sbin/sshd -D -e &
+  SSHD_PID="$!"
+  sleep 1
+  if ! kill -0 "$SSHD_PID" 2>/dev/null; then
+    echo "sshd failed to stay running" >&2
+    exit 1
+  fi
+fi
+
 ########################################
 # PERSISTENCE SETUP
-# Environment variables are already set in Dockerfile
-# Only create directories that may not exist yet
 ########################################
 
 # Create tool-specific directories if they don't exist
@@ -132,16 +175,23 @@ if [ ! -f ".initialized" ]; then
 
     echo "$REPO_DIR_NAME" > .repo_name
 
-    # Save config
-    if [ ! -z "$OPENCODE_CONFIG_BASE64" ]; then
-        mkdir -p ~/.config/opencode
-        echo "$OPENCODE_CONFIG_BASE64" | base64 -d > ~/.config/opencode/opencode.json
-    fi
-
-    # Save credentials
-    if [ ! -z "$OPENCODE_CREDENTIALS_BASE64" ]; then
-        mkdir -p ~/.local/share/opencode
-        echo "$OPENCODE_CREDENTIALS_BASE64" | base64 -d > ~/.local/share/opencode/auth.json
+    # Write agent files (configs, credential stores) from the generic manifest.
+    if [ ! -z "$AGENT_FILES_BASE64" ]; then
+        echo "$AGENT_FILES_BASE64" | base64 -d > "$RUNTIME_DIR/agent-files.json"
+        node <<'NODE'
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const files = JSON.parse(fs.readFileSync("/run/gitterm/agent-files.json", "utf8"));
+for (const file of files) {
+  const target = file.path.startsWith("~/")
+    ? path.join(os.homedir(), file.path.slice(2))
+    : file.path;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, Buffer.from(file.contentBase64, "base64"));
+}
+NODE
+        rm -f "$RUNTIME_DIR/agent-files.json"
     fi
 
     touch .initialized
@@ -220,303 +270,12 @@ if [ -n "$WORKSPACE_TOOLING_MANIFEST_BASE64" ]; then
 fi
 
 ########################################
-# LANGUAGE TOOLING SETUP
-########################################
-if [ -d "$REPO_DIR" ]; then
-    TOOLING_MARKER="/workspace/.tooling-initialized-$REPO_NAME"
-    DOTNET_INSTALLED=""
-    RUST_INSTALLED=""
-    JAVA_INSTALLED=""
-
-    has_cmd() {
-        command -v "$1" >/dev/null 2>&1
-    }
-
-    ensure_pkg_manager() {
-        if has_cmd apk; then
-            PKG_MANAGER="apk"
-        elif has_cmd apt-get; then
-            PKG_MANAGER="apt"
-        else
-            PKG_MANAGER=""
-        fi
-    }
-
-    install_packages() {
-        ensure_pkg_manager
-        if [ "$PKG_MANAGER" = "apk" ]; then
-            apk add --no-cache "$@" || echo "⚠ Package install failed: $*"
-        elif [ "$PKG_MANAGER" = "apt" ]; then
-            if [ -z "$APT_UPDATED" ]; then
-                APT_UPDATED=1
-                apt-get update || echo "⚠ apt-get update failed"
-            fi
-            apt-get install -y --no-install-recommends "$@" || echo "⚠ Package install failed: $*"
-        else
-            echo "⚠ No supported package manager found for: $*"
-        fi
-    }
-
-    repo_has() {
-        find "$REPO_DIR" -maxdepth 4 -type f "$@" -print -quit 2>/dev/null | head -n 1
-    }
-
-    manifest_has_true() {
-        printf '%s' "$TOOLING_MANIFEST_JSON" | grep -q '"'$1'":true'
-    }
-
-    ensure_bun() {
-        if has_cmd bun; then
-            return
-        fi
-        if ! has_cmd curl; then
-            install_packages curl
-        fi
-        echo "Installing bun..."
-        BUN_INSTALL=/workspace/.bun curl -fsSL https://bun.sh/install | bash || echo "⚠ Bun install failed"
-        export PATH=/workspace/.bun/bin:$PATH
-    }
-
-    ensure_node() {
-        if ! has_cmd node || ! has_cmd npm; then
-            install_packages nodejs npm
-        fi
-    }
-
-    ensure_pnpm() {
-        if has_cmd pnpm; then
-            return
-        fi
-        if has_cmd corepack; then
-            corepack prepare pnpm@latest --activate || npm install -g pnpm || echo "⚠ pnpm install failed"
-        else
-            npm install -g pnpm || echo "⚠ pnpm install failed"
-        fi
-    }
-
-    ensure_yarn() {
-        if has_cmd yarn; then
-            return
-        fi
-        if has_cmd corepack; then
-            corepack prepare yarn@stable --activate || npm install -g yarn || echo "⚠ yarn install failed"
-        else
-            npm install -g yarn || echo "⚠ yarn install failed"
-        fi
-    }
-
-    ensure_go() {
-        if has_cmd go; then
-            return
-        fi
-        ensure_pkg_manager
-        if [ "$PKG_MANAGER" = "apk" ]; then
-            install_packages go
-        elif [ "$PKG_MANAGER" = "apt" ]; then
-            install_packages golang-go
-        fi
-    }
-
-    ensure_python() {
-        if has_cmd python3; then
-            return
-        fi
-        ensure_pkg_manager
-        if [ "$PKG_MANAGER" = "apk" ]; then
-            install_packages python3 py3-pip
-        elif [ "$PKG_MANAGER" = "apt" ]; then
-            install_packages python3 python3-pip
-        fi
-    }
-
-    ensure_build_tools() {
-        if has_cmd gcc && has_cmd g++; then
-            return
-        fi
-        ensure_pkg_manager
-        if [ "$PKG_MANAGER" = "apk" ]; then
-            install_packages build-base
-        elif [ "$PKG_MANAGER" = "apt" ]; then
-            install_packages build-essential
-        fi
-    }
-
-    ensure_dotnet() {
-        if has_cmd dotnet; then
-            return
-        fi
-        if ! has_cmd curl; then
-            install_packages curl
-        fi
-        echo "Installing .NET SDK..."
-        DOTNET_DIR="/workspace/.dotnet"
-        mkdir -p "$DOTNET_DIR"
-        curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh || return
-        chmod +x /tmp/dotnet-install.sh
-        /tmp/dotnet-install.sh --channel 8.0 --install-dir "$DOTNET_DIR" || echo "⚠ .NET install failed"
-        export PATH="$DOTNET_DIR:$PATH"
-        DOTNET_INSTALLED=1
-    }
-
-    ensure_rust() {
-        if has_cmd rustc && has_cmd cargo; then
-            return
-        fi
-        if ! has_cmd curl; then
-            install_packages curl
-        fi
-        echo "Installing Rust toolchain..."
-        export CARGO_HOME="/workspace/.cargo"
-        export RUSTUP_HOME="/workspace/.rustup"
-        curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal || echo "⚠ Rust install failed"
-        export PATH="/workspace/.cargo/bin:$PATH"
-        RUST_INSTALLED=1
-    }
-
-    ensure_java() {
-        if has_cmd java; then
-            return
-        fi
-        ensure_pkg_manager
-        if [ "$PKG_MANAGER" = "apk" ]; then
-            install_packages openjdk21-jdk
-        elif [ "$PKG_MANAGER" = "apt" ]; then
-            install_packages openjdk-21-jdk
-        fi
-        JAVA_INSTALLED=1
-    }
-
-    if [ -n "$TOOLING_MANIFEST_ENABLED" ]; then
-        if manifest_has_true node; then
-            ensure_node
-        fi
-
-        if manifest_has_true bun; then
-            ensure_bun
-        fi
-
-        if manifest_has_true pnpm; then
-            ensure_node
-            ensure_pnpm
-        fi
-
-        if manifest_has_true yarn; then
-            ensure_node
-            ensure_yarn
-        fi
-
-        if manifest_has_true go; then
-            ensure_go
-        fi
-
-        if manifest_has_true python; then
-            ensure_python
-        fi
-
-        if manifest_has_true dotnet; then
-            ensure_dotnet
-        fi
-
-        if manifest_has_true buildTools; then
-            ensure_build_tools
-        fi
-
-        if manifest_has_true rust; then
-            ensure_rust
-        fi
-
-        if manifest_has_true java; then
-            ensure_java
-        fi
-
-        touch "$TOOLING_MARKER"
-    elif [ ! -f "$TOOLING_MARKER" ]; then
-        echo "Checking repository for language tooling needs..."
-
-        if [ -n "$(repo_has -name package.json -o -name package-lock.json -o -name npm-shrinkwrap.json -o -name bun.lockb -o -name bun.lock -o -name pnpm-lock.yaml -o -name yarn.lock)" ]; then
-            ensure_node
-        fi
-
-        if [ -n "$(repo_has -name bun.lockb -o -name bun.lock)" ]; then
-            ensure_bun
-        fi
-
-        if [ -n "$(repo_has -name pnpm-lock.yaml)" ]; then
-            ensure_node
-            ensure_pnpm
-        fi
-
-        if [ -n "$(repo_has -name yarn.lock)" ]; then
-            ensure_node
-            ensure_yarn
-        fi
-
-        if [ -n "$(repo_has -name go.mod -o -name go.work)" ]; then
-            ensure_go
-        fi
-
-        if [ -n "$(repo_has -name pyproject.toml -o -name requirements.txt -o -name Pipfile -o -name setup.py -o -name setup.cfg)" ]; then
-            ensure_python
-        fi
-
-        if [ -n "$(repo_has -name '*.csproj' -o -name '*.sln' -o -name '*.cs')" ]; then
-            ensure_dotnet
-        fi
-
-        if [ -n "$(repo_has -name '*.c' -o -name '*.h' -o -name '*.cpp' -o -name '*.hpp' -o -name '*.cc' -o -name '*.cxx' -o -name CMakeLists.txt -o -name Makefile)" ]; then
-            ensure_build_tools
-        fi
-
-        if [ -n "$(repo_has -name Cargo.toml -o -name Cargo.lock -o -name rust-toolchain -o -name rust-toolchain.toml)" ]; then
-            ensure_rust
-        fi
-
-        if [ -n "$(repo_has -name pom.xml -o -name build.gradle -o -name build.gradle.kts -o -name settings.gradle -o -name settings.gradle.kts -o -name gradlew -o -name mvnw -o -name '*.java')" ]; then
-            ensure_java
-        fi
-
-        touch "$TOOLING_MARKER"
-    fi
-fi
-
-########################################
-# ENVIRONMENT FILE FOR PERSISTENCE
-# Sourced by bash sessions and scripts for runtime additions
-# Note: Base variables (HOME, XDG_*, GIT_CONFIG_GLOBAL, etc.) are set in Dockerfile
-########################################
-cat > /workspace/.env << 'ENV_FILE'
-# Shell history
-export HISTFILE=/workspace/.bash_history
-export HISTSIZE=10000
-export HISTFILESIZE=10000
-ENV_FILE
-
-chmod 644 /workspace/.env
-
-if [ -n "$DOTNET_INSTALLED" ] && [ -f /workspace/.env ]; then
-    if ! grep -q "/workspace/.dotnet" /workspace/.env; then
-        echo 'export PATH=/workspace/.dotnet:$PATH' >> /workspace/.env
-    fi
-fi
-
-if [ -n "$RUST_INSTALLED" ] && [ -f /workspace/.env ]; then
-    if ! grep -q "/workspace/.cargo/bin" /workspace/.env; then
-        echo 'export PATH=/workspace/.cargo/bin:$PATH' >> /workspace/.env
-    fi
-fi
-
-########################################
 # START AGENT / SHELL
 ########################################
 cd "$REPO_NAME"
 
 # All environment variables already set above
 # Scripts and shells can source /workspace/.env for consistency
-
-if [ "${OPENCODE_RUNTIME_UPGRADE:-0}" = "1" ]; then
-    echo "Updating opencode-ai to latest..."
-    npm install -g opencode-ai@latest
-fi
 
 if ! command -v opencode >/dev/null 2>&1; then
     echo "❌ opencode not found in PATH: $PATH"

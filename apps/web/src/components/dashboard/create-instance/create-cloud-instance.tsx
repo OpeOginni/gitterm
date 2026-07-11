@@ -6,13 +6,14 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowUpRight, Key, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Key, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -39,6 +40,16 @@ import { normalizeGitHubRepositoryUrl } from "./github-repository-utils";
 interface CreateCloudInstanceProps {
   onSuccess: (result: CreateInstanceResult) => void;
   onCancel: () => void;
+}
+
+interface WorkspaceCredential {
+  id: string;
+  providerDisplayName: string;
+  logicalProviderKey: string;
+  authType: string;
+  label: string | null;
+  isActive: boolean;
+  isDefault: boolean;
 }
 
 export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstanceProps) {
@@ -83,9 +94,50 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const { data: credentialsData } = useQuery(
     trpc.modelCredentials.listMyCredentials.queryOptions(),
   );
-  const activeCredentialCount = useMemo(
-    () => (credentialsData?.credentials ?? []).filter((c) => c.isActive).length,
+  const credentialGroups = useMemo(
+    () =>
+      Object.values(
+        ((credentialsData?.credentials ?? []) as WorkspaceCredential[])
+          .filter((credential) => credential.isActive)
+          .reduce<
+            Record<
+              string,
+              {
+                key: string;
+                name: string;
+                credentials: WorkspaceCredential[];
+              }
+            >
+          >((groups, credential) => {
+            const key = credential.logicalProviderKey;
+            groups[key] ??= { key, name: credential.providerDisplayName, credentials: [] };
+            groups[key].credentials.push(credential);
+            return groups;
+          }, {}),
+      ),
     [credentialsData?.credentials],
+  );
+  const [credentialSelections, setCredentialSelections] = useState<Record<string, string | null>>(
+    {},
+  );
+
+  useEffect(() => {
+    setCredentialSelections((current) => {
+      const next = { ...current };
+      for (const group of credentialGroups) {
+        if (!(group.key in next)) {
+          next[group.key] =
+            group.credentials.find((credential) => credential.isDefault)?.id ??
+            group.credentials[0]?.id ??
+            null;
+        }
+      }
+      return next;
+    });
+  }, [credentialGroups]);
+
+  const selectedCredentialIds = Object.values(credentialSelections).filter(
+    (id): id is string => !!id,
   );
 
   // AWS providers are region-scoped: multiple cloud_provider rows share
@@ -317,6 +369,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
+      modelCredentialIds: selectedCredentialIds,
     });
   };
 
@@ -567,23 +620,116 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </div>
         )}
 
-        {/* ── 3b. API Credentials indicator ── */}
-        <div className="flex items-center justify-between rounded-md border border-border/30 bg-secondary/10 px-3 py-2">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Key className="h-3.5 w-3.5" />
-            <span>
-              <span className="font-medium text-foreground">{activeCredentialCount}</span> Provider{" "}
-              {activeCredentialCount === 1 ? "credential" : "credentials"} configured
-            </span>
-          </div>
-          <Link
-            href={"/dashboard/settings" as Route}
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-          >
-            Manage
-            <ArrowUpRight className="h-3 w-3" />
-          </Link>
-        </div>
+        {/* ── 3b. Model providers ── */}
+        {credentialGroups.length > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-md border border-border/40 bg-secondary/10 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-secondary/20"
+              >
+                <Key className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-medium text-foreground">Model providers</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {selectedCredentialIds.length === credentialGroups.length
+                      ? `All ${credentialGroups.length} providers included`
+                      : `${selectedCredentialIds.length} of ${credentialGroups.length} providers included`}
+                  </span>
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              sideOffset={8}
+              className="w-[360px] max-w-[calc(100vw-3rem)] p-2"
+            >
+              <div className="px-2 pb-2 pt-1">
+                <p className="text-xs font-medium">Model providers available to this workspace</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Defaults are selected automatically.
+                </p>
+              </div>
+              <div className="grid gap-1">
+                {credentialGroups.map((group) => {
+                  const selectedId = credentialSelections[group.key] ?? null;
+                  const isIncluded = !!selectedId;
+                  return (
+                    <div
+                      key={group.key}
+                      role="checkbox"
+                      tabIndex={0}
+                      aria-checked={isIncluded}
+                      onClick={() =>
+                        setCredentialSelections((current) => ({
+                          ...current,
+                          [group.key]: isIncluded
+                            ? null
+                            : (group.credentials.find((credential) => credential.isDefault)?.id ??
+                              group.credentials[0]?.id ??
+                              null),
+                        }))
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.currentTarget.click();
+                        }
+                      }}
+                      className="cursor-pointer rounded-lg px-2 py-2 outline-none transition-colors hover:bg-white/[0.035] focus-visible:bg-white/[0.035] focus-visible:ring-1 focus-visible:ring-ring/30"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Checkbox checked={isIncluded} className="pointer-events-none" />
+                        <span className="min-w-0 flex-1 text-sm font-medium">{group.name}</span>
+                        {group.credentials.length > 1 && isIncluded ? (
+                          <Select
+                            value={selectedId}
+                            onValueChange={(id) =>
+                              setCredentialSelections((current) => ({
+                                ...current,
+                                [group.key]: id,
+                              }))
+                            }
+                          >
+                            <SelectTrigger
+                              onClick={(event) => event.stopPropagation()}
+                              className="h-8 w-[150px] text-xs"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {group.credentials.map((credential) => (
+                                <SelectItem key={credential.id} value={credential.id}>
+                                  {credential.label ||
+                                    (credential.authType === "oauth" ? "OAuth" : "API key")}
+                                  {credential.isDefault ? " (default)" : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">
+                            {group.credentials[0]?.label ||
+                              (group.credentials[0]?.authType === "oauth" ? "OAuth" : "API key")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-1 border-t border-border/60 px-2 pt-2">
+                <Link
+                  href={"/dashboard/settings" as Route}
+                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Manage credentials
+                </Link>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
 
         {/* ── 3. GitHub Connection ── */}
         <div className="grid gap-1.5">

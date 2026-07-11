@@ -91,6 +91,7 @@ export const workspace = pgTable("workspace", {
   editorAccessEnabled: boolean("editor_access_enabled").notNull().default(false),
   editorTarget: workspaceEditorTargetEnum("editor_target"),
   sshConnection: jsonb("editor_connection").$type<WorkspaceSSHConnection | null>(),
+  modelCredentialIds: jsonb("model_credential_ids").$type<string[]>().notNull().default([]),
 
   // Workspace hosting configuration
   hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"),
@@ -159,14 +160,18 @@ export const dailyUsage = pgTable("daily_usage", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const agentConfigKindEnum = pgEnum("agent_config_kind", [
+  "opencode",
+  "claude-code",
+  "codex",
+] as const);
+
 export const agentWorkspaceConfig = pgTable("workspace_config", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  agentTypeId: uuid("agent_type_id")
-    .notNull()
-    .references(() => agentType.id, { onDelete: "cascade" }),
+  kind: agentConfigKindEnum("kind").notNull().default("opencode"),
   name: text("name").notNull(),
   config: jsonb("config").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),

@@ -129,18 +129,26 @@ const seedCloudProviders: Array<{
 
 const seedAgentTypes = [
   {
-    name: "OpenCode Terminal",
+    name: "OpenCode (TTYD)",
     serverOnly: false,
     description: "Run the OpenCode TUI in a browser-based terminal. No local client needed.",
     // Previous names used in older seeds. Used to migrate existing rows to the new name.
-    aliases: ["OpenCode"],
+    // Rename legacy rows first so bare "OpenCode" becomes TTYD before the server agent is seeded.
+    aliases: ["OpenCode Terminal", "OpenCode"],
   },
   {
-    name: "OpenCode Server",
+    name: "OpenCode",
     serverOnly: true,
     description:
       "Run a remote OpenCode server. Use it from your local TUI, Desktop app, or directly in the browser.",
-    aliases: [] as string[],
+    aliases: ["OpenCode Server"],
+  },
+  {
+    name: "T3Code",
+    serverOnly: true,
+    description:
+      "Run a T3 Code server driving Claude Code, Codex, and OpenCode. Pair it with the T3 web or mobile app via a one-time pairing link.",
+    aliases: ["T3Code Server"],
   },
 ];
 
@@ -148,18 +156,13 @@ const seedImages = [
   {
     name: "gitterm-opencode",
     imageId: "opeoginni/gitterm-opencode",
-    agentTypeName: "OpenCode Terminal",
+    agentTypeName: "OpenCode (TTYD)",
     providerMetadata: {
       isDefault: true,
       daytona: {
-        snapshot: "gitterm-opencode-server-eu",
-        snapshotsByRegion: {
-          eu: "gitterm-opencode-server-eu",
-        },
-        sshSnapshot: "gitterm-opencode-server-ssh-eu",
-        sshSnapshotsByRegion: {
-          eu: "gitterm-opencode-server-ssh-eu",
-        },
+        image: "opeoginni/gitterm-opencode-server:latest",
+        resources: { cpu: 2, memory: 4 },
+        editorResources: { cpu: 4, memory: 8 },
       },
       aws: {
         cpu: 4096,
@@ -172,7 +175,7 @@ const seedImages = [
   {
     name: "gitterm-opencode-server",
     imageId: "opeoginni/gitterm-opencode-server",
-    agentTypeName: "OpenCode Server",
+    agentTypeName: "OpenCode",
     providerMetadata: {
       isDefault: true,
       e2b: {
@@ -180,14 +183,9 @@ const seedImages = [
         sshTemplateId: "nxiezl38gnw32ufyloc0",
       },
       daytona: {
-        snapshot: "gitterm-opencode-server-eu",
-        snapshotsByRegion: {
-          eu: "gitterm-opencode-server-eu",
-        },
-        sshSnapshot: "gitterm-opencode-server-ssh-eu",
-        sshSnapshotsByRegion: {
-          eu: "gitterm-opencode-server-ssh-eu",
-        },
+        image: "opeoginni/gitterm-opencode-server:latest",
+        resources: { cpu: 2, memory: 4 },
+        editorResources: { cpu: 4, memory: 8 },
       },
       // The Cloudflare worker runs whatever this says inside the public
       // gitterm-cf-sandbox image (which bakes in opencode).
@@ -200,13 +198,46 @@ const seedImages = [
   {
     name: "gitterm-opencode-aws-server",
     imageId: "opeoginni/gitterm-opencode-aws-server",
-    agentTypeName: "OpenCode Server",
+    agentTypeName: "OpenCode",
     providerMetadata: {
       aws: {
         cpu: 4096,
         memory: 16384,
         containerPort: 7681,
         healthCheckPath: "/",
+      },
+    },
+  },
+  {
+    name: "gitterm-t3code-server",
+    imageId: "opeoginni/gitterm-t3code-server",
+    agentTypeName: "T3Code",
+    providerMetadata: {
+      isDefault: true,
+      // Built by E2B template job in Build Agent Images workflow (alias gitterm-t3code-server).
+      e2b: {
+        templateId: "gfu36xk02swjo0s9turi",
+      },
+      daytona: {
+        image: "opeoginni/gitterm-t3code-server:latest",
+        resources: { cpu: 2, memory: 4 },
+        editorResources: { cpu: 4, memory: 8 },
+      },
+      aws: {
+        cpu: 4096,
+        memory: 16384,
+        containerPort: 7681,
+        healthCheckPath: "/",
+      },
+      // The public CF sandbox image only bakes opencode; install T3 and the
+      // agent CLIs it drives at boot.
+      cloudflare: {
+        setupCommands: [
+          "npm install -g t3 @anthropic-ai/claude-code @openai/codex --no-audit --fund=false",
+        ],
+        startCommand:
+          "t3 serve --host 0.0.0.0 --port 4096 --no-browser --auto-bootstrap-project-from-cwd",
+        port: 4096,
       },
     },
   },
@@ -315,10 +346,10 @@ const seedModelProviders = [
     },
   },
   {
-    name: "openai-codex",
-    displayName: "ChatGPT Pro/Plus (Codex)",
+    name: "openai-oauth",
+    displayName: "OpenAI",
     authType: "oauth",
-    plugin: "codex-auth",
+    plugin: "oauth",
     isRecommended: true,
   },
   {
@@ -330,7 +361,7 @@ const seedModelProviders = [
   },
 ];
 
-const seedModels = [
+const availableModels = [
   // Anthropic models
   {
     providerName: "anthropic",
@@ -438,29 +469,29 @@ const seedModels = [
   },
   // OpenAI Codex models (ChatGPT Pro/Plus subscription)
   {
-    providerName: "openai-codex",
+    providerName: "openai-oauth",
     name: "gpt-5.1-codex-max",
     displayName: "GPT-5.1 Codex Max",
-    modelId: "openai-codex/gpt-5.1-codex-max",
+    modelId: "openai-oauth/gpt-5.1-codex-max",
     isRecommended: true,
   },
   {
-    providerName: "openai-codex",
+    providerName: "openai-oauth",
     name: "gpt-5.1-codex-mini",
     displayName: "GPT-5.1 Codex Mini",
-    modelId: "openai-codex/gpt-5.1-codex-mini",
+    modelId: "openai-oauth/gpt-5.1-codex-mini",
   },
   {
-    providerName: "openai-codex",
+    providerName: "openai-oauth",
     name: "gpt-5.2",
     displayName: "GPT-5.2",
-    modelId: "openai-codex/gpt-5.2",
+    modelId: "openai-oauth/gpt-5.2",
   },
   {
-    providerName: "openai-codex",
+    providerName: "openai-oauth",
     name: "gpt-5.2-codex",
     displayName: "GPT-5.2 Codex",
-    modelId: "openai-codex/gpt-5.2-codex",
+    modelId: "openai-oauth/gpt-5.2-codex",
   },
   // zai-coding-plan
   {
@@ -470,6 +501,9 @@ const seedModels = [
     modelId: "zai-coding-plan/glm-4.7",
   },
 ];
+
+// Models are intentionally not seeded while the supported catalog is being finalized.
+const seedModels: typeof availableModels = [];
 
 /**
  * Seed the database with initial data
@@ -607,7 +641,7 @@ export async function seedDatabase(): Promise<void> {
 
   for (const agent of seedAgentTypes) {
     // Look up by current name first, then fall back to any known previous names
-    // so we can rename existing rows in place (e.g. "OpenCode" -> "OpenCode Terminal").
+    // so we can rename existing rows in place (e.g. "OpenCode Terminal" -> "OpenCode (TTYD)").
     let existing = await db.query.agentType.findFirst({
       where: eq(agentType.name, agent.name),
     });
@@ -784,12 +818,32 @@ export async function seedDatabase(): Promise<void> {
   console.log("[seed] Seeding model providers...");
   const modelProviderMap = new Map<string, string>(); // name -> id
 
+  const legacyOpenAIOAuthProvider = await db.query.modelProvider.findFirst({
+    where: eq(modelProvider.name, "openai-codex"),
+  });
+  if (legacyOpenAIOAuthProvider) {
+    await db
+      .update(modelProvider)
+      .set({
+        name: "openai-oauth",
+        displayName: "OpenAI",
+        plugin: "oauth",
+        logicalProviderKey: "openai",
+      })
+      .where(eq(modelProvider.id, legacyOpenAIOAuthProvider.id));
+    console.log('[seed]   Renamed model provider "openai-codex" to "openai-oauth"');
+  }
+
   for (const provider of seedModelProviders) {
     const existing = await db.query.modelProvider.findFirst({
       where: eq(modelProvider.name, provider.name),
     });
 
     if (existing) {
+      await db
+        .update(modelProvider)
+        .set({ logicalProviderKey: provider.name === "openai-oauth" ? "openai" : provider.name })
+        .where(eq(modelProvider.id, existing.id));
       console.log(`[seed]   Model provider "${provider.name}" already exists`);
       modelProviderMap.set(provider.name, existing.id);
     } else {
@@ -798,6 +852,7 @@ export async function seedDatabase(): Promise<void> {
         .values({
           name: provider.name,
           displayName: provider.displayName,
+          logicalProviderKey: provider.name === "openai-oauth" ? "openai" : provider.name,
           authType: provider.authType,
           plugin: provider.plugin,
           oauthConfig: provider.oauthConfig,

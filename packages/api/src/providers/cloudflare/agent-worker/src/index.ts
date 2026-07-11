@@ -38,11 +38,11 @@ async function setupAuth(
   const authJsonPath = "/root/.local/share/opencode/auth.json";
 
   // Map provider names to their auth.json key
-  // Both openai and openai-codex (Codex subscription) should use "openai" as the key
+  // Both OpenAI authentication methods use "openai" as the runtime key.
   // since only one can be used in a sandbox at a time
   const providerKeyMap: Record<string, string> = {
     openai: "openai",
-    "openai-codex": "openai",
+    "openai-oauth": "openai",
   };
   const authJsonKey = providerKeyMap[credential.providerName] ?? credential.providerName;
 

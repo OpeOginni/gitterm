@@ -9,6 +9,7 @@ import { protectedProcedure, publicProcedure, router } from "../..";
 import { TRPCError } from "@trpc/server";
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
 import { GitHubCopilotOAuthService } from "../../service/credentials/oauth/github-copilot";
+import { OpenAIOAuthService } from "../../service/credentials/oauth/openai-oauth";
 
 const credentialsService = getModelCredentialsService();
 
@@ -192,6 +193,13 @@ export const modelCredentialsRouter = router({
       }
     }),
 
+  setDefaultCredential: protectedProcedure
+    .input(z.object({ credentialId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await credentialsService.setDefaultCredential(input.credentialId, ctx.session.user.id);
+      return { success: true };
+    }),
+
   /**
    * Permanently delete a credential
    */
@@ -293,13 +301,9 @@ export const modelCredentialsRouter = router({
           };
         }
 
-        // For codex-auth, we don't support OAuth flow - users should paste auth.json tokens
-        if (provider.plugin === "codex-auth") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message:
-              "OpenAI Codex requires manual token paste from OpenCode CLI auth.json. Please use the 'Paste auth.json' option.",
-          });
+        if (provider.plugin === "oauth") {
+          const deviceCode = await OpenAIOAuthService.initiateDeviceCode();
+          return { success: true, flowType: "device_code" as const, ...deviceCode };
         }
 
         throw new TRPCError({
@@ -325,6 +329,7 @@ export const modelCredentialsRouter = router({
         providerName: z.string().min(1),
         deviceCode: z.string().min(1),
         enterpriseUrl: z.string().optional(),
+        label: z.string().max(100).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -376,6 +381,21 @@ export const modelCredentialsRouter = router({
             status: "failed" as const,
             error: result.error,
           };
+        }
+
+        if (provider.plugin === "oauth") {
+          const tokens = await OpenAIOAuthService.pollDeviceCode(input.deviceCode);
+          if (!tokens) return { status: "pending" as const };
+
+          await credentialsService.storeOAuthTokens({
+            userId,
+            providerName: input.providerName,
+            refreshToken: tokens.refreshToken,
+            accessToken: tokens.accessToken,
+            expiresAt: tokens.expiresAt,
+            label: input.label,
+          });
+          return { status: "success" as const };
         }
 
         throw new TRPCError({

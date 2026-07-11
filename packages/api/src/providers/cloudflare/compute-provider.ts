@@ -48,8 +48,8 @@ interface ProvisionRepo {
 interface ProvisionPayload {
   sandboxId: string;
   repo?: ProvisionRepo;
-  opencodeConfigJson?: string;
-  opencodeCredentialsJson?: string;
+  /** Agent files to write before starting the server. */
+  agentFiles?: { path: string; contentBase64: string }[];
   serverPassword?: string;
   environmentVariables?: Record<string, string>;
   workspaceProfile?: string;
@@ -195,9 +195,8 @@ export class CloudflareComputeProvider implements ComputeProvider {
             authToken: spec.repo.authToken,
           }
         : undefined,
-      opencodeConfigJson: spec?.opencodeConfigJson,
-      opencodeCredentialsJson: spec?.opencodeCredentialsJson,
-      serverPassword: spec?.serverPassword,
+      agentFiles: spec?.agent.files,
+      serverPassword: spec?.agent.usesServerPassword ? spec?.serverPassword : undefined,
       environmentVariables,
       workspaceProfile: spec?.workspaceProfile,
       startCommand: runtime.startCommand,

@@ -1,5 +1,4 @@
 FROM node:20-bookworm-slim
-# FROM ghcr.io/anomalyco/opencode:latest
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -9,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     nodejs \
     npm \
+    openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
@@ -21,11 +21,8 @@ RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
     && npm install -g "opencode-ai@${OPENCODE_VERSION}" --prefer-online --no-audit --fund=false \
     && echo "installed opencode: $(opencode --version)"
 
-# Set up working directory
 WORKDIR /workspace
 
-# Set environment variables for persistence
-# These ensure all tools store data in /workspace by default
 ENV HOME=/workspace \
     XDG_CONFIG_HOME=/workspace/.config \
     XDG_DATA_HOME=/workspace/.local/share \
@@ -39,22 +36,14 @@ ENV HOME=/workspace \
     HISTFILE=/workspace/.bash_history \
     PATH=/workspace/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Copy and set up entrypoint script
 COPY ./opencode/server.entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Expose the ttyd port
 ENV PORT=7681
+EXPOSE 22
 EXPOSE 7681
 
-# Define the entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
-
-# Default command
 
 # IPv6 support
 CMD ["opencode", "serve", "--port", "7681", "--hostname", "[::]"]
-
-# docker build -f ./Opencode.Server.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode-server:latest .
-
-# docker push opeoginni/gitterm-opencode-server:latest

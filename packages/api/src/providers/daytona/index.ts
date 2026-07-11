@@ -1,5 +1,5 @@
 import env from "@gitterm/env/server";
-import { Daytona } from "@daytonaio/sdk";
+import { Daytona, Image } from "@daytonaio/sdk";
 import type { DaytonaImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import path from "path";
 import { getProviderConfigService } from "../../service/config/provider-config";
@@ -15,7 +15,7 @@ import type {
   WorkspaceStatusResult,
 } from "../compute";
 import { resolveProvisioningSpec } from "../provisioning-spec";
-import { resolveDaytonaSnapshotName } from "./snapshot/config";
+import { DAYTONA_DEFAULT_RESOURCES } from "./resources";
 import {
   buildHostAlias,
   buildSshCommand,
@@ -30,10 +30,18 @@ import type { DaytonaConfig } from "./types";
 
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
-const OPENCODE_SERVER_SESSION_ID = "gitterm-opencode-server";
+const AGENT_SERVER_SESSION_ID = "gitterm-agent-server";
 const REPO_NAME_LABEL = "gitterm_repo_name";
 const WORKSPACE_ID_LABEL = "gitterm_workspace_id";
 const PERSISTENT_LABEL = "gitterm_persistent";
+// Serve command/port live on the sandbox as labels so restarts (which have no
+// provisioning spec) can relaunch whichever agent the workspace runs.
+const AGENT_SERVE_COMMAND_LABEL = "gitterm_agent_serve_command";
+const AGENT_SERVE_PORT_LABEL = "gitterm_agent_serve_port";
+const DEFAULT_AGENT_SERVE = {
+  command: "opencode serve --hostname 0.0.0.0 --port 4096",
+  port: 4096,
+} as const;
 const DAYTONA_WORKSPACE_DIR = "/workspace";
 const SSH_ACCESS_TTL_MINUTES = 120;
 const SSH_ACCESS_REUSE_BUFFER_MS = 5 * 60 * 1000;
@@ -55,10 +63,6 @@ function getWorkspaceDir(): string {
 
 function getRepoDir(repoName?: string): string {
   return repoName ? path.posix.join(getWorkspaceDir(), repoName) : getWorkspaceDir();
-}
-
-function toBase64(value: string): string {
-  return Buffer.from(value).toString("base64");
 }
 
 function toDate(value?: string | number | Date | null): Date {
@@ -130,6 +134,12 @@ export class DaytonaProvider implements ComputeProvider {
       labels[REPO_NAME_LABEL] = repoName;
     }
 
+    const serve = spec?.agent.serve;
+    if (serve) {
+      labels[AGENT_SERVE_COMMAND_LABEL] = serve.command;
+      labels[AGENT_SERVE_PORT_LABEL] = String(serve.port);
+    }
+
     return labels;
   }
 
@@ -143,36 +153,34 @@ export class DaytonaProvider implements ComputeProvider {
     return providerConfig.defaultTargetRegion;
   }
 
-  private getSnapshotName(
+  private getImageCreateParams(
     config: WorkspaceConfig,
-    targetRegion: string,
     editorAccess: boolean,
-  ): string {
+  ): {
+    imageRef: string;
+    resources: { cpu: number; memory: number; disk?: number };
+  } {
     const metadata = config.imageProviderMetadata?.daytona as
       | DaytonaImageProviderMetadata
       | undefined;
 
-    // Editor/SSH workspaces use the higher-resource `server-ssh` snapshot.
-    if (editorAccess) {
-      const sshRegionSnapshot = metadata?.sshSnapshotsByRegion?.[targetRegion];
-      return (
-        sshRegionSnapshot ??
-        metadata?.sshSnapshot ??
-        resolveDaytonaSnapshotName("server-ssh", targetRegion)
-      );
-    }
+    const imageRef =
+      metadata?.image ??
+      (config.imageId.includes(":") ? config.imageId : `${config.imageId}:latest`);
 
-    const regionSnapshot = metadata?.snapshotsByRegion?.[targetRegion];
-    const snapshot =
-      regionSnapshot ?? metadata?.snapshot ?? resolveDaytonaSnapshotName("server", targetRegion);
+    const defaults = editorAccess
+      ? DAYTONA_DEFAULT_RESOURCES.editor
+      : DAYTONA_DEFAULT_RESOURCES.server;
+    const override = editorAccess ? metadata?.editorResources : metadata?.resources;
 
-    if (!regionSnapshot && !metadata?.snapshot) {
-      console.warn(
-        `[daytona] no snapshot in image metadata for workspace ${config.workspaceId} (region=${targetRegion}); defaulting to ${snapshot}`,
-      );
-    }
-
-    return snapshot;
+    return {
+      imageRef,
+      resources: {
+        cpu: override?.cpu ?? defaults.cpu,
+        memory: override?.memory ?? defaults.memory,
+        ...(override?.disk != null ? { disk: override.disk } : {}),
+      },
+    };
   }
 
   private getProjectPathHint(pathHint: string): string {
@@ -202,10 +210,14 @@ export class DaytonaProvider implements ComputeProvider {
     }
   }
 
-  private async startOpencodeServer(sandbox: DaytonaSandbox, repoName?: string): Promise<void> {
+  private async startAgentServer(
+    sandbox: DaytonaSandbox,
+    repoName: string | undefined,
+    serve: { command: string; port: number },
+  ): Promise<void> {
     const repoDir = getRepoDir(repoName);
 
-    await sandbox.process.createSession(OPENCODE_SERVER_SESSION_ID).catch((error) => {
+    await sandbox.process.createSession(AGENT_SERVER_SESSION_ID).catch((error) => {
       console.error("Daytona Sandbox Error (createSession)", error);
       throw new Error(
         `Daytona Sandbox Error (createSession): ${error instanceof Error ? error.message : String(error)}`,
@@ -213,7 +225,7 @@ export class DaytonaProvider implements ComputeProvider {
     });
 
     await sandbox.process
-      .executeSessionCommand(OPENCODE_SERVER_SESSION_ID, {
+      .executeSessionCommand(AGENT_SERVER_SESSION_ID, {
         command: `cd "${repoDir}"`,
       })
       .catch((error) => {
@@ -224,21 +236,67 @@ export class DaytonaProvider implements ComputeProvider {
       });
 
     await sandbox.process
-      .executeSessionCommand(OPENCODE_SERVER_SESSION_ID, {
-        command: "opencode serve --hostname 0.0.0.0 --port 4096 > /tmp/opencode.log 2>&1",
+      .executeSessionCommand(AGENT_SERVER_SESSION_ID, {
+        command: `${serve.command} > /tmp/agent-server.log 2>&1`,
         runAsync: true,
       })
       .catch((error) => {
-        console.error("Daytona Sandbox Error (opencode serve)", error);
+        console.error("Daytona Sandbox Error (agent serve)", error);
         throw new Error(
-          `Daytona Sandbox Error (opencode serve): ${error instanceof Error ? error.message : String(error)}`,
+          `Daytona Sandbox Error (agent serve): ${error instanceof Error ? error.message : String(error)}`,
         );
       });
+  }
+
+  /**
+   * Run the agent's access-credential command (e.g. `t3 auth pairing create`)
+   * once the server is up, retrying while it boots. Non-fatal on failure: the
+   * workspace still works, the dashboard just can't show a pairing link.
+   */
+  private async captureAccessCredential(
+    sandbox: DaytonaSandbox,
+    spec: WorkspaceProvisioningSpec | null,
+    repoName: string | undefined,
+  ): Promise<string | undefined> {
+    const command = spec?.agent.serve?.accessCredentialCommand;
+    if (!command) {
+      return undefined;
+    }
+
+    const repoDir = getRepoDir(repoName);
+
+    for (let attempt = 0; attempt < 15; attempt += 1) {
+      try {
+        const response = await sandbox.process.executeCommand(`cd "${repoDir}" && ${command}`);
+        const credential = response.result?.trim();
+        if (response.exitCode === 0 && credential) {
+          return credential;
+        }
+      } catch {
+        // Server may still be starting; retry.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+
+    console.error("Daytona Sandbox Error (capture access credential): command never succeeded");
+    return undefined;
   }
 
   private getRepoNameFromSandbox(sandbox: DaytonaSandbox): string | undefined {
     const repoName = sandbox.labels?.[REPO_NAME_LABEL];
     return repoName && repoName.length > 0 ? repoName : undefined;
+  }
+
+  /** Serve command/port for restarts, from labels (legacy sandboxes: OpenCode). */
+  private getServeSpecFromSandbox(sandbox: DaytonaSandbox): { command: string; port: number } {
+    const command = sandbox.labels?.[AGENT_SERVE_COMMAND_LABEL];
+    const port = Number(sandbox.labels?.[AGENT_SERVE_PORT_LABEL]);
+
+    if (command && Number.isFinite(port) && port > 0) {
+      return { command, port };
+    }
+
+    return DEFAULT_AGENT_SERVE;
   }
 
   private async provisionWorkspace(
@@ -249,24 +307,34 @@ export class DaytonaProvider implements ComputeProvider {
     const providerConfig = await this.getConfig();
     const targetRegion = this.getTargetRegion(config, providerConfig);
     const spec = resolveProvisioningSpec(config);
-    const snapshotName = this.getSnapshotName(
-      config,
-      targetRegion,
-      this.isEditorAccessWorkspace(spec),
-    );
+    const editorAccess = this.isEditorAccessWorkspace(spec);
+    const { imageRef, resources } = this.getImageCreateParams(config, editorAccess);
     const daytona = await this.createClient(targetRegion);
     const repoName = spec?.repo?.name;
     const repoDir = getRepoDir(repoName);
 
-    const sandbox = await provisionLogger.step(`create-sandbox snapshot=${snapshotName}`, () =>
-      daytona.create({
-        snapshot: snapshotName,
-        labels: this.getWorkspaceLabels(config, spec, persistent),
-        envVars: {
-          OPENCODE_SERVER_PASSWORD: spec?.serverPassword ?? "",
-          OPENCODE_RUNTIME_UPGRADE: "1",
-        },
-      }),
+    const image = Image.base(imageRef).entrypoint(["sleep", "infinity"]);
+
+    const sandbox = await provisionLogger.step(
+      `create-sandbox image=${imageRef} cpu=${resources.cpu} mem=${resources.memory}`,
+      () =>
+        daytona.create(
+          {
+            image,
+            resources,
+            labels: this.getWorkspaceLabels(config, spec, persistent),
+            envVars: {
+              ...spec?.agent.env,
+              AGENT_RUNTIME_UPGRADE: "1",
+            },
+          },
+          {
+            timeout: 300,
+            onSnapshotCreateLogs: (chunk) => {
+              process.stdout.write(chunk);
+            },
+          },
+        ),
     );
 
     if (spec?.repo) {
@@ -303,34 +371,34 @@ export class DaytonaProvider implements ComputeProvider {
       }
     }
 
-    if (spec?.opencodeConfigJson) {
-      await provisionLogger.step("write-opencode-config", async () => {
-        await this.executeCommand(sandbox, "mkdir -p ~/.config/opencode", true);
-        await this.executeCommand(
-          sandbox,
-          `echo "${toBase64(spec.opencodeConfigJson)}" | base64 -d > ~/.config/opencode/opencode.json`,
-          true,
-        );
+    if (spec && spec.agent.files.length > 0) {
+      await provisionLogger.step("write-agent-files", async () => {
+        for (const file of spec.agent.files) {
+          const dir = file.path.substring(0, file.path.lastIndexOf("/"));
+          if (dir) {
+            await this.executeCommand(sandbox, `mkdir -p ${dir}`, true);
+          }
+          await this.executeCommand(
+            sandbox,
+            `echo "${file.contentBase64}" | base64 -d > ${file.path}`,
+            true,
+          );
+        }
       });
     }
 
-    if (spec?.opencodeCredentialsJson) {
-      await provisionLogger.step("write-opencode-credentials", async () => {
-        await this.executeCommand(sandbox, "mkdir -p ~/.local/share/opencode", true);
-        await this.executeCommand(
-          sandbox,
-          `echo "${toBase64(spec.opencodeCredentialsJson)}" | base64 -d > ~/.local/share/opencode/auth.json`,
-          true,
-        );
-      });
-    }
+    const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
 
-    await provisionLogger.step("start-opencode-server", () =>
-      this.startOpencodeServer(sandbox, repoName),
+    await provisionLogger.step("start-agent-server", () =>
+      this.startAgentServer(sandbox, repoName, serve),
+    );
+
+    const accessCredential = await provisionLogger.step("capture-access-credential", () =>
+      this.captureAccessCredential(sandbox, spec, repoName),
     );
 
     const previewUrlData = await provisionLogger.step("create-preview-link", () =>
-      sandbox.getPreviewLink(4096),
+      sandbox.getPreviewLink(serve.port),
     );
     const serviceCreatedAt = toDate(sandbox.createdAt);
 
@@ -342,10 +410,11 @@ export class DaytonaProvider implements ComputeProvider {
         : undefined,
       domain: this.getDomain(config.subdomain),
       serviceCreatedAt,
+      accessCredential,
     };
 
     provisionLogger.log(
-      `workspace-ready persistent=${persistent} editorAccess=${this.isEditorAccessWorkspace(spec)} region=${targetRegion} snapshot=${snapshotName}`,
+      `workspace-ready persistent=${persistent} editorAccess=${editorAccess} region=${targetRegion} image=${imageRef}`,
     );
 
     if (!persistent) {
@@ -357,6 +426,16 @@ export class DaytonaProvider implements ComputeProvider {
       externalVolumeId: sandbox.id,
       volumeCreatedAt: serviceCreatedAt,
     };
+  }
+
+  async execCommand(
+    externalId: string,
+    command: string,
+  ): Promise<{ exitCode: number; stdout: string }> {
+    const daytona = await this.createClient();
+    const sandbox = await daytona.get(externalId);
+    const response = await sandbox.process.executeCommand(command);
+    return { exitCode: response.exitCode, stdout: response.result ?? "" };
   }
 
   async createWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
@@ -415,7 +494,11 @@ export class DaytonaProvider implements ComputeProvider {
       );
     });
 
-    await this.startOpencodeServer(sandbox, this.getRepoNameFromSandbox(sandbox));
+    await this.startAgentServer(
+      sandbox,
+      this.getRepoNameFromSandbox(sandbox),
+      this.getServeSpecFromSandbox(sandbox),
+    );
   }
 
   async terminateWorkspace(externalServiceId: string, _externalVolumeId?: string): Promise<void> {

@@ -1,4 +1,7 @@
 #!/bin/sh
+# T3 Code server workspace entrypoint. Shares the standard GitTerm boot
+# sequence (git, clone, tooling) with the OpenCode entrypoints; differs in
+# the agent binary, the runtime-upgrade hook, and the pairing-token reporter.
 set -e
 
 WORKSPACE="/workspace"
@@ -15,10 +18,53 @@ mkdir -p "$WORKSPACE"
 mkdir -p "$RUNTIME_DIR"
 cd "$WORKSPACE"
 
+ssh_enabled=0
+case "${EDITOR_ACCESS_ENABLED}" in
+  1|true|TRUE|yes|YES) ssh_enabled=1 ;;
+esac
+if [ -n "$USER_SSH_PUBLIC_KEY" ]; then
+  ssh_enabled=1
+fi
+
+if [ "$ssh_enabled" = "1" ] && command -v sshd >/dev/null 2>&1; then
+  mkdir -p /run/sshd /etc/ssh/sshd_config.d /etc/ssh/authorized_keys
+
+  if [ -n "$USER_SSH_PUBLIC_KEY" ]; then
+    touch /etc/ssh/authorized_keys/root
+    chmod 600 /etc/ssh/authorized_keys/root
+    chown root:root /etc/ssh/authorized_keys/root
+    if ! grep -qxF "$USER_SSH_PUBLIC_KEY" /etc/ssh/authorized_keys/root 2>/dev/null; then
+      printf '%s\n' "$USER_SSH_PUBLIC_KEY" >> /etc/ssh/authorized_keys/root
+    fi
+  fi
+
+  cat > /etc/ssh/sshd_config.d/gitterm.conf <<EOF
+PubkeyAuthentication yes
+AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin prohibit-password
+UsePAM no
+AllowTcpForwarding yes
+AllowAgentForwarding yes
+X11Forwarding no
+ClientAliveInterval 30
+ClientAliveCountMax 6
+EOF
+
+  ssh-keygen -A
+  echo "Starting sshd on port 22..."
+  /usr/sbin/sshd -D -e &
+  SSHD_PID="$!"
+  sleep 1
+  if ! kill -0 "$SSHD_PID" 2>/dev/null; then
+    echo "sshd failed to stay running" >&2
+    exit 1
+  fi
+fi
+
 ########################################
 # PERSISTENCE SETUP
-# Environment variables are already set in Dockerfile
-# Only create directories that may not exist yet
 ########################################
 
 # Create tool-specific directories if they don't exist
@@ -58,7 +104,7 @@ if [ ! -z "$GITHUB_APP_TOKEN" ]; then
 
     # Disable interactive credential helper
     git config --global credential.helper ''
-    
+
     # Create runtime-only credential helper script
     # IMPORTANT: Use unquoted heredoc to expand $GITHUB_APP_TOKEN
     cat > "$GIT_CREDENTIAL_HELPER" <<CRED_HELPER
@@ -70,10 +116,10 @@ if [ "\$1" = "get" ]; then
     echo "password=${GITHUB_APP_TOKEN}"
 fi
 CRED_HELPER
-    
+
     chmod 700 "$GIT_CREDENTIAL_HELPER"
     git config --global credential.helper "$GIT_CREDENTIAL_HELPER"
-    
+
     echo "✓ Git configured with GitHub App token"
     echo "  Token expires at: $GITHUB_APP_TOKEN_EXPIRY"
 else
@@ -94,7 +140,7 @@ if [ ! -f ".initialized" ]; then
         else
             echo "Cloning repo: $REPO_URL into $REPO_DIR_NAME"
         fi
-        
+
         # Prefer named checkout ref, then branch, for the initial clone.
         CLONE_REF="${REPO_CHECKOUT_REF:-$REPO_BRANCH}"
 
@@ -121,7 +167,7 @@ if [ ! -f ".initialized" ]; then
             git -C "$REPO_DIR_NAME" fetch --depth 1 origin "$REPO_BASE_COMMIT"
             git -C "$REPO_DIR_NAME" checkout --detach "$REPO_BASE_COMMIT"
         fi
-        
+
         echo "$REPO_OWNER" > .repo_owner
     else
         echo "No repo URL - using empty workspace."
@@ -160,6 +206,56 @@ fi
 REPO_NAME=$(cat .repo_name)
 REPO_OWNER=$(cat .repo_owner 2>/dev/null || echo "")
 REPO_DIR="/workspace/$REPO_NAME"
+GITTERM_CONTEXT_DIR="/workspace/.gitterm"
+AWS_RUNTIME_CONTEXT_FILE="$GITTERM_CONTEXT_DIR/aws-runtime-context.md"
+
+if [ "$WORKSPACE_PROVIDER" = "aws" ] && [ -f /aws-agent-context.sh ]; then
+    echo "Generating OpenCode AWS runtime context at $AWS_RUNTIME_CONTEXT_FILE..."
+    GITTERM_CONTEXT_DIR="$GITTERM_CONTEXT_DIR" sh /aws-agent-context.sh || echo "⚠ Failed to generate AWS runtime context"
+
+    if [ -f "$AWS_RUNTIME_CONTEXT_FILE" ]; then
+        mkdir -p ~/.config/opencode
+        if [ ! -f ~/.config/opencode/opencode.json ]; then
+            printf '{}' > ~/.config/opencode/opencode.json
+        fi
+
+        AWS_RUNTIME_CONTEXT_FILE="$AWS_RUNTIME_CONTEXT_FILE" node <<'NODE'
+const fs = require("fs");
+
+const configPath = `${process.env.HOME}/.config/opencode/opencode.json`;
+const contextFile = process.env.AWS_RUNTIME_CONTEXT_FILE;
+const contextDir = contextFile.replace(/\/[^/]*$/, "/**");
+let config = {};
+
+try {
+  config = JSON.parse(fs.readFileSync(configPath, "utf8") || "{}");
+} catch {
+  config = {};
+}
+
+const instructions = Array.isArray(config.instructions)
+  ? config.instructions
+  : typeof config.instructions === "string"
+    ? [config.instructions]
+    : [];
+
+if (!instructions.includes(contextFile)) {
+  instructions.push(contextFile);
+}
+
+config.instructions = instructions;
+config.permission = config.permission && typeof config.permission === "object" ? config.permission : {};
+config.permission.external_directory =
+  config.permission.external_directory && typeof config.permission.external_directory === "object"
+    ? config.permission.external_directory
+    : {};
+config.permission.external_directory[contextDir] = "allow";
+
+fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+NODE
+    fi
+fi
+
 TOOLING_MANIFEST_JSON=""
 TOOLING_MANIFEST_ENABLED=""
 
@@ -184,11 +280,38 @@ cd "$REPO_NAME"
 # All environment variables already set above
 # Scripts and shells can source /workspace/.env for consistency
 
-if ! command -v opencode >/dev/null 2>&1; then
-    echo "❌ opencode not found in PATH: $PATH"
+if ! command -v t3 >/dev/null 2>&1; then
+    echo "❌ t3 not found in PATH: $PATH"
     exit 127
 fi
 
-echo "opencode version: $(opencode --version)"
+echo "t3 version: $(t3 --version 2>/dev/null || echo unknown)"
+
+########################################
+# PAIRING TOKEN REPORTER
+# T3 issues one-time pairing tokens instead of a server password. Mint one
+# once the server is up and report it to GitTerm so the dashboard can show a
+# ready-to-use pairing link. Non-fatal: the workspace works without it, the
+# user just has to pair from a terminal instead.
+########################################
+(
+    for i in $(seq 1 30); do
+        sleep 2
+        TOKEN=$(t3 auth pairing create --label gitterm --ttl 30d --json 2>/dev/null \
+            | node -e "let d='';process.stdin.on('data',(c)=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).credential))" 2>/dev/null) || TOKEN=""
+
+        if [ -n "$TOKEN" ]; then
+            if [ -n "$WORKSPACE_API_URL" ] && [ -n "$WORKSPACE_AUTH_TOKEN" ] && [ -n "$WORKSPACE_ID" ]; then
+                curl -s -X POST "$WORKSPACE_API_URL/workspaceOps.reportAccessCredential" \
+                    -H "Authorization: Bearer $WORKSPACE_AUTH_TOKEN" \
+                    -H "Content-Type: application/json" \
+                    --data "{\"workspaceId\":\"$WORKSPACE_ID\",\"credential\":\"$TOKEN\"}" > /dev/null \
+                    && echo "✓ Reported pairing token to GitTerm" \
+                    || echo "⚠ Failed to report pairing token"
+            fi
+            break
+        fi
+    done
+) &
 
 exec "$@"

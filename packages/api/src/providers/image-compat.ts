@@ -10,7 +10,7 @@ export function imageSupportsProvider(
     case "aws":
       return Boolean(metadata?.aws);
     case "daytona":
-      return Boolean(metadata?.daytona?.snapshot);
+      return Boolean(metadata?.daytona);
     default:
       return true; // local / unknown providers don't need metadata
   }

@@ -60,8 +60,8 @@ interface ProvisionRepo {
 interface ProvisionPayload {
   sandboxId: string;
   repo?: ProvisionRepo;
-  opencodeConfigJson?: string;
-  opencodeCredentialsJson?: string;
+  /** Agent files (base64 content) to write before starting the server. */
+  agentFiles?: { path: string; contentBase64: string }[];
   serverPassword?: string;
   environmentVariables?: Record<string, string>;
   workspaceProfile?: string;
@@ -135,7 +135,7 @@ export class GittermSandbox extends Sandbox<Env> {
       }
 
       await this.mkdir(WORKSPACE_DIR, { recursive: true });
-      await this.writeOpencodeFiles(payload);
+      await this.writeAgentFiles(payload);
       await this.cloneRepo(payload, repoDir);
       await this.runSetupCommands(payload, repoDir);
       await this.startAgentServer(payload, repoDir);
@@ -173,18 +173,20 @@ export class GittermSandbox extends Sandbox<Env> {
     await this.setKeepAlive(false).catch(() => undefined);
   }
 
-  private async writeOpencodeFiles(payload: ProvisionPayload): Promise<void> {
-    if (payload.opencodeConfigJson) {
-      await this.mkdir("/root/.config/opencode", { recursive: true });
-      await this.writeFile("/root/.config/opencode/opencode.json", payload.opencodeConfigJson);
-    }
+  private async writeAgentFiles(payload: ProvisionPayload): Promise<void> {
+    // The container runs as root, so expand agent-relative homes to /root.
+    const files = (payload.agentFiles ?? []).map((file) => ({
+      ...file,
+      path: file.path.startsWith("~/") ? `/root/${file.path.slice(2)}` : file.path,
+    }));
 
-    if (payload.opencodeCredentialsJson) {
-      await this.mkdir("/root/.local/share/opencode", { recursive: true });
-      await this.writeFile(
-        "/root/.local/share/opencode/auth.json",
-        payload.opencodeCredentialsJson,
-      );
+    for (const file of files) {
+      const dir = file.path.substring(0, file.path.lastIndexOf("/"));
+      if (dir) {
+        await this.mkdir(dir, { recursive: true });
+      }
+      const bytes = Uint8Array.from(atob(file.contentBase64), (c) => c.charCodeAt(0));
+      await this.writeFile(file.path, new TextDecoder().decode(bytes));
     }
   }
 
