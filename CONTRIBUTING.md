@@ -39,9 +39,15 @@ bun turbo infra:up
 ### 4. Set Up Database
 
 ```bash
-# Migrate schema to database
+# Migrate schema to local docker postgres
 bun run db:migrate:dev
+
+# Seed providers, agent types, images, regions, etc.
+bun run db:seed:dev
 ```
+
+Use `bun run db:seed:prod` only when you intentionally want to seed production
+(or a Docker-hosted deploy where `DATABASE_URL` is already set in the environment).
 
 ### 5. Run Development Servers
 

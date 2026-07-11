@@ -50,7 +50,11 @@
       "cache": false,
       "persistent": true
     },
-    "db:seed": {
+    "db:seed:dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:seed:prod": {
       "cache": false,
       "persistent": true
     },

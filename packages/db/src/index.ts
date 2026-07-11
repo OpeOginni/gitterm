@@ -1,9 +1,13 @@
+import { existsSync } from "node:fs";
 import dotenv from "dotenv";
 
-dotenv.config({
-  // path: "../../apps/server/.env",
-  path: "../../apps/server/.env.development.local",
-});
+// Prefer an already-set DATABASE_URL (Docker/prod). Only load local dev env as fallback.
+if (!process.env.DATABASE_URL) {
+  const devEnvPath = "../../apps/server/.env.development.local";
+  if (existsSync(devEnvPath)) {
+    dotenv.config({ path: devEnvPath });
+  }
+}
 
 import { drizzle } from "drizzle-orm/node-postgres";
 

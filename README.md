@@ -116,6 +116,7 @@ bun run db:push
 bun run db:studio:dev
 bun run db:generate
 bun run db:migrate:dev
+bun run db:seed:dev
 ```
 
 ## Links

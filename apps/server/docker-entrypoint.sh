@@ -6,7 +6,7 @@ cd /app/packages/db
 bun run db:migrate:prod
 
 echo "[entrypoint] Running seed..."
-bun run db:seed
+bun run db:seed:prod
 
 echo "[entrypoint] Running admin seed..."
 cd /app/apps/server
