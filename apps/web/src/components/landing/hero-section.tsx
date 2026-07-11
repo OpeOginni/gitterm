@@ -244,18 +244,27 @@ export function HeroSection() {
                 more soon
               </span>
             </div>
-            <div className="flex items-center justify-center gap-2.5 text-white/85">
-              <Image
-                src="/opencode.svg"
-                alt="OpenCode"
-                width={24}
-                height={24}
-                className="h-6 w-6"
-              />
-              <span className="font-sans text-[15.5px] sm:text-base">OpenCode</span>
-              <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary/85">
-                live
-              </span>
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+              <div className="flex items-center gap-2.5 text-white/85">
+                <Image
+                  src="/opencode.svg"
+                  alt="OpenCode"
+                  width={24}
+                  height={24}
+                  className="h-6 w-6"
+                />
+                <span className="font-sans text-[15.5px] sm:text-base">OpenCode</span>
+                <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary/85">
+                  live
+                </span>
+              </div>
+              <div className="flex items-center gap-2.5 text-white/85">
+                <Image src="/t3.svg" alt="T3 Code" width={24} height={24} className="h-6 w-6" />
+                <span className="font-sans text-[15.5px] sm:text-base">T3 Code</span>
+                <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary/85">
+                  live
+                </span>
+              </div>
             </div>
           </div>
 
