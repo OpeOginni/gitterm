@@ -2,8 +2,10 @@ import type { AgentFile, AgentProvisioning } from "../../providers/compute";
 import {
   buildOpencodeAuthJson,
   buildOpencodeConfigJson,
+  buildOpencodeTuiConfigJson,
   OPENCODE_AUTH_PATH,
   OPENCODE_CONFIG_PATH,
+  OPENCODE_TUI_CONFIG_PATH,
 } from "./opencode";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 
@@ -105,6 +107,10 @@ export const t3codeProvisioner: AgentProvisioner = {
       contentBase64: toBase64(
         buildOpencodeConfigJson(ctx.agentConfigs?.opencode, ctx.userDisplayName),
       ),
+    });
+    files.push({
+      path: OPENCODE_TUI_CONFIG_PATH,
+      contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
     });
 
     const claudeConfig = ctx.agentConfigs?.["claude-code"];

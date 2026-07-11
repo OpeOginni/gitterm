@@ -69,13 +69,8 @@ interface Credential {
 
 // Helper to get provider logo path - logos are named after the provider name
 const getProviderLogo = (providerName: string): string => {
+  if (providerName === "openai-oauth") return "/openai.svg";
   return `/${providerName}.svg`;
-};
-
-// Helper to check if a provider is recommended
-const isProviderRecommended = (providerName: string, providers: Provider[]): boolean => {
-  const provider = providers.find((p) => p.name === providerName);
-  return provider?.isRecommended ?? false;
 };
 
 export function ModelCredentialsSection() {
@@ -644,17 +639,10 @@ export function ModelCredentialsSection() {
           ) : (
             <div className="space-y-2">
               {credentials.map((credential) => {
-                const isRecommended = isProviderRecommended(credential.providerName, providers);
                 return (
                   <div
                     key={credential.id}
-                    className={`flex items-center justify-between gap-3 rounded-lg px-4 py-3 transition-colors ${
-                      credential.isActive
-                        ? isRecommended
-                          ? "border-l-2 border-l-primary bg-input/60 hover:bg-input"
-                          : "bg-input/60 hover:bg-input"
-                        : "bg-input/20 opacity-60"
-                    }`}
+                    className={`flex items-center justify-between gap-3 rounded-lg border border-transparent px-4 py-3 transition-colors ${credential.isActive ? "bg-input/60 hover:border-border hover:bg-input" : "bg-input/20 opacity-60"}`}
                   >
                     <div className="flex items-center gap-4">
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -669,9 +657,6 @@ export function ModelCredentialsSection() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{credential.providerDisplayName}</p>
-                          {isRecommended && credential.isActive && (
-                            <span className="text-xs text-muted-foreground">Recommended</span>
-                          )}
                           {credential.label && (
                             <Badge variant="outline" className="text-xs">
                               {credential.label}
@@ -682,12 +667,13 @@ export function ModelCredentialsSection() {
                               Revoked
                             </Badge>
                           )}
-                          {credential.authType === "oauth" && (
-                            <span className="text-xs text-muted-foreground/70">OAuth</span>
-                          )}
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span className="font-mono">...{credential.keyHash.slice(-8)}</span>
+                          {credential.authType === "oauth" ? (
+                            <span>Connected via OAuth</span>
+                          ) : (
+                            <span className="font-mono">...{credential.keyHash.slice(-8)}</span>
+                          )}
                           {credential.lastUsedAt && (
                             <span>
                               Last used{" "}

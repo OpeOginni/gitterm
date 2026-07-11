@@ -471,7 +471,9 @@ export function AgentConfigSection() {
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {kindAppliesTo(config.kind) ? `→ ${kindAppliesTo(config.kind)} · ` : ""}
+                        {kindAppliesTo(config.kind)
+                          ? `For ${kindAppliesTo(config.kind)} agents · `
+                          : ""}
                         Updated{" "}
                         {new Date(config.updatedAt).toLocaleDateString(undefined, {
                           month: "short",

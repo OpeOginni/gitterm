@@ -2,6 +2,7 @@ import type { AgentProvisioning } from "../../providers/compute";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 
 export const OPENCODE_CONFIG_PATH = "~/.config/opencode/opencode.json";
+export const OPENCODE_TUI_CONFIG_PATH = "~/.config/opencode/tui.json";
 export const OPENCODE_AUTH_PATH = "~/.local/share/opencode/auth.json";
 
 const OPENCODE_SERVE_PORT = 4096;
@@ -35,12 +36,23 @@ export function buildOpencodeConfigJson(
   userDisplayName: string,
 ): string {
   const username = `Gitterm: ${userDisplayName}`;
+  const config = { ...agentConfig };
+  delete config.theme;
 
   return JSON.stringify(
     agentConfig
-      ? { ...agentConfig, username }
+      ? { ...config, username }
       : { $schema: "https://opencode.ai/config.json", username },
   );
+}
+
+export function buildOpencodeTuiConfigJson(
+  agentConfig: Record<string, unknown> | null | undefined,
+): string {
+  return JSON.stringify({
+    $schema: "https://opencode.ai/tui.json",
+    theme: typeof agentConfig?.theme === "string" ? agentConfig.theme : "opencode",
+  });
 }
 
 export const opencodeProvisioner: AgentProvisioner = {
@@ -58,6 +70,10 @@ export const opencodeProvisioner: AgentProvisioner = {
           contentBase64: toBase64(
             buildOpencodeConfigJson(ctx.agentConfigs?.opencode, ctx.userDisplayName),
           ),
+        },
+        {
+          path: OPENCODE_TUI_CONFIG_PATH,
+          contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
         },
         {
           path: OPENCODE_AUTH_PATH,

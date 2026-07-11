@@ -41,7 +41,7 @@ export const AGENT_CONFIG_KIND_META: Record<AgentConfigKind, AgentConfigKindMeta
   opencode: {
     id: "opencode",
     label: "OpenCode",
-    description: "Applied to OpenCode and T3Code workspaces as opencode.json.",
+    description: "Applied to OpenCode and T3Code workspaces as opencode.json and tui.json.",
     appliesTo: ["opencode", "t3code"],
     icon: "/opencode.svg",
     docsUrl: "https://opencode.ai/docs/config/",
