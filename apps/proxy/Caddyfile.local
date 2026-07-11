@@ -102,6 +102,8 @@
 					header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
 					header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 					header_up Host {header.X-Container-Host}
+					header_up X-Forwarded-Host {host}
+					header_up X-Forwarded-Proto https
 					header_up X-GitTerm-Aws-Routing-Key {header.X-GitTerm-Aws-Routing-Key}
 					header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
 					header_up x-daytona-preview-token {header.x-daytona-preview-token}
@@ -133,6 +135,8 @@
 					header_up Sec-WebSocket-Protocol {header.Sec-WebSocket-Protocol}
 					header_up Sec-WebSocket-Extensions {header.Sec-WebSocket-Extensions}
 					header_up Host {header.X-Container-Host}
+					header_up X-Forwarded-Host {host}
+					header_up X-Forwarded-Proto https
 					header_up X-GitTerm-Aws-Routing-Key {header.X-GitTerm-Aws-Routing-Key}
 					header_up e2b-traffic-access-token {header.e2b-traffic-access-token}
 					header_up x-daytona-preview-token {header.x-daytona-preview-token}
