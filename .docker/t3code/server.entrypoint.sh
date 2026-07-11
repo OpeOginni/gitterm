@@ -1,4 +1,7 @@
 #!/bin/sh
+# T3 Code server workspace entrypoint. Shares the standard GitTerm boot
+# sequence (git, clone, tooling) with the OpenCode entrypoints; differs in
+# the agent binary, the runtime-upgrade hook, and the pairing-token reporter.
 set -e
 
 WORKSPACE="/workspace"
@@ -58,7 +61,7 @@ if [ ! -z "$GITHUB_APP_TOKEN" ]; then
 
     # Disable interactive credential helper
     git config --global credential.helper ''
-    
+
     # Create runtime-only credential helper script
     # IMPORTANT: Use unquoted heredoc to expand $GITHUB_APP_TOKEN
     cat > "$GIT_CREDENTIAL_HELPER" <<CRED_HELPER
@@ -70,10 +73,10 @@ if [ "\$1" = "get" ]; then
     echo "password=${GITHUB_APP_TOKEN}"
 fi
 CRED_HELPER
-    
+
     chmod 700 "$GIT_CREDENTIAL_HELPER"
     git config --global credential.helper "$GIT_CREDENTIAL_HELPER"
-    
+
     echo "✓ Git configured with GitHub App token"
     echo "  Token expires at: $GITHUB_APP_TOKEN_EXPIRY"
 else
@@ -94,7 +97,7 @@ if [ ! -f ".initialized" ]; then
         else
             echo "Cloning repo: $REPO_URL into $REPO_DIR_NAME"
         fi
-        
+
         # Prefer named checkout ref, then branch, for the initial clone.
         CLONE_REF="${REPO_CHECKOUT_REF:-$REPO_BRANCH}"
 
@@ -121,7 +124,7 @@ if [ ! -f ".initialized" ]; then
             git -C "$REPO_DIR_NAME" fetch --depth 1 origin "$REPO_BASE_COMMIT"
             git -C "$REPO_DIR_NAME" checkout --detach "$REPO_BASE_COMMIT"
         fi
-        
+
         echo "$REPO_OWNER" > .repo_owner
     else
         echo "No repo URL - using empty workspace."
@@ -234,11 +237,38 @@ cd "$REPO_NAME"
 # All environment variables already set above
 # Scripts and shells can source /workspace/.env for consistency
 
-if ! command -v opencode >/dev/null 2>&1; then
-    echo "❌ opencode not found in PATH: $PATH"
+if ! command -v t3 >/dev/null 2>&1; then
+    echo "❌ t3 not found in PATH: $PATH"
     exit 127
 fi
 
-echo "opencode version: $(opencode --version)"
+echo "t3 version: $(t3 --version 2>/dev/null || echo unknown)"
+
+########################################
+# PAIRING TOKEN REPORTER
+# T3 issues one-time pairing tokens instead of a server password. Mint one
+# once the server is up and report it to GitTerm so the dashboard can show a
+# ready-to-use pairing link. Non-fatal: the workspace works without it, the
+# user just has to pair from a terminal instead.
+########################################
+(
+    for i in $(seq 1 30); do
+        sleep 2
+        TOKEN=$(t3 auth pairing create --label gitterm --ttl 30d --json 2>/dev/null \
+            | node -e "let d='';process.stdin.on('data',(c)=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).credential))" 2>/dev/null) || TOKEN=""
+
+        if [ -n "$TOKEN" ]; then
+            if [ -n "$WORKSPACE_API_URL" ] && [ -n "$WORKSPACE_AUTH_TOKEN" ] && [ -n "$WORKSPACE_ID" ]; then
+                curl -s -X POST "$WORKSPACE_API_URL/workspaceOps.reportAccessCredential" \
+                    -H "Authorization: Bearer $WORKSPACE_AUTH_TOKEN" \
+                    -H "Content-Type: application/json" \
+                    --data "{\"workspaceId\":\"$WORKSPACE_ID\",\"credential\":\"$TOKEN\"}" > /dev/null \
+                    && echo "✓ Reported pairing token to GitTerm" \
+                    || echo "⚠ Failed to report pairing token"
+            fi
+            break
+        fi
+    done
+) &
 
 exec "$@"

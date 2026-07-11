@@ -19,7 +19,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  AlertCircle,
   Check,
   ExternalLink,
   Key,
@@ -40,9 +39,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import CodeMirror from "@uiw/react-codemirror";
-import { json } from "@codemirror/lang-json";
-import { useTheme } from "next-themes";
 import { track } from "@/lib/analytics";
 
 type AuthType = "api_key" | "oauth";
@@ -71,19 +67,6 @@ interface Credential {
   updatedAt: string;
 }
 
-// Auth.json structure from OpenCode CLI
-interface AuthJsonEntry {
-  type: "oauth";
-  refresh: string;
-  access?: string;
-  expires?: number;
-  accountId?: string;
-}
-
-interface AuthJson {
-  [key: string]: AuthJsonEntry;
-}
-
 // Helper to get provider logo path - logos are named after the provider name
 const getProviderLogo = (providerName: string): string => {
   return `/${providerName}.svg`;
@@ -102,11 +85,6 @@ export function ModelCredentialsSection() {
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [apiKey, setApiKey] = useState("");
   const [label, setLabel] = useState("");
-  const [authJsonInput, setAuthJsonInput] = useState("");
-  const [authJsonError, setAuthJsonError] = useState<string | null>(null);
-
-  // Theme for CodeMirror
-  const { theme } = useTheme();
 
   // OAuth state (for device code flow - GitHub Copilot)
   const [oauthStep, setOauthStep] = useState<"idle" | "pending" | "polling">("idle");
@@ -131,7 +109,10 @@ export function ModelCredentialsSection() {
   const credentials = (credentialsData?.credentials ?? []) as Credential[];
 
   const selectedProvider = providers.find((p) => p.id === selectedProviderId);
-  const isCodexProvider = selectedProvider?.plugin === "codex-auth";
+  const isOAuthProvider = selectedProvider?.plugin === "oauth";
+  const openAIProvider = providers.find((provider) => provider.name === "openai");
+  const openAIOAuthProvider = providers.find((provider) => provider.plugin === "oauth");
+  const visibleProviders = providers.filter((provider) => provider.plugin !== "oauth");
 
   // Get the best default provider (prefer recommended, then first)
   const getDefaultProvider = useCallback(() => {
@@ -157,52 +138,20 @@ export function ModelCredentialsSection() {
   // Reset form when dialog closes
   useEffect(() => {
     if (!addDialogOpen) {
-      setApiKey("");
-      setLabel("");
-      setAuthJsonInput("");
-      setAuthJsonError(null);
-      setOauthStep("idle");
-      setDeviceCode(null);
-      const defaultProvider = getDefaultProvider();
-      if (defaultProvider) {
-        setSelectedProviderId(defaultProvider.id);
-      }
+      const resetTimer = window.setTimeout(() => {
+        setApiKey("");
+        setLabel("");
+        setOauthStep("idle");
+        setDeviceCode(null);
+        const defaultProvider = getDefaultProvider();
+        if (defaultProvider) {
+          setSelectedProviderId(defaultProvider.id);
+        }
+      }, 250);
+
+      return () => window.clearTimeout(resetTimer);
     }
   }, [addDialogOpen, getDefaultProvider]);
-
-  // Validate auth.json as user types
-  useEffect(() => {
-    if (!authJsonInput.trim()) {
-      setAuthJsonError(null);
-      return;
-    }
-    try {
-      const parsed = JSON.parse(authJsonInput) as AuthJson;
-
-      // Look for openai key (could be "openai" or the tokens directly)
-      let entry: AuthJsonEntry | undefined;
-
-      if (parsed.openai && parsed.openai.type === "oauth") {
-        entry = parsed.openai;
-      } else if ((parsed as unknown as AuthJsonEntry).type === "oauth") {
-        entry = parsed as unknown as AuthJsonEntry;
-      }
-
-      if (!entry) {
-        setAuthJsonError("Missing OpenAI OAuth tokens");
-        return;
-      }
-
-      if (!entry.refresh) {
-        setAuthJsonError("Missing refresh token");
-        return;
-      }
-
-      setAuthJsonError(null);
-    } catch {
-      setAuthJsonError("Invalid JSON format");
-    }
-  }, [authJsonInput]);
 
   const invalidateCredentials = useCallback(() => {
     queryClient.invalidateQueries({
@@ -221,20 +170,6 @@ export function ModelCredentialsSection() {
       },
       onError: (error) => {
         toast.error(`Failed to save API key: ${error.message}`);
-      },
-    }),
-  );
-
-  const storeOAuthTokensMutation = useMutation(
-    trpc.modelCredentials.storeOAuthTokens.mutationOptions({
-      onSuccess: () => {
-        track("api_key_saved", { provider: selectedProvider?.name, auth_type: "oauth_tokens" });
-        toast.success("OpenAI Codex tokens saved successfully");
-        setAddDialogOpen(false);
-        invalidateCredentials();
-      },
-      onError: (error) => {
-        toast.error(`Failed to save tokens: ${error.message}`);
       },
     }),
   );
@@ -264,13 +199,17 @@ export function ModelCredentialsSection() {
   const pollOAuthMutation = useMutation(
     trpc.modelCredentials.pollOAuth.mutationOptions({
       onSuccess: (data) => {
-        if (data.status === "success" && "accessToken" in data) {
-          // Complete the OAuth flow
-          completeOAuthMutation.mutate({
-            providerName: selectedProvider?.name ?? "",
-            accessToken: data.accessToken,
-            label: label || undefined,
-          });
+        if (data.status === "success") {
+          if (isOAuthProvider) {
+            toast.success("ChatGPT account connected");
+            setAddDialogOpen(false);
+            invalidateCredentials();
+          } else if ("accessToken" in data)
+            completeOAuthMutation.mutate({
+              providerName: selectedProvider?.name ?? "",
+              accessToken: data.accessToken,
+              label: label || undefined,
+            });
         } else if (data.status === "pending") {
           // Keep polling
           setTimeout(
@@ -279,6 +218,7 @@ export function ModelCredentialsSection() {
                 pollOAuthMutation.mutate({
                   deviceCode: deviceCode.deviceCode,
                   providerName: selectedProvider?.name ?? "",
+                  label: label || undefined,
                 });
               }
             },
@@ -292,6 +232,7 @@ export function ModelCredentialsSection() {
                 pollOAuthMutation.mutate({
                   deviceCode: deviceCode.deviceCode,
                   providerName: selectedProvider?.name ?? "",
+                  label: label || undefined,
                 });
               }
             },
@@ -370,71 +311,6 @@ export function ModelCredentialsSection() {
     });
   };
 
-  const parseAndValidateAuthJson = (
-    input: string,
-  ): { refresh: string; access?: string; expires?: number } | null => {
-    try {
-      const parsed = JSON.parse(input) as AuthJson;
-
-      // Look for openai key (could be "openai" or the tokens directly)
-      let entry: AuthJsonEntry | undefined;
-
-      if (parsed.openai && parsed.openai.type === "oauth") {
-        entry = parsed.openai;
-      } else if ((parsed as unknown as AuthJsonEntry).type === "oauth") {
-        // User might have pasted just the openai object
-        entry = parsed as unknown as AuthJsonEntry;
-      }
-
-      if (!entry) {
-        setAuthJsonError(
-          "Could not find OpenAI OAuth tokens. Make sure you copy the auth.json content from ~/.local/share/opencode/auth.json",
-        );
-        return null;
-      }
-
-      if (!entry.refresh) {
-        setAuthJsonError("Missing refresh token in auth.json");
-        return null;
-      }
-
-      setAuthJsonError(null);
-      return {
-        refresh: entry.refresh,
-        access: entry.access,
-        expires: entry.expires,
-      };
-    } catch {
-      setAuthJsonError("Invalid JSON format. Please paste the contents of your auth.json file.");
-      return null;
-    }
-  };
-
-  const handleSubmitAuthJson = () => {
-    if (!authJsonInput.trim()) {
-      toast.error("Please paste your auth.json content");
-      return;
-    }
-
-    if (!selectedProvider) {
-      toast.error("Please select a provider");
-      return;
-    }
-
-    const tokens = parseAndValidateAuthJson(authJsonInput);
-    if (!tokens) {
-      return;
-    }
-
-    storeOAuthTokensMutation.mutate({
-      providerName: selectedProvider.name,
-      refreshToken: tokens.refresh,
-      accessToken: tokens.access,
-      expiresAt: tokens.expires,
-      label: label || undefined,
-    });
-  };
-
   const handleStartOAuth = () => {
     if (!selectedProvider) {
       toast.error("Please select a provider");
@@ -455,6 +331,7 @@ export function ModelCredentialsSection() {
     pollOAuthMutation.mutate({
       deviceCode: deviceCode.deviceCode,
       providerName: selectedProvider.name,
+      label: label || undefined,
     });
   };
 
@@ -478,7 +355,6 @@ export function ModelCredentialsSection() {
 
   const isSubmitting =
     storeApiKeyMutation.isPending ||
-    storeOAuthTokensMutation.isPending ||
     initiateOAuthMutation.isPending ||
     completeOAuthMutation.isPending;
 
@@ -490,13 +366,13 @@ export function ModelCredentialsSection() {
           Add credential
         </Button>
       </DialogTrigger>
-      <DialogContent className="gap-0 p-0 sm:max-w-[600px] max-h-[90vh] overflow-hidden">
-        <DialogHeader className="space-y-0 border-b border-white/[0.06] bg-white/[0.015] px-5 py-4">
+      <DialogContent className="grid h-[min(700px,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-border bg-surface-2 p-0 sm:max-w-[760px]">
+        <DialogHeader className="space-y-0 border-b border-white/[0.07] px-6 py-5 sm:px-7">
           <span className="block font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
             New / Credential
           </span>
-          <div className="mt-2 flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04]">
+          <div className="mt-3 flex items-center gap-3.5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/[0.08]">
               {selectedProvider ? (
                 <Image
                   src={getProviderLogo(selectedProvider.name)}
@@ -510,14 +386,14 @@ export function ModelCredentialsSection() {
               )}
             </span>
             <div className="min-w-0">
-              <DialogTitle>
+              <DialogTitle className="text-xl font-medium tracking-[-0.025em]">
                 {selectedProvider
                   ? `Add ${selectedProvider.displayName} credential`
                   : "Add model credential"}
               </DialogTitle>
               <DialogDescription className="mt-0.5">
-                {selectedProvider?.authType === "oauth" && isCodexProvider
-                  ? "Paste your auth.json tokens from the OpenCode CLI."
+                {selectedProvider?.authType === "oauth" && isOAuthProvider
+                  ? "Connect securely with your ChatGPT account."
                   : selectedProvider?.authType === "oauth"
                     ? "Connect via GitHub device code flow."
                     : "Store an API key for automated agent runs."}
@@ -526,31 +402,33 @@ export function ModelCredentialsSection() {
           </div>
         </DialogHeader>
 
-        <div className="grid max-h-[calc(90vh-180px)] gap-5 overflow-y-auto px-5 py-5">
+        <div className="grid min-h-0 overflow-y-auto sm:grid-cols-[220px_minmax(0,1fr)] sm:overflow-hidden">
           {/* Provider Selection -- horizontal scrollable chips */}
-          <div className="grid gap-2.5">
+          <div className="border-b border-border bg-white/[0.015] p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
             <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
               Provider
             </Label>
-            <div className="flex flex-wrap gap-2">
-              {[...providers]
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
+              {[...visibleProviders]
                 .toSorted((a, b) => {
                   if (a.isRecommended && !b.isRecommended) return -1;
                   if (!a.isRecommended && b.isRecommended) return 1;
                   return a.displayName.localeCompare(b.displayName);
                 })
                 .map((provider) => {
-                  const isSelected = selectedProviderId === provider.id;
+                  const isSelected =
+                    selectedProviderId === provider.id ||
+                    (provider.name === "openai" && isOAuthProvider);
                   return (
                     <button
                       key={provider.id}
                       type="button"
                       onClick={() => setSelectedProviderId(provider.id)}
                       disabled={oauthStep !== "idle"}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                      className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium transition-all ${
                         isSelected
-                          ? "border-primary/60 bg-primary/15 text-foreground ring-1 ring-primary/25"
-                          : "border-white/[0.08] bg-white/[0.05] text-white/75 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                          ? "border-primary/35 bg-primary/[0.09] text-white shadow-[inset_3px_0_0_hsl(var(--primary))]"
+                          : "border-transparent text-white/50 hover:border-white/10 hover:bg-white/[0.035] hover:text-white/80"
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <Image
@@ -560,10 +438,13 @@ export function ModelCredentialsSection() {
                         height={16}
                         className="h-4 w-4"
                       />
-                      {provider.displayName}
+                      <span className="truncate">{provider.displayName}</span>
                       {provider.isRecommended && (
-                        <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                          Recommended
+                        <span
+                          className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                          title="Recommended"
+                        >
+                          <span className="sr-only">Recommended</span>
                         </span>
                       )}
                     </button>
@@ -572,167 +453,147 @@ export function ModelCredentialsSection() {
             </div>
           </div>
 
-          {/* Label (optional) */}
-          <div className="grid gap-2">
-            <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-              Label <span className="ml-1 normal-case text-white/30">(optional)</span>
-            </Label>
-            <Input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g., Work account, Personal"
-              disabled={oauthStep !== "idle"}
-            />
-          </div>
-
-          {/* API Key Input (for api_key providers) */}
-          {selectedProvider?.authType === "api_key" && (
-            <div className="grid gap-2">
-              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-                API key
-              </Label>
-              <Input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="font-mono"
-              />
-            </div>
-          )}
-
-          {/* Codex Auth - Paste auth.json */}
-          {selectedProvider?.authType === "oauth" && isCodexProvider && (
-            <div className="grid gap-3">
-              <div className="rounded-lg bg-input/40 px-3.5 py-2.5">
-                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-white/55">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
-                    How to
-                  </span>
-                  Run
-                  <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-white/85">
-                    opencode auth login
-                  </code>
-                  then copy
-                  <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-white/85">
-                    ~/.local/share/opencode/auth.json
-                  </code>
-                  below.
-                </p>
-              </div>
-
+          <div className="grid content-start gap-5 p-5 sm:overflow-y-auto sm:p-6">
+            {(selectedProvider?.name === "openai" || isOAuthProvider) && (
               <div className="grid gap-2">
                 <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-                  auth.json
+                  Authentication
                 </Label>
-                <div className="overflow-hidden rounded-lg border border-white/[0.08]">
-                  <CodeMirror
-                    value={authJsonInput}
-                    height="120px"
-                    extensions={[json()]}
-                    onChange={(value) => {
-                      setAuthJsonInput(value);
-                    }}
-                    theme={theme as "light" | "dark"}
-                    placeholder='{ "openai": { "type": "oauth", "refresh": "..." } }'
-                    basicSetup={{
-                      lineNumbers: true,
-                      foldGutter: false,
-                    }}
-                    className="text-sm"
-                  />
-                </div>
-                {authJsonError ? (
-                  <div className="flex items-center gap-1.5 text-xs text-red-500">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    {authJsonError}
-                  </div>
-                ) : authJsonInput.trim() ? (
-                  <div className="flex items-center gap-1.5 text-xs text-green-500">
-                    <Check className="h-3.5 w-3.5" />
-                    Valid tokens found
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          )}
-
-          {/* GitHub Copilot OAuth Flow (Device Code) */}
-          {selectedProvider?.authType === "oauth" && !isCodexProvider && (
-            <div className="grid gap-4">
-              {oauthStep === "idle" && (
-                <div className="flex flex-col items-center gap-4 rounded-xl border border-white/[0.08] bg-input/40 p-8">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                    <ExternalLink className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-medium">Connect with GitHub</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Authorize Copilot access via device code flow.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleStartOAuth}
-                    disabled={initiateOAuthMutation.isPending}
-                    className="gap-2"
+                <div className="grid grid-cols-2 rounded-xl border border-border bg-input/40 p-1">
+                  <button
+                    type="button"
+                    onClick={() => openAIProvider && setSelectedProviderId(openAIProvider.id)}
+                    className={`rounded-lg px-3 py-2.5 text-sm transition-colors ${!isOAuthProvider ? "bg-white/[0.09] text-white shadow-sm" : "text-white/45 hover:text-white/75"}`}
                   >
-                    {initiateOAuthMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Starting...
-                      </>
-                    ) : (
-                      "Start Authorization"
-                    )}
-                  </Button>
+                    API key
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openAIOAuthProvider && setSelectedProviderId(openAIOAuthProvider.id)
+                    }
+                    className={`rounded-lg px-3 py-2.5 text-sm transition-colors ${isOAuthProvider ? "bg-white/[0.09] text-white shadow-sm" : "text-white/45 hover:text-white/75"}`}
+                  >
+                    OAuth
+                  </button>
                 </div>
-              )}
+                <p className="text-[11px] leading-relaxed text-white/35">
+                  {isOAuthProvider
+                    ? "Uses your ChatGPT subscription. Tokens are encrypted and refreshed automatically."
+                    : "Uses usage billed through your OpenAI API account."}
+                </p>
+              </div>
+            )}
+            {/* Label (optional) */}
+            <div className="grid gap-2">
+              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                Label <span className="ml-1 normal-case text-white/30">(optional)</span>
+              </Label>
+              <Input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g., Work account, Personal"
+                disabled={oauthStep !== "idle"}
+              />
+            </div>
 
-              {oauthStep === "pending" && deviceCode && (
-                <div className="flex flex-col items-center gap-5 rounded-xl border border-white/[0.08] bg-input/40 p-8">
-                  <p className="text-sm text-muted-foreground">
-                    Open the link and enter this code:
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="rounded-lg bg-muted px-5 py-3 text-2xl font-mono font-bold tracking-[0.2em]">
-                      {deviceCode.userCode}
-                    </code>
+            {/* API Key Input (for api_key providers) */}
+            {selectedProvider?.authType === "api_key" && (
+              <div className="grid gap-2">
+                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                  API key
+                </Label>
+                <Input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  className="font-mono"
+                />
+              </div>
+            )}
+
+            {/* GitHub Copilot OAuth Flow (Device Code) */}
+            {selectedProvider?.authType === "oauth" && (
+              <div className="grid gap-4">
+                {oauthStep === "idle" && (
+                  <div className="flex flex-col items-center gap-4 rounded-xl border border-white/[0.08] bg-input/40 p-8">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                      <ExternalLink className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium">
+                        {isOAuthProvider ? "Connect your ChatGPT account" : "Connect with GitHub"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {isOAuthProvider
+                          ? "Authorize OpenAI access with a one-time device code."
+                          : "Authorize Copilot access via device code flow."}
+                      </p>
+                    </div>
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleCopyCode}
-                      className="h-8 w-8"
+                      onClick={handleStartOAuth}
+                      disabled={initiateOAuthMutation.isPending}
+                      className="gap-2"
                     >
-                      <Copy className="h-3.5 w-3.5" />
+                      {initiateOAuthMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Starting...
+                        </>
+                      ) : (
+                        "Start Authorization"
+                      )}
                     </Button>
                   </div>
-                  <a
-                    href={deviceCode.verificationUri}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-                  >
-                    {deviceCode.verificationUri}
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                  <Button onClick={handleStartPolling} className="gap-2">
-                    <Check className="h-4 w-4" />
-                    I&apos;ve entered the code
-                  </Button>
-                </div>
-              )}
+                )}
 
-              {oauthStep === "polling" && (
-                <div className="flex flex-col items-center gap-4 rounded-xl border border-white/[0.08] bg-input/40 p-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <p className="text-sm text-muted-foreground">Waiting for authorization...</p>
-                </div>
-              )}
-            </div>
-          )}
+                {oauthStep === "pending" && deviceCode && (
+                  <div className="flex flex-col items-center gap-5 rounded-xl border border-white/[0.08] bg-input/40 p-8">
+                    <p className="text-sm text-muted-foreground">
+                      Open the link and enter this code:
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="rounded-lg bg-muted px-5 py-3 text-2xl font-mono font-bold tracking-[0.2em]">
+                        {deviceCode.userCode}
+                      </code>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleCopyCode}
+                        className="h-8 w-8"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <a
+                      href={deviceCode.verificationUri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                    >
+                      {deviceCode.verificationUri}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                    <Button onClick={handleStartPolling} className="gap-2">
+                      <Check className="h-4 w-4" />
+                      I&apos;ve entered the code
+                    </Button>
+                  </div>
+                )}
+
+                {oauthStep === "polling" && (
+                  <div className="flex flex-col items-center gap-4 rounded-xl border border-white/[0.08] bg-input/40 p-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground">Waiting for authorization...</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <DialogFooter className="border-t border-white/[0.06] bg-white/[0.015] px-5 py-3.5">
+        <DialogFooter className="border-t border-border bg-white/[0.015] px-6 py-4">
           <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
             Cancel
           </Button>
@@ -749,22 +610,6 @@ export function ModelCredentialsSection() {
                 </>
               ) : (
                 "Save key"
-              )}
-            </Button>
-          )}
-          {selectedProvider?.authType === "oauth" && isCodexProvider && (
-            <Button
-              onClick={handleSubmitAuthJson}
-              disabled={isSubmitting || !authJsonInput.trim() || !!authJsonError}
-              className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
-            >
-              {storeOAuthTokensMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save tokens"
               )}
             </Button>
           )}

@@ -42,40 +42,39 @@ import {
 import CodeMirror from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { useTheme } from "next-themes";
-
-const ICON_MAP: Record<string, string> = {
-  opencode: "/opencode.svg",
-  shuvcode: "/shuvcode.svg",
-  claude: "/code.svg",
-};
-
-const getIcon = (name: string) => {
-  const key = name.toLowerCase();
-  for (const [k, v] of Object.entries(ICON_MAP)) {
-    if (key.includes(k)) return v;
-  }
-  return "/opencode.svg";
-};
-
-const EXAMPLE_CONFIG = `{
-  "$schema": "https://opencode.ai/config.json",
-  "theme": "opencode",
-  "model": "opencode/big-pickle",
-  "autoupdate": true
-}`;
+import { AGENT_CONFIG_KIND_META, AGENT_CONFIG_KINDS, type AgentConfigKind } from "@gitterm/schema";
 
 type ConfigFormData = {
   id?: string;
   name: string;
-  agentTypeId: string;
+  kind: AgentConfigKind;
   configJson: string;
 };
 
 const initialFormState: ConfigFormData = {
   name: "",
-  agentTypeId: "",
+  kind: "opencode",
   configJson: "",
 };
+
+function kindLabel(kind: string | null | undefined): string {
+  if (!kind) return "Agent";
+  return AGENT_CONFIG_KIND_META[kind as AgentConfigKind]?.label ?? kind;
+}
+
+function kindIcon(kind: string | null | undefined): string {
+  if (!kind) return "/opencode.svg";
+  return AGENT_CONFIG_KIND_META[kind as AgentConfigKind]?.icon ?? "/opencode.svg";
+}
+
+function kindAppliesTo(kind: string | null | undefined): string {
+  if (!kind) return "";
+  const meta = AGENT_CONFIG_KIND_META[kind as AgentConfigKind];
+  if (!meta) return "";
+  return meta.appliesTo
+    .map((p) => (p === "opencode" ? "OpenCode" : p === "t3code" ? "T3Code" : p))
+    .join(", ");
+}
 
 export function AgentConfigSection() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -86,33 +85,23 @@ export function AgentConfigSection() {
   const [isEditing, setIsEditing] = useState(false);
 
   const { theme } = useTheme();
-  const { data: agentTypesData } = useQuery(trpc.workspace.listAgentTypes.queryOptions());
 
   const { data: configurationsData, isLoading: isLoadingConfigs } = useQuery(
     trpc.user.listAgentConfigurations.queryOptions(),
   );
 
-  // Set default agent type when data loads
-  useEffect(() => {
-    if (!formData.agentTypeId && agentTypesData?.agentTypes?.[0]) {
-      setFormData((prev) => ({
-        ...prev,
-        agentTypeId: agentTypesData.agentTypes[0].id,
-      }));
-    }
-  }, [agentTypesData, formData.agentTypeId]);
-
   // Reset form when dialog closes
   useEffect(() => {
     if (!dialogOpen) {
-      setFormData((prev) => ({
-        ...initialFormState,
-        agentTypeId: prev.agentTypeId || agentTypesData?.agentTypes?.[0]?.id || "",
-      }));
-      setJsonError(null);
-      setIsEditing(false);
+      const resetTimer = window.setTimeout(() => {
+        setFormData(initialFormState);
+        setJsonError(null);
+        setIsEditing(false);
+      }, 250);
+
+      return () => window.clearTimeout(resetTimer);
     }
-  }, [dialogOpen, agentTypesData]);
+  }, [dialogOpen]);
 
   // Validate JSON as user types
   useEffect(() => {
@@ -174,14 +163,11 @@ export function AgentConfigSection() {
     }),
   );
 
+  const selectedMeta = AGENT_CONFIG_KIND_META[formData.kind];
+
   const handleSubmit = () => {
     if (!formData.name.trim()) {
       toast.error("Please enter a configuration name");
-      return;
-    }
-
-    if (!formData.agentTypeId) {
-      toast.error("Please select an agent type");
       return;
     }
 
@@ -202,7 +188,7 @@ export function AgentConfigSection() {
       } else {
         addConfig({
           name: formData.name,
-          agentTypeId: formData.agentTypeId,
+          kind: formData.kind,
           config: parsedConfig,
         });
       }
@@ -214,13 +200,13 @@ export function AgentConfigSection() {
   const handleEdit = (config: {
     id: string;
     name: string;
-    agentTypeId: string;
+    kind: AgentConfigKind;
     config: unknown;
   }) => {
     setFormData({
       id: config.id,
       name: config.name,
-      agentTypeId: config.agentTypeId,
+      kind: config.kind,
       configJson: JSON.stringify(config.config, null, 2),
     });
     setIsEditing(true);
@@ -239,11 +225,11 @@ export function AgentConfigSection() {
   };
 
   const handleLoadExample = () => {
-    setFormData((prev) => ({ ...prev, configJson: EXAMPLE_CONFIG }));
+    setFormData((prev) => ({
+      ...prev,
+      configJson: JSON.stringify(AGENT_CONFIG_KIND_META[prev.kind].example, null, 2),
+    }));
   };
-
-  const selectedAgentName =
-    agentTypesData?.agentTypes?.find((a) => a.id === formData.agentTypeId)?.name || "Agent";
 
   const isPending = isAdding || isUpdating;
   const configurations = configurationsData?.configurations || [];
@@ -256,49 +242,77 @@ export function AgentConfigSection() {
           Add configuration
         </Button>
       </DialogTrigger>
-      <DialogContent className="gap-0 p-0 sm:max-w-[600px] max-h-[90vh] overflow-hidden">
-        <DialogHeader className="space-y-0 border-b border-white/[0.06] bg-white/[0.015] px-5 py-4">
+      <DialogContent className="grid h-[min(700px,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-border bg-surface-2 p-0 sm:max-w-[760px]">
+        <DialogHeader className="space-y-0 border-b border-white/[0.07] px-6 py-5 sm:px-7">
           <span className="block font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
             {isEditing ? "Edit / Configuration" : "New / Configuration"}
           </span>
-          <div className="mt-2 flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04]">
+          <div className="mt-3 flex items-center gap-3.5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/[0.08]">
               <Image
-                src={getIcon(selectedAgentName)}
-                alt={selectedAgentName}
+                src={selectedMeta.icon}
+                alt={selectedMeta.label}
                 width={18}
                 height={18}
                 className="h-[18px] w-[18px]"
               />
             </span>
             <div className="min-w-0">
-              <DialogTitle>
+              <DialogTitle className="text-xl font-medium tracking-[-0.025em]">
                 {isEditing ? "Edit configuration" : "New agent configuration"}
               </DialogTitle>
               <DialogDescription className="mt-0.5">
                 {isEditing
-                  ? `Update the ${selectedAgentName} configuration.`
-                  : "Saved opencode.json presets, applied when creating workspaces."}
+                  ? `Update the ${selectedMeta.label} configuration.`
+                  : selectedMeta.description}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="grid max-h-[calc(90vh-180px)] gap-5 overflow-y-auto px-5 py-5">
-          {/* Test locally hint -- compact, inline */}
-          {!isEditing && (
-            <p className="flex items-center gap-2 rounded-lg bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-400/85">
-              <Terminal className="h-3.5 w-3.5 shrink-0" />
-              Test your config locally with{" "}
-              <code className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[11px] font-mono text-white/85">
-                opencode.json
-              </code>{" "}
-              before adding it here.
-            </p>
-          )}
+        <div className="grid min-h-0 overflow-y-auto sm:grid-cols-[220px_minmax(0,1fr)] sm:overflow-hidden">
+          <aside className="border-b border-border bg-white/[0.015] p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
+            <Label className="mb-3 block font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+              Runtime
+            </Label>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
+              {AGENT_CONFIG_KINDS.map((kind) => {
+                const meta = AGENT_CONFIG_KIND_META[kind];
+                const isSelected = formData.kind === kind;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        kind,
+                        configJson: prev.kind === kind ? prev.configJson : "",
+                      }))
+                    }
+                    disabled={isEditing}
+                    className={`group flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-primary/35 bg-primary/[0.09] text-white shadow-[inset_3px_0_0_hsl(var(--primary))]" : "border-transparent text-white/50 hover:border-white/10 hover:bg-white/[0.035] hover:text-white/80"} disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    <Image
+                      src={meta.icon}
+                      alt=""
+                      width={18}
+                      height={18}
+                      className="h-[18px] w-[18px] shrink-0"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{meta.label}</span>
+                      <span className="mt-0.5 hidden truncate text-[10px] text-white/30 sm:block">
+                        {kindAppliesTo(kind)}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
 
-          {/* Name + Agent type -- side by side */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid content-start gap-5 p-5 sm:overflow-y-auto sm:p-6">
             <div className="grid gap-2">
               <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
                 Name
@@ -310,102 +324,80 @@ export function AgentConfigSection() {
               />
             </div>
 
+            {!isEditing && (
+              <div className="flex items-start gap-2.5 border-l border-amber-400/35 pl-3 text-[11px] leading-relaxed text-white/40">
+                <Terminal className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400/70" />
+                <span>
+                  Validate locally at{" "}
+                  <code className="font-mono text-white/70">{selectedMeta.testHint}</code> before
+                  saving.
+                </span>
+              </div>
+            )}
+
             <div className="grid gap-2">
-              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-                Agent type
-                {isEditing && <span className="ml-1 normal-case text-white/30">(locked)</span>}
-              </Label>
-              <div className="flex flex-wrap gap-2">
-                {agentTypesData?.agentTypes?.map((agent) => {
-                  const isSelected = formData.agentTypeId === agent.id;
-                  return (
-                    <button
-                      key={agent.id}
-                      type="button"
-                      onClick={() => setFormData((prev) => ({ ...prev, agentTypeId: agent.id }))}
-                      disabled={isEditing}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
-                        isSelected
-                          ? "border-primary/60 bg-primary/15 text-foreground ring-1 ring-primary/25"
-                          : "border-white/[0.08] bg-white/[0.05] text-white/75 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+              <div className="flex items-center justify-between">
+                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                  Configuration{" "}
+                  {selectedMeta.docsUrl && (
+                    <a
+                      href={selectedMeta.docsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-1 normal-case text-primary/70 hover:text-primary hover:underline"
                     >
-                      <Image
-                        src={getIcon(agent.name)}
-                        alt={agent.name}
-                        width={16}
-                        height={16}
-                        className="h-4 w-4"
-                      />
-                      {agent.name}
-                    </button>
-                  );
-                })}
+                      docs
+                    </a>
+                  )}
+                </Label>
+                {!formData.configJson.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleLoadExample}
+                    className="text-xs text-white/40 transition-colors hover:text-white/70"
+                  >
+                    Load example
+                  </button>
+                )}
               </div>
-            </div>
-          </div>
 
-          {/* JSON Configuration Input */}
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-                Configuration{" "}
-                <a
-                  href="https://opencode.ai/docs/config/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-1 normal-case text-primary/70 hover:text-primary hover:underline"
-                >
-                  docs
-                </a>
-              </Label>
-              {!formData.configJson.trim() && (
-                <button
-                  type="button"
-                  onClick={handleLoadExample}
-                  className="text-xs text-white/40 transition-colors hover:text-white/70"
-                >
-                  Load example
-                </button>
-              )}
-            </div>
-
-            <div className="overflow-hidden rounded-lg border border-white/[0.08]">
-              <CodeMirror
-                value={formData.configJson}
-                height="220px"
-                extensions={[json()]}
-                onChange={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    configJson: value,
-                  }))
-                }
-                theme={theme as "light" | "dark"}
-                placeholder={EXAMPLE_CONFIG}
-                basicSetup={{
-                  lineNumbers: true,
-                  foldGutter: false,
-                }}
-                className="text-sm"
-              />
-            </div>
-
-            {jsonError ? (
-              <div className="flex items-center gap-1.5 text-xs text-red-500">
-                <AlertCircle className="h-3.5 w-3.5" />
-                {jsonError}
+              <div className="overflow-hidden rounded-xl border border-border bg-input/40">
+                <CodeMirror
+                  value={formData.configJson}
+                  height="260px"
+                  extensions={[json()]}
+                  onChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      configJson: value,
+                    }))
+                  }
+                  theme={theme as "light" | "dark"}
+                  placeholder={JSON.stringify(selectedMeta.example, null, 2)}
+                  basicSetup={{
+                    lineNumbers: true,
+                    foldGutter: false,
+                  }}
+                  className="text-sm"
+                />
               </div>
-            ) : formData.configJson.trim() ? (
-              <div className="flex items-center gap-1.5 text-xs text-green-500">
-                <Check className="h-3.5 w-3.5" />
-                Valid JSON
-              </div>
-            ) : null}
+
+              {jsonError ? (
+                <div className="flex items-center gap-1.5 text-xs text-red-500">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {jsonError}
+                </div>
+              ) : formData.configJson.trim() ? (
+                <div className="flex items-center gap-1.5 text-xs text-green-500">
+                  <Check className="h-3.5 w-3.5" />
+                  Valid JSON
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
-        <DialogFooter className="border-t border-white/[0.06] bg-white/[0.015] px-5 py-3.5">
+        <DialogFooter className="border-t border-border bg-white/[0.015] px-6 py-4">
           <Button variant="outline" onClick={() => setDialogOpen(false)}>
             Cancel
           </Button>
@@ -438,7 +430,7 @@ export function AgentConfigSection() {
         eyebrow="03 / Agents"
         icon={Settings}
         title="Agent configurations"
-        description="Save named opencode.json presets and apply them when creating new workspaces."
+        description="Save OpenCode, Claude Code, and Codex configs. Each is applied to the related workspaces on create."
         action={addConfigDialog}
       >
         <SettingsSectionBody>
@@ -452,7 +444,7 @@ export function AgentConfigSection() {
               <Code2 className="mb-3 h-8 w-8 text-white/25" />
               <p className="text-sm text-white/65">No configurations yet</p>
               <p className="mt-1 text-[12px] text-white/35">
-                Save your first opencode.json preset to reuse it across workspaces.
+                Save OpenCode, Claude Code, or Codex configs to reuse across workspaces.
               </p>
             </div>
           ) : (
@@ -465,8 +457,8 @@ export function AgentConfigSection() {
                   <div className="flex items-center gap-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                       <Image
-                        src={getIcon(config.agentTypeName || "") || "/opencode.svg"}
-                        alt={config.agentTypeName || "Agent"}
+                        src={kindIcon(config.kind)}
+                        alt={kindLabel(config.kind)}
                         width={20}
                         height={20}
                       />
@@ -475,10 +467,11 @@ export function AgentConfigSection() {
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{config.name}</p>
                         <Badge variant="secondary" className="text-xs">
-                          {config.agentTypeName}
+                          {kindLabel(config.kind)}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
+                        {kindAppliesTo(config.kind) ? `→ ${kindAppliesTo(config.kind)} · ` : ""}
                         Updated{" "}
                         {new Date(config.updatedAt).toLocaleDateString(undefined, {
                           month: "short",
@@ -500,7 +493,7 @@ export function AgentConfigSection() {
                           handleEdit({
                             id: config.id,
                             name: config.name,
-                            agentTypeId: config.agentTypeId,
+                            kind: config.kind as AgentConfigKind,
                             config: config.config,
                           })
                         }
@@ -524,7 +517,6 @@ export function AgentConfigSection() {
         </SettingsSectionBody>
       </SettingsSection>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>

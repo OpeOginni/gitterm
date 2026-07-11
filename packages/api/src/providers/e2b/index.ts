@@ -31,7 +31,8 @@ export type { E2BConfig } from "./types";
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
 const WORKSPACE_DIR = "/home/user/workspace";
-const OPENCODE_PORT = 4096;
+/** Used when the spec carries no agent serve port (legacy OpenCode default). */
+const DEFAULT_AGENT_PORT = 4096;
 const SSH_BRIDGE_PORT = 8081;
 const SSH_USER = "user";
 const SSH_REQUIRED_BINARIES = ["websocat"] as const;
@@ -148,6 +149,15 @@ export class E2BProvider implements ComputeProvider {
     });
   }
 
+  async execCommand(
+    externalId: string,
+    command: string,
+  ): Promise<{ exitCode: number; stdout: string }> {
+    const sandbox = await this.connectSandbox(externalId);
+    const result = await sandbox.commands.run(command);
+    return { exitCode: result.exitCode, stdout: result.stdout };
+  }
+
   private async runCommand(
     sandbox: E2BSandbox,
     command: string,
@@ -196,25 +206,19 @@ export class E2BProvider implements ComputeProvider {
     }
   }
 
-  private async writeOpencodeFiles(
+  private async writeAgentFiles(
     sandbox: E2BSandbox,
     spec: WorkspaceProvisioningSpec | null,
   ): Promise<void> {
-    if (spec?.opencodeConfigJson) {
-      await this.runCommand(sandbox, "mkdir -p ~/.config/opencode", "mkdir config dir");
+    for (const file of spec?.agent.files ?? []) {
+      const dir = file.path.substring(0, file.path.lastIndexOf("/"));
+      if (dir) {
+        await this.runCommand(sandbox, `mkdir -p ${dir}`, `mkdir dir for ${file.path}`);
+      }
       await this.runCommand(
         sandbox,
-        `echo "${this.toBase64(spec.opencodeConfigJson)}" | base64 -d > ~/.config/opencode/opencode.json`,
-        "write opencode config",
-      );
-    }
-
-    if (spec?.opencodeCredentialsJson) {
-      await this.runCommand(sandbox, "mkdir -p ~/.local/share/opencode", "mkdir auth dir");
-      await this.runCommand(
-        sandbox,
-        `echo "${this.toBase64(spec.opencodeCredentialsJson)}" | base64 -d > ~/.local/share/opencode/auth.json`,
-        "write opencode auth",
+        `echo "${file.contentBase64}" | base64 -d > ${file.path}`,
+        `write agent file ${file.path}`,
       );
     }
   }
@@ -293,21 +297,59 @@ export class E2BProvider implements ComputeProvider {
     return token;
   }
 
-  private async startOpencodeServer(sandbox: E2BSandbox, repoDir: string): Promise<void> {
+  private async startAgentServer(
+    sandbox: E2BSandbox,
+    spec: WorkspaceProvisioningSpec | null,
+    repoDir: string,
+  ): Promise<void> {
+    const serve = spec?.agent.serve;
+    if (!serve) {
+      return;
+    }
+
     await sandbox.commands
-      .run(
-        `cd ${repoDir} && opencode serve --hostname 0.0.0.0 --port ${OPENCODE_PORT} > /tmp/opencode.log 2>&1`,
-        {
-          background: true,
-          onStdout: (data) => console.log(data),
-          onStderr: (data) => console.error(data),
-        },
-      )
+      .run(`cd ${repoDir} && ${serve.command} > /tmp/agent-server.log 2>&1`, {
+        background: true,
+        onStdout: (data) => console.log(data),
+        onStderr: (data) => console.error(data),
+      })
       .catch(async (error) => {
         await sandbox.kill().catch(() => undefined);
-        console.error("E2B Sandbox Error (start opencode serve)", error);
+        console.error("E2B Sandbox Error (start agent server)", error);
         throw error;
       });
+  }
+
+  /**
+   * Run the agent's access-credential command (e.g. `t3 auth pairing create`)
+   * once the server is up, retrying while it boots. Non-fatal on failure: the
+   * workspace still works, the dashboard just can't show a pairing link.
+   */
+  private async captureAccessCredential(
+    sandbox: E2BSandbox,
+    spec: WorkspaceProvisioningSpec | null,
+    repoDir: string,
+  ): Promise<string | undefined> {
+    const command = spec?.agent.serve?.accessCredentialCommand;
+    if (!command) {
+      return undefined;
+    }
+
+    for (let attempt = 0; attempt < 15; attempt += 1) {
+      try {
+        const result = await sandbox.commands.run(`cd ${repoDir} && ${command}`);
+        const credential = result.stdout.trim();
+        if (result.exitCode === 0 && credential) {
+          return credential;
+        }
+      } catch {
+        // Server may still be starting; retry.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+
+    console.error("E2B Sandbox Error (capture access credential): command never succeeded");
+    return undefined;
   }
 
   private async provisionWorkspace(
@@ -325,20 +367,21 @@ export class E2BProvider implements ComputeProvider {
     await provisionLogger.step("clone-repository", () =>
       this.cloneRepository(sandbox, spec, repoDir),
     );
-    await provisionLogger.step("write-opencode-files", () =>
-      this.writeOpencodeFiles(sandbox, spec),
-    );
+    await provisionLogger.step("write-agent-files", () => this.writeAgentFiles(sandbox, spec));
     await provisionLogger.step("configure-ssh-runtime", () =>
       this.configureSshRuntime(sandbox, spec),
     );
-    await provisionLogger.step("start-opencode-server", () =>
-      this.startOpencodeServer(sandbox, repoDir),
+    await provisionLogger.step("start-agent-server", () =>
+      this.startAgentServer(sandbox, spec, repoDir),
+    );
+    const accessCredential = await provisionLogger.step("capture-access-credential", () =>
+      this.captureAccessCredential(sandbox, spec, repoDir),
     );
 
     const trafficAccessToken = await provisionLogger.step("resolve-traffic-access-token", () =>
       this.getTrafficAccessToken(sandbox, "workspace traffic"),
     );
-    const host = sandbox.getHost(OPENCODE_PORT);
+    const host = sandbox.getHost(spec?.agent.serve?.port ?? DEFAULT_AGENT_PORT);
     const startedAt = new Date(
       (await provisionLogger.step("fetch-sandbox-info", () => sandbox.getInfo())).startedAt,
     );
@@ -349,6 +392,7 @@ export class E2BProvider implements ComputeProvider {
       upstreamAccess: getTrafficAccessHeaders(trafficAccessToken),
       domain: this.getDomain(config.subdomain),
       serviceCreatedAt: startedAt,
+      accessCredential,
     };
 
     provisionLogger.log(

@@ -104,7 +104,7 @@ const deleteProviderAgentImageSchema = z.object({
   agentTypeId: z.uuid(),
 });
 
-const SEEDED_AGENT_NAMES = new Set(["OpenCode", "OpenCode Server"]);
+const SEEDED_AGENT_NAMES = new Set(["OpenCode (TTYD)", "OpenCode", "T3Code"]);
 const SEEDED_IMAGE_NAMES = new Set([
   "gitterm-opencode",
   "gitterm-opencode-server",

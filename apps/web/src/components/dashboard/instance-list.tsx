@@ -10,7 +10,6 @@ import {
   GitBranch,
   Clock,
   Globe,
-  Box,
   MapPin,
   Copy,
   Terminal,
@@ -51,7 +50,11 @@ import {
   getAttachCommand,
   getWorkspaceDisplayUrl,
   getWorkspaceOpenPortUrl,
+  getT3PairingUrl,
+  getT3DesktopPairingUrl,
+  isT3Agent,
 } from "@/lib/utils";
+import { getIcon } from "@/components/dashboard/create-instance/types";
 import Link from "next/link";
 import { ShareWorkspaceDialog } from "@/components/dashboard/share/share-workspace-dialog";
 
@@ -243,6 +246,20 @@ export function InstanceCard({
     }),
   );
 
+  const regenerateAccessCredentialMutation = useMutation(
+    trpc.workspace.regenerateAccessCredential.mutationOptions({
+      onSuccess: () => {
+        toast.success("New pairing link generated");
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspace.listWorkspaces.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(`Failed to generate pairing link: ${error.message}`);
+      },
+    }),
+  );
+
   const openWorkspacePortMutation = useMutation(
     trpc.workspace.openWorkspacePort.mutationOptions({
       onSuccess: () => {
@@ -359,6 +376,19 @@ export function InstanceCard({
   const workspaceDisplayUrl = workspace.subdomain
     ? getWorkspaceDisplayUrl(workspace.subdomain)
     : null;
+
+  // T3 workspaces authenticate with one-time pairing links instead of a
+  // server password; the stored credential is the current pairing token.
+  const isT3 = isT3Agent(workspace.image.agentType.name);
+  const agentIcon = getIcon(workspace.image.agentType.name);
+  const t3PairingUrl =
+    isT3 && workspace.subdomain && workspace.serverPassword
+      ? getT3PairingUrl(workspace.subdomain, workspace.serverPassword)
+      : null;
+  const t3DesktopPairingUrl =
+    isT3 && workspace.subdomain && workspace.serverPassword
+      ? getT3DesktopPairingUrl(workspace.subdomain, workspace.serverPassword)
+      : null;
 
   const portUrl = (port: number) =>
     workspace.subdomain ? getWorkspaceOpenPortUrl(workspace.subdomain, port) : null;
@@ -693,7 +723,13 @@ export function InstanceCard({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.04]">
-                  <Box className="h-5 w-5 text-primary" />
+                  <Image
+                    src={agentIcon}
+                    alt={workspace.image.agentType.name}
+                    width={20}
+                    height={20}
+                    className="h-5 w-5 object-contain"
+                  />
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-semibold text-white/90 truncate">
@@ -811,22 +847,43 @@ export function InstanceCard({
                 <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400/60" />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span className="text-xs font-mono text-white/40 tracking-widest select-none">
-                    {"*".repeat(16)}
+                    {isT3 ? "Pairing link" : "*".repeat(16)}
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      if (workspace.serverPassword) {
+                      if (isT3 && t3PairingUrl) {
+                        navigator.clipboard.writeText(t3PairingUrl);
+                        toast.success("Pairing link copied! It can be used once.");
+                      } else if (workspace.serverPassword) {
                         navigator.clipboard.writeText(workspace.serverPassword);
                         toast.success("Password copied to clipboard!");
                       }
                     }}
                     className="shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-400/70 bg-amber-400/[0.06] border border-amber-400/[0.1] hover:bg-amber-400/[0.12] hover:text-amber-400 transition-colors cursor-pointer"
-                    title="Copy server password"
+                    title={isT3 ? "Copy one-time pairing link" : "Copy server password"}
                   >
                     <Copy className="h-2.5 w-2.5" />
                     Copy
                   </button>
+                  {isT3 && !isShared && isRunning && (
+                    <button
+                      type="button"
+                      disabled={regenerateAccessCredentialMutation.isPending}
+                      onClick={() =>
+                        regenerateAccessCredentialMutation.mutate({ workspaceId: workspace.id })
+                      }
+                      className="shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-400/70 bg-amber-400/[0.06] border border-amber-400/[0.1] hover:bg-amber-400/[0.12] hover:text-amber-400 transition-colors cursor-pointer disabled:opacity-60"
+                      title="Pairing links are one-time; generate a new one for another device"
+                    >
+                      {regenerateAccessCredentialMutation.isPending ? (
+                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                      ) : (
+                        <Plus className="h-2.5 w-2.5" />
+                      )}
+                      New link
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -914,24 +971,50 @@ export function InstanceCard({
             workspaceUrl &&
             (workspace.serverOnly ? (
               <div className="flex gap-2 flex-1">
-                <Button
-                  size="sm"
-                  className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
-                  onClick={() => {
-                    if (workspace.subdomain) {
-                      const command = getAttachCommand(
-                        workspace.subdomain,
-                        workspace.image.agentType.name,
-                        workspace.serverPassword,
-                      );
-                      navigator.clipboard.writeText(command);
-                      toast.success("Attach command copied to clipboard!");
+                {isT3 ? (
+                  <Button
+                    size="sm"
+                    className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
+                    disabled={!t3DesktopPairingUrl}
+                    title={
+                      t3DesktopPairingUrl
+                        ? "Open in the T3 Code desktop app (one-time pairing link)"
+                        : "Waiting for the workspace to issue a pairing token..."
                     }
-                  }}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  Copy Attach
-                </Button>
+                    asChild={!!t3DesktopPairingUrl}
+                  >
+                    {t3DesktopPairingUrl ? (
+                      <a href={t3DesktopPairingUrl}>
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Open in T3
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Pairing...
+                      </span>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
+                    onClick={() => {
+                      if (workspace.subdomain) {
+                        const command = getAttachCommand(
+                          workspace.subdomain,
+                          workspace.image.agentType.name,
+                          workspace.serverPassword,
+                        );
+                        navigator.clipboard.writeText(command);
+                        toast.success("Attach command copied to clipboard!");
+                      }
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy Attach
+                  </Button>
+                )}
                 {!isShared && workspace.editorAccessEnabled && (
                   <Button
                     size="sm"
@@ -942,16 +1025,42 @@ export function InstanceCard({
                     Editor
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  className="h-9 text-xs gap-2 border-border/50"
-                  variant="outline"
-                  asChild
-                >
-                  <a href={workspaceUrl} target="_blank" rel="noreferrer">
-                    <Monitor className="h-3.5 w-3.5" />
-                  </a>
-                </Button>
+                {isT3 ? (
+                  <Button
+                    size="sm"
+                    className="h-9 text-xs gap-2 border-border/50"
+                    variant="outline"
+                    disabled={!t3PairingUrl}
+                    title={
+                      t3PairingUrl
+                        ? "Open in the T3 web app (browser)"
+                        : "Waiting for the workspace to issue a pairing token..."
+                    }
+                    asChild={!!t3PairingUrl}
+                  >
+                    {t3PairingUrl ? (
+                      <a href={t3PairingUrl} target="_blank" rel="noreferrer">
+                        <Monitor className="h-3.5 w-3.5" />
+                      </a>
+                    ) : (
+                      <span>
+                        <Monitor className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="h-9 text-xs gap-2 border-border/50"
+                    variant="outline"
+                    title="Open workspace in browser"
+                    asChild
+                  >
+                    <a href={workspaceUrl} target="_blank" rel="noreferrer">
+                      <Monitor className="h-3.5 w-3.5" />
+                    </a>
+                  </Button>
+                )}
               </div>
             ) : (
               <Button

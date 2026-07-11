@@ -187,6 +187,7 @@ export interface AgenticLoopConfig {
 }
 
 export const ICON_MAP: Record<string, string> = {
+  t3code: "/t3.svg",
   opencode: "/opencode.svg",
   shuvcode: "/opencode.svg",
   railway: "/railway.svg",
@@ -194,13 +195,15 @@ export const ICON_MAP: Record<string, string> = {
   e2b: "/E2B.svg",
   daytona: "/daytona.svg",
   aws: "/ECS.svg",
-  claude: "/code.svg",
+  claude: "/claude.svg",
   ralph: "/ralph-wiggum.svg",
 };
 
+const ICON_ENTRIES = Object.entries(ICON_MAP).sort((a, b) => b[0].length - a[0].length);
+
 export const getIcon = (name: string): string => {
   const key = name.toLowerCase();
-  for (const [k, v] of Object.entries(ICON_MAP)) {
+  for (const [k, v] of ICON_ENTRIES) {
     if (key.includes(k)) return v;
   }
   return "/opencode.svg";

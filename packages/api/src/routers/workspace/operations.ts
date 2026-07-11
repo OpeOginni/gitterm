@@ -7,6 +7,8 @@ import { TRPCError } from "@trpc/server";
 import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { logger } from "../../utils/logger";
+import { encryptWorkspacePassword } from "../../utils/workspace-password";
+import { updateWorkspaceByIdAndInvalidate } from "../../service/workspace-mutations";
 
 /**
  * Workspace operations router
@@ -20,6 +22,63 @@ import { logger } from "../../utils/logger";
  */
 
 export const workspaceOperationsRouter = router({
+  /**
+   * Report the agent's self-issued access credential (e.g. a T3 pairing
+   * token). Called from container entrypoints after the agent server boots;
+   * SDK providers capture the credential directly instead. Stored encrypted in
+   * the workspace's serverPassword slot and surfaced by the dashboard.
+   */
+  reportAccessCredential: workspaceAuthProcedure
+    .input(
+      z.object({
+        workspaceId: z.string(),
+        credential: z.string().min(1).max(4096),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { workspaceAuth } = ctx;
+
+      if (workspaceAuth.workspaceId !== input.workspaceId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Token workspace mismatch",
+        });
+      }
+
+      const [ws] = await db.select().from(workspace).where(eq(workspace.id, input.workspaceId));
+
+      if (!ws) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      if (ws.userId !== workspaceAuth.userId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Workspace ownership mismatch",
+        });
+      }
+
+      if (ws.status !== "running" && ws.status !== "pending") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Workspace is not active",
+        });
+      }
+
+      await updateWorkspaceByIdAndInvalidate(input.workspaceId, {
+        serverPassword: encryptWorkspacePassword(input.credential.trim()),
+      });
+
+      logger.info("workspace access credential reported", {
+        workspaceId: input.workspaceId,
+      });
+
+      return { success: true };
+    }),
+
   /**
    * Fork repository
    * Called from workspace terminal via git-fork.sh

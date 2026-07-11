@@ -29,9 +29,14 @@ export interface SystemWorkspaceEnv {
   REPO_BASE_COMMIT?: string;
   /** Optional checkout ref when distinct from display branch. */
   REPO_CHECKOUT_REF?: string;
-  OPENCODE_CONFIG_BASE64: string;
-  OPENCODE_CREDENTIALS_BASE64: string;
-  OPENCODE_SERVER_PASSWORD?: string;
+  /**
+   * Base64-encoded JSON `AgentFile[]`: every file the selected agent needs on
+   * disk before it starts. Entrypoints decode and write these generically,
+   * regardless of which coding agent the image runs. Agent-specific env vars
+   * (e.g. OPENCODE_SERVER_PASSWORD, ANTHROPIC_API_KEY) travel through
+   * `AgentProvisioning.env`, not as system keys.
+   */
+  AGENT_FILES_BASE64: string;
   USER_GITHUB_USERNAME?: string;
   GITHUB_APP_TOKEN?: string;
   GITHUB_APP_TOKEN_EXPIRY?: string;
@@ -59,9 +64,7 @@ export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "REPO_BRANCH",
   "REPO_BASE_COMMIT",
   "REPO_CHECKOUT_REF",
-  "OPENCODE_CONFIG_BASE64",
-  "OPENCODE_CREDENTIALS_BASE64",
-  "OPENCODE_SERVER_PASSWORD",
+  "AGENT_FILES_BASE64",
   "USER_GITHUB_USERNAME",
   "GITHUB_APP_TOKEN",
   "GITHUB_APP_TOKEN_EXPIRY",
@@ -114,25 +117,68 @@ export interface WorkspaceRepoProvisioning {
   authToken?: string;
 }
 
+/** A file an agent needs on disk before it starts. `~` expands to $HOME. */
+export interface AgentFile {
+  path: string;
+  contentBase64: string;
+}
+
+/**
+ * How SDK providers (E2B, Daytona) launch the agent's long-running process.
+ * Container providers ignore this — their launch command is the image CMD.
+ */
+export interface AgentServeSpec {
+  /** Command run from the repo directory, e.g. `opencode serve --hostname 0.0.0.0 --port 4096`. */
+  command: string;
+  /** Port the process listens on; providers preview/expose this port. */
+  port: number;
+  /**
+   * Optional command run after the server is up whose stdout (trimmed) is the
+   * workspace access credential (e.g. a T3 pairing token). Providers that can
+   * exec (E2B/Daytona) run it and return it on WorkspaceInfo; container images
+   * report it themselves via the workspace callback API.
+   */
+  accessCredentialCommand?: string;
+}
+
+/**
+ * Agent-agnostic provisioning payload produced by an agent provisioner
+ * (`packages/api/src/service/agents`). This is the ONLY place agent-specific
+ * knowledge (config formats, credential files, launch commands) is allowed to
+ * live — everything downstream treats it as opaque files + env + a command.
+ */
+export interface AgentProvisioning {
+  /** Files to write before the agent starts (configs, credential stores). */
+  files: AgentFile[];
+  /** Agent-specific env (e.g. ANTHROPIC_API_KEY). User env may override. */
+  env: Record<string, string>;
+  /** Launch instructions for SDK providers. */
+  serve?: AgentServeSpec;
+  /**
+   * True when the generated workspace server password actually gates access
+   * (OpenCode-style). Agents with their own auth (T3 pairing tokens) set false
+   * and supply the credential later via `accessCredentialCommand`/callback.
+   */
+  usesServerPassword: boolean;
+}
+
 /**
  * Paradigm-agnostic description of how to provision a workspace's filesystem:
- * what to clone and which opencode files to write.
+ * what to clone and which agent files to write.
  *
  * This is the single source of truth for provisioning. Container providers
  * (Railway, AWS) serialize it to env for their Docker entrypoint via
  * `buildWorkspaceEnv`; SDK providers (E2B, Daytona) apply it directly through
  * their native clone + file APIs via `resolveProvisioningSpec`. The duplicated
- * "decode base64 → write auth.json/opencode.json + clone" logic now lives in
- * exactly one place per consumer.
+ * "decode base64 → write agent files + clone" logic now lives in exactly one
+ * place per consumer.
  */
 export interface WorkspaceProvisioningSpec {
-  /** Stringified opencode.json contents. */
-  opencodeConfigJson: string;
-  /** Stringified auth.json contents. */
-  opencodeCredentialsJson: string;
+  /** Agent-specific files/env/launch, produced by the agent's provisioner. */
+  agent: AgentProvisioning;
   /** Repository to clone, when the workspace has one. */
   repo?: WorkspaceRepoProvisioning;
-  /** Password for serverOnly workspaces. */
+  /** Password for serverOnly workspaces (only meaningful when the agent uses it). */
   serverPassword?: string;
   /** Normalized OpenSSH public key for ssh-enabled workspaces. */
   sshPublicKey?: string;
@@ -180,6 +226,12 @@ export interface WorkspaceInfo {
   upstreamAccess?: UpstreamAccess;
   domain: string;
   serviceCreatedAt: Date;
+  /**
+   * Agent-issued access credential (e.g. a T3 pairing token) captured by the
+   * provider via `AgentServeSpec.accessCredentialCommand`. Stored encrypted on
+   * the workspace row in place of the generated server password.
+   */
+  accessCredential?: string;
 }
 
 export interface PersistentWorkspaceInfo extends WorkspaceInfo {
@@ -240,6 +292,12 @@ export interface ComputeProvider {
    * Refresh provider-side TTL for providers that automatically stop workspaces.
    */
   keepAliveWorkspace?(externalId: string, timeoutMs: number): Promise<void>;
+
+  /**
+   * Run a one-off command in a running workspace (SDK providers only). Used
+   * for agent maintenance actions like minting a fresh T3 pairing token.
+   */
+  execCommand?(externalId: string, command: string): Promise<{ exitCode: number; stdout: string }>;
 
   /**
    * Create or get a domain for an exposed port

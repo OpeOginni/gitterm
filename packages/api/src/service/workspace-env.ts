@@ -2,19 +2,20 @@
  * Workspace provisioning + environment assembly.
  *
  * The provisioning spec (`WorkspaceProvisioningSpec`) is the single source of
- * truth for what a workspace needs: which repo to clone and which opencode
- * files to write. From it we derive:
+ * truth for what a workspace needs: which repo to clone and which agent files
+ * to write. Agent-specific content (config formats, credential files, launch
+ * commands) is produced by the agent provisioners in `./agents`; from the spec
+ * we derive:
  *  - the env handed to container providers (Railway/AWS) for their Docker
  *    entrypoint, via `buildWorkspaceEnv`, and
  *  - SDK providers (E2B/Daytona) apply the spec directly (see
  *    `resolveProvisioningSpec` in `providers/provisioning-spec.ts`).
  */
 
-import { db, eq } from "@gitterm/db";
-import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-credentials";
-import { getModelCredentialsService } from "./credentials/model-credentials";
 import {
   RESERVED_WORKSPACE_ENV_KEYS,
+  type AgentFile,
+  type AgentProvisioning,
   type SystemWorkspaceEnv,
   type WorkspaceEnvironmentVariables,
   type WorkspaceProvisioningSpec,
@@ -25,69 +26,24 @@ function toBase64(json: string): string {
   return Buffer.from(json).toString("base64");
 }
 
-/**
- * Assemble the opencode `auth.json` JSON from a user's stored model credentials
- * (API keys and OAuth tokens). Returns the stringified JSON; callers base64-
- * encode it when serializing to env.
- */
-export async function buildOpencodeCredentialsJson(userId: string): Promise<string> {
-  const credService = getModelCredentialsService();
+/** Base64-encoded JSON manifest of the agent's files, for container transport. */
+export function encodeAgentFiles(files: AgentFile[]): string {
+  return toBase64(JSON.stringify(files));
+}
 
-  const userCredentials = await db
-    .select()
-    .from(userModelCredential)
-    .where(eq(userModelCredential.userId, userId))
-    .leftJoin(modelProvider, eq(userModelCredential.providerId, modelProvider.id));
-
-  const credentialsEntries = (
-    await Promise.all(
-      userCredentials.map(async (cred) => {
-        const decryptedCred = await credService.getUserCredentialForProvider(
-          userId,
-          cred.model_provider?.name as string,
-        );
-        if (!decryptedCred) return null;
-
-        // openai-codex credentials are written under the "openai" provider key.
-        const providerName =
-          decryptedCred.providerName === "openai-codex" ? "openai" : decryptedCred.providerName;
-
-        return [
-          providerName,
-          {
-            type: decryptedCred.credential.type === "api_key" ? "api" : "oauth",
-            key:
-              decryptedCred.credential.type === "api_key"
-                ? decryptedCred.credential.apiKey
-                : undefined,
-            refresh:
-              decryptedCred.credential.type === "oauth"
-                ? decryptedCred.credential.refresh
-                : undefined,
-            access:
-              decryptedCred.credential.type === "oauth"
-                ? decryptedCred.credential.access
-                : undefined,
-            expires:
-              decryptedCred.credential.type === "oauth"
-                ? decryptedCred.credential.expires
-                : undefined,
-            accountId:
-              decryptedCred.credential.type === "oauth"
-                ? decryptedCred.credential.accountId
-                : undefined,
-          },
-        ] as const;
-      }),
-    )
-  ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
-
-  return JSON.stringify(Object.fromEntries(credentialsEntries));
+/** Decode an `AGENT_FILES_BASE64` manifest back into a file list. */
+export function decodeAgentFiles(encoded: string | undefined): AgentFile[] {
+  if (!encoded) return [];
+  try {
+    const parsed = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 export interface BuildWorkspaceProvisioningSpecParams {
-  opencodeConfigJson: string;
-  opencodeCredentialsJson: string;
+  agent: AgentProvisioning;
   repo?: WorkspaceRepoProvisioning | null;
   serverPassword?: string;
   sshPublicKey?: string;
@@ -103,8 +59,7 @@ export function buildWorkspaceProvisioningSpec(
   params: BuildWorkspaceProvisioningSpecParams,
 ): WorkspaceProvisioningSpec {
   return {
-    opencodeConfigJson: params.opencodeConfigJson,
-    opencodeCredentialsJson: params.opencodeCredentialsJson,
+    agent: params.agent,
     repo: params.repo ?? undefined,
     serverPassword: params.serverPassword,
     sshPublicKey: params.sshPublicKey,
@@ -132,7 +87,9 @@ export interface BuildWorkspaceEnvRuntimeParams {
  * a compute provider. The spec covers what to clone / write; `runtime` covers
  * the workspace-identity and callback vars the in-workspace process needs.
  *
- * User-defined vars can never override a reserved system key.
+ * Merge order: agent env < user env < system env. A user var can override the
+ * agent's derived env (e.g. their own ANTHROPIC_API_KEY) but never a reserved
+ * system key.
  */
 export function buildWorkspaceEnv(
   spec: WorkspaceProvisioningSpec,
@@ -143,9 +100,7 @@ export function buildWorkspaceEnv(
     REPO_BRANCH: spec.repo?.branch,
     REPO_BASE_COMMIT: spec.repo?.baseCommit,
     REPO_CHECKOUT_REF: spec.repo?.checkoutRef,
-    OPENCODE_CONFIG_BASE64: toBase64(spec.opencodeConfigJson),
-    OPENCODE_CREDENTIALS_BASE64: toBase64(spec.opencodeCredentialsJson),
-    OPENCODE_SERVER_PASSWORD: spec.serverPassword,
+    AGENT_FILES_BASE64: encodeAgentFiles(spec.agent.files),
     USER_GITHUB_USERNAME: runtime.githubUsername,
     GITHUB_APP_TOKEN: runtime.githubAppToken,
     GITHUB_APP_TOKEN_EXPIRY: runtime.githubAppTokenExpiry,
@@ -161,19 +116,26 @@ export function buildWorkspaceEnv(
     USER_SSH_PUBLIC_KEY: spec.sshPublicKey,
   };
 
-  return mergeUserEnv(system, runtime.userEnv);
+  return mergeEnv(system, spec.agent.env, runtime.userEnv);
 }
 
 /**
- * Merge user-defined env vars over the system env, skipping any key reserved by
- * the system. Stops a user var from silently clobbering, e.g.,
- * WORKSPACE_AUTH_TOKEN.
+ * Merge agent-derived and user-defined env vars under the system env. User
+ * vars win over agent vars; nothing overrides a reserved system key.
  */
-function mergeUserEnv(
+function mergeEnv(
   system: SystemWorkspaceEnv,
+  agentEnv: Record<string, string>,
   userEnv?: Record<string, string | undefined> | null,
 ): WorkspaceEnvironmentVariables {
   const merged: WorkspaceEnvironmentVariables = { ...system };
+
+  for (const [key, value] of Object.entries(agentEnv)) {
+    if (RESERVED_WORKSPACE_ENV_KEYS.has(key)) {
+      continue;
+    }
+    merged[key] = value;
+  }
 
   if (userEnv) {
     for (const [key, value] of Object.entries(userEnv)) {

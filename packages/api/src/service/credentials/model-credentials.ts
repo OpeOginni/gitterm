@@ -21,7 +21,7 @@ import {
   EncryptionService,
 } from "../encryption";
 import { GitHubCopilotOAuthService } from "./oauth/github-copilot";
-import { OpenAICodexOAuthService } from "./oauth/openai-codex";
+import { OpenAIOAuthService } from "./oauth/openai-oauth";
 
 // Types for credential operations
 export interface StoreApiKeyOptions {
@@ -491,8 +491,8 @@ export class ModelCredentialsService {
       return newToken.token;
     }
 
-    if (decrypted.plugin === "codex-auth") {
-      const newTokens = await OpenAICodexOAuthService.refreshToken(oauthCred.refresh);
+    if (decrypted.plugin === "oauth") {
+      const newTokens = await OpenAIOAuthService.refreshToken(oauthCred.refresh);
 
       // Update stored credential - Codex returns new refresh token too
       const updatedCredential: OAuthCredential = {
