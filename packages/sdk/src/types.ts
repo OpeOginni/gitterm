@@ -72,8 +72,10 @@ export type WorkspaceCreateInput = {
   baseCommit?: string;
   checkoutRef?: string;
   subdomain?: string;
-  agentTypeId: string;
-  cloudProviderId: string;
+  /** Unique enabled agent name. */
+  agent: string;
+  /** Unique enabled provider name. Optional when a preferred default exists. */
+  provider?: string;
   regionId?: string;
   gitIntegrationId?: string;
   persistent: boolean;
@@ -110,12 +112,14 @@ export type CloudProvider = {
 };
 
 export type SandboxDefaults = {
+  agent: string;
+  provider: string;
   agentTypeId: string;
   cloudProviderId: string;
   regionId?: string;
 };
 
 export type SandboxDefaultsInput = {
-  agent?: string;
+  agent: string;
   provider?: string;
 };

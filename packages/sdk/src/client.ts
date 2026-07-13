@@ -24,10 +24,6 @@ import type {
 type RouterInputs = inferRouterInputs<AppRouter>;
 type IsExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type Assert<T extends true> = T;
-type CheckedWorkspaceCreateInput =
-  Assert<IsExact<WorkspaceCreateInput, RouterInputs["workspace"]["createWorkspace"]>> extends true
-    ? WorkspaceCreateInput
-    : never;
 type CheckedSandboxDefaultsInput =
   Assert<
     IsExact<SandboxDefaultsInput, NonNullable<RouterInputs["workspace"]["resolveSandboxDefaults"]>>
@@ -120,7 +116,7 @@ export type GittermClient = {
       sandboxOnly?: boolean;
       nonSandboxOnly?: boolean;
     }): Promise<CloudProvider[]>;
-    resolveSandboxDefaults(input?: SandboxDefaultsInput): Promise<SandboxDefaults>;
+    resolveSandboxDefaults(input: SandboxDefaultsInput): Promise<SandboxDefaults>;
   };
 };
 
@@ -294,9 +290,17 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
 
   const run = <T>(operation: () => Promise<T>) => runWithServer(credentials.serverUrl, operation);
 
-  const createWorkspace = (input: CheckedWorkspaceCreateInput) =>
+  const createWorkspace = (input: WorkspaceCreateInput) =>
     run(async (): Promise<WorkspaceCreateResult> => {
-      const result = await trpc.workspace.createWorkspace.mutate(input);
+      const { agent, provider, regionId, ...workspaceInput } = input;
+      const defaults = await trpc.workspace.resolveSandboxDefaults.query({ agent, provider });
+      const apiInput: RouterInputs["workspace"]["createWorkspace"] = {
+        ...workspaceInput,
+        agentTypeId: defaults.agentTypeId,
+        cloudProviderId: defaults.cloudProviderId,
+        regionId: regionId ?? defaults.regionId,
+      };
+      const result = await trpc.workspace.createWorkspace.mutate(apiInput);
       const workspace = normalizeWorkspace(result.workspace as RawWorkspace);
       if (!workspace) throw new GittermError("SERVER_ERROR", "Workspace creation failed");
       const runtime = result.runtime
@@ -411,7 +415,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           const result = await trpc.workspace.listCloudProviders.query(input);
           return result.cloudProviders;
         }),
-      resolveSandboxDefaults: (input?: CheckedSandboxDefaultsInput): Promise<SandboxDefaults> =>
+      resolveSandboxDefaults: (input: CheckedSandboxDefaultsInput): Promise<SandboxDefaults> =>
         run(async () => trpc.workspace.resolveSandboxDefaults.query(input)),
     },
   };

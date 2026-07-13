@@ -100,12 +100,16 @@ client.workspaces.restart(workspaceId);
 client.workspaces.terminate(workspaceId);
 client.workspaces.createSandbox({
   idempotencyKey, repo, branch, baseCommit, checkoutRef,
-  agentTypeId, cloudProviderId, persistent,
+  agent, provider, persistent, // provider is optional
 });
 client.catalog.agentTypes();
 client.catalog.cloudProviders();
 client.catalog.resolveSandboxDefaults({ agent, provider });
 ```
+
+`agent` is the unique enabled agent name (for example `"OpenCode"`).
+`provider` is the unique enabled provider name (for example `"E2B"`).
+Omit `provider` to use the preferred default sandbox provider.
 
 ### Errors
 

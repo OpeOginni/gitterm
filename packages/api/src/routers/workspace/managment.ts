@@ -351,12 +351,10 @@ export const workspaceRouter = router({
 
   resolveSandboxDefaults: protectedProcedure
     .input(
-      z
-        .object({
-          agent: z.string().trim().min(1).optional(),
-          provider: z.string().trim().min(1).optional(),
-        })
-        .optional(),
+      z.object({
+        agent: z.string().trim().min(1),
+        provider: z.string().trim().min(1).optional(),
+      }),
     )
     .query(async ({ input, ctx }) => {
       const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
@@ -371,24 +369,21 @@ export const workspaceRouter = router({
         orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
       });
 
-      const requestedAgent = input?.agent?.toLowerCase();
-      const selectedAgent = agents.find(
-        (candidate) =>
-          !requestedAgent ||
-          candidate.id === input?.agent ||
-          candidate.name.toLowerCase() === requestedAgent,
+      const requestedAgent = input.agent.toLowerCase();
+      const matchingAgents = agents.filter(
+        (candidate) => candidate.name.toLowerCase() === requestedAgent,
       );
-      const requestedProvider = input?.provider?.toLowerCase();
-      const selectedProvider = providers.find((candidate) => {
-        const providerKey = candidate.providerKey.toLowerCase();
-        return (
-          canUseProvider(viewerPlan, providerKey) &&
-          (!requestedProvider ||
-            candidate.id === input?.provider ||
-            providerKey === requestedProvider ||
-            candidate.name.toLowerCase() === requestedProvider)
-        );
-      });
+      const selectedAgent = matchingAgents.length === 1 ? matchingAgents[0] : undefined;
+      const requestedProvider = input.provider?.toLowerCase();
+      const eligibleProviders = providers.filter((candidate) =>
+        canUseProvider(viewerPlan, candidate.providerKey.toLowerCase()),
+      );
+      const matchingProviders = requestedProvider
+        ? eligibleProviders.filter(
+            (candidate) => candidate.name.toLowerCase() === requestedProvider,
+          )
+        : eligibleProviders.filter((candidate) => candidate.preferredDefault);
+      const selectedProvider = matchingProviders.length === 1 ? matchingProviders[0] : undefined;
 
       if (!selectedAgent || !selectedProvider) {
         throw new TRPCError({
@@ -398,6 +393,8 @@ export const workspaceRouter = router({
       }
 
       return {
+        agent: selectedAgent.name,
+        provider: selectedProvider.name,
         agentTypeId: selectedAgent.id,
         cloudProviderId: selectedProvider.id,
         regionId: selectedProvider.regions[0]?.id,
