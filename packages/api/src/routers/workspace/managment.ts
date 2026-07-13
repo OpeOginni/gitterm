@@ -1213,7 +1213,7 @@ export const workspaceRouter = router({
             .where(eq(cloudProvider.id, existing.cloudProviderId));
           const headers = await getWorkspaceRouteAccess(existing.id, null);
           let password: string | null = null;
-          if (existing.serverPassword && existing.serverOnly) {
+          if (existing.serverPassword) {
             password = decryptWorkspacePassword(existing.serverPassword);
           }
           return {
@@ -2161,7 +2161,7 @@ export const workspaceRouter = router({
         .where(eq(cloudProvider.id, workspaceRecord.cloudProviderId));
 
       let password: string | null = null;
-      if (workspaceRecord.serverPassword && workspaceRecord.serverOnly) {
+      if (workspaceRecord.serverPassword) {
         try {
           password = decryptWorkspacePassword(workspaceRecord.serverPassword);
         } catch (error) {
@@ -2380,7 +2380,7 @@ export const workspaceRouter = router({
         .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
 
       let password: string | null = null;
-      if (existingWorkspace.serverPassword && existingWorkspace.serverOnly) {
+      if (existingWorkspace.serverPassword) {
         try {
           password = decryptWorkspacePassword(existingWorkspace.serverPassword);
         } catch (error) {
