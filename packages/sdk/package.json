@@ -1,14 +1,13 @@
 {
   "name": "@gitterm/sdk",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "files": [
-    "dist",
-    "src/index.d.ts"
+    "dist"
   ],
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
+      "types": "./dist/index.d.ts",
       "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
@@ -18,7 +17,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node --format esm --external @trpc/client && cp src/index.d.ts dist/index.d.ts",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @trpc/client && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },
@@ -27,7 +26,6 @@
   },
   "devDependencies": {
     "@gitterm/api": "workspace:*",
-    "@gitterm/config": "workspace:*",
     "@trpc/server": "catalog:",
     "@types/bun": "^1.2.6",
     "typescript": "^5.8.2"

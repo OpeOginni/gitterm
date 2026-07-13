@@ -1,7 +1,8 @@
 import { createTRPCClient, httpBatchLink, TRPCClientError } from "@trpc/client";
 import type { AppRouter } from "@gitterm/api/routers/index";
+import type { inferRouterInputs } from "@trpc/server";
 import { loadConfigSync } from "./config.js";
-import { GittermError, type GittermErrorCode } from "./errors.js";
+import { GittermError, WorkspaceLifecycleError, type GittermErrorCode } from "./errors.js";
 import type {
   AgentType,
   AuthStatus,
@@ -16,7 +17,23 @@ import type {
   WorkspaceRuntimeAccess,
   WorkspacePauseResult,
   WorkspaceTerminateResult,
+  SandboxDefaults,
+  SandboxDefaultsInput,
 } from "./types.js";
+
+type RouterInputs = inferRouterInputs<AppRouter>;
+type IsExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Assert<T extends true> = T;
+type CheckedWorkspaceCreateInput =
+  Assert<IsExact<WorkspaceCreateInput, RouterInputs["workspace"]["createWorkspace"]>> extends true
+    ? WorkspaceCreateInput
+    : never;
+type CheckedSandboxDefaultsInput =
+  Assert<
+    IsExact<SandboxDefaultsInput, NonNullable<RouterInputs["workspace"]["resolveSandboxDefaults"]>>
+  > extends true
+    ? SandboxDefaultsInput
+    : never;
 
 export type GittermClientOptions = {
   serverUrl?: string;
@@ -56,7 +73,7 @@ type RawWorkspace = {
     agentType?: { id: string; name: string; description: string | null } | null;
   } | null;
   startedAt: Date | string | null;
-  stoppedAt: Date | string | null;
+  pausedAt: Date | string | null;
   terminatedAt: Date | string | null;
   lastActiveAt: Date | string | null;
   updatedAt: Date | string | null;
@@ -76,6 +93,35 @@ type RawRuntimeAccess = {
   persistent: boolean;
   recoverable: boolean;
   providerKey: string | null;
+};
+
+export type GittermClient = {
+  serverUrl: string;
+  auth: { status(): Promise<AuthStatus> };
+  workspaces: {
+    list(input?: WorkspaceListOptions): Promise<WorkspaceListResult>;
+    get(workspaceId: string): Promise<Workspace>;
+    getRuntimeAccess(workspaceId: string): Promise<WorkspaceRuntimeAccess>;
+    ensureRunning(
+      workspaceId: string,
+      options?: { timeoutMs?: number; pollIntervalMs?: number },
+    ): Promise<WorkspaceEnsureRunningResult>;
+    pause(workspaceId: string): Promise<WorkspacePauseResult>;
+    restart(workspaceId: string): Promise<WorkspaceRestartResult>;
+    terminate(workspaceId: string): Promise<WorkspaceTerminateResult>;
+    create(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
+    createSandbox(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
+  };
+  catalog: {
+    agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
+    cloudProviders(input?: {
+      localOnly?: boolean;
+      cloudOnly?: boolean;
+      sandboxOnly?: boolean;
+      nonSandboxOnly?: boolean;
+    }): Promise<CloudProvider[]>;
+    resolveSandboxDefaults(input?: SandboxDefaultsInput): Promise<SandboxDefaults>;
+  };
 };
 
 function envValue(name: string): string | undefined {
@@ -143,7 +189,7 @@ function normalizeWorkspace(workspace: RawWorkspace | null | undefined): Workspa
         }
       : null,
     startedAt: toIso(workspace.startedAt),
-    stoppedAt: toIso(workspace.stoppedAt),
+    pausedAt: toIso(workspace.pausedAt),
     terminatedAt: toIso(workspace.terminatedAt),
     lastActiveAt: toIso(workspace.lastActiveAt),
     updatedAt: toIso(workspace.updatedAt),
@@ -199,6 +245,24 @@ async function runWithServer<T>(serverUrl: string, operation: () => Promise<T>):
         });
       }
       const code = mapTrpcCode(trpcCode);
+      if (/WORKSPACE_TERMINATED/.test(error.message)) {
+        throw new WorkspaceLifecycleError("WORKSPACE_TERMINATED", error.message, { cause: error });
+      }
+      if (/WORKSPACE_NON_RECOVERABLE/.test(error.message)) {
+        throw new WorkspaceLifecycleError("WORKSPACE_NON_RECOVERABLE", error.message, {
+          cause: error,
+        });
+      }
+      if (/WORKSPACE_START_TIMEOUT/.test(error.message)) {
+        throw new WorkspaceLifecycleError("WORKSPACE_START_TIMEOUT", error.message, {
+          cause: error,
+        });
+      }
+      if (/WORKSPACE_RESTART_FAILED/.test(error.message)) {
+        throw new WorkspaceLifecycleError("WORKSPACE_RESTART_FAILED", error.message, {
+          cause: error,
+        });
+      }
       throw new GittermError(
         code,
         code === "UNAUTHORIZED"
@@ -216,7 +280,7 @@ async function runWithServer<T>(serverUrl: string, operation: () => Promise<T>):
   }
 }
 
-export function createGittermClient(options: GittermClientOptions = {}) {
+export function createGittermClient(options: GittermClientOptions = {}): GittermClient {
   const credentials = resolveCredentials(options);
   const trpc = createTRPCClient<AppRouter>({
     links: [
@@ -230,7 +294,7 @@ export function createGittermClient(options: GittermClientOptions = {}) {
 
   const run = <T>(operation: () => Promise<T>) => runWithServer(credentials.serverUrl, operation);
 
-  const createWorkspace = (input: WorkspaceCreateInput) =>
+  const createWorkspace = (input: CheckedWorkspaceCreateInput) =>
     run(async (): Promise<WorkspaceCreateResult> => {
       const result = await trpc.workspace.createWorkspace.mutate(input);
       const workspace = normalizeWorkspace(result.workspace as RawWorkspace);
@@ -317,7 +381,7 @@ export function createGittermClient(options: GittermClientOptions = {}) {
       restart: (workspaceId: string) =>
         run(async (): Promise<WorkspaceRestartResult> => {
           const result = await trpc.workspace.restartWorkspace.mutate({ workspaceId });
-          return { status: result.status };
+          return { status: result.status as Workspace["status"] };
         }),
       terminate: (workspaceId: string) =>
         run(async (): Promise<WorkspaceTerminateResult> => {
@@ -347,11 +411,8 @@ export function createGittermClient(options: GittermClientOptions = {}) {
           const result = await trpc.workspace.listCloudProviders.query(input);
           return result.cloudProviders;
         }),
+      resolveSandboxDefaults: (input?: CheckedSandboxDefaultsInput): Promise<SandboxDefaults> =>
+        run(async () => trpc.workspace.resolveSandboxDefaults.query(input)),
     },
   };
 }
-
-export type GittermClient = ReturnType<typeof createGittermClient>;
-
-// TODO: Publishing @gitterm/sdk publicly needs bundled .d.ts output or a trimmed
-// public router type so external users do not need the private @gitterm/api package.

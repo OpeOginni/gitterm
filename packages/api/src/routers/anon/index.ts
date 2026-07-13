@@ -509,7 +509,7 @@ export const anonRouter = router({
       const now = new Date();
       await updateWorkspaceByIdReturningAndInvalidate(input.workspaceId, {
         status: "terminated",
-        stoppedAt: now,
+        pausedAt: now,
         terminatedAt: now,
         upstreamUrl: null,
         externalInstanceId: "",

@@ -261,18 +261,18 @@ export interface ComputeProvider {
   createPersistentWorkspace(config: PersistentWorkspaceConfig): Promise<PersistentWorkspaceInfo>;
 
   /**
-   * Stop a workspace (scale to 0 replicas, but keep resources)
+   * Pause compute while preserving the workspace's recoverable resources.
    */
-  stopWorkspace(
+  pauseWorkspace(
     externalId: string,
     regionIdentifier?: string,
     externalRunningDeploymentId?: string,
   ): Promise<void>;
 
   /**
-   * Restart a stopped workspace (scale back up)
+   * Resume a paused workspace and its preserved resources.
    */
-  restartWorkspace(
+  resumeWorkspace(
     externalId: string,
     regionIdentifier?: string,
     externalRunningDeploymentId?: string,

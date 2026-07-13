@@ -204,7 +204,7 @@ export const userRouter = router({
             ws.id,
             {
               status: "terminated",
-              stoppedAt: new Date(),
+              pausedAt: new Date(),
               terminatedAt: new Date(),
               updatedAt: new Date(),
             },

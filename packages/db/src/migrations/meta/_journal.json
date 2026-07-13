@@ -134,6 +134,13 @@
       "when": 1783797198991,
       "tag": "0018_smooth_william_stryker",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783947762834,
+      "tag": "0019_sticky_puppet_master",
+      "breakpoints": true
     }
   ]
 }

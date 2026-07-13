@@ -95,7 +95,7 @@ export function printWorkspaceDetails(workspace: Workspace) {
   detailLine("Hosting", workspace.hostingType);
   detailLine("Persistent", workspace.persistent ? "yes" : "no");
   detailLine("Started", workspace.startedAt);
-  detailLine("Stopped", workspace.stoppedAt);
+  detailLine("Paused", workspace.pausedAt);
 }
 
 export async function confirm(question: string): Promise<boolean> {

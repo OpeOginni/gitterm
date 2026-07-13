@@ -369,7 +369,7 @@ export class RailwayProvider implements ComputeProvider {
     };
   }
 
-  async stopWorkspace(
+  async pauseWorkspace(
     _externalId: string,
     _regionIdentifier: string,
     externalRunningDeploymentId?: string,
@@ -392,7 +392,7 @@ export class RailwayProvider implements ComputeProvider {
     });
   }
 
-  async restartWorkspace(
+  async resumeWorkspace(
     _externalId: string,
     _regionIdentifier: string,
     externalRunningDeploymentId?: string,

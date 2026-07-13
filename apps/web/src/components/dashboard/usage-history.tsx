@@ -74,8 +74,8 @@ export function UsageHistory() {
                   Started {formatDistanceToNow(new Date(ws.startedAt), { addSuffix: true })}
                 </span>
               </div>
-              {ws.stoppedAt && (
-                <p>Stopped {formatDistanceToNow(new Date(ws.stoppedAt), { addSuffix: true })}</p>
+              {ws.pausedAt && (
+                <p>Paused {formatDistanceToNow(new Date(ws.pausedAt), { addSuffix: true })}</p>
               )}
             </div>
           </div>

@@ -1,9 +1,3 @@
-import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@gitterm/api/routers/index";
-
-export type RouterInputs = inferRouterInputs<AppRouter>;
-export type RouterOutputs = inferRouterOutputs<AppRouter>;
-
 export type AuthStatus = {
   loggedIn: true;
   userId: string;
@@ -34,7 +28,7 @@ export type Workspace = {
   agentType: { id: string; name: string; description: string | null } | null;
   image: { id: string; name: string; imageId: string } | null;
   startedAt: string | null;
-  stoppedAt: string | null;
+  pausedAt: string | null;
   terminatedAt: string | null;
   lastActiveAt: string | null;
   updatedAt: string | null;
@@ -61,19 +55,33 @@ export type WorkspaceCreateResult = {
   runtime: WorkspaceRuntimeAccess;
 };
 
-export type WorkspaceListOptions = NonNullable<RouterInputs["workspace"]["listWorkspaces"]>;
+export type WorkspaceListOptions = {
+  limit?: number;
+  offset?: number;
+  status?: "all" | "active" | "terminated";
+};
 export type WorkspaceListResult = {
   workspaces: Workspace[];
-  pagination: RouterOutputs["workspace"]["listWorkspaces"]["pagination"];
+  pagination: { total: number; limit: number; offset: number; hasMore: boolean };
 };
-export type WorkspaceCreateInput = RouterInputs["workspace"]["createWorkspace"];
-export type WorkspaceRestartResult = Pick<RouterOutputs["workspace"]["restartWorkspace"], "status">;
-export type WorkspaceStopResult = Pick<
-  RouterOutputs["workspace"]["pauseWorkspace"],
-  "durationMinutes"
->;
-/** @deprecated use WorkspaceStopResult — same shape for pauseWorkspace */
-export type WorkspacePauseResult = WorkspaceStopResult;
+export type WorkspaceCreateInput = {
+  idempotencyKey?: string;
+  name?: string;
+  repo?: string;
+  branch?: string;
+  baseCommit?: string;
+  checkoutRef?: string;
+  subdomain?: string;
+  agentTypeId: string;
+  cloudProviderId: string;
+  regionId?: string;
+  gitIntegrationId?: string;
+  persistent: boolean;
+  workspaceProfile?: "standard" | "ssh-enabled";
+  modelCredentialIds?: string[];
+};
+export type WorkspaceRestartResult = { status: WorkspaceStatus };
+export type WorkspacePauseResult = { durationMinutes: number };
 export type WorkspaceTerminateResult = {
   workspace: Workspace | null;
   cleanupInBackground: boolean;
@@ -83,6 +91,31 @@ export type WorkspaceEnsureRunningResult = {
   runtime: WorkspaceRuntimeAccess;
 };
 
-export type AgentType = RouterOutputs["workspace"]["listAgentTypes"]["agentTypes"][number];
-export type CloudProvider =
-  RouterOutputs["workspace"]["listCloudProviders"]["cloudProviders"][number];
+export type AgentType = {
+  id: string;
+  name: string;
+  description: string | null;
+  serverOnly: boolean;
+  isEnabled: boolean;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+};
+
+export type CloudProvider = {
+  id: string;
+  name: string;
+  providerKey: string;
+  regions?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+};
+
+export type SandboxDefaults = {
+  agentTypeId: string;
+  cloudProviderId: string;
+  regionId?: string;
+};
+
+export type SandboxDefaultsInput = {
+  agent?: string;
+  provider?: string;
+};

@@ -10,12 +10,13 @@ export {
 export type { CliConfig } from "./config.js";
 export { loginWithDeviceCode } from "./device-login.js";
 export type { DeviceCodeInfo, LoginWithDeviceCodeOptions } from "./device-login.js";
-export { GittermError } from "./errors.js";
-export type { GittermErrorCode } from "./errors.js";
+export { GittermError, WorkspaceLifecycleError } from "./errors.js";
+export type { GittermErrorCode, WorkspaceLifecycleErrorCode } from "./errors.js";
 export type {
   AgentType,
   AuthStatus,
   CloudProvider,
+  SandboxDefaults,
   Workspace,
   WorkspaceCreateInput,
   WorkspaceCreateResult,
@@ -26,7 +27,7 @@ export type {
   WorkspaceRestartResult,
   WorkspaceRuntimeAccess,
   WorkspaceStatus,
-  WorkspaceStopResult,
   WorkspacePauseResult,
   WorkspaceTerminateResult,
+  SandboxDefaultsInput,
 } from "./types.js";

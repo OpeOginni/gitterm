@@ -245,7 +245,7 @@ export class GittermSandbox extends Sandbox<Env> {
 
     if (repo.baseCommit) {
       const pin = await this.exec(
-        `git fetch --depth 1 origin ${repo.baseCommit} && git checkout --detach ${repo.baseCommit}`,
+        `git fetch --depth 1 origin ${repo.baseCommit} && git cat-file -e ${repo.baseCommit}^{commit} && git checkout --detach ${repo.baseCommit} && test "$(git rev-parse HEAD)" = "${repo.baseCommit}"`,
         { cwd: repoDir },
       );
       if (pin.exitCode !== 0) {

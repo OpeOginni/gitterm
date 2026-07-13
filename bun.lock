@@ -304,13 +304,12 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@trpc/client": "^11.8.1",
       },
       "devDependencies": {
         "@gitterm/api": "workspace:*",
-        "@gitterm/config": "workspace:*",
         "@trpc/server": "catalog:",
         "@types/bun": "^1.2.6",
         "typescript": "^5.8.2",

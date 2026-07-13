@@ -22,6 +22,7 @@ import {
   PLAN_LIMITS,
   type UserPlan,
 } from "../../config/features";
+import { isPausedWorkspacePastRetention } from "../../utils/workspace-retention";
 import { auth } from "@gitterm/auth";
 import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
 import { logger } from "../../utils/logger";
@@ -212,8 +213,8 @@ export const internalRouter = router({
     }));
   }),
 
-  // Stop a workspace (for worker)
-  stopWorkspaceInternal: internalProcedure
+  // Pause a workspace (for worker)
+  pauseWorkspaceInternal: internalProcedure
     .input(
       z.object({
         workspaceId: z.string(),
@@ -233,12 +234,12 @@ export const internalRouter = router({
           domain: workspace.domain,
         })
         .from(workspace)
-        .where(eq(workspace.id, input.workspaceId));
+        .where(and(eq(workspace.id, input.workspaceId), eq(workspace.status, "running")));
 
       if (!ws) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Workspace not found",
+          message: "Workspace is no longer running",
         });
       }
 
@@ -270,9 +271,9 @@ export const internalRouter = router({
         }
       }
 
-      // Stop via provider
+      // Pause via provider
       const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
-      await computeProvider.stopWorkspace(
+      await computeProvider.pauseWorkspace(
         ws.externalInstanceId,
         workspaceRegion?.externalRegionIdentifier,
         ws.externalRunningDeploymentId || undefined,
@@ -288,7 +289,7 @@ export const internalRouter = router({
       const now = new Date();
       await updateWorkspaceByIdAndInvalidate(input.workspaceId, {
         status: "paused",
-        stoppedAt: now,
+        pausedAt: now,
         updatedAt: now,
       });
 
@@ -308,6 +309,7 @@ export const internalRouter = router({
     .input(
       z.object({
         workspaceId: z.string(),
+        requirePaused: z.boolean().default(false).optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -323,12 +325,16 @@ export const internalRouter = router({
           domain: workspace.domain,
         })
         .from(workspace)
-        .where(eq(workspace.id, input.workspaceId));
+        .where(
+          input.requirePaused
+            ? and(eq(workspace.id, input.workspaceId), eq(workspace.status, "paused"))
+            : eq(workspace.id, input.workspaceId),
+        );
 
       if (!ws) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Workspace not found",
+          message: input.requirePaused ? "Workspace is no longer paused" : "Workspace not found",
         });
       }
 
@@ -377,10 +383,17 @@ export const internalRouter = router({
         persistedVolume?.externalVolumeId,
       );
 
+      if (persistedVolume) {
+        await db.delete(volume).where(eq(volume.workspaceId, input.workspaceId));
+      }
+
       // Update workspace status
       const now = new Date();
       await updateWorkspaceByIdAndInvalidate(input.workspaceId, {
         status: "terminated",
+        externalInstanceId: "",
+        externalRunningDeploymentId: null,
+        upstreamUrl: null,
         terminatedAt: now,
         updatedAt: now,
       });
@@ -468,15 +481,17 @@ export const internalRouter = router({
         status: workspace.status,
         hostingType: workspace.hostingType,
         lastActiveAt: workspace.lastActiveAt,
+        pausedAt: workspace.pausedAt,
         plan: user.plan,
       })
       .from(workspace)
       .leftJoin(user, eq(workspace.userId, user.id))
       .where(
         and(
-          or(eq(workspace.status, "running"), eq(workspace.status, "paused")),
+          eq(workspace.status, "paused"),
           eq(workspace.hostingType, "cloud"),
           lt(workspace.lastActiveAt, candidateThreshold),
+          lt(workspace.pausedAt, candidateThreshold),
         ),
       );
 
@@ -486,7 +501,12 @@ export const internalRouter = router({
       const retentionDays = getRetentionDaysForPlan((ws.plan ?? "free") as UserPlan);
       if (retentionDays === null) return false;
       const threshold = new Date(now - retentionDays * dayMs);
-      return ws.lastActiveAt !== null && ws.lastActiveAt < threshold;
+      return isPausedWorkspacePastRetention({
+        status: ws.status,
+        lastActiveAt: ws.lastActiveAt,
+        pausedAt: ws.pausedAt,
+        threshold,
+      });
     });
 
     return longTermInactiveWorkspaces.map(({ plan: _plan, ...ws }) => ws);

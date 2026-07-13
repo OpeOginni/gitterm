@@ -1275,7 +1275,7 @@ export class AwsProvider implements ComputeProvider {
     return (await this.provisionWorkspace(config, true)) as PersistentWorkspaceInfo;
   }
 
-  async stopWorkspace(
+  async pauseWorkspace(
     externalId: string,
     regionIdentifier?: string,
     _externalRunningDeploymentId?: string,
@@ -1293,7 +1293,7 @@ export class AwsProvider implements ComputeProvider {
     );
   }
 
-  async restartWorkspace(
+  async resumeWorkspace(
     externalId: string,
     regionIdentifier?: string,
     _externalRunningDeploymentId?: string,
