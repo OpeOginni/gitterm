@@ -8,6 +8,7 @@ import {
   integer,
   date,
   boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { agentType, cloudProvider, image, region } from "./cloud";
@@ -56,65 +57,72 @@ export interface WorkspaceSSHConnection {
   expiresAt?: string;
 }
 
-export const workspace = pgTable("workspace", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  externalInstanceId: text("external_instance_id").notNull(),
-  externalRunningDeploymentId: text("external_running_deployment_id"),
-  gitIntegrationId: uuid("git_integration_id").references(() => gitIntegration.id, {
-    onDelete: "set null",
-  }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  imageId: uuid("image_id")
-    .notNull()
-    .references(() => image.id, { onDelete: "cascade" }),
-  cloudProviderId: uuid("cloud_provider_id")
-    .notNull()
-    .references(() => cloudProvider.id, { onDelete: "cascade" }),
-  regionId: uuid("region_id").references(() => region.id, {
-    onDelete: "cascade",
-  }),
-  repositoryUrl: text("repository_url"),
-  repositoryBranch: text("repository_branch"),
-  /** Exact git commit the workspace was created from (full SHA when available). */
-  repositoryBaseCommit: text("repository_base_commit"),
-  /** Optional provider checkout ref (branch/tag) when distinct from display branch. */
-  repositoryCheckoutRef: text("repository_checkout_ref"),
-  domain: text("domain").notNull(), // Full domain: {uuid}.gitterm.dev or just {uuid} in path mode
-  subdomain: text("subdomain"), // The workspace URL identifier (UUID format)
-  upstreamUrl: text("upstream_url"), // URL to proxy requests to (cloud container or tunnel endpoint)
-  status: workspaceStatusEnum("status").notNull(),
-  persistent: boolean("persistent").notNull().default(false),
-  serverOnly: boolean("server_only").notNull().default(false),
-  workspaceProfile: workspaceProfileEnum("workspace_profile").notNull().default("standard"),
-  editorAccessEnabled: boolean("editor_access_enabled").notNull().default(false),
-  editorTarget: workspaceEditorTargetEnum("editor_target"),
-  sshConnection: jsonb("editor_connection").$type<WorkspaceSSHConnection | null>(),
-  modelCredentialIds: jsonb("model_credential_ids").$type<string[]>().notNull().default([]),
+export const workspace = pgTable(
+  "workspace",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    externalInstanceId: text("external_instance_id").notNull(),
+    externalRunningDeploymentId: text("external_running_deployment_id"),
+    gitIntegrationId: uuid("git_integration_id").references(() => gitIntegration.id, {
+      onDelete: "set null",
+    }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    imageId: uuid("image_id")
+      .notNull()
+      .references(() => image.id, { onDelete: "cascade" }),
+    cloudProviderId: uuid("cloud_provider_id")
+      .notNull()
+      .references(() => cloudProvider.id, { onDelete: "cascade" }),
+    regionId: uuid("region_id").references(() => region.id, {
+      onDelete: "cascade",
+    }),
+    repositoryUrl: text("repository_url"),
+    repositoryBranch: text("repository_branch"),
+    /** Exact git commit the workspace was created from (full SHA when available). */
+    repositoryBaseCommit: text("repository_base_commit"),
+    /** Optional provider checkout ref (branch/tag) when distinct from display branch. */
+    repositoryCheckoutRef: text("repository_checkout_ref"),
+    domain: text("domain").notNull(), // Full domain: {uuid}.gitterm.dev or just {uuid} in path mode
+    subdomain: text("subdomain"), // The workspace URL identifier (UUID format)
+    upstreamUrl: text("upstream_url"), // URL to proxy requests to (cloud container or tunnel endpoint)
+    status: workspaceStatusEnum("status").notNull(),
+    persistent: boolean("persistent").notNull().default(false),
+    serverOnly: boolean("server_only").notNull().default(false),
+    workspaceProfile: workspaceProfileEnum("workspace_profile").notNull().default("standard"),
+    editorAccessEnabled: boolean("editor_access_enabled").notNull().default(false),
+    editorTarget: workspaceEditorTargetEnum("editor_target"),
+    sshConnection: jsonb("editor_connection").$type<WorkspaceSSHConnection | null>(),
+    modelCredentialIds: jsonb("model_credential_ids").$type<string[]>().notNull().default([]),
 
-  // Workspace hosting configuration
-  hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"),
-  name: text("name"), // Display name for the workspace
-  reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
-  exposedPorts: jsonb("exposed_ports").$type<
-    Record<
-      string,
-      {
-        port: number;
-        name?: string;
-        upstreamUrl?: string;
-        externalPortDomainId?: string;
-      }
-    >
-  >(),
-  serverPassword: text("server_password"),
-  startedAt: timestamp("started_at").notNull(),
-  stoppedAt: timestamp("stopped_at"),
-  terminatedAt: timestamp("terminated_at"),
-  lastActiveAt: timestamp("last_active_at"),
-  updatedAt: timestamp("updated_at").notNull(),
-});
+    // Workspace hosting configuration
+    hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"),
+    name: text("name"), // Display name for the workspace
+    idempotencyKey: text("idempotency_key"),
+    reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
+    exposedPorts: jsonb("exposed_ports").$type<
+      Record<
+        string,
+        {
+          port: number;
+          name?: string;
+          upstreamUrl?: string;
+          externalPortDomainId?: string;
+        }
+      >
+    >(),
+    serverPassword: text("server_password"),
+    startedAt: timestamp("started_at").notNull(),
+    pausedAt: timestamp("paused_at"),
+    terminatedAt: timestamp("terminated_at"),
+    lastActiveAt: timestamp("last_active_at"),
+    updatedAt: timestamp("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("workspace_user_idempotency_key_unique").on(table.userId, table.idempotencyKey),
+  ],
+);
 
 export const volume = pgTable("volume", {
   id: uuid("id").primaryKey().defaultRandom(),

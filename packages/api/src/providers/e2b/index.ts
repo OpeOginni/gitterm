@@ -200,7 +200,7 @@ export class E2BProvider implements ComputeProvider {
     if (spec.repo.baseCommit) {
       await this.runCommand(
         sandbox,
-        `git -C ${repoDir} fetch --depth 1 origin ${spec.repo.baseCommit} && git -C ${repoDir} checkout --detach ${spec.repo.baseCommit}`,
+        `git -C ${repoDir} fetch --depth 1 origin ${spec.repo.baseCommit} && git -C ${repoDir} cat-file -e ${spec.repo.baseCommit}^{commit} && git -C ${repoDir} checkout --detach ${spec.repo.baseCommit} && test "$(git -C ${repoDir} rev-parse HEAD)" = "${spec.repo.baseCommit}"`,
         "checkout base commit",
       );
     }
@@ -424,7 +424,7 @@ export class E2BProvider implements ComputeProvider {
     return (await this.provisionWorkspace(config, "kill", true)) as PersistentWorkspaceInfo;
   }
 
-  async stopWorkspace(
+  async pauseWorkspace(
     externalId: string,
     _regionIdentifier: string,
     _externalRunningDeploymentId?: string,
@@ -437,7 +437,7 @@ export class E2BProvider implements ComputeProvider {
     });
   }
 
-  async restartWorkspace(
+  async resumeWorkspace(
     externalId: string,
     _regionIdentifier: string,
     _externalRunningDeploymentId?: string,

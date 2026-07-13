@@ -5,7 +5,14 @@ export type GittermErrorCode =
   | "FORBIDDEN"
   | "BAD_REQUEST"
   | "SERVER_ERROR"
-  | "NETWORK";
+  | "NETWORK"
+  | WorkspaceLifecycleErrorCode;
+
+export type WorkspaceLifecycleErrorCode =
+  | "WORKSPACE_TERMINATED"
+  | "WORKSPACE_NON_RECOVERABLE"
+  | "WORKSPACE_START_TIMEOUT"
+  | "WORKSPACE_RESTART_FAILED";
 
 export class GittermError extends Error {
   readonly code: GittermErrorCode;
@@ -16,5 +23,18 @@ export class GittermError extends Error {
     this.name = "GittermError";
     this.code = code;
     this.cause = options.cause;
+  }
+}
+
+export class WorkspaceLifecycleError extends GittermError {
+  declare readonly code: WorkspaceLifecycleErrorCode;
+
+  constructor(
+    code: WorkspaceLifecycleErrorCode,
+    message: string,
+    options: { cause?: unknown } = {},
+  ) {
+    super(code, message, options);
+    this.name = "WorkspaceLifecycleError";
   }
 }

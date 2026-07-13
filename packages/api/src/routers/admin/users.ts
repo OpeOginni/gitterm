@@ -294,7 +294,7 @@ export const usersRouter = router({
       const now = new Date();
       await updateWorkspaceByIdReturningAndInvalidate(ws.id, {
         status: "terminated",
-        stoppedAt: now,
+        pausedAt: now,
         terminatedAt: now,
         upstreamUrl: null,
         externalInstanceId: "",

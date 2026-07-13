@@ -353,7 +353,7 @@ export class DaytonaProvider implements ComputeProvider {
         await provisionLogger.step("checkout-base-commit", () =>
           this.executeCommand(
             sandbox,
-            `git -C ${repoDir} fetch --depth 1 origin ${spec.repo!.baseCommit} && git -C ${repoDir} checkout --detach ${spec.repo!.baseCommit}`,
+            `git -C ${repoDir} fetch --depth 1 origin ${spec.repo!.baseCommit} && git -C ${repoDir} cat-file -e ${spec.repo!.baseCommit}^{commit} && git -C ${repoDir} checkout --detach ${spec.repo!.baseCommit} && test "$(git -C ${repoDir} rev-parse HEAD)" = "${spec.repo!.baseCommit}"`,
             true,
           ).catch(async (err) => {
             await sandbox.delete().catch(() => undefined);
@@ -441,7 +441,7 @@ export class DaytonaProvider implements ComputeProvider {
     return (await this.provisionWorkspace(config, true)) as PersistentWorkspaceInfo;
   }
 
-  async stopWorkspace(
+  async pauseWorkspace(
     externalId: string,
     _regionIdentifier?: string,
     _externalRunningDeploymentId?: string,
@@ -472,7 +472,7 @@ export class DaytonaProvider implements ComputeProvider {
     }
   }
 
-  async restartWorkspace(
+  async resumeWorkspace(
     externalId: string,
     _regionIdentifier?: string,
     _externalRunningDeploymentId?: string,

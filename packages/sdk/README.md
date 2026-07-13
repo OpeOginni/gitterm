@@ -93,12 +93,18 @@ const status = await client.auth.status();
 client.auth.status();                 // -> { userId, email, name, plan, authMethod }
 client.workspaces.list(options?);     // -> { workspaces, pagination }
 client.workspaces.get(workspaceId);
+client.workspaces.getRuntimeAccess(workspaceId); // read-only; never resumes compute
+client.workspaces.ensureRunning(workspaceId, options?);
 client.workspaces.pause(workspaceId);
 client.workspaces.restart(workspaceId);
 client.workspaces.terminate(workspaceId);
-client.workspaces.create(input);      // needs agentTypeId + cloudProviderId, see catalog
+client.workspaces.createSandbox({
+  idempotencyKey, repo, branch, baseCommit, checkoutRef,
+  agentTypeId, cloudProviderId, persistent,
+});
 client.catalog.agentTypes();
 client.catalog.cloudProviders();
+client.catalog.resolveSandboxDefaults({ agent, provider });
 ```
 
 ### Errors
@@ -117,8 +123,14 @@ try {
 }
 ```
 
-Codes: `NOT_LOGGED_IN`, `UNAUTHORIZED`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`,
-`SERVER_ERROR`, `NETWORK`.
+Workspace lifecycle failures are also exposed as `WorkspaceLifecycleError`, with stable
+`WORKSPACE_TERMINATED`, `WORKSPACE_NON_RECOVERABLE`, `WORKSPACE_START_TIMEOUT`, and
+`WORKSPACE_RESTART_FAILED` codes. General codes are
+`NOT_LOGGED_IN`, `UNAUTHORIZED`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`,
+`SERVER_ERROR`, and `NETWORK`.
+
+The package ships self-contained declarations from `dist`; TypeScript consumers do not
+need GitTerm's API package or tRPC server types.
 
 ### Obtaining a token programmatically
 

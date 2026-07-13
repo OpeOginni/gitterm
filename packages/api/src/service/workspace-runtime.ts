@@ -36,15 +36,17 @@ export type WorkspaceRuntimeSource = Pick<
   providerKey?: string | null;
 };
 
-/** Statuses from which a workspace can still be resumed. */
+/** Statuses that do not require a provider-specific resume operation. */
 export const RECOVERABLE_WORKSPACE_STATUSES = new Set<PublicWorkspaceStatus>([
   "pending",
   "running",
-  "paused",
 ]);
 
-export function isRecoverableWorkspaceStatus(status: string): boolean {
-  return RECOVERABLE_WORKSPACE_STATUSES.has(status as PublicWorkspaceStatus);
+export function isRecoverableWorkspaceStatus(status: string, providerCanResume = false): boolean {
+  return (
+    RECOVERABLE_WORKSPACE_STATUSES.has(status as PublicWorkspaceStatus) ||
+    (status === "paused" && providerCanResume)
+  );
 }
 
 export function isResumableWorkspaceStatus(status: string): boolean {
@@ -89,13 +91,15 @@ export function buildWorkspaceRuntimeAccess(options: {
   headers?: Record<string, string> | null;
   password?: string | null;
   providerKey?: string | null;
+  providerCanResume?: boolean;
 }): WorkspaceRuntimeAccess {
   const { workspace } = options;
   const providerKey = options.providerKey ?? workspace.providerKey ?? null;
   const status = workspace.status as PublicWorkspaceStatus;
-  const url = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
-  const headers = toClientUpstreamHeaders(options.headers);
-  const password = options.password ?? undefined;
+  const terminated = status === "terminated";
+  const url = !terminated && workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
+  const headers = terminated ? undefined : toClientUpstreamHeaders(options.headers);
+  const password = terminated ? undefined : (options.password ?? undefined);
 
   return {
     workspaceId: workspace.id,
@@ -109,7 +113,7 @@ export function buildWorkspaceRuntimeAccess(options: {
     baseCommit: workspace.repositoryBaseCommit,
     checkoutRef: workspace.repositoryCheckoutRef,
     persistent: workspace.persistent,
-    recoverable: isRecoverableWorkspaceStatus(status),
+    recoverable: isRecoverableWorkspaceStatus(status, options.providerCanResume),
     providerKey,
   };
 }

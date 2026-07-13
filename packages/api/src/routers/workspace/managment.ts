@@ -83,6 +83,7 @@ import {
   isResumableWorkspaceStatus,
 } from "../../service/workspace-runtime";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -348,6 +349,61 @@ export const workspaceRouter = router({
       }
     }),
 
+  resolveSandboxDefaults: protectedProcedure
+    .input(
+      z
+        .object({
+          agent: z.string().trim().min(1).optional(),
+          provider: z.string().trim().min(1).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
+      const agents = await db
+        .select()
+        .from(agentType)
+        .where(eq(agentType.isEnabled, true))
+        .orderBy(asc(agentType.name));
+      const providers = await db.query.cloudProvider.findMany({
+        where: and(eq(cloudProvider.isEnabled, true), eq(cloudProvider.isSandbox, true)),
+        with: { regions: { where: eq(region.isEnabled, true), orderBy: [asc(region.name)] } },
+        orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
+      });
+
+      const requestedAgent = input?.agent?.toLowerCase();
+      const selectedAgent = agents.find(
+        (candidate) =>
+          !requestedAgent ||
+          candidate.id === input?.agent ||
+          candidate.name.toLowerCase() === requestedAgent,
+      );
+      const requestedProvider = input?.provider?.toLowerCase();
+      const selectedProvider = providers.find((candidate) => {
+        const providerKey = candidate.providerKey.toLowerCase();
+        return (
+          canUseProvider(viewerPlan, providerKey) &&
+          (!requestedProvider ||
+            candidate.id === input?.provider ||
+            providerKey === requestedProvider ||
+            candidate.name.toLowerCase() === requestedProvider)
+        );
+      });
+
+      if (!selectedAgent || !selectedProvider) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No enabled sandbox configuration matches the requested defaults",
+        });
+      }
+
+      return {
+        agentTypeId: selectedAgent.id,
+        cloudProviderId: selectedProvider.id,
+        regionId: selectedProvider.regions[0]?.id,
+      };
+    }),
+
   // List all workspaces for the authenticated user (paginated)
   listWorkspaces: protectedProcedure
     .input(
@@ -412,29 +468,12 @@ export const workspaceRouter = router({
           offset,
         });
 
-        // Decrypt server passwords for serverOnly workspaces
-        const workspacesWithDecryptedPasswords = workspaces.map((ws) => {
-          if (ws.serverPassword && ws.serverOnly) {
-            try {
-              return {
-                ...ws,
-                serverPassword: decryptWorkspacePassword(ws.serverPassword),
-              };
-            } catch (error) {
-              console.error(`Failed to decrypt password for workspace ${ws.id}:`, error);
-              // Return without password if decryption fails
-              return {
-                ...ws,
-                serverPassword: null,
-              };
-            }
-          }
-          return ws;
-        });
-
         return {
           success: true,
-          workspaces: workspacesWithDecryptedPasswords,
+          workspaces: workspaces.map((record) => ({
+            ...record,
+            serverPassword: null as string | null,
+          })),
           pagination: {
             total,
             limit,
@@ -482,25 +521,9 @@ export const workspaceRouter = router({
           });
         }
 
-        let workspaceWithPassword = workspaceRecord;
-        if (workspaceRecord.serverPassword && workspaceRecord.serverOnly) {
-          try {
-            workspaceWithPassword = {
-              ...workspaceRecord,
-              serverPassword: decryptWorkspacePassword(workspaceRecord.serverPassword),
-            };
-          } catch (error) {
-            console.error(`Failed to decrypt password for workspace ${workspaceRecord.id}:`, error);
-            workspaceWithPassword = {
-              ...workspaceRecord,
-              serverPassword: null,
-            };
-          }
-        }
-
         return {
           success: true,
-          workspace: workspaceWithPassword,
+          workspace: { ...workspaceRecord, serverPassword: null as string | null },
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -1111,6 +1134,7 @@ export const workspaceRouter = router({
     .input(
       z.object({
         name: z.string().optional(),
+        idempotencyKey: z.string().trim().min(1).max(255).optional(),
         repo: z.string().optional(), // Optional for local workspaces
         branch: z
           .string()
@@ -1176,6 +1200,39 @@ export const workspaceRouter = router({
           code: "NOT_FOUND",
           message: "User not found",
         });
+      }
+
+      if (input.idempotencyKey) {
+        const existing = await db.query.workspace.findFirst({
+          where: and(
+            eq(workspace.userId, userId),
+            eq(workspace.idempotencyKey, input.idempotencyKey),
+          ),
+        });
+        if (existing) {
+          const [existingProvider] = await db
+            .select()
+            .from(cloudProvider)
+            .where(eq(cloudProvider.id, existing.cloudProviderId));
+          const headers = await getWorkspaceRouteAccess(existing.id, null);
+          let password: string | null = null;
+          if (existing.serverPassword && existing.serverOnly) {
+            password = decryptWorkspacePassword(existing.serverPassword);
+          }
+          return {
+            success: true,
+            message: "Existing workspace returned for idempotency key",
+            workspace: existing,
+            volume: null,
+            runtime: buildWorkspaceRuntimeAccess({
+              workspace: existing,
+              headers,
+              password,
+              providerKey: existingProvider?.providerKey ?? null,
+              providerCanResume: existingProvider?.providerKey !== "cloudflare",
+            }),
+          };
+        }
       }
 
       // Validate that the provided repo is publicly clonable using `git ls-remote`
@@ -1972,6 +2029,7 @@ export const workspaceRouter = router({
             status: initialWorkspaceStatus,
             hostingType: isLocal ? "local" : "cloud",
             name: input.name || subdomain,
+            idempotencyKey: input.idempotencyKey ?? null,
             startedAt: new Date(workspaceInfo.serviceCreatedAt),
             lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),
             updatedAt: new Date(workspaceInfo.serviceCreatedAt),
@@ -2121,6 +2179,8 @@ export const workspaceRouter = router({
         headers,
         password,
         providerKey: provider?.providerKey ?? null,
+        providerCanResume:
+          workspaceRecord.status === "paused" && provider?.providerKey !== "cloudflare",
       });
     }),
 
@@ -2165,71 +2225,121 @@ export const workspaceRouter = router({
       if (existingWorkspace.status === "terminated") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Workspace is terminated and cannot be restarted",
+          message: "WORKSPACE_TERMINATED: workspace cannot be restarted",
         });
       }
 
       if (isResumableWorkspaceStatus(existingWorkspace.status)) {
-        const hasQuota = await hasRemainingQuota(userId);
-        if (!hasQuota) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Daily free tier limit reached. Please try again tomorrow.",
-          });
-        }
+        // Atomically claim the restart. Concurrent callers observe pending and
+        // wait for the same provider operation instead of starting another one.
+        const [claimedWorkspace] = await db
+          .update(workspace)
+          .set({ status: "pending", updatedAt: new Date() })
+          .where(
+            and(
+              eq(workspace.id, input.workspaceId),
+              eq(workspace.userId, userId),
+              eq(workspace.status, "paused"),
+            ),
+          )
+          .returning();
 
-        const [provider] = await db
-          .select()
-          .from(cloudProvider)
-          .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
+        if (!claimedWorkspace) {
+          existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
+        } else {
+          existingWorkspace = claimedWorkspace;
+          const hasQuota = await hasRemainingQuota(userId);
+          if (!hasQuota) {
+            await updateWorkspaceByIdAndInvalidate(
+              input.workspaceId,
+              { status: "paused", updatedAt: new Date() },
+              existingWorkspace.subdomain,
+            );
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Daily free tier limit reached. Please try again tomorrow.",
+            });
+          }
 
-        if (!provider) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Cloud provider not found",
-          });
-        }
-
-        let workspaceRegion;
-        if (provider.supportsRegions && existingWorkspace.regionId) {
-          [workspaceRegion] = await db
+          const [provider] = await db
             .select()
-            .from(region)
-            .where(eq(region.id, existingWorkspace.regionId));
-        }
+            .from(cloudProvider)
+            .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
 
-        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
-        await computeProvider.restartWorkspace(
-          existingWorkspace.externalInstanceId,
-          workspaceRegion?.externalRegionIdentifier,
-          existingWorkspace.externalRunningDeploymentId ?? undefined,
-        );
+          if (!provider) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Cloud provider not found",
+            });
+          }
 
-        const restartWorkspaceStatus =
-          provider.restartSettlement === "immediate" ? "running" : "pending";
-        const now = new Date();
-        await updateWorkspaceByIdAndInvalidate(
-          input.workspaceId,
-          {
+          if (provider.providerKey === "cloudflare") {
+            await updateWorkspaceByIdAndInvalidate(
+              input.workspaceId,
+              { status: "paused", updatedAt: new Date() },
+              existingWorkspace.subdomain,
+            );
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "WORKSPACE_NON_RECOVERABLE: provider does not preserve paused filesystem state",
+            });
+          }
+
+          let workspaceRegion;
+          if (provider.supportsRegions && existingWorkspace.regionId) {
+            [workspaceRegion] = await db
+              .select()
+              .from(region)
+              .where(eq(region.id, existingWorkspace.regionId));
+          }
+
+          const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+          try {
+            await computeProvider.resumeWorkspace(
+              existingWorkspace.externalInstanceId,
+              workspaceRegion?.externalRegionIdentifier,
+              existingWorkspace.externalRunningDeploymentId ?? undefined,
+            );
+          } catch (error) {
+            await updateWorkspaceByIdAndInvalidate(
+              input.workspaceId,
+              { status: "paused", updatedAt: new Date() },
+              existingWorkspace.subdomain,
+            );
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "WORKSPACE_RESTART_FAILED: provider could not restart the workspace",
+              cause: error,
+            });
+          }
+
+          const restartWorkspaceStatus =
+            provider.restartSettlement === "immediate" ? "running" : "pending";
+          const now = new Date();
+          await updateWorkspaceByIdAndInvalidate(
+            input.workspaceId,
+            {
+              status: restartWorkspaceStatus,
+              pausedAt: null,
+              lastActiveAt: now,
+              updatedAt: now,
+            },
+            existingWorkspace.subdomain,
+          );
+
+          await createUsageSession(input.workspaceId, userId);
+
+          WORKSPACE_EVENTS.emitStatus({
+            workspaceId: input.workspaceId,
             status: restartWorkspaceStatus,
-            stoppedAt: null,
-            lastActiveAt: now,
             updatedAt: now,
-          },
-          existingWorkspace.subdomain,
-        );
+            userId,
+            workspaceDomain: existingWorkspace.domain,
+          });
 
-        await createUsageSession(input.workspaceId, userId);
-
-        WORKSPACE_EVENTS.emitStatus({
-          workspaceId: input.workspaceId,
-          status: restartWorkspaceStatus,
-          updatedAt: now,
-          userId,
-          workspaceDomain: existingWorkspace.domain,
-        });
-
-        existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
+          existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
+        }
       }
 
       // Wait until running (or timeout) when still pending after restart/create.
@@ -2243,7 +2353,7 @@ export const workspaceRouter = router({
           if (existingWorkspace.status === "terminated") {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "Workspace terminated while waiting to become running",
+              message: "WORKSPACE_TERMINATED: workspace terminated during startup",
             });
           }
           if (existingWorkspace.status === "running") break;
@@ -2263,7 +2373,7 @@ export const workspaceRouter = router({
       if (existingWorkspace.status !== "running") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `Workspace is ${existingWorkspace.status}; runtime is not available yet`,
+          message: `WORKSPACE_START_TIMEOUT: workspace remained ${existingWorkspace.status}`,
         });
       }
 
@@ -2287,7 +2397,29 @@ export const workspaceRouter = router({
         headers,
         password,
         providerKey: provider?.providerKey ?? null,
+        providerCanResume: provider?.providerKey !== "cloudflare",
       });
+
+      if (!runtime.url) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "WORKSPACE_START_TIMEOUT: runtime URL is not available",
+        });
+      }
+      const healthy = await pollHttpRuntimeHealth({
+        url: runtime.url,
+        headers: runtime.headers,
+        timeoutMs,
+        intervalMs: pollIntervalMs,
+        // Authentication failures still prove that the runtime server is up.
+        isHealthy: (response) => response.status < 500,
+      });
+      if (!healthy) {
+        throw new TRPCError({
+          code: "TIMEOUT",
+          message: "WORKSPACE_START_TIMEOUT: runtime health check did not pass",
+        });
+      }
 
       return {
         success: true,
@@ -2371,7 +2503,7 @@ export const workspaceRouter = router({
             });
         }
 
-        await computeProvider.stopWorkspace(
+        await computeProvider.pauseWorkspace(
           existingWorkspace.externalInstanceId,
           workspaceRegion?.externalRegionIdentifier,
           existingWorkspace.externalRunningDeploymentId ?? undefined,
@@ -2386,7 +2518,7 @@ export const workspaceRouter = router({
           input.workspaceId,
           {
             status: "paused",
-            stoppedAt: now,
+            pausedAt: now,
             sshConnection: null,
             updatedAt: now,
           },
@@ -2490,7 +2622,7 @@ export const workspaceRouter = router({
 
         // Get compute provider and restart the workspace
         const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
-        await computeProvider.restartWorkspace(
+        await computeProvider.resumeWorkspace(
           existingWorkspace.externalInstanceId,
           workspaceRegion?.externalRegionIdentifier,
           existingWorkspace.externalRunningDeploymentId ?? undefined,
@@ -2504,7 +2636,7 @@ export const workspaceRouter = router({
           input.workspaceId,
           {
             status: restartWorkspaceStatus,
-            stoppedAt: null,
+            pausedAt: null,
             lastActiveAt: now,
             updatedAt: now,
           },
@@ -2632,7 +2764,7 @@ export const workspaceRouter = router({
         input.workspaceId,
         {
           status: "terminated",
-          stoppedAt: terminatedAt,
+          pausedAt: terminatedAt,
           terminatedAt,
           exposedPorts: null,
           sshConnection: null,

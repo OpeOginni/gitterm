@@ -278,7 +278,7 @@ export class CloudflareComputeProvider implements ComputeProvider {
     return (await this.provisionWorkspace(config, true)) as PersistentWorkspaceInfo;
   }
 
-  async stopWorkspace(externalId: string): Promise<void> {
+  async pauseWorkspace(externalId: string): Promise<void> {
     const handle = parseHandle(externalId);
     const { internalApiKey } = await this.requireConfig();
     await this.callControl(handle.workerUrl, internalApiKey, "/__gitterm/stop", {
@@ -286,7 +286,7 @@ export class CloudflareComputeProvider implements ComputeProvider {
     });
   }
 
-  async restartWorkspace(externalId: string): Promise<void> {
+  async resumeWorkspace(externalId: string): Promise<void> {
     const handle = parseHandle(externalId);
     const { internalApiKey } = await this.requireConfig();
     const response = await this.callControl(

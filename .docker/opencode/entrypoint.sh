@@ -119,7 +119,9 @@ if [ ! -f ".initialized" ]; then
         if [ -n "$REPO_BASE_COMMIT" ]; then
             echo "Checking out base commit: $REPO_BASE_COMMIT"
             git -C "$REPO_DIR_NAME" fetch --depth 1 origin "$REPO_BASE_COMMIT"
+            git -C "$REPO_DIR_NAME" cat-file -e "${REPO_BASE_COMMIT}^{commit}"
             git -C "$REPO_DIR_NAME" checkout --detach "$REPO_BASE_COMMIT"
+            test "$(git -C "$REPO_DIR_NAME" rev-parse HEAD)" = "$REPO_BASE_COMMIT"
         fi
         
         echo "$REPO_OWNER" > .repo_owner
