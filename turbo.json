@@ -8,7 +8,7 @@
       "outputs": ["dist/**"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["^build", "^check-types"]
     },
     "dev": {
       "cache": false,
