@@ -842,7 +842,7 @@ export function InstanceCard({
                 </button>
               </div>
             )}
-            {workspace.serverOnly && workspace.serverPassword && (
+            {workspace.serverPassword && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400/60" />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">

@@ -49,6 +49,19 @@ import {
   getWorkspaceLimit,
   type UserPlan,
 } from "../../config/features";
+
+function decryptServerPasswordSafe(
+  encrypted: string | null | undefined,
+  workspaceId: string,
+): string | null {
+  if (!encrypted) return null;
+  try {
+    return decryptWorkspacePassword(encrypted);
+  } catch (error) {
+    console.error(`Failed to decrypt password for workspace ${workspaceId}:`, error);
+    return null;
+  }
+}
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooling";
 import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "../../service/workspace-env";
@@ -469,7 +482,7 @@ export const workspaceRouter = router({
           success: true,
           workspaces: workspaces.map((record) => ({
             ...record,
-            serverPassword: null as string | null,
+            serverPassword: decryptServerPasswordSafe(record.serverPassword, record.id),
           })),
           pagination: {
             total,
@@ -520,7 +533,13 @@ export const workspaceRouter = router({
 
         return {
           success: true,
-          workspace: { ...workspaceRecord, serverPassword: null as string | null },
+          workspace: {
+            ...workspaceRecord,
+            serverPassword: decryptServerPasswordSafe(
+              workspaceRecord.serverPassword,
+              workspaceRecord.id,
+            ),
+          },
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
