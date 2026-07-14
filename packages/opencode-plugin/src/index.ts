@@ -156,6 +156,21 @@ export const GittermWorkspacePlugin: Plugin = async (
       const sandboxID = sandboxByWorkspace.get(sourceWorkspaceID);
       if (!sandboxID) return;
       sandboxByWorkspace.delete(sourceWorkspaceID);
+      // Removing the workspace record tears the sandbox down through this
+      // adapter's remove() AND clears the entry from workspace listings.
+      // Published stable plugin types may predate remove(); fall back to
+      // terminating the sandbox directly on older opencode versions.
+      const removeWorkspace = (
+        experimental_workspace as { remove?: (workspaceID: string) => Promise<void> }
+      ).remove;
+      if (removeWorkspace) {
+        try {
+          await removeWorkspace(sourceWorkspaceID);
+          return;
+        } catch (error) {
+          console.error("Gitterm: workspace remove failed; terminating sandbox directly", error);
+        }
+      }
       try {
         await clientFor(config).workspaces.terminate(sandboxID);
       } catch (error) {
