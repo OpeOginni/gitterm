@@ -7,7 +7,7 @@ async function main() {
     .aptInstall(["git", "bash", "curl", "ca-certificates"], {
       noInstallRecommends: true,
     })
-    .npmInstall("@gitterm/opencode-workspace@1.17.20-workspaces.8", { g: true })
+    .npmInstall("@gitterm/opencode-workspace@1.17.20-workspaces.12", { g: true })
     .runCmd('ln -sf "$(command -v opencode-workspace)" /usr/local/bin/opencode', { user: "root" })
     .setEnvs({ OPENCODE_EXPERIMENTAL_WORKSPACES: "true" })
     .setStartCmd("sleep infinity", waitForTimeout(1_000));
