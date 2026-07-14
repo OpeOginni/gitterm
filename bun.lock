@@ -279,6 +279,21 @@
         "typescript": "^5",
       },
     },
+    "packages/opencode-plugin": {
+      "name": "@gitterm/opencode-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@gitterm/sdk": "^0.0.3",
+      },
+      "devDependencies": {
+        "@opencode-ai/plugin": "^1.17.7",
+        "@types/bun": "^1.2.6",
+        "typescript": "^5.8.2",
+      },
+      "peerDependencies": {
+        "@opencode-ai/plugin": "^1.17.7",
+      },
+    },
     "packages/redis": {
       "name": "@gitterm/redis",
       "version": "0.0.1",
@@ -707,6 +722,8 @@
     "@gitterm/db": ["@gitterm/db@workspace:packages/db"],
 
     "@gitterm/env": ["@gitterm/env@workspace:packages/env"],
+
+    "@gitterm/opencode-plugin": ["@gitterm/opencode-plugin@workspace:packages/opencode-plugin"],
 
     "@gitterm/redis": ["@gitterm/redis@workspace:packages/redis"],
 
@@ -3076,6 +3093,8 @@
 
     "@gitterm/env/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
 
+    "@gitterm/opencode-plugin/@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
+
     "@gitterm/schema/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
 
     "@gitterm/sdk/@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
@@ -3681,6 +3700,8 @@
     "@esbuild-kit/core-utils/esbuild/@esbuild/win32-x64": ["@esbuild/win32-x64@0.18.20", "", { "os": "win32", "cpu": "x64" }, "sha512-kTdfRcSiDfQca/y9QIkng02avJ+NCaQvrMejlsB3RRv5sE9rRoeBPISaZpKxHELzRxZyLvNts1P27W3wV+8geQ=="],
 
     "@gitterm/cli/@types/bun/bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
+
+    "@gitterm/opencode-plugin/@types/bun/bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
 
     "@gitterm/sdk/@types/bun/bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
 

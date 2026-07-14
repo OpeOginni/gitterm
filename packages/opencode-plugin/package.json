@@ -1,0 +1,48 @@
+{
+  "name": "@gitterm/opencode-plugin",
+  "version": "0.1.2",
+  "description": "Run OpenCode experimental workspaces on Gitterm",
+  "keywords": [
+    "gitterm",
+    "opencode",
+    "opencode-plugin",
+    "remote-development",
+    "workspace"
+  ],
+  "homepage": "https://gitterm.dev",
+  "license": "MIT",
+  "author": "Opeyemi Oginni",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target bun --format esm && tsc -p tsconfig.build.json",
+    "check-types": "tsc --noEmit",
+    "prepack": "bun run check-types && bun run build"
+  },
+  "devDependencies": {
+    "@gitterm/sdk": "workspace:*",
+    "@opencode-ai/plugin": "^1.17.7",
+    "@types/bun": "^1.2.6",
+    "typescript": "^5.8.2"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "^1.17.7"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  }
+}
