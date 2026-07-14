@@ -107,18 +107,27 @@
 						write_buffer 32768
 					}
 
+					# Serve error pages with the upstream status so clients see the
+					# real failure. `method GET` is required: file_server rejects
+					# other methods with 405, which masked every failing POST.
 					@unavailable status 403 404 503
 					handle_response @unavailable {
 						root * /srv/errors
 						rewrite * /unavailable.html
-						file_server
+						method GET
+						file_server {
+							status {rp.status_code}
+						}
 					}
 
 					@server_error status 500 502 504
 					handle_response @server_error {
 						root * /srv/errors
 						rewrite * /error.html
-						file_server
+						method GET
+						file_server {
+							status {rp.status_code}
+						}
 					}
 				}
 			}
@@ -155,18 +164,27 @@
 						write_buffer 32768
 					}
 
+					# Serve error pages with the upstream status so clients see the
+					# real failure. `method GET` is required: file_server rejects
+					# other methods with 405, which masked every failing POST.
 					@unavailable status 403 404 503
 					handle_response @unavailable {
 						root * /srv/errors
 						rewrite * /unavailable.html
-						file_server
+						method GET
+						file_server {
+							status {rp.status_code}
+						}
 					}
 
 					@server_error status 500 502 504
 					handle_response @server_error {
 						root * /srv/errors
 						rewrite * /error.html
-						file_server
+						method GET
+						file_server {
+							status {rp.status_code}
+						}
 					}
 				}
 			}
@@ -176,13 +194,20 @@
 	# Error handling with nice HTML pages
 	# Security: Group 401/403/404 together to prevent workspace enumeration
 	handle_errors {
+		# file_server rejects non-GET methods with 405, which masked the real
+		# error status on failing POSTs. Rewrite to GET and serve the page
+		# with the original error status.
+		method GET
+
 		# Access denied / not found - use same response to prevent enumeration
 		@unavailable expression {err.status_code} == 401 || {err.status_code} == 403 || {err.status_code} == 404
 		handle @unavailable {
 			header Content-Type text/html
 			root * /srv/errors
 			rewrite * /unavailable.html
-			file_server
+			file_server {
+				status {err.status_code}
+			}
 		}
 
 		# Server errors (5xx)
@@ -191,7 +216,9 @@
 			header Content-Type text/html
 			root * /srv/errors
 			rewrite * /error.html
-			file_server
+			file_server {
+				status {err.status_code}
+			}
 		}
 
 		# Bad request (400)
@@ -200,7 +227,9 @@
 			header Content-Type text/html
 			root * /srv/errors
 			rewrite * /error.html
-			file_server
+			file_server {
+				status {err.status_code}
+			}
 		}
 
 		# Default fallback
@@ -208,7 +237,9 @@
 			header Content-Type text/html
 			root * /srv/errors
 			rewrite * /error.html
-			file_server
+			file_server {
+				status {err.status_code}
+			}
 		}
 	}
 }
