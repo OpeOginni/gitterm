@@ -78,6 +78,7 @@ import {
   updateWorkspaceByIdAndInvalidate,
   updateWorkspaceByIdReturningAndInvalidate,
   updateWorkspaceRoutingAndInvalidate,
+  updateWorkspaceStatusAndInvalidate,
   invalidateWorkspaceCacheAfterMutation,
 } from "../../service/workspace-mutations";
 import {
@@ -2163,7 +2164,7 @@ export const workspaceRouter = router({
         });
       }
 
-      const workspaceRecord = await db.query.workspace.findFirst({
+      let workspaceRecord = await db.query.workspace.findFirst({
         where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
       });
 
@@ -2178,6 +2179,46 @@ export const workspaceRouter = router({
         .select()
         .from(cloudProvider)
         .where(eq(cloudProvider.id, workspaceRecord.cloudProviderId));
+      if (
+        provider &&
+        workspaceRecord.externalInstanceId &&
+        (workspaceRecord.status === "paused" || workspaceRecord.status === "pending")
+      ) {
+        try {
+          const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+          const live = await computeProvider.getStatus(workspaceRecord.externalInstanceId);
+          if (live.status === "running") {
+            const now = new Date();
+            // Guard on the stale status so a concurrent lifecycle transition
+            // (terminate, ensureRunning claim) is never overwritten.
+            const [reconciled] = await updateWorkspaceStatusAndInvalidate(
+              and(
+                eq(workspace.id, workspaceRecord.id),
+                or(eq(workspace.status, "paused"), eq(workspace.status, "pending")),
+              ),
+              { status: "running", pausedAt: null, lastActiveAt: now, updatedAt: now },
+            );
+            if (reconciled) {
+              WORKSPACE_EVENTS.emitStatus({
+                workspaceId: reconciled.id,
+                status: reconciled.status,
+                updatedAt: reconciled.updatedAt,
+                userId,
+                workspaceDomain: reconciled.workspaceDomain,
+              });
+              workspaceRecord =
+                (await db.query.workspace.findFirst({
+                  where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
+                })) ?? workspaceRecord;
+            }
+          }
+        } catch (error) {
+          console.error(
+            `Failed to reconcile live provider status for workspace ${workspaceRecord.id}:`,
+            error,
+          );
+        }
+      }
 
       let password: string | null = null;
       if (workspaceRecord.serverPassword) {

@@ -1,6 +1,6 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
-import { db, eq, and, sql, gt, lt, or } from "@gitterm/db";
+import { db, eq, and, sql, gt, lt, or, isNull } from "@gitterm/db";
 import {
   workspace,
   dailyUsage,
@@ -858,6 +858,10 @@ export const internalRouter = router({
             eq(workspace.cloudProviderId, e2bProvider.id),
             eq(workspace.externalInstanceId, serviceId),
             eq(workspace.status, "running"),
+            or(
+              isNull(workspace.lastActiveAt),
+              lt(workspace.lastActiveAt, new Date(input.timestamp)),
+            ),
           ),
           {
             status: "paused",

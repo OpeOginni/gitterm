@@ -449,12 +449,12 @@ export class E2BProvider implements ComputeProvider {
   }
 
   async terminateWorkspace(externalServiceId: string, _externalVolumeId?: string): Promise<void> {
-    const sandbox = await this.connectSandbox(externalServiceId);
-
-    await sandbox.kill().catch((error: Error) => {
-      console.error("E2B Sandbox Error (Sandbox.kill)", error.message);
-      throw new Error(`E2B Sandbox Error (Sandbox.kill): ${error.message}`);
-    });
+    await Sandbox.kill(externalServiceId, { apiKey: await this.getApiKey() }).catch(
+      (error: Error) => {
+        console.error("E2B Sandbox Error (Sandbox.kill)", error.message);
+        throw new Error(`E2B Sandbox Error (Sandbox.kill): ${error.message}`);
+      },
+    );
   }
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
