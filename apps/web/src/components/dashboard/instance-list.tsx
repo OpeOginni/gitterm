@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   EthernetPort,
+  Folder,
   X,
   Plus,
   KeyRound,
@@ -50,9 +51,11 @@ import {
   getAttachCommand,
   getWorkspaceDisplayUrl,
   getWorkspaceOpenPortUrl,
+  getWorkspaceProjectPath,
   getT3PairingUrl,
   getT3DesktopPairingUrl,
   isT3Agent,
+  isOpencodeAgent,
 } from "@/lib/utils";
 import { getIcon } from "@/components/dashboard/create-instance/types";
 import Link from "next/link";
@@ -348,13 +351,13 @@ export function InstanceCard({
 
   const getRegionInfo = () => {
     const provider = providers.find((p) => p.id === workspace.cloudProviderId);
-    if (!provider) return { name: "Unknown", location: "Unknown", providerName: "Unknown" };
-
-    const region = provider.regions?.find((r: any) => r.id === workspace.regionId);
+    // Sandbox providers often have no per-instance region; omit the row then.
+    const region = provider?.regions?.find((r: any) => r.id === workspace.regionId);
     return {
-      name: region?.name || "Unknown",
-      location: region?.location || "Unknown",
-      providerName: provider.name,
+      name: region?.name,
+      location: region?.location,
+      providerName: provider?.name || "Unknown",
+      providerKey: provider?.providerKey,
     };
   };
 
@@ -380,6 +383,8 @@ export function InstanceCard({
   // T3 workspaces authenticate with one-time pairing links instead of a
   // server password; the stored credential is the current pairing token.
   const isT3 = isT3Agent(workspace.image.agentType.name);
+  const isOpencode = isOpencodeAgent(workspace.image.agentType.name);
+  const projectPath = getWorkspaceProjectPath(regionInfo.providerKey, workspace.repositoryUrl);
   const agentIcon = getIcon(workspace.image.agentType.name);
   const t3PairingUrl =
     isT3 && workspace.subdomain && workspace.serverPassword
@@ -796,12 +801,16 @@ export function InstanceCard({
                 </span>
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">
-                {regionInfo.name} · {regionInfo.location}
-              </span>
-            </div>
+            {regionInfo.name && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">
+                  {regionInfo.location
+                    ? `${regionInfo.name} · ${regionInfo.location}`
+                    : regionInfo.name}
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Server className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{regionInfo.providerName}</span>
@@ -885,6 +894,18 @@ export function InstanceCard({
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+            {isOpencode && isRunning && (
+              <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                <Folder className="h-3.5 w-3.5 shrink-0" />
+                <button
+                  onClick={() => copyValue(projectPath, "Project path copied!")}
+                  className="text-xs font-mono text-white/40 hover:text-white/70 truncate transition-colors cursor-pointer underline decoration-dotted underline-offset-2 text-left min-w-0"
+                  title="Copy project path and paste it into OpenCode when opening this workspace's project"
+                >
+                  {projectPath}
+                </button>
               </div>
             )}
             {workspace.editorAccessEnabled && (

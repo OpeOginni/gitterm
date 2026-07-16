@@ -20,7 +20,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { GitHub } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
-import { getWorkspaceUrl } from "@/lib/utils";
+import { getWorkspaceProjectPath, getWorkspaceUrl } from "@/lib/utils";
 import { track, AnalyticsEvent } from "@/lib/analytics";
 import { toast } from "sonner";
 import {
@@ -158,6 +158,7 @@ export function HeroSection() {
               {result ? (
                 <ResultCard
                   result={result}
+                  repo={repo}
                   onReset={handleReset}
                   isResetting={killMutation.isPending}
                 />
@@ -355,14 +356,18 @@ function LaunchForm({
 
 function ResultCard({
   result,
+  repo,
   onReset,
   isResetting,
 }: {
   result: AnonResult;
+  repo: string;
   onReset: () => void;
   isResetting?: boolean;
 }) {
   const url = useMemo(() => getWorkspaceUrl(result.subdomain), [result.subdomain]);
+  // Anon sandboxes always run on E2B; OpenCode expands ~/ to the sandbox home.
+  const projectPath = useMemo(() => getWorkspaceProjectPath("e2b", repo.trim()), [repo]);
   const attachCommand = useMemo(
     () => `opencode attach ${url} -p ${result.serverPassword}`,
     [url, result.serverPassword],
@@ -524,8 +529,18 @@ function ResultCard({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium text-white/85">Desktop</p>
-                <p className="text-[11.5px] text-white/40">Use the credentials above.</p>
+                <p className="truncate text-[11.5px] text-white/40">
+                  Credentials above · project <span className="font-mono">{projectPath}</span>
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={() => copyText(projectPath, "Project path copied")}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/70 transition-colors hover:border-white/20 hover:text-white"
+              >
+                <Copy className="h-3 w-3" />
+                Copy
+              </button>
             </div>
           </div>
         </div>

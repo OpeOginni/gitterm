@@ -68,6 +68,29 @@ export function isT3Agent(agentName: string): boolean {
   return agentName.trim().toLowerCase().startsWith("t3code");
 }
 
+export function isOpencodeAgent(agentName: string): boolean {
+  return agentName.trim().toLowerCase().includes("opencode");
+}
+
+/**
+ * In-sandbox path of the cloned repo, for pasting into OpenCode's project
+ * picker. Mirrors each provider's workspace layout (see packages/api/src/providers).
+ * OpenCode expands `~/`, so E2B's /home/user/workspace is shown as ~/workspace;
+ * Daytona's /workspace is not under the home dir and stays absolute.
+ */
+export function getWorkspaceProjectPath(
+  providerKey: string | undefined,
+  repositoryUrl?: string | null,
+): string {
+  const repoName = repositoryUrl
+    ?.replace(/\/+$/, "")
+    .split("/")
+    .pop()
+    ?.replace(/\.git$/i, "");
+  const base = providerKey === "e2b" ? "~/workspace" : "/workspace";
+  return repoName ? `${base}/${repoName}` : base;
+}
+
 export function getT3PairingUrl(subdomain: string, token: string): string {
   const host = encodeURIComponent(getWorkspaceUrl(subdomain));
   return `https://app.t3.codes/pair?host=${host}#token=${encodeURIComponent(token)}`;
