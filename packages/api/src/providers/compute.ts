@@ -139,6 +139,13 @@ export interface AgentServeSpec {
    * report it themselves via the workspace callback API.
    */
   accessCredentialCommand?: string;
+  /**
+   * Optional command launched detached from the repo directory after the serve
+   * command, e.g. to register the repo as an OpenCode project so desktop
+   * clients don't have to type the path. Best-effort: providers must not fail
+   * provisioning when it errors.
+   */
+  postStartCommand?: string;
 }
 
 /**

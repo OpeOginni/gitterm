@@ -46,6 +46,29 @@ export function buildOpencodeConfigJson(
   );
 }
 
+/**
+ * OpenCode registers a project lazily on the first request scoped to a
+ * directory, so a fresh workspace shows an empty project picker until the
+ * user types the repo path. Polling `/project/current` for the repo dir once
+ * the server is up persists the project, making it one click away. Basic auth
+ * is sent unconditionally; the server ignores it when no password is set.
+ */
+export function buildOpencodeRegisterProjectCommand(port: number = OPENCODE_SERVE_PORT): string {
+  return [
+    // Only git checkouts should become projects; a bare workspace dir would
+    // register OpenCode's synthetic "global" project instead.
+    `[ -e .git ] || exit 0`,
+    `i=0`,
+    `while [ "$i" -lt 120 ]; do`,
+    `  curl -sf -o /dev/null -u "opencode:$OPENCODE_SERVER_PASSWORD" -G --data-urlencode "directory=$PWD" "http://127.0.0.1:${port}/project/current" && exit 0`,
+    `  i=$((i + 1))`,
+    `  sleep 1`,
+    `done`,
+    `echo "gitterm: timed out registering opencode project" >&2`,
+    `exit 1`,
+  ].join("\n");
+}
+
 export function buildOpencodeTuiConfigJson(
   agentConfig: Record<string, unknown> | null | undefined,
 ): string {
@@ -84,6 +107,7 @@ export const opencodeProvisioner: AgentProvisioner = {
       serve: {
         command: `opencode serve --hostname 0.0.0.0 --port ${OPENCODE_SERVE_PORT}`,
         port: OPENCODE_SERVE_PORT,
+        postStartCommand: buildOpencodeRegisterProjectCommand(),
       },
       usesServerPassword: true,
     };

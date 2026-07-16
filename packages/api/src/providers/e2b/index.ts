@@ -320,6 +320,28 @@ export class E2BProvider implements ComputeProvider {
       });
   }
 
+  /** Launch the agent's post-start command detached; failures are non-fatal. */
+  private async runPostStartCommand(
+    sandbox: E2BSandbox,
+    spec: WorkspaceProvisioningSpec | null,
+    repoDir: string,
+  ): Promise<void> {
+    const command = spec?.agent.serve?.postStartCommand;
+    if (!command) {
+      return;
+    }
+
+    const escaped = command.replace(/'/g, `'"'"'`);
+
+    await sandbox.commands
+      .run(`nohup setsid bash -lc '${escaped}' > /tmp/agent-post-start.log 2>&1 </dev/null &`, {
+        cwd: repoDir,
+      })
+      .catch((error) => {
+        console.error("E2B Sandbox Error (post-start command)", error);
+      });
+  }
+
   /** Run the agent's access-credential command before starting its server. */
   private async captureAccessCredential(
     sandbox: E2BSandbox,
@@ -369,6 +391,9 @@ export class E2BProvider implements ComputeProvider {
     );
     await provisionLogger.step("start-agent-server", () =>
       this.startAgentServer(sandbox, spec, repoDir),
+    );
+    await provisionLogger.step("run-post-start-command", () =>
+      this.runPostStartCommand(sandbox, spec, repoDir),
     );
 
     const trafficAccessToken = await provisionLogger.step("resolve-traffic-access-token", () =>

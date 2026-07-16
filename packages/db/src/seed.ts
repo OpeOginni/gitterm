@@ -698,24 +698,26 @@ export async function seedDatabase(): Promise<void> {
       where: eq(image.name, img.name),
     });
 
+    const agentTypeId = agentTypeMap.get(img.agentTypeName);
+    if (!agentTypeId) {
+      console.log(`[seed]   Skipping image "${img.name}" - agent type not found`);
+      continue;
+    }
+
     if (existing) {
       await db
         .update(image)
         .set({
           imageId: img.imageId,
+          agentTypeId,
           providerMetadata: img.providerMetadata ?? {},
+          isEnabled: true,
           updatedAt: new Date(),
         })
         .where(eq(image.id, existing.id));
-      console.log(`[seed]   Image "${img.name}" already exists`);
+      console.log(`[seed]   Updated image "${img.name}"`);
       imageMap.set(img.name, existing.id);
     } else {
-      const agentTypeId = agentTypeMap.get(img.agentTypeName);
-      if (!agentTypeId) {
-        console.log(`[seed]   Skipping image "${img.name}" - agent type not found`);
-        continue;
-      }
-
       const [created] = await db
         .insert(image)
         .values({

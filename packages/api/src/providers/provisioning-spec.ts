@@ -1,3 +1,4 @@
+import { buildOpencodeRegisterProjectCommand } from "../service/agents/opencode";
 import { decodeAgentFiles } from "../service/workspace-env";
 import type { WorkspaceConfig, WorkspaceProvisioningSpec } from "./compute";
 
@@ -46,6 +47,7 @@ export function resolveProvisioningSpec(config: WorkspaceConfig): WorkspaceProvi
       serve: {
         command: "opencode serve --hostname 0.0.0.0 --port 4096",
         port: 4096,
+        postStartCommand: buildOpencodeRegisterProjectCommand(4096),
       },
       usesServerPassword: true,
     },

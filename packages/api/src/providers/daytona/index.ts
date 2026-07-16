@@ -248,6 +248,26 @@ export class DaytonaProvider implements ComputeProvider {
       });
   }
 
+  /** Launch the agent's post-start command detached; failures are non-fatal. */
+  private async runPostStartCommand(
+    sandbox: DaytonaSandbox,
+    spec: WorkspaceProvisioningSpec | null,
+  ): Promise<void> {
+    const command = spec?.agent.serve?.postStartCommand;
+    if (!command) {
+      return;
+    }
+
+    await sandbox.process
+      .executeSessionCommand(AGENT_SERVER_SESSION_ID, {
+        command: `(${command}) > /tmp/agent-post-start.log 2>&1`,
+        runAsync: true,
+      })
+      .catch((error) => {
+        console.error("Daytona Sandbox Error (post-start command)", error);
+      });
+  }
+
   /** Run the agent's access-credential command before starting its server. */
   private async captureAccessCredential(
     sandbox: DaytonaSandbox,
@@ -388,6 +408,9 @@ export class DaytonaProvider implements ComputeProvider {
 
     await provisionLogger.step("start-agent-server", () =>
       this.startAgentServer(sandbox, repoName, serve),
+    );
+    await provisionLogger.step("run-post-start-command", () =>
+      this.runPostStartCommand(sandbox, spec),
     );
 
     const previewUrlData = await provisionLogger.step("create-preview-link", () =>
