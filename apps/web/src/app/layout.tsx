@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     siteName: "GitTerm",
     images: [
       {
-        url: "/og-card/og-card.png",
+        url: "/og-card/og-card-v2.png",
         width: 1200,
         height: 630,
         alt: TITLE,
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/og-card/og-card.png"],
+    images: ["/og-card/og-card-v2.png"],
   },
   manifest: "/favicon_io/site.webmanifest",
   icons: {
