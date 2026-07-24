@@ -549,6 +549,42 @@ export const proxyResolverRouter = async (c: Context) => {
       }
     }
 
+    // Browsers omit credentials from CORS preflights. Route genuine
+    // preflights upstream so the workspace can return its CORS policy before
+    // requiring Basic auth for the actual request.
+    const isCorsPreflight =
+      c.req.header("X-Original-Method") === "OPTIONS" &&
+      Boolean(c.req.header("Origin")) &&
+      Boolean(c.req.header("Access-Control-Request-Method"));
+    if (isCorsPreflight) {
+      if (!ws.upstreamUrl) {
+        return htmlError(c, "error", 500);
+      }
+
+      let upstreamUrl = new URL(ws.upstreamUrl);
+      let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
+      if (extractedPort && portUpstream) {
+        const portUrl = new URL(portUpstream);
+        port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
+        upstreamUrl = portUrl;
+      }
+
+      return c.text(
+        "OK",
+        200,
+        buildProxyResolveHeaders(
+          {
+            "X-Upstream-URL": upstreamUrl.toString(),
+            "X-Container-Host": upstreamUrl.hostname,
+            "X-Container-Port": port,
+            "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+            "X-Hosting-Type": ws.hostingType,
+          },
+          upstreamAccessHeaders,
+        ),
+      );
+    }
+
     // Validate auth for user-owned workspaces. Server-only/OpenCode desktop
     // workspaces may be reached without cookies by CLI clients, but only with
     // the workspace's server password via Basic auth.
