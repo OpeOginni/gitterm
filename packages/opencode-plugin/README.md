@@ -27,7 +27,7 @@ self-hosted deployments:
     [
       "@gitterm/opencode-plugin",
       {
-        "serverUrl": "https://gitterm.example.com",
+        "serverUrl": "https://gitterm.example.com"
       }
     ]
   ]
