@@ -123,7 +123,6 @@ function FormCardStatus({
  *
  * Editorial section card used across the dashboard's Settings tabs (workspace
  * config, account, etc). Has a built-in header strip with:
- *   - mono eyebrow (e.g. `01 / Section`)
  *   - icon + title row
  *   - one-line description
  *   - optional `action` slot on the right (e.g. `Add Credential` button)
@@ -133,7 +132,6 @@ function FormCardStatus({
 
 function SettingsSection({
   className,
-  eyebrow,
   title,
   description,
   icon: Icon,
@@ -141,7 +139,6 @@ function SettingsSection({
   children,
   ...props
 }: Omit<React.ComponentProps<"section">, "title"> & {
-  eyebrow?: string;
   title: React.ReactNode;
   description?: React.ReactNode;
   icon?: React.ComponentType<{ className?: string }>;
@@ -157,11 +154,6 @@ function SettingsSection({
       {...props}
     >
       <header className="space-y-2.5 border-b border-white/[0.05] bg-white/[0.02] px-5 py-4">
-        {eyebrow && (
-          <span className="block font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-            {eyebrow}
-          </span>
-        )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             {Icon && (

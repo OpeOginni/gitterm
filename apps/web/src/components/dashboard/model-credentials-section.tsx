@@ -629,7 +629,6 @@ export function ModelCredentialsSection() {
   return (
     <>
       <SettingsSection
-        eyebrow="02 / Credentials"
         icon={Key}
         title="Model credentials"
         description="Bring your own keys. We never resell AI access, and your credentials are only injected into your workspaces."

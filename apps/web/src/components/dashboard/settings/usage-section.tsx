@@ -46,7 +46,6 @@ function UsageQuota() {
 
   return (
     <SettingsSection
-      eyebrow="01 / Quota"
       icon={Clock}
       title="Runtime today"
       description="Cloud compute minutes used today. Resets daily at midnight UTC."
@@ -132,7 +131,6 @@ function WorkspaceHistory() {
 
   return (
     <SettingsSection
-      eyebrow="02 / History"
       icon={History}
       title="Workspace history"
       description="Active and terminated workspaces across all your providers."

@@ -57,8 +57,11 @@ function copyText(value: string, message: string) {
   );
 }
 
+// Prefilled so trying GitTerm is one click, not a decision.
+const DEFAULT_REPO = "anomalyco/opencode";
+
 export function HeroSection() {
-  const [repo, setRepo] = useState("");
+  const [repo, setRepo] = useState(DEFAULT_REPO);
   const [result, setResult] = useState<AnonResult | null>(null);
 
   const launchMutation = useMutation(trpc.anon.tryGitterm.mutationOptions());
@@ -97,7 +100,7 @@ export function HeroSection() {
     }
     setResult(null);
     launchMutation.reset();
-    setRepo("");
+    setRepo(DEFAULT_REPO);
   }
 
   return (
@@ -107,15 +110,6 @@ export function HeroSection() {
       </div>
 
       <div className="relative mx-auto max-w-[920px] px-4 text-center sm:px-6">
-        <div
-          className="rise mb-8 flex items-center justify-center gap-3"
-          style={{ animationDelay: "0ms" }}
-        >
-          <span className="h-px w-10 bg-white/[0.08]" />
-          <span className="marker">Open-source cloud workspaces for coding agents</span>
-          <span className="h-px w-10 bg-white/[0.08]" />
-        </div>
-
         <h1
           className={`rise font-display font-light leading-[1] tracking-tight text-white sm:leading-[0.98] ${
             anonEnabled ? "text-[clamp(2rem,7vw,4.8rem)]" : "text-[clamp(2.4rem,9vw,6.5rem)]"
@@ -124,29 +118,14 @@ export function HeroSection() {
         >
           Cloud workspaces
           <br />
-          for coding <span className="font-display-italic text-primary">agents.</span>
+          for coding <span className="font-display-accent text-primary">agents.</span>
         </h1>
 
         <p
           className="rise mx-auto mt-5 max-w-xl font-sans text-[15px] leading-[1.6] text-white/55 sm:mt-7 sm:text-[17px] sm:leading-[1.65]"
           style={{ animationDelay: "180ms" }}
         >
-          {anonEnabled ? (
-            <>
-              For heavy runs, temporary sandboxes, or any cloud you pick. Your keys. Try free in a
-              10-minute{" "}
-              <Link
-                href="https://opencode.ai/"
-                target="_blank"
-                className="text-white/85 underline decoration-white/20 underline-offset-[5px] transition hover:decoration-primary"
-              >
-                OpenCode
-              </Link>{" "}
-              sandbox. No signup.
-            </>
-          ) : (
-            "For heavy runs, temporary sandboxes, or any cloud you pick. Your keys. Open source, self-hostable."
-          )}
+          Heavy runs and throwaway sandboxes, on any cloud you pick. Your keys. Open source.
         </p>
 
         <div
@@ -173,13 +152,12 @@ export function HeroSection() {
               )}
 
               {!result && (
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12.5px] text-white/40">
-                  <span>Want persistence, SSH, and your own keys?</span>
+                <div className="mt-5 text-center">
                   <Link
                     href="/dashboard"
-                    className="inline-flex items-center gap-1 font-mono uppercase tracking-[0.18em] text-primary/90 underline decoration-primary/30 underline-offset-4 hover:decoration-primary"
+                    className="text-[12.5px] text-white/40 transition-colors hover:text-white/70"
                   >
-                    Sign in →
+                    Sign in for persistent workspaces →
                   </Link>
                 </div>
               )}
@@ -193,7 +171,7 @@ export function HeroSection() {
                 </Button>
               </Link>
               <span className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-white/35">
-                open source · your keys · any cloud · no card required
+                no card required
               </span>
             </div>
           )}
@@ -203,15 +181,8 @@ export function HeroSection() {
           <div className="hairline" />
 
           <div className="py-8">
-            <div className="mb-5 flex items-baseline justify-between">
-              <span className="marker text-[12px] tracking-[0.22em]">
-                <span className="text-white/55">01</span>
-                <span className="mx-2 text-white/20">/</span>
-                Run on
-              </span>
-              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/25">
-                pick your cloud
-              </span>
+            <div className="mb-5 text-center">
+              <span className="marker">Runs on</span>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3.5 sm:gap-x-10">
               {clouds.map((c) => (
@@ -235,17 +206,10 @@ export function HeroSection() {
           <div className="hairline" />
 
           <div className="py-8">
-            <div className="mb-5 flex items-baseline justify-between">
-              <span className="marker text-[12px] tracking-[0.22em]">
-                <span className="text-white/55">02</span>
-                <span className="mx-2 text-white/20">/</span>
-                Powered by
-              </span>
-              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/25">
-                more soon
-              </span>
+            <div className="mb-5 text-center">
+              <span className="marker">Agents</span>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:gap-x-10">
               <div className="flex items-center gap-2.5 text-white/85">
                 <Image
                   src="/opencode.svg"
@@ -255,16 +219,10 @@ export function HeroSection() {
                   className="h-6 w-6"
                 />
                 <span className="font-sans text-[15.5px] sm:text-base">OpenCode</span>
-                <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary/85">
-                  live
-                </span>
               </div>
               <div className="flex items-center gap-2.5 text-white/85">
                 <Image src="/t3.svg" alt="T3 Code" width={24} height={24} className="h-6 w-6" />
                 <span className="font-sans text-[15.5px] sm:text-base">T3 Code</span>
-                <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary/85">
-                  live
-                </span>
               </div>
             </div>
           </div>
@@ -341,7 +299,7 @@ function LaunchForm({
         ) : null}
 
         <FormCardFooter>
-          <span className="truncate">10-min workspace · public repos · no signup</span>
+          <span className="truncate">10 min · no signup</span>
           <span className="flex shrink-0 items-center gap-1.5 text-white/55">
             <Image src="/E2B.svg" alt="" width={11} height={11} />
             sponsored by E2B

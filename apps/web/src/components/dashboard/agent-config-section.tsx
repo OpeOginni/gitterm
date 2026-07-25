@@ -427,7 +427,6 @@ export function AgentConfigSection() {
   return (
     <>
       <SettingsSection
-        eyebrow="03 / Agents"
         icon={Settings}
         title="Agent configurations"
         description="Save OpenCode, Claude Code, and Codex configs. Each is applied to the related workspaces on create."

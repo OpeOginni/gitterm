@@ -26,17 +26,10 @@ export function ProblemSection() {
     >
       <div className="relative mx-auto max-w-[1100px] px-4 sm:px-6">
         <div className="mb-10 max-w-2xl sm:mb-12">
-          <div className="mb-5 flex items-center gap-3">
-            <span className="h-px flex-1 bg-white/[0.08]" />
-            <span className="marker">Why GitTerm</span>
-          </div>
           <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
             When your laptop needs{" "}
-            <span className="font-display-italic text-[color:var(--cream)]">backup</span>.
+            <span className="font-display-accent text-[color:var(--cream)]">backup</span>.
           </h2>
-          <p className="mt-5 max-w-xl text-base leading-[1.65] text-white/55 sm:text-[17px]">
-            More power. Safer sandboxes. Any cloud you choose.
-          </p>
         </div>
 
         <div className="grid gap-px bg-white/[0.06] md:grid-cols-3">
@@ -45,10 +38,7 @@ export function ProblemSection() {
               key={idx}
               className="group bg-background p-5 transition-colors hover:bg-card sm:p-7"
             >
-              <div className="mb-6 flex items-center justify-between">
-                <span className="marker">
-                  <span className="text-white/55">01.{idx + 1}</span>
-                </span>
+              <div className="mb-6">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.04] text-white/40 transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                   <item.icon className="h-4 w-4" />
                 </span>

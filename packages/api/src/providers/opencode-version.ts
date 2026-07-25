@@ -6,7 +6,7 @@
  * cache whenever a new opencode version is released (avoiding stale versions).
  */
 export async function getLatestOpencodeVersion(): Promise<string> {
-  const res = await fetch("https://api.github.com/repos/sst/opencode/releases/latest", {
+  const res = await fetch("https://api.github.com/repos/anomalyco/opencode/releases/latest", {
     headers: { Accept: "application/vnd.github+json" },
   });
 

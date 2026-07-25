@@ -16,7 +16,7 @@ export default function TermsPage() {
       <main className="mx-auto max-w-[760px] px-4 pt-24 pb-14 sm:px-6 sm:pt-32 sm:pb-20">
         <header className="border-b border-white/[0.06] pb-8">
           <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-primary/80">Legal</p>
-          <h1 className="mt-3 font-serif text-4xl font-medium tracking-tight text-white sm:text-5xl">
+          <h1 className="mt-3 font-display text-4xl font-medium tracking-tight text-white sm:text-5xl">
             Terms of Service
           </h1>
           <p className="mt-3 text-sm text-white/45">Last updated {LAST_UPDATED}</p>
@@ -192,7 +192,7 @@ export default function TermsPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="font-serif text-2xl font-medium text-white">{title}</h2>
+      <h2 className="font-display text-2xl font-medium text-white">{title}</h2>
       <div className="space-y-3">{children}</div>
     </section>
   );

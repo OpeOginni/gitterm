@@ -25,7 +25,6 @@ export function ApiSection() {
       <ApiTokensSection />
 
       <SettingsSection
-        eyebrow="02 / Developer tools"
         icon={TerminalSquare}
         title="Build with GitTerm"
         description="Use your API token with our official CLI and TypeScript SDK."

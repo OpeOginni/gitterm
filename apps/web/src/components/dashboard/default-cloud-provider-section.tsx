@@ -83,7 +83,6 @@ export function DefaultCloudProviderSection() {
 
   return (
     <SettingsSection
-      eyebrow="01 / Compute"
       icon={Cloud}
       title="Default cloud provider"
       description="Pre-selects the compute target when you spin up a new instance or agent loop. Only providers your admin has enabled appear here."

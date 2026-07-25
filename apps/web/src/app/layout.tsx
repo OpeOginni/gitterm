@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Fraunces, JetBrains_Mono } from "next/font/google";
+import { Geist, JetBrains_Mono } from "next/font/google";
 import { Suspense } from "react";
 import "../index.css";
 import Providers from "@/components/providers";
@@ -15,13 +15,6 @@ const jetbrains = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
-});
-
-const fraunces = Fraunces({
-  variable: "--font-serif",
-  subsets: ["latin"],
-  axes: ["opsz", "SOFT"],
-  style: ["normal", "italic"],
 });
 
 const TITLE = "GitTerm · Cloud workspaces for coding agents";
@@ -80,7 +73,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geist.variable} ${jetbrains.variable} ${fraunces.variable} antialiased`}>
+      <body className={`${geist.variable} ${jetbrains.variable} antialiased`}>
         <Providers>{children}</Providers>
         <Suspense fallback={null}>
           <PostHogProvider />

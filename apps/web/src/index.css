@@ -160,7 +160,6 @@
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-  --font-serif: var(--font-serif);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -247,22 +246,17 @@
   border-radius: inherit;
 }
 
-/* Display serif utility - Fraunces, narrow tracking, optical size large */
+/* Display utility - Geist, tight tracking so headings read as one block */
 .font-display {
-  font-family: var(--font-serif), ui-serif, Georgia, serif;
-  font-variation-settings:
-    "opsz" 144,
-    "SOFT" 30;
-  letter-spacing: -0.025em;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.035em;
 }
 
-.font-display-italic {
-  font-family: var(--font-serif), ui-serif, Georgia, serif;
-  font-style: italic;
-  font-variation-settings:
-    "opsz" 144,
-    "SOFT" 80;
-  letter-spacing: -0.015em;
+/* Accent word inside a display heading - weight shift, no italic */
+.font-display-accent {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.035em;
 }
 
 /* Cream accent for serif italic flourishes */
@@ -341,18 +335,7 @@
   }
 }
 
-/* Vertical mono labels (editorial side-marks) */
-.vlabel {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 10px;
-  letter-spacing: 0.35em;
-  text-transform: uppercase;
-  color: rgba(255 255 255 / 0.3);
-}
-
-/* Editorial number marker, e.g. "GT/01" */
+/* Small mono label above a group (e.g. the hero's "Runs on" logo strip) */
 .marker {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 10px;

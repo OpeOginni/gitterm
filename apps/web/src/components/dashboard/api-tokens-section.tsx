@@ -110,7 +110,6 @@ export function ApiTokensSection() {
 
   return (
     <SettingsSection
-      eyebrow="01 / Personal access"
       icon={KeySquare}
       title="API tokens"
       description="Tokens act with your full account permissions and can be revoked here at any time. CLI device-code logins show up in this list too."

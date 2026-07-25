@@ -94,9 +94,7 @@ export function GitHubOnboarding() {
       <div className="relative grid gap-7 p-6 sm:p-8 lg:grid-cols-[1.15fr_1fr] lg:items-center">
         {/* Left: pitch */}
         <div>
-          <span className="marker">GT / GET STARTED</span>
-
-          <h2 className="mt-3 text-balance text-xl font-bold tracking-tight text-white sm:text-2xl">
+          <h2 className="text-balance text-xl font-bold tracking-tight text-white sm:text-2xl">
             Build from your repo, <span className="text-primary">not an empty shell.</span>
           </h2>
 

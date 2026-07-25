@@ -27,7 +27,6 @@ export function PrivacySection() {
   return (
     <div className="space-y-6">
       <SettingsSection
-        eyebrow="01 / Privacy"
         title="Analytics"
         description="Help us improve GitTerm by sharing anonymous product usage. You can change this any time."
         icon={Shield}

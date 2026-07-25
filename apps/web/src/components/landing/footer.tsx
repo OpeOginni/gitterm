@@ -20,12 +20,6 @@ export function Footer() {
           </div>
 
           <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-xs text-white/35 sm:gap-6">
-            <Link
-              href="/dashboard"
-              className="uppercase tracking-widest transition-colors hover:text-white/70"
-            >
-              Dashboard
-            </Link>
             {showPricing && (
               <Link
                 href={"/pricing" as Route}
