@@ -15,13 +15,20 @@ describe("createGittermClient", () => {
 const awsSelection: WorkspaceProviderSelection = {
   type: "aws",
   region: "us-east-1",
-  machine: "rendering",
+  machine: { type: "profile", key: "rendering" },
 };
 
 // @ts-expect-error E2B placement does not accept a caller-selected region.
 const invalidE2bSelection: WorkspaceProviderSelection = { type: "e2b", region: "us-east-1" };
 
+const invalidE2bMachine: WorkspaceProviderSelection = {
+  type: "e2b",
+  // @ts-expect-error E2B templates are profile-only; custom CPU/RAM is unsupported.
+  machine: { type: "custom", resources: { cpu: 4 } },
+};
+
 test("provider selections retain their discriminated fields", () => {
-  expect(awsSelection.region).toBe("us-east-1");
+  expect(awsSelection.type === "aws" && awsSelection.region).toBe("us-east-1");
   expect(invalidE2bSelection.type).toBe("e2b");
+  expect(invalidE2bMachine.type).toBe("e2b");
 });

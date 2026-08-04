@@ -26,6 +26,7 @@ SET "key" = CASE
 END,
 "provisioner_key" = CASE WHEN lower("name") LIKE 't3code%' THEN 't3code' ELSE 'opencode' END;--> statement-breakpoint
 ALTER TABLE "agent_type" ALTER COLUMN "key" SET NOT NULL;--> statement-breakpoint
+ALTER TABLE "cloud_provider" ADD COLUMN "machine_selection_policy" jsonb DEFAULT '{"mode":"standard"}'::jsonb NOT NULL;--> statement-breakpoint
 ALTER TABLE "provider_agent_image" ADD COLUMN "machine_profile_id" uuid;--> statement-breakpoint
 ALTER TABLE "provider_agent_image" ADD COLUMN "runtime_config" jsonb DEFAULT '{}'::jsonb NOT NULL;--> statement-breakpoint
 ALTER TABLE "provider_agent_image" ADD COLUMN "is_enabled" boolean DEFAULT true NOT NULL;--> statement-breakpoint

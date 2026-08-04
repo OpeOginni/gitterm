@@ -15,6 +15,12 @@ import { providerConfig } from "./provider-config";
 
 export const settlementEnum = pgEnum("settlement_enum", ["immediate", "webhook", "poll"] as const);
 
+export interface MachineSelectionPolicy {
+  mode: "standard" | "profiles" | "flexible";
+  minimum?: Record<string, unknown>;
+  maximum?: Record<string, unknown>;
+}
+
 export const cloudAccount = pgTable("cloud_account", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id")
@@ -45,6 +51,10 @@ export const cloudProvider = pgTable("cloud_provider", {
   supportsRegions: boolean("supports_regions").notNull().default(true),
   allowUserRegionSelection: boolean("allow_user_region_selection").notNull().default(true),
   supportServerOnly: boolean("support_server_only").notNull().default(false),
+  machineSelectionPolicy: jsonb("machine_selection_policy")
+    .$type<MachineSelectionPolicy>()
+    .notNull()
+    .default(sql`'{"mode":"standard"}'::jsonb`),
   sshAccessSupport: jsonb("editor_access_support")
     .$type<CloudProvidersshAccessSupport>()
     .notNull()

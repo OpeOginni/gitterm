@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and, ne } from "@gitterm/db";
-import { cloudProvider, image, providerLaunchProfile, region } from "@gitterm/db/schema/cloud";
+import {
+  cloudProvider,
+  image,
+  machineProfile,
+  providerLaunchProfile,
+  region,
+} from "@gitterm/db/schema/cloud";
 import { providerConfig, providerType } from "@gitterm/db/schema/provider-config";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { adminProcedure, router } from "../..";
@@ -279,6 +285,16 @@ export const awsRouter = router({
           });
         }
       }
+
+      await db.insert(machineProfile).values({
+        cloudProviderId: created.id,
+        key: "standard",
+        name: "Standard",
+        description: "1 vCPU and 2 GiB memory Fargate task.",
+        providerOptions: { cpu: 1024, memory: 2048 },
+        isDefault: true,
+        isEnabled: true,
+      });
 
       return {
         provider: created,

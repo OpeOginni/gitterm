@@ -3,6 +3,7 @@ import {
   agentType,
   cloudProvider,
   image,
+  machineProfile,
   providerLaunchProfile,
   region,
   type CloudProvidersshAccessSupport,
@@ -32,6 +33,7 @@ const seedCloudProviders: Array<{
   preferredDefault?: boolean;
   autoPersistent?: boolean;
   supportsPersistence?: boolean;
+  machineSelectionPolicy?: { mode: "standard" | "profiles" | "flexible" };
   supportsRegions: boolean;
   allowUserRegionSelection?: boolean;
   supportServerOnly?: boolean;
@@ -46,6 +48,7 @@ const seedCloudProviders: Array<{
     providerKey: "railway",
     isEnabled: false,
     supportsRegions: true,
+    machineSelectionPolicy: { mode: "standard" },
     sshAccessSupport: {
       supported: true,
       transportKind: "managed-ssh",
@@ -72,6 +75,7 @@ const seedCloudProviders: Array<{
     autoPersistent: false,
     supportsPersistence: false,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "standard" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: false,
@@ -90,6 +94,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: true,
@@ -110,6 +115,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: true,
+    machineSelectionPolicy: { mode: "profiles" },
     // A Daytona API key is bound to a single region, so end users can't pick a
     // region - the admin-configured defaultTargetRegion is always used.
     allowUserRegionSelection: false,
@@ -132,6 +138,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: false,
@@ -150,6 +157,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: false,
@@ -169,6 +177,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: true,
@@ -188,6 +197,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: true,
@@ -333,6 +343,57 @@ const seedProviderLaunchProfiles: Array<{
   imageName: string;
   workspaceProfile: "standard" | "ssh-enabled";
 }> = [];
+
+const seedMachineProfiles: Array<{
+  providerName: string;
+  key: string;
+  name: string;
+  description: string;
+  providerOptions: Record<string, unknown>;
+}> = [
+  {
+    providerName: "E2B",
+    key: "standard",
+    name: "Standard",
+    description: "Default E2B template resources.",
+    providerOptions: {},
+  },
+  {
+    providerName: "Daytona",
+    key: "standard",
+    name: "Standard",
+    description: "2 CPU and 4 GB memory.",
+    providerOptions: { resources: { cpu: 2, memory: 4 } },
+  },
+  {
+    providerName: "Vercel Sandbox",
+    key: "standard",
+    name: "Standard",
+    description: "1 vCPU Vercel Sandbox.",
+    providerOptions: { vcpus: 1 },
+  },
+  {
+    providerName: "Upstash Box",
+    key: "standard",
+    name: "Standard",
+    description: "Medium Upstash Box.",
+    providerOptions: { size: "medium" },
+  },
+  {
+    providerName: "Ascii Box",
+    key: "standard",
+    name: "Standard",
+    description: "Default Ascii Box.",
+    providerOptions: { size: "default" },
+  },
+  {
+    providerName: "exe.dev",
+    key: "standard",
+    name: "Standard",
+    description: "2 CPU, 4 GB memory, and 20 GB disk.",
+    providerOptions: { cpu: 2, memory: "4GB", disk: "20GB" },
+  },
+];
 
 const seedProviderTypes = PROVIDER_DEFINITIONS;
 
@@ -617,6 +678,7 @@ export async function seedDatabase(): Promise<void> {
       const targetProviderRestartSettlement = provider.restartSettlement ?? "webhook";
       const targetProviderTerminationSettlement = provider.terminationSettlement ?? "webhook";
       const targetsshAccessSupport = provider.sshAccessSupport ?? {};
+      const targetMachineSelectionPolicy = provider.machineSelectionPolicy ?? { mode: "standard" };
 
       if (existing.providerKey !== provider.providerKey) {
         updates.providerKey = provider.providerKey;
@@ -673,6 +735,10 @@ export async function seedDatabase(): Promise<void> {
         updates.sshAccessSupport = targetsshAccessSupport;
       }
 
+      if (!hasSameJson(existing.machineSelectionPolicy, targetMachineSelectionPolicy)) {
+        updates.machineSelectionPolicy = targetMachineSelectionPolicy;
+      }
+
       if (Object.keys(updates).length > 0) {
         await db
           .update(cloudProvider)
@@ -703,6 +769,7 @@ export async function seedDatabase(): Promise<void> {
           allowUserRegionSelection: provider.allowUserRegionSelection ?? true,
           supportServerOnly: provider.supportServerOnly ?? false,
           sshAccessSupport: provider.sshAccessSupport ?? {},
+          machineSelectionPolicy: provider.machineSelectionPolicy ?? { mode: "standard" },
           creationSettlement: provider.creationSettlement ?? "webhook",
           stopSettlement: provider.stopSettlement ?? "webhook",
           restartSettlement: provider.restartSettlement ?? "webhook",
@@ -711,6 +778,34 @@ export async function seedDatabase(): Promise<void> {
         .returning();
       console.log(`[seed]   Created provider "${provider.name}"`);
       providerMap.set(provider.name, created!.id);
+    }
+  }
+
+  console.log("[seed] Seeding machine profiles...");
+  for (const profile of seedMachineProfiles) {
+    const cloudProviderId = providerMap.get(profile.providerName);
+    if (!cloudProviderId) continue;
+    const profileValues = {
+      key: profile.key,
+      name: profile.name,
+      description: profile.description,
+      providerOptions: profile.providerOptions,
+    };
+    const existing = await db.query.machineProfile.findFirst({
+      where: and(
+        eq(machineProfile.cloudProviderId, cloudProviderId),
+        eq(machineProfile.key, profile.key),
+      ),
+    });
+    if (existing) {
+      await db
+        .update(machineProfile)
+        .set({ ...profileValues, isDefault: true, isEnabled: true, updatedAt: new Date() })
+        .where(eq(machineProfile.id, existing.id));
+    } else {
+      await db
+        .insert(machineProfile)
+        .values({ ...profileValues, cloudProviderId, isDefault: true, isEnabled: true });
     }
   }
 

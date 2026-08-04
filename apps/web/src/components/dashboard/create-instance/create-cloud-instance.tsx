@@ -612,7 +612,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             </div>
           </div>
 
-          {availableMachineProfiles.length > 0 && (
+          {availableMachineProfiles.length > 1 && (
             <div className="col-span-2 grid gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Machine</Label>
               <Select value={selectedMachineProfileId} onValueChange={setUserMachineProfileId}>

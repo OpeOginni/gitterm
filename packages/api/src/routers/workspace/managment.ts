@@ -71,9 +71,11 @@ import type { AgentConfigByKind } from "../../service/agents/types";
 import { T3_PAIRING_CREATE_COMMAND } from "../../service/agents/t3code";
 import {
   configKindsForAgentType,
+  parseProviderMachineOptions,
   providerKeySchema,
   workspaceProviderSelectionSchema,
   type AgentConfigKind,
+  type ProviderKey,
 } from "@gitterm/schema";
 import {
   deleteAllWorkspaceRouteAccess,
@@ -183,6 +185,7 @@ const legacyWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
   cloudProviderId: z.string(),
   regionId: z.string().optional(),
   machineProfileId: z.uuid().optional(),
+  machineOptions: z.record(z.string(), z.unknown()).optional(),
   persistent: z.boolean(),
 });
 
@@ -286,12 +289,32 @@ async function resolveWorkspaceCreateIntent(
   }
 
   const requestedMachine = providerSelection?.machine;
-  const selectedMachine = requestedMachine
-    ? selectedProvider.machineProfiles.find(
-        (candidate) => candidate.key === requestedMachine || candidate.id === requestedMachine,
-      )
-    : selectedProvider.machineProfiles[0];
-  if (requestedMachine && !selectedMachine) {
+  if (
+    requestedMachine?.type === "custom" &&
+    selectedProvider.machineSelectionPolicy.mode !== "flexible"
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "This provider does not allow custom machine sizes",
+    });
+  }
+  if (
+    requestedMachine?.type === "profile" &&
+    selectedProvider.machineSelectionPolicy.mode === "standard"
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "This provider uses its standard machine size",
+    });
+  }
+  const selectedMachine =
+    requestedMachine?.type === "profile"
+      ? selectedProvider.machineProfiles.find(
+          (candidate) =>
+            candidate.key === requestedMachine.key || candidate.id === requestedMachine.key,
+        )
+      : selectedProvider.machineProfiles[0];
+  if (requestedMachine?.type === "profile" && !selectedMachine) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: `No enabled machine profile matches "${requestedMachine}"`,
@@ -305,6 +328,13 @@ async function resolveWorkspaceCreateIntent(
     cloudProviderId: selectedProvider.id,
     regionId: selectedRegion?.id,
     machineProfileId: selectedMachine?.id,
+    machineOptions:
+      requestedMachine?.type === "custom"
+        ? parseProviderMachineOptions(
+            selectedProvider.providerKey as ProviderKey,
+            requestedMachine.resources,
+          )
+        : undefined,
     persistent: rawInput.persistent ?? selectedProvider.autoPersistent,
   };
 }
@@ -2158,7 +2188,9 @@ export const workspaceRouter = router({
         const imageProviderMetadata = applyMachineProfile(
           imageRecord.providerMetadata,
           providerKey,
-          launchProfile?.machineProfile?.providerOptions ?? selectedMachineProfile?.providerOptions,
+          input.machineOptions ??
+            launchProfile?.machineProfile?.providerOptions ??
+            selectedMachineProfile?.providerOptions,
         );
 
         // Plan-based persistence gating: free tier cannot opt into persistent

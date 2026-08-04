@@ -79,16 +79,41 @@ export type ProviderKey =
 type ProviderSelectionBase = {
   /** Select a specific provider installation. Usually omitted. */
   providerId?: string;
-  /** Admin-defined machine profile key from `catalog.workspaceOptions()`. */
-  machine?: string;
+  /** An admin-defined profile or flexible resources within the provider's allowed limits. */
+  machine?: { type: "profile"; key: string };
 };
 
+type FlexibleMachine<T> = { type: "profile"; key: string } | { type: "custom"; resources: T };
+
+type AwsResources = {
+  cpu?: number;
+  memory?: number;
+  ephemeralStorageGiB?: number;
+  architecture?: "X86_64" | "ARM64";
+};
+type DaytonaResources = {
+  resources?: { cpu?: number; memory?: number; disk?: number };
+  editorResources?: { cpu?: number; memory?: number; disk?: number };
+};
+type VercelResources = { vcpus?: number };
+type ExeDevResources = { cpu?: number; memory?: string; disk?: string };
+
 export type WorkspaceProviderSelection =
-  | ({ type: "railway"; region?: string } & ProviderSelectionBase)
-  | ({ type: "aws"; region?: string } & ProviderSelectionBase)
-  | ({
-      type: Exclude<ProviderKey, "railway" | "aws">;
-    } & ProviderSelectionBase);
+  | { type: "railway"; providerId?: string; region?: string }
+  | ({ type: "aws"; region?: string } & Omit<ProviderSelectionBase, "machine"> & {
+        machine?: FlexibleMachine<AwsResources>;
+      })
+  | ({ type: "daytona" } & Omit<ProviderSelectionBase, "machine"> & {
+        machine?: FlexibleMachine<DaytonaResources>;
+      })
+  | ({ type: "vercel" } & Omit<ProviderSelectionBase, "machine"> & {
+        machine?: FlexibleMachine<VercelResources>;
+      })
+  | ({ type: "exedev" } & Omit<ProviderSelectionBase, "machine"> & {
+        machine?: FlexibleMachine<ExeDevResources>;
+      })
+  | ({ type: "e2b" | "upstash" | "ascii" } & ProviderSelectionBase)
+  | { type: "cloudflare"; providerId?: string };
 
 export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";
 export type AgentKey = BuiltInAgentKey | (string & {});
