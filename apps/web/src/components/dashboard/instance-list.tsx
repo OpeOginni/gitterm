@@ -58,6 +58,15 @@ import {
   isOpencodeAgent,
 } from "@/lib/utils";
 import { getIcon } from "@/components/dashboard/create-instance/types";
+
+const PROVIDER_LOGOS: Record<string, string> = {
+  aws: "/ECS.svg",
+  cloudflare: "/cloudflare.svg",
+  daytona: "/daytona.svg",
+  e2b: "/E2B.svg",
+  railway: "/railway.svg",
+  vercel: "/vercel.svg",
+};
 import Link from "next/link";
 import { ShareWorkspaceDialog } from "@/components/dashboard/share/share-workspace-dialog";
 
@@ -812,7 +821,17 @@ export function InstanceCard({
               </div>
             )}
             <div className="flex items-center gap-2">
-              <Server className="h-3.5 w-3.5 shrink-0" />
+              {regionInfo.providerKey && PROVIDER_LOGOS[regionInfo.providerKey] ? (
+                <Image
+                  src={PROVIDER_LOGOS[regionInfo.providerKey]}
+                  alt=""
+                  width={14}
+                  height={14}
+                  className="h-3.5 w-3.5 shrink-0 object-contain"
+                />
+              ) : (
+                <Server className="h-3.5 w-3.5 shrink-0" />
+              )}
               <span className="truncate">{regionInfo.providerName}</span>
             </div>
             <div className="flex items-center gap-2">

@@ -37,6 +37,7 @@ const clouds = [
   { src: "/railway.svg", label: "Railway" },
   { src: "/ECS.svg", label: "AWS" },
   { src: "/cloudflare.svg", label: "Cloudflare" },
+  { src: "/vercel.svg", label: "Vercel" },
 ];
 
 interface AnonResult {
