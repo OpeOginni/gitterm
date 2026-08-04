@@ -37,7 +37,16 @@ export interface CloudProvider {
   autoPersistent?: boolean;
   supportsPersistence?: boolean;
   regions?: Region[];
+  machineProfiles?: MachineProfile[];
   sshAccessSupport?: sshAccessSupport;
+}
+
+export interface MachineProfile {
+  id: string;
+  key: string;
+  name: string;
+  description?: string | null;
+  isDefault: boolean;
 }
 
 export interface Region {

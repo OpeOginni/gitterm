@@ -64,7 +64,13 @@ export default function AgentTypesPage() {
       }
     }
   }, [session?.user, isSessionPending, router]);
-  const [newAgent, setNewAgent] = useState({ name: "", description: "", serverOnly: false });
+  const [newAgent, setNewAgent] = useState({
+    key: "",
+    name: "",
+    description: "",
+    provisionerKey: "opencode" as "opencode" | "t3code",
+    serverOnly: false,
+  });
 
   const { data: agentTypes, isLoading } = useQuery({
     queryKey: ["admin", "agentTypes"],
@@ -77,12 +83,23 @@ export default function AgentTypesPage() {
   });
 
   const createAgentType = useMutation({
-    mutationFn: (params: { name: string; description?: string; serverOnly: boolean }) =>
-      trpcClient.admin.infrastructure.createAgentType.mutate(params),
+    mutationFn: (params: {
+      key: string;
+      name: string;
+      description?: string;
+      provisionerKey: "opencode" | "t3code";
+      serverOnly: boolean;
+    }) => trpcClient.admin.infrastructure.createAgentType.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "agentTypes"] });
       setIsCreateOpen(false);
-      setNewAgent({ name: "", description: "", serverOnly: false });
+      setNewAgent({
+        key: "",
+        name: "",
+        description: "",
+        provisionerKey: "opencode",
+        serverOnly: false,
+      });
       toast.success("Agent type created");
     },
     onError: (error) => toast.error(error.message),
@@ -166,9 +183,56 @@ export default function AgentTypesPage() {
                   <Input
                     id="name"
                     value={newAgent.name}
-                    onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      setNewAgent((current) => {
+                        const previousAutoKey = current.name
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, "-")
+                          .replace(/^-|-$/g, "");
+                        return {
+                          ...current,
+                          name,
+                          key:
+                            !current.key || current.key === previousAutoKey
+                              ? name
+                                  .toLowerCase()
+                                  .replace(/[^a-z0-9]+/g, "-")
+                                  .replace(/^-|-$/g, "")
+                              : current.key,
+                        };
+                      });
+                    }}
                     placeholder="e.g., OpenCode (TTYD)"
                   />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="key">SDK key</Label>
+                    <Input
+                      id="key"
+                      value={newAgent.key}
+                      onChange={(e) => setNewAgent({ ...newAgent, key: e.target.value })}
+                      placeholder="opencode-reviewer"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Runtime</Label>
+                    <Select
+                      value={newAgent.provisionerKey}
+                      onValueChange={(provisionerKey: "opencode" | "t3code") =>
+                        setNewAgent({ ...newAgent, provisionerKey })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="opencode">OpenCode</SelectItem>
+                        <SelectItem value="t3code">T3Code</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="description">
@@ -203,11 +267,13 @@ export default function AgentTypesPage() {
                   onClick={() =>
                     createAgentType.mutate({
                       name: newAgent.name,
+                      key: newAgent.key,
                       description: newAgent.description.trim() || undefined,
+                      provisionerKey: newAgent.provisionerKey,
                       serverOnly: newAgent.serverOnly,
                     })
                   }
-                  disabled={!newAgent.name || createAgentType.isPending}
+                  disabled={!newAgent.name || !newAgent.key || createAgentType.isPending}
                 >
                   {createAgentType.isPending ? "Creating..." : "Create"}
                 </Button>
@@ -230,10 +296,7 @@ export default function AgentTypesPage() {
               const agentImages = images?.filter((image) => image.agentTypeId === agent.id) ?? [];
               const enabledAgentImages = agentImages.filter((image) => image.isEnabled);
               const defaultImage = enabledAgentImages.find(isDefaultImage);
-              const isSeeded =
-                agent.name === "OpenCode (TTYD)" ||
-                agent.name === "OpenCode" ||
-                agent.name === "T3Code";
+              const isSeeded = ["opencode-ttyd", "opencode", "t3code"].includes(agent.key);
 
               return (
                 <div
@@ -247,6 +310,12 @@ export default function AgentTypesPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="font-medium text-white/90">{agent.name}</span>
+                        <Badge variant="outline" className="font-mono text-[10px] text-white/45">
+                          {agent.key}
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px]">
+                          {agent.provisionerKey}
+                        </Badge>
                         {!agent.isEnabled && (
                           <Badge
                             variant="outline"
@@ -349,8 +418,8 @@ export default function AgentTypesPage() {
           <DialogHeader>
             <DialogTitle>Delete Agent Type</DialogTitle>
             <DialogDescription>
-              This removes the custom agent type and its connected images. Seeded agent types cannot
-              be deleted.
+              Custom agent types can only be deleted after their images are removed. Seeded agent
+              types cannot be deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

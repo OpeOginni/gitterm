@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, Loader2, Lock, MapPin, RefreshCw, Trash2, Wand2 } from "lucide-react";
+import { Cpu, Download, Loader2, Lock, MapPin, Plus, RefreshCw, Trash2, Wand2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import type { Route } from "next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,6 +47,52 @@ interface ProviderConfigField {
 
 interface AwsSetupSummary {
   stackName: string;
+}
+
+type MachineField = {
+  path: string;
+  label: string;
+  type?: "number" | "text" | "select";
+  placeholder?: string;
+  options?: string[];
+};
+
+const MACHINE_FIELDS: Record<string, MachineField[]> = {
+  aws: [
+    { path: "cpu", label: "CPU units", type: "number", placeholder: "4096" },
+    { path: "memory", label: "Memory (MiB)", type: "number", placeholder: "16384" },
+    { path: "ephemeralStorageGiB", label: "Disk (GiB)", type: "number", placeholder: "20" },
+    { path: "architecture", label: "Architecture", type: "select", options: ["X86_64", "ARM64"] },
+  ],
+  e2b: [
+    { path: "templateId", label: "Template ID", placeholder: "gitterm-opencode" },
+    { path: "sshTemplateId", label: "SSH template ID", placeholder: "Optional" },
+  ],
+  daytona: [
+    { path: "resources.cpu", label: "CPU", type: "number", placeholder: "2" },
+    { path: "resources.memory", label: "Memory (GB)", type: "number", placeholder: "4" },
+    { path: "resources.disk", label: "Disk (GB)", type: "number", placeholder: "20" },
+  ],
+  vercel: [{ path: "vcpus", label: "vCPUs", type: "number", placeholder: "2" }],
+  upstash: [
+    { path: "size", label: "Box size", type: "select", options: ["small", "medium", "large"] },
+  ],
+  ascii: [
+    { path: "size", label: "Box size", type: "select", options: ["small", "default", "large"] },
+  ],
+  exedev: [
+    { path: "cpu", label: "CPUs", type: "number", placeholder: "2" },
+    { path: "memory", label: "Memory", placeholder: "8GB" },
+    { path: "disk", label: "Disk", placeholder: "25GB" },
+  ],
+};
+
+function setNestedOption(options: Record<string, any>, path: string, value: string) {
+  const [parent, child] = path.split(".");
+  const parsedValue =
+    value === "" ? undefined : Number.isFinite(Number(value)) ? Number(value) : value;
+  if (!child) return { ...options, [parent]: parsedValue };
+  return { ...options, [parent]: { ...options[parent], [child]: parsedValue } };
 }
 
 export default function ProviderSettingsPage() {
@@ -73,6 +119,12 @@ export default function ProviderSettingsPage() {
     name: "",
     location: "",
     externalRegionIdentifier: "",
+  });
+  const [newMachineProfile, setNewMachineProfile] = useState({
+    key: "",
+    name: "",
+    providerOptions: {} as Record<string, any>,
+    isDefault: false,
   });
 
   const refreshProviderQueries = () => {
@@ -137,10 +189,19 @@ export default function ProviderSettingsPage() {
     queryFn: () => trpcClient.admin.infrastructure.listImages.query(),
   });
 
-  const { data: providerImageAssignments } = useQuery({
-    queryKey: ["admin", "providerImageAssignments", providerId],
+  const { data: launchProfiles } = useQuery({
+    queryKey: ["admin", "launchProfiles", providerId],
     queryFn: () =>
-      trpcClient.admin.infrastructure.listProviderImageAssignments.query({
+      trpcClient.admin.infrastructure.listProviderLaunchProfiles.query({
+        cloudProviderId: providerId as string,
+      }),
+    enabled: !!providerId,
+  });
+
+  const { data: machineProfiles } = useQuery({
+    queryKey: ["admin", "machineProfiles", providerId],
+    queryFn: () =>
+      trpcClient.admin.infrastructure.listMachineProfiles.query({
         cloudProviderId: providerId as string,
       }),
     enabled: !!providerId,
@@ -183,26 +244,64 @@ export default function ProviderSettingsPage() {
       }),
   });
 
-  const upsertProviderImageAssignment = useMutation({
-    mutationFn: (params: { cloudProviderId: string; agentTypeId: string; imageId: string }) =>
-      trpcClient.admin.infrastructure.upsertProviderImageAssignment.mutate(params),
+  const upsertLaunchProfile = useMutation({
+    mutationFn: (params: {
+      cloudProviderId: string;
+      agentTypeId: string;
+      imageId: string;
+      workspaceProfile: "standard" | "ssh-enabled";
+      machineProfileId?: string | null;
+    }) => trpcClient.admin.infrastructure.upsertProviderLaunchProfile.mutate(params),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["admin", "providerImageAssignments", providerId],
-      });
-      toast.success("Provider image assignment saved");
+      queryClient.invalidateQueries({ queryKey: ["admin", "launchProfiles", providerId] });
+      toast.success("Launch profile saved");
     },
     onError: (error) => toast.error(error.message),
   });
 
-  const deleteProviderImageAssignment = useMutation({
-    mutationFn: (params: { cloudProviderId: string; agentTypeId: string }) =>
-      trpcClient.admin.infrastructure.deleteProviderImageAssignment.mutate(params),
+  const deleteLaunchProfile = useMutation({
+    mutationFn: (params: {
+      cloudProviderId: string;
+      agentTypeId: string;
+      workspaceProfile: "standard" | "ssh-enabled";
+    }) => trpcClient.admin.infrastructure.deleteProviderLaunchProfile.mutate(params),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["admin", "providerImageAssignments", providerId],
-      });
-      toast.success("Provider image assignment removed");
+      queryClient.invalidateQueries({ queryKey: ["admin", "launchProfiles", providerId] });
+      toast.success("Launch profile removed");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const createMachineProfile = useMutation({
+    mutationFn: (params: {
+      cloudProviderId: string;
+      key: string;
+      name: string;
+      providerOptions: Record<string, unknown>;
+      isDefault: boolean;
+    }) => trpcClient.admin.infrastructure.createMachineProfile.mutate(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "machineProfiles", providerId] });
+      setNewMachineProfile({ key: "", name: "", providerOptions: {}, isDefault: false });
+      toast.success("Machine profile created");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const updateMachineProfile = useMutation({
+    mutationFn: (params: { id: string; isDefault?: boolean; isEnabled?: boolean }) =>
+      trpcClient.admin.infrastructure.updateMachineProfile.mutate(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "machineProfiles", providerId] });
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteMachineProfile = useMutation({
+    mutationFn: (id: string) => trpcClient.admin.infrastructure.deleteMachineProfile.mutate({ id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "machineProfiles", providerId] });
+      toast.success("Machine profile deleted");
     },
     onError: (error) => toast.error(error.message),
   });
@@ -364,11 +463,14 @@ export default function ProviderSettingsPage() {
   const isBootstrappingAws = bootstrapAwsProvider.isPending;
   const isDeletingAwsInfrastructure = deleteAwsInfrastructure.isPending;
 
-  const assignmentByAgentType = new Map(
-    providerImageAssignments?.map((assignment: any) => [assignment.agentTypeId, assignment]) ?? [],
+  const launchProfileByAgentType = new Map(
+    launchProfiles
+      ?.filter((profile: any) => profile.workspaceProfile === "standard")
+      .map((profile: any) => [profile.agentTypeId, profile]) ?? [],
   );
 
   const assignableAgentTypes = agentTypes?.filter((agent: any) => agent.isEnabled) ?? [];
+  const machineFields = MACHINE_FIELDS[provider?.providerKey ?? ""] ?? [];
 
   useEffect(() => {
     if (!isSessionPending) {
@@ -868,6 +970,225 @@ export default function ProviderSettingsPage() {
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="size-4 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground/90">Machine Profiles</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Name provider-specific compute settings once, then expose the stable key to the
+                    SDK.
+                  </p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="border-foreground/[0.08] bg-foreground/[0.04] text-xs text-muted-foreground"
+                >
+                  {machineProfiles?.length ?? 0} profiles
+                </Badge>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {machineProfiles?.map((profile) => (
+                  <div
+                    key={profile.id}
+                    className="grid gap-3 rounded-xl border border-border/70 bg-foreground/[0.01] p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-foreground/90">{profile.name}</p>
+                        <code className="rounded bg-foreground/[0.05] px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {profile.key}
+                        </code>
+                        {profile.isDefault && <Badge variant="secondary">Default</Badge>}
+                      </div>
+                      <p className="truncate font-mono text-[11px] text-muted-foreground">
+                        {Object.keys(profile.providerOptions).length > 0
+                          ? JSON.stringify(profile.providerOptions)
+                          : "Provider-managed resources"}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      {!profile.isDefault && profile.isEnabled && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            updateMachineProfile.mutate({ id: profile.id, isDefault: true })
+                          }
+                        >
+                          Make default
+                        </Button>
+                      )}
+                      <Switch
+                        checked={profile.isEnabled}
+                        onCheckedChange={(isEnabled) =>
+                          updateMachineProfile.mutate({ id: profile.id, isEnabled })
+                        }
+                        aria-label={`${profile.isEnabled ? "Disable" : "Enable"} ${profile.name}`}
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => deleteMachineProfile.mutate(profile.id)}
+                        aria-label={`Delete ${profile.name}`}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {machineFields.length > 0 ? (
+                  <div className="rounded-xl border border-dashed border-foreground/[0.12] p-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="machine-name">Profile name</Label>
+                        <Input
+                          id="machine-name"
+                          value={newMachineProfile.name}
+                          placeholder="Standard"
+                          onChange={(event) => {
+                            const name = event.target.value;
+                            setNewMachineProfile((current) => {
+                              const previousAutoKey = current.name
+                                .toLowerCase()
+                                .replace(/[^a-z0-9]+/g, "-")
+                                .replace(/^-|-$/g, "");
+                              return {
+                                ...current,
+                                name,
+                                key:
+                                  !current.key || current.key === previousAutoKey
+                                    ? name
+                                        .toLowerCase()
+                                        .replace(/[^a-z0-9]+/g, "-")
+                                        .replace(/^-|-$/g, "")
+                                    : current.key,
+                              };
+                            });
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="machine-key">SDK key</Label>
+                        <Input
+                          id="machine-key"
+                          value={newMachineProfile.key}
+                          placeholder="standard"
+                          onChange={(event) =>
+                            setNewMachineProfile((current) => ({
+                              ...current,
+                              key: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      {machineFields.map((field) => {
+                        const [parent, child] = field.path.split(".");
+                        const value = child
+                          ? newMachineProfile.providerOptions[parent]?.[child]
+                          : newMachineProfile.providerOptions[parent];
+                        return (
+                          <div key={field.path} className="space-y-2">
+                            <Label>{field.label}</Label>
+                            {field.type === "select" ? (
+                              <Select
+                                value={String(value ?? "")}
+                                onValueChange={(nextValue) =>
+                                  setNewMachineProfile((current) => ({
+                                    ...current,
+                                    providerOptions: setNestedOption(
+                                      current.providerOptions,
+                                      field.path,
+                                      nextValue,
+                                    ),
+                                  }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={`Select ${field.label.toLowerCase()}`}
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {field.options?.map((option) => (
+                                    <SelectItem key={option} value={option}>
+                                      {option}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                type={field.type ?? "text"}
+                                value={String(value ?? "")}
+                                placeholder={field.placeholder}
+                                onChange={(event) =>
+                                  setNewMachineProfile((current) => ({
+                                    ...current,
+                                    providerOptions: setNestedOption(
+                                      current.providerOptions,
+                                      field.path,
+                                      event.target.value,
+                                    ),
+                                  }))
+                                }
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-4 flex items-center justify-between gap-4">
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Switch
+                          checked={newMachineProfile.isDefault}
+                          onCheckedChange={(isDefault) =>
+                            setNewMachineProfile((current) => ({ ...current, isDefault }))
+                          }
+                        />
+                        Use by default
+                      </label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={
+                          !provider?.id ||
+                          !newMachineProfile.name ||
+                          !newMachineProfile.key ||
+                          createMachineProfile.isPending
+                        }
+                        onClick={() =>
+                          provider?.id &&
+                          createMachineProfile.mutate({
+                            cloudProviderId: provider.id,
+                            ...newMachineProfile,
+                          })
+                        }
+                      >
+                        {createMachineProfile.isPending ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <Plus />
+                        )}
+                        Add profile
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-foreground/[0.08] p-4 text-sm text-muted-foreground">
+                    {provider?.name} controls machine resources at the provider level, so no
+                    per-workspace profile is required.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
                   <p className="text-sm font-medium text-foreground/90">Provider</p>
                   <p className="text-xs text-muted-foreground">
                     Update the display name and enablement for this provider.
@@ -1192,26 +1513,27 @@ export default function ProviderSettingsPage() {
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground/90">Default Images</p>
+                  <p className="text-sm font-medium text-foreground/90">Launch Profiles</p>
                   <p className="text-xs text-muted-foreground">
-                    Choose the container image this provider should use for each agent type.
+                    Bind each agent to its image and optional default machine size for this
+                    provider.
                   </p>
                 </div>
                 <Badge
                   variant="outline"
                   className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-xs"
                 >
-                  {providerImageAssignments?.length ?? 0} assigned
+                  {launchProfiles?.length ?? 0} configured
                 </Badge>
               </div>
 
               <div className="mt-4 space-y-3">
                 {assignableAgentTypes.map((agent: any) => {
-                  const assignment = assignmentByAgentType.get(agent.id) as any;
+                  const launchProfile = launchProfileByAgentType.get(agent.id) as any;
                   const compatibleImages =
                     images?.filter((img: any) => img.agentTypeId === agent.id && img.isEnabled) ??
                     [];
-                  const selectedImageId = assignment?.imageId ?? "fallback";
+                  const selectedImageId = launchProfile?.imageId ?? "fallback";
 
                   return (
                     <div
@@ -1231,8 +1553,8 @@ export default function ProviderSettingsPage() {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {assignment?.image?.imageId ??
-                            "Uses the global default image for this agent type."}
+                          {launchProfile?.image?.imageId ??
+                            "No launch profile configured for this agent type."}
                         </p>
                       </div>
 
@@ -1245,17 +1567,20 @@ export default function ProviderSettingsPage() {
                           }
 
                           if (imageId === "fallback") {
-                            deleteProviderImageAssignment.mutate({
+                            deleteLaunchProfile.mutate({
                               cloudProviderId: provider.id,
                               agentTypeId: agent.id,
+                              workspaceProfile: "standard",
                             });
                             return;
                           }
 
-                          upsertProviderImageAssignment.mutate({
+                          upsertLaunchProfile.mutate({
                             cloudProviderId: provider.id,
                             agentTypeId: agent.id,
                             imageId,
+                            workspaceProfile: "standard",
+                            machineProfileId: launchProfile?.machineProfileId ?? null,
                           });
                         }}
                       >
@@ -1263,7 +1588,7 @@ export default function ProviderSettingsPage() {
                           <SelectValue placeholder="Select image" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="fallback">Global default</SelectItem>
+                          <SelectItem value="fallback">No launch profile</SelectItem>
                           {compatibleImages.map((img: any) => (
                             <SelectItem key={img.id} value={img.id}>
                               {img.name}

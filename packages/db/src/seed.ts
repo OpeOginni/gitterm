@@ -3,7 +3,7 @@ import {
   agentType,
   cloudProvider,
   image,
-  providerAgentImage,
+  providerLaunchProfile,
   region,
   type CloudProvidersshAccessSupport,
   type ProviderSettlement,
@@ -204,7 +204,9 @@ const seedCloudProviders: Array<{
 
 const seedAgentTypes = [
   {
+    key: "opencode-ttyd",
     name: "OpenCode (TTYD)",
+    provisionerKey: "opencode",
     serverOnly: false,
     description: "Run the OpenCode TUI in a browser-based terminal. No local client needed.",
     // Previous names used in older seeds. Used to migrate existing rows to the new name.
@@ -212,14 +214,18 @@ const seedAgentTypes = [
     aliases: ["OpenCode Terminal", "OpenCode"],
   },
   {
+    key: "opencode",
     name: "OpenCode",
+    provisionerKey: "opencode",
     serverOnly: true,
     description:
       "Run a remote OpenCode server. Use it from your local TUI, Desktop app, or directly in the browser.",
     aliases: ["OpenCode Server"],
   },
   {
+    key: "t3code",
     name: "T3Code",
+    provisionerKey: "t3code",
     serverOnly: true,
     description:
       "Run a T3 Code server driving Claude Code, Codex, and OpenCode. Pair it with the T3 web or mobile app via a one-time pairing link.",
@@ -320,12 +326,12 @@ const seedImages = [
 
 // AWS image assignments are NOT seeded here. They're created per-region when an
 // admin calls `aws.createRegionProvider` (each AWS region is its own
-// cloud_provider row), since providerAgentImage is keyed by cloudProviderId.
-const seedProviderAgentImages: Array<{
+// cloud_provider row), since launch profiles are keyed by cloudProviderId.
+const seedProviderLaunchProfiles: Array<{
   providerName: string;
   agentTypeName: string;
   imageName: string;
-  workspaceProfile: string | null;
+  workspaceProfile: "standard" | "ssh-enabled";
 }> = [];
 
 const seedProviderTypes = PROVIDER_DEFINITIONS;
@@ -738,8 +744,10 @@ export async function seedDatabase(): Promise<void> {
       const [updated] = await db
         .update(agentType)
         .set({
+          key: agent.key,
           name: agent.name,
           description: agent.description,
+          provisionerKey: agent.provisionerKey,
           serverOnly: agent.serverOnly,
           updatedAt: new Date(),
         })
@@ -751,8 +759,10 @@ export async function seedDatabase(): Promise<void> {
       const [created] = await db
         .insert(agentType)
         .values({
+          key: agent.key,
           name: agent.name,
           description: agent.description,
+          provisionerKey: agent.provisionerKey,
           serverOnly: agent.serverOnly,
           isEnabled: true,
         })
@@ -809,11 +819,11 @@ export async function seedDatabase(): Promise<void> {
   }
 
   // =========================================================================
-  // Seed Provider Image Assignments
+  // Seed Provider Launch Profiles
   // =========================================================================
-  console.log("[seed] Seeding provider image assignments...");
+  console.log("[seed] Seeding provider launch profiles...");
 
-  for (const assignment of seedProviderAgentImages) {
+  for (const assignment of seedProviderLaunchProfiles) {
     const cloudProviderId = providerMap.get(assignment.providerName);
     const agentTypeId = agentTypeMap.get(assignment.agentTypeName);
     const imageId = imageMap.get(assignment.imageName);
@@ -825,33 +835,34 @@ export async function seedDatabase(): Promise<void> {
       continue;
     }
 
-    const existing = await db.query.providerAgentImage.findFirst({
+    const existing = await db.query.providerLaunchProfile.findFirst({
       where: and(
-        eq(providerAgentImage.cloudProviderId, cloudProviderId),
-        eq(providerAgentImage.agentTypeId, agentTypeId),
+        eq(providerLaunchProfile.cloudProviderId, cloudProviderId),
+        eq(providerLaunchProfile.agentTypeId, agentTypeId),
+        eq(providerLaunchProfile.workspaceProfile, assignment.workspaceProfile),
       ),
     });
 
     if (existing) {
       await db
-        .update(providerAgentImage)
+        .update(providerLaunchProfile)
         .set({
           imageId,
           workspaceProfile: assignment.workspaceProfile,
-          isDefault: true,
+          isEnabled: true,
           updatedAt: new Date(),
         })
-        .where(eq(providerAgentImage.id, existing.id));
+        .where(eq(providerLaunchProfile.id, existing.id));
       console.log(
         `[seed]   Updated image assignment ${assignment.providerName}/${assignment.agentTypeName}`,
       );
     } else {
-      await db.insert(providerAgentImage).values({
+      await db.insert(providerLaunchProfile).values({
         cloudProviderId,
         agentTypeId,
         imageId,
         workspaceProfile: assignment.workspaceProfile,
-        isDefault: true,
+        isEnabled: true,
       });
       console.log(
         `[seed]   Created image assignment ${assignment.providerName}/${assignment.agentTypeName}`,

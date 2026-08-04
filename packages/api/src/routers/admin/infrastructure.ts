@@ -13,16 +13,24 @@ import {
   region,
   agentType,
   image,
-  providerAgentImage,
+  machineProfile,
+  providerLaunchProfile,
   type NewCloudProvider,
   type NewAgentType,
   type NewImage,
+  type NewMachineProfile,
   type ImageProviderMetadata,
 } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { imageSupportsProvider } from "../../providers/image-compat";
-import { getAllProviderDefinitions } from "@gitterm/schema";
+import {
+  agentProvisionerKeySchema,
+  getAllProviderDefinitions,
+  parseProviderMachineOptions,
+  providerKeySchema,
+} from "@gitterm/schema";
 import { providerType } from "@gitterm/db/schema/provider-config";
+import { workspace } from "@gitterm/db/schema/workspace";
 
 // ============================================================================
 // Input Schemas
@@ -30,10 +38,7 @@ import { providerType } from "@gitterm/db/schema/provider-config";
 
 const createCloudProviderSchema = z.object({
   name: z.string().min(1, "Provider name is required"),
-  providerKey: z
-    .string()
-    .min(1, "Provider key is required")
-    .regex(/^[a-z0-9-]+$/, "Provider key must be lowercase letters, numbers, or dashes"),
+  providerKey: providerKeySchema,
   supportsRegions: z.boolean().default(true),
   allowUserRegionSelection: z.boolean().default(true),
 });
@@ -62,8 +67,15 @@ const updateRegionSchema = z.object({
 });
 
 const createAgentTypeSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
   name: z.string().min(1, "Agent type name is required"),
   description: z.string().max(500).optional(),
+  provisionerKey: agentProvisionerKeySchema.default("opencode"),
   serverOnly: z.boolean().default(false),
 });
 
@@ -71,6 +83,7 @@ const updateAgentTypeSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).optional(),
   description: z.string().max(500).nullable().optional(),
+  provisionerKey: agentProvisionerKeySchema.optional(),
   serverOnly: z.boolean().optional(),
   isEnabled: z.boolean().optional(),
 });
@@ -92,24 +105,83 @@ const updateImageSchema = z.object({
   isEnabled: z.boolean().optional(),
 });
 
-const upsertProviderAgentImageSchema = z.object({
+const upsertProviderLaunchProfileSchema = z.object({
   cloudProviderId: z.uuid(),
   agentTypeId: z.uuid(),
   imageId: z.uuid(),
-  workspaceProfile: z.enum(["standard", "ssh-enabled"]).nullable().optional(),
+  machineProfileId: z.uuid().nullable().optional(),
+  workspaceProfile: z.enum(["standard", "ssh-enabled"]).default("standard"),
 });
 
-const deleteProviderAgentImageSchema = z.object({
+const deleteProviderLaunchProfileSchema = z.object({
   cloudProviderId: z.uuid(),
   agentTypeId: z.uuid(),
+  workspaceProfile: z.enum(["standard", "ssh-enabled"]).default("standard"),
 });
 
-const SEEDED_AGENT_NAMES = new Set(["OpenCode (TTYD)", "OpenCode", "T3Code"]);
+const machineProfileFields = {
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/),
+  name: z.string().trim().min(1),
+  description: z.string().trim().max(500).nullable().optional(),
+  providerOptions: z.record(z.string(), z.unknown()).default({}),
+  isDefault: z.boolean().default(false),
+  isEnabled: z.boolean().default(true),
+};
+
+const createMachineProfileSchema = z.object({
+  cloudProviderId: z.uuid(),
+  ...machineProfileFields,
+});
+
+const updateMachineProfileSchema = z.object({
+  id: z.uuid(),
+  key: machineProfileFields.key.optional(),
+  name: machineProfileFields.name.optional(),
+  description: machineProfileFields.description,
+  providerOptions: machineProfileFields.providerOptions.optional(),
+  isDefault: z.boolean().optional(),
+  isEnabled: z.boolean().optional(),
+});
+
+const SEEDED_AGENT_KEYS = new Set(["opencode-ttyd", "opencode", "t3code"]);
 const SEEDED_IMAGE_NAMES = new Set([
   "gitterm-opencode",
   "gitterm-opencode-server",
   "gitterm-opencode-aws-server",
+  "gitterm-t3code-server",
 ]);
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function validateMachineOptions(providerKey: string, options: unknown): Record<string, unknown> {
+  const parsedProviderKey = providerKeySchema.safeParse(providerKey);
+  if (!parsedProviderKey.success) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Provider does not support machine profiles",
+    });
+  }
+
+  try {
+    return parseProviderMachineOptions(parsedProviderKey.data, options) as Record<string, unknown>;
+  } catch (error) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Invalid ${parsedProviderKey.data} machine settings`,
+      cause: error,
+    });
+  }
+}
 
 const createProviderConfigSchema = z.object({
   providerTypeId: z.uuid(),
@@ -406,11 +478,18 @@ export const infrastructureRouter = router({
   }),
 
   createAgentType: adminProcedure.input(createAgentTypeSchema).mutation(async ({ input }) => {
+    const key = input.key ?? slugify(input.name);
+    if (!key) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Agent key is required" });
+    }
+
     const [newType] = await db
       .insert(agentType)
       .values({
+        key,
         name: input.name,
         description: input.description ?? null,
+        provisionerKey: input.provisionerKey,
         serverOnly: input.serverOnly,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -467,14 +546,130 @@ export const infrastructureRouter = router({
       throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
     }
 
-    if (SEEDED_AGENT_NAMES.has(existing.name)) {
+    if (SEEDED_AGENT_KEYS.has(existing.key)) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Seeded agent types cannot be deleted" });
+    }
+
+    const connectedImage = await db.query.image.findFirst({
+      where: eq(image.agentTypeId, existing.id),
+      columns: { id: true },
+    });
+    if (connectedImage) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Agent types with connected images cannot be deleted; disable it instead",
+      });
     }
 
     const [deleted] = await db.delete(agentType).where(eq(agentType.id, input.id)).returning();
 
     return deleted;
   }),
+
+  // ========================================================================
+  // Machine Profiles
+  // ========================================================================
+
+  listMachineProfiles: adminProcedure
+    .input(z.object({ cloudProviderId: z.uuid() }))
+    .query(async ({ input }) => {
+      return db.query.machineProfile.findMany({
+        where: eq(machineProfile.cloudProviderId, input.cloudProviderId),
+        orderBy: (profile, { desc, asc }) => [desc(profile.isDefault), asc(profile.name)],
+      });
+    }),
+
+  createMachineProfile: adminProcedure
+    .input(createMachineProfileSchema)
+    .mutation(async ({ input }) => {
+      const provider = await db.query.cloudProvider.findFirst({
+        where: eq(cloudProvider.id, input.cloudProviderId),
+      });
+      if (!provider) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Provider not found" });
+      }
+
+      const providerOptions = validateMachineOptions(provider.providerKey, input.providerOptions);
+      return db.transaction(async (tx) => {
+        if (input.isDefault) {
+          await tx
+            .update(machineProfile)
+            .set({ isDefault: false, updatedAt: new Date() })
+            .where(eq(machineProfile.cloudProviderId, provider.id));
+        }
+
+        const [created] = await tx
+          .insert(machineProfile)
+          .values({
+            cloudProviderId: provider.id,
+            key: input.key,
+            name: input.name,
+            description: input.description ?? null,
+            providerOptions,
+            isDefault: input.isDefault,
+            isEnabled: input.isEnabled,
+          } as NewMachineProfile)
+          .returning();
+        return created;
+      });
+    }),
+
+  updateMachineProfile: adminProcedure
+    .input(updateMachineProfileSchema)
+    .mutation(async ({ input }) => {
+      const existing = await db.query.machineProfile.findFirst({
+        where: eq(machineProfile.id, input.id),
+        with: { cloudProvider: true },
+      });
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Machine profile not found" });
+      }
+
+      const { id, ...updates } = input;
+      const providerOptions = updates.providerOptions
+        ? validateMachineOptions(existing.cloudProvider.providerKey, updates.providerOptions)
+        : undefined;
+
+      return db.transaction(async (tx) => {
+        if (updates.isDefault) {
+          await tx
+            .update(machineProfile)
+            .set({ isDefault: false, updatedAt: new Date() })
+            .where(eq(machineProfile.cloudProviderId, existing.cloudProviderId));
+        }
+
+        const [updated] = await tx
+          .update(machineProfile)
+          .set({ ...updates, providerOptions, updatedAt: new Date() })
+          .where(eq(machineProfile.id, id))
+          .returning();
+        return updated;
+      });
+    }),
+
+  deleteMachineProfile: adminProcedure
+    .input(z.object({ id: z.uuid() }))
+    .mutation(async ({ input }) => {
+      const used = await db.query.workspace.findFirst({
+        where: eq(workspace.machineProfileId, input.id),
+        columns: { id: true },
+      });
+      if (used) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Machine profiles used by workspaces cannot be deleted; disable it instead",
+        });
+      }
+
+      const [deleted] = await db
+        .delete(machineProfile)
+        .where(eq(machineProfile.id, input.id))
+        .returning();
+      if (!deleted) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Machine profile not found" });
+      }
+      return deleted;
+    }),
 
   // ========================================================================
   // Images
@@ -490,25 +685,31 @@ export const infrastructureRouter = router({
     return images;
   }),
 
-  listProviderImageAssignments: adminProcedure
+  listProviderLaunchProfiles: adminProcedure
     .input(z.object({ cloudProviderId: z.uuid() }))
     .query(async ({ input }) => {
-      return await db.query.providerAgentImage.findMany({
-        where: eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
+      return await db.query.providerLaunchProfile.findMany({
+        where: eq(providerLaunchProfile.cloudProviderId, input.cloudProviderId),
         with: {
           agentType: true,
           image: true,
+          machineProfile: true,
         },
       });
     }),
 
-  upsertProviderImageAssignment: adminProcedure
-    .input(upsertProviderAgentImageSchema)
+  upsertProviderLaunchProfile: adminProcedure
+    .input(upsertProviderLaunchProfileSchema)
     .mutation(async ({ input }) => {
-      const [providerRecord, agentTypeRecord, imageRecord] = await Promise.all([
+      const [providerRecord, agentTypeRecord, imageRecord, machineRecord] = await Promise.all([
         db.query.cloudProvider.findFirst({ where: eq(cloudProvider.id, input.cloudProviderId) }),
         db.query.agentType.findFirst({ where: eq(agentType.id, input.agentTypeId) }),
         db.query.image.findFirst({ where: eq(image.id, input.imageId) }),
+        input.machineProfileId
+          ? db.query.machineProfile.findFirst({
+              where: eq(machineProfile.id, input.machineProfileId),
+            })
+          : undefined,
       ]);
 
       if (!providerRecord) {
@@ -521,6 +722,16 @@ export const infrastructureRouter = router({
 
       if (!imageRecord) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
+      }
+
+      if (
+        input.machineProfileId &&
+        (!machineRecord || machineRecord.cloudProviderId !== input.cloudProviderId)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Selected machine profile does not belong to this provider.",
+        });
       }
 
       if (imageRecord.agentTypeId !== input.agentTypeId) {
@@ -543,50 +754,51 @@ export const infrastructureRouter = router({
         });
       }
 
-      const workspaceProfile = input.workspaceProfile ?? null;
-      const existing = await db.query.providerAgentImage.findFirst({
+      const existing = await db.query.providerLaunchProfile.findFirst({
         where: and(
-          eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
-          eq(providerAgentImage.agentTypeId, input.agentTypeId),
+          eq(providerLaunchProfile.cloudProviderId, input.cloudProviderId),
+          eq(providerLaunchProfile.agentTypeId, input.agentTypeId),
+          eq(providerLaunchProfile.workspaceProfile, input.workspaceProfile),
         ),
       });
 
       if (existing) {
         const [updated] = await db
-          .update(providerAgentImage)
+          .update(providerLaunchProfile)
           .set({
             imageId: input.imageId,
-            workspaceProfile,
-            isDefault: true,
+            machineProfileId: input.machineProfileId ?? null,
+            isEnabled: true,
             updatedAt: new Date(),
           })
-          .where(eq(providerAgentImage.id, existing.id))
+          .where(eq(providerLaunchProfile.id, existing.id))
           .returning();
         return updated;
       }
 
       const [created] = await db
-        .insert(providerAgentImage)
+        .insert(providerLaunchProfile)
         .values({
           cloudProviderId: input.cloudProviderId,
           agentTypeId: input.agentTypeId,
           imageId: input.imageId,
-          workspaceProfile,
-          isDefault: true,
+          machineProfileId: input.machineProfileId ?? null,
+          workspaceProfile: input.workspaceProfile,
         })
         .returning();
       return created;
     }),
 
-  deleteProviderImageAssignment: adminProcedure
-    .input(deleteProviderAgentImageSchema)
+  deleteProviderLaunchProfile: adminProcedure
+    .input(deleteProviderLaunchProfileSchema)
     .mutation(async ({ input }) => {
       await db
-        .delete(providerAgentImage)
+        .delete(providerLaunchProfile)
         .where(
           and(
-            eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
-            eq(providerAgentImage.agentTypeId, input.agentTypeId),
+            eq(providerLaunchProfile.cloudProviderId, input.cloudProviderId),
+            eq(providerLaunchProfile.agentTypeId, input.agentTypeId),
+            eq(providerLaunchProfile.workspaceProfile, input.workspaceProfile),
           ),
         );
 
@@ -718,6 +930,17 @@ export const infrastructureRouter = router({
 
     if (SEEDED_IMAGE_NAMES.has(existing.name)) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Seeded images cannot be deleted" });
+    }
+
+    const usedByWorkspace = await db.query.workspace.findFirst({
+      where: eq(workspace.imageId, existing.id),
+      columns: { id: true },
+    });
+    if (usedByWorkspace) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Images used by workspaces cannot be deleted; disable it instead",
+      });
     }
 
     const [deleted] = await db.delete(image).where(eq(image.id, input.id)).returning();

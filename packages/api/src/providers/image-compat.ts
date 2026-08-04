@@ -11,6 +11,8 @@ export function imageSupportsProvider(
       return Boolean(metadata?.aws);
     case "daytona":
       return Boolean(metadata?.daytona);
+    case "cloudflare":
+      return Boolean(metadata?.cloudflare?.startCommand && metadata.cloudflare.port);
     case "vercel":
       return Boolean(metadata?.vercel?.image || metadata?.vercel?.runtime);
     case "upstash":
@@ -19,7 +21,10 @@ export function imageSupportsProvider(
       return Boolean(metadata?.ascii);
     case "exedev":
       return Boolean(metadata?.exedev);
+    case "railway":
+    case "local":
+      return true;
     default:
-      return true; // local / unknown providers don't need metadata
+      return false;
   }
 }

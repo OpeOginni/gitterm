@@ -64,24 +64,54 @@ export type WorkspaceListResult = {
   workspaces: Workspace[];
   pagination: { total: number; limit: number; offset: number; hasMore: boolean };
 };
+
+export type ProviderKey =
+  | "railway"
+  | "aws"
+  | "e2b"
+  | "daytona"
+  | "cloudflare"
+  | "vercel"
+  | "upstash"
+  | "ascii"
+  | "exedev";
+
+type ProviderSelectionBase = {
+  /** Select a specific provider installation. Usually omitted. */
+  providerId?: string;
+  /** Admin-defined machine profile key from `catalog.workspaceOptions()`. */
+  machine?: string;
+};
+
+export type WorkspaceProviderSelection =
+  | ({ type: "railway"; region?: string } & ProviderSelectionBase)
+  | ({ type: "aws"; region?: string } & ProviderSelectionBase)
+  | ({
+      type: Exclude<ProviderKey, "railway" | "aws">;
+    } & ProviderSelectionBase);
+
+export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";
+export type AgentKey = BuiltInAgentKey | (string & {});
+
 export type WorkspaceCreateInput = {
   idempotencyKey?: string;
   name?: string;
-  repo?: string;
+  repo: string;
   branch?: string;
   baseCommit?: string;
   checkoutRef?: string;
   subdomain?: string;
-  /** Unique enabled agent name. */
-  agent: string;
-  /** Unique enabled provider name. Optional when a preferred default exists. */
-  provider?: string;
-  regionId?: string;
+  /** Stable agent key. Defaults to `opencode`. */
+  agent?: AgentKey;
+  /** Provider intent. Defaults to the user's or deployment's preferred provider. */
+  provider?: WorkspaceProviderSelection;
   gitIntegrationId?: string;
-  persistent: boolean;
+  /** Defaults from the selected provider. */
+  persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
   modelCredentialIds?: string[];
 };
+
 export type WorkspaceRestartResult = { status: WorkspaceStatus };
 export type WorkspacePauseResult = { durationMinutes: number };
 export type WorkspaceTerminateResult = {
@@ -95,6 +125,7 @@ export type WorkspaceEnsureRunningResult = {
 
 export type AgentType = {
   id: string;
+  key: string;
   name: string;
   description: string | null;
   serverOnly: boolean;
@@ -106,20 +137,39 @@ export type AgentType = {
 export type CloudProvider = {
   id: string;
   name: string;
-  providerKey: string;
-  regions?: Array<Record<string, unknown>>;
-  [key: string]: unknown;
+  providerKey: ProviderKey | string;
+  regions?: Array<{
+    id: string;
+    name: string;
+    location: string;
+    externalRegionIdentifier: string;
+  }>;
 };
 
-export type SandboxDefaults = {
-  agent: string;
-  provider: string;
-  agentTypeId: string;
-  cloudProviderId: string;
-  regionId?: string;
-};
-
-export type SandboxDefaultsInput = {
-  agent: string;
-  provider?: string;
+export type WorkspaceCatalog = {
+  agents: Array<{
+    id: string;
+    key: string;
+    name: string;
+    description: string | null;
+    serverOnly: boolean;
+  }>;
+  providers: Array<{
+    id: string;
+    type: ProviderKey;
+    name: string;
+    isDefault: boolean;
+    persistence: "required" | "optional" | "unsupported";
+    regionSelection: "none" | "user" | "admin";
+    regions: Array<{ id: string; key: string; name: string; location: string }>;
+    machines: Array<{
+      id: string;
+      key: string;
+      name: string;
+      description: string | null;
+      isDefault: boolean;
+    }>;
+    agentKeys: string[];
+    ssh: boolean;
+  }>;
 };

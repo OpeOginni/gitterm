@@ -1,5 +1,11 @@
 import type { Plugin, PluginInput, WorkspaceInfo } from "@opencode-ai/plugin";
-import { createGittermClient, type GittermClient, type WorkspaceCreateResult } from "@gitterm/sdk";
+import {
+  createGittermClient,
+  type AgentKey,
+  type GittermClient,
+  type WorkspaceCreateResult,
+  type WorkspaceProviderSelection,
+} from "@gitterm/sdk";
 
 type GittermExtra = {
   workspaceID?: string;
@@ -12,7 +18,8 @@ type GittermExtra = {
 type GittermOptions = {
   serverUrl?: string;
   token?: string;
-  regionId?: string;
+  agent?: AgentKey;
+  provider?: WorkspaceProviderSelection;
   persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
   name?: string;
@@ -24,9 +31,6 @@ type MovedProperties = {
   source?: { directory?: string; workspaceID?: string };
   location?: { directory?: string; workspaceID?: string };
 };
-
-const AGENT = "Opencode (Beta Workspaces)";
-const PROVIDER = "e2b";
 
 export const GittermWorkspacePlugin: Plugin = async (
   { experimental_workspace, $, directory },
@@ -64,18 +68,19 @@ export const GittermWorkspacePlugin: Plugin = async (
     async create(info: WorkspaceInfo) {
       const client = clientFor(config);
       const extra = readExtra(info);
+      if (!extra.repo)
+        throw new Error("A repository URL is required to create a Gitterm workspace");
       const result = normalizeCreateResult(
-        await client.workspaces.createSandbox({
+        await client.workspaces.create({
           idempotencyKey: `${info.id}:${extra.baseCommit}`,
           name: info.name,
           repo: extra.repo,
           branch: extra.branch ?? info.branch ?? undefined,
           baseCommit: extra.baseCommit,
           checkoutRef: extra.checkoutRef,
-          agent: AGENT,
-          provider: PROVIDER,
-          regionId: config?.regionId,
-          persistent: config?.persistent ?? false,
+          agent: config?.agent ?? "opencode",
+          provider: config?.provider ?? { type: "e2b" },
+          persistent: config?.persistent,
           workspaceProfile: config?.workspaceProfile ?? "standard",
         }),
       );

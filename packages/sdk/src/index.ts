@@ -14,12 +14,15 @@ export { GittermError, WorkspaceLifecycleError } from "./errors.js";
 export type { GittermErrorCode, WorkspaceLifecycleErrorCode } from "./errors.js";
 export type {
   AgentType,
+  AgentKey,
   AuthStatus,
+  BuiltInAgentKey,
   CloudProvider,
-  SandboxDefaults,
+  ProviderKey,
   Workspace,
   WorkspaceCreateInput,
   WorkspaceCreateResult,
+  WorkspaceCatalog,
   WorkspaceEnsureRunningResult,
   WorkspaceHostingType,
   WorkspaceListOptions,
@@ -29,5 +32,5 @@ export type {
   WorkspaceStatus,
   WorkspacePauseResult,
   WorkspaceTerminateResult,
-  SandboxDefaultsInput,
+  WorkspaceProviderSelection,
 } from "./types.js";

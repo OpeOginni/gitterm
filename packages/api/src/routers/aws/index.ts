@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and, ne } from "@gitterm/db";
-import { cloudProvider, image, providerAgentImage, region } from "@gitterm/db/schema/cloud";
+import { cloudProvider, image, providerLaunchProfile, region } from "@gitterm/db/schema/cloud";
 import { providerConfig, providerType } from "@gitterm/db/schema/provider-config";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { adminProcedure, router } from "../..";
@@ -242,7 +242,7 @@ export const awsRouter = router({
 
       // Copy AWS-compatible image assignments to the new provider.
       //
-      // providerAgentImage is keyed by cloudProviderId, so every AWS region
+      // provider launch profiles are keyed by cloudProviderId, so every AWS region
       // provider needs its own (agentType -> image) assignments to be deployable.
       // We pick the set of images that carry AWS-specific provider metadata
       // (e.g. `providerMetadata.aws.cpu/memory/containerPort/...`) - those are
@@ -268,12 +268,12 @@ export const awsRouter = router({
           if (seenAgentTypes.has(awsImage.agentTypeId)) continue;
           seenAgentTypes.add(awsImage.agentTypeId);
 
-          await db.insert(providerAgentImage).values({
+          await db.insert(providerLaunchProfile).values({
             cloudProviderId: created.id,
             agentTypeId: awsImage.agentTypeId,
             imageId: awsImage.id,
-            workspaceProfile: null,
-            isDefault: true,
+            workspaceProfile: "standard",
+            isEnabled: true,
             createdAt: new Date(),
             updatedAt: new Date(),
           });

@@ -25,6 +25,7 @@ import type { Route } from "next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
+import type { ProviderKey } from "@gitterm/schema";
 import { getIcon } from "@/components/dashboard/create-instance";
 import Image from "next/image";
 
@@ -143,7 +144,7 @@ export default function ProvidersPage() {
   const [newProviderSupportsRegions, setNewProviderSupportsRegions] = useState(true);
 
   const createProvider = useMutation({
-    mutationFn: (params: { name: string; providerKey: string; supportsRegions: boolean }) =>
+    mutationFn: (params: { name: string; providerKey: ProviderKey; supportsRegions: boolean }) =>
       trpcClient.admin.infrastructure.createProvider.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
@@ -281,7 +282,7 @@ export default function ProvidersPage() {
                   onClick={() =>
                     createProvider.mutate({
                       name: newProviderName,
-                      providerKey: newProviderKey,
+                      providerKey: newProviderKey as ProviderKey,
                       supportsRegions: newProviderSupportsRegions,
                     })
                   }
