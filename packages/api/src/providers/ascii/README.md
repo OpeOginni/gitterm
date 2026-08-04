@@ -6,9 +6,9 @@ Runs GitTerm workspaces on persistent Ascii Box Linux VMs.
 
 Configure the following value in the GitTerm admin panel:
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `Box API Key` | Yes | Service API key created in the Ascii Box dashboard. |
+| Field         | Required | Notes                                               |
+| ------------- | -------- | --------------------------------------------------- |
+| `Box API Key` | Yes      | Service API key created in the Ascii Box dashboard. |
 
 ## Images
 
