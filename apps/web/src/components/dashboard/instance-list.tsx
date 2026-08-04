@@ -65,6 +65,7 @@ const PROVIDER_LOGOS: Record<string, string> = {
   daytona: "/daytona.svg",
   e2b: "/E2B.svg",
   railway: "/railway.svg",
+  upstash: "/upstash.svg",
   vercel: "/vercel.svg",
 };
 import Link from "next/link";

@@ -38,6 +38,7 @@ const clouds = [
   { src: "/ECS.svg", label: "AWS" },
   { src: "/cloudflare.svg", label: "Cloudflare" },
   { src: "/vercel.svg", label: "Vercel" },
+  { src: "/upstash.svg", label: "Upstash" },
 ];
 
 interface AnonResult {

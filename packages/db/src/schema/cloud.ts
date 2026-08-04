@@ -231,6 +231,21 @@ export interface VercelImageProviderMetadata {
   vcpus?: number;
 }
 
+export interface UpstashImageProviderMetadata {
+  runtime?:
+    | "node"
+    | "node-alpine"
+    | "python"
+    | "python-alpine"
+    | "golang"
+    | "golang-alpine"
+    | "ruby"
+    | "ruby-alpine"
+    | "rust"
+    | "rust-alpine";
+  size?: "small" | "medium" | "large";
+}
+
 export interface ImageProviderMetadata {
   isDefault?: boolean;
   e2b?: {
@@ -241,6 +256,7 @@ export interface ImageProviderMetadata {
   aws?: AwsImageProviderMetadata;
   cloudflare?: CloudflareImageProviderMetadata;
   vercel?: VercelImageProviderMetadata;
+  upstash?: UpstashImageProviderMetadata;
   [provider: string]: unknown;
 }
 
