@@ -6,11 +6,11 @@ Runs GitTerm workspaces in persistent Vercel Sandbox microVMs.
 
 Configure the following values in the GitTerm admin panel:
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `API Token` | Yes | Vercel access token with access to the selected team and project. |
-| `Team ID` | Yes | Vercel team ID. |
-| `Project ID` | Yes | Vercel project ID used for Sandbox operations. |
+| Field        | Required | Notes                                                             |
+| ------------ | -------- | ----------------------------------------------------------------- |
+| `API Token`  | Yes      | Vercel access token with access to the selected team and project. |
+| `Team ID`    | Yes      | Vercel team ID.                                                   |
+| `Project ID` | Yes      | Vercel project ID used for Sandbox operations.                    |
 
 ## Images
 
