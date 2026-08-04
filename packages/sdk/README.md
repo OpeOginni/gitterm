@@ -130,7 +130,6 @@ run UI review or browser capture tools in the sandbox, upload the resulting medi
 the changelog in the checked-out repository, then terminate the workspace. Use an
 `idempotencyKey` based on the release SHA when the workflow may be retried.
 
-
 ### Errors
 
 Every method throws `GittermError` with a stable `code`:
