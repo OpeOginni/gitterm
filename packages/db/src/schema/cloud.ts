@@ -250,6 +250,13 @@ export interface AsciiImageProviderMetadata {
   size?: "small" | "default" | "large";
 }
 
+export interface ExeDevImageProviderMetadata {
+  image?: string;
+  cpu?: number;
+  memory?: string;
+  disk?: string;
+}
+
 export interface ImageProviderMetadata {
   isDefault?: boolean;
   e2b?: {
@@ -262,6 +269,7 @@ export interface ImageProviderMetadata {
   vercel?: VercelImageProviderMetadata;
   upstash?: UpstashImageProviderMetadata;
   ascii?: AsciiImageProviderMetadata;
+  exedev?: ExeDevImageProviderMetadata;
   [provider: string]: unknown;
 }
 

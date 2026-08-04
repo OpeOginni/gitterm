@@ -422,6 +422,24 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       },
     ],
   },
+  exedev: {
+    name: "exedev",
+    displayName: "exe.dev",
+    category: "sandbox",
+    configSchema: z.object({
+      apiToken: z.string().min(1, "Automation API token is required"),
+    }),
+    fields: [
+      {
+        fieldName: "apiToken",
+        fieldLabel: "Automation API Token",
+        fieldType: "password",
+        isRequired: true,
+        isEncrypted: true,
+        sortOrder: 1,
+      },
+    ],
+  },
 };
 
 export function getProviderDefinition(providerName: string): ProviderDefinition | undefined {

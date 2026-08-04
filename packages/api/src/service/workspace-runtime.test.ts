@@ -31,6 +31,9 @@ describe("workspace runtime helpers", () => {
     expect(resolveProjectDirectory("https://github.com/acme/demo", "ascii")).toBe(
       "/home/user/demo",
     );
+    expect(resolveProjectDirectory("https://github.com/acme/demo", "exedev")).toBe(
+      "/home/exedev/demo",
+    );
     expect(resolveProjectDirectory(null, "railway")).toBe("/workspace");
   });
 

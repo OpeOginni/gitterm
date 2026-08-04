@@ -47,7 +47,7 @@
 			uri /api/internal/proxy-resolve
 
 			# Copy headers from auth response into request including some for specific providers
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization X-GitTerm-Ascii-Token e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization X-GitTerm-Ascii-Token X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
 
 			# Copy original headers
 			header_up Host {host}
