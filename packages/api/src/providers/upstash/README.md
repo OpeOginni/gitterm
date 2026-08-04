@@ -6,9 +6,9 @@ Runs GitTerm workspaces in durable Upstash Box containers.
 
 Configure the following value in the GitTerm admin panel:
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `Box API Key` | Yes | API key created in the Upstash Console. |
+| Field         | Required | Notes                                   |
+| ------------- | -------- | --------------------------------------- |
+| `Box API Key` | Yes      | API key created in the Upstash Console. |
 
 ## Images
 
