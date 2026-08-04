@@ -87,7 +87,12 @@ export function getWorkspaceProjectPath(
     .split("/")
     .pop()
     ?.replace(/\.git$/i, "");
-  const base = providerKey === "e2b" ? "~/workspace" : "/workspace";
+  const base =
+    providerKey === "e2b"
+      ? "~/workspace"
+      : providerKey === "vercel"
+        ? "/vercel/sandbox"
+        : "/workspace";
   return repoName ? `${base}/${repoName}` : base;
 }
 

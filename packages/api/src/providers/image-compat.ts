@@ -11,6 +11,8 @@ export function imageSupportsProvider(
       return Boolean(metadata?.aws);
     case "daytona":
       return Boolean(metadata?.daytona);
+    case "vercel":
+      return Boolean(metadata?.vercel?.image || metadata?.vercel?.runtime);
     default:
       return true; // local / unknown providers don't need metadata
   }
