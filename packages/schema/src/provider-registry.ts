@@ -404,6 +404,24 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       },
     ],
   },
+  ascii: {
+    name: "ascii",
+    displayName: "Ascii Box",
+    category: "sandbox",
+    configSchema: z.object({
+      apiKey: z.string().min(1, "API key is required"),
+    }),
+    fields: [
+      {
+        fieldName: "apiKey",
+        fieldLabel: "Box API Key",
+        fieldType: "password",
+        isRequired: true,
+        isEncrypted: true,
+        sortOrder: 1,
+      },
+    ],
+  },
 };
 
 export function getProviderDefinition(providerName: string): ProviderDefinition | undefined {

@@ -254,6 +254,7 @@ export default function ProvidersPage() {
                     <span className="font-mono text-foreground">daytona</span>, or{" "}
                     <span className="font-mono text-foreground">vercel</span>, or{" "}
                     <span className="font-mono text-foreground">upstash</span>, or{" "}
+                    <span className="font-mono text-foreground">ascii</span>, or{" "}
                     <span className="font-mono text-foreground">cloudflare</span>.
                   </p>
                 </div>

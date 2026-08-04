@@ -15,6 +15,8 @@ export function imageSupportsProvider(
       return Boolean(metadata?.vercel?.image || metadata?.vercel?.runtime);
     case "upstash":
       return Boolean(metadata?.upstash?.runtime);
+    case "ascii":
+      return Boolean(metadata?.ascii);
     default:
       return true; // local / unknown providers don't need metadata
   }

@@ -1,4 +1,5 @@
 import type { ComputeProvider } from "./compute";
+import { asciiProvider } from "./ascii";
 import { awsProvider } from "./aws";
 import { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 import { daytonaProvider } from "./daytona";
@@ -12,6 +13,7 @@ export { awsProvider } from "./aws";
 export { railwayProvider } from "./railway";
 export { e2bProvider } from "./e2b";
 export { cloudflareComputeProvider } from "./cloudflare/compute-provider";
+export { asciiProvider } from "./ascii";
 export { vercelProvider } from "./vercel";
 export { upstashProvider } from "./upstash";
 
@@ -22,6 +24,7 @@ export { upstashProvider } from "./upstash";
  *
  */
 const availableProviders: Record<string, ComputeProvider> = {
+  ascii: asciiProvider,
   aws: awsProvider,
   railway: railwayProvider,
   e2b: e2bProvider,

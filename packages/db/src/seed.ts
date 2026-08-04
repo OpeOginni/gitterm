@@ -162,6 +162,25 @@ const seedCloudProviders: Array<{
     restartSettlement: "immediate" as ProviderSettlement,
     terminationSettlement: "immediate" as ProviderSettlement,
   },
+  {
+    name: "Ascii Box",
+    providerKey: "ascii",
+    isEnabled: false,
+    isSandbox: true,
+    autoPersistent: true,
+    supportsRegions: false,
+    supportServerOnly: true,
+    sshAccessSupport: {
+      supported: true,
+      transportKind: "direct-ssh",
+      label: "Native SSH",
+      description: "Your saved SSH public key is authorized directly on the Box.",
+    },
+    creationSettlement: "immediate" as ProviderSettlement,
+    stopSettlement: "immediate" as ProviderSettlement,
+    restartSettlement: "immediate" as ProviderSettlement,
+    terminationSettlement: "immediate" as ProviderSettlement,
+  },
 ];
 
 const seedAgentTypes = [
