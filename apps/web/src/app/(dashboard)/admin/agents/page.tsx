@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -28,21 +29,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import type { Route } from "next";
-import { Container, Plus, Server, Trash2 } from "lucide-react";
+import { Container, Plus, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
+import { getIcon } from "@/components/dashboard/create-instance/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
-
-function isDefaultImage(image: { providerMetadata: unknown }) {
-  const metadata = image.providerMetadata;
-  return (
-    metadata !== null &&
-    typeof metadata === "object" &&
-    "isDefault" in metadata &&
-    metadata.isDefault === true
-  );
-}
 
 export default function AgentTypesPage() {
   const router = useRouter();
@@ -115,16 +107,6 @@ export default function AgentTypesPage() {
     onError: (error) => toast.error(error.message),
   });
 
-  const setDefaultImage = useMutation({
-    mutationFn: ({ id }: { id: string }) =>
-      trpcClient.admin.infrastructure.updateImage.mutate({ id, isDefault: true }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
-      toast.success("Agent image updated");
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
   const deleteAgentType = useMutation({
     mutationFn: ({ id }: { id: string }) =>
       trpcClient.admin.infrastructure.deleteAgentType.mutate({ id }),
@@ -151,8 +133,8 @@ export default function AgentTypesPage() {
   return (
     <DashboardShell>
       <DashboardHeader
-        heading="Agent Types"
-        text="Configure the types of agents available for workspaces. Disabled agents won't appear in workspace creation."
+        heading="Agents"
+        text="Manage each workspace agent and the single runtime image that powers it."
       >
         <div className="flex gap-2">
           <Button asChild variant="outline">
@@ -291,114 +273,119 @@ export default function AgentTypesPage() {
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="space-y-2">
             {agentTypes?.map((agent) => {
-              const agentImages = images?.filter((image) => image.agentTypeId === agent.id) ?? [];
-              const enabledAgentImages = agentImages.filter((image) => image.isEnabled);
-              const defaultImage = enabledAgentImages.find(isDefaultImage);
+              const runtimeImage = images?.find((image) => image.agentTypeId === agent.id);
               const isSeeded = ["opencode-ttyd", "opencode", "t3code"].includes(agent.key);
 
               return (
                 <div
                   key={agent.id}
-                  className={`flex flex-col gap-4 border-b border-white/[0.04] p-4 transition-colors last:border-0 hover:bg-white/[0.02] md:flex-row md:items-center md:justify-between ${!agent.isEnabled ? "opacity-60" : ""}`}
+                  className={`group relative overflow-hidden rounded-2xl border border-border bg-card p-5 transition-colors hover:border-amber-400/20 ${!agent.isEnabled ? "opacity-60" : ""}`}
                 >
-                  <div className="flex min-w-0 items-start gap-4">
-                    <div className="rounded-xl bg-white/[0.04] p-2.5">
-                      <Server className="h-5 w-5 text-white/40" />
+                  <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-amber-500/[0.04] opacity-0 blur-3xl transition-opacity group-hover:opacity-100" />
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    <div className="rounded-xl border border-border bg-foreground/[0.02] p-2.5">
+                      <Image
+                        src={getIcon(agent.key)}
+                        alt=""
+                        width={20}
+                        height={20}
+                        className="h-5 w-5 object-contain"
+                      />
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="font-medium text-white/90">{agent.name}</span>
-                        <Badge variant="outline" className="font-mono text-[10px] text-white/45">
-                          {agent.key}
-                        </Badge>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {agent.provisionerKey}
-                        </Badge>
-                        {!agent.isEnabled && (
-                          <Badge
-                            variant="outline"
-                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                          >
-                            Disabled
-                          </Badge>
-                        )}
-                      </div>
-                      {agent.description && (
-                        <p className="text-xs text-white/55 mt-1 max-w-2xl leading-snug">
-                          {agent.description}
-                        </p>
-                      )}
-                      <p className="text-xs text-white/25 mt-0.5">
-                        Created {new Date(agent.createdAt).toLocaleDateString()}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="flex items-center gap-1 text-xs text-white/35">
-                          <Container className="h-3.5 w-3.5" />
-                          Images:
-                        </span>
-                        {agentImages.length > 0 ? (
-                          agentImages.map((image) => (
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div>
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <h3 className="font-semibold text-foreground/90">{agent.name}</h3>
+                          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                            {agent.key}
+                          </span>
+                          {agent.serverOnly ? (
+                            <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                              Server only
+                            </span>
+                          ) : null}
+                          {!agent.isEnabled ? (
                             <Badge
-                              key={image.id}
                               variant="outline"
-                              className={`max-w-48 text-xs ${
-                                image.isEnabled
-                                  ? "border-primary/20 bg-primary/10 text-primary"
-                                  : "border-white/[0.08] bg-white/[0.04] text-white/40"
-                              }`}
+                              className="border-foreground/[0.08] bg-foreground/[0.04] text-[10px] text-muted-foreground"
                             >
-                              <span className="truncate">{image.name}</span>
-                              {isDefaultImage(image) && (
-                                <span className="ml-1 text-white/35">Default</span>
-                              )}
+                              Disabled
                             </Badge>
-                          ))
-                        ) : (
-                          <span className="text-xs text-white/25">None connected</span>
-                        )}
+                          ) : null}
+                        </div>
+                        {agent.description ? (
+                          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+                            {agent.description}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div
+                        className={`flex flex-col gap-3 rounded-xl border px-3 py-3 sm:flex-row sm:items-center sm:justify-between ${
+                          runtimeImage
+                            ? "border-border/70 bg-foreground/[0.015]"
+                            : "border-amber-500/20 bg-amber-500/[0.04]"
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Container
+                            className={`h-4 w-4 shrink-0 ${runtimeImage ? "text-muted-foreground" : "text-amber-400"}`}
+                          />
+                          {runtimeImage ? (
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-medium text-foreground/85">
+                                  {runtimeImage.name}
+                                </span>
+                                {!runtimeImage.isEnabled ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-foreground/[0.08] text-[10px] text-muted-foreground"
+                                  >
+                                    Image disabled
+                                  </Badge>
+                                ) : null}
+                              </div>
+                              <code className="block truncate font-mono text-[11px] text-muted-foreground">
+                                {runtimeImage.imageId}
+                              </code>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-sm font-medium text-amber-300">
+                                Runtime image missing
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Connect an image before enabling this agent.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex w-full items-center gap-3 md:w-auto">
-                    <Select
-                      value={defaultImage?.id ?? ""}
-                      onValueChange={(imageId) => setDefaultImage.mutate({ id: imageId })}
-                      disabled={enabledAgentImages.length === 0 || setDefaultImage.isPending}
-                    >
-                      <SelectTrigger className="w-full md:w-52">
-                        <SelectValue
-                          placeholder={
-                            enabledAgentImages.length === 0 ? "No images" : "Image in use"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {enabledAgentImages.map((image) => (
-                          <SelectItem key={image.id} value={image.id}>
-                            {image.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Switch
-                      checked={agent.isEnabled}
-                      onCheckedChange={(checked) =>
-                        toggleAgentType.mutate({ id: agent.id, isEnabled: checked })
-                      }
-                    />
-                    {!isSeeded && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-white/35 hover:text-red-400"
-                        onClick={() => setDeleteAgentId(agent.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <div className="flex shrink-0 items-center justify-end gap-2 sm:self-center">
+                      <Switch
+                        checked={agent.isEnabled}
+                        disabled={!runtimeImage && !agent.isEnabled}
+                        onCheckedChange={(checked) =>
+                          toggleAgentType.mutate({ id: agent.id, isEnabled: checked })
+                        }
+                        aria-label={`${agent.isEnabled ? "Disable" : "Enable"} ${agent.name}`}
+                      />
+                      {!isSeeded ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-white/35 hover:text-red-400"
+                          onClick={() => setDeleteAgentId(agent.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               );

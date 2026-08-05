@@ -49,6 +49,7 @@ export interface BuildWorkspaceProvisioningSpecParams {
   sshPublicKey?: string;
   workspaceProfile: string;
   editorAccessEnabled: boolean;
+  setupCommand?: string;
 }
 
 /**
@@ -65,6 +66,7 @@ export function buildWorkspaceProvisioningSpec(
     sshPublicKey: params.sshPublicKey,
     workspaceProfile: params.workspaceProfile,
     editorAccessEnabled: params.editorAccessEnabled,
+    setupCommand: params.setupCommand,
   };
 }
 
@@ -114,6 +116,9 @@ export function buildWorkspaceEnv(
     WORKSPACE_PROFILE: spec.workspaceProfile,
     EDITOR_ACCESS_ENABLED: spec.editorAccessEnabled ? "true" : "false",
     USER_SSH_PUBLIC_KEY: spec.sshPublicKey,
+    WORKSPACE_SETUP_COMMAND_BASE64: spec.setupCommand
+      ? Buffer.from(spec.setupCommand).toString("base64")
+      : undefined,
   };
 
   return mergeEnv(system, spec.agent.env, runtime.userEnv);

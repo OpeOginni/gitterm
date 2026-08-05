@@ -129,16 +129,6 @@ function getImageMetadata(config: WorkspaceConfig): AwsImageProviderMetadata {
   return config.imageProviderMetadata?.aws ?? {};
 }
 
-function getRoleNameFromArn(roleArn: string): string | undefined {
-  const marker = ":role/";
-  const index = roleArn.indexOf(marker);
-  if (index === -1) {
-    return undefined;
-  }
-
-  return roleArn.slice(index + marker.length);
-}
-
 function buildWorkspaceHost(workspaceId: string): string {
   return `${workspaceId}.workspace.aws.gitterm.internal`;
 }
@@ -799,7 +789,6 @@ export class AwsProvider implements ComputeProvider {
       ],
       environment: normalizeEnvironmentVariables({
         ...config.environmentVariables,
-        AWS_TASK_ROLE_NAME: getRoleNameFromArn(providerConfig.taskRoleArn),
       }),
     };
 

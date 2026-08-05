@@ -135,6 +135,12 @@ export type WorkspaceCreateInput = {
   persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
   modelCredentialIds?: string[];
+  /**
+   * Ordered commands launched in the repository after the agent server starts.
+   * They do not block workspace readiness; inspect ~/.gitterm/setup for status
+   * and logs from inside the workspace.
+   */
+  setupCommands?: string[];
 };
 
 export type WorkspaceRestartResult = { status: WorkspaceStatus };

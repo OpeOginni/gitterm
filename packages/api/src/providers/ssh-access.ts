@@ -96,11 +96,7 @@ export function pickWorkspaceImage<
     providerMetadata?: { isDefault?: boolean } | null;
   },
 >(images: T[], _profile: WorkspaceProfile): T | undefined {
-  if (images.length === 0) {
-    return undefined;
-  }
-
-  return images.find((img) => img.providerMetadata?.isDefault === true) ?? images[0];
+  return images[0];
 }
 
 export function buildHostAlias(subdomain: string): string {

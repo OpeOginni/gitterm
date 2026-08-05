@@ -55,7 +55,8 @@ ENV HOME=/workspace \
 
 # Copy and set up entrypoint script
 COPY ./t3code/server.entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY ./workspace-setup-runner.sh /usr/local/bin/gitterm-workspace-setup
+RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup
 
 ENV PORT=7681
 EXPOSE 22

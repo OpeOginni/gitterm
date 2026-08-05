@@ -4,7 +4,6 @@ import {
   cloudProvider,
   image,
   machineProfile,
-  providerLaunchProfile,
   region,
   type CloudProvidersshAccessSupport,
   type ProviderSettlement,
@@ -249,7 +248,6 @@ const seedImages = [
     imageId: "opeoginni/gitterm-opencode",
     agentTypeName: "OpenCode (TTYD)",
     providerMetadata: {
-      isDefault: true,
       daytona: {
         image: "opeoginni/gitterm-opencode-server:latest",
         resources: { cpu: 2, memory: 4 },
@@ -268,7 +266,6 @@ const seedImages = [
     imageId: "opeoginni/gitterm-opencode-server",
     agentTypeName: "OpenCode",
     providerMetadata: {
-      isDefault: true,
       e2b: {
         templateId: "r9xlzvdbcoocvbncrds9",
         sshTemplateId: "nxiezl38gnw32ufyloc0",
@@ -284,13 +281,6 @@ const seedImages = [
         startCommand: "opencode serve --hostname 0.0.0.0 --port 4096",
         port: 4096,
       },
-    },
-  },
-  {
-    name: "gitterm-opencode-aws-server",
-    imageId: "opeoginni/gitterm-opencode-aws-server",
-    agentTypeName: "OpenCode",
-    providerMetadata: {
       aws: {
         cpu: 4096,
         memory: 16384,
@@ -304,7 +294,6 @@ const seedImages = [
     imageId: "opeoginni/gitterm-t3code-server",
     agentTypeName: "T3Code",
     providerMetadata: {
-      isDefault: true,
       // Built by E2B template job in Build Agent Images workflow (alias gitterm-t3code-server).
       e2b: {
         templateId: "gfu36xk02swjo0s9turi",
@@ -333,16 +322,6 @@ const seedImages = [
     },
   },
 ];
-
-// AWS image assignments are NOT seeded here. They're created per-region when an
-// admin calls `aws.createRegionProvider` (each AWS region is its own
-// cloud_provider row), since launch profiles are keyed by cloudProviderId.
-const seedProviderLaunchProfiles: Array<{
-  providerName: string;
-  agentTypeName: string;
-  imageName: string;
-  workspaceProfile: "standard" | "ssh-enabled";
-}> = [];
 
 const seedMachineProfiles: Array<{
   providerName: string;
@@ -910,58 +889,6 @@ export async function seedDatabase(): Promise<void> {
         .returning();
       console.log(`[seed]   Created image "${img.name}"`);
       imageMap.set(img.name, created!.id);
-    }
-  }
-
-  // =========================================================================
-  // Seed Provider Launch Profiles
-  // =========================================================================
-  console.log("[seed] Seeding provider launch profiles...");
-
-  for (const assignment of seedProviderLaunchProfiles) {
-    const cloudProviderId = providerMap.get(assignment.providerName);
-    const agentTypeId = agentTypeMap.get(assignment.agentTypeName);
-    const imageId = imageMap.get(assignment.imageName);
-
-    if (!cloudProviderId || !agentTypeId || !imageId) {
-      console.log(
-        `[seed]   Skipping image assignment ${assignment.providerName}/${assignment.agentTypeName} - missing provider, agent type, or image`,
-      );
-      continue;
-    }
-
-    const existing = await db.query.providerLaunchProfile.findFirst({
-      where: and(
-        eq(providerLaunchProfile.cloudProviderId, cloudProviderId),
-        eq(providerLaunchProfile.agentTypeId, agentTypeId),
-        eq(providerLaunchProfile.workspaceProfile, assignment.workspaceProfile),
-      ),
-    });
-
-    if (existing) {
-      await db
-        .update(providerLaunchProfile)
-        .set({
-          imageId,
-          workspaceProfile: assignment.workspaceProfile,
-          isEnabled: true,
-          updatedAt: new Date(),
-        })
-        .where(eq(providerLaunchProfile.id, existing.id));
-      console.log(
-        `[seed]   Updated image assignment ${assignment.providerName}/${assignment.agentTypeName}`,
-      );
-    } else {
-      await db.insert(providerLaunchProfile).values({
-        cloudProviderId,
-        agentTypeId,
-        imageId,
-        workspaceProfile: assignment.workspaceProfile,
-        isEnabled: true,
-      });
-      console.log(
-        `[seed]   Created image assignment ${assignment.providerName}/${assignment.agentTypeName}`,
-      );
     }
   }
 

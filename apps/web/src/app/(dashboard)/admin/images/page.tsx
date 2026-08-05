@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -27,8 +28,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Route } from "next";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Container, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
+import { getIcon } from "@/components/dashboard/create-instance/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -68,6 +70,35 @@ const DEFAULT_PROVIDER_METADATA = `{
   }
 }`;
 
+const PROVIDER_LABELS: Record<string, string> = {
+  aws: "AWS",
+  e2b: "E2B",
+  daytona: "Daytona",
+  cloudflare: "Cloudflare",
+  vercel: "Vercel",
+  upstash: "Upstash",
+  ascii: "Ascii",
+  exedev: "exe.dev",
+};
+
+function getSupportedProviders(metadata: unknown): string[] {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return [];
+  const providerMetadata = metadata as Record<string, any>;
+  const supported = [
+    providerMetadata.aws ? "aws" : null,
+    providerMetadata.e2b?.templateId ? "e2b" : null,
+    providerMetadata.daytona?.image ? "daytona" : null,
+    providerMetadata.cloudflare?.startCommand && providerMetadata.cloudflare?.port
+      ? "cloudflare"
+      : null,
+    providerMetadata.vercel?.image ? "vercel" : null,
+    providerMetadata.upstash?.runtime ? "upstash" : null,
+    providerMetadata.ascii ? "ascii" : null,
+    providerMetadata.exedev?.image ? "exedev" : null,
+  ].filter((provider): provider is string => provider !== null);
+  return supported.map((provider) => PROVIDER_LABELS[provider] ?? provider);
+}
+
 export default function ImagesPage() {
   const router = useRouter();
   const { data: session, isPending: isSessionPending } = authClient.useSession();
@@ -104,6 +135,8 @@ export default function ImagesPage() {
     queryKey: ["admin", "agentTypes"],
     queryFn: () => trpcClient.admin.infrastructure.listAgentTypes.query(),
   });
+  const assignedAgentTypeIds = new Set(images?.map((image) => image.agentTypeId));
+  const availableAgentTypes = agentTypes?.filter((agent) => !assignedAgentTypeIds.has(agent.id));
 
   const createImage = useMutation({
     mutationFn: (params: {
@@ -154,6 +187,7 @@ export default function ImagesPage() {
       trpcClient.admin.infrastructure.toggleImage.mutate({ id, isEnabled }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "agentTypes"] });
       toast.success(`Image ${data.isEnabled ? "enabled" : "disabled"}`);
     },
     onError: (error) => toast.error(error.message),
@@ -184,8 +218,8 @@ export default function ImagesPage() {
   return (
     <DashboardShell>
       <DashboardHeader
-        heading="Container Images"
-        text="Manage Docker images used for workspaces. Disabled images won't appear in workspace creation."
+        heading="Runtime Images"
+        text="Manage the single canonical image connected to each workspace agent."
       >
         <div className="flex gap-2">
           <Button asChild variant="outline">
@@ -198,7 +232,10 @@ export default function ImagesPage() {
           </Button>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85">
+              <Button
+                disabled={(availableAgentTypes?.length ?? 0) === 0}
+                className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Image
               </Button>
@@ -240,7 +277,7 @@ export default function ImagesPage() {
                       <SelectValue placeholder="Select an agent type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {agentTypes?.map((agent) => (
+                      {availableAgentTypes?.map((agent) => (
                         <SelectItem key={agent.id} value={agent.id}>
                           {agent.name}
                         </SelectItem>
@@ -294,70 +331,89 @@ export default function ImagesPage() {
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="space-y-2">
             {images?.map((image) => {
               const isSeeded =
                 image.name === "gitterm-opencode" ||
                 image.name === "gitterm-opencode-server" ||
-                image.name === "gitterm-opencode-aws-server";
+                image.name === "gitterm-t3code-server";
+              const supportedProviders = getSupportedProviders(image.providerMetadata);
 
               return (
                 <div
                   key={image.id}
-                  className={`flex items-center justify-between p-4 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02] ${!image.isEnabled ? "opacity-60" : ""}`}
+                  className={`group relative overflow-hidden rounded-2xl border border-border bg-card p-5 transition-colors hover:border-amber-400/20 ${!image.isEnabled ? "opacity-60" : ""}`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="rounded-xl bg-white/[0.04] p-2.5">
-                      <Container className="h-5 w-5 text-white/40" />
+                  <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-amber-500/[0.04] opacity-0 blur-3xl transition-opacity group-hover:opacity-100" />
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <div className="relative rounded-xl border border-border bg-foreground/[0.02] p-2.5">
+                      <Image
+                        src={getIcon(image.agentType.key)}
+                        alt=""
+                        width={20}
+                        height={20}
+                        className="h-5 w-5 object-contain"
+                      />
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium text-white/90">{image.name}</span>
-                        {!image.isEnabled && (
-                          <Badge
-                            variant="outline"
-                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                          >
-                            Disabled
-                          </Badge>
-                        )}
-                        <Badge
-                          variant="outline"
-                          className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs"
-                        >
-                          {image.agentType.name}
-                        </Badge>
-                        {image.agentType.serverOnly && (
-                          <Badge
-                            variant="outline"
-                            className="border-white/[0.08] bg-white/[0.04] text-white/40 text-xs"
-                          >
-                            Server Only
-                          </Badge>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div>
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <h3 className="font-semibold text-foreground/90">{image.name}</h3>
+                          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                            {image.agentType.name}
+                          </span>
+                          {image.agentType.serverOnly ? (
+                            <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                              Server only
+                            </span>
+                          ) : null}
+                          {!image.isEnabled ? (
+                            <Badge
+                              variant="outline"
+                              className="border-foreground/[0.08] bg-foreground/[0.04] text-[10px] text-muted-foreground"
+                            >
+                              Disabled
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <code className="mt-1 block max-w-2xl truncate font-mono text-xs text-muted-foreground">
+                          {image.imageId}
+                        </code>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="mr-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Runs on
+                        </span>
+                        {supportedProviders.length > 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            {supportedProviders.join(" · ")}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-amber-400">
+                            No provider compatibility configured
+                          </span>
                         )}
                       </div>
-                      <code className="font-mono text-xs text-white/25 mt-0.5 block truncate max-w-md">
-                        {image.imageId}
-                      </code>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!isSeeded && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-white/35 hover:text-red-400"
-                        onClick={() => setDeleteImageId(image.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Switch
-                      checked={image.isEnabled}
-                      onCheckedChange={(checked) =>
-                        toggleImage.mutate({ id: image.id, isEnabled: checked })
-                      }
-                    />
+                    <div className="flex shrink-0 items-center justify-end gap-2">
+                      {!isSeeded ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-white/35 hover:text-red-400"
+                          onClick={() => setDeleteImageId(image.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                      <Switch
+                        checked={image.isEnabled}
+                        onCheckedChange={(checked) =>
+                          toggleImage.mutate({ id: image.id, isEnabled: checked })
+                        }
+                        aria-label={`${image.isEnabled ? "Disable" : "Enable"} ${image.name}`}
+                      />
+                    </div>
                   </div>
                 </div>
               );

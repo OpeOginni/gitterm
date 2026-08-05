@@ -113,12 +113,18 @@ Override only the placement decisions your integration cares about:
 await client.workspaces.create({
   repo: "https://github.com/acme/product",
   agent: "opencode",
+  setupCommands: ["npm install", "npm run generate"],
   provider: {
     type: "exedev",
     machine: "content-rendering",
   },
 });
 ```
+
+Setup commands run in order from the checked-out repository after the agent server is
+ready. They do not delay workspace creation or stop the agent if they fail. Provider and
+agent defaults configured by an administrator run first; inspect `~/.gitterm/setup/state`
+and `~/.gitterm/setup/setup.log` inside the workspace for the result.
 
 `provider` is a discriminated union, so TypeScript only offers `region` for providers
 where GitTerm supports caller-selected placement. Machine keys are configured by admins

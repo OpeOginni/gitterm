@@ -171,8 +171,17 @@ export default function ProvidersPage() {
         others.push(provider);
       }
     }
+    others.sort((a, b) => {
+      const configurationOrder =
+        Number(Boolean(b.providerConfig?.isEnabled)) - Number(Boolean(a.providerConfig?.isEnabled));
+      return configurationOrder || a.name.localeCompare(b.name);
+    });
     return { awsProviders, others };
   }, [providers]);
+
+  const awsIsConfigured = groupedProviders.awsProviders.some(
+    (provider) => provider.providerConfig?.isEnabled,
+  );
 
   if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
     return (
@@ -301,10 +310,12 @@ export default function ProvidersPage() {
           <ProvidersPageSkeleton />
         ) : (
           <ul className="space-y-2">
-            {/* AWS - expandable cluster row */}
-            <li>
-              <AwsProviderSection awsProviders={groupedProviders.awsProviders} />
-            </li>
+            {/* Keep the AWS region group with providers sharing its configuration state. */}
+            {awsIsConfigured && (
+              <li>
+                <AwsProviderSection awsProviders={groupedProviders.awsProviders} />
+              </li>
+            )}
 
             {/* Other providers - flat rows */}
             {groupedProviders.others.map((provider) => (
@@ -375,6 +386,12 @@ export default function ProvidersPage() {
                 </Link>
               </li>
             ))}
+
+            {!awsIsConfigured && (
+              <li>
+                <AwsProviderSection awsProviders={groupedProviders.awsProviders} />
+              </li>
+            )}
 
             {(providers?.length ?? 0) === 0 && (
               <li className="py-12 text-center text-sm text-muted-foreground">

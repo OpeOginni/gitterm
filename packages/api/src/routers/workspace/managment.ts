@@ -8,14 +8,7 @@ import {
   workspace,
   volume,
 } from "@gitterm/db/schema/workspace";
-import {
-  agentType,
-  image,
-  cloudProvider,
-  machineProfile,
-  providerLaunchProfile,
-  region,
-} from "@gitterm/db/schema/cloud";
+import { agentType, image, cloudProvider, machineProfile, region } from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
 import {
@@ -74,6 +67,7 @@ import {
   parseProviderMachineOptions,
   providerKeySchema,
   workspaceProviderSelectionSchema,
+  workspaceSetupCommandsSchema,
   type AgentConfigKind,
   type ProviderKey,
 } from "@gitterm/schema";
@@ -107,6 +101,10 @@ import {
 } from "../../service/workspace-runtime";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
+import {
+  buildWorkspaceSetupCommand,
+  resolveWorkspaceSetupCommands,
+} from "../../service/workspace-setup";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -178,6 +176,7 @@ const workspaceCreateBaseSchema = z.object({
   gitIntegrationId: z.string().optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
   modelCredentialIds: z.array(z.uuid()).max(50).optional(),
+  setupCommands: workspaceSetupCommandsSchema.optional(),
 });
 
 const legacyWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
@@ -1793,38 +1792,10 @@ export const workspaceRouter = router({
           });
         }
 
-        const launchProfile = await db.query.providerLaunchProfile.findFirst({
-          where: and(
-            eq(providerLaunchProfile.cloudProviderId, input.cloudProviderId),
-            eq(providerLaunchProfile.agentTypeId, input.agentTypeId),
-            eq(providerLaunchProfile.workspaceProfile, workspaceProfile),
-            eq(providerLaunchProfile.isEnabled, true),
-          ),
-          with: {
-            image: true,
-            machineProfile: true,
-          },
-        });
-
-        // An assignment is only usable if its image actually carries the
-        // provider metadata required to provision on the selected provider.
-        // Otherwise (e.g. an AWS-only image assigned to E2B) we ignore it and
-        // fall back to a profile-aware pick among provider-compatible images.
-        const assignedImage = launchProfile?.image;
-        const assignmentUsable =
-          assignedImage?.isEnabled === true &&
-          imageSupportsProvider(
-            providerKey,
-            assignedImage.providerMetadata as ImageProviderMetadata | null,
-          );
-
         const compatibleImageRecords = imageRecords.filter((img) =>
           imageSupportsProvider(providerKey, img.providerMetadata as ImageProviderMetadata | null),
         );
-
-        const imageRecord = assignmentUsable
-          ? assignedImage
-          : pickWorkspaceImage(compatibleImageRecords, workspaceProfile);
+        const imageRecord = pickWorkspaceImage(compatibleImageRecords, workspaceProfile);
 
         if (!imageRecord) {
           throw new TRPCError({
@@ -2136,6 +2107,24 @@ export const workspaceRouter = router({
           ),
         });
 
+        const setupCommand = buildWorkspaceSetupCommand(
+          await resolveWorkspaceSetupCommands({
+            cloudProviderId: input.cloudProviderId,
+            agentTypeId: input.agentTypeId,
+            requestedCommands: input.setupCommands,
+          }),
+          agentProvisioning.serve?.port,
+        );
+
+        if (setupCommand && agentProvisioning.serve) {
+          agentProvisioning.serve.postStartCommand = [
+            agentProvisioning.serve.postStartCommand,
+            setupCommand,
+          ]
+            .filter(Boolean)
+            .join("\n");
+        }
+
         if (!agentProvisioning.usesServerPassword) {
           encryptedServerPassword = undefined;
         }
@@ -2160,6 +2149,7 @@ export const workspaceRouter = router({
               : undefined,
           workspaceProfile,
           editorAccessEnabled,
+          setupCommand,
         });
 
         // Serialize the spec + runtime vars into the env handed to the compute
@@ -2188,9 +2178,7 @@ export const workspaceRouter = router({
         const imageProviderMetadata = applyMachineProfile(
           imageRecord.providerMetadata,
           providerKey,
-          input.machineOptions ??
-            launchProfile?.machineProfile?.providerOptions ??
-            selectedMachineProfile?.providerOptions,
+          input.machineOptions ?? selectedMachineProfile?.providerOptions,
         );
 
         // Plan-based persistence gating: free tier cannot opt into persistent
@@ -2275,7 +2263,7 @@ export const workspaceRouter = router({
             imageId: imageRecord.id,
             cloudProviderId: input.cloudProviderId,
             machineProfileId: selectedMachineProfile?.id ?? null,
-            launchProfileId: launchProfile?.id ?? null,
+            launchProfileId: null,
             gitIntegrationId: input.gitIntegrationId ?? null,
             modelCredentialIds: input.modelCredentialIds ?? [],
             persistent: effectivePersistent,

@@ -23,11 +23,13 @@ export function DashboardShell({ children, className }: DashboardShellProps) {
 export function DashboardHeader({
   heading,
   text,
+  icon,
   children,
   className,
 }: {
   heading: string;
   text?: string;
+  icon?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
 }) {
@@ -39,9 +41,12 @@ export function DashboardHeader({
       )}
     >
       <div className="space-y-1.5">
-        <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl text-balance">
-          {heading}
-        </h1>
+        <div className="flex flex-wrap items-center gap-3">
+          {icon}
+          <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl text-balance">
+            {heading}
+          </h1>
+        </div>
         {text ? <p className="text-sm text-white/40 md:text-base">{text}</p> : null}
       </div>
       {children}
