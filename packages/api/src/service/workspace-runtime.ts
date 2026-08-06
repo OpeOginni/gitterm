@@ -55,8 +55,8 @@ export function isResumableWorkspaceStatus(status: string): boolean {
 
 /**
  * Resolve the project directory inside a sandbox for a given provider.
- * E2B uses `/home/user/workspace`, Vercel uses `/vercel/sandbox`, and most
- * other providers use `/workspace`.
+ * E2B uses `/home/user/workspace`, Vercel uses `/vercel/sandbox`, Upstash uses
+ * `/workspace/home`, and most other providers use `/workspace`.
  */
 export function resolveProjectDirectory(
   repositoryUrl: string | null | undefined,
@@ -68,6 +68,9 @@ export function resolveProjectDirectory(
   }
   if ((providerKey ?? "").toLowerCase() === "vercel") {
     return hint.replace(/^\/workspace/, "/vercel/sandbox");
+  }
+  if ((providerKey ?? "").toLowerCase() === "upstash") {
+    return hint.replace(/^\/workspace/, "/workspace/home");
   }
   return hint;
 }

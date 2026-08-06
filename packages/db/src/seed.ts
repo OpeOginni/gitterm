@@ -143,6 +143,25 @@ const seedCloudProviders: Array<{
     restartSettlement: "immediate" as ProviderSettlement,
     terminationSettlement: "immediate" as ProviderSettlement,
   },
+  {
+    name: "Upstash Box",
+    providerKey: "upstash",
+    isEnabled: false,
+    isSandbox: true,
+    autoPersistent: true,
+    supportsRegions: false,
+    supportServerOnly: true,
+    sshAccessSupport: {
+      supported: false,
+      label: "Not supported",
+      description:
+        "Upstash Box SSH requires the account-wide Box API key and cannot be granted per user.",
+    },
+    creationSettlement: "immediate" as ProviderSettlement,
+    stopSettlement: "immediate" as ProviderSettlement,
+    restartSettlement: "immediate" as ProviderSettlement,
+    terminationSettlement: "immediate" as ProviderSettlement,
+  },
 ];
 
 const seedAgentTypes = [

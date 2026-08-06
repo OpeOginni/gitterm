@@ -52,6 +52,10 @@ const DEFAULT_PROVIDER_METADATA = `{
   "vercel": {
     "image": "my-vcr-repository:latest",
     "vcpus": 2
+  },
+  "upstash": {
+    "runtime": "node",
+    "size": "small"
   }
 }`;
 
