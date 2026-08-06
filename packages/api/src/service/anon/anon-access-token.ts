@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import env from "@gitterm/env/server";
+import { ANON_WORKSPACE_TTL_SECONDS } from "./anon-lifetime";
 
 /**
  * Stateless access tokens for the anonymous "try gitterm" flow.
@@ -19,7 +20,7 @@ import env from "@gitterm/env/server";
  */
 
 export const ANON_COOKIE_NAME = "gitterm_anon";
-export const ANON_TOKEN_TTL_SECONDS = 10 * 60;
+export const ANON_TOKEN_TTL_SECONDS = ANON_WORKSPACE_TTL_SECONDS;
 
 function getSecret(): string {
   const secret = env.BETTER_AUTH_SECRET;

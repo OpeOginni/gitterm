@@ -15,6 +15,6 @@
   },
   "deploy": {
     "startCommand": "cd apps/worker && bun run dist/idle-reaper.mjs",
-    "cronSchedule": "*/10 * * * *"
+    "cronSchedule": "*/5 * * * *"
   }
 }

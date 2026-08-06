@@ -25,6 +25,7 @@ import {
 import { createProvisionLogger } from "../provision-logger";
 import type { E2BConfig } from "./types";
 import { getWorkspaceIdleTimeoutMs } from "../../service/workspace-timeouts";
+import { ANON_WORKSPACE_TTL_SECONDS } from "../../service/anon/anon-lifetime";
 
 export type { E2BConfig } from "./types";
 
@@ -127,8 +128,9 @@ export class E2BProvider implements ComputeProvider {
     config: WorkspaceConfig,
     onTimeout: "pause" | "kill",
     sshEnabled: boolean,
+    timeoutOverrideMs?: number,
   ): Promise<E2BSandbox> {
-    const timeoutMs = await getWorkspaceIdleTimeoutMs(config.userId);
+    const timeoutMs = timeoutOverrideMs ?? (await getWorkspaceIdleTimeoutMs(config.userId));
 
     return Sandbox.create(this.getTemplateId(config, sshEnabled), {
       apiKey: await this.getApiKey(),
@@ -371,11 +373,12 @@ export class E2BProvider implements ComputeProvider {
     config: WorkspaceConfig,
     onTimeout: "pause" | "kill",
     persistent: boolean,
+    timeoutOverrideMs?: number,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
     const provisionLogger = createProvisionLogger(this.name, config.workspaceId);
     const spec = resolveProvisioningSpec(config);
     const sandbox = await provisionLogger.step("create-sandbox", () =>
-      this.createSandbox(config, onTimeout, this.isSshEnabledWorkspace(spec)),
+      this.createSandbox(config, onTimeout, this.isSshEnabledWorkspace(spec), timeoutOverrideMs),
     );
     const repoDir = this.getRepoDir(spec);
 
@@ -440,7 +443,12 @@ export class E2BProvider implements ComputeProvider {
    * pausing would just leave a zombie.
    */
   async createEphemeralAnonWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
-    return (await this.provisionWorkspace(config, "kill", false)) as WorkspaceInfo;
+    return (await this.provisionWorkspace(
+      config,
+      "kill",
+      false,
+      ANON_WORKSPACE_TTL_SECONDS * 1_000,
+    )) as WorkspaceInfo;
   }
 
   async createPersistentWorkspace(

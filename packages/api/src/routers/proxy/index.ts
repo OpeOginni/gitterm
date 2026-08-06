@@ -1,6 +1,7 @@
 import { auth } from "@gitterm/auth";
 import { db, eq, and } from "@gitterm/db";
 import { agentType, image } from "@gitterm/db/schema/cloud";
+import { user } from "@gitterm/db/schema/auth";
 import { workspace } from "@gitterm/db/schema/workspace";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -19,6 +20,7 @@ import {
 } from "../../service/proxy-cache";
 import { recordWorkspaceActivity } from "../../service/workspace-activity";
 import { extractWorkspaceSubdomain } from "../../utils/routing";
+import { isAnonWorkspaceExpired } from "../../service/anon/anon-lifetime";
 import { userCanAccessWorkspace } from "../workspace/share";
 
 const DEBUG_PROXY_RESOLVE = process.env.DEBUG_PROXY_RESOLVE === "true";
@@ -382,12 +384,15 @@ export const proxyResolverRouter = async (c: Context) => {
           hostingType: workspace.hostingType,
           status: workspace.status,
           serverOnly: workspace.serverOnly,
+          ownerEmail: user.email,
+          startedAt: workspace.startedAt,
           agentTypeName: agentType.name,
           exposedPorts: workspace.exposedPorts,
         })
         .from(workspace)
         .innerJoin(image, eq(workspace.imageId, image.id))
         .innerJoin(agentType, eq(image.agentTypeId, agentType.id))
+        .innerJoin(user, eq(workspace.userId, user.id))
         .where(and(eq(workspace.subdomain, subdomain), eq(workspace.status, "running")))
         .limit(1);
 
@@ -402,6 +407,10 @@ export const proxyResolverRouter = async (c: Context) => {
       cacheProxyWorkspaceMiss(subdomain);
       await setCachedProxyWorkspaceMiss(subdomain);
       debugProxyResolve("[PROXY-RESOLVE] Workspace not found for subdomain:", subdomain);
+      return htmlError(c, "unavailable", 404);
+    }
+
+    if (isAnonWorkspaceExpired(ws.ownerEmail, ws.startedAt)) {
       return htmlError(c, "unavailable", 404);
     }
 

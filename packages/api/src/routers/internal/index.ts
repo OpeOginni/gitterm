@@ -47,6 +47,7 @@ import {
 } from "../../service/workspace-activity";
 import type { E2BConfig } from "../../providers/e2b";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
+import { ANON_WORKSPACE_TTL_SECONDS } from "../../service/anon/anon-lifetime";
 
 /**
  * Internal router for service-to-service communication
@@ -421,13 +422,12 @@ export const internalRouter = router({
   }),
   /**
    * Find anonymous "try gitterm" workspaces that have outlived their 10-min
-   * E2B lease (with a 2-minute grace buffer for webhook delivery). These are
+   * E2B lease. These are
    * always still in `running` state in the DB if E2B's webhook was delayed
    * or lost. The reaper terminates them as a safety net.
    */
   getAnonStragglerWorkspaces: internalProcedure.query(async () => {
-    // 12 minutes ago: 10-min lease + 2-min grace
-    const cutoff = new Date(Date.now() - 12 * 60 * 1000);
+    const cutoff = new Date(Date.now() - ANON_WORKSPACE_TTL_SECONDS * 1_000);
     const stragglers = await db
       .select({
         id: workspace.id,
