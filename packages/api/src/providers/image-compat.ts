@@ -17,6 +17,8 @@ export function imageSupportsProvider(
       return Boolean(metadata?.upstash?.runtime);
     case "ascii":
       return Boolean(metadata?.ascii);
+    case "exedev":
+      return Boolean(metadata?.exedev);
     default:
       return true; // local / unknown providers don't need metadata
   }

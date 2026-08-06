@@ -69,6 +69,7 @@ GitTerm can run workspaces on any of these providers. Configure each one in the 
 | [Vercel Sandbox](https://vercel.com/docs/sandbox)                | Sandbox | No      | [Guide](packages/api/src/providers/vercel/README.md)     |
 | [Upstash Box](https://upstash.com/docs/box)                      | Sandbox | No      | [Guide](packages/api/src/providers/upstash/README.md)    |
 | [Ascii Box](https://docs.ascii.dev/box/quickstart)               | Sandbox | No      | [Guide](packages/api/src/providers/ascii/README.md)      |
+| [exe.dev](https://exe.dev/sandbox)                               | Sandbox | No      | [Guide](packages/api/src/providers/exedev/README.md)     |
 
 [![SPONSORED BY E2B FOR STARTUPS](https://img.shields.io/badge/SPONSORED%20BY-E2B%20FOR%20STARTUPS-ff8800?style=for-the-badge)](https://e2b.dev/startups)
 

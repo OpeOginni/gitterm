@@ -59,6 +59,12 @@ const DEFAULT_PROVIDER_METADATA = `{
   },
   "ascii": {
     "size": "default"
+  },
+  "exedev": {
+    "image": "exeuntu",
+    "cpu": 2,
+    "memory": "8GB",
+    "disk": "25GB"
   }
 }`;
 

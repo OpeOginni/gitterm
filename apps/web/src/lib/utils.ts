@@ -96,7 +96,9 @@ export function getWorkspaceProjectPath(
           ? "/workspace/home"
           : providerKey === "ascii"
             ? "/home/user"
-            : "/workspace";
+            : providerKey === "exedev"
+              ? "/home/exedev"
+              : "/workspace";
   return repoName ? `${base}/${repoName}` : base;
 }
 
