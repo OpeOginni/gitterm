@@ -4,11 +4,9 @@ import env from "@gitterm/env/server";
 /**
  * Stateless access tokens for the anonymous "try gitterm" flow.
  *
- * The proxy edge (`routers/proxy/index.ts`) calls `verifyAnonAccessToken` to
- * decide whether to forward a request to a workspace owned by a synthetic
- * anon user. The token is short-lived (10 min, matching the sandbox lease)
- * and bound to a single subdomain so a leaked cookie can't be replayed
- * against another anon workspace.
+ * The anonymous lifecycle router verifies this token before terminating a
+ * workspace owned by a synthetic anon user. The token is short-lived (10 min,
+ * matching the sandbox lease) and bound to a single workspace.
  *
  * Format: `<subdomain>.<exp>.<workspaceId>.<sig>` where:
  *   subdomain   = workspace.subdomain (immutable per workspace)
@@ -105,31 +103,23 @@ export function readAnonCookie(cookieHeader: string | null | undefined): string 
 }
 
 /**
- * Build the `Set-Cookie` header value for an anon access token. Scoped to the
- * parent domain so it travels to `<subdomain>.<BASE_DOMAIN>` requests.
+ * Build the `Set-Cookie` header value for an anon access token. It is scoped
+ * to the lifecycle API and is never sent to workspace routes.
  */
 export function buildAnonCookieHeader(params: { token: string; ttlSeconds: number }): string {
   const baseDomain = env.BASE_DOMAIN;
   const isLocal = baseDomain.includes("localhost") || baseDomain.includes("127.0.0.1");
-  const isSubdomainRouting = env.ROUTING_MODE === "subdomain";
 
   const attrs = [
     `${ANON_COOKIE_NAME}=${params.token}`,
     `Max-Age=${params.ttlSeconds}`,
-    "Path=/",
+    "Path=/api",
     "HttpOnly",
     "SameSite=Lax",
   ];
 
   if (!isLocal) {
     attrs.push("Secure");
-  }
-
-  // Cross-subdomain cookie so the workspace subdomain receives it. In path
-  // routing mode the workspace lives at the same origin, so a host cookie is
-  // sufficient and we skip the Domain attribute.
-  if (isSubdomainRouting && !isLocal) {
-    attrs.push(`Domain=.${baseDomain.replace(/^\./, "")}`);
   }
 
   return attrs.join("; ");
