@@ -125,6 +125,24 @@ const seedCloudProviders: Array<{
     restartSettlement: "webhook" as ProviderSettlement,
     terminationSettlement: "webhook" as ProviderSettlement,
   },
+  {
+    name: "Vercel Sandbox",
+    providerKey: "vercel",
+    isEnabled: false,
+    isSandbox: true,
+    autoPersistent: true,
+    supportsRegions: false,
+    supportServerOnly: true,
+    sshAccessSupport: {
+      supported: false,
+      label: "Not supported",
+      description: "Vercel Sandbox does not currently expose SSH editor access.",
+    },
+    creationSettlement: "immediate" as ProviderSettlement,
+    stopSettlement: "immediate" as ProviderSettlement,
+    restartSettlement: "immediate" as ProviderSettlement,
+    terminationSettlement: "immediate" as ProviderSettlement,
+  },
 ];
 
 const seedAgentTypes = [

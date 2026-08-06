@@ -222,6 +222,15 @@ export interface CloudflareImageProviderMetadata {
   setupCommands?: string[];
 }
 
+export interface VercelImageProviderMetadata {
+  /** Vercel Container Registry image that includes the selected coding agent. */
+  image?: string;
+  /** Vercel runtime for images that install the agent during startup. */
+  runtime?: "node26" | "node24" | "node22" | "python3.13";
+  /** Vercel allocates 2 GiB of memory for every vCPU. */
+  vcpus?: number;
+}
+
 export interface ImageProviderMetadata {
   isDefault?: boolean;
   e2b?: {
@@ -231,6 +240,7 @@ export interface ImageProviderMetadata {
   daytona?: DaytonaImageProviderMetadata;
   aws?: AwsImageProviderMetadata;
   cloudflare?: CloudflareImageProviderMetadata;
+  vercel?: VercelImageProviderMetadata;
   [provider: string]: unknown;
 }
 

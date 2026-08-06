@@ -350,6 +350,42 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       },
     ],
   },
+  vercel: {
+    name: "vercel",
+    displayName: "Vercel Sandbox",
+    category: "sandbox",
+    configSchema: z.object({
+      apiToken: z.string().min(1, "API token is required"),
+      teamId: z.string().min(1, "Team ID is required"),
+      projectId: z.string().min(1, "Project ID is required"),
+    }),
+    fields: [
+      {
+        fieldName: "apiToken",
+        fieldLabel: "API Token",
+        fieldType: "password",
+        isRequired: true,
+        isEncrypted: true,
+        sortOrder: 1,
+      },
+      {
+        fieldName: "teamId",
+        fieldLabel: "Team ID",
+        fieldType: "text",
+        isRequired: true,
+        isEncrypted: false,
+        sortOrder: 2,
+      },
+      {
+        fieldName: "projectId",
+        fieldLabel: "Project ID",
+        fieldType: "text",
+        isRequired: true,
+        isEncrypted: false,
+        sortOrder: 3,
+      },
+    ],
+  },
 };
 
 export function getProviderDefinition(providerName: string): ProviderDefinition | undefined {

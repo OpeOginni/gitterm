@@ -48,6 +48,10 @@ const DEFAULT_PROVIDER_METADATA = `{
     "image": "",
     "resources": { "cpu": 2, "memory": 4 },
     "editorResources": { "cpu": 4, "memory": 8 }
+  },
+  "vercel": {
+    "image": "my-vcr-repository:latest",
+    "vcpus": 2
   }
 }`;
 
