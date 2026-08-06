@@ -25,6 +25,7 @@ import {
   updateWorkspaceByIdReturningAndInvalidate,
 } from "../../service/workspace-mutations";
 import { logger } from "../../utils/logger";
+import { encryptWorkspacePassword } from "../../utils/workspace-password";
 import { hashClientIp, getOrCreateAnonUser } from "../../service/anon/anon-user";
 import {
   ANON_TOKEN_TTL_SECONDS,
@@ -371,9 +372,7 @@ export const anonRouter = router({
             editorAccessEnabled: false,
             editorTarget: null,
             sshConnection: null,
-            // Plaintext: row is ephemeral (10 min) and the password is also
-            // returned to the client in the same response.
-            serverPassword,
+            serverPassword: encryptWorkspacePassword(serverPassword),
             upstreamUrl: workspaceInfo.upstreamUrl,
             status: "running",
             hostingType: "cloud",

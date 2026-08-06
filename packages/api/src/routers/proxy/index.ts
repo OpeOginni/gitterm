@@ -342,6 +342,23 @@ function getBasicAuthPassword(authorizationHeader: string | undefined) {
   }
 }
 
+async function getServerOnlyPassword(workspaceId: string) {
+  const [workspaceRecord] = await db
+    .select({ serverPassword: workspace.serverPassword })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+
+  if (!workspaceRecord?.serverPassword) return null;
+
+  try {
+    return decryptWorkspacePassword(workspaceRecord.serverPassword);
+  } catch (error) {
+    console.error(`Failed to decrypt server password for workspace ${workspaceId}:`, error);
+    return null;
+  }
+}
+
 async function hasValidServerOnlyBasicAuth(
   workspaceId: string,
   authorizationHeader: string | undefined,
@@ -349,20 +366,15 @@ async function hasValidServerOnlyBasicAuth(
   const password = getBasicAuthPassword(authorizationHeader);
   if (!password) return false;
 
-  const [workspaceRecord] = await db
-    .select({ serverPassword: workspace.serverPassword })
-    .from(workspace)
-    .where(eq(workspace.id, workspaceId))
-    .limit(1);
+  const expectedPassword = await getServerOnlyPassword(workspaceId);
+  return expectedPassword !== null && constantTimeEquals(password, expectedPassword);
+}
 
-  if (!workspaceRecord?.serverPassword) return false;
-
-  try {
-    return constantTimeEquals(password, decryptWorkspacePassword(workspaceRecord.serverPassword));
-  } catch (error) {
-    console.error(`Failed to decrypt server password for workspace ${workspaceId}:`, error);
-    return false;
-  }
+async function getServerOnlyBasicAuthHeader(workspaceId: string) {
+  const password = await getServerOnlyPassword(workspaceId);
+  return password === null
+    ? null
+    : `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`;
 }
 
 export const proxyResolverRouter = async (c: Context) => {
@@ -519,6 +531,10 @@ export const proxyResolverRouter = async (c: Context) => {
         if (!ws.upstreamUrl) {
           return htmlError(c, "error", 500);
         }
+        const upstreamAuthorization = await getServerOnlyBasicAuthHeader(ws.id);
+        if (!upstreamAuthorization) {
+          return htmlError(c, "error", 500);
+        }
         let upstreamUrl = new URL(ws.upstreamUrl);
         let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
         if (extractedPort && portUpstream) {
@@ -542,6 +558,7 @@ export const proxyResolverRouter = async (c: Context) => {
               "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
               "X-Hosting-Type": ws.hostingType,
               "X-Anon-Access": "1",
+              Authorization: upstreamAuthorization,
             },
             upstreamAccessHeaders,
           ),

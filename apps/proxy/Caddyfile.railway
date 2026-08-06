@@ -104,7 +104,7 @@
 		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
 
 			header_up Host {host}
 			header_up X-Internal-Key {$INTERNAL_API_KEY}
@@ -198,7 +198,7 @@
 		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key e2b-traffic-access-token x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization e2b-traffic-access-token x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
 
 			header_up Host {host}
 			header_up X-Requested-Port {http.regexp.portsub.1}
