@@ -611,10 +611,11 @@ export const proxyResolverRouter = async (c: Context) => {
     });
 
     if (!session) {
+      const clientAuthorization = c.req.header("Authorization");
       if (
         !ws.serverOnly ||
         extractedPort ||
-        !(await hasValidServerOnlyBasicAuth(ws.id, c.req.header("Authorization")))
+        !(await hasValidServerOnlyBasicAuth(ws.id, clientAuthorization))
       ) {
         return htmlError(c, "unavailable", 403);
       }
@@ -648,6 +649,7 @@ export const proxyResolverRouter = async (c: Context) => {
             "X-Container-Port": port,
             "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
             "X-Hosting-Type": ws.hostingType,
+            Authorization: clientAuthorization!,
           },
           upstreamAccessHeaders,
         ),
