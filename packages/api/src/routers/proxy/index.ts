@@ -1,5 +1,4 @@
 import { auth } from "@gitterm/auth";
-import { timingSafeEqual } from "crypto";
 import { db, eq, and } from "@gitterm/db";
 import { agentType, image } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
@@ -20,9 +19,7 @@ import {
 } from "../../service/proxy-cache";
 import { recordWorkspaceActivity } from "../../service/workspace-activity";
 import { extractWorkspaceSubdomain } from "../../utils/routing";
-import { readAnonCookie, verifyAnonAccessToken } from "../../service/anon/anon-access-token";
 import { userCanAccessWorkspace } from "../workspace/share";
-import { decryptWorkspacePassword } from "../../utils/workspace-password";
 
 const DEBUG_PROXY_RESOLVE = process.env.DEBUG_PROXY_RESOLVE === "true";
 
@@ -321,62 +318,6 @@ function buildProxyResolveHeaders(
   return responseHeaders;
 }
 
-function constantTimeEquals(a: string, b: string) {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
-
-function getBasicAuthPassword(authorizationHeader: string | undefined) {
-  if (!authorizationHeader?.startsWith("Basic ")) return null;
-
-  try {
-    const decoded = Buffer.from(authorizationHeader.slice("Basic ".length), "base64").toString(
-      "utf8",
-    );
-    const separatorIndex = decoded.indexOf(":");
-    if (separatorIndex === -1) return null;
-    return decoded.slice(separatorIndex + 1);
-  } catch {
-    return null;
-  }
-}
-
-async function getServerOnlyPassword(workspaceId: string) {
-  const [workspaceRecord] = await db
-    .select({ serverPassword: workspace.serverPassword })
-    .from(workspace)
-    .where(eq(workspace.id, workspaceId))
-    .limit(1);
-
-  if (!workspaceRecord?.serverPassword) return null;
-
-  try {
-    return decryptWorkspacePassword(workspaceRecord.serverPassword);
-  } catch (error) {
-    console.error(`Failed to decrypt server password for workspace ${workspaceId}:`, error);
-    return null;
-  }
-}
-
-async function hasValidServerOnlyBasicAuth(
-  workspaceId: string,
-  authorizationHeader: string | undefined,
-) {
-  const password = getBasicAuthPassword(authorizationHeader);
-  if (!password) return false;
-
-  const expectedPassword = await getServerOnlyPassword(workspaceId);
-  return expectedPassword !== null && constantTimeEquals(password, expectedPassword);
-}
-
-async function getServerOnlyBasicAuthHeader(workspaceId: string) {
-  const password = await getServerOnlyPassword(workspaceId);
-  return password === null
-    ? null
-    : `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`;
-}
-
 export const proxyResolverRouter = async (c: Context) => {
   debugProxyResolve("[PROXY-RESOLVE] Request received");
 
@@ -519,51 +460,33 @@ export const proxyResolverRouter = async (c: Context) => {
       );
     }
 
-    // Visitors of the homepage anon flow get a short-lived HMAC-signed
-    // cookie (see `service/anon/anon-access-token.ts`) scoped to a single
-    // workspace subdomain. If present and valid we authorize without
-    // requiring a logged-in session - and skip OpenCode's basic-auth as
-    // well, since we trust the cookie's HMAC + 10-min exp.
-    const anonCookieRaw = readAnonCookie(c.req.header("Cookie"));
-    if (anonCookieRaw) {
-      const verified = verifyAnonAccessToken(anonCookieRaw, ws.subdomain ?? "");
-      if (verified && verified.workspaceId === ws.id) {
-        if (!ws.upstreamUrl) {
-          return htmlError(c, "error", 500);
-        }
-        const upstreamAuthorization = await getServerOnlyBasicAuthHeader(ws.id);
-        if (!upstreamAuthorization) {
-          return htmlError(c, "error", 500);
-        }
-        let upstreamUrl = new URL(ws.upstreamUrl);
-        let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
-        if (extractedPort && portUpstream) {
-          const portUrl = new URL(portUpstream);
-          port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
-          upstreamUrl = portUrl;
-        }
-        debugProxyResolve("[PROXY-RESOLVE] Anon cookie authorized:", {
-          subdomain: ws.subdomain,
-          workspaceId: ws.id,
-        });
-        await recordWorkspaceActivity(ws.id);
-        return c.text(
-          "OK",
-          200,
-          buildProxyResolveHeaders(
-            {
-              "X-Upstream-URL": upstreamUrl.toString(),
-              "X-Container-Host": upstreamUrl.hostname,
-              "X-Container-Port": port,
-              "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
-              "X-Hosting-Type": ws.hostingType,
-              "X-Anon-Access": "1",
-              Authorization: upstreamAuthorization,
-            },
-            upstreamAccessHeaders,
-          ),
-        );
+    // OpenCode server workspaces own their Basic auth challenge and validation.
+    // GitTerm only resolves the primary route and preserves client credentials.
+    if (!extractedPort && ws.serverOnly) {
+      if (!ws.upstreamUrl) {
+        return htmlError(c, "error", 500);
       }
+
+      const upstreamUrl = new URL(ws.upstreamUrl);
+      const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
+      const clientAuthorization = c.req.header("Authorization");
+      await recordWorkspaceActivity(ws.id);
+
+      return c.text(
+        "OK",
+        200,
+        buildProxyResolveHeaders(
+          {
+            "X-Upstream-URL": upstreamUrl.toString(),
+            "X-Container-Host": upstreamUrl.hostname,
+            "X-Container-Port": port,
+            "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
+            "X-Hosting-Type": ws.hostingType,
+            ...(clientAuthorization ? { Authorization: clientAuthorization } : {}),
+          },
+          upstreamAccessHeaders,
+        ),
+      );
     }
 
     // Browsers omit credentials from CORS preflights. Route genuine
@@ -602,58 +525,13 @@ export const proxyResolverRouter = async (c: Context) => {
       );
     }
 
-    // Validate auth for user-owned workspaces. Server-only/OpenCode desktop
-    // workspaces may be reached without cookies by CLI clients, but only with
-    // the workspace's server password via Basic auth.
-    // Use 403 here to avoid colliding with upstream Basic Auth 401 challenges.
+    // Validate access to user-owned browser terminal workspaces and exposed ports.
     const session = await auth.api.getSession({
       headers: c.req.raw.headers,
     });
 
     if (!session) {
-      const clientAuthorization = c.req.header("Authorization");
-      if (
-        !ws.serverOnly ||
-        extractedPort ||
-        !(await hasValidServerOnlyBasicAuth(ws.id, clientAuthorization))
-      ) {
-        return htmlError(c, "unavailable", 403);
-      }
-
-      if (!ws.upstreamUrl) {
-        return htmlError(c, "error", 500);
-      }
-
-      let upstreamUrl = new URL(ws.upstreamUrl);
-      let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
-      if (extractedPort && portUpstream) {
-        const portUrl = new URL(portUpstream);
-        port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
-        upstreamUrl = portUrl;
-      }
-
-      debugProxyResolve("[PROXY-RESOLVE] Server-only basic auth routing:", {
-        id: ws.id,
-        subdomain: ws.subdomain,
-      });
-
-      await recordWorkspaceActivity(ws.id);
-
-      return c.text(
-        "OK",
-        200,
-        buildProxyResolveHeaders(
-          {
-            "X-Upstream-URL": upstreamUrl.toString(),
-            "X-Container-Host": upstreamUrl.hostname,
-            "X-Container-Port": port,
-            "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
-            "X-Hosting-Type": ws.hostingType,
-            Authorization: clientAuthorization!,
-          },
-          upstreamAccessHeaders,
-        ),
-      );
+      return htmlError(c, "unavailable", 403);
     }
 
     const canAccess = await userCanAccessWorkspace(ws.id, session.user.id);
