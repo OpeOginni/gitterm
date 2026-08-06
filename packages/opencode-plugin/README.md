@@ -34,8 +34,10 @@ self-hosted deployments:
 }
 ```
 
-Supported options are `serverUrl`, `token`, `regionId`, `persistent`,
-`workspaceProfile`, `name`, `repo`, and `branch`.
+Supported options are `serverUrl`, `token`, `agent`, `provider`, `persistent`,
+`workspaceProfile`, `name`, `repo`, and `branch`. Provider selection uses the SDK
+shape, for example
+`{ "type": "exedev", "machine": { "type": "profile", "key": "standard" } }`.
 
 This plugin requires an OpenCode release with the experimental workspace API.
 

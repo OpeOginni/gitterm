@@ -25,8 +25,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, Loader2, Lock, MapPin, RefreshCw, Trash2, Wand2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Cpu,
+  Download,
+  KeyRound,
+  Loader2,
+  Lock,
+  MapPin,
+  Plus,
+  RefreshCw,
+  ScrollText,
+  Trash2,
+  Wand2,
+} from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
+import { getIcon } from "@/components/dashboard/create-instance/types";
 import type { Route } from "next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -47,6 +61,60 @@ interface ProviderConfigField {
 
 interface AwsSetupSummary {
   stackName: string;
+}
+
+type MachineField = {
+  path: string;
+  label: string;
+  type?: "number" | "text" | "select";
+  placeholder?: string;
+  options?: string[];
+};
+
+const MACHINE_FIELDS: Record<string, MachineField[]> = {
+  aws: [
+    { path: "cpu", label: "CPU units", type: "number", placeholder: "4096" },
+    { path: "memory", label: "Memory (MiB)", type: "number", placeholder: "16384" },
+    { path: "ephemeralStorageGiB", label: "Disk (GiB)", type: "number", placeholder: "20" },
+    { path: "architecture", label: "Architecture", type: "select", options: ["X86_64", "ARM64"] },
+  ],
+  e2b: [
+    { path: "templateId", label: "Template ID", placeholder: "gitterm-opencode" },
+    { path: "sshTemplateId", label: "SSH template ID", placeholder: "Optional" },
+  ],
+  daytona: [
+    { path: "resources.cpu", label: "CPU", type: "number", placeholder: "2" },
+    { path: "resources.memory", label: "Memory (GB)", type: "number", placeholder: "4" },
+    { path: "resources.disk", label: "Disk (GB)", type: "number", placeholder: "20" },
+  ],
+  vercel: [{ path: "vcpus", label: "vCPUs", type: "number", placeholder: "2" }],
+  upstash: [
+    { path: "size", label: "Box size", type: "select", options: ["small", "medium", "large"] },
+  ],
+  ascii: [
+    { path: "size", label: "Box size", type: "select", options: ["small", "default", "large"] },
+  ],
+  exedev: [
+    { path: "cpu", label: "CPUs", type: "number", placeholder: "2" },
+    { path: "memory", label: "Memory", placeholder: "8GB" },
+    { path: "disk", label: "Disk", placeholder: "25GB" },
+  ],
+};
+
+function setNestedOption(options: Record<string, any>, path: string, value: string) {
+  const [parent, child] = path.split(".");
+  const parsedValue =
+    value === "" ? undefined : Number.isFinite(Number(value)) ? Number(value) : value;
+  if (!child) return { ...options, [parent]: parsedValue };
+  return { ...options, [parent]: { ...options[parent], [child]: parsedValue } };
+}
+
+function getMachineProfileKey(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 export default function ProviderSettingsPage() {
@@ -74,6 +142,13 @@ export default function ProviderSettingsPage() {
     location: "",
     externalRegionIdentifier: "",
   });
+  const [newMachineProfile, setNewMachineProfile] = useState({
+    name: "",
+    providerOptions: {} as Record<string, any>,
+    isDefault: false,
+  });
+  const [setupAgentTypeId, setSetupAgentTypeId] = useState("all");
+  const [setupScript, setSetupScript] = useState("");
 
   const refreshProviderQueries = () => {
     queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
@@ -132,15 +207,19 @@ export default function ProviderSettingsPage() {
     queryFn: () => trpcClient.admin.infrastructure.listAgentTypes.query(),
   });
 
-  const { data: images } = useQuery({
-    queryKey: ["admin", "images"],
-    queryFn: () => trpcClient.admin.infrastructure.listImages.query(),
+  const { data: setupDefaults } = useQuery({
+    queryKey: ["admin", "workspaceSetupDefaults", providerId],
+    queryFn: () =>
+      trpcClient.admin.infrastructure.listWorkspaceSetupDefaults.query({
+        cloudProviderId: providerId as string,
+      }),
+    enabled: !!providerId,
   });
 
-  const { data: providerImageAssignments } = useQuery({
-    queryKey: ["admin", "providerImageAssignments", providerId],
+  const { data: machineProfiles } = useQuery({
+    queryKey: ["admin", "machineProfiles", providerId],
     queryFn: () =>
-      trpcClient.admin.infrastructure.listProviderImageAssignments.query({
+      trpcClient.admin.infrastructure.listMachineProfiles.query({
         cloudProviderId: providerId as string,
       }),
     enabled: !!providerId,
@@ -183,26 +262,50 @@ export default function ProviderSettingsPage() {
       }),
   });
 
-  const upsertProviderImageAssignment = useMutation({
-    mutationFn: (params: { cloudProviderId: string; agentTypeId: string; imageId: string }) =>
-      trpcClient.admin.infrastructure.upsertProviderImageAssignment.mutate(params),
+  const setSetupDefault = useMutation({
+    mutationFn: (params: {
+      cloudProviderId: string;
+      agentTypeId: string | null;
+      commands: string[];
+    }) => trpcClient.admin.infrastructure.setWorkspaceSetupDefault.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["admin", "providerImageAssignments", providerId],
+        queryKey: ["admin", "workspaceSetupDefaults", providerId],
       });
-      toast.success("Provider image assignment saved");
+      toast.success("Default setup script saved");
     },
     onError: (error) => toast.error(error.message),
   });
 
-  const deleteProviderImageAssignment = useMutation({
-    mutationFn: (params: { cloudProviderId: string; agentTypeId: string }) =>
-      trpcClient.admin.infrastructure.deleteProviderImageAssignment.mutate(params),
+  const createMachineProfile = useMutation({
+    mutationFn: (params: {
+      cloudProviderId: string;
+      name: string;
+      providerOptions: Record<string, unknown>;
+      isDefault: boolean;
+    }) => trpcClient.admin.infrastructure.createMachineProfile.mutate(params),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["admin", "providerImageAssignments", providerId],
-      });
-      toast.success("Provider image assignment removed");
+      queryClient.invalidateQueries({ queryKey: ["admin", "machineProfiles", providerId] });
+      setNewMachineProfile({ name: "", providerOptions: {}, isDefault: false });
+      toast.success("Machine profile created");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const updateMachineProfile = useMutation({
+    mutationFn: (params: { id: string; isDefault?: boolean; isEnabled?: boolean }) =>
+      trpcClient.admin.infrastructure.updateMachineProfile.mutate(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "machineProfiles", providerId] });
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteMachineProfile = useMutation({
+    mutationFn: (id: string) => trpcClient.admin.infrastructure.deleteMachineProfile.mutate({ id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "machineProfiles", providerId] });
+      toast.success("Machine profile deleted");
     },
     onError: (error) => toast.error(error.message),
   });
@@ -364,11 +467,15 @@ export default function ProviderSettingsPage() {
   const isBootstrappingAws = bootstrapAwsProvider.isPending;
   const isDeletingAwsInfrastructure = deleteAwsInfrastructure.isPending;
 
-  const assignmentByAgentType = new Map(
-    providerImageAssignments?.map((assignment: any) => [assignment.agentTypeId, assignment]) ?? [],
-  );
+  const machineFields = MACHINE_FIELDS[provider?.providerKey ?? ""] ?? [];
 
-  const assignableAgentTypes = agentTypes?.filter((agent: any) => agent.isEnabled) ?? [];
+  useEffect(() => {
+    const selectedAgentTypeId = setupAgentTypeId === "all" ? null : setupAgentTypeId;
+    const selectedDefault = setupDefaults?.find(
+      (entry) => entry.agentTypeId === selectedAgentTypeId,
+    );
+    setSetupScript(selectedDefault?.commands.join("\n") ?? "");
+  }, [setupAgentTypeId, setupDefaults]);
 
   useEffect(() => {
     if (!isSessionPending) {
@@ -754,6 +861,10 @@ export default function ProviderSettingsPage() {
     !!provider?.id && awsDefaultRegion.length > 0 && hasSavedAwsCredentials;
   const canResetAwsInfrastructure = hasExistingAwsSetup && canRunAwsSimpleSetup;
   const isAwsActionPending = isDeletingAwsInfrastructure || isResettingAwsInfrastructure;
+  const newMachineProfileKey = getMachineProfileKey(newMachineProfile.name);
+  const duplicateMachineProfile = machineProfiles?.find(
+    (profile) => getMachineProfileKey(profile.name) === newMachineProfileKey,
+  );
 
   const handleAwsSimpleSetup = async () => {
     if (!provider?.id) {
@@ -840,8 +951,15 @@ export default function ProviderSettingsPage() {
       <DashboardHeader
         heading={provider ? `${provider.name} Settings` : "Provider Settings"}
         text="Manage credentials, naming, enablement, and regions for this provider."
+        icon={
+          provider ? (
+            <div className="rounded-xl border border-border bg-foreground/[0.02] p-2">
+              <img src={getIcon(provider.providerKey)} alt="" className="h-5 w-5 object-contain" />
+            </div>
+          ) : undefined
+        }
       >
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="outline">
             <Link href={"/admin/providers" as Route}>Back to Providers</Link>
           </Button>
@@ -863,73 +981,282 @@ export default function ProviderSettingsPage() {
             <Skeleton className="h-52 w-full" />
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* Provider Section */}
-            <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="flex flex-col gap-6">
+            {/* Machine Profiles Section */}
+            <div className="order-1 rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground/90">Provider</p>
+                  <div className="flex items-center gap-2">
+                    <Cpu className="size-4 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground/90">Machine Profiles</p>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Update the display name and enablement for this provider.
+                    Name provider-specific compute settings once, then expose the stable key to the
+                    SDK.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm text-muted-foreground">Enabled</Label>
-                  <Switch checked={provider?.isEnabled} onCheckedChange={handleToggleProvider} />
-                </div>
+                <Badge
+                  variant="outline"
+                  className="border-foreground/[0.08] bg-foreground/[0.04] text-xs text-muted-foreground"
+                >
+                  {machineProfiles?.length ?? 0} profiles
+                </Badge>
               </div>
-              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="provider-name">Provider Name</Label>
-                  <Input
-                    id="provider-name"
-                    value={providerName}
-                    onChange={(e) => setProviderName(e.target.value)}
-                    placeholder="e.g., Railway"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Provider Type</Label>
-                  <Input value={selectedProviderType?.displayName ?? "Unknown"} disabled readOnly />
-                </div>
-              </div>
-              {provider?.supportsRegions && (
-                <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground/90">
-                      Allow User Region Selection
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {isAwsProvider
-                        ? "AWS uses the default region selected in the credentials config above."
-                        : "When enabled, users can choose a region. When disabled, the default region is always used."}
-                    </p>
+
+              <div className="mt-4 space-y-3">
+                {machineProfiles?.map((profile) => (
+                  <div
+                    key={profile.id}
+                    className="grid gap-3 rounded-xl border border-border/70 bg-foreground/[0.01] p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-foreground/90">{profile.name}</p>
+                        <code className="rounded bg-foreground/[0.05] px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {profile.key}
+                        </code>
+                        {profile.isDefault && <Badge variant="secondary">Default</Badge>}
+                      </div>
+                      <p className="truncate font-mono text-[11px] text-muted-foreground">
+                        {Object.keys(profile.providerOptions).length > 0
+                          ? JSON.stringify(profile.providerOptions)
+                          : "Provider-managed resources"}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      {!profile.isDefault && profile.isEnabled && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            updateMachineProfile.mutate({ id: profile.id, isDefault: true })
+                          }
+                        >
+                          Make default
+                        </Button>
+                      )}
+                      <Switch
+                        checked={profile.isEnabled}
+                        onCheckedChange={(isEnabled) =>
+                          updateMachineProfile.mutate({ id: profile.id, isEnabled })
+                        }
+                        aria-label={`${profile.isEnabled ? "Disable" : "Enable"} ${profile.name}`}
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => deleteMachineProfile.mutate(profile.id)}
+                        aria-label={`Delete ${profile.name}`}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm text-muted-foreground">Enabled</Label>
-                    <Switch
-                      checked={isAwsProvider ? false : allowUserRegionSelection}
-                      disabled={isAwsProvider}
-                      onCheckedChange={setAllowUserRegionSelection}
+                ))}
+
+                {machineFields.length > 0 ? (
+                  <div className="rounded-xl border border-dashed border-foreground/[0.12] p-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="machine-name">Profile name</Label>
+                        <Input
+                          id="machine-name"
+                          value={newMachineProfile.name}
+                          placeholder="Standard"
+                          onChange={(event) =>
+                            setNewMachineProfile((current) => ({
+                              ...current,
+                              name: event.target.value,
+                            }))
+                          }
+                        />
+                        {newMachineProfileKey && (
+                          <p className="text-xs text-muted-foreground">
+                            SDK key: <code>{newMachineProfileKey}</code>
+                          </p>
+                        )}
+                        {duplicateMachineProfile && (
+                          <p className="text-xs text-destructive">
+                            A profile named {duplicateMachineProfile.name} already exists.
+                          </p>
+                        )}
+                      </div>
+                      {machineFields.map((field) => {
+                        const [parent, child] = field.path.split(".");
+                        const value = child
+                          ? newMachineProfile.providerOptions[parent]?.[child]
+                          : newMachineProfile.providerOptions[parent];
+                        return (
+                          <div key={field.path} className="space-y-2">
+                            <Label>{field.label}</Label>
+                            {field.type === "select" ? (
+                              <Select
+                                value={String(value ?? "")}
+                                onValueChange={(nextValue) =>
+                                  setNewMachineProfile((current) => ({
+                                    ...current,
+                                    providerOptions: setNestedOption(
+                                      current.providerOptions,
+                                      field.path,
+                                      nextValue,
+                                    ),
+                                  }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={`Select ${field.label.toLowerCase()}`}
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {field.options?.map((option) => (
+                                    <SelectItem key={option} value={option}>
+                                      {option}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                type={field.type ?? "text"}
+                                value={String(value ?? "")}
+                                placeholder={field.placeholder}
+                                onChange={(event) =>
+                                  setNewMachineProfile((current) => ({
+                                    ...current,
+                                    providerOptions: setNestedOption(
+                                      current.providerOptions,
+                                      field.path,
+                                      event.target.value,
+                                    ),
+                                  }))
+                                }
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-4 flex items-center justify-between gap-4">
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Switch
+                          checked={newMachineProfile.isDefault}
+                          onCheckedChange={(isDefault) =>
+                            setNewMachineProfile((current) => ({ ...current, isDefault }))
+                          }
+                        />
+                        Use by default
+                      </label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={
+                          !provider?.id ||
+                          !newMachineProfile.name ||
+                          !newMachineProfileKey ||
+                          !!duplicateMachineProfile ||
+                          createMachineProfile.isPending
+                        }
+                        onClick={() =>
+                          provider?.id &&
+                          createMachineProfile.mutate({
+                            cloudProviderId: provider.id,
+                            ...newMachineProfile,
+                          })
+                        }
+                      >
+                        {createMachineProfile.isPending ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <Plus />
+                        )}
+                        Add profile
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-foreground/[0.08] p-4 text-sm text-muted-foreground">
+                    {provider?.name} controls machine resources at the provider level, so no
+                    per-workspace profile is required.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-end gap-2 px-1">
+                <Label className="text-sm text-muted-foreground">Enabled</Label>
+                <Switch
+                  checked={provider?.isEnabled}
+                  disabled={!provider?.isEnabled && !provider?.providerConfig?.isEnabled}
+                  onCheckedChange={handleToggleProvider}
+                  aria-label="Enable provider"
+                />
+              </div>
+              <div className="rounded-2xl border border-border bg-card p-6">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="provider-name">Provider Name</Label>
+                    <Input
+                      id="provider-name"
+                      value={providerName}
+                      onChange={(e) => setProviderName(e.target.value)}
+                      placeholder="e.g., Railway"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Provider Type</Label>
+                    <Input
+                      value={selectedProviderType?.displayName ?? "Unknown"}
+                      disabled
+                      readOnly
                     />
                   </div>
                 </div>
-              )}
+                {provider?.supportsRegions && (
+                  <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground/90">
+                        Allow User Region Selection
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {isAwsProvider
+                          ? "AWS uses the default region selected in the credentials config above."
+                          : "When enabled, users can choose a region. When disabled, the default region is always used."}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm text-muted-foreground">Enabled</Label>
+                      <Switch
+                        checked={isAwsProvider ? false : allowUserRegionSelection}
+                        disabled={isAwsProvider}
+                        onCheckedChange={setAllowUserRegionSelection}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Credentials & Config Section */}
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground/90">Credentials & Config</p>
-                  <p
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="size-4 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground/90">Credentials & Config</p>
+                  </div>
+                  <Badge
+                    variant="outline"
                     className={cn(
-                      "text-xs",
+                      "text-[10px]",
                       provider?.providerConfig
                         ? provider.providerConfig.isEnabled
-                          ? "text-emerald-400"
-                          : "text-muted-foreground"
-                        : "text-amber-400",
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                          : "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground"
+                        : "border-amber-500/20 bg-amber-500/10 text-amber-400",
                     )}
                   >
                     {provider?.providerConfig
@@ -937,7 +1264,7 @@ export default function ProviderSettingsPage() {
                         ? "Active and ready"
                         : "Saved but disabled"
                       : "Missing configurations"}
-                  </p>
+                  </Badge>
                 </div>
               </div>
 
@@ -1192,102 +1519,91 @@ export default function ProviderSettingsPage() {
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground/90">Default Images</p>
+                  <div className="flex items-center gap-2">
+                    <ScrollText className="size-4 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground/90">Default Setup Script</p>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Choose the container image this provider should use for each agent type.
+                    Runs in the repository after the agent starts. Failures never stop workspace
+                    readiness.
                   </p>
                 </div>
                 <Badge
                   variant="outline"
                   className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-xs"
                 >
-                  {providerImageAssignments?.length ?? 0} assigned
+                  {setupDefaults?.filter((entry) => entry.commands.length > 0).length ?? 0}{" "}
+                  configured
                 </Badge>
               </div>
 
-              <div className="mt-4 space-y-3">
-                {assignableAgentTypes.map((agent: any) => {
-                  const assignment = assignmentByAgentType.get(agent.id) as any;
-                  const compatibleImages =
-                    images?.filter((img: any) => img.agentTypeId === agent.id && img.isEnabled) ??
-                    [];
-                  const selectedImageId = assignment?.imageId ?? "fallback";
-
-                  return (
-                    <div
-                      key={agent.id}
-                      className="grid gap-3 rounded-xl border border-border/70 bg-foreground/[0.01] p-4 md:grid-cols-[minmax(0,1fr)_minmax(260px,360px)] md:items-center"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-foreground/90">{agent.name}</p>
-                          {agent.serverOnly && (
-                            <Badge
-                              variant="outline"
-                              className="border-foreground/[0.08] text-[10px]"
-                            >
-                              Server Only
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {assignment?.image?.imageId ??
-                            "Uses the global default image for this agent type."}
-                        </p>
-                      </div>
-
-                      <Select
-                        value={selectedImageId}
-                        disabled={!provider?.id || compatibleImages.length === 0}
-                        onValueChange={(imageId) => {
-                          if (!provider?.id) {
-                            return;
-                          }
-
-                          if (imageId === "fallback") {
-                            deleteProviderImageAssignment.mutate({
-                              cloudProviderId: provider.id,
-                              agentTypeId: agent.id,
-                            });
-                            return;
-                          }
-
-                          upsertProviderImageAssignment.mutate({
-                            cloudProviderId: provider.id,
-                            agentTypeId: agent.id,
-                            imageId,
-                          });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select image" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="fallback">Global default</SelectItem>
-                          {compatibleImages.map((img: any) => (
-                            <SelectItem key={img.id} value={img.id}>
-                              {img.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  );
-                })}
-
-                {assignableAgentTypes.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4 text-sm text-muted-foreground">
-                    No enabled agent types are available.
-                  </div>
-                )}
+              <div className="mt-4 space-y-4">
+                <div className="max-w-sm space-y-2">
+                  <Label>Applies to</Label>
+                  <Select value={setupAgentTypeId} onValueChange={setSetupAgentTypeId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All agents on this provider</SelectItem>
+                      {agentTypes
+                        ?.filter((agent) => agent.isEnabled)
+                        .map((agent) => (
+                          <SelectItem key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="workspace-setup-script">Shell script</Label>
+                  <Textarea
+                    id="workspace-setup-script"
+                    value={setupScript}
+                    onChange={(event) => setSetupScript(event.target.value)}
+                    placeholder={"npm install\n./scripts/bootstrap.sh"}
+                    className="min-h-36 font-mono text-xs"
+                    spellCheck={false}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Admin defaults run before commands supplied through the SDK. Logs and status are
+                    written to <code>~/.gitterm/setup</code>.
+                  </p>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!provider?.id || setSetupDefault.isPending}
+                    onClick={() =>
+                      provider?.id &&
+                      setSetupDefault.mutate({
+                        cloudProviderId: provider.id,
+                        agentTypeId: setupAgentTypeId === "all" ? null : setupAgentTypeId,
+                        commands: setupScript.trim() ? [setupScript.trim()] : [],
+                      })
+                    }
+                  >
+                    {setSetupDefault.isPending ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <ScrollText />
+                    )}
+                    Save setup script
+                  </Button>
+                </div>
               </div>
             </div>
 
             {provider?.supportsRegions && !isAwsProvider && (
-              <div className="rounded-2xl border border-border bg-card p-6">
+              <div className="order-2 rounded-2xl border border-border bg-card p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground/90">Regions</p>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="size-4 text-muted-foreground" />
+                      <p className="text-sm font-medium text-foreground/90">Regions</p>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Enable, disable, or add regions for this provider.
                     </p>

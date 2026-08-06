@@ -72,7 +72,6 @@ self-hosted.
 import { createGittermClient } from "@gitterm/sdk";
 
 const client = createGittermClient({
-  serverUrl: "https://api.gitterm.dev",
   token: process.env.GITTERM_API_TOKEN,
 });
 
@@ -98,18 +97,44 @@ client.workspaces.ensureRunning(workspaceId, options?);
 client.workspaces.pause(workspaceId);
 client.workspaces.restart(workspaceId);
 client.workspaces.terminate(workspaceId);
-client.workspaces.createSandbox({
-  idempotencyKey, repo, branch, baseCommit, checkoutRef,
-  agent, provider, persistent, // provider is optional
+client.workspaces.create({
+  repo: "https://github.com/acme/product",
 });
 client.catalog.agentTypes();
 client.catalog.cloudProviders();
-client.catalog.resolveSandboxDefaults({ agent, provider });
+client.catalog.workspaceOptions();
 ```
 
-`agent` is the unique enabled agent name (for example `"OpenCode"`).
-`provider` is the unique enabled provider name (for example `"E2B"`).
-Omit `provider` to use the preferred default sandbox provider.
+The server defaults the agent to `opencode`, selects the user's preferred provider,
+uses that provider's default machine profile, and applies the provider's persistence policy.
+Override only the placement decisions your integration cares about:
+
+```ts
+await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  agent: "opencode",
+  setupCommands: ["npm install", "npm run generate"],
+  provider: {
+    type: "exedev",
+    machine: { type: "profile", key: "content-rendering" },
+  },
+});
+```
+
+Setup commands run in order from the checked-out repository after the agent server is
+ready. They do not delay workspace creation or stop the agent if they fail. Provider and
+agent defaults configured by an administrator run first; inspect `~/.gitterm/setup/state`
+and `~/.gitterm/setup/setup.log` inside the workspace for the result.
+
+`provider` is a discriminated union, so TypeScript only offers `region` for providers
+where GitTerm supports caller-selected placement. Machine keys are configured by admins
+and returned by `client.catalog.workspaceOptions()`; raw CPU, memory, credentials, and
+provider account configuration are never supplied by SDK callers.
+
+This makes release automation a normal workspace task: create an OpenCode workspace,
+run UI review or browser capture tools in the sandbox, upload the resulting media, update
+the changelog in the checked-out repository, then terminate the workspace. Use an
+`idempotencyKey` based on the release SHA when the workflow may be retried.
 
 ### Errors
 

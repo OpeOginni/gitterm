@@ -8,13 +8,7 @@ import {
   workspace,
   volume,
 } from "@gitterm/db/schema/workspace";
-import {
-  agentType,
-  image,
-  cloudProvider,
-  providerAgentImage,
-  region,
-} from "@gitterm/db/schema/cloud";
+import { agentType, image, cloudProvider, machineProfile, region } from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
 import {
@@ -68,7 +62,15 @@ import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "../../service
 import { getAgentProvisioner, getUserProviderCredentials } from "../../service/agents";
 import type { AgentConfigByKind } from "../../service/agents/types";
 import { T3_PAIRING_CREATE_COMMAND } from "../../service/agents/t3code";
-import { configKindsForAgentType, type AgentConfigKind } from "@gitterm/schema";
+import {
+  configKindsForAgentType,
+  parseProviderMachineOptions,
+  providerKeySchema,
+  workspaceProviderSelectionSchema,
+  workspaceSetupCommandsSchema,
+  type AgentConfigKind,
+  type ProviderKey,
+} from "@gitterm/schema";
 import {
   deleteAllWorkspaceRouteAccess,
   deleteWorkspaceRouteAccess,
@@ -90,6 +92,7 @@ import {
 } from "../../providers/ssh-access";
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
 import { imageSupportsProvider } from "../../providers/image-compat";
+import { applyMachineProfile } from "../../providers/machine-profile";
 import type { CloudProviderType, ImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { normalizeBaseCommit } from "../../utils/workspace-base-commit";
 import {
@@ -98,6 +101,10 @@ import {
 } from "../../service/workspace-runtime";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
+import {
+  buildWorkspaceSetupCommand,
+  resolveWorkspaceSetupCommands,
+} from "../../service/workspace-setup";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -135,6 +142,200 @@ function normalizeRepoUrl(url: string): string {
   }
 
   return trimmed.replace(/\.git\/?$/i, "");
+}
+
+const workspaceCreateBaseSchema = z.object({
+  name: z.string().optional(),
+  idempotencyKey: z.string().trim().min(1).max(255).optional(),
+  repo: z.string().optional(),
+  branch: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .regex(/^[A-Za-z0-9._/-]+$/)
+    .optional(),
+  baseCommit: z.string().trim().min(1).max(64).optional(),
+  checkoutRef: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .regex(/^[A-Za-z0-9._/-]+$/)
+    .optional(),
+  subdomain: z
+    .union([
+      z
+        .string()
+        .min(1)
+        .max(63)
+        .regex(/^[a-z0-9-]+$/),
+      z.literal(""),
+    ])
+    .optional(),
+  gitIntegrationId: z.string().optional(),
+  workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
+  modelCredentialIds: z.array(z.uuid()).max(50).optional(),
+  setupCommands: workspaceSetupCommandsSchema.optional(),
+});
+
+const legacyWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
+  agentTypeId: z.string(),
+  cloudProviderId: z.string(),
+  regionId: z.string().optional(),
+  machineProfileId: z.uuid().optional(),
+  machineOptions: z.record(z.string(), z.unknown()).optional(),
+  persistent: z.boolean(),
+});
+
+const intentWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
+  repo: z.string().trim().min(1),
+  agent: z.string().trim().min(1).default("opencode").optional(),
+  provider: workspaceProviderSelectionSchema.optional(),
+  persistent: z.boolean().optional(),
+});
+
+const workspaceCreateSchema = z.union([legacyWorkspaceCreateSchema, intentWorkspaceCreateSchema]);
+type ResolvedWorkspaceCreateInput = z.infer<typeof legacyWorkspaceCreateSchema>;
+
+function matchesRegion(
+  candidate: { id: string; name: string; externalRegionIdentifier: string },
+  requested: string,
+): boolean {
+  const normalized = requested.toLowerCase();
+  return (
+    candidate.id === requested ||
+    candidate.name.toLowerCase() === normalized ||
+    candidate.externalRegionIdentifier.toLowerCase() === normalized
+  );
+}
+
+async function resolveWorkspaceCreateIntent(
+  rawInput: z.infer<typeof workspaceCreateSchema>,
+  userId: string,
+  viewerPlan: UserPlan,
+): Promise<ResolvedWorkspaceCreateInput> {
+  if ("agentTypeId" in rawInput) return rawInput;
+
+  const requestedAgent = rawInput.agent ?? "opencode";
+  const selectedAgent = await db.query.agentType.findFirst({
+    where: and(eq(agentType.key, requestedAgent), eq(agentType.isEnabled, true)),
+  });
+  if (!selectedAgent) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `No enabled agent matches "${requestedAgent}"`,
+    });
+  }
+
+  const providerSelection = rawInput.provider;
+  const providerRows = await db.query.cloudProvider.findMany({
+    where: eq(cloudProvider.isEnabled, true),
+    with: {
+      regions: { where: eq(region.isEnabled, true), orderBy: [asc(region.name)] },
+      machineProfiles: {
+        where: eq(machineProfile.isEnabled, true),
+        orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
+      },
+    },
+    orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
+  });
+  const eligibleProviders = providerRows.filter((candidate) =>
+    canUseProvider(viewerPlan, candidate.providerKey.toLowerCase()),
+  );
+
+  let candidates = eligibleProviders;
+  if (providerSelection) {
+    candidates = candidates.filter(
+      (candidate) =>
+        candidate.providerKey === providerSelection.type &&
+        (!providerSelection.providerId || candidate.id === providerSelection.providerId),
+    );
+    if ("region" in providerSelection && providerSelection.region) {
+      const requestedRegion = providerSelection.region;
+      const regionMatches = candidates.filter((candidate) =>
+        candidate.regions.some((candidateRegion) =>
+          matchesRegion(candidateRegion, requestedRegion),
+        ),
+      );
+      if (regionMatches.length > 0) candidates = regionMatches;
+    }
+  } else {
+    const currentUser = await db.query.user.findFirst({ where: eq(user.id, userId) });
+    const savedDefault = eligibleProviders.find(
+      (candidate) => candidate.id === currentUser?.defaultCloudProviderId,
+    );
+    const preferredDefault = eligibleProviders.find((candidate) => candidate.preferredDefault);
+    candidates = savedDefault
+      ? [savedDefault]
+      : preferredDefault
+        ? [preferredDefault]
+        : eligibleProviders;
+  }
+
+  const selectedProvider = candidates[0];
+  if (!selectedProvider) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "No enabled provider matches this request" });
+  }
+
+  const requestedRegion =
+    providerSelection && "region" in providerSelection ? providerSelection.region : undefined;
+  const selectedRegion = requestedRegion
+    ? selectedProvider.regions.find((candidate) => matchesRegion(candidate, requestedRegion))
+    : selectedProvider.regions[0];
+  if (requestedRegion && !selectedRegion) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "No enabled region matches this request" });
+  }
+
+  const requestedMachine = providerSelection?.machine;
+  if (
+    requestedMachine?.type === "custom" &&
+    selectedProvider.machineSelectionPolicy.mode !== "flexible"
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "This provider does not allow custom machine sizes",
+    });
+  }
+  if (
+    requestedMachine?.type === "profile" &&
+    selectedProvider.machineSelectionPolicy.mode === "standard"
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "This provider uses its standard machine size",
+    });
+  }
+  const selectedMachine =
+    requestedMachine?.type === "profile"
+      ? selectedProvider.machineProfiles.find(
+          (candidate) =>
+            candidate.key === requestedMachine.key || candidate.id === requestedMachine.key,
+        )
+      : selectedProvider.machineProfiles[0];
+  if (requestedMachine?.type === "profile" && !selectedMachine) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `No enabled machine profile matches "${requestedMachine}"`,
+    });
+  }
+
+  const { agent: _agent, provider: _provider, ...workspaceInput } = rawInput;
+  return {
+    ...workspaceInput,
+    agentTypeId: selectedAgent.id,
+    cloudProviderId: selectedProvider.id,
+    regionId: selectedRegion?.id,
+    machineProfileId: selectedMachine?.id,
+    machineOptions:
+      requestedMachine?.type === "custom"
+        ? parseProviderMachineOptions(
+            selectedProvider.providerKey as ProviderKey,
+            requestedMachine.resources,
+          )
+        : undefined,
+    persistent: rawInput.persistent ?? selectedProvider.autoPersistent,
+  };
 }
 
 async function getConfiguredDefaultRegionIdentifier(
@@ -296,6 +497,10 @@ export const workspaceRouter = router({
               where: eq(region.isEnabled, true),
               orderBy: [asc(region.name)],
             },
+            machineProfiles: {
+              where: eq(machineProfile.isEnabled, true),
+              orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
+            },
           },
           orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
         });
@@ -344,6 +549,13 @@ export const workspaceRouter = router({
             return {
               ...provider,
               regions,
+              machineProfiles: provider.machineProfiles.map((profile) => ({
+                id: profile.id,
+                key: profile.key,
+                name: profile.name,
+                description: profile.description,
+                isDefault: profile.isDefault,
+              })),
               sshAccessSupport: normalizeProvidersshAccessSupport(provider.sshAccessSupport),
             };
           }),
@@ -363,57 +575,95 @@ export const workspaceRouter = router({
       }
     }),
 
-  resolveSandboxDefaults: protectedProcedure
-    .input(
-      z.object({
-        agent: z.string().trim().min(1),
-        provider: z.string().trim().min(1).optional(),
+  getWorkspaceCatalog: protectedProcedure.query(async ({ ctx }) => {
+    const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
+    const [currentUser, agents, providers, images] = await Promise.all([
+      db.query.user.findFirst({ where: eq(user.id, ctx.session.user.id) }),
+      db.query.agentType.findMany({
+        where: eq(agentType.isEnabled, true),
+        orderBy: [asc(agentType.name)],
       }),
-    )
-    .query(async ({ input, ctx }) => {
-      const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
-      const agents = await db
-        .select()
-        .from(agentType)
-        .where(eq(agentType.isEnabled, true))
-        .orderBy(asc(agentType.name));
-      const providers = await db.query.cloudProvider.findMany({
-        where: and(eq(cloudProvider.isEnabled, true), eq(cloudProvider.isSandbox, true)),
-        with: { regions: { where: eq(region.isEnabled, true), orderBy: [asc(region.name)] } },
+      db.query.cloudProvider.findMany({
+        where: eq(cloudProvider.isEnabled, true),
+        with: {
+          regions: { where: eq(region.isEnabled, true), orderBy: [asc(region.name)] },
+          machineProfiles: {
+            where: eq(machineProfile.isEnabled, true),
+            orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
+          },
+        },
         orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
-      });
+      }),
+      db.query.image.findMany({ where: eq(image.isEnabled, true) }),
+    ]);
 
-      const requestedAgent = input.agent.toLowerCase();
-      const matchingAgents = agents.filter(
-        (candidate) => candidate.name.toLowerCase() === requestedAgent,
-      );
-      const selectedAgent = matchingAgents.length === 1 ? matchingAgents[0] : undefined;
-      const requestedProvider = input.provider?.toLowerCase();
-      const eligibleProviders = providers.filter((candidate) =>
-        canUseProvider(viewerPlan, candidate.providerKey.toLowerCase()),
-      );
-      const matchingProviders = requestedProvider
-        ? eligibleProviders.filter(
-            (candidate) => candidate.name.toLowerCase() === requestedProvider,
-          )
-        : eligibleProviders.filter((candidate) => candidate.preferredDefault);
-      const selectedProvider = matchingProviders.length === 1 ? matchingProviders[0] : undefined;
+    const catalogProviders = providers.flatMap((provider) => {
+      const parsedKey = providerKeySchema.safeParse(provider.providerKey);
+      if (!parsedKey.success || !canUseProvider(viewerPlan, parsedKey.data)) return [];
 
-      if (!selectedAgent || !selectedProvider) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "No enabled sandbox configuration matches the requested defaults",
-        });
-      }
+      const agentKeys = agents
+        .filter((agent) =>
+          images.some(
+            (candidateImage) =>
+              candidateImage.agentTypeId === agent.id &&
+              imageSupportsProvider(
+                parsedKey.data,
+                candidateImage.providerMetadata as ImageProviderMetadata,
+              ),
+          ),
+        )
+        .map((agent) => agent.key);
 
-      return {
-        agent: selectedAgent.name,
-        provider: selectedProvider.name,
-        agentTypeId: selectedAgent.id,
-        cloudProviderId: selectedProvider.id,
-        regionId: selectedProvider.regions[0]?.id,
-      };
-    }),
+      if (agentKeys.length === 0) return [];
+
+      return [
+        {
+          id: provider.id,
+          type: parsedKey.data,
+          name: provider.name,
+          isDefault:
+            provider.id === currentUser?.defaultCloudProviderId ||
+            (!currentUser?.defaultCloudProviderId && provider.preferredDefault),
+          persistence: provider.supportsPersistence
+            ? provider.autoPersistent
+              ? ("required" as const)
+              : ("optional" as const)
+            : ("unsupported" as const),
+          regionSelection: !provider.supportsRegions
+            ? ("none" as const)
+            : provider.allowUserRegionSelection
+              ? ("user" as const)
+              : ("admin" as const),
+          regions: provider.regions.map((providerRegion) => ({
+            id: providerRegion.id,
+            key: providerRegion.externalRegionIdentifier,
+            name: providerRegion.name,
+            location: providerRegion.location,
+          })),
+          machines: provider.machineProfiles.map((profile) => ({
+            id: profile.id,
+            key: profile.key,
+            name: profile.name,
+            description: profile.description,
+            isDefault: profile.isDefault,
+          })),
+          agentKeys,
+          ssh: normalizeProvidersshAccessSupport(provider.sshAccessSupport).supported,
+        },
+      ];
+    });
+
+    return {
+      agents: agents.map((agent) => ({
+        id: agent.id,
+        key: agent.key,
+        name: agent.name,
+        description: agent.description,
+        serverOnly: agent.serverOnly,
+      })),
+      providers: catalogProviders,
+    };
+  }),
 
   // List all workspaces for the authenticated user (paginated)
   listWorkspaces: protectedProcedure
@@ -1146,48 +1396,11 @@ export const workspaceRouter = router({
       }
     }),
 
-  // Create a new workspace
+  // Create a new workspace. ID-based input remains supported for the web app;
+  // integrations can submit stable provider and agent intent instead.
   createWorkspace: protectedProcedure
-    .input(
-      z.object({
-        name: z.string().optional(),
-        idempotencyKey: z.string().trim().min(1).max(255).optional(),
-        repo: z.string().optional(), // Optional for local workspaces
-        branch: z
-          .string()
-          .trim()
-          .min(1)
-          .max(255)
-          .regex(/^[A-Za-z0-9._/-]+$/)
-          .optional(),
-        baseCommit: z.string().trim().min(1).max(64).optional(),
-        checkoutRef: z
-          .string()
-          .trim()
-          .min(1)
-          .max(255)
-          .regex(/^[A-Za-z0-9._/-]+$/)
-          .optional(),
-        subdomain: z
-          .union([
-            z
-              .string()
-              .min(1)
-              .max(63)
-              .regex(/^[a-z0-9-]+$/),
-            z.literal(""),
-          ])
-          .optional(),
-        agentTypeId: z.string(),
-        cloudProviderId: z.string(),
-        regionId: z.string().optional(),
-        gitIntegrationId: z.string().optional(),
-        persistent: z.boolean(),
-        workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
-        modelCredentialIds: z.array(z.uuid()).max(50).optional(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
+    .input(workspaceCreateSchema)
+    .mutation(async ({ input: rawInput, ctx }) => {
       const userId = ctx.session.user.id;
       const workspaceId = randomUUID();
       const workspaceCreateLogger = createProvisionLogger("workspace-router", workspaceId);
@@ -1198,6 +1411,9 @@ export const workspaceRouter = router({
           message: "User not authenticated",
         });
       }
+
+      const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
+      const input = await resolveWorkspaceCreateIntent(rawInput, userId, viewerPlan);
 
       let resolvedBaseCommit: string | null = null;
       try {
@@ -1289,6 +1505,28 @@ export const workspaceRouter = router({
         const providerConfigService = getProviderConfigService();
 
         const providerKey = (cloudProviderRecord.providerKey ?? "local").toLowerCase();
+        const selectedMachineProfile = input.machineProfileId
+          ? await db.query.machineProfile.findFirst({
+              where: and(
+                eq(machineProfile.id, input.machineProfileId),
+                eq(machineProfile.cloudProviderId, cloudProviderRecord.id),
+                eq(machineProfile.isEnabled, true),
+              ),
+            })
+          : await db.query.machineProfile.findFirst({
+              where: and(
+                eq(machineProfile.cloudProviderId, cloudProviderRecord.id),
+                eq(machineProfile.isEnabled, true),
+              ),
+              orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
+            });
+
+        if (input.machineProfileId && !selectedMachineProfile) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Selected machine profile is not available for this provider",
+          });
+        }
 
         if (providerKey !== "local") {
           if (!cloudProviderRecord.providerConfigId) {
@@ -1554,36 +1792,10 @@ export const workspaceRouter = router({
           });
         }
 
-        const assignedProviderImage = await db.query.providerAgentImage.findFirst({
-          where: and(
-            eq(providerAgentImage.cloudProviderId, input.cloudProviderId),
-            eq(providerAgentImage.agentTypeId, input.agentTypeId),
-            sql`coalesce(${providerAgentImage.workspaceProfile}, 'standard') = ${workspaceProfile}`,
-          ),
-          with: {
-            image: true,
-          },
-        });
-
-        // An assignment is only usable if its image actually carries the
-        // provider metadata required to provision on the selected provider.
-        // Otherwise (e.g. an AWS-only image assigned to E2B) we ignore it and
-        // fall back to a profile-aware pick among provider-compatible images.
-        const assignedImage = assignedProviderImage?.image;
-        const assignmentUsable =
-          assignedImage?.isEnabled === true &&
-          imageSupportsProvider(
-            providerKey,
-            assignedImage.providerMetadata as ImageProviderMetadata | null,
-          );
-
         const compatibleImageRecords = imageRecords.filter((img) =>
           imageSupportsProvider(providerKey, img.providerMetadata as ImageProviderMetadata | null),
         );
-
-        const imageRecord = assignmentUsable
-          ? assignedImage
-          : pickWorkspaceImage(compatibleImageRecords, workspaceProfile);
+        const imageRecord = pickWorkspaceImage(compatibleImageRecords, workspaceProfile);
 
         if (!imageRecord) {
           throw new TRPCError({
@@ -1882,7 +2094,7 @@ export const workspaceRouter = router({
           encryptedServerPassword = passwordData.encryptedPassword;
         }
 
-        const agentProvisioning = getAgentProvisioner(agentTypeRecord.name).provision({
+        const agentProvisioning = getAgentProvisioner(agentTypeRecord.provisionerKey).provision({
           userId,
           userDisplayName: fetchedUser.name,
           workspaceHostname: `${subdomain}.${process.env.BASE_DOMAIN ?? "gitterm.dev"}`,
@@ -1894,6 +2106,24 @@ export const workspaceRouter = router({
             getUserProviderCredentials(userId, input.modelCredentialIds),
           ),
         });
+
+        const setupCommand = buildWorkspaceSetupCommand(
+          await resolveWorkspaceSetupCommands({
+            cloudProviderId: input.cloudProviderId,
+            agentTypeId: input.agentTypeId,
+            requestedCommands: input.setupCommands,
+          }),
+          agentProvisioning.serve?.port,
+        );
+
+        if (setupCommand && agentProvisioning.serve) {
+          agentProvisioning.serve.postStartCommand = [
+            agentProvisioning.serve.postStartCommand,
+            setupCommand,
+          ]
+            .filter(Boolean)
+            .join("\n");
+        }
 
         if (!agentProvisioning.usesServerPassword) {
           encryptedServerPassword = undefined;
@@ -1919,6 +2149,7 @@ export const workspaceRouter = router({
               : undefined,
           workspaceProfile,
           editorAccessEnabled,
+          setupCommand,
         });
 
         // Serialize the spec + runtime vars into the env handed to the compute
@@ -1944,6 +2175,11 @@ export const workspaceRouter = router({
 
         // Get compute provider
         const computeProvider = await getProviderByCloudProviderId(providerKey);
+        const imageProviderMetadata = applyMachineProfile(
+          imageRecord.providerMetadata,
+          providerKey,
+          input.machineOptions ?? selectedMachineProfile?.providerOptions,
+        );
 
         // Plan-based persistence gating: free tier cannot opt into persistent
         // (volume-backed) workspaces. Guard server-side even though the UI hides
@@ -1984,7 +2220,7 @@ export const workspaceRouter = router({
                   workspaceId,
                   userId,
                   imageId: imageRecord.imageId,
-                  imageProviderMetadata: imageRecord.providerMetadata,
+                  imageProviderMetadata,
                   subdomain,
                   repositoryUrl: input.repo,
                   repositoryBranch: input.branch,
@@ -1999,7 +2235,7 @@ export const workspaceRouter = router({
                   workspaceId,
                   userId,
                   imageId: imageRecord.imageId,
-                  imageProviderMetadata: imageRecord.providerMetadata,
+                  imageProviderMetadata,
                   subdomain,
                   repositoryUrl: input.repo,
                   repositoryBranch: input.branch,
@@ -2026,6 +2262,8 @@ export const workspaceRouter = router({
             userId,
             imageId: imageRecord.id,
             cloudProviderId: input.cloudProviderId,
+            machineProfileId: selectedMachineProfile?.id ?? null,
+            launchProfileId: null,
             gitIntegrationId: input.gitIntegrationId ?? null,
             modelCredentialIds: input.modelCredentialIds ?? [],
             persistent: effectivePersistent,

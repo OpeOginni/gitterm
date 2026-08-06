@@ -55,6 +55,15 @@ export class VercelProvider implements ComputeProvider {
     return config;
   }
 
+  private async getSdkCredentials() {
+    const credentials = await this.getCredentials();
+    return {
+      token: credentials.apiToken,
+      teamId: credentials.teamId,
+      projectId: credentials.projectId,
+    };
+  }
+
   private getDomain(subdomain: string): string {
     if (ROUTING_MODE === "path") {
       return BASE_DOMAIN.includes("localhost")
@@ -138,16 +147,14 @@ export class VercelProvider implements ComputeProvider {
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
     const logger = createProvisionLogger(this.name, config.workspaceId);
-    const credentials = await this.getCredentials();
+    const credentials = await this.getSdkCredentials();
     const spec = resolveProvisioningSpec(config);
     const metadata = this.getImageMetadata(config);
     const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
     const repoDir = this.getRepoDir(spec);
     const sandbox = await logger.step("create-sandbox", () =>
       Sandbox.create({
-        token: credentials.apiToken,
-        teamId: credentials.teamId,
-        projectId: credentials.projectId,
+        ...credentials,
         name: this.getSandboxName(config.workspaceId),
         persistent,
         ports: [serve.port],
@@ -265,20 +272,20 @@ esac
     externalId: string,
     command: string,
   ): Promise<{ exitCode: number; stdout: string }> {
-    const credentials = await this.getCredentials();
+    const credentials = await this.getSdkCredentials();
     const sandbox = await Sandbox.get({ name: externalId, ...credentials });
     const result = await sandbox.runCommand({ cmd: "bash", args: ["-lc", command] });
     return { exitCode: result.exitCode, stdout: await result.stdout() };
   }
 
   async pauseWorkspace(externalId: string): Promise<void> {
-    const credentials = await this.getCredentials();
+    const credentials = await this.getSdkCredentials();
     const sandbox = await Sandbox.get({ name: externalId, resume: false, ...credentials });
     if (sandbox.status !== "stopped") await sandbox.stop();
   }
 
   async resumeWorkspace(externalId: string): Promise<void> {
-    const credentials = await this.getCredentials();
+    const credentials = await this.getSdkCredentials();
     await Sandbox.get({
       name: externalId,
       ...credentials,
@@ -292,14 +299,14 @@ esac
   }
 
   async terminateWorkspace(externalId: string): Promise<void> {
-    const credentials = await this.getCredentials();
+    const credentials = await this.getSdkCredentials();
     const sandbox = await Sandbox.get({ name: externalId, resume: false, ...credentials });
     await sandbox.delete();
   }
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
     try {
-      const credentials = await this.getCredentials();
+      const credentials = await this.getSdkCredentials();
       const sandbox = await Sandbox.get({ name: externalId, resume: false, ...credentials });
       const lastActiveAt = sandbox.statusUpdatedAt ?? sandbox.updatedAt;
       if (sandbox.status === "running") return { status: "running", lastActiveAt };
@@ -313,7 +320,7 @@ esac
   }
 
   async keepAliveWorkspace(externalId: string, timeoutMs: number): Promise<void> {
-    const credentials = await this.getCredentials();
+    const credentials = await this.getSdkCredentials();
     const sandbox = await Sandbox.get({ name: externalId, ...credentials });
     await sandbox.update({ timeout: timeoutMs });
   }
@@ -322,7 +329,7 @@ esac
     externalId: string,
     port: number,
   ): Promise<{ domain: string }> {
-    const credentials = await this.getCredentials();
+    const credentials = await this.getSdkCredentials();
     const sandbox = await Sandbox.get({ name: externalId, ...credentials });
     if (!sandbox.routes.some((route) => route.port === port)) {
       await sandbox.update({ ports: [...sandbox.routes.map((route) => route.port), port] });

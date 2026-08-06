@@ -59,6 +59,8 @@ interface ProvisionPayload {
   port: number;
   /** Commands to run before starting the server (e.g. install the agent). */
   setupCommands?: string[];
+  /** Best-effort command launched after the server is ready. */
+  postStartCommand?: string;
 }
 
 interface AgentRuntime {
@@ -202,6 +204,7 @@ export class CloudflareComputeProvider implements ComputeProvider {
       startCommand: runtime.startCommand,
       port: runtime.port,
       setupCommands: runtime.setupCommands,
+      postStartCommand: spec?.setupCommand,
     };
   }
 

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and, ne } from "@gitterm/db";
-import { cloudProvider, image, providerAgentImage, region } from "@gitterm/db/schema/cloud";
+import { cloudProvider, machineProfile, region } from "@gitterm/db/schema/cloud";
+import { workspaceSetupCommandDefault } from "@gitterm/db/schema/workspace-setup";
 import { providerConfig, providerType } from "@gitterm/db/schema/provider-config";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { adminProcedure, router } from "../..";
@@ -9,6 +10,7 @@ import { normalizeAwsConfig } from "../../providers/aws";
 import { bootstrapAwsProvider, deleteAwsProviderInfrastructure } from "../../providers/aws/setup";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import { AWS_CLI_SETUP_COMMAND } from "../../service/workspace-setup";
 
 const AWS_REGION_METADATA: Record<string, { name: string; location: string; flag: string }> = {
   "us-east-1": {
@@ -240,45 +242,21 @@ export const awsRouter = router({
         updatedAt: new Date(),
       });
 
-      // Copy AWS-compatible image assignments to the new provider.
-      //
-      // providerAgentImage is keyed by cloudProviderId, so every AWS region
-      // provider needs its own (agentType -> image) assignments to be deployable.
-      // We pick the set of images that carry AWS-specific provider metadata
-      // (e.g. `providerMetadata.aws.cpu/memory/containerPort/...`) - those are
-      // the images intended to run on AWS infrastructure.
-      const allImages = await db.query.image.findMany({
-        where: eq(image.isEnabled, true),
+      await db.insert(workspaceSetupCommandDefault).values({
+        cloudProviderId: created.id,
+        agentTypeId: null,
+        commands: [AWS_CLI_SETUP_COMMAND],
       });
-      const awsImages = allImages.filter(
-        (img) => img.providerMetadata && (img.providerMetadata as Record<string, unknown>).aws,
-      );
 
-      if (awsImages.length === 0) {
-        console.warn(
-          `[aws.createRegionProvider] No AWS-compatible images found. Provider "${created.name}" was created but has no image assignments - workspaces cannot be deployed against it until an image is assigned via the admin panel.`,
-        );
-      } else {
-        // Use a single (agentType, image) per agentType to avoid violating the
-        // (cloudProviderId, agentTypeId, workspaceProfile) unique index. If
-        // multiple AWS images exist for the same agent type, the first one wins;
-        // admins can change the assignment later in the admin panel.
-        const seenAgentTypes = new Set<string>();
-        for (const awsImage of awsImages) {
-          if (seenAgentTypes.has(awsImage.agentTypeId)) continue;
-          seenAgentTypes.add(awsImage.agentTypeId);
-
-          await db.insert(providerAgentImage).values({
-            cloudProviderId: created.id,
-            agentTypeId: awsImage.agentTypeId,
-            imageId: awsImage.id,
-            workspaceProfile: null,
-            isDefault: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
-        }
-      }
+      await db.insert(machineProfile).values({
+        cloudProviderId: created.id,
+        key: "standard",
+        name: "Standard",
+        description: "1 vCPU and 2 GiB memory Fargate task.",
+        providerOptions: { cpu: 1024, memory: 2048 },
+        isDefault: true,
+        isEnabled: true,
+      });
 
       return {
         provider: created,

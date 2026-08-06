@@ -1,7 +1,6 @@
 import { createTRPCClient, httpBatchLink, TRPCClientError } from "@trpc/client";
 import type { AppRouter } from "@gitterm/api/routers/index";
-import type { inferRouterInputs } from "@trpc/server";
-import { loadConfigSync } from "./config.js";
+import { DEFAULT_GITTERM_SERVER_URL, loadConfigSync } from "./config.js";
 import { GittermError, WorkspaceLifecycleError, type GittermErrorCode } from "./errors.js";
 import type {
   AgentType,
@@ -17,19 +16,8 @@ import type {
   WorkspaceRuntimeAccess,
   WorkspacePauseResult,
   WorkspaceTerminateResult,
-  SandboxDefaults,
-  SandboxDefaultsInput,
+  WorkspaceCatalog,
 } from "./types.js";
-
-type RouterInputs = inferRouterInputs<AppRouter>;
-type IsExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-type Assert<T extends true> = T;
-type CheckedSandboxDefaultsInput =
-  Assert<
-    IsExact<SandboxDefaultsInput, NonNullable<RouterInputs["workspace"]["resolveSandboxDefaults"]>>
-  > extends true
-    ? SandboxDefaultsInput
-    : never;
 
 export type GittermClientOptions = {
   serverUrl?: string;
@@ -106,7 +94,6 @@ export type GittermClient = {
     restart(workspaceId: string): Promise<WorkspaceRestartResult>;
     terminate(workspaceId: string): Promise<WorkspaceTerminateResult>;
     create(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
-    createSandbox(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
@@ -116,7 +103,7 @@ export type GittermClient = {
       sandboxOnly?: boolean;
       nonSandboxOnly?: boolean;
     }): Promise<CloudProvider[]>;
-    resolveSandboxDefaults(input: SandboxDefaultsInput): Promise<SandboxDefaults>;
+    workspaceOptions(): Promise<WorkspaceCatalog>;
   };
 };
 
@@ -127,7 +114,11 @@ function envValue(name: string): string | undefined {
 
 function resolveCredentials(options: GittermClientOptions): Credentials {
   const config = !options.serverUrl || !options.token ? loadConfigSync(options.configPath) : null;
-  const serverUrl = options.serverUrl ?? envValue("GITTERM_SERVER_URL") ?? config?.serverUrl;
+  const serverUrl =
+    options.serverUrl ??
+    envValue("GITTERM_SERVER_URL") ??
+    config?.serverUrl ??
+    DEFAULT_GITTERM_SERVER_URL;
   const token = options.token ?? envValue("GITTERM_API_TOKEN") ?? config?.token;
 
   if (!serverUrl || !token) {
@@ -290,35 +281,36 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
 
   const run = <T>(operation: () => Promise<T>) => runWithServer(credentials.serverUrl, operation);
 
+  const normalizeCreateResult = (result: {
+    workspace: RawWorkspace;
+    runtime?: RawRuntimeAccess | null;
+  }): WorkspaceCreateResult => {
+    const workspace = normalizeWorkspace(result.workspace);
+    if (!workspace) throw new GittermError("SERVER_ERROR", "Workspace creation failed");
+    const runtime = result.runtime
+      ? normalizeRuntime(result.runtime)
+      : {
+          workspaceId: workspace.id,
+          status: workspace.status,
+          url: null,
+          directory: "/workspace",
+          repo: workspace.repositoryUrl,
+          branch: workspace.repositoryBranch,
+          baseCommit: workspace.baseCommit,
+          checkoutRef: workspace.checkoutRef,
+          persistent: workspace.persistent,
+          recoverable: workspace.status !== "terminated",
+          providerKey: null,
+        };
+    return { workspace, runtime };
+  };
+
   const createWorkspace = (input: WorkspaceCreateInput) =>
     run(async (): Promise<WorkspaceCreateResult> => {
-      const { agent, provider, regionId, ...workspaceInput } = input;
-      const defaults = await trpc.workspace.resolveSandboxDefaults.query({ agent, provider });
-      const apiInput: RouterInputs["workspace"]["createWorkspace"] = {
-        ...workspaceInput,
-        agentTypeId: defaults.agentTypeId,
-        cloudProviderId: defaults.cloudProviderId,
-        regionId: regionId ?? defaults.regionId,
-      };
-      const result = await trpc.workspace.createWorkspace.mutate(apiInput);
-      const workspace = normalizeWorkspace(result.workspace as RawWorkspace);
-      if (!workspace) throw new GittermError("SERVER_ERROR", "Workspace creation failed");
-      const runtime = result.runtime
-        ? normalizeRuntime(result.runtime)
-        : {
-            workspaceId: workspace.id,
-            status: workspace.status,
-            url: null,
-            directory: "/workspace",
-            repo: workspace.repositoryUrl,
-            branch: workspace.repositoryBranch,
-            baseCommit: workspace.baseCommit,
-            checkoutRef: workspace.checkoutRef,
-            persistent: workspace.persistent,
-            recoverable: workspace.status !== "terminated",
-            providerKey: null,
-          };
-      return { workspace, runtime };
+      const result = await trpc.workspace.createWorkspace.mutate(input);
+      return normalizeCreateResult(
+        result as { workspace: RawWorkspace; runtime?: RawRuntimeAccess },
+      );
     });
 
   return {
@@ -396,8 +388,6 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           };
         }),
       create: createWorkspace,
-      /** Alias for create — preferred name for sandbox/plugin callers. */
-      createSandbox: createWorkspace,
     },
     catalog: {
       agentTypes: (input?: { serverOnly?: boolean }): Promise<AgentType[]> =>
@@ -415,8 +405,8 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           const result = await trpc.workspace.listCloudProviders.query(input);
           return result.cloudProviders;
         }),
-      resolveSandboxDefaults: (input: CheckedSandboxDefaultsInput): Promise<SandboxDefaults> =>
-        run(async () => trpc.workspace.resolveSandboxDefaults.query(input)),
+      workspaceOptions: (): Promise<WorkspaceCatalog> =>
+        run(async () => trpc.workspace.getWorkspaceCatalog.query()),
     },
   };
 }

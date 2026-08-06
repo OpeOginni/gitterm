@@ -15,6 +15,12 @@ import { providerConfig } from "./provider-config";
 
 export const settlementEnum = pgEnum("settlement_enum", ["immediate", "webhook", "poll"] as const);
 
+export interface MachineSelectionPolicy {
+  mode: "standard" | "profiles" | "flexible";
+  minimum?: Record<string, unknown>;
+  maximum?: Record<string, unknown>;
+}
+
 export const cloudAccount = pgTable("cloud_account", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id")
@@ -45,6 +51,10 @@ export const cloudProvider = pgTable("cloud_provider", {
   supportsRegions: boolean("supports_regions").notNull().default(true),
   allowUserRegionSelection: boolean("allow_user_region_selection").notNull().default(true),
   supportServerOnly: boolean("support_server_only").notNull().default(false),
+  machineSelectionPolicy: jsonb("machine_selection_policy")
+    .$type<MachineSelectionPolicy>()
+    .notNull()
+    .default(sql`'{"mode":"standard"}'::jsonb`),
   sshAccessSupport: jsonb("editor_access_support")
     .$type<CloudProvidersshAccessSupport>()
     .notNull()
@@ -95,7 +105,7 @@ export const image = pgTable("image", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const providerAgentImage = pgTable(
+export const providerLaunchProfile = pgTable(
   "provider_agent_image",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -108,8 +118,15 @@ export const providerAgentImage = pgTable(
     imageId: uuid("image_id")
       .notNull()
       .references(() => image.id, { onDelete: "cascade" }),
-    workspaceProfile: text("workspace_profile"),
-    isDefault: boolean("is_default").notNull().default(true),
+    machineProfileId: uuid("machine_profile_id").references(() => machineProfile.id, {
+      onDelete: "set null",
+    }),
+    workspaceProfile: text("workspace_profile").notNull().default("standard"),
+    runtimeConfig: jsonb("runtime_config")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    isEnabled: boolean("is_enabled").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -117,15 +134,41 @@ export const providerAgentImage = pgTable(
     uniqueIndex("provider_agent_image_unique").on(
       table.cloudProviderId,
       table.agentTypeId,
-      sql`coalesce(${table.workspaceProfile}, '')`,
+      table.workspaceProfile,
     ),
+  ],
+);
+
+export const machineProfile = pgTable(
+  "machine_profile",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cloudProviderId: uuid("cloud_provider_id")
+      .notNull()
+      .references(() => cloudProvider.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    providerOptions: jsonb("provider_options")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    isDefault: boolean("is_default").notNull().default(false),
+    isEnabled: boolean("is_enabled").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("machine_profile_provider_key_unique").on(table.cloudProviderId, table.key),
   ],
 );
 
 export const agentType = pgTable("agent_type", {
   id: uuid("id").primaryKey().defaultRandom(),
+  key: text("key").notNull().unique(),
   name: text("name").notNull().unique(),
   description: text("description"),
+  provisionerKey: text("provisioner_key").notNull().default("opencode"),
   serverOnly: boolean("server_only").notNull().default(false),
   isEnabled: boolean("is_enabled").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -150,6 +193,8 @@ export const cloudProviderRelations = relations(cloudProvider, ({ one, many }) =
   }),
   regions: many(region),
   cloudAccounts: many(cloudAccount),
+  machineProfiles: many(machineProfile),
+  launchProfiles: many(providerLaunchProfile),
   volumes: many(volume),
 }));
 
@@ -169,19 +214,32 @@ export const imageRelations = relations(image, ({ one }) => ({
   }),
 }));
 
-export const providerAgentImageRelations = relations(providerAgentImage, ({ one }) => ({
+export const providerLaunchProfileRelations = relations(providerLaunchProfile, ({ one }) => ({
   cloudProvider: one(cloudProvider, {
-    fields: [providerAgentImage.cloudProviderId],
+    fields: [providerLaunchProfile.cloudProviderId],
     references: [cloudProvider.id],
   }),
   agentType: one(agentType, {
-    fields: [providerAgentImage.agentTypeId],
+    fields: [providerLaunchProfile.agentTypeId],
     references: [agentType.id],
   }),
   image: one(image, {
-    fields: [providerAgentImage.imageId],
+    fields: [providerLaunchProfile.imageId],
     references: [image.id],
   }),
+  machineProfile: one(machineProfile, {
+    fields: [providerLaunchProfile.machineProfileId],
+    references: [machineProfile.id],
+  }),
+}));
+
+export const machineProfileRelations = relations(machineProfile, ({ one, many }) => ({
+  cloudProvider: one(cloudProvider, {
+    fields: [machineProfile.cloudProviderId],
+    references: [cloudProvider.id],
+  }),
+  workspaces: many(workspace),
+  launchProfiles: many(providerLaunchProfile),
 }));
 
 export interface CloudProvidersshAccessSupport {
@@ -275,7 +333,8 @@ export interface ImageProviderMetadata {
 
 export type NewCloudProvider = typeof cloudProvider.$inferInsert;
 export type NewImage = typeof image.$inferInsert;
-export type NewProviderAgentImage = typeof providerAgentImage.$inferInsert;
+export type NewProviderLaunchProfile = typeof providerLaunchProfile.$inferInsert;
+export type NewMachineProfile = typeof machineProfile.$inferInsert;
 export type NewAgentType = typeof agentType.$inferInsert;
 export type NewCloudAccount = typeof cloudAccount.$inferInsert;
 export type ProviderSettlement = (typeof settlementEnum.enumValues)[number];
@@ -284,3 +343,4 @@ export type ImageType = typeof image.$inferSelect;
 export type AgentType = typeof agentType.$inferSelect;
 export type CloudAccountType = typeof cloudAccount.$inferSelect;
 export type RegionType = typeof region.$inferSelect;
+export type MachineProfileType = typeof machineProfile.$inferSelect;

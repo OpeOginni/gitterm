@@ -37,7 +37,8 @@ ENV HOME=/workspace \
     PATH=/workspace/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 COPY ./opencode/server.entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY ./workspace-setup-runner.sh /usr/local/bin/gitterm-workspace-setup
+RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup
 
 ENV PORT=7681
 EXPOSE 22

@@ -44,11 +44,6 @@ case "$name" in
       --build-arg "OPENCODE_VERSION=${OPENCODE_VERSION}" \
       --build-arg "OPENCODE_INSTALL_CACHE_BUST=${CACHE_BUST}"
     ;;
-  opencode-aws-server)
-    build_push .docker/Opencode.Server.AWS.Dockerfile .docker gitterm-opencode-aws-server latest \
-      --build-arg "OPENCODE_VERSION=${OPENCODE_VERSION}" \
-      --build-arg "OPENCODE_INSTALL_CACHE_BUST=${CACHE_BUST}"
-    ;;
   t3code-server)
     build_push .docker/T3Code.Server.Dockerfile .docker gitterm-t3code-server latest \
       --build-arg "T3_VERSION=${T3_VERSION}" \

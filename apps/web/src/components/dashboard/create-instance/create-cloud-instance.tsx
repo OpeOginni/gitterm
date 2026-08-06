@@ -59,6 +59,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [userAgentTypeId, setUserAgentTypeId] = useState<string | null>(null);
   const [userCloudProviderId, setUserCloudProviderId] = useState<string | null>(null);
   const [userRegionId, setUserRegionId] = useState<string | null>(null);
+  const [userMachineProfileId, setUserMachineProfileId] = useState<string | null>(null);
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string | null>(null);
   const [persistent, setPersistent] = useState(true);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
@@ -207,6 +208,14 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   }, [isAwsGroup, awsProviders, nonAwsProviders, selectedCloudGroupKey, userCloudProviderId]);
 
   const selectedCloudProviderId = selectedCloudProvider?.id ?? "";
+  const availableMachineProfiles = selectedCloudProvider?.machineProfiles ?? [];
+  const selectedMachineProfileId =
+    (userMachineProfileId &&
+    availableMachineProfiles.some((profile) => profile.id === userMachineProfileId)
+      ? userMachineProfileId
+      : undefined) ??
+    availableMachineProfiles.find((profile) => profile.isDefault)?.id ??
+    availableMachineProfiles[0]?.id;
 
   // Persistence capability for the selected provider. Some providers (e.g.
   // Cloudflare sandboxes) cannot keep files between sessions at all.
@@ -275,6 +284,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const handleCloudGroupChange = (groupKey: CloudGroupKey) => {
     setUserCloudGroupKey(groupKey);
     setUserRegionId(null);
+    setUserMachineProfileId(null);
     if (groupKey === "aws") {
       // Default to first AWS provider; region picker will refine selection.
       setUserCloudProviderId(awsProviders[0]?.id ?? null);
@@ -285,6 +295,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
   const handleRegionChange = (regionValue: string) => {
     setUserRegionId(regionValue);
+    setUserMachineProfileId(null);
     if (isAwsGroup) {
       // AWS region values are "<providerId>::<regionId>" so we can route the
       // selection back to the right region-provider row.
@@ -365,6 +376,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       agentTypeId: selectedAgentTypeId,
       cloudProviderId: resolvedCloudProviderId,
       regionId: resolvedRegionId,
+      machineProfileId: selectedMachineProfileId,
       gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
@@ -599,6 +611,37 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               ) : null}
             </div>
           </div>
+
+          {availableMachineProfiles.length > 1 && (
+            <div className="col-span-2 grid gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Machine</Label>
+              <Select value={selectedMachineProfileId} onValueChange={setUserMachineProfileId}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select machine size" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMachineProfiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      <span>{profile.name}</span>
+                      <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+                        {profile.key}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {availableMachineProfiles.find((profile) => profile.id === selectedMachineProfileId)
+                ?.description && (
+                <p className="text-[11px] text-muted-foreground/70">
+                  {
+                    availableMachineProfiles.find(
+                      (profile) => profile.id === selectedMachineProfileId,
+                    )?.description
+                  }
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── 3a. Selected agent description card ── */}

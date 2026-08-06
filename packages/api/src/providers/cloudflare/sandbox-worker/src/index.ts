@@ -71,6 +71,8 @@ interface ProvisionPayload {
   port: number;
   /** Commands to run before starting the server (e.g. install the agent). */
   setupCommands?: string[];
+  /** Best-effort command launched after the server is ready. */
+  postStartCommand?: string;
 }
 
 interface BootResult {
@@ -139,6 +141,11 @@ export class GittermSandbox extends Sandbox<Env> {
       await this.cloneRepo(payload, repoDir);
       await this.runSetupCommands(payload, repoDir);
       await this.startAgentServer(payload, repoDir);
+      if (payload.postStartCommand) {
+        await this.startProcess(payload.postStartCommand, { cwd: repoDir }).catch((error) =>
+          console.error("Post-start command failed to launch", error),
+        );
+      }
 
       return { ready: true, repoDir };
     } catch (error) {

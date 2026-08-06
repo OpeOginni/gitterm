@@ -50,12 +50,6 @@ jobs:
             image: gitterm-opencode-server
             tag: latest
             agent: opencode
-          - id: opencode-aws-server
-            file: .docker/Opencode.Server.AWS.Dockerfile
-            context: .docker
-            image: gitterm-opencode-aws-server
-            tag: latest
-            agent: opencode
           - id: t3code-server
             file: .docker/T3Code.Server.Dockerfile
             context: .docker

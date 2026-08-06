@@ -3,7 +3,7 @@ import {
   agentType,
   cloudProvider,
   image,
-  providerAgentImage,
+  machineProfile,
   region,
   type CloudProvidersshAccessSupport,
   type ProviderSettlement,
@@ -32,6 +32,7 @@ const seedCloudProviders: Array<{
   preferredDefault?: boolean;
   autoPersistent?: boolean;
   supportsPersistence?: boolean;
+  machineSelectionPolicy?: { mode: "standard" | "profiles" | "flexible" };
   supportsRegions: boolean;
   allowUserRegionSelection?: boolean;
   supportServerOnly?: boolean;
@@ -46,6 +47,7 @@ const seedCloudProviders: Array<{
     providerKey: "railway",
     isEnabled: false,
     supportsRegions: true,
+    machineSelectionPolicy: { mode: "standard" },
     sshAccessSupport: {
       supported: true,
       transportKind: "managed-ssh",
@@ -72,6 +74,7 @@ const seedCloudProviders: Array<{
     autoPersistent: false,
     supportsPersistence: false,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "standard" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: false,
@@ -90,6 +93,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: true,
@@ -110,6 +114,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: true,
+    machineSelectionPolicy: { mode: "profiles" },
     // A Daytona API key is bound to a single region, so end users can't pick a
     // region - the admin-configured defaultTargetRegion is always used.
     allowUserRegionSelection: false,
@@ -132,6 +137,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: false,
@@ -150,6 +156,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: false,
@@ -169,6 +176,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: true,
@@ -188,6 +196,7 @@ const seedCloudProviders: Array<{
     isSandbox: true,
     autoPersistent: true,
     supportsRegions: false,
+    machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
       supported: true,
@@ -204,7 +213,9 @@ const seedCloudProviders: Array<{
 
 const seedAgentTypes = [
   {
+    key: "opencode-ttyd",
     name: "OpenCode (TTYD)",
+    provisionerKey: "opencode",
     serverOnly: false,
     description: "Run the OpenCode TUI in a browser-based terminal. No local client needed.",
     // Previous names used in older seeds. Used to migrate existing rows to the new name.
@@ -212,14 +223,18 @@ const seedAgentTypes = [
     aliases: ["OpenCode Terminal", "OpenCode"],
   },
   {
+    key: "opencode",
     name: "OpenCode",
+    provisionerKey: "opencode",
     serverOnly: true,
     description:
       "Run a remote OpenCode server. Use it from your local TUI, Desktop app, or directly in the browser.",
     aliases: ["OpenCode Server"],
   },
   {
+    key: "t3code",
     name: "T3Code",
+    provisionerKey: "t3code",
     serverOnly: true,
     description:
       "Run a T3 Code server driving Claude Code, Codex, and OpenCode. Pair it with the T3 web or mobile app via a one-time pairing link.",
@@ -233,7 +248,6 @@ const seedImages = [
     imageId: "opeoginni/gitterm-opencode",
     agentTypeName: "OpenCode (TTYD)",
     providerMetadata: {
-      isDefault: true,
       daytona: {
         image: "opeoginni/gitterm-opencode-server:latest",
         resources: { cpu: 2, memory: 4 },
@@ -252,7 +266,6 @@ const seedImages = [
     imageId: "opeoginni/gitterm-opencode-server",
     agentTypeName: "OpenCode",
     providerMetadata: {
-      isDefault: true,
       e2b: {
         templateId: "r9xlzvdbcoocvbncrds9",
         sshTemplateId: "nxiezl38gnw32ufyloc0",
@@ -268,13 +281,6 @@ const seedImages = [
         startCommand: "opencode serve --hostname 0.0.0.0 --port 4096",
         port: 4096,
       },
-    },
-  },
-  {
-    name: "gitterm-opencode-aws-server",
-    imageId: "opeoginni/gitterm-opencode-aws-server",
-    agentTypeName: "OpenCode",
-    providerMetadata: {
       aws: {
         cpu: 4096,
         memory: 16384,
@@ -288,7 +294,6 @@ const seedImages = [
     imageId: "opeoginni/gitterm-t3code-server",
     agentTypeName: "T3Code",
     providerMetadata: {
-      isDefault: true,
       // Built by E2B template job in Build Agent Images workflow (alias gitterm-t3code-server).
       e2b: {
         templateId: "gfu36xk02swjo0s9turi",
@@ -318,15 +323,56 @@ const seedImages = [
   },
 ];
 
-// AWS image assignments are NOT seeded here. They're created per-region when an
-// admin calls `aws.createRegionProvider` (each AWS region is its own
-// cloud_provider row), since providerAgentImage is keyed by cloudProviderId.
-const seedProviderAgentImages: Array<{
+const seedMachineProfiles: Array<{
   providerName: string;
-  agentTypeName: string;
-  imageName: string;
-  workspaceProfile: string | null;
-}> = [];
+  key: string;
+  name: string;
+  description: string;
+  providerOptions: Record<string, unknown>;
+}> = [
+  {
+    providerName: "E2B",
+    key: "standard",
+    name: "Standard",
+    description: "Default E2B template resources.",
+    providerOptions: {},
+  },
+  {
+    providerName: "Daytona",
+    key: "standard",
+    name: "Standard",
+    description: "2 CPU and 4 GB memory.",
+    providerOptions: { resources: { cpu: 2, memory: 4 } },
+  },
+  {
+    providerName: "Vercel Sandbox",
+    key: "standard",
+    name: "Standard",
+    description: "1 vCPU Vercel Sandbox.",
+    providerOptions: { vcpus: 1 },
+  },
+  {
+    providerName: "Upstash Box",
+    key: "standard",
+    name: "Standard",
+    description: "Medium Upstash Box.",
+    providerOptions: { size: "medium" },
+  },
+  {
+    providerName: "Ascii Box",
+    key: "standard",
+    name: "Standard",
+    description: "Default Ascii Box.",
+    providerOptions: { size: "default" },
+  },
+  {
+    providerName: "exe.dev",
+    key: "standard",
+    name: "Standard",
+    description: "2 CPU, 4 GB memory, and 20 GB disk.",
+    providerOptions: { cpu: 2, memory: "4GB", disk: "20GB" },
+  },
+];
 
 const seedProviderTypes = PROVIDER_DEFINITIONS;
 
@@ -611,6 +657,7 @@ export async function seedDatabase(): Promise<void> {
       const targetProviderRestartSettlement = provider.restartSettlement ?? "webhook";
       const targetProviderTerminationSettlement = provider.terminationSettlement ?? "webhook";
       const targetsshAccessSupport = provider.sshAccessSupport ?? {};
+      const targetMachineSelectionPolicy = provider.machineSelectionPolicy ?? { mode: "standard" };
 
       if (existing.providerKey !== provider.providerKey) {
         updates.providerKey = provider.providerKey;
@@ -667,6 +714,10 @@ export async function seedDatabase(): Promise<void> {
         updates.sshAccessSupport = targetsshAccessSupport;
       }
 
+      if (!hasSameJson(existing.machineSelectionPolicy, targetMachineSelectionPolicy)) {
+        updates.machineSelectionPolicy = targetMachineSelectionPolicy;
+      }
+
       if (Object.keys(updates).length > 0) {
         await db
           .update(cloudProvider)
@@ -697,6 +748,7 @@ export async function seedDatabase(): Promise<void> {
           allowUserRegionSelection: provider.allowUserRegionSelection ?? true,
           supportServerOnly: provider.supportServerOnly ?? false,
           sshAccessSupport: provider.sshAccessSupport ?? {},
+          machineSelectionPolicy: provider.machineSelectionPolicy ?? { mode: "standard" },
           creationSettlement: provider.creationSettlement ?? "webhook",
           stopSettlement: provider.stopSettlement ?? "webhook",
           restartSettlement: provider.restartSettlement ?? "webhook",
@@ -705,6 +757,34 @@ export async function seedDatabase(): Promise<void> {
         .returning();
       console.log(`[seed]   Created provider "${provider.name}"`);
       providerMap.set(provider.name, created!.id);
+    }
+  }
+
+  console.log("[seed] Seeding machine profiles...");
+  for (const profile of seedMachineProfiles) {
+    const cloudProviderId = providerMap.get(profile.providerName);
+    if (!cloudProviderId) continue;
+    const profileValues = {
+      key: profile.key,
+      name: profile.name,
+      description: profile.description,
+      providerOptions: profile.providerOptions,
+    };
+    const existing = await db.query.machineProfile.findFirst({
+      where: and(
+        eq(machineProfile.cloudProviderId, cloudProviderId),
+        eq(machineProfile.key, profile.key),
+      ),
+    });
+    if (existing) {
+      await db
+        .update(machineProfile)
+        .set({ ...profileValues, isDefault: true, isEnabled: true, updatedAt: new Date() })
+        .where(eq(machineProfile.id, existing.id));
+    } else {
+      await db
+        .insert(machineProfile)
+        .values({ ...profileValues, cloudProviderId, isDefault: true, isEnabled: true });
     }
   }
 
@@ -738,8 +818,10 @@ export async function seedDatabase(): Promise<void> {
       const [updated] = await db
         .update(agentType)
         .set({
+          key: agent.key,
           name: agent.name,
           description: agent.description,
+          provisionerKey: agent.provisionerKey,
           serverOnly: agent.serverOnly,
           updatedAt: new Date(),
         })
@@ -751,8 +833,10 @@ export async function seedDatabase(): Promise<void> {
       const [created] = await db
         .insert(agentType)
         .values({
+          key: agent.key,
           name: agent.name,
           description: agent.description,
+          provisionerKey: agent.provisionerKey,
           serverOnly: agent.serverOnly,
           isEnabled: true,
         })
@@ -805,57 +889,6 @@ export async function seedDatabase(): Promise<void> {
         .returning();
       console.log(`[seed]   Created image "${img.name}"`);
       imageMap.set(img.name, created!.id);
-    }
-  }
-
-  // =========================================================================
-  // Seed Provider Image Assignments
-  // =========================================================================
-  console.log("[seed] Seeding provider image assignments...");
-
-  for (const assignment of seedProviderAgentImages) {
-    const cloudProviderId = providerMap.get(assignment.providerName);
-    const agentTypeId = agentTypeMap.get(assignment.agentTypeName);
-    const imageId = imageMap.get(assignment.imageName);
-
-    if (!cloudProviderId || !agentTypeId || !imageId) {
-      console.log(
-        `[seed]   Skipping image assignment ${assignment.providerName}/${assignment.agentTypeName} - missing provider, agent type, or image`,
-      );
-      continue;
-    }
-
-    const existing = await db.query.providerAgentImage.findFirst({
-      where: and(
-        eq(providerAgentImage.cloudProviderId, cloudProviderId),
-        eq(providerAgentImage.agentTypeId, agentTypeId),
-      ),
-    });
-
-    if (existing) {
-      await db
-        .update(providerAgentImage)
-        .set({
-          imageId,
-          workspaceProfile: assignment.workspaceProfile,
-          isDefault: true,
-          updatedAt: new Date(),
-        })
-        .where(eq(providerAgentImage.id, existing.id));
-      console.log(
-        `[seed]   Updated image assignment ${assignment.providerName}/${assignment.agentTypeName}`,
-      );
-    } else {
-      await db.insert(providerAgentImage).values({
-        cloudProviderId,
-        agentTypeId,
-        imageId,
-        workspaceProfile: assignment.workspaceProfile,
-        isDefault: true,
-      });
-      console.log(
-        `[seed]   Created image assignment ${assignment.providerName}/${assignment.agentTypeName}`,
-      );
     }
   }
 

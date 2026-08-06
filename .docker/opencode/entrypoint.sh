@@ -193,4 +193,8 @@ fi
 
 echo "opencode version: $(opencode --version)"
 
+if [ -n "$WORKSPACE_SETUP_COMMAND_BASE64" ]; then
+    nohup /usr/local/bin/gitterm-workspace-setup "/workspace/$REPO_NAME" >/dev/null 2>&1 &
+fi
+
 exec "$@"

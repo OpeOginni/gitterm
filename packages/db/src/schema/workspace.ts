@@ -11,7 +11,14 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
-import { agentType, cloudProvider, image, region } from "./cloud";
+import {
+  agentType,
+  cloudProvider,
+  image,
+  machineProfile,
+  providerLaunchProfile,
+  region,
+} from "./cloud";
 import { relations } from "drizzle-orm";
 import { gitIntegration } from "./integrations";
 
@@ -77,6 +84,12 @@ export const workspace = pgTable(
       .references(() => cloudProvider.id, { onDelete: "cascade" }),
     regionId: uuid("region_id").references(() => region.id, {
       onDelete: "cascade",
+    }),
+    machineProfileId: uuid("machine_profile_id").references(() => machineProfile.id, {
+      onDelete: "set null",
+    }),
+    launchProfileId: uuid("launch_profile_id").references(() => providerLaunchProfile.id, {
+      onDelete: "set null",
     }),
     repositoryUrl: text("repository_url"),
     repositoryBranch: text("repository_branch"),
@@ -216,6 +229,14 @@ export const workspaceRelations = relations(workspace, ({ one, many }) => ({
   image: one(image, {
     fields: [workspace.imageId],
     references: [image.id],
+  }),
+  machineProfile: one(machineProfile, {
+    fields: [workspace.machineProfileId],
+    references: [machineProfile.id],
+  }),
+  launchProfile: one(providerLaunchProfile, {
+    fields: [workspace.launchProfileId],
+    references: [providerLaunchProfile.id],
   }),
 }));
 

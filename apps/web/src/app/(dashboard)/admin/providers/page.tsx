@@ -25,6 +25,7 @@ import type { Route } from "next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
+import type { ProviderKey } from "@gitterm/schema";
 import { getIcon } from "@/components/dashboard/create-instance";
 import Image from "next/image";
 
@@ -143,7 +144,7 @@ export default function ProvidersPage() {
   const [newProviderSupportsRegions, setNewProviderSupportsRegions] = useState(true);
 
   const createProvider = useMutation({
-    mutationFn: (params: { name: string; providerKey: string; supportsRegions: boolean }) =>
+    mutationFn: (params: { name: string; providerKey: ProviderKey; supportsRegions: boolean }) =>
       trpcClient.admin.infrastructure.createProvider.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
@@ -170,8 +171,17 @@ export default function ProvidersPage() {
         others.push(provider);
       }
     }
+    others.sort((a, b) => {
+      const configurationOrder =
+        Number(Boolean(b.providerConfig?.isEnabled)) - Number(Boolean(a.providerConfig?.isEnabled));
+      return configurationOrder || a.name.localeCompare(b.name);
+    });
     return { awsProviders, others };
   }, [providers]);
+
+  const awsIsConfigured = groupedProviders.awsProviders.some(
+    (provider) => provider.providerConfig?.isEnabled,
+  );
 
   if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
     return (
@@ -281,7 +291,7 @@ export default function ProvidersPage() {
                   onClick={() =>
                     createProvider.mutate({
                       name: newProviderName,
-                      providerKey: newProviderKey,
+                      providerKey: newProviderKey as ProviderKey,
                       supportsRegions: newProviderSupportsRegions,
                     })
                   }
@@ -300,10 +310,12 @@ export default function ProvidersPage() {
           <ProvidersPageSkeleton />
         ) : (
           <ul className="space-y-2">
-            {/* AWS - expandable cluster row */}
-            <li>
-              <AwsProviderSection awsProviders={groupedProviders.awsProviders} />
-            </li>
+            {/* Keep the AWS region group with providers sharing its configuration state. */}
+            {awsIsConfigured && (
+              <li>
+                <AwsProviderSection awsProviders={groupedProviders.awsProviders} />
+              </li>
+            )}
 
             {/* Other providers - flat rows */}
             {groupedProviders.others.map((provider) => (
@@ -374,6 +386,12 @@ export default function ProvidersPage() {
                 </Link>
               </li>
             ))}
+
+            {!awsIsConfigured && (
+              <li>
+                <AwsProviderSection awsProviders={groupedProviders.awsProviders} />
+              </li>
+            )}
 
             {(providers?.length ?? 0) === 0 && (
               <li className="py-12 text-center text-sm text-muted-foreground">

@@ -50,6 +50,8 @@ export interface SystemWorkspaceEnv {
   WORKSPACE_PROFILE?: string;
   EDITOR_ACCESS_ENABLED?: string;
   USER_SSH_PUBLIC_KEY?: string;
+  /** Base64-encoded detached setup command consumed by canonical images. */
+  WORKSPACE_SETUP_COMMAND_BASE64?: string;
 }
 
 /**
@@ -78,6 +80,7 @@ export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "WORKSPACE_PROFILE",
   "EDITOR_ACCESS_ENABLED",
   "USER_SSH_PUBLIC_KEY",
+  "WORKSPACE_SETUP_COMMAND_BASE64",
 ] as const satisfies readonly (keyof SystemWorkspaceEnv)[];
 
 // Compile-time guard: every SystemWorkspaceEnv key must appear above.
@@ -193,6 +196,8 @@ export interface WorkspaceProvisioningSpec {
   workspaceProfile: string;
   /** Whether editor (SSH) access is enabled. */
   editorAccessEnabled: boolean;
+  /** Restart-safe command launched after the agent starts. */
+  setupCommand?: string;
 }
 
 export interface WorkspaceConfig {

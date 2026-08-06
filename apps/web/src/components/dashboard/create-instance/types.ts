@@ -37,7 +37,16 @@ export interface CloudProvider {
   autoPersistent?: boolean;
   supportsPersistence?: boolean;
   regions?: Region[];
+  machineProfiles?: MachineProfile[];
   sshAccessSupport?: sshAccessSupport;
+}
+
+export interface MachineProfile {
+  id: string;
+  key: string;
+  name: string;
+  description?: string | null;
+  isDefault: boolean;
 }
 
 export interface Region {
@@ -194,6 +203,11 @@ export const ICON_MAP: Record<string, string> = {
   cloudflare: "/cloudflare.svg",
   e2b: "/E2B.svg",
   daytona: "/daytona.svg",
+  ascii: "/ascii.svg",
+  "exe.dev": "/exe.png",
+  exedev: "/exe.png",
+  upstash: "/upstash.svg",
+  vercel: "/vercel.svg",
   aws: "/ECS.svg",
   claude: "/claude.svg",
   ralph: "/ralph-wiggum.svg",

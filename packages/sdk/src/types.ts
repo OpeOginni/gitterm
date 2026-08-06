@@ -64,24 +64,85 @@ export type WorkspaceListResult = {
   workspaces: Workspace[];
   pagination: { total: number; limit: number; offset: number; hasMore: boolean };
 };
+
+export type ProviderKey =
+  | "railway"
+  | "aws"
+  | "e2b"
+  | "daytona"
+  | "cloudflare"
+  | "vercel"
+  | "upstash"
+  | "ascii"
+  | "exedev";
+
+type ProviderSelectionBase = {
+  /** Select a specific provider installation. Usually omitted. */
+  providerId?: string;
+  /** An admin-defined profile or flexible resources within the provider's allowed limits. */
+  machine?: { type: "profile"; key: string };
+};
+
+type FlexibleMachine<T> = { type: "profile"; key: string } | { type: "custom"; resources: T };
+
+type AwsResources = {
+  cpu?: number;
+  memory?: number;
+  ephemeralStorageGiB?: number;
+  architecture?: "X86_64" | "ARM64";
+};
+type DaytonaResources = {
+  resources?: { cpu?: number; memory?: number; disk?: number };
+  editorResources?: { cpu?: number; memory?: number; disk?: number };
+};
+type VercelResources = { vcpus?: number };
+type ExeDevResources = { cpu?: number; memory?: string; disk?: string };
+
+export type WorkspaceProviderSelection =
+  | { type: "railway"; providerId?: string; region?: string }
+  | ({ type: "aws"; region?: string } & Omit<ProviderSelectionBase, "machine"> & {
+        machine?: FlexibleMachine<AwsResources>;
+      })
+  | ({ type: "daytona" } & Omit<ProviderSelectionBase, "machine"> & {
+        machine?: FlexibleMachine<DaytonaResources>;
+      })
+  | ({ type: "vercel" } & Omit<ProviderSelectionBase, "machine"> & {
+        machine?: FlexibleMachine<VercelResources>;
+      })
+  | ({ type: "exedev" } & Omit<ProviderSelectionBase, "machine"> & {
+        machine?: FlexibleMachine<ExeDevResources>;
+      })
+  | ({ type: "e2b" | "upstash" | "ascii" } & ProviderSelectionBase)
+  | { type: "cloudflare"; providerId?: string };
+
+export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";
+export type AgentKey = BuiltInAgentKey | (string & {});
+
 export type WorkspaceCreateInput = {
   idempotencyKey?: string;
   name?: string;
-  repo?: string;
+  repo: string;
   branch?: string;
   baseCommit?: string;
   checkoutRef?: string;
   subdomain?: string;
-  /** Unique enabled agent name. */
-  agent: string;
-  /** Unique enabled provider name. Optional when a preferred default exists. */
-  provider?: string;
-  regionId?: string;
+  /** Stable agent key. Defaults to `opencode`. */
+  agent?: AgentKey;
+  /** Provider intent. Defaults to the user's or deployment's preferred provider. */
+  provider?: WorkspaceProviderSelection;
   gitIntegrationId?: string;
-  persistent: boolean;
+  /** Defaults from the selected provider. */
+  persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
   modelCredentialIds?: string[];
+  /**
+   * Ordered commands launched in the repository after the agent server starts.
+   * They do not block workspace readiness; inspect ~/.gitterm/setup for status
+   * and logs from inside the workspace.
+   */
+  setupCommands?: string[];
 };
+
 export type WorkspaceRestartResult = { status: WorkspaceStatus };
 export type WorkspacePauseResult = { durationMinutes: number };
 export type WorkspaceTerminateResult = {
@@ -95,6 +156,7 @@ export type WorkspaceEnsureRunningResult = {
 
 export type AgentType = {
   id: string;
+  key: string;
   name: string;
   description: string | null;
   serverOnly: boolean;
@@ -106,20 +168,39 @@ export type AgentType = {
 export type CloudProvider = {
   id: string;
   name: string;
-  providerKey: string;
-  regions?: Array<Record<string, unknown>>;
-  [key: string]: unknown;
+  providerKey: ProviderKey | string;
+  regions?: Array<{
+    id: string;
+    name: string;
+    location: string;
+    externalRegionIdentifier: string;
+  }>;
 };
 
-export type SandboxDefaults = {
-  agent: string;
-  provider: string;
-  agentTypeId: string;
-  cloudProviderId: string;
-  regionId?: string;
-};
-
-export type SandboxDefaultsInput = {
-  agent: string;
-  provider?: string;
+export type WorkspaceCatalog = {
+  agents: Array<{
+    id: string;
+    key: string;
+    name: string;
+    description: string | null;
+    serverOnly: boolean;
+  }>;
+  providers: Array<{
+    id: string;
+    type: ProviderKey;
+    name: string;
+    isDefault: boolean;
+    persistence: "required" | "optional" | "unsupported";
+    regionSelection: "none" | "user" | "admin";
+    regions: Array<{ id: string; key: string; name: string; location: string }>;
+    machines: Array<{
+      id: string;
+      key: string;
+      name: string;
+      description: string | null;
+      isDefault: boolean;
+    }>;
+    agentKeys: string[];
+    ssh: boolean;
+  }>;
 };

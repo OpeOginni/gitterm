@@ -104,7 +104,8 @@ ENV HOME=/workspace \
 
 # Copy and set up entrypoint script
 COPY ./opencode/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY ./workspace-setup-runner.sh /usr/local/bin/gitterm-workspace-setup
+RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup
 
 # Expose the ttyd port
 ENV PORT=7681

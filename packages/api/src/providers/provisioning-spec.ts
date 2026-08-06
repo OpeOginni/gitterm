@@ -54,5 +54,8 @@ export function resolveProvisioningSpec(config: WorkspaceConfig): WorkspaceProvi
     sshPublicKey: env.USER_SSH_PUBLIC_KEY,
     workspaceProfile: env.WORKSPACE_PROFILE ?? "standard",
     editorAccessEnabled: env.EDITOR_ACCESS_ENABLED === "true",
+    setupCommand: env.WORKSPACE_SETUP_COMMAND_BASE64
+      ? Buffer.from(env.WORKSPACE_SETUP_COMMAND_BASE64, "base64").toString("utf8")
+      : undefined,
   };
 }
