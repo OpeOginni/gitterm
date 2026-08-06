@@ -56,6 +56,9 @@ const DEFAULT_PROVIDER_METADATA = `{
   "upstash": {
     "runtime": "node",
     "size": "small"
+  },
+  "ascii": {
+    "size": "default"
   }
 }`;
 

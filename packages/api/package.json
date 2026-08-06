@@ -78,6 +78,7 @@
     "e2b:build": "bun run ./src/providers/e2b/template/build.ts"
   },
   "dependencies": {
+    "@asciidev/box-sdk": "^0.0.26",
     "@aws-sdk/client-cloudformation": "^3.1032.0",
     "@aws-sdk/client-ec2": "^3.1032.0",
     "@aws-sdk/client-ecs": "^3.1032.0",

@@ -56,7 +56,8 @@ export function isResumableWorkspaceStatus(status: string): boolean {
 /**
  * Resolve the project directory inside a sandbox for a given provider.
  * E2B uses `/home/user/workspace`, Vercel uses `/vercel/sandbox`, Upstash uses
- * `/workspace/home`, and most other providers use `/workspace`.
+ * `/workspace/home`, Ascii uses `/home/user`, and most other providers use
+ * `/workspace`.
  */
 export function resolveProjectDirectory(
   repositoryUrl: string | null | undefined,
@@ -71,6 +72,9 @@ export function resolveProjectDirectory(
   }
   if ((providerKey ?? "").toLowerCase() === "upstash") {
     return hint.replace(/^\/workspace/, "/workspace/home");
+  }
+  if ((providerKey ?? "").toLowerCase() === "ascii") {
+    return hint.replace(/^\/workspace/, "/home/user");
   }
   return hint;
 }

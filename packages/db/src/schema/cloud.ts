@@ -246,6 +246,10 @@ export interface UpstashImageProviderMetadata {
   size?: "small" | "medium" | "large";
 }
 
+export interface AsciiImageProviderMetadata {
+  size?: "small" | "default" | "large";
+}
+
 export interface ImageProviderMetadata {
   isDefault?: boolean;
   e2b?: {
@@ -257,6 +261,7 @@ export interface ImageProviderMetadata {
   cloudflare?: CloudflareImageProviderMetadata;
   vercel?: VercelImageProviderMetadata;
   upstash?: UpstashImageProviderMetadata;
+  ascii?: AsciiImageProviderMetadata;
   [provider: string]: unknown;
 }
 

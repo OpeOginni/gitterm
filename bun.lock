@@ -151,6 +151,7 @@
     "packages/api": {
       "name": "@gitterm/api",
       "dependencies": {
+        "@asciidev/box-sdk": "^0.0.26",
         "@aws-sdk/client-cloudformation": "^3.1032.0",
         "@aws-sdk/client-ec2": "^3.1032.0",
         "@aws-sdk/client-ecs": "^3.1032.0",
@@ -352,6 +353,8 @@
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
 
     "@ardatan/relay-compiler": ["@ardatan/relay-compiler@12.0.3", "", { "dependencies": { "@babel/generator": "^7.26.10", "@babel/parser": "^7.26.10", "@babel/runtime": "^7.26.10", "chalk": "^4.0.0", "fb-watchman": "^2.0.0", "immutable": "~3.7.6", "invariant": "^2.2.4", "nullthrows": "^1.1.1", "relay-runtime": "12.0.0", "signedsource": "^1.0.0" }, "peerDependencies": { "graphql": "*" }, "bin": { "relay-compiler": "bin/relay-compiler" } }, "sha512-mBDFOGvAoVlWaWqs3hm1AciGHSQE1rqFc/liZTyYz/Oek9yZdT5H26pH2zAFuEiTiBVPPyMuqf5VjOFPI2DGsQ=="],
+
+    "@asciidev/box-sdk": ["@asciidev/box-sdk@0.0.26", "", {}, "sha512-7WysWgJxFQLPC/hwXeGj8GgVk18FyzwCCOL3sHegmBBItqyK31qB+cLGqAXfotnzyPAnSBqhDwiVrpRAW+ut5Q=="],
 
     "@aws-crypto/crc32": ["@aws-crypto/crc32@5.2.0", "", { "dependencies": { "@aws-crypto/util": "^5.2.0", "@aws-sdk/types": "^3.222.0", "tslib": "^2.6.2" } }, "sha512-nLbCWqQNgUiwwtFsen1AdzAtvuLRsQS8rYgMuxCrdKf9kOssamGLuPwyTY9wyYblNr9+1XM8v6zoDTPPSIeANg=="],
 
