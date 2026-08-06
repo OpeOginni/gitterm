@@ -1,0 +1,9 @@
+{
+  "extends": "@gitterm/config/tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "baseUrl": ".",
+    "jsx": "react-jsx"
+  }
+}

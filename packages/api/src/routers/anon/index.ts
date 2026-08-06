@@ -45,8 +45,8 @@ import {
  *
  * Sandbox lifecycle (10-min wall clock + hard kill) is enforced by E2B
  * itself — see `providers/e2b/index.ts`. The existing E2B webhook handler
- * flips workspace status to `terminated` automatically. The idle reaper
- * (`apps/worker/src/idle-reaper.ts`) is the safety net for missed webhooks.
+ * flips workspace status to `terminated` automatically. The managed anonymous
+ * reaper (`apps/anon-reaper`) is the safety net for missed webhooks.
  *
  * Workspace access is gated by an HMAC-signed cookie scoped to the workspace
  * subdomain (see `service/anon/anon-access-token.ts`). The proxy resolver

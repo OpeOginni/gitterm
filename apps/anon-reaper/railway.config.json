@@ -2,19 +2,18 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "buildCommand": "turbo build --filter=worker",
+    "buildCommand": "turbo build --filter=anon-reaper",
     "watchPatterns": [
-      "apps/worker/**/*",
+      "apps/anon-reaper/**/*",
       "packages/api/**/*",
       "packages/config/**/*",
-      "apps/worker/.env*",
       "turbo.json",
       "package.json",
       "bun.lock"
     ]
   },
   "deploy": {
-    "startCommand": "cd apps/worker && bun run dist/idle-reaper.mjs",
-    "cronSchedule": "*/10 * * * *"
+    "startCommand": "cd apps/anon-reaper && bun run dist/anon-reaper.mjs",
+    "cronSchedule": "*/5 * * * *"
   }
 }
