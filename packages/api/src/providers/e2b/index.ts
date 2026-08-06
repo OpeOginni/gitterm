@@ -25,7 +25,6 @@ import {
 import { createProvisionLogger } from "../provision-logger";
 import type { E2BConfig } from "./types";
 import { getWorkspaceIdleTimeoutMs } from "../../service/workspace-timeouts";
-import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
 
 export type { E2BConfig } from "./types";
 
@@ -401,28 +400,14 @@ export class E2BProvider implements ComputeProvider {
       this.getTrafficAccessToken(sandbox, "workspace traffic"),
     );
     const host = sandbox.getHost(spec?.agent.serve?.port ?? DEFAULT_AGENT_PORT);
-    const upstreamUrl = `https://${host}`;
-    const upstreamAccess = getTrafficAccessHeaders(trafficAccessToken);
-    const healthy = await provisionLogger.step("wait-agent-ready", () =>
-      pollHttpRuntimeHealth({
-        url: upstreamUrl,
-        headers: upstreamAccess.headers,
-        timeoutMs: 30_000,
-        isHealthy: (response) => response.status < 500,
-      }),
-    );
-    if (!healthy) {
-      await sandbox.kill().catch(() => undefined);
-      throw new Error("E2B agent server did not become ready in time.");
-    }
     const startedAt = new Date(
       (await provisionLogger.step("fetch-sandbox-info", () => sandbox.getInfo())).startedAt,
     );
 
     const workspaceInfo: WorkspaceInfo = {
       externalServiceId: sandbox.sandboxId,
-      upstreamUrl,
-      upstreamAccess,
+      upstreamUrl: `https://${host}`,
+      upstreamAccess: getTrafficAccessHeaders(trafficAccessToken),
       domain: this.getDomain(config.subdomain),
       serviceCreatedAt: startedAt,
       accessCredential,
