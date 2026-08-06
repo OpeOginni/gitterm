@@ -13,6 +13,12 @@ CREATE TABLE "machine_profile" (
 --> statement-breakpoint
 DROP INDEX "provider_agent_image_unique";--> statement-breakpoint
 ALTER TABLE "provider_agent_image" ALTER COLUMN "workspace_profile" SET DEFAULT 'standard';--> statement-breakpoint
+DELETE FROM "provider_agent_image" AS legacy
+USING "provider_agent_image" AS explicit
+WHERE legacy."workspace_profile" IS NULL
+	AND explicit."workspace_profile" = 'standard'
+	AND legacy."cloud_provider_id" = explicit."cloud_provider_id"
+	AND legacy."agent_type_id" = explicit."agent_type_id";--> statement-breakpoint
 UPDATE "provider_agent_image" SET "workspace_profile" = 'standard' WHERE "workspace_profile" IS NULL;--> statement-breakpoint
 ALTER TABLE "provider_agent_image" ALTER COLUMN "workspace_profile" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "agent_type" ADD COLUMN "key" text;--> statement-breakpoint

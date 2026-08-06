@@ -116,7 +116,7 @@ await client.workspaces.create({
   setupCommands: ["npm install", "npm run generate"],
   provider: {
     type: "exedev",
-    machine: "content-rendering",
+    machine: { type: "profile", key: "content-rendering" },
   },
 });
 ```

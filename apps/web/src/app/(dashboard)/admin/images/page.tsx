@@ -28,7 +28,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Route } from "next";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { getIcon } from "@/components/dashboard/create-instance/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -91,10 +91,10 @@ function getSupportedProviders(metadata: unknown): string[] {
     providerMetadata.cloudflare?.startCommand && providerMetadata.cloudflare?.port
       ? "cloudflare"
       : null,
-    providerMetadata.vercel?.image ? "vercel" : null,
+    providerMetadata.vercel?.image || providerMetadata.vercel?.runtime ? "vercel" : null,
     providerMetadata.upstash?.runtime ? "upstash" : null,
     providerMetadata.ascii ? "ascii" : null,
-    providerMetadata.exedev?.image ? "exedev" : null,
+    providerMetadata.exedev ? "exedev" : null,
   ].filter((provider): provider is string => provider !== null);
   return supported.map((provider) => PROVIDER_LABELS[provider] ?? provider);
 }
@@ -105,6 +105,11 @@ export default function ImagesPage() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [deleteImageId, setDeleteImageId] = useState<string | null>(null);
+  const [editingImage, setEditingImage] = useState<{
+    id: string;
+    name: string;
+    providerMetadataJson: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!isSessionPending) {
@@ -192,6 +197,36 @@ export default function ImagesPage() {
     },
     onError: (error) => toast.error(error.message),
   });
+
+  const updateImage = useMutation({
+    mutationFn: (params: { id: string; providerMetadata: Record<string, unknown> }) =>
+      trpcClient.admin.infrastructure.updateImage.mutate(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
+      setEditingImage(null);
+      toast.success("Provider metadata updated");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const handleUpdateImage = () => {
+    if (!editingImage) return;
+
+    try {
+      const providerMetadata = JSON.parse(editingImage.providerMetadataJson || "{}");
+      if (
+        !providerMetadata ||
+        typeof providerMetadata !== "object" ||
+        Array.isArray(providerMetadata)
+      ) {
+        toast.error("Provider metadata must be a JSON object");
+        return;
+      }
+      updateImage.mutate({ id: editingImage.id, providerMetadata });
+    } catch {
+      toast.error("Provider metadata contains invalid JSON");
+    }
+  };
 
   const deleteImage = useMutation({
     mutationFn: ({ id }: { id: string }) =>
@@ -396,6 +431,25 @@ export default function ImagesPage() {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-white/35 hover:text-amber-300"
+                        onClick={() =>
+                          setEditingImage({
+                            id: image.id,
+                            name: image.name,
+                            providerMetadataJson: JSON.stringify(
+                              image.providerMetadata ?? {},
+                              null,
+                              2,
+                            ),
+                          })
+                        }
+                        aria-label={`Edit provider metadata for ${image.name}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       {!isSeeded ? (
                         <Button
                           variant="ghost"
@@ -427,6 +481,39 @@ export default function ImagesPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={!!editingImage} onOpenChange={(open) => !open && setEditingImage(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Provider Metadata</DialogTitle>
+            <DialogDescription>
+              Configure the provider runtimes and images used by {editingImage?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-4">
+            <Label htmlFor="edit-provider-metadata">Provider Metadata</Label>
+            <textarea
+              id="edit-provider-metadata"
+              value={editingImage?.providerMetadataJson ?? ""}
+              onChange={(event) =>
+                setEditingImage((current) =>
+                  current ? { ...current, providerMetadataJson: event.target.value } : current,
+                )
+              }
+              className="min-h-80 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              spellCheck={false}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingImage(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateImage} disabled={updateImage.isPending}>
+              {updateImage.isPending ? "Saving..." : "Save Metadata"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!deleteImageId} onOpenChange={() => setDeleteImageId(null)}>
         <DialogContent>

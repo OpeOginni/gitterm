@@ -150,7 +150,7 @@ export class ExeDevProvider implements ComputeProvider {
 
   private async getVmAccessToken(vmName: string): Promise<string> {
     const result = await this.execute(
-      `ssh-key generate-api-key --vm=${vmName} --label=gitterm --exp=24h`,
+      `ssh-key generate-api-key --vm=${vmName} --label=gitterm --exp=never`,
     );
     const token = findToken(result);
     if (!token) throw new Error("exe.dev did not return a VM access token.");
