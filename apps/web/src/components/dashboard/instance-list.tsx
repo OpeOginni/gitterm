@@ -30,6 +30,7 @@ import {
   User,
   Shield,
   LogOut,
+  Ellipsis,
 } from "lucide-react";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
@@ -47,11 +48,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   getWorkspaceUrl,
   getAttachCommand,
   getWorkspaceDisplayUrl,
   getWorkspaceOpenPortUrl,
   getWorkspaceProjectPath,
+  getOpencodeDesktopConnectUrl,
+  getOpencodeWebConnectUrl,
   getT3PairingUrl,
   getT3DesktopPairingUrl,
   isT3Agent,
@@ -397,6 +407,10 @@ export function InstanceCard({
   const isT3 = isT3Agent(workspace.image.agentType.name);
   const isOpencode = isOpencodeAgent(workspace.image.agentType.name);
   const projectPath = getWorkspaceProjectPath(regionInfo.providerKey, workspace.repositoryUrl);
+  const opencodeWebConnectUrl =
+    isOpencode && workspaceUrl ? getOpencodeWebConnectUrl(workspaceUrl, projectPath) : null;
+  const opencodeDesktopConnectUrl =
+    isOpencode && workspaceUrl ? getOpencodeDesktopConnectUrl(workspaceUrl, projectPath) : null;
   const agentIcon = getIcon(workspace.image.agentType.name);
   const t3PairingUrl =
     isT3 && workspace.subdomain && workspace.serverPassword
@@ -1058,6 +1072,20 @@ export function InstanceCard({
                     Copy Attach
                   </Button>
                 )}
+                {isOpencode && opencodeDesktopConnectUrl && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 text-xs gap-2 border-border/50"
+                    title="Open this workspace in the OpenCode desktop app"
+                    asChild
+                  >
+                    <a href={opencodeDesktopConnectUrl}>
+                      <Monitor className="h-3.5 w-3.5" />
+                      Desktop
+                    </a>
+                  </Button>
+                )}
                 {!isShared && workspace.editorAccessEnabled && (
                   <Button
                     size="sm"
@@ -1096,11 +1124,23 @@ export function InstanceCard({
                     size="sm"
                     className="h-9 text-xs gap-2 border-border/50"
                     variant="outline"
-                    title="Open workspace in browser"
+                    title={
+                      isOpencode
+                        ? "Open this workspace in the OpenCode web app"
+                        : "Open workspace in browser"
+                    }
                     asChild
                   >
-                    <a href={workspaceUrl} target="_blank" rel="noreferrer">
-                      <Monitor className="h-3.5 w-3.5" />
+                    <a
+                      href={isOpencode ? opencodeWebConnectUrl! : workspaceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {isOpencode ? (
+                        <Globe className="h-3.5 w-3.5" />
+                      ) : (
+                        <Monitor className="h-3.5 w-3.5" />
+                      )}
                     </a>
                   </Button>
                 )}
@@ -1133,48 +1173,51 @@ export function InstanceCard({
             </Button>
           )}
 
-          {!isShared && (isPending || isRunning) && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 px-3 text-xs"
-              disabled={pauseWorkspaceMutation.isPending}
-              onClick={() => pauseWorkspaceMutation.mutate({ workspaceId: workspace.id })}
-            >
-              {pauseWorkspaceMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <PauseIcon className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          )}
-
           {!isShared && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 px-3 border-border/50 hover:text-primary hover:border-primary/30"
-              onClick={() => setShowShareDialog(true)}
-              aria-label="Share workspace"
-            >
-              <UserPlus className="h-4 w-4" />
-            </Button>
-          )}
-
-          {!isShared && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
-              disabled={deleteServiceMutation.isPending}
-              onClick={() => deleteServiceMutation.mutate({ workspaceId: workspace.id })}
-            >
-              {deleteServiceMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-3 border-border/50"
+                  aria-label="Workspace actions"
+                >
+                  <Ellipsis className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="top" className="w-44">
+                {(isPending || isRunning) && (
+                  <DropdownMenuItem
+                    disabled={pauseWorkspaceMutation.isPending}
+                    onSelect={() => pauseWorkspaceMutation.mutate({ workspaceId: workspace.id })}
+                  >
+                    {pauseWorkspaceMutation.isPending ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <PauseIcon />
+                    )}
+                    Pause workspace
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={() => setShowShareDialog(true)}>
+                  <UserPlus />
+                  Share workspace
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={deleteServiceMutation.isPending}
+                  onSelect={() => deleteServiceMutation.mutate({ workspaceId: workspace.id })}
+                >
+                  {deleteServiceMutation.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Trash2 />
+                  )}
+                  Delete workspace
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
 
           {isShared && !(isRunning && workspaceUrl) && (

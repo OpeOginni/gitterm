@@ -20,7 +20,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { GitHub } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
-import { getWorkspaceProjectPath, getWorkspaceUrl } from "@/lib/utils";
+import {
+  getOpencodeDesktopConnectUrl,
+  getOpencodeWebConnectUrl,
+  getWorkspaceProjectPath,
+  getWorkspaceUrl,
+} from "@/lib/utils";
 import { track, AnalyticsEvent } from "@/lib/analytics";
 import { toast } from "sonner";
 import {
@@ -316,6 +321,14 @@ function ResultCard({
     [url, result.serverPassword],
   );
   const attachDisplay = useMemo(() => `opencode attach ${url} -p ••••`, [url]);
+  const webConnectUrl = useMemo(
+    () => getOpencodeWebConnectUrl(url, projectPath),
+    [url, projectPath],
+  );
+  const desktopConnectUrl = useMemo(
+    () => getOpencodeDesktopConnectUrl(url, projectPath),
+    [url, projectPath],
+  );
   const [now, setNow] = useState(() => Date.now());
   const [showPassword, setShowPassword] = useState(false);
 
@@ -331,7 +344,7 @@ function ResultCard({
   const expired = remainingMs === 0;
 
   function handleOpen() {
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.open(webConnectUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -432,8 +445,8 @@ function ResultCard({
                 <Globe className="h-3.5 w-3.5 text-white/60" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-white/85">Browser</p>
-                <p className="text-[11.5px] text-white/40">Open the workspace.</p>
+                <p className="text-[13px] font-medium text-white/85">OpenCode web</p>
+                <p className="text-[11.5px] text-white/40">Connect in your browser.</p>
               </div>
               <button
                 type="button"
@@ -473,16 +486,18 @@ function ResultCard({
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium text-white/85">Desktop</p>
                 <p className="truncate text-[11.5px] text-white/40">
-                  Credentials above · project <span className="font-mono">{projectPath}</span>
+                  Connect in the OpenCode desktop app.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => copyText(projectPath, "Project path copied")}
+                onClick={() => {
+                  window.location.href = desktopConnectUrl;
+                }}
                 className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/70 transition-colors hover:border-white/20 hover:text-white"
               >
-                <Copy className="h-3 w-3" />
-                Copy
+                <ExternalLink className="h-3 w-3" />
+                Open
               </button>
             </div>
           </div>

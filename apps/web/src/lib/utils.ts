@@ -2,6 +2,9 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import env from "@gitterm/env/web";
 
+// Point this at app.opencode.ai once the connect route is released there.
+export const OPENCODE_CONNECT_WEB_URL = "http://127.0.0.1:4173";
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -70,6 +73,16 @@ export function isT3Agent(agentName: string): boolean {
 
 export function isOpencodeAgent(agentName: string): boolean {
   return agentName.trim().toLowerCase().includes("opencode");
+}
+
+export function getOpencodeWebConnectUrl(server: string, directory: string): string {
+  const params = new URLSearchParams({ server, directory });
+  return `${OPENCODE_CONNECT_WEB_URL}/#connect?${params}`;
+}
+
+export function getOpencodeDesktopConnectUrl(server: string, directory: string): string {
+  const params = new URLSearchParams({ server, directory });
+  return `opencode://connect?${params}`;
 }
 
 /**
