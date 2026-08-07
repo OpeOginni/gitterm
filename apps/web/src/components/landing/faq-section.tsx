@@ -14,7 +14,7 @@ const faqs = [
   },
   {
     q: "Which clouds can workspaces run on?",
-    a: "E2B, Daytona, Railway, AWS, or Cloudflare. Configure the ones you want and pick per workspace. No lock-in.",
+    a: "E2B, Daytona, Railway, AWS, Cloudflare, Ascii, Vercel, Upstash, or exe.dev. Configure the ones you want and pick per workspace. No lock-in.",
   },
   {
     q: "Is it open source? Can I self-host?",
