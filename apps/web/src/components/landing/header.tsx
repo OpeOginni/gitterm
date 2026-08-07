@@ -14,18 +14,18 @@ export function LandingHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-background/75 backdrop-blur-xl">
-      <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6">
+      <div className="relative mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6">
         <Link
           href="/"
           className="group flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80"
         >
           <Terminal className="h-5 w-5 text-primary" />
-          <span className="font-mono text-sm font-bold tracking-[0.18em] uppercase text-white/90">
+          <span className="font-mono text-sm font-bold tracking-[0.18em] uppercase text-white/90 max-[359px]:hidden">
             GitTerm
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-8 lg:flex">
+        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 lg:flex">
           <Link
             href="/#features"
             className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
@@ -59,7 +59,7 @@ export function LandingHeader() {
             href="https://github.com/OpeOginni/gitterm"
             target="_blank"
             title="Star on GitHub"
-            className="inline-flex"
+            className="inline-flex max-[359px]:hidden"
           >
             <Button
               variant="outline"
@@ -83,7 +83,7 @@ export function LandingHeader() {
             <Link href="/dashboard">
               <Button
                 size="sm"
-                className="h-8 bg-primary px-3 font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary-foreground hover:bg-primary/85 sm:px-4"
+                className="h-8 bg-primary px-3 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-primary-foreground hover:bg-primary/85 sm:px-4 sm:text-xs sm:tracking-[0.16em]"
               >
                 Get Started
               </Button>

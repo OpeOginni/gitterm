@@ -25,7 +25,7 @@ export function ProblemSection() {
       className="relative overflow-hidden border-t border-white/[0.06] py-14 sm:py-20 md:py-28"
     >
       <div className="relative mx-auto max-w-[1100px] px-4 sm:px-6">
-        <div className="mb-10 max-w-2xl sm:mb-12">
+        <div className="mx-auto mb-10 max-w-2xl text-center sm:mx-0 sm:mb-12 sm:text-left">
           <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
             When your laptop needs{" "}
             <span className="font-display-accent text-[color:var(--cream)]">backup</span>.

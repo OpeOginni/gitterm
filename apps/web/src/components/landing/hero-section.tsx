@@ -108,32 +108,36 @@ export function HeroSection() {
   }
 
   return (
-    <section className="relative overflow-hidden pt-24 pb-14 sm:pt-32 sm:pb-20 md:pt-44 md:pb-24">
+    <section className="relative overflow-hidden pt-14 pb-16 sm:pb-20">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-40 left-1/2 h-[700px] w-[1100px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.08),transparent)]" />
       </div>
 
-      <div className="relative mx-auto max-w-[920px] px-4 text-center sm:px-6">
-        <h1
-          className={`rise font-display font-light leading-[1] tracking-tight text-white sm:leading-[0.98] ${
-            anonEnabled ? "text-[clamp(2rem,7vw,4.8rem)]" : "text-[clamp(2.4rem,9vw,6.5rem)]"
-          }`}
-          style={{ animationDelay: "80ms" }}
-        >
-          Cloud workspaces
-          <br />
-          for coding <span className="font-display-accent text-primary">agents.</span>
-        </h1>
+      <div className="relative mx-auto max-w-[920px] px-4 text-center sm:px-6 sm:pt-[clamp(7rem,18svh,11rem)]">
+        <div className="flex min-h-[42svh] flex-col justify-center sm:min-h-0">
+          <h1
+            className={`rise font-display text-balance font-normal leading-[0.94] tracking-[-0.045em] text-white ${
+              anonEnabled
+                ? "text-[clamp(2.35rem,11vw,4.8rem)]"
+                : "text-[clamp(2.55rem,12vw,6.5rem)]"
+            }`}
+            style={{ animationDelay: "80ms" }}
+          >
+            Cloud workspaces
+            <br />
+            for coding <span className="font-display-accent text-primary">agents.</span>
+          </h1>
 
-        <p
-          className="rise mx-auto mt-5 max-w-xl font-sans text-[15px] leading-[1.6] text-white/55 sm:mt-7 sm:text-[17px] sm:leading-[1.65]"
-          style={{ animationDelay: "180ms" }}
-        >
-          Heavy runs and throwaway sandboxes, on any cloud you pick. Your keys. Open source.
-        </p>
+          <p
+            className="rise mx-auto mt-5 max-w-[34rem] text-balance font-sans text-[15px] leading-[1.6] text-white/55 sm:mt-6 sm:text-[17px] sm:leading-[1.65]"
+            style={{ animationDelay: "180ms" }}
+          >
+            Heavy runs and throwaway sandboxes, on any cloud you pick. Your keys. Open source.
+          </p>
+        </div>
 
         <div
-          className="rise mx-auto mt-8 max-w-2xl text-left sm:mt-11"
+          className="rise mx-auto mt-5 w-full max-w-[760px] text-left sm:mt-8"
           style={{ animationDelay: "260ms" }}
         >
           {anonEnabled ? (
@@ -153,17 +157,6 @@ export function HeroSection() {
                   error={launchMutation.error?.message}
                   onSubmit={handleLaunch}
                 />
-              )}
-
-              {!result && (
-                <div className="mt-5 text-center">
-                  <Link
-                    href="/dashboard"
-                    className="text-[12.5px] text-white/40 transition-colors hover:text-white/70"
-                  >
-                    Sign in for persistent workspaces →
-                  </Link>
-                </div>
               )}
             </>
           ) : (
@@ -186,13 +179,13 @@ export function HeroSection() {
 
           <div className="py-8">
             <div className="mb-5 text-center">
-              <span className="marker">Runs on</span>
+              <span className="marker">Runs Everywhere</span>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3.5 sm:gap-x-10">
+            <div className="grid grid-cols-3 gap-x-3 gap-y-4 lg:relative lg:left-1/2 lg:flex lg:w-[min(1120px,calc(100vw-3rem))] lg:-translate-x-1/2 lg:flex-nowrap lg:items-center lg:justify-between">
               {clouds.map((c) => (
                 <div
                   key={c.label}
-                  className="group flex items-center gap-2.5 text-white/60 transition-colors hover:text-white/90"
+                  className="group flex min-w-0 shrink-0 flex-col items-center gap-1.5 whitespace-nowrap text-center text-white/60 transition-colors hover:text-white/90 lg:flex-row lg:gap-2.5 lg:text-left"
                 >
                   <Image
                     src={c.src}
@@ -201,7 +194,7 @@ export function HeroSection() {
                     height={22}
                     className="h-[22px] w-[22px] opacity-80 transition-opacity group-hover:opacity-100"
                   />
-                  <span className="font-sans text-[15px] sm:text-[15.5px]">{c.label}</span>
+                  <span className="font-sans text-[12.5px] lg:text-[15px]">{c.label}</span>
                 </div>
               ))}
             </div>
@@ -211,7 +204,7 @@ export function HeroSection() {
 
           <div className="py-8">
             <div className="mb-5 text-center">
-              <span className="marker">Agents</span>
+              <span className="marker">Agents Supported</span>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:gap-x-10">
               <div className="flex items-center gap-2.5 text-white/85">
@@ -254,43 +247,39 @@ function LaunchForm({
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
-    <FormCard className="scanlines">
+    <FormCard className="group/launcher border-white/[0.1] bg-[#0d0d10]/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.035),0_32px_100px_-44px_rgba(0,0,0,0.95)] transition-[border-color,box-shadow] duration-300 hover:border-white/[0.15] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_36px_110px_-40px_rgba(0,0,0,1)]">
       <form onSubmit={onSubmit}>
-        <FormCardHeader>
-          <span>Try it now</span>
-          <FormCardStatus tone="ready">ready</FormCardStatus>
-        </FormCardHeader>
-
-        <FormCardBody className="flex flex-col items-stretch gap-2 md:flex-row md:items-center">
-          <label className="flex flex-1 items-center gap-3 rounded-lg bg-input/70 px-3.5 transition-colors focus-within:bg-input focus-within:ring-2 focus-within:ring-ring/40">
-            <GitHub className="h-4 w-4 shrink-0 opacity-60" />
+        <FormCardBody className="flex flex-col items-stretch gap-2.5 p-2.5 sm:flex-row sm:items-center sm:gap-3 sm:p-3">
+          <label className="flex min-w-0 flex-1 items-center gap-3.5 rounded-xl bg-white/[0.035] px-4 transition-[background-color,box-shadow] focus-within:bg-white/[0.05] focus-within:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] sm:px-5">
+            <GitHub className="h-[18px] w-[18px] shrink-0 text-white/55 transition-colors group-focus-within/launcher:text-white/80" />
             <input
               type="text"
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
-              placeholder="github.com/your-org/your-repo"
+              placeholder="owner/repository"
+              aria-label="GitHub repository"
               spellCheck={false}
               autoCapitalize="off"
               autoCorrect="off"
               disabled={isPending}
-              className="h-10 w-full bg-transparent font-mono text-sm text-white/90 placeholder:text-white/40 focus:outline-none disabled:opacity-50"
+              className="h-14 min-w-0 w-full bg-transparent font-mono text-[15px] tracking-[-0.01em] text-white/90 placeholder:text-white/30 focus:outline-none disabled:opacity-50 sm:h-[60px] sm:text-base"
             />
           </label>
 
           <Button
             type="submit"
             disabled={isPending}
-            className="group h-10 shrink-0 px-5 font-mono text-[12px] font-bold uppercase tracking-[0.18em]"
+            className="group/button h-14 shrink-0 rounded-xl px-6 font-mono text-[12px] font-bold uppercase tracking-[0.2em] sm:h-[60px] sm:min-w-[154px] sm:px-7"
           >
             {isPending ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Booting
               </>
             ) : (
               <>
                 Launch
-                <ArrowRight className="cta-arrow-nudge ml-2 h-3.5 w-3.5" />
+                <ArrowRight className="h-4 w-4 transition-transform duration-300 ease-out group-hover/button:translate-x-1" />
               </>
             )}
           </Button>
@@ -301,14 +290,6 @@ function LaunchForm({
             {error}
           </div>
         ) : null}
-
-        <FormCardFooter>
-          <span className="truncate">10 min · no signup</span>
-          <span className="flex shrink-0 items-center gap-1.5 text-white/55">
-            <Image src="/E2B.svg" alt="" width={11} height={11} />
-            sponsored by E2B
-          </span>
-        </FormCardFooter>
       </form>
     </FormCard>
   );

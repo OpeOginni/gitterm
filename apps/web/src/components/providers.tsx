@@ -6,8 +6,11 @@ import { queryClient } from "@/utils/trpc";
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
 import { WorkspaceStatusWatcherProvider } from "./workspace-status-watcher";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
+  const isMobile = useIsMobile();
+
   return (
     <ThemeProvider
       attribute="class"
@@ -17,7 +20,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <WorkspaceStatusWatcherProvider>{children}</WorkspaceStatusWatcherProvider>
-        <ReactQueryDevtools />
+        {!isMobile && <ReactQueryDevtools />}
       </QueryClientProvider>
       <Toaster richColors position="top-right" />
     </ThemeProvider>

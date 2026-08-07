@@ -26,7 +26,7 @@ export function FaqSection() {
   return (
     <section id="faq" className="border-t border-white/[0.06] py-14 sm:py-20 md:py-28">
       <div className="mx-auto max-w-[820px] px-4 sm:px-6">
-        <div className="mb-10 max-w-xl sm:mb-12">
+        <div className="mx-auto mb-10 max-w-xl text-center sm:mx-0 sm:mb-12 sm:text-left">
           <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
             Questions.
           </h2>
