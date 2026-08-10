@@ -287,6 +287,11 @@ const seedImages = [
         containerPort: 7681,
         healthCheckPath: "/",
       },
+      vercel: {
+        runtime: "node22" as const,
+        setupCommands: ["npm install -g opencode-ai --no-audit --fund=false"],
+        vcpus: 2,
+      },
     },
   },
   {
@@ -318,6 +323,13 @@ const seedImages = [
         startCommand:
           "t3 serve --host 0.0.0.0 --port 4096 --no-browser --auto-bootstrap-project-from-cwd",
         port: 4096,
+      },
+      vercel: {
+        runtime: "node22" as const,
+        setupCommands: [
+          "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai --no-audit --fund=false",
+        ],
+        vcpus: 2,
       },
     },
   },

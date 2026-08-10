@@ -14,7 +14,7 @@ Configure the following values in the GitTerm admin panel:
 
 ## Images
 
-Each agent image enabled for Vercel needs `providerMetadata.vercel`. Use an OCI image stored in Vercel Container Registry that includes the coding agent:
+Each agent image enabled for Vercel needs `providerMetadata.vercel`. Custom OCI images stored in Vercel Container Registry are supported when a deployment needs a fixed filesystem or faster cold starts:
 
 ```json
 {
@@ -24,6 +24,12 @@ Each agent image enabled for Vercel needs `providerMetadata.vercel`. Use an OCI 
   }
 }
 ```
+
+### Managed Runtime Default
+
+The seeded OpenCode Server and T3Code agents use Vercel managed Node runtimes and install the selected agent when a sandbox starts. We deliberately use this as the default instead of requiring every GitTerm deployment to build, publish, maintain, and grant access to its own VCR images.
+
+This makes cold starts slower because dependencies must be installed before the agent server can start. It is the better default user experience: configuring Vercel only requires the API token, team ID, and project ID, while GitTerm maintains the install commands and agent versions. Persistent sandbox resumes reuse the installed runtime. Deployments that prioritize startup latency can still opt into a custom VCR image.
 
 Vercel public preview URLs are routed through GitTerm. Vercel Sandbox does not provide SSH editor access.
 

@@ -285,6 +285,8 @@ export interface VercelImageProviderMetadata {
   image?: string;
   /** Vercel runtime for images that install the agent during startup. */
   runtime?: "node26" | "node24" | "node22" | "python3.13";
+  /** Commands to run before starting the agent on a managed runtime. */
+  setupCommands?: string[];
   /** Vercel allocates 2 GiB of memory for every vCPU. */
   vcpus?: number;
 }

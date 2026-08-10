@@ -33,6 +33,21 @@ const WORKSPACE_ID_TAG = "gitterm_workspace";
 const REPO_NAME_TAG = "gitterm_repo";
 const AGENT_COMMAND_TAG = "gitterm_command";
 const AGENT_PORT_TAG = "gitterm_port";
+const CONTAINER_PROVISIONING_ENV_KEYS = new Set([
+  "AGENT_FILES_BASE64",
+  "GITHUB_APP_TOKEN",
+  "GITHUB_APP_TOKEN_EXPIRY",
+  "REPO_BASE_COMMIT",
+  "REPO_BRANCH",
+  "REPO_CHECKOUT_REF",
+  "REPO_NAME",
+  "REPO_OWNER",
+  "REPO_URL",
+  "USER_GITHUB_USERNAME",
+  "USER_SSH_PUBLIC_KEY",
+  "WORKSPACE_SETUP_COMMAND_BASE64",
+  "WORKSPACE_TOOLING_MANIFEST_BASE64",
+]);
 
 type VercelSandbox = Awaited<ReturnType<typeof Sandbox.get>>;
 
@@ -98,7 +113,7 @@ export class VercelProvider implements ComputeProvider {
   private getEnvironment(config: WorkspaceConfig, spec: WorkspaceProvisioningSpec | null) {
     return Object.fromEntries(
       Object.entries({ ...config.environmentVariables, ...spec?.agent.env }).filter(
-        ([, value]) => value !== undefined,
+        ([key, value]) => value !== undefined && !CONTAINER_PROVISIONING_ENV_KEYS.has(key),
       ),
     ) as Record<string, string>;
   }
@@ -127,10 +142,18 @@ export class VercelProvider implements ComputeProvider {
     });
   }
 
+  private async setupAgent(sandbox: VercelSandbox, commands: string[] | undefined): Promise<void> {
+    for (const command of commands ?? []) {
+      await sandbox.runCommand({ cmd: "bash", args: ["-lc", command] });
+    }
+  }
+
   private async writeAgentFiles(sandbox: VercelSandbox, spec: WorkspaceProvisioningSpec | null) {
+    const homeResult = await sandbox.runCommand("printenv", ["HOME"]);
+    const homeDirectory = (await homeResult.stdout()).trim() || "/home/vercel-sandbox";
     for (const file of spec?.agent.files ?? []) {
       const target = file.path.startsWith("~/")
-        ? `/home/vercel-sandbox/${file.path.slice(2)}`
+        ? `${homeDirectory}/${file.path.slice(2)}`
         : file.path;
       const directory = target.substring(0, target.lastIndexOf("/"));
       if (directory) {
@@ -140,6 +163,30 @@ export class VercelProvider implements ComputeProvider {
         { path: target, content: Buffer.from(file.contentBase64, "base64") },
       ]);
     }
+  }
+
+  private async captureAccessCredential(
+    sandbox: VercelSandbox,
+    spec: WorkspaceProvisioningSpec | null,
+    repoDir: string,
+  ): Promise<string | undefined> {
+    const command = spec?.agent.serve?.accessCredentialCommand;
+    if (!command) return undefined;
+
+    try {
+      const result = await sandbox.runCommand({
+        cmd: "bash",
+        args: ["-lc", command],
+        cwd: repoDir,
+      });
+      const credential = (await result.stdout()).trim();
+      if (result.exitCode === 0 && credential) return credential;
+    } catch {
+      // Credential capture is non-fatal; the workspace can still start.
+    }
+
+    console.error("Vercel Sandbox Error (capture access credential): command never succeeded");
+    return undefined;
   }
 
   private async provisionWorkspace(
@@ -152,6 +199,7 @@ export class VercelProvider implements ComputeProvider {
     const metadata = this.getImageMetadata(config);
     const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
     const repoDir = this.getRepoDir(spec);
+    let accessCredential: string | undefined;
     const sandbox = await logger.step("create-sandbox", () =>
       Sandbox.create({
         ...credentials,
@@ -174,6 +222,7 @@ export class VercelProvider implements ComputeProvider {
       await logger.step("create-workspace-directory", () =>
         sandbox.runCommand("mkdir", ["-p", repoDir]),
       );
+      await logger.step("setup-agent", () => this.setupAgent(sandbox, metadata.setupCommands));
       if (spec?.repo) {
         const repo = spec.repo;
         const repositoryUrl = repo.url.endsWith(".git") ? repo.url : `${repo.url}.git`;
@@ -232,6 +281,9 @@ esac
         }
       }
       await logger.step("write-agent-files", () => this.writeAgentFiles(sandbox, spec));
+      accessCredential = await logger.step("capture-access-credential", () =>
+        this.captureAccessCredential(sandbox, spec, repoDir),
+      );
       await logger.step("start-agent-server", () => this.startAgentServer(sandbox, repoDir, serve));
       if (spec?.agent.serve?.postStartCommand) {
         await logger.step("run-post-start-command", () =>
@@ -253,6 +305,7 @@ esac
       upstreamUrl: sandbox.domain(serve.port),
       domain: this.getDomain(config.subdomain),
       serviceCreatedAt: sandbox.createdAt,
+      accessCredential,
     };
     if (!persistent) return workspaceInfo;
     return { ...workspaceInfo, externalVolumeId: sandbox.name, volumeCreatedAt: sandbox.createdAt };
