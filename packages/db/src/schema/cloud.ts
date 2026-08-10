@@ -308,6 +308,8 @@ export interface UpstashImageProviderMetadata {
 
 export interface AsciiImageProviderMetadata {
   size?: "small" | "default" | "large";
+  /** Commands to run before starting the agent in the Box. */
+  setupCommands?: string[];
 }
 
 export interface ExeDevImageProviderMetadata {

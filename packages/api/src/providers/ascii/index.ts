@@ -115,10 +115,11 @@ export class AsciiProvider implements ComputeProvider {
     boxId: string,
     command: string,
     cwd?: string,
+    timeoutSeconds = 60,
   ): Promise<string> {
     const result = await client.command({
       boxId,
-      commandRequest: { command, cwd, timeoutSeconds: 60 },
+      commandRequest: { command, cwd, timeoutSeconds },
     });
     if (!result.success || result.exitCode !== 0) {
       throw new Error(`Ascii Box command failed: ${result.stderr || result.stdout}`);
@@ -137,6 +138,16 @@ export class AsciiProvider implements ComputeProvider {
         boxId,
         fileWriteRequest: { path, content: file.contentBase64, encoding: "base64" },
       });
+    }
+  }
+
+  private async setupAgent(
+    client: BoxApi,
+    boxId: string,
+    commands: string[] | undefined,
+  ): Promise<void> {
+    for (const command of commands ?? []) {
+      await this.runCommand(client, boxId, command, undefined, 600);
     }
   }
 
@@ -206,6 +217,9 @@ export class AsciiProvider implements ComputeProvider {
       );
       await logger.step("create-workspace-directory", () =>
         this.runCommand(client, handle.boxId, `mkdir -p "${repoDir}"`),
+      );
+      await logger.step("setup-agent", () =>
+        this.setupAgent(client, handle.boxId, metadata.setupCommands),
       );
 
       if (spec?.repo) {

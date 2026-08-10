@@ -18,7 +18,7 @@ export function imageSupportsProvider(
     case "upstash":
       return Boolean(metadata?.upstash?.runtime);
     case "ascii":
-      return Boolean(metadata?.ascii);
+      return Boolean(metadata?.ascii?.setupCommands?.length);
     case "exedev":
       return Boolean(metadata?.exedev);
     case "railway":

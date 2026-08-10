@@ -292,6 +292,9 @@ const seedImages = [
         setupCommands: ["npm install -g opencode-ai --no-audit --fund=false"],
         vcpus: 2,
       },
+      ascii: {
+        setupCommands: ["npm install -g opencode-ai --no-audit --fund=false"],
+      },
     },
   },
   {
@@ -330,6 +333,11 @@ const seedImages = [
           "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai --no-audit --fund=false",
         ],
         vcpus: 2,
+      },
+      ascii: {
+        setupCommands: [
+          "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai --no-audit --fund=false",
+        ],
       },
     },
   },
