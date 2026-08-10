@@ -39,7 +39,6 @@ const clouds = [
   { src: "/cloudflare.svg", label: "Cloudflare" },
   { src: "/ascii.svg", label: "Ascii" },
   { src: "/vercel.svg", label: "Vercel" },
-  { src: "/upstash.svg", label: "Upstash" },
   { src: "/exe.png", label: "exe.dev" },
 ];
 

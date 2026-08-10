@@ -150,26 +150,6 @@ const seedCloudProviders: Array<{
     terminationSettlement: "immediate" as ProviderSettlement,
   },
   {
-    name: "Upstash Box",
-    providerKey: "upstash",
-    isEnabled: false,
-    isSandbox: true,
-    autoPersistent: true,
-    supportsRegions: false,
-    machineSelectionPolicy: { mode: "profiles" },
-    supportServerOnly: true,
-    sshAccessSupport: {
-      supported: false,
-      label: "Not supported",
-      description:
-        "Upstash Box SSH requires the account-wide Box API key and cannot be granted per user.",
-    },
-    creationSettlement: "immediate" as ProviderSettlement,
-    stopSettlement: "immediate" as ProviderSettlement,
-    restartSettlement: "immediate" as ProviderSettlement,
-    terminationSettlement: "immediate" as ProviderSettlement,
-  },
-  {
     name: "Ascii Box",
     providerKey: "ascii",
     isEnabled: false,
@@ -370,13 +350,6 @@ const seedMachineProfiles: Array<{
     name: "Standard",
     description: "1 vCPU Vercel Sandbox.",
     providerOptions: { vcpus: 1 },
-  },
-  {
-    providerName: "Upstash Box",
-    key: "standard",
-    name: "Standard",
-    description: "Medium Upstash Box.",
-    providerOptions: { size: "medium" },
   },
   {
     providerName: "Ascii Box",

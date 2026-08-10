@@ -16,7 +16,7 @@ describe("applyMachineProfile", () => {
   });
 
   test("returns the original metadata when no profile is selected", () => {
-    const metadata = { upstash: { runtime: "node" as const, size: "small" as const } };
-    expect(applyMachineProfile(metadata, "upstash", undefined)).toBe(metadata);
+    const metadata = { e2b: { templateId: "template" } };
+    expect(applyMachineProfile(metadata, "e2b", undefined)).toBe(metadata);
   });
 });

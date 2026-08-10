@@ -15,8 +15,6 @@ export function imageSupportsProvider(
       return Boolean(metadata?.cloudflare?.startCommand && metadata.cloudflare.port);
     case "vercel":
       return Boolean(metadata?.vercel?.image || metadata?.vercel?.runtime);
-    case "upstash":
-      return Boolean(metadata?.upstash?.runtime);
     case "ascii":
       return Boolean(metadata?.ascii?.setupCommands?.length);
     case "exedev":

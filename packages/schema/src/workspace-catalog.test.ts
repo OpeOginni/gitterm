@@ -3,8 +3,6 @@ import { parseProviderMachineOptions, workspaceProviderSelectionSchema } from ".
 
 describe("workspace catalog schemas", () => {
   test("validates provider-specific machine settings", () => {
-    expect(parseProviderMachineOptions("upstash", { size: "large" })).toEqual({ size: "large" });
-    expect(() => parseProviderMachineOptions("upstash", { cpu: 4 })).toThrow();
     expect(parseProviderMachineOptions("exedev", { cpu: 4, memory: "8GB" })).toEqual({
       cpu: 4,
       memory: "8GB",

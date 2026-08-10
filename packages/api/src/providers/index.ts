@@ -6,7 +6,6 @@ import { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 import { daytonaProvider } from "./daytona";
 import { e2bProvider } from "./e2b";
 import { railwayProvider } from "./railway";
-import { upstashProvider } from "./upstash";
 import { vercelProvider } from "./vercel";
 
 export * from "./compute";
@@ -17,7 +16,6 @@ export { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 export { asciiProvider } from "./ascii";
 export { exeDevProvider } from "./exedev";
 export { vercelProvider } from "./vercel";
-export { upstashProvider } from "./upstash";
 
 /**
  * All available provider implementations
@@ -34,7 +32,6 @@ const availableProviders: Record<string, ComputeProvider> = {
   daytona: daytonaProvider,
   cloudflare: cloudflareComputeProvider,
   vercel: vercelProvider,
-  upstash: upstashProvider,
   // Future providers:
   // docker: dockerProvider,
   // kubernetes: kubernetesProvider,

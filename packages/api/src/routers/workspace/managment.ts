@@ -18,7 +18,11 @@ import {
   closeUsageSession,
   createUsageSession,
 } from "../../utils/metering";
-import { getProviderByCloudProviderId, type PersistentWorkspaceInfo } from "../../providers";
+import {
+  getProviderByCloudProviderId,
+  isProviderImplemented,
+  type PersistentWorkspaceInfo,
+} from "../../providers";
 import { createProvisionLogger } from "../../providers/provision-logger";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
@@ -240,8 +244,11 @@ async function resolveWorkspaceCreateIntent(
     },
     orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
   });
-  const eligibleProviders = providerRows.filter((candidate) =>
-    canUseProvider(viewerPlan, candidate.providerKey.toLowerCase()),
+  const eligibleProviders = providerRows.filter(
+    (candidate) =>
+      canUseProvider(viewerPlan, candidate.providerKey.toLowerCase()) &&
+      (candidate.providerKey.toLowerCase() === "local" ||
+        isProviderImplemented(candidate.providerKey)),
   );
 
   let candidates = eligibleProviders;
@@ -511,8 +518,10 @@ export const workspaceRouter = router({
         const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
         const planVisibleProviders = providers.filter((provider) => {
           const providerKey = (provider.providerKey ?? "local").toLowerCase();
-          if (providerKey === "local") return true;
-          return canUseProvider(viewerPlan, providerKey);
+          return (
+            (providerKey === "local" || isProviderImplemented(providerKey)) &&
+            (providerKey === "local" || canUseProvider(viewerPlan, providerKey))
+          );
         });
 
         const providersWithEditorSupport = await Promise.all(
@@ -599,7 +608,12 @@ export const workspaceRouter = router({
 
     const catalogProviders = providers.flatMap((provider) => {
       const parsedKey = providerKeySchema.safeParse(provider.providerKey);
-      if (!parsedKey.success || !canUseProvider(viewerPlan, parsedKey.data)) return [];
+      if (
+        !parsedKey.success ||
+        !isProviderImplemented(parsedKey.data) ||
+        !canUseProvider(viewerPlan, parsedKey.data)
+      )
+        return [];
 
       const agentKeys = agents
         .filter((agent) =>
@@ -1505,6 +1519,12 @@ export const workspaceRouter = router({
         const providerConfigService = getProviderConfigService();
 
         const providerKey = (cloudProviderRecord.providerKey ?? "local").toLowerCase();
+        if (providerKey !== "local" && !isProviderImplemented(providerKey)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Selected cloud provider is no longer supported",
+          });
+        }
         const selectedMachineProfile = input.machineProfileId
           ? await db.query.machineProfile.findFirst({
               where: and(

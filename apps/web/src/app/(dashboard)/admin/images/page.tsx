@@ -55,10 +55,6 @@ const DEFAULT_PROVIDER_METADATA = `{
     "image": "my-vcr-repository:latest",
     "vcpus": 2
   },
-  "upstash": {
-    "runtime": "node",
-    "size": "small"
-  },
   "ascii": {
     "size": "default"
   },
@@ -76,7 +72,6 @@ const PROVIDER_LABELS: Record<string, string> = {
   daytona: "Daytona",
   cloudflare: "Cloudflare",
   vercel: "Vercel",
-  upstash: "Upstash",
   ascii: "Ascii",
   exedev: "exe.dev",
 };
@@ -92,7 +87,6 @@ function getSupportedProviders(metadata: unknown): string[] {
       ? "cloudflare"
       : null,
     providerMetadata.vercel?.image || providerMetadata.vercel?.runtime ? "vercel" : null,
-    providerMetadata.upstash?.runtime ? "upstash" : null,
     providerMetadata.ascii ? "ascii" : null,
     providerMetadata.exedev ? "exedev" : null,
   ].filter((provider): provider is string => provider !== null);

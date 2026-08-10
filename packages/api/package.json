@@ -103,7 +103,6 @@
     "@react-email/render": "^2.0.9",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
-    "@upstash/box": "^0.6.2",
     "@vercel/sandbox": "^2.9.2",
     "discord.js": "^14.25.1",
     "dotenv": "^17.3.1",

@@ -25,9 +25,6 @@ describe("workspace runtime helpers", () => {
     expect(resolveProjectDirectory("https://github.com/acme/demo", "vercel")).toBe(
       "/vercel/sandbox/demo",
     );
-    expect(resolveProjectDirectory("https://github.com/acme/demo", "upstash")).toBe(
-      "/workspace/home/demo",
-    );
     expect(resolveProjectDirectory("https://github.com/acme/demo", "ascii")).toBe(
       "/home/user/demo",
     );

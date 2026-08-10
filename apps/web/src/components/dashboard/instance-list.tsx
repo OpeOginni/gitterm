@@ -67,7 +67,6 @@ const PROVIDER_LOGOS: Record<string, string> = {
   ascii: "/ascii.svg",
   exedev: "/exe.png",
   railway: "/railway.svg",
-  upstash: "/upstash.svg",
   vercel: "/vercel.svg",
 };
 import Link from "next/link";

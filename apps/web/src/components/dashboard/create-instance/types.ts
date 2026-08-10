@@ -206,7 +206,6 @@ export const ICON_MAP: Record<string, string> = {
   ascii: "/ascii.svg",
   "exe.dev": "/exe.png",
   exedev: "/exe.png",
-  upstash: "/upstash.svg",
   vercel: "/vercel.svg",
   aws: "/ECS.svg",
   claude: "/claude.svg",

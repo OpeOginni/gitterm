@@ -67,7 +67,6 @@ GitTerm can run workspaces on any of these providers. Configure each one in the 
 | [Daytona](https://daytona.io/)                                   | Sandbox | No      | [Guide](packages/api/src/providers/daytona/README.md)    |
 | [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) | Sandbox | No      | [Guide](packages/api/src/providers/cloudflare/README.md) |
 | [Vercel Sandbox](https://vercel.com/docs/sandbox)                | Sandbox | No      | [Guide](packages/api/src/providers/vercel/README.md)     |
-| [Upstash Box](https://upstash.com/docs/box)                      | Sandbox | No      | [Guide](packages/api/src/providers/upstash/README.md)    |
 | [Ascii Box](https://docs.ascii.dev/box/quickstart)               | Sandbox | No      | [Guide](packages/api/src/providers/ascii/README.md)      |
 | [exe.dev](https://exe.dev/sandbox)                               | Sandbox | No      | [Guide](packages/api/src/providers/exedev/README.md)     |
 

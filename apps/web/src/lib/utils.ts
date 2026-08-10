@@ -92,13 +92,11 @@ export function getWorkspaceProjectPath(
       ? "~/workspace"
       : providerKey === "vercel"
         ? "/vercel/sandbox"
-        : providerKey === "upstash"
-          ? "/workspace/home"
-          : providerKey === "ascii"
-            ? "/home/user"
-            : providerKey === "exedev"
-              ? "/home/exedev"
-              : "/workspace";
+        : providerKey === "ascii"
+          ? "/home/user"
+          : providerKey === "exedev"
+            ? "/home/exedev"
+            : "/workspace";
   return repoName ? `${base}/${repoName}` : base;
 }
 

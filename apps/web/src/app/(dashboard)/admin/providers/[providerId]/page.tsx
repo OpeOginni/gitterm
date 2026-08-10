@@ -88,9 +88,6 @@ const MACHINE_FIELDS: Record<string, MachineField[]> = {
     { path: "resources.disk", label: "Disk (GB)", type: "number", placeholder: "20" },
   ],
   vercel: [{ path: "vcpus", label: "vCPUs", type: "number", placeholder: "2" }],
-  upstash: [
-    { path: "size", label: "Box size", type: "select", options: ["small", "medium", "large"] },
-  ],
   ascii: [
     { path: "size", label: "Box size", type: "select", options: ["small", "default", "large"] },
   ],

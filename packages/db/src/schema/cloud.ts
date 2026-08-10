@@ -291,21 +291,6 @@ export interface VercelImageProviderMetadata {
   vcpus?: number;
 }
 
-export interface UpstashImageProviderMetadata {
-  runtime?:
-    | "node"
-    | "node-alpine"
-    | "python"
-    | "python-alpine"
-    | "golang"
-    | "golang-alpine"
-    | "ruby"
-    | "ruby-alpine"
-    | "rust"
-    | "rust-alpine";
-  size?: "small" | "medium" | "large";
-}
-
 export interface AsciiImageProviderMetadata {
   size?: "small" | "default" | "large";
   /** Commands to run before starting the agent in the Box. */
@@ -329,7 +314,6 @@ export interface ImageProviderMetadata {
   aws?: AwsImageProviderMetadata;
   cloudflare?: CloudflareImageProviderMetadata;
   vercel?: VercelImageProviderMetadata;
-  upstash?: UpstashImageProviderMetadata;
   ascii?: AsciiImageProviderMetadata;
   exedev?: ExeDevImageProviderMetadata;
   [provider: string]: unknown;

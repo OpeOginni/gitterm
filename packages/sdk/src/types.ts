@@ -72,7 +72,6 @@ export type ProviderKey =
   | "daytona"
   | "cloudflare"
   | "vercel"
-  | "upstash"
   | "ascii"
   | "exedev";
 
@@ -112,7 +111,7 @@ export type WorkspaceProviderSelection =
   | ({ type: "exedev" } & Omit<ProviderSelectionBase, "machine"> & {
         machine?: FlexibleMachine<ExeDevResources>;
       })
-  | ({ type: "e2b" | "upstash" | "ascii" } & ProviderSelectionBase)
+  | ({ type: "e2b" | "ascii" } & ProviderSelectionBase)
   | { type: "cloudflare"; providerId?: string };
 
 export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";
