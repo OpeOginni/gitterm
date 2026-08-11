@@ -4,165 +4,153 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1200" />
     <title>GitTerm OG Card</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
-      rel="stylesheet"
-    />
     <style>
       * {
         box-sizing: border-box;
       }
+
       html,
       body {
-        margin: 0;
         width: 1200px;
         height: 630px;
+        margin: 0;
         overflow: hidden;
       }
+
       body {
-        position: relative;
-        padding: 52px 62px;
-        color: #f7f5ef;
-        background: #0a0a0a;
-        font-family: "DM Sans", sans-serif;
+        color: rgba(255, 255, 255, 0.9);
+        background-color: #09090b;
+        background-image:
+          radial-gradient(circle at center, rgba(200, 164, 78, 0.075), transparent 56%),
+          radial-gradient(circle, rgba(255, 255, 255, 0.055) 1.2px, transparent 1.5px);
+        background-size: auto, 32px 32px;
+        font-family: Arial, sans-serif;
       }
-      body::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background-image: radial-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px);
-        background-size: 28px 28px;
-        mask-image: linear-gradient(to bottom, black, transparent 78%);
-      }
+
       .card {
-        position: relative;
-        z-index: 1;
+        width: 100%;
         height: 100%;
-        display: flex;
-        flex-direction: column;
+        padding: 52px 64px 48px;
       }
+
       header {
         display: flex;
         align-items: center;
         justify-content: space-between;
       }
+
       .brand {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
+        font-family: monospace;
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.3em;
       }
+
       .brand img {
-        width: 31px;
-        height: 31px;
+        width: 28px;
+        height: 28px;
       }
-      .brand span {
-        font:
-          700 16px "Space Mono",
-          monospace;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-      }
+
       .url {
-        color: rgba(255, 255, 255, 0.45);
-        font:
-          12px "Space Mono",
-          monospace;
+        color: rgba(255, 255, 255, 0.35);
+        font-family: monospace;
+        font-size: 13px;
       }
+
       main {
-        display: grid;
-        grid-template-columns: 1.1fr 0.9fr;
-        align-items: center;
-        flex: 1;
-        gap: 58px;
+        text-align: center;
       }
-      .kicker {
-        margin-bottom: 15px;
-        color: #c8a44e;
-        font:
-          700 10px "Space Mono",
-          monospace;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-      }
+
       h1 {
-        margin: 0;
-        max-width: 600px;
-        font-size: 55px;
-        line-height: 1.04;
-        letter-spacing: -0.035em;
+        margin: 83px 0 0;
+        font-size: 62px;
+        font-weight: 400;
+        line-height: 1.05;
+        letter-spacing: -0.05em;
       }
+
       h1 span {
         color: #c8a44e;
       }
-      .subtitle {
-        margin: 20px 0 0;
-        max-width: 530px;
-        color: rgba(255, 255, 255, 0.62);
-        font-size: 17px;
-        line-height: 1.55;
+
+      .label {
+        color: rgba(255, 255, 255, 0.35);
+        font-family: monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
       }
+
+      .agents-label {
+        margin-top: 40px;
+      }
+
       .agents {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 13px;
+        display: flex;
+        justify-content: center;
+        gap: 64px;
+        margin-top: 24px;
       }
+
       .agent {
         display: flex;
         align-items: center;
-        gap: 13px;
-        height: 76px;
-        padding: 0 18px;
-        border: 1px solid rgba(255, 255, 255, 0.11);
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.035);
+        gap: 16px;
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 22px;
       }
+
       .agent img {
-        width: 31px;
-        height: 31px;
+        width: 42px;
+        height: 42px;
         object-fit: contain;
       }
-      .agent span {
-        font-size: 14px;
-        font-weight: 600;
+
+      .agent-divider {
+        width: 1px;
+        height: 34px;
+        align-self: center;
+        background: rgba(255, 255, 255, 0.16);
       }
-      .agent:first-child {
-        border-color: rgba(200, 164, 78, 0.4);
-        background: rgba(200, 164, 78, 0.07);
-      }
+
       footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        min-height: 86px;
-        padding: 0 4px;
+        margin-top: 52px;
+        padding-top: 35px;
         border-top: 1px solid rgba(255, 255, 255, 0.09);
+        text-align: center;
       }
-      .providers-label {
-        color: rgba(255, 255, 255, 0.38);
-        font:
-          10px "Space Mono",
-          monospace;
-        letter-spacing: 0.19em;
-        text-transform: uppercase;
-      }
+
       .providers {
         display: flex;
-        align-items: center;
-        gap: 28px;
+        align-items: stretch;
+        margin-top: 25px;
       }
+
       .provider {
         display: flex;
+        flex: 1;
+        flex-direction: column;
         align-items: center;
-        gap: 8px;
-        color: rgba(255, 255, 255, 0.7);
-        font-size: 12px;
-        font-weight: 500;
+        gap: 10px;
+        color: rgba(255, 255, 255, 0.62);
+        font-size: 14px;
+        line-height: 1;
       }
+
       .provider img {
-        width: 20px;
-        height: 20px;
+        display: block;
+        width: 24px;
+        height: 24px;
         object-fit: contain;
+      }
+
+      .provider span {
+        display: block;
+        white-space: nowrap;
       }
     </style>
   </head>
@@ -170,34 +158,34 @@
     <div class="card">
       <header>
         <div class="brand">
-          <img src="/gitterm-railway.svg" alt="GitTerm" /><span>GitTerm</span>
+          <img src="./gitterm-railway.svg" alt="" />
+          <span>GITTERM</span>
         </div>
         <span class="url">gitterm.dev</span>
       </header>
+
       <main>
-        <section>
-          <div class="kicker">Cloud workspaces for coding agents</div>
-          <h1>Your agents.<br />Your cloud. <span>Anywhere.</span></h1>
-          <p class="subtitle">
-            Secure, stateful workspaces for the coding agents you already use, on the infrastructure
-            you choose.
-          </p>
-        </section>
-        <section class="agents" aria-label="Supported coding agents">
-          <div class="agent"><img src="/opencode.svg" alt="" /><span>OpenCode</span></div>
-          <div class="agent"><img src="/t3.svg" alt="" /><span>T3 Code</span></div>
-          <div class="agent"><img src="/claude.svg" alt="" /><span>Claude Code</span></div>
-          <div class="agent"><img src="/openai-codex.svg" alt="" /><span>Codex</span></div>
-        </section>
+        <h1>Cloud workspaces<br />for coding <span>agents.</span></h1>
+
+        <div class="label agents-label">Agent servers</div>
+        <div class="agents">
+          <div class="agent"><img src="./opencode.svg" alt="" /><span>OpenCode</span></div>
+          <div class="agent-divider" aria-hidden="true"></div>
+          <div class="agent"><img src="./t3.svg" alt="" /><span>T3 Chat</span></div>
+        </div>
       </main>
+
       <footer>
-        <span class="providers-label">Run on your cloud</span>
+        <div class="label">Runs on</div>
         <div class="providers">
-          <div class="provider"><img src="/railway.svg" alt="" /><span>Railway</span></div>
-          <div class="provider"><img src="/E2B.svg" alt="" /><span>E2B</span></div>
-          <div class="provider"><img src="/daytona.svg" alt="" /><span>Daytona</span></div>
-          <div class="provider"><img src="/cloudflare.svg" alt="" /><span>Cloudflare</span></div>
-          <div class="provider"><img src="/ECS.svg" alt="" /><span>AWS</span></div>
+          <div class="provider"><img src="./railway.svg" alt="" /><span>Railway</span></div>
+          <div class="provider"><img src="./EC2.svg" alt="" /><span>AWS</span></div>
+          <div class="provider"><img src="./E2B.svg" alt="" /><span>E2B</span></div>
+          <div class="provider"><img src="./daytona.svg" alt="" /><span>Daytona</span></div>
+          <div class="provider"><img src="./cloudflare.svg" alt="" /><span>Cloudflare</span></div>
+          <div class="provider"><img src="./vercel.svg" alt="" /><span>Vercel</span></div>
+          <div class="provider"><img src="./ascii.svg" alt="" /><span>Ascii</span></div>
+          <div class="provider"><img src="./exe.png" alt="" /><span>exe.dev</span></div>
         </div>
       </footer>
     </div>

@@ -1,4 +1,4 @@
-![GitTerm](./apps/web/public/og-card/og-card-v2.png)
+![GitTerm](./apps/web/public/og-card/og-card-v3.png)
 
 Run your coding agent in the cloud. GitTerm runs Opencode in remote workspaces on the cloud provider or sandbox of your choice, so you can code from any device with your own model keys.
 
@@ -11,6 +11,17 @@ Run your coding agent in the cloud. GitTerm runs Opencode in remote workspaces o
 - Gives you server-only Opencode URLs for desktop or local clients
 - Exposes any workspace port behind a shareable URL, so you can preview and test your app live
 - Keeps your model keys yours (bring your own keys, no markup)
+
+## Sandbox lifecycle
+
+GitTerm helps you manage a sandbox from first boot through cleanup:
+
+- **Create** a workspace from a repository and the provider, agent, and configuration you choose
+- **Open** a running workspace in the browser, connect from a local client, or share a live app preview
+- **Pause** workspaces when you are finished for now, preserving their state while stopping active compute
+- **Resume** a paused workspace and continue from where your agent left off
+- **Share** a workspace with teammates when you need to collaborate
+- **Terminate** a workspace when the work is complete
 
 ## Deploy on Railway
 
