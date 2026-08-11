@@ -246,51 +246,63 @@ function LaunchForm({
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
-    <FormCard className="group/launcher border-white/[0.1] bg-[#0d0d10]/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.035),0_32px_100px_-44px_rgba(0,0,0,0.95)] transition-[border-color,box-shadow] duration-300 hover:border-white/[0.15] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_36px_110px_-40px_rgba(0,0,0,1)]">
-      <form onSubmit={onSubmit}>
-        <FormCardBody className="flex flex-col items-stretch gap-2.5 p-2.5 sm:flex-row sm:items-center sm:gap-3 sm:p-3">
-          <label className="flex min-w-0 flex-1 items-center gap-3.5 rounded-xl bg-white/[0.035] px-4 transition-[background-color,box-shadow] focus-within:bg-white/[0.05] focus-within:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] sm:px-5">
-            <GitHub className="h-[18px] w-[18px] shrink-0 text-white/55 transition-colors group-focus-within/launcher:text-white/80" />
-            <input
-              type="text"
-              value={repo}
-              onChange={(e) => setRepo(e.target.value)}
-              placeholder="owner/repository"
-              aria-label="GitHub repository"
-              spellCheck={false}
-              autoCapitalize="off"
-              autoCorrect="off"
+    <div>
+      <FormCard className="group/launcher overflow-visible rounded-none border-0 bg-transparent shadow-none">
+        <form onSubmit={onSubmit}>
+          <FormCardBody className="flex flex-col items-stretch gap-2 p-0 sm:flex-row sm:items-center">
+            <label className="flex min-w-0 flex-1 cursor-text items-center gap-3 rounded-[10px] bg-white/[0.035] px-3.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] transition-[background-color,box-shadow] hover:bg-white/[0.045] focus-within:bg-white/[0.05] focus-within:shadow-[inset_0_0_0_1px_rgba(200,164,78,0.55),0_0_0_3px_rgba(200,164,78,0.07)] sm:px-4">
+              <GitHub className="h-[18px] w-[18px] shrink-0 text-white/55 transition-colors group-focus-within/launcher:text-white/80" />
+              <input
+                type="text"
+                value={repo}
+                onChange={(e) => setRepo(e.target.value)}
+                placeholder="owner/repository"
+                aria-label="GitHub repository"
+                spellCheck={false}
+                autoCapitalize="off"
+                autoCorrect="off"
+                disabled={isPending}
+                className="h-14 min-w-0 w-full bg-transparent font-mono text-[14px] tracking-[-0.01em] text-white/90 placeholder:text-white/30 focus:outline-none disabled:opacity-50"
+              />
+            </label>
+
+            <Button
+              type="submit"
               disabled={isPending}
-              className="h-14 min-w-0 w-full bg-transparent font-mono text-[15px] tracking-[-0.01em] text-white/90 placeholder:text-white/30 focus:outline-none disabled:opacity-50 sm:h-[60px] sm:text-base"
-            />
-          </label>
+              className="group/button h-10 shrink-0 self-center rounded-lg px-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] sm:w-[126px]"
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Booting
+                </>
+              ) : (
+                <>
+                  Launch Now
+                  <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 ease-out group-hover/button:translate-x-1" />
+                </>
+              )}
+            </Button>
+          </FormCardBody>
 
-          <Button
-            type="submit"
-            disabled={isPending}
-            className="group/button h-14 shrink-0 rounded-xl px-6 font-mono text-[12px] font-bold uppercase tracking-[0.2em] sm:h-[60px] sm:min-w-[154px] sm:px-7"
-          >
-            {isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Booting
-              </>
-            ) : (
-              <>
-                Launch
-                <ArrowRight className="h-4 w-4 transition-transform duration-300 ease-out group-hover/button:translate-x-1" />
-              </>
-            )}
-          </Button>
-        </FormCardBody>
+          {error ? (
+            <div className="mt-2 rounded-lg bg-destructive/[0.06] px-4 py-2.5 text-[12.5px] text-destructive/90">
+              {error}
+            </div>
+          ) : null}
+        </form>
+      </FormCard>
 
-        {error ? (
-          <div className="border-t border-destructive/30 bg-destructive/[0.06] px-4 py-2.5 text-[12.5px] text-destructive/90">
-            {error}
-          </div>
-        ) : null}
-      </form>
-    </FormCard>
+      <a
+        href="https://e2b.dev"
+        target="_blank"
+        rel="noreferrer"
+        className="mx-auto mt-3 flex w-fit items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/30 transition-colors hover:text-white/55"
+      >
+        <Image src="/E2B.svg" alt="" width={13} height={14} className="h-3.5 w-auto opacity-60" />
+        <span>Sponsored by E2B</span>
+      </a>
+    </div>
   );
 }
 
