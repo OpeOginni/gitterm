@@ -1,4 +1,4 @@
-![GitTerm](./apps/web/public/og-card/og-card-v3.png)
+![GitTerm](./apps/web/public/og-card/og-card-v4.png)
 
 Run your coding agent in the cloud. GitTerm runs Opencode in remote workspaces on the cloud provider or sandbox of your choice, so you can code from any device with your own model keys.
 
