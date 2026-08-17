@@ -38,7 +38,7 @@ import {
   decryptWorkspacePassword,
   encryptWorkspacePassword,
 } from "../../utils/workspace-password";
-import { getWorkspaceDomain } from "../../utils/routing";
+import { getWorkspaceDomain, getWorkspaceUrl } from "../../utils/routing";
 import {
   canUseCustomCloudSubdomain,
   canCreatePersistentWorkspace,
@@ -102,6 +102,7 @@ import { normalizeBaseCommit } from "../../utils/workspace-base-commit";
 import {
   buildWorkspaceRuntimeAccess,
   isResumableWorkspaceStatus,
+  resolveProjectDirectory,
 } from "../../service/workspace-runtime";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
@@ -109,6 +110,7 @@ import {
   buildWorkspaceSetupCommand,
   resolveWorkspaceSetupCommands,
 } from "../../service/workspace-setup";
+import { getOpencodeSetupStatus } from "../../service/agent-run/opencode";
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -181,6 +183,25 @@ const workspaceCreateBaseSchema = z.object({
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
   modelCredentialIds: z.array(z.uuid()).max(50).optional(),
   setupCommands: workspaceSetupCommandsSchema.optional(),
+  opencode: z
+    .object({
+      skills: z
+        .array(
+          z.object({
+            name: z
+              .string()
+              .trim()
+              .min(1)
+              .max(64)
+              .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+            content: z.string().min(1).max(200_000),
+          }),
+        )
+        .max(50)
+        .optional(),
+      plugins: z.array(z.string().trim().min(1).max(500)).max(50).optional(),
+    })
+    .optional(),
 });
 
 const legacyWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
@@ -2077,11 +2098,11 @@ export const workspaceRouter = router({
         }
 
         // Generate workspace-scoped JWT token (replaces shared INTERNAL_API_KEY)
-        const workspaceAuthToken = workspaceJWT.generateToken(
-          workspaceId,
-          userId,
-          ["port:*"], // All git scopes
-        );
+        const workspaceAuthToken = workspaceJWT.generateToken(workspaceId, userId, [
+          "workspace:read",
+          "port:*",
+          "git:*",
+        ]);
 
         // API endpoint for workspace operations
         const WORKSPACE_API_URL =
@@ -2125,6 +2146,7 @@ export const workspaceRouter = router({
           credentials: await workspaceCreateLogger.step("fetch-model-credentials", () =>
             getUserProviderCredentials(userId, input.modelCredentialIds),
           ),
+          opencode: input.opencode,
         });
 
         const setupCommand = buildWorkspaceSetupCommand(
@@ -2286,6 +2308,7 @@ export const workspaceRouter = router({
             launchProfileId: null,
             gitIntegrationId: input.gitIntegrationId ?? null,
             modelCredentialIds: input.modelCredentialIds ?? [],
+            setupRequired: Boolean(setupCommand),
             persistent: effectivePersistent,
             regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,
@@ -2409,6 +2432,48 @@ export const workspaceRouter = router({
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }
+    }),
+
+  getSetupStatus: protectedProcedure
+    .input(z.object({ workspaceId: z.uuid() }))
+    .query(async ({ input, ctx }) => {
+      const workspaceRecord = await db.query.workspace.findFirst({
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, ctx.session.user.id)),
+        with: { image: { with: { agentType: true } } },
+      });
+      if (!workspaceRecord) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      }
+      if (!workspaceRecord.setupRequired) {
+        return getOpencodeSetupStatus({ required: false, url: "", directory: "" });
+      }
+      if (workspaceRecord.status !== "running" || !workspaceRecord.subdomain) {
+        return {
+          status: "waiting" as const,
+          exitCode: null,
+          startedAt: null,
+          finishedAt: null,
+          log: null,
+        };
+      }
+      if (workspaceRecord.image.agentType.provisionerKey !== "opencode") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Setup status currently supports OpenCode workspaces only",
+        });
+      }
+      const [provider] = await db
+        .select({ providerKey: cloudProvider.providerKey })
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, workspaceRecord.cloudProviderId));
+      return getOpencodeSetupStatus({
+        required: true,
+        url: getWorkspaceUrl(workspaceRecord.subdomain),
+        directory: resolveProjectDirectory(workspaceRecord.repositoryUrl, provider?.providerKey),
+        password: workspaceRecord.serverPassword
+          ? decryptWorkspacePassword(workspaceRecord.serverPassword)
+          : null,
+      });
     }),
 
   getRuntimeAccess: protectedProcedure

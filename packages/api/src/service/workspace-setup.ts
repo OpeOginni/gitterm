@@ -43,8 +43,9 @@ export function buildWorkspaceSetupCommand(
   const body = commands.join("\n");
   const encoded = Buffer.from(body).toString("base64");
   const script = [
-    'SETUP_DIR="${HOME:-/tmp}/.gitterm/setup"',
+    'SETUP_DIR="$PWD/.gitterm/setup"',
     'mkdir -p "$SETUP_DIR"',
+    'if [ -d .git/info ]; then grep -qxF "/.gitterm/" .git/info/exclude 2>/dev/null || printf "/.gitterm/\\n" >> .git/info/exclude; fi',
     'if [ "$(cat "$SETUP_DIR/state" 2>/dev/null)" = "succeeded" ]; then exit 0; fi',
     "BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || printf unknown)",
     'if ! mkdir "$SETUP_DIR/claim" 2>/dev/null; then OLD_BOOT_ID=$(cat "$SETUP_DIR/claim/boot-id" 2>/dev/null || true); OLD_PID=$(cat "$SETUP_DIR/claim/pid" 2>/dev/null || true); if [ "$OLD_BOOT_ID" = "$BOOT_ID" ] && [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then exit 0; fi; rm -rf "$SETUP_DIR/claim"; mkdir "$SETUP_DIR/claim" 2>/dev/null || exit 0; fi',

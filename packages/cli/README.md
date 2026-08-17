@@ -101,6 +101,22 @@ code, you approve the device in your browser, and the CLI receives a user API to
 - Create revocable tokens in the dashboard under **Settings → Account → API tokens**
   and pass them via `GITTERM_API_TOKEN` (with optional `GITTERM_SERVER_URL`)
 
+## Inside a GitTerm workspace
+
+GitTerm injects a separate workspace identity and installs the CLI in supported agent
+images. When those credentials are present, the CLI switches to a restricted command set:
+
+```bash
+gitterm workspace info
+gitterm ports list
+gitterm ports open 3000 --name app
+gitterm ports close 3000
+```
+
+No account commands are exposed in this mode. The workspace cannot list or operate on
+other workspaces and cannot create a workspace. The CLI does not fall back to a saved user
+login when any workspace identity variable is present.
+
 ## Programmatic use
 
 This CLI is a thin layer over `@gitterm/sdk`. If you are building an integration,

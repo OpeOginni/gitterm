@@ -81,6 +81,19 @@ export function getWorkspaceUrl(subdomain: string): string {
   return `${protocol}://${subdomain}.${env.BASE_DOMAIN}`;
 }
 
+/** Construct the public proxy URL for a port exposed by a workspace. */
+export function getWorkspacePortUrl(subdomain: string, port: number): string {
+  const isLocalhost =
+    env.BASE_DOMAIN.includes("localhost") || env.BASE_DOMAIN.includes("127.0.0.1");
+  const protocol = isLocalhost ? "http" : "https";
+
+  if (isPathRouting()) {
+    return `${protocol}://${env.BASE_DOMAIN}/ws/${port}-${subdomain}`;
+  }
+
+  return `${protocol}://${port}-${subdomain}.${env.BASE_DOMAIN}`;
+}
+
 /**
  * Construct a workspace URL with a specific path
  *

@@ -60,13 +60,11 @@ export class WorkspaceJWTService {
    * Check if token has required scope
    */
   static hasScope(payload: WorkspaceTokenPayload, requiredScope: string): boolean {
-    // Check for wildcard scope
-    if (payload.scope.includes("git:*")) {
-      return true;
-    }
+    if (payload.scope.includes(requiredScope) || payload.scope.includes("*")) return true;
 
-    // Check for exact scope match
-    return payload.scope.includes(requiredScope);
+    const separator = requiredScope.indexOf(":");
+    if (separator === -1) return false;
+    return payload.scope.includes(`${requiredScope.slice(0, separator)}:*`);
   }
 
   /**

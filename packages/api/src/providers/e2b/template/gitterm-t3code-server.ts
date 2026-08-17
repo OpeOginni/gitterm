@@ -22,6 +22,7 @@ export function createT3CodeServerTemplate(
           "@anthropic-ai/claude-code@latest",
           "@openai/codex@latest",
           `opencode-ai@${opencodeVersion}`,
+          "@gitterm/cli@latest",
         ],
         { g: true },
       )

@@ -13,6 +13,7 @@ import { agentLoopRouter } from "./agent-loop";
 import { modelCredentialsRouter } from "./model-credentials";
 import { anonRouter } from "./anon";
 import { apiTokensRouter } from "./api-tokens";
+import { runRouter } from "./run";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -37,6 +38,7 @@ export const appRouter = router({
   workspaceShare: workspaceShareRouter,
   anon: anonRouter,
   apiTokens: apiTokensRouter,
+  run: runRouter,
 });
 export type AppRouter = typeof appRouter;
 

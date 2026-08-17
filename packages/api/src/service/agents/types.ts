@@ -19,6 +19,10 @@ export interface AgentProvisionerContext {
   agentConfigs?: AgentConfigByKind;
   serverPassword?: string;
   credentials: UserProviderCredential[];
+  opencode?: {
+    skills?: Array<{ name: string; content: string }>;
+    plugins?: string[];
+  };
 }
 
 export interface AgentProvisioner {

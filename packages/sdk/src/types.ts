@@ -137,9 +137,15 @@ export type WorkspaceCreateInput = {
   /**
    * Ordered commands launched in the repository after the agent server starts.
    * They do not block workspace readiness; inspect ~/.gitterm/setup for status
-   * and logs from inside the workspace.
+   * and logs through workspaces.setupStatus()/waitForSetup().
    */
   setupCommands?: string[];
+  /** OpenCode capabilities materialized only in this workspace. */
+  opencode?: {
+    skills?: Array<{ name: string; content: string }>;
+    /** NPM package specs or plugin paths accepted by OpenCode. Pin versions for repeatable runs. */
+    plugins?: string[];
+  };
 };
 
 export type WorkspaceRestartResult = { status: WorkspaceStatus };
@@ -151,6 +157,46 @@ export type WorkspaceTerminateResult = {
 export type WorkspaceEnsureRunningResult = {
   workspace: Workspace;
   runtime: WorkspaceRuntimeAccess;
+};
+
+export type AgentRunStatus = "running" | "retrying" | "completed" | "failed" | "cancelled";
+
+export type AgentRun = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  status: AgentRunStatus;
+  error: string | null;
+  finalText: string | null;
+};
+
+export type AgentRunCreateInput = {
+  workspaceId: string;
+  prompt: string;
+  title?: string;
+  agent?: string;
+  /** OpenCode model in provider/model format. */
+  model?: string;
+  /** Wait for workspace setup commands before submitting the prompt. */
+  waitForSetup?: boolean;
+  setupTimeoutMs?: number;
+};
+
+export type AgentRunMessage = {
+  id: string;
+  role: "user" | "assistant";
+  createdAt: string;
+  completedAt: string | null;
+  text: string;
+  error: string | null;
+};
+
+export type WorkspaceSetupStatus = {
+  status: "not_requested" | "waiting" | "running" | "succeeded" | "failed";
+  exitCode: number | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  log: string | null;
 };
 
 export type AgentType = {

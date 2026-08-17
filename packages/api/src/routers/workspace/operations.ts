@@ -1,6 +1,7 @@
 import z from "zod";
 import { workspaceAuthProcedure, router } from "../../index";
 import { db, eq, and, gt } from "@gitterm/db";
+import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { gitIntegration, workspaceGitConfig } from "@gitterm/db/schema/integrations";
 import { TRPCError } from "@trpc/server";
@@ -9,6 +10,25 @@ import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { logger } from "../../utils/logger";
 import { encryptWorkspacePassword } from "../../utils/workspace-password";
 import { updateWorkspaceByIdAndInvalidate } from "../../service/workspace-mutations";
+import {
+  deleteWorkspaceRouteAccess,
+  upsertWorkspaceRouteAccess,
+} from "../../service/workspace-route-access";
+import { updateWorkspaceRoutingAndInvalidate } from "../../service/workspace-mutations";
+import { getProviderByCloudProviderId } from "../../providers";
+import { getWorkspacePortUrl, getWorkspaceUrl } from "../../utils/routing";
+
+const workspacePortSchema = z.number().int().min(1).max(65535);
+
+async function getAuthenticatedWorkspace(workspaceId: string, userId: string) {
+  const ws = await db.query.workspace.findFirst({
+    where: and(eq(workspace.id, workspaceId), eq(workspace.userId, userId)),
+  });
+  if (!ws) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+  }
+  return ws;
+}
 
 /**
  * Workspace operations router
@@ -22,6 +42,134 @@ import { updateWorkspaceByIdAndInvalidate } from "../../service/workspace-mutati
  */
 
 export const workspaceOperationsRouter = router({
+  getSelf: workspaceAuthProcedure.query(async ({ ctx }) => {
+    const { workspaceAuth } = ctx;
+    if (!workspaceJWT.hasScope(workspaceAuth, "workspace:read")) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient workspace scope" });
+    }
+
+    const ws = await getAuthenticatedWorkspace(workspaceAuth.workspaceId, workspaceAuth.userId);
+    const [provider] = await db
+      .select({ providerKey: cloudProvider.providerKey })
+      .from(cloudProvider)
+      .where(eq(cloudProvider.id, ws.cloudProviderId));
+
+    return {
+      id: ws.id,
+      name: ws.name,
+      status: ws.status,
+      repositoryUrl: ws.repositoryUrl,
+      repositoryBranch: ws.repositoryBranch,
+      baseCommit: ws.repositoryBaseCommit,
+      checkoutRef: ws.repositoryCheckoutRef,
+      providerKey: provider?.providerKey ?? null,
+      url: ws.subdomain && ws.status !== "terminated" ? getWorkspaceUrl(ws.subdomain) : null,
+      ports: Object.values(ws.exposedPorts ?? {}).map((entry) => ({
+        port: entry.port,
+        name: entry.name ?? null,
+        url: ws.subdomain ? getWorkspacePortUrl(ws.subdomain, entry.port) : null,
+      })),
+    };
+  }),
+
+  listPorts: workspaceAuthProcedure.query(async ({ ctx }) => {
+    const { workspaceAuth } = ctx;
+    if (!workspaceJWT.hasScope(workspaceAuth, "port:list")) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient port scope" });
+    }
+    const ws = await getAuthenticatedWorkspace(workspaceAuth.workspaceId, workspaceAuth.userId);
+    return Object.values(ws.exposedPorts ?? {}).map((entry) => ({
+      port: entry.port,
+      name: entry.name ?? null,
+      url: ws.subdomain ? getWorkspacePortUrl(ws.subdomain, entry.port) : null,
+    }));
+  }),
+
+  openPort: workspaceAuthProcedure
+    .input(
+      z.object({ port: workspacePortSchema, name: z.string().trim().min(1).max(100).optional() }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { workspaceAuth } = ctx;
+      if (!workspaceJWT.hasScope(workspaceAuth, "port:open")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient port scope" });
+      }
+      const ws = await getAuthenticatedWorkspace(workspaceAuth.workspaceId, workspaceAuth.userId);
+      if (ws.status !== "running") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace must be running" });
+      }
+      const [provider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, ws.cloudProviderId));
+      if (!provider) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Cloud provider not found" });
+      }
+
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      const exposed = await computeProvider.createOrGetExposedPortDomain(
+        ws.externalInstanceId,
+        input.port,
+      );
+      await updateWorkspaceRoutingAndInvalidate(
+        ws.id,
+        {
+          exposedPorts: {
+            ...ws.exposedPorts,
+            [input.port]: {
+              port: input.port,
+              name: input.name,
+              upstreamUrl: exposed.domain,
+              externalPortDomainId: exposed.externalPortDomainId,
+            },
+          },
+        },
+        ws.subdomain,
+      );
+      if (exposed.upstreamAccess?.headers) {
+        await upsertWorkspaceRouteAccess(ws.id, input.port, exposed.upstreamAccess.headers);
+      } else {
+        await deleteWorkspaceRouteAccess(ws.id, input.port);
+      }
+
+      return {
+        port: input.port,
+        name: input.name ?? null,
+        url: ws.subdomain ? getWorkspacePortUrl(ws.subdomain, input.port) : null,
+      };
+    }),
+
+  closePort: workspaceAuthProcedure
+    .input(z.object({ port: workspacePortSchema }))
+    .mutation(async ({ input, ctx }) => {
+      const { workspaceAuth } = ctx;
+      if (!workspaceJWT.hasScope(workspaceAuth, "port:close")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient port scope" });
+      }
+      const ws = await getAuthenticatedWorkspace(workspaceAuth.workspaceId, workspaceAuth.userId);
+      const exposed = ws.exposedPorts?.[input.port];
+      if (exposed?.externalPortDomainId) {
+        const [provider] = await db
+          .select()
+          .from(cloudProvider)
+          .where(eq(cloudProvider.id, ws.cloudProviderId));
+        if (!provider) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Cloud provider not found",
+          });
+        }
+        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+        await computeProvider.removeExposedPortDomain(exposed.externalPortDomainId);
+      }
+
+      const exposedPorts = { ...ws.exposedPorts };
+      delete exposedPorts[input.port];
+      await updateWorkspaceRoutingAndInvalidate(ws.id, { exposedPorts }, ws.subdomain);
+      await deleteWorkspaceRouteAccess(ws.id, input.port);
+      return { port: input.port, closed: true };
+    }),
+
   /**
    * Report the agent's self-issued access credential (e.g. a T3 pairing
    * token). Called from container entrypoints after the agent server boots;

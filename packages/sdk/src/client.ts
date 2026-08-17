@@ -4,6 +4,9 @@ import { DEFAULT_GITTERM_SERVER_URL, loadConfigSync } from "./config.js";
 import { GittermError, WorkspaceLifecycleError, type GittermErrorCode } from "./errors.js";
 import type {
   AgentType,
+  AgentRun,
+  AgentRunCreateInput,
+  AgentRunMessage,
   AuthStatus,
   CloudProvider,
   Workspace,
@@ -17,6 +20,7 @@ import type {
   WorkspacePauseResult,
   WorkspaceTerminateResult,
   WorkspaceCatalog,
+  WorkspaceSetupStatus,
 } from "./types.js";
 
 export type GittermClientOptions = {
@@ -94,6 +98,22 @@ export type GittermClient = {
     restart(workspaceId: string): Promise<WorkspaceRestartResult>;
     terminate(workspaceId: string): Promise<WorkspaceTerminateResult>;
     create(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
+    setupStatus(workspaceId: string): Promise<WorkspaceSetupStatus>;
+    waitForSetup(
+      workspaceId: string,
+      options?: { timeoutMs?: number; pollIntervalMs?: number },
+    ): Promise<WorkspaceSetupStatus>;
+  };
+  runs: {
+    create(input: AgentRunCreateInput): Promise<AgentRun>;
+    get(workspaceId: string, runId: string): Promise<AgentRun>;
+    messages(workspaceId: string, runId: string): Promise<AgentRunMessage[]>;
+    cancel(workspaceId: string, runId: string): Promise<{ cancelled: boolean }>;
+    wait(
+      workspaceId: string,
+      runId: string,
+      options?: { timeoutMs?: number; pollIntervalMs?: number },
+    ): Promise<AgentRun>;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
@@ -313,6 +333,29 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
       );
     });
 
+  const waitForWorkspaceSetup = async (
+    workspaceId: string,
+    waitOptions?: { timeoutMs?: number; pollIntervalMs?: number },
+  ): Promise<WorkspaceSetupStatus> => {
+    const timeoutMs = waitOptions?.timeoutMs ?? 10 * 60_000;
+    const pollIntervalMs = waitOptions?.pollIntervalMs ?? 2_000;
+    const deadline = Date.now() + timeoutMs;
+    while (true) {
+      const result = await trpc.workspace.getSetupStatus.query({ workspaceId });
+      if (result.status === "not_requested" || result.status === "succeeded") return result;
+      if (result.status === "failed") {
+        throw new GittermError(
+          "BAD_REQUEST",
+          `Workspace setup failed${result.exitCode === null ? "" : ` with exit code ${result.exitCode}`}`,
+        );
+      }
+      if (Date.now() >= deadline) {
+        throw new GittermError("NETWORK", `Timed out waiting for workspace ${workspaceId} setup`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+  };
+
   return {
     serverUrl: credentials.serverUrl,
     auth: {
@@ -388,6 +431,39 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           };
         }),
       create: createWorkspace,
+      setupStatus: (workspaceId) =>
+        run(async () => trpc.workspace.getSetupStatus.query({ workspaceId })),
+      waitForSetup: (workspaceId, waitOptions) =>
+        run(() => waitForWorkspaceSetup(workspaceId, waitOptions)),
+    },
+    runs: {
+      create: (input) =>
+        run(async () => {
+          if (input.waitForSetup) {
+            await waitForWorkspaceSetup(input.workspaceId, { timeoutMs: input.setupTimeoutMs });
+          }
+          const { waitForSetup: _wait, setupTimeoutMs: _timeout, ...request } = input;
+          return trpc.run.create.mutate(request);
+        }),
+      get: (workspaceId, runId) => run(async () => trpc.run.get.query({ workspaceId, runId })),
+      messages: (workspaceId, runId) =>
+        run(async () => trpc.run.messages.query({ workspaceId, runId })),
+      cancel: (workspaceId, runId) =>
+        run(async () => trpc.run.cancel.mutate({ workspaceId, runId })),
+      wait: (workspaceId, runId, waitOptions) =>
+        run(async () => {
+          const timeoutMs = waitOptions?.timeoutMs ?? 30 * 60_000;
+          const pollIntervalMs = waitOptions?.pollIntervalMs ?? 2_000;
+          const deadline = Date.now() + timeoutMs;
+          while (true) {
+            const result = await trpc.run.get.query({ workspaceId, runId });
+            if (result.status !== "running" && result.status !== "retrying") return result;
+            if (Date.now() >= deadline) {
+              throw new GittermError("NETWORK", `Timed out waiting for run ${runId}`);
+            }
+            await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          }
+        }),
     },
     catalog: {
       agentTypes: (input?: { serverOnly?: boolean }): Promise<AgentType[]> =>

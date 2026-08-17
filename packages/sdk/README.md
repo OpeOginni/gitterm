@@ -78,6 +78,21 @@ const client = createGittermClient({
 const { workspaces } = await client.workspaces.list();
 ```
 
+The SDK deliberately exposes two clients. `createGittermClient()` uses a user API token and
+can manage the user's workspaces. `createGittermWorkspaceClient()` uses the scoped identity
+injected into a GitTerm workspace and can inspect only that workspace and its ports:
+
+```ts
+import { createGittermWorkspaceClient } from "@gitterm/sdk";
+
+const workspace = createGittermWorkspaceClient();
+const self = await workspace.self.get();
+const preview = await workspace.ports.open(3000, { name: "app" });
+```
+
+The workspace client never reads the CLI's saved account login and has no create, list,
+pause, restart, or terminate operations.
+
 ### With the CLI's saved login
 
 ```ts
@@ -114,6 +129,20 @@ await client.workspaces.create({
   repo: "https://github.com/acme/product",
   agent: "opencode",
   setupCommands: ["npm install", "npm run generate"],
+  opencode: {
+    skills: [
+      {
+        name: "release-demo",
+        content: `---
+name: release-demo
+description: Record and publish a product release demo.
+---
+
+Follow the repository's release-demo workflow.`,
+      },
+    ],
+    plugins: ["@acme/opencode-browser@1.2.3"],
+  },
   provider: {
     type: "exedev",
     machine: { type: "profile", key: "content-rendering" },
@@ -123,8 +152,10 @@ await client.workspaces.create({
 
 Setup commands run in order from the checked-out repository after the agent server is
 ready. They do not delay workspace creation or stop the agent if they fail. Provider and
-agent defaults configured by an administrator run first; inspect `~/.gitterm/setup/state`
-and `~/.gitterm/setup/setup.log` inside the workspace for the result.
+agent defaults configured by an administrator run first. Use
+`client.workspaces.setupStatus(workspaceId)` or `waitForSetup(workspaceId)` to inspect them.
+The underlying state and log live in the repository's git-excluded `.gitterm/setup/`
+directory.
 
 `provider` is a discriminated union, so TypeScript only offers `region` for providers
 where GitTerm supports caller-selected placement. Machine keys are configured by admins
@@ -135,6 +166,31 @@ This makes release automation a normal workspace task: create an OpenCode worksp
 run UI review or browser capture tools in the sandbox, upload the resulting media, update
 the changelog in the checked-out repository, then terminate the workspace. Use an
 `idempotencyKey` based on the release SHA when the workflow may be retried.
+
+### Agent runs
+
+Runs are a thin control layer over the workspace's native OpenCode session. Completion
+means the agent session became idle; it does not claim that a pull request, upload, or
+other product outcome succeeded.
+
+```ts
+const { workspace } = await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  setupCommands: ["npm install", "npm run db:seed"],
+});
+
+const run = await client.runs.create({
+  workspaceId: workspace.id,
+  waitForSetup: true,
+  prompt: "Record the new onboarding flow and open a pull request adding it to the changelog.",
+});
+
+const completed = await client.runs.wait(workspace.id, run.id);
+const messages = await client.runs.messages(workspace.id, run.id);
+```
+
+Use `client.runs.cancel(workspaceId, runId)` to abort the native session. Direct workspace
+URLs remain available when an integration wants to use the OpenCode SDK itself.
 
 ### Errors
 

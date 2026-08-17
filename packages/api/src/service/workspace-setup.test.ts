@@ -32,6 +32,7 @@ describe("buildWorkspaceSetupCommand", () => {
     const home = await mkdtemp(join(tmpdir(), "gitterm-setup-"));
     const claim = join(home, ".gitterm/setup/claim");
     await mkdir(claim, { recursive: true });
+    await mkdir(join(home, ".git/info"), { recursive: true });
     await writeFile(join(claim, "boot-id"), "stale\n");
     await writeFile(join(claim, "pid"), "999999\n");
     const server = Bun.serve({
@@ -42,7 +43,8 @@ describe("buildWorkspaceSetupCommand", () => {
     try {
       const command = buildWorkspaceSetupCommand(['printf done > "$HOME/done"'], server.port);
       const process = Bun.spawn(["bash", "-lc", command!], {
-        env: { ...Bun.env, HOME: home },
+        cwd: home,
+        env: { ...Bun.env, HOME: home, PORT: String(server.port) },
         stdout: "ignore",
         stderr: "ignore",
       });
@@ -57,6 +59,7 @@ describe("buildWorkspaceSetupCommand", () => {
 
       expect(state).toBe("succeeded");
       expect(await readFile(join(home, "done"), "utf8")).toBe("done");
+      expect(await readFile(join(home, ".git/info/exclude"), "utf8")).toContain("/.gitterm/");
     } finally {
       server.stop(true);
       await rm(home, { recursive: true, force: true });
