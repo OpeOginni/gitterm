@@ -16,42 +16,42 @@ import {
 const features = [
   {
     icon: Layers,
-    title: "Pick your cloud.",
+    title: "Pick your cloud",
     body: "Choose the provider that fits each job, from quick sandboxes to infrastructure you already trust.",
   },
   {
     icon: Timer,
-    title: "Short task or long run.",
+    title: "Short task or long run",
     body: "Launch a workspace for one quick job or keep it available for ongoing work. You decide when it stops.",
   },
   {
     icon: KeyRound,
-    title: "Set keys once.",
+    title: "Set keys once",
     body: "Securely reuse your model and environment credentials without pasting secrets into every workspace.",
   },
   {
     icon: MonitorSmartphone,
-    title: "Connect from any device.",
+    title: "Connect from any device",
     body: "Open the same workspace in your browser or local client and continue exactly where you left off.",
   },
   {
     icon: Save,
-    title: "Pause without losing progress.",
+    title: "Pause without losing progress",
     body: "Stop active compute, preserve the workspace state, and resume when you are ready to keep going.",
   },
   {
     icon: Globe,
-    title: "Share a live app preview.",
+    title: "Share a live app preview",
     body: "Expose any workspace port through a shareable URL for testing, feedback, or a quick demo.",
   },
   {
     icon: Share2,
-    title: "Bring your team in.",
+    title: "Bring your team in",
     body: "Share a workspace with teammates when a task needs another set of eyes or a clean handoff.",
   },
   {
     icon: TerminalSquare,
-    title: "Automate with CLI or SDK.",
+    title: "Automate with CLI or SDK",
     body: "Create and manage workspaces from scripts, internal tools, or the terminal you already use.",
   },
 ];
