@@ -1,6 +1,38 @@
 import { relations, sql } from "drizzle-orm";
-import { jsonb, pgTable, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { agentType, cloudProvider } from "./cloud";
+import { workspace } from "./workspace";
+
+export const workspaceSetupStatusEnum = pgEnum("workspace_setup_status", [
+  "waiting",
+  "running",
+  "succeeded",
+  "failed",
+]);
+
+export const workspaceSetup = pgTable("workspace_setup", {
+  workspaceId: uuid("workspace_id")
+    .primaryKey()
+    .references(() => workspace.id, { onDelete: "cascade" }),
+  executionId: uuid("execution_id").notNull().unique(),
+  status: workspaceSetupStatusEnum("status").notNull().default("waiting"),
+  command: text("command").notNull(),
+  exitCode: integer("exit_code"),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+  log: text("log"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 export const workspaceSetupCommandDefault = pgTable(
   "workspace_setup_command_default",
@@ -41,3 +73,4 @@ export const workspaceSetupCommandDefaultRelations = relations(
 );
 
 export type WorkspaceSetupCommandDefault = typeof workspaceSetupCommandDefault.$inferSelect;
+export type WorkspaceSetup = typeof workspaceSetup.$inferSelect;

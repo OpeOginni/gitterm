@@ -159,7 +159,13 @@ export type WorkspaceEnsureRunningResult = {
   runtime: WorkspaceRuntimeAccess;
 };
 
-export type AgentRunStatus = "running" | "retrying" | "completed" | "failed" | "cancelled";
+export type AgentRunStatus =
+  | "pending"
+  | "running"
+  | "retrying"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export type AgentRun = {
   id: string;
@@ -168,15 +174,20 @@ export type AgentRun = {
   status: AgentRunStatus;
   error: string | null;
   finalText: string | null;
+  context: { type: "isolated" } | { type: "continued"; runId: string };
 };
 
 export type AgentRunCreateInput = {
   workspaceId: string;
+  /** Stable key used to return the same run when a request is retried. */
+  idempotencyKey: string;
   prompt: string;
   title?: string;
   agent?: string;
   /** OpenCode model in provider/model format. */
   model?: string;
+  /** Start with fresh context (default), or continue a terminal run's context. */
+  context?: { type: "isolated" } | { type: "continue"; runId: string };
   /** Wait for workspace setup commands before submitting the prompt. */
   waitForSetup?: boolean;
   setupTimeoutMs?: number;

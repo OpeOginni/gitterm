@@ -11,7 +11,7 @@ export function createOpencodeServerWithSSHTemplate(opencodeVersion: string): Te
       { user: "root" },
     )
     .runCmd("mkdir -p /run/sshd && ssh-keygen -A", { user: "root" })
-    .npmInstall(`opencode-ai@${opencodeVersion}`, { g: true })
+    .npmInstall([`opencode-ai@${opencodeVersion}`, "@gitterm/cli@latest"], { g: true })
     .setStartCmd(
       "sudo /usr/sbin/sshd && /usr/local/bin/websocat -b --exit-on-eof ws-l:0.0.0.0:8081 tcp:127.0.0.1:22",
       waitForPort(8081),

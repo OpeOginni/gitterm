@@ -75,7 +75,7 @@ static void heartbeat_timer_cb(uv_timer_t* handle) {
 
 void setup_workspace_heartbeat(uv_loop_t *loop) {
     const char *workspace_id = getenv("WORKSPACE_ID");
-    const char *token = getenv("WORKSPACE_AUTH_TOKEN");
+    const char *token = getenv("WORKSPACE_AGENT_AUTH_TOKEN");
     const char *api_url = getenv("WORKSPACE_API_URL");
 
     if (workspace_id == NULL || token == NULL || api_url == NULL) {

@@ -231,6 +231,8 @@ function mapTrpcCode(code: string | undefined): GittermErrorCode {
       return "FORBIDDEN";
     case "BAD_REQUEST":
       return "BAD_REQUEST";
+    case "CONFLICT":
+      return "CONFLICT";
     default:
       return "SERVER_ERROR";
   }
@@ -437,14 +439,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         run(() => waitForWorkspaceSetup(workspaceId, waitOptions)),
     },
     runs: {
-      create: (input) =>
-        run(async () => {
-          if (input.waitForSetup) {
-            await waitForWorkspaceSetup(input.workspaceId, { timeoutMs: input.setupTimeoutMs });
-          }
-          const { waitForSetup: _wait, setupTimeoutMs: _timeout, ...request } = input;
-          return trpc.run.create.mutate(request);
-        }),
+      create: (input) => run(async () => trpc.run.create.mutate(input)),
       get: (workspaceId, runId) => run(async () => trpc.run.get.query({ workspaceId, runId })),
       messages: (workspaceId, runId) =>
         run(async () => trpc.run.messages.query({ workspaceId, runId })),
@@ -457,7 +452,12 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           const deadline = Date.now() + timeoutMs;
           while (true) {
             const result = await trpc.run.get.query({ workspaceId, runId });
-            if (result.status !== "running" && result.status !== "retrying") return result;
+            if (
+              result.status !== "pending" &&
+              result.status !== "running" &&
+              result.status !== "retrying"
+            )
+              return result;
             if (Date.now() >= deadline) {
               throw new GittermError("NETWORK", `Timed out waiting for run ${runId}`);
             }

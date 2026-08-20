@@ -39,8 +39,9 @@ export type GittermWorkspaceClient = {
 };
 
 export function getWorkspaceEnvironment(
-  environment: Record<string, string | undefined> = process.env,
+  environment?: Record<string, string | undefined>,
 ): WorkspaceEnvironment | null {
+  environment ??= typeof process === "undefined" ? {} : process.env;
   const serverUrl = environment.WORKSPACE_API_URL;
   const token = environment.WORKSPACE_AUTH_TOKEN;
   const workspaceId = environment.WORKSPACE_ID;
@@ -64,7 +65,8 @@ function errorCode(code: string | undefined): GittermErrorCode {
 export function createGittermWorkspaceClient(
   options: WorkspaceClientOptions = {},
 ): GittermWorkspaceClient {
-  const detected = getWorkspaceEnvironment();
+  const detected =
+    options.serverUrl && options.token && options.workspaceId ? null : getWorkspaceEnvironment();
   const serverUrl = options.serverUrl ?? detected?.serverUrl;
   const token = options.token ?? detected?.token;
   const workspaceId = options.workspaceId ?? detected?.workspaceId;

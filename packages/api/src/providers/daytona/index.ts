@@ -336,10 +336,12 @@ export class DaytonaProvider implements ComputeProvider {
             image,
             resources,
             labels: this.getWorkspaceLabels(config, spec, persistent),
-            envVars: {
-              ...spec?.agent.env,
-              AGENT_RUNTIME_UPGRADE: "1",
-            },
+            envVars: Object.fromEntries(
+              Object.entries({
+                ...config.environmentVariables,
+                AGENT_RUNTIME_UPGRADE: "1",
+              }).filter((entry): entry is [string, string] => entry[1] !== undefined),
+            ),
           },
           {
             timeout: 300,

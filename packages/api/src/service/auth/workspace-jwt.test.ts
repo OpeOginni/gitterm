@@ -19,4 +19,16 @@ describe("WorkspaceJWTService.hasScope", () => {
   test("supports an explicit global wildcard", () => {
     expect(WorkspaceJWTService.hasScope(payload(["*"]), "workspace:read")).toBe(true);
   });
+
+  test("durable workspace tokens contain only their explicit scopes", () => {
+    const token = WorkspaceJWTService.generateToken("workspace", "user", [
+      "workspace:read",
+      "port:*",
+    ]);
+    const decoded = WorkspaceJWTService.verifyToken(token);
+    expect(decoded.exp).toBeUndefined();
+    expect(WorkspaceJWTService.hasScope(decoded, "port:open")).toBe(true);
+    expect(WorkspaceJWTService.hasScope(decoded, "git:refresh")).toBe(false);
+    expect(WorkspaceJWTService.hasScope(decoded, "setup:write")).toBe(false);
+  });
 });
