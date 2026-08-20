@@ -1,4 +1,5 @@
 import { Template, waitForTimeout, type TemplateClass } from "e2b";
+import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
 
 /**
  * T3 Code server template. Mirrors .docker/T3Code.Server.Dockerfile:
@@ -16,6 +17,7 @@ export function createT3CodeServerTemplate(
         noInstallRecommends: true,
       })
       // node-pty (bundled by t3) has no linux-x64 prebuilds; needs python/make/g++.
+      .runCmd(GITTERM_CLI_CACHE_BUST)
       .npmInstall(
         [
           `t3@${t3Version}`,

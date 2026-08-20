@@ -1,5 +1,6 @@
 import { Template, waitForTimeout, defaultBuildLogger } from "e2b";
 import "dotenv/config";
+import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
 
 async function main() {
   const template = Template()
@@ -7,6 +8,7 @@ async function main() {
     .aptInstall(["git", "bash", "curl", "ca-certificates"], {
       noInstallRecommends: true,
     })
+    .runCmd(GITTERM_CLI_CACHE_BUST)
     .npmInstall(["@gitterm/opencode-workspace@1.18.0-workspaces.1", "@gitterm/cli@latest"], {
       g: true,
     })

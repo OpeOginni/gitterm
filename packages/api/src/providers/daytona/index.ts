@@ -43,6 +43,7 @@ const DEFAULT_AGENT_SERVE = {
   port: 4096,
 } as const;
 const DAYTONA_WORKSPACE_DIR = "/workspace";
+const DAYTONA_CREATE_TIMEOUT_SECONDS = 210;
 const SSH_ACCESS_TTL_MINUTES = 120;
 const SSH_ACCESS_REUSE_BUFFER_MS = 5 * 60 * 1000;
 
@@ -344,7 +345,9 @@ export class DaytonaProvider implements ComputeProvider {
             ),
           },
           {
-            timeout: 300,
+            // Leave enough time for the API to return an error before Bun's
+            // 255-second request timeout closes the client connection.
+            timeout: DAYTONA_CREATE_TIMEOUT_SECONDS,
             onSnapshotCreateLogs: (chunk) => {
               process.stdout.write(chunk);
             },

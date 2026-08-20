@@ -16,6 +16,7 @@ const PROVIDERS = [
 ] as const satisfies readonly ProviderKey[];
 
 const HOSTED_PROVIDERS = ["railway", "e2b", "daytona"] as const satisfies readonly ProviderKey[];
+const MAX_ENSURE_RUNNING_TIMEOUT_MS = 240_000;
 
 type StepResult = {
   name: string;
@@ -95,7 +96,9 @@ async function step<T>(
     console.log(`ok (${(durationMs / 1000).toFixed(1)}s)`);
     return result;
   } catch (error) {
-    console.log("failed");
+    const durationMs = Math.round(performance.now() - startedAt);
+    results.push({ name, durationMs });
+    console.log(`failed (${(durationMs / 1000).toFixed(1)}s)`);
     throw error;
   }
 }
@@ -139,7 +142,17 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
   const token = requiredEnv("GITTERM_API_TOKEN");
   const repo = requiredEnv("GITTERM_E2E_REPO");
   const agent = process.env.GITTERM_E2E_AGENT?.trim() || "opencode";
-  const timeoutMs = Number(process.env.GITTERM_E2E_TIMEOUT_MS ?? 15 * 60_000);
+  // Keep this in sync with workspace.ensureRunning's API validation limit.
+  const timeoutMs = Number(process.env.GITTERM_E2E_TIMEOUT_MS ?? MAX_ENSURE_RUNNING_TIMEOUT_MS);
+  if (
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs < 1_000 ||
+    timeoutMs > MAX_ENSURE_RUNNING_TIMEOUT_MS
+  ) {
+    throw new Error(
+      `GITTERM_E2E_TIMEOUT_MS must be an integer between 1000 and ${MAX_ENSURE_RUNNING_TIMEOUT_MS}`,
+    );
+  }
   const runTimeoutMs = Number(process.env.GITTERM_E2E_RUN_TIMEOUT_MS ?? 30 * 60_000);
   const runId = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const client = createGittermClient({ serverUrl, token });

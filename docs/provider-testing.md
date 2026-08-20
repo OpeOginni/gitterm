@@ -9,6 +9,21 @@ GitTerm's provider test suite has two layers:
 
 Use a dedicated GitTerm staging deployment with the providers configured in its database. The runner deliberately requires an explicit server and does not fall back to the production SDK default.
 
+When the GitTerm server runs on localhost, cloud workspaces and provider webhooks still need a public route back to it. Start the local proxy, listener, and a tunnel to the proxy, then set this server environment variable and restart the server:
+
+```bash
+WORKSPACE_API_URL=https://<tunnel-domain>/api/trpc
+```
+
+Configure webhook providers against the same tunnel:
+
+```text
+Railway: https://<tunnel-domain>/listener/trpc/railway.handleWebhook
+E2B:     https://<tunnel-domain>/listener/trpc/e2b.handleWebhook
+```
+
+Before testing scoped CLI commands, publish the current `@gitterm/cli`, rebuild the Docker and E2B agent images with the `Build Agent Images` workflow, and reseed the server database so provider metadata references the current images and setup commands.
+
 ```bash
 export GITTERM_SERVER_URL=https://staging-api.example.com
 export GITTERM_API_TOKEN=gt_...
@@ -23,7 +38,7 @@ Optional settings:
 
 ```bash
 export GITTERM_E2E_AGENT=opencode
-export GITTERM_E2E_TIMEOUT_MS=900000
+export GITTERM_E2E_TIMEOUT_MS=240000
 export GITTERM_E2E_RUN_TIMEOUT_MS=1800000
 ```
 

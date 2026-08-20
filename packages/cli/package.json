@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/cli",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Complete suit of gitterm tools in one CLI",
   "keywords": [
     "gitterm",
@@ -23,7 +23,7 @@
   },
   "scripts": {
     "dev:local": "bun --hot src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
+    "build": "bun build src/index.ts --outdir dist --target node",
     "prepublishOnly": "bun run build",
     "check-types": "tsc --noEmit"
   },

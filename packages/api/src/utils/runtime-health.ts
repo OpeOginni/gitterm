@@ -10,6 +10,32 @@ export type HttpRuntimeHealthPollOptions = {
   isHealthy?: (response: Response) => boolean;
 };
 
+const MAX_FETCH_ATTEMPT_MS = 10_000;
+
+async function fetchWithTimeout(
+  fetchImpl: NonNullable<HttpRuntimeHealthPollOptions["fetch"]>,
+  url: string,
+  headers: Record<string, string> | undefined,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      fetchImpl(url, { headers, signal: controller.signal }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error("Runtime health request timed out"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /** Poll an HTTP endpoint until it returns a healthy response or the deadline expires. */
 export async function pollHttpRuntimeHealth({
   url,
@@ -23,7 +49,8 @@ export async function pollHttpRuntimeHealth({
 
   do {
     try {
-      const response = await fetchImpl(url, { headers });
+      const attemptTimeoutMs = Math.max(1, Math.min(MAX_FETCH_ATTEMPT_MS, deadline - Date.now()));
+      const response = await fetchWithTimeout(fetchImpl, url, headers, attemptTimeoutMs);
       if (isHealthy(response)) return true;
     } catch {
       // Connection failures are expected while a runtime is starting.

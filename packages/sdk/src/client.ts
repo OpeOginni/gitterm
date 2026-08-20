@@ -347,9 +347,10 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
       const result = await trpc.workspace.getSetupStatus.query({ workspaceId });
       if (result.status === "not_requested" || result.status === "succeeded") return result;
       if (result.status === "failed") {
+        const log = result.log?.trim();
         throw new GittermError(
           "BAD_REQUEST",
-          `Workspace setup failed${result.exitCode === null ? "" : ` with exit code ${result.exitCode}`}`,
+          `Workspace setup failed${result.exitCode === null ? "" : ` with exit code ${result.exitCode}`}${log ? `\n${log}` : ""}`,
         );
       }
       if (Date.now() >= deadline) {

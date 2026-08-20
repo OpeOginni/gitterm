@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { DEFAULT_GITTERM_SERVER_URL, getWorkspaceEnvironment } from "@gitterm/sdk";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
