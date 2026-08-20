@@ -4,6 +4,7 @@ export type GittermErrorCode =
   | "NOT_FOUND"
   | "FORBIDDEN"
   | "BAD_REQUEST"
+  | "CONFLICT"
   | "SERVER_ERROR"
   | "NETWORK"
   | WorkspaceLifecycleErrorCode;

@@ -48,6 +48,7 @@ import {
 import type { E2BConfig } from "../../providers/e2b";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { ANON_WORKSPACE_TTL_SECONDS } from "../../service/anon/anon-lifetime";
+import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
 
 /**
  * Internal router for service-to-service communication
@@ -274,6 +275,7 @@ export const internalRouter = router({
 
       // Pause via provider
       const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      await finalizeWorkspaceAgentRuns(input.workspaceId, ws.userId);
       await computeProvider.pauseWorkspace(
         ws.externalInstanceId,
         workspaceRegion?.externalRegionIdentifier,
@@ -372,6 +374,7 @@ export const internalRouter = router({
         : [];
 
       const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      await finalizeWorkspaceAgentRuns(input.workspaceId, ws.userId);
 
       for (const exposedPort of Object.values(ws.exposedPorts ?? {})) {
         if (exposedPort?.externalPortDomainId) {
@@ -874,6 +877,7 @@ export const internalRouter = router({
             Promise.all([
               closeUsageSession(updatedWorkspace.id, "provider_auto"),
               deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+              finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
             ]),
           ),
         );
@@ -911,6 +915,7 @@ export const internalRouter = router({
             Promise.all([
               closeUsageSession(updatedWorkspace.id, "provider_auto"),
               deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+              finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
             ]),
           ),
         );
@@ -1027,6 +1032,7 @@ export const internalRouter = router({
             Promise.all([
               closeUsageSession(updatedWorkspace.id, "provider_auto"),
               deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+              finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
             ]),
           ),
         );
@@ -1058,6 +1064,7 @@ export const internalRouter = router({
             Promise.all([
               closeUsageSession(updatedWorkspace.id, "provider_auto"),
               deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+              finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
             ]),
           ),
         );

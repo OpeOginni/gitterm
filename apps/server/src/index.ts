@@ -138,6 +138,10 @@ app.post("/api/internal/workspace-heartbeat", async (c) => {
     );
   }
 
+  if (!workspaceJWT.hasScope(payload, "agent:heartbeat")) {
+    return c.json({ success: false, error: "insufficient_scope" }, 403);
+  }
+
   const body = (await c.req.json().catch(() => ({}))) as { workspaceId?: string };
   const workspaceId = body.workspaceId || payload.workspaceId;
 
@@ -156,6 +160,10 @@ app.post("/api/internal/workspace-heartbeat", async (c) => {
 
   if (existingWorkspace.userId !== payload.userId) {
     return c.json({ success: false, error: "workspace_ownership_mismatch" }, 403);
+  }
+
+  if (existingWorkspace.status !== "running" && existingWorkspace.status !== "pending") {
+    return c.json({ success: true, action: "shutdown", reason: "workspace_inactive" });
   }
 
   const hasQuota = await hasRemainingQuota(existingWorkspace.userId);

@@ -18,7 +18,7 @@ ARG OPENCODE_INSTALL_CACHE_BUST=manual
 RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
     && echo "npm latest opencode-ai: $(npm view opencode-ai@${OPENCODE_VERSION} version)" \
-    && npm install -g "opencode-ai@${OPENCODE_VERSION}" --prefer-online --no-audit --fund=false \
+    && npm install -g "opencode-ai@${OPENCODE_VERSION}" "@gitterm/cli@latest" --prefer-online --no-audit --fund=false \
     && echo "installed opencode: $(opencode --version)"
 
 WORKDIR /workspace

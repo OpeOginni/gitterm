@@ -10,6 +10,7 @@ import {
 } from "@gitterm/db/schema/workspace";
 import { agentType, image, cloudProvider, machineProfile, region } from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
+import { workspaceSetup } from "@gitterm/db/schema/workspace-setup";
 import { TRPCError } from "@trpc/server";
 import {
   getOrCreateDailyUsage,
@@ -23,6 +24,7 @@ import {
   isProviderImplemented,
   type PersistentWorkspaceInfo,
 } from "../../providers";
+import type { ComputeProvider } from "../../providers/compute";
 import { createProvisionLogger } from "../../providers/provision-logger";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
@@ -102,13 +104,37 @@ import { normalizeBaseCommit } from "../../utils/workspace-base-commit";
 import {
   buildWorkspaceRuntimeAccess,
   isResumableWorkspaceStatus,
+  resolveProjectDirectory,
 } from "../../service/workspace-runtime";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
 import {
   buildWorkspaceSetupCommand,
+  getWorkspaceSetupStatus,
   resolveWorkspaceSetupCommands,
+  withWorkspaceSetupPort,
 } from "../../service/workspace-setup";
+import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+async function relaunchWorkspaceSetup(
+  computeProvider: ComputeProvider,
+  record: typeof workspace.$inferSelect,
+  providerKey: string,
+) {
+  if (!computeProvider.execCommand || !record.setupRequired) return;
+  const setup = await db.query.workspaceSetup.findFirst({
+    where: eq(workspaceSetup.workspaceId, record.id),
+  });
+  if (!setup || setup.status === "succeeded" || setup.status === "failed") return;
+  const directory = resolveProjectDirectory(record.repositoryUrl, providerKey);
+  await computeProvider
+    .execCommand(record.externalInstanceId, `cd ${shellQuote(directory)} && ${setup.command}`)
+    .catch((error) => console.warn("Failed to relaunch workspace setup:", error));
+}
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -181,6 +207,25 @@ const workspaceCreateBaseSchema = z.object({
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
   modelCredentialIds: z.array(z.uuid()).max(50).optional(),
   setupCommands: workspaceSetupCommandsSchema.optional(),
+  opencode: z
+    .object({
+      skills: z
+        .array(
+          z.object({
+            name: z
+              .string()
+              .trim()
+              .min(1)
+              .max(64)
+              .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+            content: z.string().min(1).max(200_000),
+          }),
+        )
+        .max(50)
+        .optional(),
+      plugins: z.array(z.string().trim().min(1).max(500)).max(50).optional(),
+    })
+    .optional(),
 });
 
 const legacyWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
@@ -1350,6 +1395,10 @@ export const workspaceRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { workspaceAuth } = ctx;
 
+      if (!workspaceJWT.hasScope(workspaceAuth, "agent:heartbeat")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient agent scope" });
+      }
+
       // Verify workspace ID matches token
       if (workspaceAuth.workspaceId !== input.workspaceId) {
         throw new TRPCError({
@@ -1378,6 +1427,14 @@ export const workspaceRouter = router({
             code: "FORBIDDEN",
             message: "Workspace ownership mismatch",
           });
+        }
+
+        if (existingWorkspace.status !== "running" && existingWorkspace.status !== "pending") {
+          return {
+            success: true,
+            action: "shutdown" as const,
+            reason: "workspace_inactive",
+          };
         }
 
         // Check if workspace is still allowed to run (quota check)
@@ -2077,11 +2134,19 @@ export const workspaceRouter = router({
         }
 
         // Generate workspace-scoped JWT token (replaces shared INTERNAL_API_KEY)
-        const workspaceAuthToken = workspaceJWT.generateToken(
-          workspaceId,
-          userId,
-          ["port:*"], // All git scopes
-        );
+        const workspaceAuthToken = workspaceJWT.generateToken(workspaceId, userId, [
+          "workspace:read",
+          "port:*",
+          "git:fork",
+          "git:refresh",
+        ]);
+        const workspaceAgentAuthToken = workspaceJWT.generateToken(workspaceId, userId, [
+          "agent:credential",
+          "agent:heartbeat",
+        ]);
+        const workspaceSetupAuthToken = workspaceJWT.generateToken(workspaceId, userId, [
+          "setup:write",
+        ]);
 
         // API endpoint for workspace operations
         const WORKSPACE_API_URL =
@@ -2125,21 +2190,29 @@ export const workspaceRouter = router({
           credentials: await workspaceCreateLogger.step("fetch-model-credentials", () =>
             getUserProviderCredentials(userId, input.modelCredentialIds),
           ),
+          opencode: input.opencode,
         });
 
+        const setupCommands = await resolveWorkspaceSetupCommands({
+          cloudProviderId: input.cloudProviderId,
+          agentTypeId: input.agentTypeId,
+          requestedCommands: input.setupCommands,
+        });
+        const setupExecutionId = setupCommands.length > 0 ? randomUUID() : undefined;
         const setupCommand = buildWorkspaceSetupCommand(
-          await resolveWorkspaceSetupCommands({
-            cloudProviderId: input.cloudProviderId,
-            agentTypeId: input.agentTypeId,
-            requestedCommands: input.setupCommands,
-          }),
+          setupCommands,
           agentProvisioning.serve?.port,
+          { executionId: setupExecutionId },
         );
+        const runtimeSetupCommand =
+          setupCommand && agentProvisioning.serve && !["railway", "aws"].includes(providerKey)
+            ? withWorkspaceSetupPort(setupCommand, agentProvisioning.serve.port)
+            : setupCommand;
 
-        if (setupCommand && agentProvisioning.serve) {
+        if (runtimeSetupCommand && agentProvisioning.serve) {
           agentProvisioning.serve.postStartCommand = [
             agentProvisioning.serve.postStartCommand,
-            setupCommand,
+            runtimeSetupCommand,
           ]
             .filter(Boolean)
             .join("\n");
@@ -2169,7 +2242,7 @@ export const workspaceRouter = router({
               : undefined,
           workspaceProfile,
           editorAccessEnabled,
-          setupCommand,
+          setupCommand: runtimeSetupCommand,
         });
 
         // Serialize the spec + runtime vars into the env handed to the compute
@@ -2183,6 +2256,8 @@ export const workspaceRouter = router({
           repoOwner: repoInfo?.owner,
           workspaceId,
           workspaceAuthToken,
+          workspaceAgentAuthToken,
+          workspaceSetupAuthToken,
           workspaceApiUrl: WORKSPACE_API_URL,
           workspaceProvider: providerKey,
           userEnv: userWorkspaceEnvironmentVariables
@@ -2286,6 +2361,7 @@ export const workspaceRouter = router({
             launchProfileId: null,
             gitIntegrationId: input.gitIntegrationId ?? null,
             modelCredentialIds: input.modelCredentialIds ?? [],
+            setupRequired: Boolean(runtimeSetupCommand),
             persistent: effectivePersistent,
             regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,
@@ -2315,6 +2391,14 @@ export const workspaceRouter = router({
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to create workspace record",
+          });
+        }
+
+        if (runtimeSetupCommand && setupExecutionId) {
+          await db.insert(workspaceSetup).values({
+            workspaceId,
+            executionId: setupExecutionId,
+            command: runtimeSetupCommand,
           });
         }
 
@@ -2409,6 +2493,22 @@ export const workspaceRouter = router({
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }
+    }),
+
+  getSetupStatus: protectedProcedure
+    .input(z.object({ workspaceId: z.uuid() }))
+    .query(async ({ input, ctx }) => {
+      const workspaceRecord = await db.query.workspace.findFirst({
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, ctx.session.user.id)),
+        with: { image: { with: { agentType: true } } },
+      });
+      if (!workspaceRecord) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      }
+      if (!workspaceRecord.setupRequired) {
+        return getWorkspaceSetupStatus(workspaceRecord.id, false);
+      }
+      return getWorkspaceSetupStatus(workspaceRecord.id);
     }),
 
   getRuntimeAccess: protectedProcedure
@@ -2616,6 +2716,7 @@ export const workspaceRouter = router({
               workspaceRegion?.externalRegionIdentifier,
               existingWorkspace.externalRunningDeploymentId ?? undefined,
             );
+            await relaunchWorkspaceSetup(computeProvider, existingWorkspace, provider.providerKey);
           } catch (error) {
             await updateWorkspaceByIdAndInvalidate(
               input.workspaceId,
@@ -2805,6 +2906,7 @@ export const workspaceRouter = router({
 
         // Get compute provider and stop the workspace
         const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+        await finalizeWorkspaceAgentRuns(input.workspaceId, userId);
         if (existingWorkspace.sshConnection) {
           await computeProvider
             .revokeWorkspaceSSHAccess({
@@ -2942,6 +3044,7 @@ export const workspaceRouter = router({
           workspaceRegion?.externalRegionIdentifier,
           existingWorkspace.externalRunningDeploymentId ?? undefined,
         );
+        await relaunchWorkspaceSetup(computeProvider, existingWorkspace, provider.providerKey);
 
         const restartWorkspaceStatus =
           provider.restartSettlement === "immediate" ? "running" : "pending";
@@ -3028,6 +3131,7 @@ export const workspaceRouter = router({
 
       // Get compute provider and terminate the workspace
       const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      await finalizeWorkspaceAgentRuns(input.workspaceId, userId);
       const terminateInBackground = provider.providerKey === "aws";
       const externalVolumeId = fetchedWorkspace.persistent
         ? fetchedWorkspace.volume.externalVolumeId

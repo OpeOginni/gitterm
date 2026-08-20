@@ -1,0 +1,1 @@
+ALTER TABLE "workspace" ADD COLUMN "setup_required" boolean DEFAULT false NOT NULL;

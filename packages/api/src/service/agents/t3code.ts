@@ -3,8 +3,10 @@ import {
   buildOpencodeAuthJson,
   buildOpencodeConfigJson,
   buildOpencodeTuiConfigJson,
+  GITTERM_INSTRUCTIONS,
   OPENCODE_AUTH_PATH,
   OPENCODE_CONFIG_PATH,
+  OPENCODE_GITTERM_INSTRUCTIONS_PATH,
   OPENCODE_TUI_CONFIG_PATH,
 } from "./opencode";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
@@ -105,13 +107,27 @@ export const t3codeProvisioner: AgentProvisioner = {
     files.push({
       path: OPENCODE_CONFIG_PATH,
       contentBase64: toBase64(
-        buildOpencodeConfigJson(ctx.agentConfigs?.opencode, ctx.userDisplayName),
+        buildOpencodeConfigJson(
+          ctx.agentConfigs?.opencode,
+          ctx.userDisplayName,
+          ctx.opencode?.plugins,
+        ),
       ),
     });
     files.push({
       path: OPENCODE_TUI_CONFIG_PATH,
       contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
     });
+    files.push({
+      path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,
+      contentBase64: toBase64(GITTERM_INSTRUCTIONS),
+    });
+    for (const skill of ctx.opencode?.skills ?? []) {
+      files.push({
+        path: `~/.config/opencode/skills/${skill.name}/SKILL.md`,
+        contentBase64: toBase64(skill.content),
+      });
+    }
 
     const claudeConfig = ctx.agentConfigs?.["claude-code"];
     if (claudeConfig) {

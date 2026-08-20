@@ -78,6 +78,8 @@ export interface BuildWorkspaceEnvRuntimeParams {
   repoOwner?: string;
   workspaceId: string;
   workspaceAuthToken: string;
+  workspaceAgentAuthToken: string;
+  workspaceSetupAuthToken: string;
   workspaceApiUrl: string;
   workspaceProvider: string;
   /** User-defined env vars; reserved system keys are stripped before merge. */
@@ -111,6 +113,8 @@ export function buildWorkspaceEnv(
     REPO_NAME: spec.repo?.name,
     WORKSPACE_ID: runtime.workspaceId,
     WORKSPACE_AUTH_TOKEN: runtime.workspaceAuthToken,
+    WORKSPACE_AGENT_AUTH_TOKEN: runtime.workspaceAgentAuthToken,
+    WORKSPACE_SETUP_AUTH_TOKEN: runtime.workspaceSetupAuthToken,
     WORKSPACE_API_URL: runtime.workspaceApiUrl,
     WORKSPACE_PROVIDER: runtime.workspaceProvider,
     WORKSPACE_PROFILE: spec.workspaceProfile,

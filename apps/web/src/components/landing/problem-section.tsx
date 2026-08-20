@@ -1,4 +1,4 @@
-import { Cpu, GitBranch, Network } from "lucide-react";
+import { Boxes, Cpu, GitBranch, Network, Smartphone } from "lucide-react";
 
 const capabilities = [
   {
@@ -16,6 +16,16 @@ const capabilities = [
     title: "Same workflow.",
     body: "Branch, commit, and push to GitHub like you would locally. Cloud machine, laptop habits.",
   },
+  {
+    icon: Boxes,
+    title: "Agents on demand.",
+    body: "Give each task its own workspace. Run several agents at once, then shut them down when the work is done.",
+  },
+  {
+    icon: Smartphone,
+    title: "Code from anywhere.",
+    body: "Open your workspace from any device. No second computer to maintain, and you only pay for the compute you use.",
+  },
 ];
 
 export function ProblemSection() {
@@ -27,16 +37,19 @@ export function ProblemSection() {
       <div className="relative mx-auto max-w-[1100px] px-4 sm:px-6">
         <div className="mx-auto mb-10 max-w-2xl text-center sm:mx-0 sm:mb-12 sm:text-left">
           <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
-            When your laptop needs{" "}
-            <span className="font-display-accent text-[color:var(--cream)]">backup</span>.
+            When you need{" "}
+            <span className="font-display-accent text-[color:var(--cream)]">more</span> than your
+            computer.
           </h2>
         </div>
 
-        <div className="grid gap-px bg-white/[0.06] md:grid-cols-3">
+        <div className="grid gap-px bg-white/[0.06] md:grid-cols-6">
           {capabilities.map((item, idx) => (
             <div
-              key={idx}
-              className="group bg-background p-5 transition-colors hover:bg-card sm:p-7"
+              key={item.title}
+              className={`group bg-background p-5 transition-colors hover:bg-card sm:p-7 ${
+                idx < 3 ? "md:col-span-2" : "md:col-span-3"
+              }`}
             >
               <div className="mb-6">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.04] text-white/40 transition-colors group-hover:bg-primary/10 group-hover:text-primary">

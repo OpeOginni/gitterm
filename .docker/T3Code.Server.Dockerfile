@@ -31,6 +31,7 @@ RUN echo "t3 install cache bust: ${T3_INSTALL_CACHE_BUST}" \
     && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" --no-audit --fund=false \
     && npm install -g "@openai/codex@${CODEX_VERSION}" --no-audit --fund=false \
     && npm install -g "opencode-ai@${OPENCODE_VERSION}" --no-audit --fund=false \
+    && npm install -g "@gitterm/cli@latest" --no-audit --fund=false \
     && echo "installed t3: $(t3 --version 2>/dev/null || echo unknown)"
 
 # Set up working directory

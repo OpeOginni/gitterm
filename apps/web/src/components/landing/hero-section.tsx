@@ -269,7 +269,7 @@ function LaunchForm({
             <Button
               type="submit"
               disabled={isPending}
-              className="group/button h-10 shrink-0 self-center rounded-lg px-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] sm:w-[126px]"
+              className="group/button h-10 shrink-0 self-center rounded-lg px-3 font-mono text-[11px] font-bold uppercase tracking-[0.14em] sm:w-[126px]"
             >
               {isPending ? (
                 <>

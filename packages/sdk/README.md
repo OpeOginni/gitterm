@@ -78,6 +78,21 @@ const client = createGittermClient({
 const { workspaces } = await client.workspaces.list();
 ```
 
+The SDK deliberately exposes two clients. `createGittermClient()` uses a user API token and
+can manage the user's workspaces. `createGittermWorkspaceClient()` uses the scoped identity
+injected into a GitTerm workspace and can inspect only that workspace and its ports:
+
+```ts
+import { createGittermWorkspaceClient } from "@gitterm/sdk";
+
+const workspace = createGittermWorkspaceClient();
+const self = await workspace.self.get();
+const preview = await workspace.ports.open(3000, { name: "app" });
+```
+
+The workspace client never reads the CLI's saved account login and has no create, list,
+pause, restart, or terminate operations.
+
 ### With the CLI's saved login
 
 ```ts
@@ -114,6 +129,20 @@ await client.workspaces.create({
   repo: "https://github.com/acme/product",
   agent: "opencode",
   setupCommands: ["npm install", "npm run generate"],
+  opencode: {
+    skills: [
+      {
+        name: "release-demo",
+        content: `---
+name: release-demo
+description: Record and publish a product release demo.
+---
+
+Follow the repository's release-demo workflow.`,
+      },
+    ],
+    plugins: ["@acme/opencode-browser@1.2.3"],
+  },
   provider: {
     type: "exedev",
     machine: { type: "profile", key: "content-rendering" },
@@ -123,8 +152,10 @@ await client.workspaces.create({
 
 Setup commands run in order from the checked-out repository after the agent server is
 ready. They do not delay workspace creation or stop the agent if they fail. Provider and
-agent defaults configured by an administrator run first; inspect `~/.gitterm/setup/state`
-and `~/.gitterm/setup/setup.log` inside the workspace for the result.
+agent defaults configured by an administrator run first. Use
+`client.workspaces.setupStatus(workspaceId)` or `waitForSetup(workspaceId)` to inspect them.
+GitTerm persists the reported state and bounded log; a recovery copy also lives in the
+repository's git-excluded `.gitterm/setup/` directory.
 
 `provider` is a discriminated union, so TypeScript only offers `region` for providers
 where GitTerm supports caller-selected placement. Machine keys are configured by admins
@@ -135,6 +166,46 @@ This makes release automation a normal workspace task: create an OpenCode worksp
 run UI review or browser capture tools in the sandbox, upload the resulting media, update
 the changelog in the checked-out repository, then terminate the workspace. Use an
 `idempotencyKey` based on the release SHA when the workflow may be retried.
+
+### Agent runs
+
+Runs use durable GitTerm IDs backed by the workspace's native OpenCode session. Reusing an
+idempotency key with the same input returns the original run, and terminal results remain
+available after the workspace is paused. Completion means the native session became idle;
+it does not claim that a pull request, upload, or other product outcome succeeded.
+
+```ts
+const { workspace } = await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  setupCommands: ["npm install", "npm run db:seed"],
+});
+
+const run = await client.runs.create({
+  workspaceId: workspace.id,
+  idempotencyKey: "onboarding-v2",
+  waitForSetup: true,
+  prompt: "Record the new onboarding flow and open a pull request adding it to the changelog.",
+});
+
+const completed = await client.runs.wait(workspace.id, run.id);
+const messages = await client.runs.messages(workspace.id, run.id);
+```
+
+Runs are isolated by default and can execute in parallel. To preserve conversational context,
+continue a terminal run; continued runs sharing context must remain sequential:
+
+```ts
+const next = await client.runs.create({
+  workspaceId: workspace.id,
+  idempotencyKey: "onboarding-tests-v1",
+  prompt: "Now add tests for that change.",
+  context: { type: "continue", runId: completed.id },
+});
+```
+
+Use `client.runs.cancel(workspaceId, runId)` to abort the current run. GitTerm keeps the
+underlying OpenCode session private. For native session control, use
+`workspaces.getRuntimeAccess()` and connect with the official OpenCode SDK.
 
 ### Errors
 
@@ -155,7 +226,7 @@ try {
 Workspace lifecycle failures are also exposed as `WorkspaceLifecycleError`, with stable
 `WORKSPACE_TERMINATED`, `WORKSPACE_NON_RECOVERABLE`, `WORKSPACE_START_TIMEOUT`, and
 `WORKSPACE_RESTART_FAILED` codes. General codes are
-`NOT_LOGGED_IN`, `UNAUTHORIZED`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`,
+`NOT_LOGGED_IN`, `UNAUTHORIZED`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`, `CONFLICT`,
 `SERVER_ERROR`, and `NETWORK`.
 
 The package ships self-contained declarations from `dist`; TypeScript consumers do not

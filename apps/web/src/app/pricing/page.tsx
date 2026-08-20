@@ -3,12 +3,13 @@
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
-import { Check, X, Terminal, ExternalLink, ArrowRight, Loader2, Mail } from "lucide-react";
+import { Check, X, Terminal, ArrowRight, Loader2, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
+import { GitHub } from "@/components/logos/Github";
 
 type UserPlan = "free" | "starter" | "pro";
 type CheckoutPlanSlug = "starter" | "pro";
@@ -20,8 +21,6 @@ interface PlanTier {
   description: string;
   features: string[];
   popular?: boolean;
-  exclusive?: boolean;
-  isSelfHost?: boolean;
   actionLabel: string;
 }
 
@@ -32,8 +31,8 @@ const PLAN_TIERS: PlanTier[] = [
     description: "Try agentic coding on E2B sandboxes. No card required",
     features: [
       "60 minutes/day cloud runtime",
-      "10 agent runs/month",
-      "2 workspaces, kept 2 days idle",
+      "2 concurrent workspaces",
+      "2-day idle workspace retention",
       "E2B sandboxes only",
     ],
     actionLabel: "Get Started",
@@ -45,12 +44,12 @@ const PLAN_TIERS: PlanTier[] = [
     description: "For occasional builders who want every provider and persistence",
     features: [
       "180 minutes/day cloud runtime",
-      "75 agent runs/month",
-      "5 persistent workspaces, 7-day idle retention",
-      "All providers",
-      "Teams & custom subdomains",
+      "5 concurrent workspaces",
+      "7-day idle workspace retention",
+      "All providers available",
+      "Teams & Worksapce Sharing",
+      "Custom Subdomains",
     ],
-    popular: true,
     actionLabel: "Choose Starter",
   },
   {
@@ -60,24 +59,14 @@ const PLAN_TIERS: PlanTier[] = [
     description: "For serious solo builders who live in their workspaces",
     features: [
       "480 minutes/day cloud runtime",
-      "250 agent runs/month",
-      "15 persistent workspaces, 15-day idle retention",
-      "All providers",
-      "Teams, subdomains & priority support",
+      "15 concurrent workspaces",
+      "15-day idle workspace retention",
+      "All providers available",
+      "Teams & Worksapce Sharing",
+      "Custom Subdomains",
     ],
+    popular: true,
     actionLabel: "Go Pro",
-  },
-  {
-    name: "Self-Hosted",
-    description: "Full control with unlimited everything on your own infrastructure",
-    features: [
-      "Unlimited runtime, workspaces & retention",
-      "Deploy on Railway, AWS, or bare metal",
-      "Full data ownership, MIT licensed",
-    ],
-    exclusive: true,
-    isSelfHost: true,
-    actionLabel: "Deploy on Railway",
   },
 ];
 
@@ -93,13 +82,6 @@ const COMPARISON_ROWS: Array<{
     free: "60 min",
     starter: "180 min",
     pro: "480 min",
-    selfHosted: "Unlimited",
-  },
-  {
-    label: "Agent runs/month",
-    free: "10",
-    starter: "75",
-    pro: "250",
     selfHosted: "Unlimited",
   },
   {
@@ -201,7 +183,7 @@ function PricingCard({
   return (
     <div
       className={cn(
-        "relative flex w-full max-w-[420px] flex-col justify-between rounded-2xl border p-5 transition-colors sm:p-6 xl:max-w-none xl:flex-1 xl:basis-0",
+        "relative flex w-full max-w-[420px] flex-col justify-between rounded-2xl border p-5 transition-colors sm:p-6 md:max-w-none",
         plan.popular
           ? "border-primary/30 bg-primary/[0.04]"
           : "border-white/[0.06] bg-white/[0.02]",
@@ -215,11 +197,6 @@ function PricingCard({
           {plan.popular && (
             <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
               Popular
-            </span>
-          )}
-          {plan.exclusive && (
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/40">
-              Open Source
             </span>
           )}
         </div>
@@ -245,16 +222,7 @@ function PricingCard({
       </div>
 
       <div className="mt-8">
-        {plan.isSelfHost ? (
-          <Link
-            href="https://railway.com/template/gitterm?referralCode=o9MFOP"
-            target="_blank"
-            className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
-          >
-            {plan.actionLabel}
-            <ExternalLink className="ml-2 h-4 w-4" />
-          </Link>
-        ) : isCurrentPlan || isFreeCurrentPlan ? (
+        {isCurrentPlan || isFreeCurrentPlan ? (
           <span className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.06] px-6 py-2.5 font-mono text-sm text-white/30">
             Current Plan
           </span>
@@ -388,7 +356,7 @@ function PricingPageContent() {
           </div>
 
           {/* Plan cards */}
-          <div className="mx-auto flex max-w-[420px] flex-col items-center justify-center gap-5 xl:max-w-none xl:flex-row xl:items-stretch">
+          <div className="mx-auto grid max-w-[420px] grid-cols-1 gap-5 md:max-w-none md:grid-cols-3 md:items-stretch">
             {PLAN_TIERS.map((plan) => (
               <PricingCard
                 key={plan.name}
@@ -399,6 +367,49 @@ function PricingPageContent() {
                 loadingPlan={loadingPlan}
               />
             ))}
+          </div>
+
+          {/* Self-hosted option */}
+          <div className="mx-auto mt-5 flex max-w-[420px] flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:px-5 sm:py-4 md:max-w-none md:flex-row md:items-center md:justify-between md:px-6">
+            <div className="max-w-2xl">
+              <div className="mb-1 flex items-center gap-3">
+                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary/80">
+                  Open Source
+                </span>
+                <span className="h-px w-8 bg-primary/25" />
+              </div>
+              <h2 className="font-display text-xl font-light tracking-tight text-white sm:text-2xl">
+                Get all of GitTerm, free.
+              </h2>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-white/45 sm:text-sm">
+                Self-host the complete stack on your own infrastructure. Deploy it in one click or
+                fork the MIT-licensed source and run it anywhere.
+              </p>
+            </div>
+
+            <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+              <Link
+                href="https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <img
+                  src="https://railway.com/button.svg"
+                  alt="Deploy on Railway"
+                  height={40}
+                  className="h-10 opacity-90 transition-opacity hover:opacity-100"
+                />
+              </Link>
+              <Link
+                href="https://github.com/OpeOginni/gitterm"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.03] px-5 py-2.5 font-mono text-xs font-medium text-white/70 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+              >
+                <GitHub className="mr-2 h-4 w-4" />
+                View on GitHub
+              </Link>
+            </div>
           </div>
 
           {/* Plan comparison */}
@@ -421,8 +432,8 @@ function PricingPageContent() {
                   <tr className="border-b border-white/[0.06] bg-white/[0.02] font-mono text-[10px] uppercase tracking-[0.2em] text-white/35">
                     <th className="px-5 py-3 text-left font-medium">Feature</th>
                     <th className="px-4 py-3 text-center font-medium">Free</th>
-                    <th className="px-4 py-3 text-center font-medium text-primary">Starter</th>
-                    <th className="px-4 py-3 text-center font-medium">Pro</th>
+                    <th className="px-4 py-3 text-center font-medium">Starter</th>
+                    <th className="px-4 py-3 text-center font-medium text-primary">Pro</th>
                     <th className="px-4 py-3 text-center font-medium">Self-hosted</th>
                   </tr>
                 </thead>
@@ -433,10 +444,10 @@ function PricingPageContent() {
                       <td className="px-4 py-4 text-center">
                         <ComparisonValue value={row.free} />
                       </td>
-                      <td className="bg-primary/[0.025] px-4 py-4 text-center">
+                      <td className="px-4 py-4 text-center">
                         <ComparisonValue value={row.starter} />
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="bg-primary/2.5 px-4 py-4 text-center">
                         <ComparisonValue value={row.pro} />
                       </td>
                       <td className="px-4 py-4 text-center">
@@ -455,9 +466,8 @@ function PricingPageContent() {
               No AI markup. No middleman.
             </h3>
             <p className="text-sm leading-relaxed text-white/50">
-              You bring your own Anthropic, OpenAI, or Copilot keys — that spend stays between you
-              and the provider. Paid plans only cover the cloud workspace itself: compute, storage,
-              and multi-cloud orchestration.
+              You bring your own Model Provider keys/subscriptions. <br /> Paid plans only cover the
+              cloud workspace itself: compute, storage, and multi-cloud orchestration.
             </p>
           </div>
 

@@ -108,6 +108,7 @@ export const workspace = pgTable(
     editorTarget: workspaceEditorTargetEnum("editor_target"),
     sshConnection: jsonb("editor_connection").$type<WorkspaceSSHConnection | null>(),
     modelCredentialIds: jsonb("model_credential_ids").$type<string[]>().notNull().default([]),
+    setupRequired: boolean("setup_required").notNull().default(false),
 
     // Workspace hosting configuration
     hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"),
