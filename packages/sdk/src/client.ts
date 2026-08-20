@@ -231,6 +231,8 @@ function mapTrpcCode(code: string | undefined): GittermErrorCode {
       return "FORBIDDEN";
     case "BAD_REQUEST":
       return "BAD_REQUEST";
+    case "CONFLICT":
+      return "CONFLICT";
     default:
       return "SERVER_ERROR";
   }

@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   index,
   jsonb,
   pgEnum,
@@ -38,7 +39,11 @@ export const agentRun = pgTable(
       .references(() => workspace.id, { onDelete: "cascade" }),
     idempotencyKey: text("idempotency_key").notNull(),
     requestHash: text("request_hash").notNull(),
+    parentRunId: uuid("parent_run_id").references((): AnyPgColumn => agentRun.id, {
+      onDelete: "set null",
+    }),
     nativeSessionId: text("native_session_id"),
+    nativeMessageId: text("native_message_id").notNull(),
     status: agentRunStatusEnum("status").notNull().default("pending"),
     title: text("title").notNull(),
     errorMessage: text("error_message"),
@@ -54,10 +59,8 @@ export const agentRun = pgTable(
       table.workspaceId,
       table.idempotencyKey,
     ),
-    uniqueIndex("agent_run_workspace_native_session_unique").on(
-      table.workspaceId,
-      table.nativeSessionId,
-    ),
+    uniqueIndex("agent_run_parent_run_unique").on(table.parentRunId),
+    index("agent_run_workspace_native_session_idx").on(table.workspaceId, table.nativeSessionId),
     index("agent_run_workspace_status_idx").on(table.workspaceId, table.status),
   ],
 );

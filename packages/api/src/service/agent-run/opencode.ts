@@ -2,6 +2,23 @@ import { createOpencodeClient, type SessionStatus } from "@opencode-ai/sdk";
 
 export type AgentRunStatus = "running" | "retrying" | "completed" | "failed" | "cancelled";
 
+export function isOpencodeRunMessage(
+  info: { id: string; role: "user" } | { id: string; role: "assistant"; parentID: string },
+  messageId: string,
+): boolean {
+  return info.id === messageId || (info.role === "assistant" && info.parentID === messageId);
+}
+
+export function findLastOpencodeRunAssistant<
+  T extends {
+    info: { id: string; role: "user" } | { id: string; role: "assistant"; parentID: string };
+  },
+>(messages: readonly T[], messageId: string): T | undefined {
+  return messages.findLast(
+    (message) => message.info.role === "assistant" && isOpencodeRunMessage(message.info, messageId),
+  );
+}
+
 export function mapOpencodeRunStatus(
   status: SessionStatus | undefined,
   errorName?: string,
@@ -97,19 +114,23 @@ export async function getOpencodeRun(input: {
   password?: string | null;
   workspaceId: string;
   runId: string;
+  messageId: string;
   missingAssistantIsFailure?: boolean;
 }) {
   const client = createWorkspaceOpencodeClient(input);
-  const [session, statuses, messages] = await Promise.all([
+  const [session, statuses] = await Promise.all([
     client.session.get({ path: { id: input.runId }, query: { directory: input.directory } }),
     client.session.status({ query: { directory: input.directory } }),
-    client.session.messages({ path: { id: input.runId }, query: { directory: input.directory } }),
   ]);
   if (session.error || !session.data) throw new Error(errorMessage(session.error));
   if (statuses.error || !statuses.data) throw new Error(errorMessage(statuses.error));
+  const messages = await client.session.messages({
+    path: { id: input.runId },
+    query: { directory: input.directory },
+  });
   if (messages.error || !messages.data) throw new Error(errorMessage(messages.error));
 
-  const assistant = messages.data.findLast((message) => message.info.role === "assistant");
+  const assistant = findLastOpencodeRunAssistant(messages.data, input.messageId);
   const assistantError = assistant?.info.role === "assistant" ? assistant.info.error : undefined;
   const missingAssistantError =
     !assistant && input.missingAssistantIsFailure
@@ -133,40 +154,27 @@ export async function getOpencodeRun(input: {
     ),
     error: assistantError ? errorMessage(assistantError) : missingAssistantError,
     finalText: finalText || null,
+    messages: messages.data
+      .filter((message) => isOpencodeRunMessage(message.info, input.messageId))
+      .map((message) => ({
+        id: message.info.id,
+        role: message.info.role,
+        createdAt: new Date(message.info.time.created).toISOString(),
+        completedAt:
+          message.info.role === "assistant" && message.info.time.completed
+            ? new Date(message.info.time.completed).toISOString()
+            : null,
+        text: message.parts
+          .filter((part) => part.type === "text" && !part.ignored)
+          .map((part) => (part.type === "text" ? part.text : ""))
+          .join("\n")
+          .trim(),
+        error:
+          message.info.role === "assistant" && message.info.error
+            ? errorMessage(message.info.error)
+            : null,
+      })),
   };
-}
-
-export async function getOpencodeRunMessages(input: {
-  url: string;
-  directory: string;
-  password?: string | null;
-  runId: string;
-}) {
-  const client = createWorkspaceOpencodeClient(input);
-  const result = await client.session.messages({
-    path: { id: input.runId },
-    query: { directory: input.directory },
-  });
-  if (result.error || !result.data) throw new Error(errorMessage(result.error));
-
-  return result.data.map((message) => ({
-    id: message.info.id,
-    role: message.info.role,
-    createdAt: new Date(message.info.time.created).toISOString(),
-    completedAt:
-      message.info.role === "assistant" && message.info.time.completed
-        ? new Date(message.info.time.completed).toISOString()
-        : null,
-    text: message.parts
-      .filter((part) => part.type === "text" && !part.ignored)
-      .map((part) => (part.type === "text" ? part.text : ""))
-      .join("\n")
-      .trim(),
-    error:
-      message.info.role === "assistant" && message.info.error
-        ? errorMessage(message.info.error)
-        : null,
-  }));
 }
 
 export async function cancelOpencodeRun(input: {

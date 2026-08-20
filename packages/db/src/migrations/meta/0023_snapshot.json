@@ -556,11 +556,23 @@
           "primaryKey": false,
           "notNull": true
         },
+        "parent_run_id": {
+          "name": "parent_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "native_session_id": {
           "name": "native_session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "native_message_id": {
+          "name": "native_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         },
         "status": {
           "name": "status",
@@ -644,8 +656,23 @@
           "method": "btree",
           "with": {}
         },
-        "agent_run_workspace_native_session_unique": {
-          "name": "agent_run_workspace_native_session_unique",
+        "agent_run_parent_run_unique": {
+          "name": "agent_run_parent_run_unique",
+          "columns": [
+            {
+              "expression": "parent_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "agent_run_workspace_native_session_idx": {
+          "name": "agent_run_workspace_native_session_idx",
           "columns": [
             {
               "expression": "workspace_id",
@@ -660,7 +687,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -695,6 +722,15 @@
           "columnsFrom": ["workspace_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_run_parent_run_id_agent_run_id_fk": {
+          "name": "agent_run_parent_run_id_agent_run_id_fk",
+          "tableFrom": "agent_run",
+          "tableTo": "agent_run",
+          "columnsFrom": ["parent_run_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

@@ -13,7 +13,6 @@ import {
   createOpencodeSession,
   deleteOpencodeSession,
   getOpencodeRun,
-  getOpencodeRunMessages,
   submitOpencodePrompt,
 } from "./opencode";
 
@@ -31,6 +30,7 @@ type RunCreateInput = {
   model?: string;
   waitForSetup?: boolean;
   setupTimeoutMs?: number;
+  context?: { type: "isolated" } | { type: "continue"; runId: string };
 };
 
 function requestHash(input: RunCreateInput): string {
@@ -42,6 +42,10 @@ function requestHash(input: RunCreateInput): string {
         title: input.title ?? null,
         agent: input.agent ?? null,
         model: input.model ?? null,
+        context:
+          input.context?.type === "continue"
+            ? { type: "continue", runId: input.context.runId }
+            : { type: "isolated" },
       }),
     )
     .digest("hex");
@@ -55,6 +59,9 @@ function publicRun(run: AgentRun) {
     status: run.status,
     error: run.errorMessage,
     finalText: run.finalText,
+    context: run.parentRunId
+      ? { type: "continued" as const, runId: run.parentRunId }
+      : { type: "isolated" as const },
   };
 }
 
@@ -207,25 +214,22 @@ async function reconcileRun(run: AgentRun, userId: string): Promise<AgentRun> {
   const missingAssistantIsFailure =
     Boolean(run.submittedAt) &&
     Date.now() - (run.submittedAt?.getTime() ?? Date.now()) >= MISSING_ASSISTANT_GRACE_MS;
-  const [native, messages] = await Promise.all([
-    getOpencodeRun({
-      ...target,
-      workspaceId: run.workspaceId,
-      runId: run.nativeSessionId,
-      missingAssistantIsFailure,
-    }),
-    getOpencodeRunMessages({ ...target, runId: run.nativeSessionId }),
-  ]);
+  const native = await getOpencodeRun({
+    ...target,
+    workspaceId: run.workspaceId,
+    runId: run.nativeSessionId,
+    messageId: run.nativeMessageId,
+    missingAssistantIsFailure,
+  });
   const terminal =
     native.status === "completed" || native.status === "failed" || native.status === "cancelled";
   const [updated] = await db
     .update(agentRun)
     .set({
-      title: native.title,
       status: native.status,
       errorMessage: native.error,
       finalText: native.finalText,
-      messages,
+      messages: native.messages,
       completedAt: terminal ? new Date() : null,
       updatedAt: new Date(),
     })
@@ -259,6 +263,23 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
   }
 
   const id = randomUUID();
+  const nativeMessageId = `msg_${id.replaceAll("-", "")}`;
+  let parentRun: AgentRun | undefined;
+  if (input.context?.type === "continue") {
+    parentRun = await getOwnedRun(input.workspaceId, input.context.runId, userId);
+    if (ACTIVE_RUN_STATUSES.includes(parentRun.status as (typeof ACTIVE_RUN_STATUSES)[number])) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "The previous run must finish before its context can be continued",
+      });
+    }
+    if (!parentRun.nativeSessionId) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "The previous run does not have reusable context",
+      });
+    }
+  }
   const [inserted] = await db
     .insert(agentRun)
     .values({
@@ -266,11 +287,12 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       workspaceId: input.workspaceId,
       idempotencyKey: input.idempotencyKey,
       requestHash: hash,
+      parentRunId: parentRun?.id,
+      nativeSessionId: parentRun?.nativeSessionId,
+      nativeMessageId,
       title: input.title ?? "Agent run",
     })
-    .onConflictDoNothing({
-      target: [agentRun.workspaceId, agentRun.idempotencyKey],
-    })
+    .onConflictDoNothing()
     .returning();
 
   if (!inserted) {
@@ -281,7 +303,10 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       ),
     });
     if (!racedExisting) {
-      throw new TRPCError({ code: "CONFLICT", message: "Run creation conflicted" });
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "The selected run context has already been continued",
+      });
     }
     if (racedExisting.requestHash !== hash) {
       throw new TRPCError({
@@ -292,15 +317,21 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
     return publicRun(await reconcileRun(racedExisting, userId));
   }
 
-  let nativeSessionId: string | undefined;
+  let nativeSessionId = inserted.nativeSessionId ?? undefined;
+  let ownsNativeSession = false;
   try {
-    const native = await createOpencodeSession({ ...target, title: input.title });
-    nativeSessionId = native.id;
+    let nativeTitle = inserted.title;
+    if (!nativeSessionId) {
+      const native = await createOpencodeSession({ ...target, title: input.title });
+      nativeSessionId = native.id;
+      nativeTitle = native.title;
+      ownsNativeSession = true;
+    }
     const [submitting] = await db
       .update(agentRun)
       .set({
-        nativeSessionId: native.id,
-        title: native.title,
+        nativeSessionId,
+        title: nativeTitle,
         status: "running",
         submittedAt: new Date(),
         updatedAt: new Date(),
@@ -308,28 +339,38 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       .where(and(eq(agentRun.id, inserted.id), eq(agentRun.status, "pending")))
       .returning();
     if (!submitting) {
-      await cancelNativeRun(target, native.id).catch(() => undefined);
-      await deleteNativeSession(target, native.id).catch(() => undefined);
+      if (ownsNativeSession) {
+        await cancelNativeRun(target, nativeSessionId).catch(() => undefined);
+        await deleteNativeSession(target, nativeSessionId).catch(() => undefined);
+      }
       return publicRun(await getOwnedRun(input.workspaceId, inserted.id, userId));
     }
     await submitOpencodePrompt({
       ...target,
-      sessionId: native.id,
-      messageId: `msg_${inserted.id.replaceAll("-", "")}`,
+      sessionId: nativeSessionId,
+      messageId: nativeMessageId,
       prompt: input.prompt,
       agent: input.agent,
       model: input.model,
     });
     const current = await getOwnedRun(input.workspaceId, inserted.id, userId);
     if (!ACTIVE_RUN_STATUSES.includes(current.status as (typeof ACTIVE_RUN_STATUSES)[number])) {
-      await cancelNativeRun(target, native.id).catch(() => undefined);
-      await deleteNativeSession(target, native.id).catch(() => undefined);
+      await cancelNativeRun(target, nativeSessionId).catch(() => undefined);
+      if (ownsNativeSession) {
+        await deleteNativeSession(target, nativeSessionId).catch(() => undefined);
+      }
     }
     return publicRun(current);
   } catch (error) {
     if (nativeSessionId) {
       await cancelNativeRun(target, nativeSessionId).catch(() => undefined);
-      await deleteNativeSession(target, nativeSessionId).catch(() => undefined);
+      if (ownsNativeSession) {
+        await deleteNativeSession(target, nativeSessionId).catch(() => undefined);
+        await db
+          .update(agentRun)
+          .set({ nativeSessionId: null, updatedAt: new Date() })
+          .where(eq(agentRun.id, inserted.id));
+      }
     }
     const failed = await failRun(
       inserted.id,
@@ -355,50 +396,42 @@ export async function cancelAgentRun(workspaceId: string, runId: string, userId:
     return { cancelled: run.status === "cancelled" };
   }
 
-  const [updated] = await db
-    .update(agentRun)
-    .set({ status: "cancelled", completedAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(agentRun.id, run.id), inArray(agentRun.status, [...ACTIVE_RUN_STATUSES])))
-    .returning();
-  if (!updated) {
-    const current = await getOwnedRun(workspaceId, runId, userId);
-    return { cancelled: current.status === "cancelled" };
-  }
-
-  if (updated.nativeSessionId) {
+  let contextReusable = false;
+  if (run.nativeSessionId) {
     const workspaceRecord = await getRunWorkspace(workspaceId, userId);
     if (workspaceRecord.status === "running") {
       const target = await getRuntimeTarget(workspaceId, userId);
-      await cancelNativeRun(target, updated.nativeSessionId).catch(() => undefined);
+      contextReusable = await cancelNativeRun(target, run.nativeSessionId)
+        .then(() => true)
+        .catch(() => false);
     }
   }
-  return { cancelled: true };
-}
 
-export async function finalizeWorkspaceAgentRuns(workspaceId: string, userId: string) {
-  await getRunWorkspace(workspaceId, userId);
-  const now = new Date();
-  const runs = await db
+  const [updated] = await db
     .update(agentRun)
     .set({
       status: "cancelled",
-      errorMessage: "Workspace stopped before the run completed",
-      completedAt: now,
-      updatedAt: now,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+      nativeSessionId: contextReusable ? run.nativeSessionId : null,
     })
+    .where(and(eq(agentRun.id, run.id), inArray(agentRun.status, [...ACTIVE_RUN_STATUSES])))
+    .returning();
+  if (updated) return { cancelled: true };
+
+  const current = await getOwnedRun(workspaceId, runId, userId);
+  return { cancelled: current.status === "cancelled" };
+}
+
+export async function finalizeWorkspaceAgentRuns(workspaceId: string, userId: string) {
+  const runs = await db
+    .select({ id: agentRun.id })
+    .from(agentRun)
     .where(
       and(
         eq(agentRun.workspaceId, workspaceId),
         inArray(agentRun.status, [...ACTIVE_RUN_STATUSES]),
       ),
-    )
-    .returning();
-
-  const nativeRuns = runs.filter((run) => run.nativeSessionId);
-  if (nativeRuns.length === 0) return;
-
-  const workspaceRecord = await getRunWorkspace(workspaceId, userId);
-  if (workspaceRecord.status !== "running") return;
-  const target = await getRuntimeTarget(workspaceId, userId);
-  await Promise.allSettled(nativeRuns.map((run) => cancelNativeRun(target, run.nativeSessionId!)));
+    );
+  await Promise.all(runs.map((run) => cancelAgentRun(workspaceId, run.id, userId)));
 }

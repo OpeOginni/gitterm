@@ -191,8 +191,21 @@ const completed = await client.runs.wait(workspace.id, run.id);
 const messages = await client.runs.messages(workspace.id, run.id);
 ```
 
-Use `client.runs.cancel(workspaceId, runId)` to abort the native session. Direct workspace
-URLs remain available when an integration wants to use the OpenCode SDK itself.
+Runs are isolated by default and can execute in parallel. To preserve conversational context,
+continue a terminal run; continued runs sharing context must remain sequential:
+
+```ts
+const next = await client.runs.create({
+  workspaceId: workspace.id,
+  idempotencyKey: "onboarding-tests-v1",
+  prompt: "Now add tests for that change.",
+  context: { type: "continue", runId: completed.id },
+});
+```
+
+Use `client.runs.cancel(workspaceId, runId)` to abort the current run. GitTerm keeps the
+underlying OpenCode session private. For native session control, use
+`workspaces.getRuntimeAccess()` and connect with the official OpenCode SDK.
 
 ### Errors
 
@@ -213,7 +226,7 @@ try {
 Workspace lifecycle failures are also exposed as `WorkspaceLifecycleError`, with stable
 `WORKSPACE_TERMINATED`, `WORKSPACE_NON_RECOVERABLE`, `WORKSPACE_START_TIMEOUT`, and
 `WORKSPACE_RESTART_FAILED` codes. General codes are
-`NOT_LOGGED_IN`, `UNAUTHORIZED`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`,
+`NOT_LOGGED_IN`, `UNAUTHORIZED`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`, `CONFLICT`,
 `SERVER_ERROR`, and `NETWORK`.
 
 The package ships self-contained declarations from `dist`; TypeScript consumers do not

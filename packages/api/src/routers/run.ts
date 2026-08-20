@@ -34,6 +34,12 @@ export const runRouter = router({
         agent: z.string().trim().min(1).max(100).optional(),
         model: z.string().trim().min(3).max(255).optional(),
         waitForSetup: z.boolean().optional(),
+        context: z
+          .discriminatedUnion("type", [
+            z.object({ type: z.literal("isolated") }).strict(),
+            z.object({ type: z.literal("continue"), runId: z.uuid() }).strict(),
+          ])
+          .optional(),
         setupTimeoutMs: z
           .number()
           .int()

@@ -174,6 +174,7 @@ export type AgentRun = {
   status: AgentRunStatus;
   error: string | null;
   finalText: string | null;
+  context: { type: "isolated" } | { type: "continued"; runId: string };
 };
 
 export type AgentRunCreateInput = {
@@ -185,6 +186,8 @@ export type AgentRunCreateInput = {
   agent?: string;
   /** OpenCode model in provider/model format. */
   model?: string;
+  /** Start with fresh context (default), or continue a terminal run's context. */
+  context?: { type: "isolated" } | { type: "continue"; runId: string };
   /** Wait for workspace setup commands before submitting the prompt. */
   waitForSetup?: boolean;
   setupTimeoutMs?: number;
