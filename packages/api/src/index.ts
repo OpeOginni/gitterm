@@ -5,6 +5,8 @@ import env from "@gitterm/env/server";
 import { verifyApiToken } from "./service/auth/api-token";
 import { db, eq } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
+import type { ApiTokenScope } from "@gitterm/schema";
+import type { WorkspaceTokenPurpose } from "./service/auth/workspace-jwt";
 
 // Internal service API key for service-to-service communication
 const INTERNAL_API_KEY = env.INTERNAL_API_KEY;
@@ -31,44 +33,59 @@ export const publicProcedure = t.procedure;
 // Export AppRouter type for clients
 export type { AppRouter } from "./routers/index";
 
-export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
-  if (ctx.session) {
+/** Browser-session authentication. API tokens must use an explicitly scoped procedure. */
+export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.session) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Browser session required" });
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      session: ctx.session,
+      authMethod: "session" as const,
+      apiToken: null,
+    },
+  });
+});
+
+/** Browser sessions are unrestricted; API tokens require the declared capability. */
+export const accountProcedure = (requiredScope: ApiTokenScope) =>
+  t.procedure.use(async ({ ctx, next }) => {
+    if (ctx.session) {
+      return next({
+        ctx: {
+          ...ctx,
+          session: ctx.session,
+          authMethod: "session" as const,
+        },
+      });
+    }
+
+    const token = ctx.bearerToken;
+    const verified = token ? await verifyApiToken(token) : null;
+    if (!verified) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
+    }
+    if (!verified.scopes.includes(requiredScope)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `API token lacks required scope: ${requiredScope}`,
+      });
+    }
+
+    const [apiUser] = await db.select().from(user).where(eq(user.id, verified.userId)).limit(1);
+    if (!apiUser) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
+    }
+
     return next({
       ctx: {
         ...ctx,
-        session: ctx.session,
-        authMethod: "session" as const,
+        session: { user: apiUser } as unknown as NonNullable<Context["session"]>,
+        authMethod: "apiToken" as const,
       },
     });
-  }
-
-  const token = ctx.bearerToken;
-  if (token) {
-    // User API tokens (`gt_...`): DB-backed and revocable, created from the
-    // web UI (Settings -> Account -> API tokens) or the CLI device-code flow.
-    const verified = await verifyApiToken(token);
-
-    if (verified) {
-      const [apiUser] = await db.select().from(user).where(eq(user.id, verified.userId)).limit(1);
-
-      if (apiUser) {
-        return next({
-          ctx: {
-            ...ctx,
-            session: { user: apiUser } as unknown as NonNullable<Context["session"]>,
-            authMethod: "apiToken" as const,
-          },
-        });
-      }
-    }
-  }
-
-  throw new TRPCError({
-    code: "UNAUTHORIZED",
-    message: "Authentication required",
-    cause: "No session or valid API token",
   });
-});
 
 /**
  * Session-only procedure - requires a browser session (better-auth cookie) and
@@ -217,39 +234,44 @@ export const cloudflareWebhookProcedure = t.procedure.use(({ ctx, next }) => {
  * - User sessions: Cookie-based (better-auth)
  * - Workspace auth: Bearer token in Authorization header
  */
-export const workspaceAuthProcedure = t.procedure.use(({ ctx, next }) => {
-  const token = ctx.bearerToken;
+const workspaceProcedure = (purpose: WorkspaceTokenPurpose) =>
+  t.procedure.use(({ ctx, next }) => {
+    const token = ctx.bearerToken;
 
-  if (!token) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Workspace authentication token required",
-    });
-  }
+    if (!token) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Workspace authentication token required",
+      });
+    }
 
-  // Ensure this is NOT a user session request
-  // Workspace requests should not have user sessions
-  if (ctx.session) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        "Workspace endpoints cannot be called with user session. Use workspace JWT token only.",
-    });
-  }
+    // Ensure this is NOT a user session request
+    // Workspace requests should not have user sessions
+    if (ctx.session) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Workspace endpoints cannot be called with user session. Use workspace JWT token only.",
+      });
+    }
 
-  try {
-    const payload = workspaceJWT.verifyToken(token);
+    try {
+      const payload = workspaceJWT.verifyToken(token, purpose);
 
-    return next({
-      ctx: {
-        ...ctx,
-        workspaceAuth: payload,
-      },
-    });
-  } catch (error) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: error instanceof Error ? error.message : "Invalid workspace token",
-    });
-  }
-});
+      return next({
+        ctx: {
+          ...ctx,
+          workspaceAuth: payload,
+        },
+      });
+    } catch (error) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: error instanceof Error ? error.message : "Invalid workspace token",
+      });
+    }
+  });
+
+export const workspaceAuthProcedure = workspaceProcedure("workspace");
+export const workspaceAgentAuthProcedure = workspaceProcedure("agent");
+export const workspaceSetupAuthProcedure = workspaceProcedure("setup");

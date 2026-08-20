@@ -47,6 +47,7 @@ export const apiToken = pgTable("api_token", {
   name: text("name").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
   tokenPrefix: text("token_prefix").notNull(),
+  scopes: text("scopes").array().notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   expiresAt: timestamp("expires_at"),
   lastUsedAt: timestamp("last_used_at"),

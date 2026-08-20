@@ -90,7 +90,6 @@ async function executeAgentRun(
     repoOwner,
     repoName,
     branch,
-    gitAuthToken,
     prompt,
     featureListPath,
     documentedProgressPath,
@@ -108,19 +107,19 @@ if [ "$1" = "get" ]; then
     echo "protocol=https"
     echo "host=github.com"
     echo "username=x-access-token"
-    echo "password=${gitAuthToken}"
+    echo "password=$GITHUB_APP_TOKEN"
 fi
 `,
   );
 
   await sandbox.exec(
-    "git config --global credential.helper '/workspace/.git-credential-helper.sh'",
+    "chmod 700 /workspace/.git-credential-helper.sh && git config --global credential.helper '/workspace/.git-credential-helper.sh'",
   );
 
   await sandbox.exec('git config --global user.name "Opencode: Gitterm"');
   await sandbox.exec('git config --global user.email "opencode@gitterm.dev"');
 
-  const repoUrl = `https://x-access-token:${gitAuthToken}@github.com/${repoPath}.git`;
+  const repoUrl = `https://github.com/${repoPath}.git`;
   const checkoutResult = await sandbox.gitCheckout(repoUrl, {
     branch: branch,
     targetDir: `/root/workspace/${repoName}`,
@@ -300,6 +299,8 @@ export default {
         AGENT_CALLBACK_SECRET: config.callbackSecret,
         RUN_ID: config.runId,
         SANDBOX_ID: config.userSandboxId,
+        GITHUB_APP_TOKEN: config.gitAuthToken,
+        GIT_TERMINAL_PROMPT: "0",
       });
 
       const result = await executeAgentRun(config, sandbox);

@@ -19,7 +19,6 @@ import {
   renderWorkspaceInviteEmail,
 } from "../../service/email/invite-templates";
 import { sendEmail } from "../../service/email/mailer";
-import { decryptWorkspacePassword } from "../../utils/workspace-password";
 import { canShareWorkspaces, type UserPlan } from "../../config";
 
 const roleSchema = z.enum(["viewer", "editor", "admin"]);
@@ -1058,25 +1057,17 @@ export const workspaceShareRouter = router({
     const workspaces = rows.map((ws) => {
       const ctx = access.get(ws.id)!;
       const owner = ownerById.get(ws.userId) ?? null;
-      const serverPassword =
-        ws.serverPassword && ws.serverOnly
-          ? safeDecryptPassword(ws.serverPassword, ws.id)
-          : ws.serverPassword;
-      return { ...ws, serverPassword, access: { ...ctx, owner } };
+      return {
+        ...ws,
+        serverPassword: null,
+        hasAccessCredential: Boolean(ws.serverPassword),
+        access: { ...ctx, owner },
+      };
     });
 
     return { success: true, workspaces };
   }),
 });
-
-function safeDecryptPassword(value: string, workspaceId: string): string | null {
-  try {
-    return decryptWorkspacePassword(value);
-  } catch (error) {
-    console.error(`Failed to decrypt password for workspace ${workspaceId}:`, error);
-    return null;
-  }
-}
 
 export async function userCanAccessWorkspace(workspaceId: string, userId: string) {
   const [record] = await db

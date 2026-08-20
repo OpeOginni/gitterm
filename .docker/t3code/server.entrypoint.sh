@@ -7,6 +7,7 @@ set -e
 WORKSPACE="/workspace"
 RUNTIME_DIR="/run/gitterm"
 GIT_CREDENTIAL_HELPER="$RUNTIME_DIR/git-credential-helper.sh"
+GIT_TOKEN_FILE="$RUNTIME_DIR/github-token"
 USER_GITHUB_USERNAME="${USER_GITHUB_USERNAME}"
 GITHUB_APP_TOKEN="${GITHUB_APP_TOKEN}"
 GITHUB_APP_TOKEN_EXPIRY="${GITHUB_APP_TOKEN_EXPIRY}"
@@ -101,24 +102,26 @@ fi
 
 if [ ! -z "$GITHUB_APP_TOKEN" ]; then
     echo "Configuring git with GitHub App authentication..."
+    printf '%s' "$GITHUB_APP_TOKEN" > "$GIT_TOKEN_FILE"
+    chmod 600 "$GIT_TOKEN_FILE"
 
     # Disable interactive credential helper
     git config --global credential.helper ''
 
-    # Create runtime-only credential helper script
-    # IMPORTANT: Use unquoted heredoc to expand $GITHUB_APP_TOKEN
-    cat > "$GIT_CREDENTIAL_HELPER" <<CRED_HELPER
+    # The helper reads a runtime-only token file so the token never enters this script.
+    cat > "$GIT_CREDENTIAL_HELPER" <<'CRED_HELPER'
 #!/bin/sh
-if [ "\$1" = "get" ]; then
+if [ "$1" = "get" ]; then
     echo "protocol=https"
     echo "host=github.com"
     echo "username=x-access-token"
-    echo "password=${GITHUB_APP_TOKEN}"
+    echo "password=$(cat /run/gitterm/github-token 2>/dev/null)"
 fi
 CRED_HELPER
 
     chmod 700 "$GIT_CREDENTIAL_HELPER"
     git config --global credential.helper "$GIT_CREDENTIAL_HELPER"
+    export GIT_TERMINAL_PROMPT=0
 
     echo "✓ Git configured with GitHub App token"
     echo "  Token expires at: $GITHUB_APP_TOKEN_EXPIRY"
@@ -144,21 +147,10 @@ if [ ! -f ".initialized" ]; then
         # Prefer named checkout ref, then branch, for the initial clone.
         CLONE_REF="${REPO_CHECKOUT_REF:-$REPO_BRANCH}"
 
-        # If GitHub App token is available, use authenticated URL
-        if [ ! -z "$GITHUB_APP_TOKEN" ] && [ ! -z "$REPO_OWNER" ] && [ ! -z "$REPO_NAME" ]; then
-            AUTH_URL="https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${REPO_OWNER}/${REPO_NAME}.git"
-            if [ -n "$CLONE_REF" ]; then
-                git clone --branch "$CLONE_REF" --single-branch "$AUTH_URL" "$REPO_DIR_NAME"
-            else
-                git clone "$AUTH_URL" "$REPO_DIR_NAME"
-            fi
+        if [ -n "$CLONE_REF" ]; then
+            git clone --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
         else
-            # Fallback to original URL (public repos only)
-            if [ -n "$CLONE_REF" ]; then
-                git clone --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
-            else
-                git clone "$REPO_URL" "$REPO_DIR_NAME"
-            fi
+            git clone "$REPO_URL" "$REPO_DIR_NAME"
         fi
 
         # Pin to exact base commit when provided (detached HEAD).

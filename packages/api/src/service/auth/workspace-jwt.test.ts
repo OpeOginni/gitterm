@@ -5,6 +5,10 @@ const payload = (scope: string[]): WorkspaceTokenPayload => ({
   workspaceId: "workspace",
   userId: "user",
   scope,
+  purpose: "workspace",
+  iss: "gitterm",
+  aud: "gitterm-workspace-api",
+  jti: "token-id",
   iat: 0,
   exp: Number.MAX_SAFE_INTEGER,
 });
@@ -21,12 +25,18 @@ describe("WorkspaceJWTService.hasScope", () => {
   });
 
   test("durable workspace tokens contain only their explicit scopes", () => {
-    const token = WorkspaceJWTService.generateToken("workspace", "user", [
-      "workspace:read",
-      "port:*",
-    ]);
-    const decoded = WorkspaceJWTService.verifyToken(token);
-    expect(decoded.exp).toBeUndefined();
+    const token = WorkspaceJWTService.generateToken(
+      "workspace",
+      "user",
+      ["workspace:read", "port:*"],
+      "workspace",
+    );
+    const decoded = WorkspaceJWTService.verifyToken(token, "workspace");
+    expect(decoded.exp).toBeGreaterThan(decoded.iat);
+    expect(decoded.jti).toBeTruthy();
+    expect(decoded.iss).toBe("gitterm");
+    expect(decoded.aud).toBe("gitterm-workspace-api");
+    expect(() => WorkspaceJWTService.verifyToken(token, "agent")).toThrow();
     expect(WorkspaceJWTService.hasScope(decoded, "port:open")).toBe(true);
     expect(WorkspaceJWTService.hasScope(decoded, "git:refresh")).toBe(false);
     expect(WorkspaceJWTService.hasScope(decoded, "setup:write")).toBe(false);

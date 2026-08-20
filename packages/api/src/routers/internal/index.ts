@@ -1,13 +1,13 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
-import { db, eq, and, sql, gt, lt, or, isNull } from "@gitterm/db";
+import { db, eq, and, sql, lt, or, isNull } from "@gitterm/db";
 import {
   workspace,
   dailyUsage,
   type SessionStopSource,
   volume,
 } from "@gitterm/db/schema/workspace";
-import { workspaceGitConfig, githubAppInstallation } from "@gitterm/db/schema/integrations";
+import { githubAppInstallation } from "@gitterm/db/schema/integrations";
 import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
@@ -24,7 +24,7 @@ import {
 } from "../../config/features";
 import { isPausedWorkspacePastRetention } from "../../utils/workspace-retention";
 import { auth } from "@gitterm/auth";
-import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
+import { getGitHubAppService } from "../../service/github";
 import { logger } from "../../utils/logger";
 import { railwayWebhookSchema } from "../railway/webhook";
 import { agentLoopWebhookSchema } from "../agent-loop/webhook";
@@ -514,190 +514,6 @@ export const internalRouter = router({
 
     return longTermInactiveWorkspaces.map(({ plan: _plan, ...ws }) => ws);
   }),
-
-  // Fork repository (called from workspace)
-  forkRepository: internalProcedure
-    .input(
-      z.object({
-        workspaceId: z.uuid(),
-        owner: z.string(),
-        repo: z.string(),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      try {
-        // Get workspace to verify it exists and get userId
-        const [workspaceRecord] = await db
-          .select()
-          .from(workspace)
-          .where(eq(workspace.id, input.workspaceId));
-
-        if (!workspaceRecord) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Workspace not found",
-          });
-        }
-
-        // Security: Verify workspace is in running state
-        // This prevents calls from stopped/terminated workspaces
-        if (workspaceRecord.status !== "running" && workspaceRecord.status !== "pending") {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Workspace is not active. Cannot perform fork operation.",
-          });
-        }
-
-        const userId = workspaceRecord.userId;
-
-        if (!workspaceRecord.gitIntegrationId) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "GitHub App not connected. Please connect your GitHub account.",
-          });
-        }
-
-        const githubService = getGitHubAppService();
-        // Get GitHub App installation with verification
-        const installation = await githubService.getUserInstallation(
-          userId,
-          workspaceRecord.gitIntegrationId,
-          true, // verify
-        );
-
-        if (!installation) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message:
-              "GitHub App not connected or has been removed. Please reconnect your GitHub account.",
-          });
-        }
-
-        if (installation.suspended) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "GitHub App installation is suspended.",
-          });
-        }
-
-        // Security: Rate limiting - check if this user has forked recently
-        // (Prevents abuse of the fork API)
-        const recentForks = await db
-          .select()
-          .from(workspaceGitConfig)
-          .where(
-            and(
-              eq(workspaceGitConfig.userId, userId),
-              gt(workspaceGitConfig.forkCreatedAt, new Date(Date.now() - 60000)), // Last minute
-            ),
-          );
-
-        if (recentForks.length >= 3) {
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: "Too many fork requests. Please wait a minute and try again.",
-          });
-        }
-
-        // Fork the repository
-        const fork = await githubService.forkRepository(
-          installation.installationId,
-          input.owner,
-          input.repo,
-        );
-
-        // Update or create workspace git config
-        const [existingConfig] = await db
-          .select()
-          .from(workspaceGitConfig)
-          .where(eq(workspaceGitConfig.workspaceId, input.workspaceId));
-
-        if (existingConfig) {
-          // Update existing config
-          await db
-            .update(workspaceGitConfig)
-            .set({
-              repositoryUrl: fork.cloneUrl,
-              repositoryOwner: fork.owner,
-              repositoryName: fork.repo,
-              isFork: true,
-              originalOwner: input.owner,
-              originalRepo: input.repo,
-              forkCreatedAt: new Date(),
-              defaultBranch: fork.defaultBranch,
-              updatedAt: new Date(),
-            })
-            .where(eq(workspaceGitConfig.id, existingConfig.id));
-        } else {
-          // Create new config
-          await db.insert(workspaceGitConfig).values({
-            workspaceId: input.workspaceId,
-            userId,
-            provider: "github",
-            repositoryUrl: fork.cloneUrl,
-            repositoryOwner: fork.owner,
-            repositoryName: fork.repo,
-            isFork: true,
-            originalOwner: input.owner,
-            originalRepo: input.repo,
-            forkCreatedAt: new Date(),
-            defaultBranch: fork.defaultBranch,
-          });
-        }
-
-        // Generate authenticated URL for the workspace to use
-        const { token } = await githubService.getUserToServerToken(installation.installationId);
-        const authenticatedUrl = githubService.getAuthenticatedGitUrl(token, fork.owner, fork.repo);
-
-        logger.info("Fork operation completed", {
-          workspaceId: input.workspaceId,
-          userId,
-          action: "fork_repository_internal",
-        });
-
-        return {
-          success: true,
-          message: "Repository forked successfully",
-          fork: {
-            owner: fork.owner,
-            repo: fork.repo,
-            cloneUrl: fork.cloneUrl,
-            authenticatedUrl, // For immediate use in workspace
-            htmlUrl: fork.htmlUrl,
-            defaultBranch: fork.defaultBranch,
-          },
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-
-        // Handle installation not found specifically
-        if (error instanceof GitHubInstallationNotFoundError) {
-          logger.warn("GitHub installation not found during fork", {
-            workspaceId: input.workspaceId,
-            action: "fork_repository_internal",
-          });
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "GitHub App installation has been removed. Please reconnect.",
-          });
-        }
-
-        logger.error(
-          "Failed to fork repository",
-          {
-            workspaceId: input.workspaceId,
-            action: "fork_repository_internal",
-          },
-          error as Error,
-        );
-
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fork repository",
-          cause: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }),
 
   // ============================================================================
   // LISTENER ENDPOINTS

@@ -130,7 +130,7 @@ app.post("/api/internal/workspace-heartbeat", async (c) => {
 
   let payload;
   try {
-    payload = workspaceJWT.verifyToken(token);
+    payload = workspaceJWT.verifyToken(token, "agent");
   } catch (error) {
     return c.json(
       { success: false, error: error instanceof Error ? error.message : "invalid_token" },
@@ -211,4 +211,6 @@ export default {
   fetch: app.fetch,
   hostname: "::",
   port: env.PORT,
+  // Keep long runtime startup checks alive while remote providers boot.
+  idleTimeout: 255,
 };

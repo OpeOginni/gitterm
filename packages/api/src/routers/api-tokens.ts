@@ -2,6 +2,7 @@ import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { sessionProcedure, router } from "../index";
 import { createApiToken, listApiTokens, revokeApiToken } from "../service/auth/api-token";
+import { apiTokenScopesSchema } from "@gitterm/schema";
 
 /**
  * User API token (personal access token) management.
@@ -14,6 +15,7 @@ export const apiTokensRouter = router({
     .input(
       z.object({
         name: z.string().trim().min(1).max(100),
+        scopes: apiTokenScopesSchema,
         // null/undefined = no expiry; capped at one year
         expiresInDays: z.number().int().min(1).max(365).nullish(),
       }),
@@ -23,6 +25,7 @@ export const apiTokensRouter = router({
         const { token, record } = await createApiToken({
           userId: ctx.session.user.id,
           name: input.name,
+          scopes: input.scopes,
           expiresInDays: input.expiresInDays,
         });
 

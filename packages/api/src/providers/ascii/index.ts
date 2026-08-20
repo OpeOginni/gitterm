@@ -224,17 +224,20 @@ export class AsciiProvider implements ComputeProvider {
 
       if (spec?.repo) {
         const repoUrl = spec.repo.url.endsWith(".git") ? spec.repo.url : `${spec.repo.url}.git`;
-        const cloneUrl = spec.repo.authToken
-          ? repoUrl.replace(
-              "://",
-              `://${encodeURIComponent(spec.repo.authUsername ?? "x-access-token")}:${encodeURIComponent(spec.repo.authToken)}@`,
-            )
-          : repoUrl;
+        if (spec.repo.authToken) {
+          await logger.step("configure-git-auth", () =>
+            this.runCommand(
+              client,
+              handle.boxId,
+              `git config --global credential.helper '!f() { [ "$1" = get ] || exit 0; printf "%s\\n" "protocol=https" "host=github.com" "username=x-access-token" "password=$GITHUB_APP_TOKEN"; }; f'`,
+            ),
+          );
+        }
         await logger.step("clone-repository", () =>
           this.runCommand(
             client,
             handle.boxId,
-            `git clone ${spec.repo!.checkoutRef || spec.repo!.branch ? `--branch ${spec.repo!.checkoutRef || spec.repo!.branch}` : ""} "${cloneUrl}" .`,
+            `GIT_TERMINAL_PROMPT=0 git clone ${spec.repo!.checkoutRef || spec.repo!.branch ? `--branch ${spec.repo!.checkoutRef || spec.repo!.branch}` : ""} "${repoUrl}" .`,
             repoDir,
           ),
         );
@@ -243,7 +246,7 @@ export class AsciiProvider implements ComputeProvider {
             this.runCommand(
               client,
               handle.boxId,
-              `git fetch --depth 1 origin ${spec.repo!.baseCommit} && git checkout --detach ${spec.repo!.baseCommit}`,
+              `GIT_TERMINAL_PROMPT=0 git fetch --depth 1 origin ${spec.repo!.baseCommit} && git checkout --detach ${spec.repo!.baseCommit}`,
               repoDir,
             ),
           );
