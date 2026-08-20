@@ -29,12 +29,20 @@ export GITTERM_E2E_RUN_TIMEOUT_MS=1800000
 
 Providers run sequentially to limit cost. Every workspace receives a unique idempotency key and is terminated in a `finally` block after a normal test failure. The summary reports cleanup failures separately so leaked resources are visible.
 
-## GitHub Actions
+`--all` is local-only. It includes every implemented provider, including providers that are not available in GitTerm's hosted product. Do not set `CI` when running it locally.
 
-Run the `Provider smoke tests` workflow manually and select one provider or `all`. Configure these secrets on the protected `provider-e2e` environment:
+## Hosted GitHub Actions
+
+Run the `Provider smoke tests` workflow manually to test the hosted GitTerm application. It runs one job each for the three hosted providers:
+
+- Railway
+- E2B
+- Daytona
+
+The workflow uses the protected `provider-e2e` environment. Configure these secrets there:
 
 - `GITTERM_SERVER_URL`
 - `GITTERM_API_TOKEN`
 - `GITTERM_E2E_REPO`
 
-The workflow is intentionally not triggered by pull requests. Provider credentials and paid resources must not be exposed to untrusted code.
+The workflow is intentionally not triggered by pull requests. Provider credentials and paid resources must not be exposed to untrusted code. It cannot run `--all`; providers that are not offered by the hosted product are tested locally with their own configured deployment.

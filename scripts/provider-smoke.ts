@@ -15,6 +15,8 @@ const PROVIDERS = [
   "exedev",
 ] as const satisfies readonly ProviderKey[];
 
+const HOSTED_PROVIDERS = ["railway", "e2b", "daytona"] as const satisfies readonly ProviderKey[];
+
 type StepResult = {
   name: string;
   durationMs: number;
@@ -36,6 +38,7 @@ function requiredEnv(name: string): string {
 
 function selectedProviders(): ProviderKey[] {
   const args = process.argv.slice(2);
+  const hostedOnly = args.includes("--hosted");
   const providerFlag = args.find((arg) => arg.startsWith("--provider="));
   const providerIndex = args.indexOf("--provider");
   const selection =
@@ -43,9 +46,18 @@ function selectedProviders(): ProviderKey[] {
     (providerIndex >= 0 ? args[providerIndex + 1] : undefined) ??
     process.env.GITTERM_E2E_PROVIDERS;
 
-  if (args.includes("--all") || selection === "all") return [...PROVIDERS];
+  if (hostedOnly) {
+    if (args.includes("--all") || selection === "all") {
+      throw new Error("--hosted cannot be combined with --all");
+    }
+    if (!selection) return [...HOSTED_PROVIDERS];
+  }
+  if (args.includes("--all") || selection === "all") {
+    if (process.env.CI) throw new Error("--all is local-only; use --hosted in GitHub Actions");
+    return [...PROVIDERS];
+  }
   if (!selection) {
-    throw new Error("Select providers with --provider e2b,daytona or --all");
+    throw new Error("Select providers with --provider e2b,daytona, --hosted, or --all");
   }
 
   const providers = selection
@@ -57,7 +69,12 @@ function selectedProviders(): ProviderKey[] {
   );
   if (unknown.length > 0) throw new Error(`Unknown providers: ${unknown.join(", ")}`);
   if (providers.length === 0) throw new Error("At least one provider is required");
-  return [...new Set(providers)] as ProviderKey[];
+  const selected = [...new Set(providers)] as ProviderKey[];
+  const nonHosted = selected.filter((provider) => !HOSTED_PROVIDERS.includes(provider));
+  if (hostedOnly && nonHosted.length > 0) {
+    throw new Error(`Not a hosted provider: ${nonHosted.join(", ")}`);
+  }
+  return selected;
 }
 
 function errorMessage(error: unknown): string {

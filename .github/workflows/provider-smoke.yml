@@ -2,35 +2,23 @@ name: Provider smoke tests
 
 on:
   workflow_dispatch:
-    inputs:
-      provider:
-        description: Provider to test
-        required: true
-        default: e2b
-        type: choice
-        options:
-          - e2b
-          - daytona
-          - cloudflare
-          - vercel
-          - ascii
-          - exedev
-          - railway
-          - aws
-          - all
 
 concurrency:
-  group: provider-smoke-${{ inputs.provider }}
+  group: hosted-provider-smoke
   cancel-in-progress: false
 
 jobs:
   smoke:
-    name: Test ${{ inputs.provider }}
+    name: Test ${{ matrix.provider }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: provider-e2e
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [railway, e2b, daytona]
     env:
       GITTERM_SERVER_URL: ${{ secrets.GITTERM_SERVER_URL }}
       GITTERM_API_TOKEN: ${{ secrets.GITTERM_API_TOKEN }}
@@ -48,4 +36,4 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run provider smoke tests
-        run: bun run test:providers --provider "${{ inputs.provider }}"
+        run: bun run test:providers --hosted --provider "${{ matrix.provider }}"

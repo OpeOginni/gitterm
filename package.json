@@ -25,6 +25,7 @@
     "check-types": "turbo check-types",
     "test": "bun test packages/*/src apps/*/src",
     "test:providers": "bun run scripts/provider-smoke.ts",
+    "test:providers:hosted": "bun run test:providers --hosted",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format:check": "oxfmt --check",
