@@ -1,6 +1,7 @@
 import { DeviceCodeRepository } from "@gitterm/redis";
 import env from "@gitterm/env/server";
 import { createApiToken } from "../api-token";
+import { CLI_API_TOKEN_SCOPES } from "@gitterm/schema";
 
 const DEFAULT_POLL_INTERVAL_SECONDS = 5;
 
@@ -36,6 +37,7 @@ export class DeviceCodeService {
     const { token } = await createApiToken({
       userId: consumed.userId,
       name: "CLI device login",
+      scopes: CLI_API_TOKEN_SCOPES,
       expiresInDays: DEVICE_LOGIN_TOKEN_EXPIRY_DAYS,
     });
 

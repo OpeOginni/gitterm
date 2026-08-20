@@ -453,55 +453,6 @@ export class GitHubAppService {
   }
 
   /**
-   * Fork a repository on behalf of the user
-   * Returns the new fork's details
-   */
-  async forkRepository(
-    installationId: string,
-    owner: string,
-    repo: string,
-  ): Promise<{
-    owner: string;
-    repo: string;
-    cloneUrl: string;
-    htmlUrl: string;
-    defaultBranch: string;
-  }> {
-    try {
-      // Get installation token
-      const { token } = await this.getUserToServerToken(installationId);
-
-      // Create authenticated Octokit instance with the installation token
-      const userOctokit = new Octokit({ auth: token });
-
-      // Fork the repository
-      const { data: fork } = await userOctokit.repos.createFork({
-        owner,
-        repo,
-      });
-
-      logger.info("Successfully forked repository", {
-        action: "fork_repository",
-        provider: "github",
-      });
-
-      return {
-        owner: fork.owner.login,
-        repo: fork.name,
-        cloneUrl: fork.clone_url,
-        htmlUrl: fork.html_url,
-        defaultBranch: fork.default_branch,
-      };
-    } catch (error) {
-      if (error instanceof GitHubInstallationNotFoundError) {
-        throw error; // Re-throw for caller to handle cleanup
-      }
-      logger.error("Failed to fork repository", { action: "fork_repository" }, error as Error);
-      throw new GitHubAPIError("Failed to fork repository");
-    }
-  }
-
-  /**
    * Get repository information
    */
   async getRepository(
@@ -910,14 +861,6 @@ export class GitHubAppService {
       installationId,
       action: "remove_installation_deprecated",
     });
-  }
-
-  /**
-   * Generate authenticated Git URL for cloning
-   * Format: https://x-access-token:<token>@github.com/owner/repo.git
-   */
-  getAuthenticatedGitUrl(token: string, owner: string, repo: string): string {
-    return `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
   }
 
   /**

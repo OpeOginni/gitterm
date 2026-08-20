@@ -202,24 +202,28 @@ export class ExeDevProvider implements ComputeProvider {
       }
       if (spec?.repo) {
         const repoUrl = spec.repo.url.endsWith(".git") ? spec.repo.url : `${spec.repo.url}.git`;
-        const authenticatedUrl = spec.repo.authToken
-          ? repoUrl.replace(
-              "://",
-              `://${encodeURIComponent(spec.repo.authUsername ?? "x-access-token")}:${encodeURIComponent(spec.repo.authToken)}@`,
-            )
-          : repoUrl;
+        if (spec.repo.authToken) {
+          const helper =
+            '!f() { [ "$1" = get ] || exit 0; printf "%s\\n" "protocol=https" "host=github.com" "username=x-access-token" "password=$GITHUB_APP_TOKEN"; }; f';
+          await logger.step("configure-git-auth", () =>
+            this.runVmCommand(
+              handle,
+              `git config --global credential.helper ${shellQuote(helper)}`,
+            ),
+          );
+        }
         const branch = spec.repo.checkoutRef || spec.repo.branch;
         await logger.step("clone-repository", () =>
           this.runVmCommand(
             handle,
-            `git clone ${branch ? `--branch ${shellQuote(branch)}` : ""} ${shellQuote(authenticatedUrl)} ${shellQuote(handle.repoDir)}`,
+            `GIT_TERMINAL_PROMPT=0 git clone ${branch ? `--branch ${shellQuote(branch)}` : ""} ${shellQuote(repoUrl)} ${shellQuote(handle.repoDir)}`,
           ),
         );
         if (spec.repo.baseCommit) {
           await logger.step("checkout-base-commit", () =>
             this.runVmCommand(
               handle,
-              `git -C ${shellQuote(handle.repoDir)} fetch --depth 1 origin ${shellQuote(spec.repo!.baseCommit!)} && git -C ${shellQuote(handle.repoDir)} checkout --detach ${shellQuote(spec.repo!.baseCommit!)}`,
+              `GIT_TERMINAL_PROMPT=0 git -C ${shellQuote(handle.repoDir)} fetch --depth 1 origin ${shellQuote(spec.repo!.baseCommit!)} && git -C ${shellQuote(handle.repoDir)} checkout --detach ${shellQuote(spec.repo!.baseCommit!)}`,
             ),
           );
         }

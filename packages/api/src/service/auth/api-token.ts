@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import { db, eq, and, isNull } from "@gitterm/db";
 import { apiToken } from "@gitterm/db/schema/auth";
+import type { ApiTokenScope } from "@gitterm/schema";
 
 /**
  * User API tokens (personal access tokens).
@@ -28,6 +29,7 @@ export type ApiTokenMetadata = {
   id: string;
   name: string;
   tokenPrefix: string;
+  scopes: ApiTokenScope[];
   createdAt: Date;
   expiresAt: Date | null;
   lastUsedAt: Date | null;
@@ -36,6 +38,7 @@ export type ApiTokenMetadata = {
 export async function createApiToken(params: {
   userId: string;
   name: string;
+  scopes: ApiTokenScope[];
   expiresInDays?: number | null;
 }): Promise<{ token: string; record: ApiTokenMetadata }> {
   const token = `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString("base64url")}`;
@@ -51,6 +54,7 @@ export async function createApiToken(params: {
       name: params.name,
       tokenHash: hashToken(token),
       tokenPrefix: token.slice(0, DISPLAY_PREFIX_LENGTH),
+      scopes: [...new Set(params.scopes)],
       expiresAt,
     })
     .returning();
@@ -63,6 +67,7 @@ export async function createApiToken(params: {
       id: record.id,
       name: record.name,
       tokenPrefix: record.tokenPrefix,
+      scopes: record.scopes as ApiTokenScope[],
       createdAt: record.createdAt,
       expiresAt: record.expiresAt,
       lastUsedAt: record.lastUsedAt,
@@ -77,7 +82,9 @@ export async function createApiToken(params: {
  * Updates `lastUsedAt` fire-and-forget so verification stays a single
  * round-trip on the hot path.
  */
-export async function verifyApiToken(token: string): Promise<{ userId: string } | null> {
+export async function verifyApiToken(
+  token: string,
+): Promise<{ tokenId: string; userId: string; scopes: ApiTokenScope[] } | null> {
   const [record] = await db
     .select()
     .from(apiToken)
@@ -95,7 +102,11 @@ export async function verifyApiToken(token: string): Promise<{ userId: string } 
       // Best-effort bookkeeping; never fail auth over it.
     });
 
-  return { userId: record.userId };
+  return {
+    tokenId: record.id,
+    userId: record.userId,
+    scopes: record.scopes as ApiTokenScope[],
+  };
 }
 
 export async function listApiTokens(userId: string): Promise<ApiTokenMetadata[]> {
@@ -104,6 +115,7 @@ export async function listApiTokens(userId: string): Promise<ApiTokenMetadata[]>
       id: apiToken.id,
       name: apiToken.name,
       tokenPrefix: apiToken.tokenPrefix,
+      scopes: apiToken.scopes,
       createdAt: apiToken.createdAt,
       expiresAt: apiToken.expiresAt,
       lastUsedAt: apiToken.lastUsedAt,
@@ -111,7 +123,9 @@ export async function listApiTokens(userId: string): Promise<ApiTokenMetadata[]>
     .from(apiToken)
     .where(and(eq(apiToken.userId, userId), isNull(apiToken.revokedAt)));
 
-  return records.toSorted((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return records
+    .map((record) => ({ ...record, scopes: record.scopes as ApiTokenScope[] }))
+    .toSorted((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 /** Revoke one of the user's tokens. Returns false when it doesn't exist (or isn't theirs). */

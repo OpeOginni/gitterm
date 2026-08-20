@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import z from "zod";
-import { protectedProcedure, router } from "../index";
+import { accountProcedure, router } from "../index";
 import {
   cancelAgentRun,
   createAgentRun,
@@ -24,7 +24,7 @@ async function translateAgentError<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 export const runRouter = router({
-  create: protectedProcedure
+  create: accountProcedure("run:write")
     .input(
       z.object({
         workspaceId: z.uuid(),
@@ -52,13 +52,13 @@ export const runRouter = router({
       translateAgentError(() => createAgentRun(input, ctx.session.user.id)),
     ),
 
-  get: protectedProcedure
+  get: accountProcedure("run:read")
     .input(runTargetSchema)
     .query(async ({ input, ctx }) =>
       translateAgentError(() => getAgentRun(input.workspaceId, input.runId, ctx.session.user.id)),
     ),
 
-  messages: protectedProcedure
+  messages: accountProcedure("run:read")
     .input(runTargetSchema)
     .query(async ({ input, ctx }) =>
       translateAgentError(() =>
@@ -66,7 +66,7 @@ export const runRouter = router({
       ),
     ),
 
-  cancel: protectedProcedure
+  cancel: accountProcedure("run:write")
     .input(runTargetSchema)
     .mutation(async ({ input, ctx }) =>
       translateAgentError(() =>

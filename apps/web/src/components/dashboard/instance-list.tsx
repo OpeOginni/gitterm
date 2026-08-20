@@ -1,6 +1,6 @@
 "use client";
 
-import { trpc, queryClient } from "@/utils/trpc";
+import { trpc, trpcClient, queryClient } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import {
   Loader2,
@@ -384,7 +384,6 @@ export function InstanceCard({
     enabled: showConnectDialog && workspace.editorAccessEnabled && isRunning,
     retry: false,
   });
-
   // Get the workspace URL for linking
   const workspaceUrl = workspace.subdomain ? getWorkspaceUrl(workspace.subdomain) : null;
   const workspaceDisplayUrl = workspace.subdomain
@@ -397,21 +396,25 @@ export function InstanceCard({
   const isOpencode = isOpencodeAgent(workspace.image.agentType.name);
   const projectPath = getWorkspaceProjectPath(regionInfo.providerKey, workspace.repositoryUrl);
   const agentIcon = getIcon(workspace.image.agentType.name);
-  const t3PairingUrl =
-    isT3 && workspace.subdomain && workspace.serverPassword
-      ? getT3PairingUrl(workspace.subdomain, workspace.serverPassword)
-      : null;
-  const t3DesktopPairingUrl =
-    isT3 && workspace.subdomain && workspace.serverPassword
-      ? getT3DesktopPairingUrl(workspace.subdomain, workspace.serverPassword)
-      : null;
-
   const portUrl = (port: number) =>
     workspace.subdomain ? getWorkspaceOpenPortUrl(workspace.subdomain, port) : null;
 
   const copyValue = async (value: string, successMessage: string) => {
     await navigator.clipboard.writeText(value);
     toast.success(successMessage);
+  };
+
+  const revealAccessCredential = async () => {
+    if (!workspace.hasAccessCredential) return null;
+    try {
+      const result = await trpcClient.workspace.getAccessCredential.mutate({
+        workspaceId: workspace.id,
+      });
+      return result.credential;
+    } catch {
+      toast.error("Failed to retrieve the workspace credential");
+      return null;
+    }
   };
 
   const editorProtocols = [
@@ -872,7 +875,7 @@ export function InstanceCard({
                 </button>
               </div>
             )}
-            {workspace.serverPassword && (
+            {workspace.hasAccessCredential && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400/60" />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -881,12 +884,16 @@ export function InstanceCard({
                   </span>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (isT3 && t3PairingUrl) {
-                        navigator.clipboard.writeText(t3PairingUrl);
+                    onClick={async () => {
+                      const credential = await revealAccessCredential();
+                      if (!credential || !workspace.subdomain) return;
+                      if (isT3) {
+                        navigator.clipboard.writeText(
+                          getT3PairingUrl(workspace.subdomain, credential),
+                        );
                         toast.success("Pairing link copied! It can be used once.");
-                      } else if (workspace.serverPassword) {
-                        navigator.clipboard.writeText(workspace.serverPassword);
+                      } else {
+                        navigator.clipboard.writeText(credential);
                         toast.success("Password copied to clipboard!");
                       }
                     }}
@@ -1017,36 +1024,32 @@ export function InstanceCard({
                   <Button
                     size="sm"
                     className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
-                    disabled={!t3DesktopPairingUrl}
-                    title={
-                      t3DesktopPairingUrl
-                        ? "Open in the T3 Code desktop app (one-time pairing link)"
-                        : "Waiting for the workspace to issue a pairing token..."
-                    }
-                    asChild={!!t3DesktopPairingUrl}
+                    disabled={!workspace.hasAccessCredential}
+                    title="Open in the T3 Code desktop app (one-time pairing link)"
+                    onClick={async () => {
+                      const credential = await revealAccessCredential();
+                      if (credential && workspace.subdomain) {
+                        window.location.href = getT3DesktopPairingUrl(
+                          workspace.subdomain,
+                          credential,
+                        );
+                      }
+                    }}
                   >
-                    {t3DesktopPairingUrl ? (
-                      <a href={t3DesktopPairingUrl}>
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Open in T3
-                      </a>
-                    ) : (
-                      <span className="inline-flex items-center gap-2">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Pairing...
-                      </span>
-                    )}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open in T3
                   </Button>
                 ) : (
                   <Button
                     size="sm"
                     className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
-                    onClick={() => {
+                    onClick={async () => {
                       if (workspace.subdomain) {
+                        const credential = await revealAccessCredential();
                         const command = getAttachCommand(
                           workspace.subdomain,
                           workspace.image.agentType.name,
-                          workspace.serverPassword,
+                          credential,
                         );
                         navigator.clipboard.writeText(command);
                         toast.success("Attach command copied to clipboard!");
@@ -1072,23 +1075,16 @@ export function InstanceCard({
                     size="sm"
                     className="h-9 text-xs gap-2 border-border/50"
                     variant="outline"
-                    disabled={!t3PairingUrl}
-                    title={
-                      t3PairingUrl
-                        ? "Open in the T3 web app (browser)"
-                        : "Waiting for the workspace to issue a pairing token..."
-                    }
-                    asChild={!!t3PairingUrl}
+                    disabled={!workspace.hasAccessCredential}
+                    title="Open in the T3 web app (browser)"
+                    onClick={async () => {
+                      const credential = await revealAccessCredential();
+                      if (credential && workspace.subdomain) {
+                        window.location.href = getT3PairingUrl(workspace.subdomain, credential);
+                      }
+                    }}
                   >
-                    {t3PairingUrl ? (
-                      <a href={t3PairingUrl} target="_blank" rel="noreferrer">
-                        <Monitor className="h-3.5 w-3.5" />
-                      </a>
-                    ) : (
-                      <span>
-                        <Monitor className="h-3.5 w-3.5" />
-                      </span>
-                    )}
+                    <Monitor className="h-3.5 w-3.5" />
                   </Button>
                 ) : (
                   <Button

@@ -1,6 +1,7 @@
 import { TRPCClientError, createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@gitterm/api/routers/index";
 import { GittermError, type GittermErrorCode } from "./errors.js";
+import { createNoRedirectFetch, normalizeServerUrl } from "./transport.js";
 
 export type WorkspaceEnvironment = {
   serverUrl: string;
@@ -53,7 +54,7 @@ export function getWorkspaceEnvironment(
       "Incomplete GitTerm workspace environment: WORKSPACE_API_URL, WORKSPACE_AUTH_TOKEN, and WORKSPACE_ID are required",
     );
   }
-  return { serverUrl, token, workspaceId };
+  return { serverUrl: normalizeServerUrl(serverUrl), token, workspaceId };
 }
 
 function errorCode(code: string | undefined): GittermErrorCode {
@@ -67,18 +68,19 @@ export function createGittermWorkspaceClient(
 ): GittermWorkspaceClient {
   const detected =
     options.serverUrl && options.token && options.workspaceId ? null : getWorkspaceEnvironment();
-  const serverUrl = options.serverUrl ?? detected?.serverUrl;
+  const rawServerUrl = options.serverUrl ?? detected?.serverUrl;
   const token = options.token ?? detected?.token;
   const workspaceId = options.workspaceId ?? detected?.workspaceId;
-  if (!serverUrl || !token || !workspaceId) {
+  if (!rawServerUrl || !token || !workspaceId) {
     throw new GittermError("UNAUTHORIZED", "This command must run inside a GitTerm workspace");
   }
+  const serverUrl = normalizeServerUrl(rawServerUrl);
 
   const trpc = createTRPCClient<AppRouter>({
     links: [
       httpBatchLink({
         url: new URL("/trpc", serverUrl).toString(),
-        fetch: options.fetch,
+        fetch: createNoRedirectFetch(options.fetch),
         headers: () => ({ authorization: `Bearer ${token}` }),
       }),
     ],

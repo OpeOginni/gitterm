@@ -1,6 +1,11 @@
 import { randomUUID } from "crypto";
 import z from "zod";
-import { protectedProcedure, workspaceAuthProcedure, router } from "../../index";
+import {
+  accountProcedure,
+  protectedProcedure,
+  workspaceAgentAuthProcedure,
+  router,
+} from "../../index";
 import { db, eq, and, asc, desc, or, ne, SQL, sql } from "@gitterm/db";
 import {
   agentWorkspaceConfig,
@@ -115,6 +120,7 @@ import {
   withWorkspaceSetupPort,
 } from "../../service/workspace-setup";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
+import { userCanAccessWorkspace } from "./share";
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
@@ -458,7 +464,7 @@ export const workspaceRouter = router({
   }),
 
   // List all agent types
-  listAgentTypes: protectedProcedure
+  listAgentTypes: accountProcedure("workspace:read")
     .input(
       z
         .object({
@@ -511,7 +517,7 @@ export const workspaceRouter = router({
     }),
 
   // List cloud providers
-  listCloudProviders: protectedProcedure
+  listCloudProviders: accountProcedure("workspace:read")
     .input(
       z
         .object({
@@ -629,7 +635,7 @@ export const workspaceRouter = router({
       }
     }),
 
-  getWorkspaceCatalog: protectedProcedure.query(async ({ ctx }) => {
+  getWorkspaceCatalog: accountProcedure("workspace:read").query(async ({ ctx }) => {
     const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
     const [currentUser, agents, providers, images] = await Promise.all([
       db.query.user.findFirst({ where: eq(user.id, ctx.session.user.id) }),
@@ -725,7 +731,7 @@ export const workspaceRouter = router({
   }),
 
   // List all workspaces for the authenticated user (paginated)
-  listWorkspaces: protectedProcedure
+  listWorkspaces: accountProcedure("workspace:read")
     .input(
       z
         .object({
@@ -792,7 +798,8 @@ export const workspaceRouter = router({
           success: true,
           workspaces: workspaces.map((record) => ({
             ...record,
-            serverPassword: decryptServerPasswordSafe(record.serverPassword, record.id),
+            serverPassword: null,
+            hasAccessCredential: Boolean(record.serverPassword),
           })),
           pagination: {
             total,
@@ -810,7 +817,7 @@ export const workspaceRouter = router({
       }
     }),
 
-  getWorkspace: protectedProcedure
+  getWorkspace: accountProcedure("workspace:read")
     .input(z.object({ workspaceId: z.uuid() }))
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
@@ -845,10 +852,8 @@ export const workspaceRouter = router({
           success: true,
           workspace: {
             ...workspaceRecord,
-            serverPassword: decryptServerPasswordSafe(
-              workspaceRecord.serverPassword,
-              workspaceRecord.id,
-            ),
+            serverPassword: null,
+            hasAccessCredential: Boolean(workspaceRecord.serverPassword),
           },
         };
       } catch (error) {
@@ -859,6 +864,25 @@ export const workspaceRouter = router({
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }
+    }),
+
+  getAccessCredential: protectedProcedure
+    .input(z.object({ workspaceId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const workspaceRecord = await db.query.workspace.findFirst({
+        where: eq(workspace.id, input.workspaceId),
+        columns: { id: true, serverPassword: true },
+      });
+      if (
+        !workspaceRecord ||
+        !(await userCanAccessWorkspace(workspaceRecord.id, ctx.session.user.id))
+      ) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      }
+      ctx.honoContext.header("Cache-Control", "no-store, private");
+      return {
+        credential: decryptServerPasswordSafe(workspaceRecord.serverPassword, workspaceRecord.id),
+      };
     }),
 
   /**
@@ -1383,7 +1407,7 @@ export const workspaceRouter = router({
   }),
 
   // Heartbeat endpoint for workspace agents (uses JWT auth)
-  heartbeat: workspaceAuthProcedure
+  heartbeat: workspaceAgentAuthProcedure
     .input(
       z.object({
         workspaceId: z.uuid(),
@@ -1469,7 +1493,7 @@ export const workspaceRouter = router({
 
   // Create a new workspace. ID-based input remains supported for the web app;
   // integrations can submit stable provider and agent intent instead.
-  createWorkspace: protectedProcedure
+  createWorkspace: accountProcedure("workspace:write")
     .input(workspaceCreateSchema)
     .mutation(async ({ input: rawInput, ctx }) => {
       const userId = ctx.session.user.id;
@@ -2134,19 +2158,24 @@ export const workspaceRouter = router({
         }
 
         // Generate workspace-scoped JWT token (replaces shared INTERNAL_API_KEY)
-        const workspaceAuthToken = workspaceJWT.generateToken(workspaceId, userId, [
-          "workspace:read",
-          "port:*",
-          "git:fork",
-          "git:refresh",
-        ]);
-        const workspaceAgentAuthToken = workspaceJWT.generateToken(workspaceId, userId, [
-          "agent:credential",
-          "agent:heartbeat",
-        ]);
-        const workspaceSetupAuthToken = workspaceJWT.generateToken(workspaceId, userId, [
-          "setup:write",
-        ]);
+        const workspaceAuthToken = workspaceJWT.generateToken(
+          workspaceId,
+          userId,
+          ["workspace:read", "port:*"],
+          "workspace",
+        );
+        const workspaceAgentAuthToken = workspaceJWT.generateToken(
+          workspaceId,
+          userId,
+          ["agent:credential", "agent:heartbeat"],
+          "agent",
+        );
+        const workspaceSetupAuthToken = workspaceJWT.generateToken(
+          workspaceId,
+          userId,
+          ["setup:write"],
+          "setup",
+        );
 
         // API endpoint for workspace operations
         const WORKSPACE_API_URL =
@@ -2495,7 +2524,7 @@ export const workspaceRouter = router({
       }
     }),
 
-  getSetupStatus: protectedProcedure
+  getSetupStatus: accountProcedure("workspace:read")
     .input(z.object({ workspaceId: z.uuid() }))
     .query(async ({ input, ctx }) => {
       const workspaceRecord = await db.query.workspace.findFirst({
@@ -2511,7 +2540,7 @@ export const workspaceRouter = router({
       return getWorkspaceSetupStatus(workspaceRecord.id);
     }),
 
-  getRuntimeAccess: protectedProcedure
+  getRuntimeAccess: accountProcedure("workspace:access")
     .input(z.object({ workspaceId: z.uuid() }))
     .query(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
@@ -2599,12 +2628,12 @@ export const workspaceRouter = router({
       });
     }),
 
-  ensureRunning: protectedProcedure
+  ensureRunning: accountProcedure("workspace:write")
     .input(
       z.object({
         workspaceId: z.uuid(),
         /** Max time to wait for runtime URL after restart (ms). */
-        timeoutMs: z.number().int().min(1_000).max(300_000).default(120_000).optional(),
+        timeoutMs: z.number().int().min(1_000).max(240_000).default(120_000).optional(),
         /** Poll interval while waiting for running status (ms). */
         pollIntervalMs: z.number().int().min(250).max(10_000).default(2_000).optional(),
       }),
@@ -2758,9 +2787,11 @@ export const workspaceRouter = router({
         }
       }
 
+      // Keep the entire wait below Bun's 255-second maximum idle timeout.
+      const deadline = Date.now() + timeoutMs;
+
       // Wait until running (or timeout) when still pending after restart/create.
       if (existingWorkspace.status === "pending" || existingWorkspace.status === "running") {
-        const deadline = Date.now() + timeoutMs;
         while (Date.now() < deadline) {
           existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
           if (existingWorkspace.status === "running" && existingWorkspace.subdomain) {
@@ -2825,7 +2856,7 @@ export const workspaceRouter = router({
       const healthy = await pollHttpRuntimeHealth({
         url: runtime.url,
         headers: runtime.headers,
-        timeoutMs,
+        timeoutMs: Math.max(0, deadline - Date.now()),
         intervalMs: pollIntervalMs,
         // Authentication failures still prove that the runtime server is up.
         isHealthy: (response) => response.status < 500,
@@ -2845,7 +2876,7 @@ export const workspaceRouter = router({
     }),
 
   // Pause a running workspace (compute down, recoverable)
-  pauseWorkspace: protectedProcedure
+  pauseWorkspace: accountProcedure("workspace:write")
     .input(
       z.object({
         workspaceId: z.uuid(),
@@ -2967,7 +2998,7 @@ export const workspaceRouter = router({
     }),
 
   // Restart a paused workspace
-  restartWorkspace: protectedProcedure
+  restartWorkspace: accountProcedure("workspace:write")
     .input(
       z.object({
         workspaceId: z.string(),
@@ -3092,7 +3123,7 @@ export const workspaceRouter = router({
     }),
 
   // Delete a workspace
-  deleteWorkspace: protectedProcedure
+  deleteWorkspace: accountProcedure("workspace:write")
     .input(z.object({ workspaceId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;

@@ -38,10 +38,11 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
       ? `http://${env.NEXT_PUBLIC_BASE_DOMAIN}`
       : `https://${env.NEXT_PUBLIC_BASE_DOMAIN}`;
 
-  const callbackURL = new URL(
-    redirectUrl && redirectUrl.startsWith("/") ? redirectUrl : "/dashboard",
-    webOrigin,
-  ).toString();
+  const requestedCallback = new URL(redirectUrl || "/dashboard", webOrigin);
+  const callbackURL =
+    requestedCallback.origin === webOrigin
+      ? requestedCallback.toString()
+      : new URL("/dashboard", webOrigin).toString();
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();

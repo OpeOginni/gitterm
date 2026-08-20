@@ -221,7 +221,7 @@ export class GittermSandbox extends Sandbox<Env> {
           '  echo "protocol=https"',
           '  echo "host=github.com"',
           `  echo "username=${credentialUsername}"`,
-          `  echo "password=${repo.authToken}"`,
+          '  echo "password=$GITHUB_APP_TOKEN"',
           "fi",
           "",
         ].join("\n"),

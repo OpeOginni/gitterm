@@ -285,16 +285,24 @@ export const anonRouter = router({
         const subdomain = await generateUniqueSubdomain();
         const domain = getWorkspaceDomain(subdomain);
 
-        const workspaceAuthToken = workspaceJWT.generateToken(workspaceId, anonUser.id, [
-          "workspace:read",
-          "port:*",
-        ]);
-        const workspaceAgentAuthToken = workspaceJWT.generateToken(workspaceId, anonUser.id, [
-          "agent:heartbeat",
-        ]);
-        const workspaceSetupAuthToken = workspaceJWT.generateToken(workspaceId, anonUser.id, [
-          "setup:write",
-        ]);
+        const workspaceAuthToken = workspaceJWT.generateToken(
+          workspaceId,
+          anonUser.id,
+          ["workspace:read", "port:*"],
+          "workspace",
+        );
+        const workspaceAgentAuthToken = workspaceJWT.generateToken(
+          workspaceId,
+          anonUser.id,
+          ["agent:heartbeat"],
+          "agent",
+        );
+        const workspaceSetupAuthToken = workspaceJWT.generateToken(
+          workspaceId,
+          anonUser.id,
+          ["setup:write"],
+          "setup",
+        );
 
         // ── 6. Build env vars ────────────────────────────────────────────
         // OpenCode ships with built-in free models, so we don't inject any

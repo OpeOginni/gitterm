@@ -22,6 +22,7 @@ import type {
   WorkspaceCatalog,
   WorkspaceSetupStatus,
 } from "./types.js";
+import { createNoRedirectFetch, normalizeServerUrl } from "./transport.js";
 
 export type GittermClientOptions = {
   serverUrl?: string;
@@ -145,7 +146,7 @@ function resolveCredentials(options: GittermClientOptions): Credentials {
     throw new GittermError("NOT_LOGGED_IN", "Not logged in. Run: gitterm login");
   }
 
-  return { serverUrl, token };
+  return { serverUrl: normalizeServerUrl(serverUrl), token };
 }
 
 function toTrpcUrl(serverUrl: string): string {
@@ -295,7 +296,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
     links: [
       httpBatchLink({
         url: toTrpcUrl(credentials.serverUrl),
-        fetch: options.fetch as HttpBatchLinkOptions["fetch"],
+        fetch: createNoRedirectFetch(options.fetch) as HttpBatchLinkOptions["fetch"],
         headers: () => ({ authorization: `Bearer ${credentials.token}` }),
       }),
     ],
