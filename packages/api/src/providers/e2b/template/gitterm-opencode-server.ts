@@ -6,6 +6,6 @@ export function createOpencodeServerTemplate(opencodeVersion: string): TemplateC
     .aptInstall(["git", "bash", "curl", "ca-certificates"], {
       noInstallRecommends: true,
     })
-    .npmInstall(`opencode-ai@${opencodeVersion}`, { g: true })
+    .npmInstall([`opencode-ai@${opencodeVersion}`, "@gitterm/cli@latest"], { g: true })
     .setStartCmd("sleep infinity", waitForTimeout(1_000));
 }

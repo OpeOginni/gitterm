@@ -22,6 +22,7 @@ import * as providerConfigSchema from "./schema/provider-config";
 import * as workspaceRouteAccessSchema from "./schema/workspace-route-access";
 import * as workspaceAccessSchema from "./schema/workspace-access";
 import * as workspaceSetupSchema from "./schema/workspace-setup";
+import * as agentRunSchema from "./schema/agent-run";
 
 export const db = drizzle(process.env.DATABASE_URL || "", {
   schema: {
@@ -36,6 +37,7 @@ export const db = drizzle(process.env.DATABASE_URL || "", {
     ...workspaceRouteAccessSchema,
     ...workspaceAccessSchema,
     ...workspaceSetupSchema,
+    ...agentRunSchema,
   },
 });
 

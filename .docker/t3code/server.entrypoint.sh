@@ -258,9 +258,9 @@ fi
             | node -e "let d='';process.stdin.on('data',(c)=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).credential))" 2>/dev/null) || TOKEN=""
 
         if [ -n "$TOKEN" ]; then
-            if [ -n "$WORKSPACE_API_URL" ] && [ -n "$WORKSPACE_AUTH_TOKEN" ] && [ -n "$WORKSPACE_ID" ]; then
+            if [ -n "$WORKSPACE_API_URL" ] && [ -n "$WORKSPACE_AGENT_AUTH_TOKEN" ] && [ -n "$WORKSPACE_ID" ]; then
                 curl -s -X POST "$WORKSPACE_API_URL/workspaceOps.reportAccessCredential" \
-                    -H "Authorization: Bearer $WORKSPACE_AUTH_TOKEN" \
+                    -H "Authorization: Bearer $WORKSPACE_AGENT_AUTH_TOKEN" \
                     -H "Content-Type: application/json" \
                     --data "{\"workspaceId\":\"$WORKSPACE_ID\",\"credential\":\"$TOKEN\"}" > /dev/null \
                     && echo "✓ Reported pairing token to GitTerm" \

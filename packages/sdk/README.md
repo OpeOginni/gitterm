@@ -154,8 +154,8 @@ Setup commands run in order from the checked-out repository after the agent serv
 ready. They do not delay workspace creation or stop the agent if they fail. Provider and
 agent defaults configured by an administrator run first. Use
 `client.workspaces.setupStatus(workspaceId)` or `waitForSetup(workspaceId)` to inspect them.
-The underlying state and log live in the repository's git-excluded `.gitterm/setup/`
-directory.
+GitTerm persists the reported state and bounded log; a recovery copy also lives in the
+repository's git-excluded `.gitterm/setup/` directory.
 
 `provider` is a discriminated union, so TypeScript only offers `region` for providers
 where GitTerm supports caller-selected placement. Machine keys are configured by admins
@@ -169,9 +169,10 @@ the changelog in the checked-out repository, then terminate the workspace. Use a
 
 ### Agent runs
 
-Runs are a thin control layer over the workspace's native OpenCode session. Completion
-means the agent session became idle; it does not claim that a pull request, upload, or
-other product outcome succeeded.
+Runs use durable GitTerm IDs backed by the workspace's native OpenCode session. Reusing an
+idempotency key with the same input returns the original run, and terminal results remain
+available after the workspace is paused. Completion means the native session became idle;
+it does not claim that a pull request, upload, or other product outcome succeeded.
 
 ```ts
 const { workspace } = await client.workspaces.create({
@@ -181,6 +182,7 @@ const { workspace } = await client.workspaces.create({
 
 const run = await client.runs.create({
   workspaceId: workspace.id,
+  idempotencyKey: "onboarding-v2",
   waitForSetup: true,
   prompt: "Record the new onboarding flow and open a pull request adding it to the changelog.",
 });

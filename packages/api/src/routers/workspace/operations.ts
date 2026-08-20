@@ -1,11 +1,16 @@
 import z from "zod";
 import { workspaceAuthProcedure, router } from "../../index";
-import { db, eq, and, gt } from "@gitterm/db";
+import { db, eq, and, gt, inArray } from "@gitterm/db";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
+import { workspaceSetup } from "@gitterm/db/schema/workspace-setup";
 import { gitIntegration, workspaceGitConfig } from "@gitterm/db/schema/integrations";
 import { TRPCError } from "@trpc/server";
-import { getGitHubAppService, GitHubInstallationNotFoundError } from "../../service/github";
+import {
+  getGitHubAppService,
+  GitHubInstallationNotFoundError,
+  parseGitHubRepoUrl,
+} from "../../service/github";
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { logger } from "../../utils/logger";
 import { encryptWorkspacePassword } from "../../utils/workspace-password";
@@ -26,6 +31,9 @@ async function getAuthenticatedWorkspace(workspaceId: string, userId: string) {
   });
   if (!ws) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+  }
+  if (ws.status === "terminated") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Workspace is terminated" });
   }
   return ws;
 }
@@ -186,6 +194,10 @@ export const workspaceOperationsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { workspaceAuth } = ctx;
 
+      if (!workspaceJWT.hasScope(workspaceAuth, "agent:credential")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient agent scope" });
+      }
+
       if (workspaceAuth.workspaceId !== input.workspaceId) {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -225,6 +237,75 @@ export const workspaceOperationsRouter = router({
       });
 
       return { success: true };
+    }),
+
+  reportSetupStatus: workspaceAuthProcedure
+    .input(
+      z.object({
+        executionId: z.uuid(),
+        status: z.enum(["running", "succeeded", "failed"]),
+        exitCode: z.number().int().min(0).max(255).nullable(),
+        startedAt: z.iso.datetime().nullable(),
+        finishedAt: z.iso.datetime().nullable(),
+        logBase64: z.string().max(70_000),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { workspaceAuth } = ctx;
+      if (!workspaceJWT.hasScope(workspaceAuth, "setup:write")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient setup scope" });
+      }
+
+      const ws = await db.query.workspace.findFirst({
+        where: and(
+          eq(workspace.id, workspaceAuth.workspaceId),
+          eq(workspace.userId, workspaceAuth.userId),
+        ),
+      });
+      if (!ws) throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      if (ws.status === "terminated") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Workspace is terminated" });
+      }
+
+      const setup = await db.query.workspaceSetup.findFirst({
+        where: eq(workspaceSetup.workspaceId, ws.id),
+      });
+      if (!setup) throw new TRPCError({ code: "NOT_FOUND", message: "Workspace setup not found" });
+      if (setup.executionId !== input.executionId) {
+        throw new TRPCError({ code: "CONFLICT", message: "Stale workspace setup execution" });
+      }
+      if (setup.status === "succeeded" || setup.status === "failed") {
+        return { accepted: true, status: setup.status };
+      }
+
+      const log = input.logBase64
+        ? Buffer.from(input.logBase64, "base64")
+            .toString("utf8")
+            .replaceAll("\0", "")
+            .slice(-50_000)
+        : null;
+      const next = {
+        status: input.status,
+        exitCode: input.exitCode,
+        startedAt: input.startedAt ? new Date(input.startedAt) : setup.startedAt,
+        finishedAt: input.finishedAt ? new Date(input.finishedAt) : null,
+        log,
+        updatedAt: new Date(),
+      } as const;
+      const allowedStatuses =
+        input.status === "running" ? (["waiting"] as const) : (["waiting", "running"] as const);
+      const [updated] = await db
+        .update(workspaceSetup)
+        .set(next)
+        .where(
+          and(
+            eq(workspaceSetup.workspaceId, ws.id),
+            inArray(workspaceSetup.status, [...allowedStatuses]),
+          ),
+        )
+        .returning({ status: workspaceSetup.status });
+
+      return { accepted: true, status: updated?.status ?? setup.status };
     }),
 
   /**
@@ -286,12 +367,21 @@ export const workspaceOperationsRouter = router({
 
       try {
         const userId = ws.userId;
+        if (!ws.gitIntegrationId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "GitHub App not connected" });
+        }
 
         // Get GitHub App installation using the specific installation ID
         const [gitIntegrationRecord] = await db
           .select()
           .from(gitIntegration)
-          .where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
+          .where(
+            and(
+              eq(gitIntegration.id, ws.gitIntegrationId),
+              eq(gitIntegration.userId, userId),
+              eq(gitIntegration.provider, "github"),
+            ),
+          );
 
         if (!gitIntegrationRecord) {
           throw new TRPCError({
@@ -384,8 +474,9 @@ export const workspaceOperationsRouter = router({
         }
 
         // Generate authenticated URL
-        const { token } = await getGitHubAppService().getUserToServerToken(
+        const { token } = await getGitHubAppService().getRepositoryScopedToken(
           installation.installationId,
+          [fork.repo],
         );
         const authenticatedUrl = getGitHubAppService().getAuthenticatedGitUrl(
           token,
@@ -452,7 +543,7 @@ export const workspaceOperationsRouter = router({
         workspaceId: z.uuid(),
       }),
     )
-    .query(async ({ input, ctx }) => {
+    .mutation(async ({ input, ctx }) => {
       const { workspaceAuth } = ctx;
 
       // Verify workspace ID matches token
@@ -498,11 +589,20 @@ export const workspaceOperationsRouter = router({
 
       try {
         const userId = ws.userId;
+        if (!ws.gitIntegrationId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "GitHub App not connected" });
+        }
 
         const [gitIntegrationRecord] = await db
           .select()
           .from(gitIntegration)
-          .where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
+          .where(
+            and(
+              eq(gitIntegration.id, ws.gitIntegrationId),
+              eq(gitIntegration.userId, userId),
+              eq(gitIntegration.provider, "github"),
+            ),
+          );
 
         // we only support GitHub for now
         if (!gitIntegrationRecord) {
@@ -534,8 +634,16 @@ export const workspaceOperationsRouter = router({
         }
 
         // Generate new token
-        const tokenData = await getGitHubAppService().getUserToServerToken(
+        const repository = ws.repositoryUrl ? parseGitHubRepoUrl(ws.repositoryUrl) : null;
+        if (!repository) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Workspace does not have a GitHub repository",
+          });
+        }
+        const tokenData = await getGitHubAppService().getRepositoryScopedToken(
           installation.installationId,
+          [repository.repo],
         );
 
         logger.info("Git token refresh completed", {

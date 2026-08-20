@@ -159,7 +159,13 @@ export type WorkspaceEnsureRunningResult = {
   runtime: WorkspaceRuntimeAccess;
 };
 
-export type AgentRunStatus = "running" | "retrying" | "completed" | "failed" | "cancelled";
+export type AgentRunStatus =
+  | "pending"
+  | "running"
+  | "retrying"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export type AgentRun = {
   id: string;
@@ -172,6 +178,8 @@ export type AgentRun = {
 
 export type AgentRunCreateInput = {
   workspaceId: string;
+  /** Stable key used to return the same run when a request is retried. */
+  idempotencyKey: string;
   prompt: string;
   title?: string;
   agent?: string;
