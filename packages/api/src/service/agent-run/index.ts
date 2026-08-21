@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, db, eq, inArray } from "@gitterm/db";
 import { agentRun, type AgentRun } from "@gitterm/db/schema/agent-run";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
+import { model, userModelCredential } from "@gitterm/db/schema/model-credentials";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { TRPCError } from "@trpc/server";
 import { getWorkspaceSetupStatus } from "../workspace-setup";
@@ -112,6 +113,51 @@ async function getRuntimeTarget(workspaceId: string, userId: string) {
     directory: resolveProjectDirectory(record.repositoryUrl, provider?.providerKey),
     password: record.serverPassword ? decryptWorkspacePassword(record.serverPassword) : null,
   };
+}
+
+async function validateModelCredential(
+  workspaceRecord: Awaited<ReturnType<typeof getRunWorkspace>>,
+  userId: string,
+  selectedModel: string | undefined,
+) {
+  if (!selectedModel) return;
+  const separator = selectedModel.indexOf("/");
+  if (separator <= 0 || separator === selectedModel.length - 1) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: 'MODEL_CREDENTIAL_REQUIRED: model must use the "provider/model" format',
+    });
+  }
+
+  const [registeredModel] = await db
+    .select({ isFree: model.isFree })
+    .from(model)
+    .where(eq(model.modelId, selectedModel))
+    .limit(1);
+  if (registeredModel?.isFree) return;
+
+  const provider = selectedModel.slice(0, separator);
+  if (workspaceRecord.inlineModelProviders.includes(provider)) return;
+
+  const credentialIds = workspaceRecord.modelCredentialIds;
+  if (credentialIds.length > 0) {
+    const credentials = await db
+      .select({ logicalProviderKey: userModelCredential.logicalProviderKey })
+      .from(userModelCredential)
+      .where(
+        and(
+          eq(userModelCredential.userId, userId),
+          eq(userModelCredential.isActive, true),
+          inArray(userModelCredential.id, credentialIds),
+        ),
+      );
+    if (credentials.some((credential) => credential.logicalProviderKey === provider)) return;
+  }
+
+  throw new TRPCError({
+    code: "BAD_REQUEST",
+    message: `MODEL_CREDENTIAL_REQUIRED: Workspace has no credential for ${provider}. Recreate it with a matching dashboard credential (modelCredentialIds) or an inline credential (modelCredentials).`,
+  });
 }
 
 async function withNativeTimeout(operation: Promise<unknown>, message: string) {
@@ -258,6 +304,7 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
   }
 
   const target = await getRuntimeTarget(input.workspaceId, userId);
+  await validateModelCredential(target.workspace, userId, input.model);
   if (input.waitForSetup) {
     await waitForSetup(input.workspaceId, userId, input.setupTimeoutMs ?? 10 * 60_000);
   }

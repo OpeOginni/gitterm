@@ -1,7 +1,12 @@
 import { createTRPCClient, httpBatchLink, TRPCClientError } from "@trpc/client";
 import type { AppRouter } from "@gitterm/api/routers/index";
 import { DEFAULT_GITTERM_SERVER_URL, loadConfigSync } from "./config.js";
-import { GittermError, WorkspaceLifecycleError, type GittermErrorCode } from "./errors.js";
+import {
+  GittermError,
+  WorkspaceLifecycleError,
+  type CredentialErrorCode,
+  type GittermErrorCode,
+} from "./errors.js";
 import type {
   AgentType,
   AgentRun,
@@ -21,6 +26,8 @@ import type {
   WorkspaceTerminateResult,
   WorkspaceCatalog,
   WorkspaceSetupStatus,
+  ModelCredential,
+  ModelProviderInfo,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl } from "./transport.js";
 
@@ -125,6 +132,10 @@ export type GittermClient = {
       nonSandboxOnly?: boolean;
     }): Promise<CloudProvider[]>;
     workspaceOptions(): Promise<WorkspaceCatalog>;
+  };
+  credentials: {
+    list(): Promise<ModelCredential[]>;
+    listProviders(): Promise<ModelProviderInfo[]>;
   };
 };
 
@@ -239,6 +250,13 @@ function mapTrpcCode(code: string | undefined): GittermErrorCode {
   }
 }
 
+function credentialErrorCode(message: string): CredentialErrorCode | undefined {
+  const match = /^(MODEL_CREDENTIAL_(?:UNAVAILABLE|DUPLICATE_PROVIDER|INVALID|REQUIRED)):\s*/.exec(
+    message,
+  );
+  return match?.[1] as CredentialErrorCode | undefined;
+}
+
 async function runWithServer<T>(serverUrl: string, operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
@@ -255,6 +273,8 @@ async function runWithServer<T>(serverUrl: string, operation: () => Promise<T>):
         });
       }
       const code = mapTrpcCode(trpcCode);
+      const credentialCode = credentialErrorCode(error.message);
+      if (credentialCode) throw new GittermError(credentialCode, error.message, { cause: error });
       if (/WORKSPACE_TERMINATED/.test(error.message)) {
         throw new WorkspaceLifecycleError("WORKSPACE_TERMINATED", error.message, { cause: error });
       }
@@ -489,6 +509,30 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         }),
       workspaceOptions: (): Promise<WorkspaceCatalog> =>
         run(async () => trpc.workspace.getWorkspaceCatalog.query()),
+    },
+    credentials: {
+      list: () =>
+        run(async (): Promise<ModelCredential[]> => {
+          const result = await trpc.modelCredentials.listMyCredentials.query();
+          return result.credentials.map((credential) => ({
+            ...credential,
+            lastUsedAt: toIso(credential.lastUsedAt),
+            oauthExpiresAt: toIso(credential.oauthExpiresAt),
+            createdAt: toIso(credential.createdAt)!,
+            updatedAt: toIso(credential.updatedAt)!,
+          }));
+        }),
+      listProviders: () =>
+        run(async (): Promise<ModelProviderInfo[]> => {
+          const result = await trpc.modelCredentials.listProviders.query();
+          return result.providers.map((provider) => ({
+            id: provider.id,
+            name: provider.name,
+            displayName: provider.displayName,
+            authType: provider.authType,
+            isRecommended: provider.isRecommended,
+          }));
+        }),
     },
   };
 }

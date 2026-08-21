@@ -203,6 +203,56 @@ const next = await client.runs.create({
 });
 ```
 
+### Model provider credentials
+
+Workspaces can receive model credentials two ways, and they compose:
+
+**Dashboard credentials** — list the account's credential metadata, choose one active credential
+per provider, and pass the IDs when creating a workspace. The SDK never returns credential
+secrets.
+
+```ts
+const credentials = await client.credentials.list();
+const selected = credentials.filter(
+  (credential) =>
+    credential.isActive && ["anthropic", "openai"].includes(credential.logicalProviderKey),
+);
+
+const { workspace } = await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  modelCredentialIds: selected.map((credential) => credential.id),
+});
+```
+
+**Inline credentials** — pass API keys directly for this workspace only. They are injected into
+the provisioned agent and never stored in the dashboard. Use
+`client.credentials.listProviders()` for valid provider names; OAuth providers (e.g. GitHub
+Copilot) can only be connected through the dashboard.
+
+```ts
+const { workspace } = await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  modelCredentials: [{ providerName: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY! }],
+});
+
+const run = await client.runs.create({
+  workspaceId: workspace.workspaceId,
+  model: "anthropic/claude-sonnet-4-20250514",
+  prompt: "Record before/after videos of the changes in PR #42",
+});
+```
+
+Rules and errors:
+
+- Omit both fields to inject the dashboard defaults.
+- One credential per logical provider. An inline credential always overrides the dashboard
+  credential (default or selected) for the same provider; two credentials for the same provider
+  within one field throw `MODEL_CREDENTIAL_DUPLICATE_PROVIDER`.
+- Unknown providers or inline keys for OAuth-only providers throw `MODEL_CREDENTIAL_INVALID`;
+  missing, inactive, or unowned dashboard selections throw `MODEL_CREDENTIAL_UNAVAILABLE`.
+- A run that requests a credential-backed `provider/model` not available in its workspace throws
+  `MODEL_CREDENTIAL_REQUIRED` before the prompt is submitted.
+
 Use `client.runs.cancel(workspaceId, runId)` to abort the current run. GitTerm keeps the
 underlying OpenCode session private. For native session control, use
 `workspaces.getRuntimeAccess()` and connect with the official OpenCode SDK.

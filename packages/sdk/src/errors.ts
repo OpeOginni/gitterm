@@ -7,7 +7,14 @@ export type GittermErrorCode =
   | "CONFLICT"
   | "SERVER_ERROR"
   | "NETWORK"
+  | CredentialErrorCode
   | WorkspaceLifecycleErrorCode;
+
+export type CredentialErrorCode =
+  | "MODEL_CREDENTIAL_UNAVAILABLE"
+  | "MODEL_CREDENTIAL_DUPLICATE_PROVIDER"
+  | "MODEL_CREDENTIAL_INVALID"
+  | "MODEL_CREDENTIAL_REQUIRED";
 
 export type WorkspaceLifecycleErrorCode =
   | "WORKSPACE_TERMINATED"

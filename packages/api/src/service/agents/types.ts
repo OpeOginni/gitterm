@@ -2,7 +2,10 @@ import type { AgentProvisioning } from "../../providers/compute";
 import type { ApiKeyCredential, OAuthCredential } from "../encryption";
 
 export interface UserProviderCredential {
+  /** Dashboard credential ID, or null for inline credentials that are never stored. */
+  credentialId: string | null;
   providerName: string;
+  logicalProviderKey: string;
   credential: ApiKeyCredential | OAuthCredential;
 }
 

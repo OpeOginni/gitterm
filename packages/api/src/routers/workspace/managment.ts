@@ -70,7 +70,7 @@ function decryptServerPasswordSafe(
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooling";
 import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "../../service/workspace-env";
-import { getAgentProvisioner, getUserProviderCredentials } from "../../service/agents";
+import { getAgentProvisioner, resolveWorkspaceProviderCredentials } from "../../service/agents";
 import type { AgentConfigByKind } from "../../service/agents/types";
 import { T3_PAIRING_CREATE_COMMAND } from "../../service/agents/t3code";
 import {
@@ -181,6 +181,11 @@ function normalizeRepoUrl(url: string): string {
   return trimmed.replace(/\.git\/?$/i, "");
 }
 
+const inlineModelCredentialSchema = z.object({
+  providerName: z.string().trim().min(1).max(100),
+  apiKey: z.string().min(1).max(10_000),
+});
+
 const workspaceCreateBaseSchema = z.object({
   name: z.string().optional(),
   idempotencyKey: z.string().trim().min(1).max(255).optional(),
@@ -212,7 +217,13 @@ const workspaceCreateBaseSchema = z.object({
     .optional(),
   gitIntegrationId: z.string().optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
-  modelCredentialIds: z.array(z.uuid()).max(50).optional(),
+  modelCredentialIds: z
+    .array(z.uuid())
+    .max(50)
+    .refine((ids) => new Set(ids).size === ids.length, "Credential IDs must be unique")
+    .optional(),
+  /** Injected into this workspace only; never stored in the dashboard. */
+  modelCredentials: z.array(inlineModelCredentialSchema).max(20).optional(),
   setupCommands: workspaceSetupCommandsSchema.optional(),
   opencode: z
     .object({
@@ -2222,6 +2233,13 @@ export const workspaceRouter = router({
           encryptedServerPassword = passwordData.encryptedPassword;
         }
 
+        const credentials = await workspaceCreateLogger.step("fetch-model-credentials", () =>
+          resolveWorkspaceProviderCredentials({
+            userId,
+            credentialIds: input.modelCredentialIds,
+            inlineCredentials: input.modelCredentials,
+          }),
+        );
         const agentProvisioning = getAgentProvisioner(agentTypeRecord.provisionerKey).provision({
           userId,
           userDisplayName: fetchedUser.name,
@@ -2230,9 +2248,7 @@ export const workspaceRouter = router({
           serverOnly: agentTypeRecord.serverOnly,
           agentConfigs,
           serverPassword,
-          credentials: await workspaceCreateLogger.step("fetch-model-credentials", () =>
-            getUserProviderCredentials(userId, input.modelCredentialIds),
-          ),
+          credentials,
           opencode: input.opencode,
         });
 
@@ -2419,7 +2435,13 @@ export const workspaceRouter = router({
             machineProfileId: selectedMachineProfile?.id ?? null,
             launchProfileId: null,
             gitIntegrationId: input.gitIntegrationId ?? null,
-            modelCredentialIds: input.modelCredentialIds ?? [],
+            // Persist resolved defaults too, so later runs validate the exact injected credentials.
+            modelCredentialIds: credentials
+              .map((credential) => credential.credentialId)
+              .filter((id): id is string => id !== null),
+            inlineModelProviders: credentials
+              .filter((credential) => credential.credentialId === null)
+              .map((credential) => credential.logicalProviderKey),
             setupRequired: Boolean(runtimeSetupCommand),
             persistent: effectivePersistent,
             regionId: regionRecord?.id,

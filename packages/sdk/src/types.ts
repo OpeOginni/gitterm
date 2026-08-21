@@ -133,7 +133,15 @@ export type WorkspaceCreateInput = {
   /** Defaults from the selected provider. */
   persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
+  /** Credential IDs from client.credentials.list(). Omit to inject dashboard defaults. */
   modelCredentialIds?: string[];
+  /**
+   * Inline API keys for this workspace only — injected at provision time and
+   * never stored in the dashboard. An inline key overrides any dashboard
+   * credential for the same provider. OAuth providers can't be supplied
+   * inline; connect those in the dashboard.
+   */
+  modelCredentials?: WorkspaceModelCredentialInput[];
   /**
    * Ordered commands launched in the repository after the agent server starts.
    * They do not block workspace readiness; inspect ~/.gitterm/setup for status
@@ -208,6 +216,47 @@ export type WorkspaceSetupStatus = {
   startedAt: string | null;
   finishedAt: string | null;
   log: string | null;
+};
+
+/**
+ * A model provider from the Gitterm registry. `name` is what credential
+ * inputs reference; `authType` tells you whether it accepts inline API keys
+ * ("api_key") or requires the dashboard OAuth flow ("oauth").
+ */
+export type ModelProviderInfo = {
+  id: string;
+  name: string;
+  displayName: string;
+  authType: string;
+  isRecommended: boolean;
+};
+
+/**
+ * An API key passed directly to workspaces.create(). `providerName` must be an
+ * API-key provider from credentials.listProviders(), e.g. "anthropic" or
+ * "openai"; unknown or OAuth-only providers throw MODEL_CREDENTIAL_INVALID.
+ */
+export type WorkspaceModelCredentialInput = {
+  providerName: string;
+  apiKey: string;
+};
+
+/** Safe dashboard credential metadata. Secret material is never returned by the SDK. */
+export type ModelCredential = {
+  id: string;
+  providerId: string;
+  providerName: string;
+  providerDisplayName: string;
+  logicalProviderKey: string;
+  authType: string;
+  label: string | null;
+  keyHash: string;
+  isActive: boolean;
+  isDefault: boolean;
+  lastUsedAt: string | null;
+  oauthExpiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AgentType = {

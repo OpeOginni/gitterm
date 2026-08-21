@@ -1,0 +1,71 @@
+name: Record external PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Public GitHub repository in owner/repository format
+        required: true
+        type: string
+      pull_request:
+        description: Pull request number to review
+        required: true
+        type: string
+      prompt:
+        description: Optional instructions for the agent
+        required: false
+        default: Review the most relevant user-facing change with mock or seeded data.
+        type: string
+      model:
+        description: Optional model in provider/model format, e.g. anthropic/claude-sonnet-4-20250514
+        required: false
+        type: string
+
+concurrency:
+  group: external-pr-review-${{ inputs.repository }}-${{ inputs.pull_request }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: Review ${{ inputs.repository }}#${{ inputs.pull_request }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      GITTERM_SERVER_URL: ${{ secrets.GITTERM_SERVER_URL }}
+      GITTERM_API_TOKEN: ${{ secrets.GITTERM_API_TOKEN }}
+      TARGET_REPOSITORY: ${{ inputs.repository }}
+      TARGET_PR: ${{ inputs.pull_request }}
+      GITTERM_PROMPT: ${{ inputs.prompt }}
+      GITTERM_MODEL: ${{ inputs.model }}
+      # Optional API key for the model's provider, used with the model input.
+      # Injected into the disposable workspaces only, never stored in Gitterm;
+      # leave the secret unset to use your Gitterm dashboard credentials.
+      GITTERM_MODEL_API_KEY: ${{ secrets.GITTERM_MODEL_API_KEY }}
+      OUTPUT_DIR: artifacts/external-pr-review
+
+    steps:
+      # This checks out Gitterm, never the repository being reviewed.
+      - name: Checkout Gitterm
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.2
+
+      - name: Install dependencies
+        run: bun install --cwd examples/external-pr-review --frozen-lockfile
+
+      # The script creates and removes isolated base and PR-head workspaces.
+      - name: Run visual review
+        run: bun examples/external-pr-review/record-external-pr.ts
+
+      - name: Upload review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-pr-review-${{ inputs.pull_request }}
+          path: artifacts/external-pr-review
+          if-no-files-found: warn

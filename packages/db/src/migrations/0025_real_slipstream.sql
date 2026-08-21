@@ -1,0 +1,1 @@
+ALTER TABLE "workspace" ADD COLUMN "inline_model_providers" jsonb DEFAULT '[]'::jsonb NOT NULL;

@@ -20,7 +20,11 @@ export {
   type WorkspacePort,
   type WorkspaceSelf,
 } from "./workspace-client.js";
-export type { GittermErrorCode, WorkspaceLifecycleErrorCode } from "./errors.js";
+export type {
+  CredentialErrorCode,
+  GittermErrorCode,
+  WorkspaceLifecycleErrorCode,
+} from "./errors.js";
 export type {
   AgentRun,
   AgentRunCreateInput,
@@ -44,6 +48,9 @@ export type {
   WorkspaceRuntimeAccess,
   WorkspaceStatus,
   WorkspaceSetupStatus,
+  ModelCredential,
+  ModelProviderInfo,
+  WorkspaceModelCredentialInput,
   WorkspacePauseResult,
   WorkspaceTerminateResult,
   WorkspaceProviderSelection,
