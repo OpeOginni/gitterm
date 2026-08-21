@@ -109,7 +109,7 @@ function buildPrompt({
 Your required workflow:
 1. Inspect the repository and identify the user-facing flow changed by this PR.
 2. Install dependencies and run the app using mock or seeded data only. Do not use production services.
-3. Use Playwright with Chromium to capture at least one useful screenshot or short recording of the changed flow. Save captures under \`/tmp/gitterm-review/${label}\`.
+3. Playwright and Chromium are already installed and ready to use. Use them to capture at least one useful screenshot or short recording of the changed flow. Save captures under \`/tmp/gitterm-review/${label}\`.
 4. Upload every capture immediately with \`~/.local/bin/gitterm-upload-artifact FILE KEY\`, using keys under \`external-pr-reviews/\${REVIEW_ID}/${label}/\`. The command prints the public URL; record each URL.
 5. Reply with a concise summary and every uploaded URL. If capture or upload fails, explain the exact reason and continue with any other useful capture.
 
