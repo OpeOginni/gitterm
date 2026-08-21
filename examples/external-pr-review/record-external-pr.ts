@@ -30,11 +30,7 @@ const modelCredentials =
     ? [{ providerName: model.slice(0, model.indexOf("/")), apiKey: modelApiKey }]
     : undefined;
 // 4 vCPU / 8 GB sandboxes for app + browser capture.
-const e2bTemplate = "gitterm-opencode-server-lg";
-const provider = {
-  type: "e2b",
-  machine: { type: "custom", resources: { templateId: e2bTemplate } },
-} as const;
+const provider = { type: "e2b", machine: { type: "profile", key: "large" } } as const;
 const reviewId = process.env.GITHUB_RUN_ID
   ? `${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`
   : crypto.randomUUID();

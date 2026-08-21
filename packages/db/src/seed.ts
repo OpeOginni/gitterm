@@ -339,6 +339,7 @@ const seedMachineProfiles: Array<{
   name: string;
   description: string;
   providerOptions: Record<string, unknown>;
+  isDefault: boolean;
 }> = [
   {
     providerName: "E2B",
@@ -346,6 +347,15 @@ const seedMachineProfiles: Array<{
     name: "Standard",
     description: "Default E2B template resources.",
     providerOptions: {},
+    isDefault: true,
+  },
+  {
+    providerName: "E2B",
+    key: "large",
+    name: "Large",
+    description: "4 vCPU and 8 GB memory.",
+    providerOptions: { templateId: "gitterm-opencode-server-lg" },
+    isDefault: false,
   },
   {
     providerName: "Daytona",
@@ -353,6 +363,7 @@ const seedMachineProfiles: Array<{
     name: "Standard",
     description: "2 CPU and 4 GB memory.",
     providerOptions: { resources: { cpu: 2, memory: 4 } },
+    isDefault: true,
   },
   {
     providerName: "Vercel Sandbox",
@@ -360,6 +371,7 @@ const seedMachineProfiles: Array<{
     name: "Standard",
     description: "1 vCPU Vercel Sandbox.",
     providerOptions: { vcpus: 1 },
+    isDefault: true,
   },
   {
     providerName: "Ascii Box",
@@ -367,6 +379,7 @@ const seedMachineProfiles: Array<{
     name: "Standard",
     description: "Default Ascii Box.",
     providerOptions: { size: "default" },
+    isDefault: true,
   },
   {
     providerName: "exe.dev",
@@ -374,6 +387,7 @@ const seedMachineProfiles: Array<{
     name: "Standard",
     description: "2 CPU, 4 GB memory, and 20 GB disk.",
     providerOptions: { cpu: 2, memory: "4GB", disk: "20GB" },
+    isDefault: true,
   },
 ];
 
@@ -782,12 +796,20 @@ export async function seedDatabase(): Promise<void> {
     if (existing) {
       await db
         .update(machineProfile)
-        .set({ ...profileValues, isDefault: true, isEnabled: true, updatedAt: new Date() })
+        .set({
+          ...profileValues,
+          isDefault: profile.isDefault,
+          isEnabled: true,
+          updatedAt: new Date(),
+        })
         .where(eq(machineProfile.id, existing.id));
     } else {
-      await db
-        .insert(machineProfile)
-        .values({ ...profileValues, cloudProviderId, isDefault: true, isEnabled: true });
+      await db.insert(machineProfile).values({
+        ...profileValues,
+        cloudProviderId,
+        isDefault: profile.isDefault,
+        isEnabled: true,
+      });
     }
   }
 
