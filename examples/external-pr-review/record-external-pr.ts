@@ -47,7 +47,7 @@ const reviewToolsSetup = [
   'key="${2:?usage: gitterm-upload-artifact FILE KEY}"',
   'content_type="$(file --brief --mime-type "$file")"',
   'wrangler r2 object put "$R2_BUCKET/$key" --file "$file" --remote --content-type "$content_type" >/dev/null',
-  'printf \'%s/%s\\n\' "${R2_PUBLIC_URL%/}" "$key"',
+  'if [ -n "${R2_PUBLIC_URL:-}" ]; then printf \'%s/%s\\n\' "${R2_PUBLIC_URL%/}" "$key"; else printf \'r2://%s/%s\\n\' "$R2_BUCKET" "$key"; fi',
   "UPLOAD_SCRIPT",
   'chmod +x "$HOME/.local/bin/gitterm-upload-artifact"',
 ].join("\n");
@@ -149,9 +149,9 @@ async function reviewRevision({
         CLOUDFLARE_ACCOUNT_ID: r2.accountId!,
         CLOUDFLARE_API_TOKEN: r2.apiToken!,
         R2_BUCKET: r2.bucket!,
-        R2_PUBLIC_URL: r2.publicUrl!,
         REVIEW_ID: reviewId,
         REVIEW_LABEL: label,
+        ...(r2.publicUrl ? { R2_PUBLIC_URL: r2.publicUrl } : {}),
       },
       setupCommands: [reviewToolsSetup],
       opencode: {
@@ -253,7 +253,6 @@ async function main() {
   if (!r2.accountId) throw new Error("R2_ACCOUNT_ID is required");
   if (!r2.apiToken) throw new Error("R2_API_TOKEN is required");
   if (!r2.bucket) throw new Error("R2_BUCKET is required");
-  if (!r2.publicUrl) throw new Error("R2_PUBLIC_URL is required");
   if (model && !/^[^/]+\/.+$/.test(model)) {
     throw new Error(
       "GITTERM_MODEL must use the provider/model format, e.g. anthropic/claude-sonnet-4-20250514",
