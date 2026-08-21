@@ -5,7 +5,7 @@
     "": {
       "name": "gitterm-external-pr-review-example",
       "dependencies": {
-        "@gitterm/sdk": "^0.0.6",
+        "@gitterm/sdk": "^0.0.8",
       },
       "devDependencies": {
         "@types/bun": "^1.3.6",
@@ -13,7 +13,7 @@
     },
   },
   "packages": {
-    "@gitterm/sdk": ["@gitterm/sdk@0.0.6", "", { "dependencies": { "@trpc/client": "^11.8.1" } }, "sha512-2nmMVyZh7S4raN0x2cf6zjAIuX+Ywy+fYmYLBiYtRXWRKhMqhu+ZT5QVupPuOATGehjAfA0hNWyBoq2CLjI3NA=="],
+    "@gitterm/sdk": ["@gitterm/sdk@0.0.8", "", { "dependencies": { "@trpc/client": "^11.8.1" } }, "sha512-Q7xpiHA9FnD8kuyUK2plvXq6t+Ok7Vf+EF9cjZX/v6G8JfqGELEJlON799ibq1B8opHqJMAe/nE3LeaC9oeNMg=="],
 
     "@trpc/client": ["@trpc/client@11.18.0", "", { "peerDependencies": { "@trpc/server": "11.18.0", "typescript": ">=5.7.2" }, "bin": { "intent": "bin/intent.js" } }, "sha512-wOqeg3Fvl25V1ZisQhUD3K8G60ZJDlSGJNSyeXrLH24xAo5w6GSR2Kzb1cSNY9Y+IQ2YZvYGZstBU+V/ulo/ow=="],
 

@@ -278,6 +278,16 @@ const seedImages = [
     },
   },
   {
+    name: "gitterm-opencode-server-lg",
+    imageId: "brightoginni123/gitterm-opencode-server-lg",
+    agentTypeName: "OpenCode",
+    providerMetadata: {
+      e2b: {
+        templateId: "8q4c6rxkpsuq6fuo6l6l",
+      },
+    },
+  },
+  {
     name: "gitterm-t3code-server",
     imageId: "opeoginni/gitterm-t3code-server",
     agentTypeName: "T3Code",
