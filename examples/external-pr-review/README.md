@@ -18,7 +18,7 @@ bun record-external-pr.ts
 
 The SDK uses `https://api.gitterm.dev` by default. Set `GITTERM_SERVER_URL` to override it.
 
-The script writes `review.md` and `review.json` to `artifacts/external-pr-review` and terminates both workspaces when it finishes.
+The script prints the before/after reports (including the uploaded capture URLs) to the console and terminates both workspaces when it finishes.
 
 ## Choosing the model
 

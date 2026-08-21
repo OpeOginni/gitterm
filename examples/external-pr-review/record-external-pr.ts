@@ -1,6 +1,19 @@
-import { mkdir } from "node:fs/promises";
+/**
+ * Records a before/after visual review of an external GitHub pull request.
+ *
+ * For each side of the PR (base commit and head commit) the script:
+ *   1. creates a disposable Gitterm workspace pinned to that commit,
+ *   2. asks an agent to run the app and capture the changed flow with Playwright,
+ *   3. uploads every capture to Cloudflare R2 via a helper installed in the sandbox,
+ *   4. terminates the workspace.
+ *
+ * The before/after reports (including the uploaded capture URLs) are printed
+ * to the console. See README.md for the required environment variables.
+ */
 
 import { createGittermClient, type Workspace } from "@gitterm/sdk";
+
+type GittermClient = ReturnType<typeof createGittermClient>;
 
 type PullRequest = {
   number: number;
@@ -10,61 +23,16 @@ type PullRequest = {
   head: { ref: string; sha: string; repo: { clone_url: string } | null };
 };
 
+type ReviewLabel = "before" | "after";
+
 type Review = {
-  label: "before" | "after";
+  label: ReviewLabel;
   commit: string;
   workspaceId?: string;
   status: "completed" | "failed";
   report: string;
   cleanup: "terminated" | "failed" | "not-needed";
 };
-
-const repositoryPattern = /^[\w.-]+\/[\w.-]+$/;
-const runTimeoutMs = Number(process.env.GITTERM_PR_REVIEW_TIMEOUT_MS ?? 30 * 60_000);
-// GITTERM_MODEL + GITTERM_MODEL_API_KEY inject a key for these workspaces only;
-// leave both unset to use your dashboard credentials.
-const model = process.env.GITTERM_MODEL?.trim() || undefined;
-const modelApiKey = process.env.GITTERM_MODEL_API_KEY?.trim() || undefined;
-const modelCredentials =
-  model && modelApiKey
-    ? [{ providerName: model.slice(0, model.indexOf("/")), apiKey: modelApiKey }]
-    : undefined;
-const r2 = {
-  accountId: process.env.R2_ACCOUNT_ID?.trim(),
-  accessKeyId: process.env.R2_ACCESS_KEY_ID?.trim(),
-  bucket: process.env.R2_BUCKET?.trim(),
-  publicUrl: process.env.R2_PUBLIC_URL?.trim().replace(/\/$/, ""),
-  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY?.trim(),
-};
-const reviewToolsSetup = [
-  "set -eu",
-  'TOOLS_DIR="$HOME/.gitterm/review-tools"',
-  'mkdir -p "$TOOLS_DIR" "$HOME/.local/bin"',
-  'npm install --prefix "$TOOLS_DIR" @aws-sdk/client-s3 playwright',
-  '"$TOOLS_DIR/node_modules/.bin/playwright" install --with-deps chromium',
-  "cat > \"$TOOLS_DIR/upload-r2.mjs\" <<'UPLOAD_MODULE'",
-  'import { readFile } from "node:fs/promises";',
-  'import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";',
-  "const [file, key, contentType] = process.argv.slice(2);",
-  'const client = new S3Client({ region: "auto", endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY } });',
-  "await client.send(new PutObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key, Body: await readFile(file), ContentType: contentType }));",
-  "UPLOAD_MODULE",
-  "cat > \"$HOME/.local/bin/gitterm-upload-artifact\" <<'UPLOAD_SCRIPT'",
-  "#!/bin/sh",
-  "set -eu",
-  'file="$1"',
-  'key="${2:?usage: gitterm-upload-artifact FILE KEY}"',
-  'case "$file" in *.png) content_type=image/png ;; *.jpg|*.jpeg) content_type=image/jpeg ;; *.webm) content_type=video/webm ;; *.mp4) content_type=video/mp4 ;; *) content_type=application/octet-stream ;; esac',
-  'node "$HOME/.gitterm/review-tools/upload-r2.mjs" "$file" "$key" "$content_type"',
-  'if [ -n "${R2_PUBLIC_URL:-}" ]; then printf \'%s/%s\\n\' "${R2_PUBLIC_URL%/}" "$key"; else printf \'r2://%s/%s\\n\' "$R2_BUCKET" "$key"; fi',
-  "UPLOAD_SCRIPT",
-  'chmod +x "$HOME/.local/bin/gitterm-upload-artifact"',
-].join("\n");
-// 4 vCPU / 8 GB sandboxes for app + browser capture.
-const provider = { type: "e2b", machine: { type: "profile", key: "large" } } as const;
-const reviewId = process.env.GITHUB_RUN_ID
-  ? `${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`
-  : crypto.randomUUID();
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -75,6 +43,118 @@ function requiredEnv(name: string): string {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+// --- Configuration ----------------------------------------------------------
+
+const repositoryPattern = /^[\w.-]+\/[\w.-]+$/;
+
+const runTimeoutMs = Number(process.env.GITTERM_PR_REVIEW_TIMEOUT_MS ?? 30 * 60_000);
+if (!Number.isFinite(runTimeoutMs) || runTimeoutMs < 1_000) {
+  throw new Error("GITTERM_PR_REVIEW_TIMEOUT_MS must be at least 1000");
+}
+
+// GITTERM_MODEL + GITTERM_MODEL_API_KEY inject a key for these workspaces only;
+// leave both unset to use your dashboard credentials.
+const model = process.env.GITTERM_MODEL?.trim() || undefined;
+const modelApiKey = process.env.GITTERM_MODEL_API_KEY?.trim() || undefined;
+if (model && !/^[^/]+\/.+$/.test(model)) {
+  throw new Error(
+    "GITTERM_MODEL must use the provider/model format, e.g. anthropic/claude-sonnet-4-20250514",
+  );
+}
+if (modelApiKey && !model) {
+  console.warn(
+    "GITTERM_MODEL_API_KEY is only used together with GITTERM_MODEL; using dashboard credentials instead.",
+  );
+}
+const modelCredentials =
+  model && modelApiKey
+    ? [{ providerName: model.slice(0, model.indexOf("/")), apiKey: modelApiKey }]
+    : undefined;
+
+const r2 = {
+  accountId: requiredEnv("R2_ACCOUNT_ID"),
+  accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
+  bucket: requiredEnv("R2_BUCKET"),
+  secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
+  // Optional; when set, uploads print public HTTPS URLs instead of r2:// keys.
+  publicUrl: process.env.R2_PUBLIC_URL?.trim().replace(/\/$/, ""),
+};
+
+// 4 vCPU / 8 GB sandboxes for app + browser capture.
+const provider = { type: "e2b", machine: { type: "profile", key: "large" } } as const;
+
+const reviewId = process.env.GITHUB_RUN_ID
+  ? `${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`
+  : crypto.randomUUID();
+
+// --- Sandbox tooling --------------------------------------------------------
+
+// Written into each workspace: a tiny Node script that pushes one file to R2.
+const uploadModuleSource = `
+import { readFile } from "node:fs/promises";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+
+const [file, key, contentType] = process.argv.slice(2);
+const client = new S3Client({
+  region: "auto",
+  endpoint: "https://" + process.env.R2_ACCOUNT_ID + ".r2.cloudflarestorage.com",
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  },
+});
+await client.send(
+  new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET,
+    Key: key,
+    Body: await readFile(file),
+    ContentType: contentType,
+  }),
+);
+`.trim();
+
+// The command the agent calls to publish a capture; prints the resulting URL.
+const uploadCommandSource = `
+#!/bin/sh
+set -eu
+file="$1"
+key="\${2:?usage: gitterm-upload-artifact FILE KEY}"
+case "$file" in
+  *.png) content_type=image/png ;;
+  *.jpg | *.jpeg) content_type=image/jpeg ;;
+  *.webm) content_type=video/webm ;;
+  *.mp4) content_type=video/mp4 ;;
+  *) content_type=application/octet-stream ;;
+esac
+node "$HOME/.gitterm/review-tools/upload-r2.mjs" "$file" "$key" "$content_type"
+if [ -n "\${R2_PUBLIC_URL:-}" ]; then
+  printf '%s/%s\\n' "\${R2_PUBLIC_URL%/}" "$key"
+else
+  printf 'r2://%s/%s\\n' "$R2_BUCKET" "$key"
+fi
+`.trim();
+
+// Runs while each workspace boots: installs Playwright + Chromium and the
+// upload helper above.
+const reviewToolsSetup = `
+set -eu
+TOOLS_DIR="$HOME/.gitterm/review-tools"
+mkdir -p "$TOOLS_DIR" "$HOME/.local/bin"
+npm install --prefix "$TOOLS_DIR" @aws-sdk/client-s3 playwright
+"$TOOLS_DIR/node_modules/.bin/playwright" install --with-deps chromium
+
+cat > "$TOOLS_DIR/upload-r2.mjs" <<'UPLOAD_MODULE'
+${uploadModuleSource}
+UPLOAD_MODULE
+
+cat > "$HOME/.local/bin/gitterm-upload-artifact" <<'UPLOAD_SCRIPT'
+${uploadCommandSource}
+UPLOAD_SCRIPT
+chmod +x "$HOME/.local/bin/gitterm-upload-artifact"
+`.trim();
+
+// --- Review flow ------------------------------------------------------------
 
 async function getPullRequest(repository: string, number: number): Promise<PullRequest> {
   const githubToken = process.env.GITHUB_TOKEN?.trim();
@@ -101,7 +181,7 @@ function buildPrompt({
 }: {
   repository: string;
   pullRequest: PullRequest;
-  label: "before" | "after";
+  label: ReviewLabel;
   instructions: string;
 }): string {
   return `You are capturing the "${label}" half of a before/after visual for ${repository} pull request #${pullRequest.number}: ${pullRequest.title}. This workspace is checked out at the ${label} revision.
@@ -119,6 +199,21 @@ Additional instructions from the workflow operator:
 ${instructions}`;
 }
 
+async function terminateWorkspace(
+  client: GittermClient,
+  label: ReviewLabel,
+  workspace: Workspace | undefined,
+): Promise<Review["cleanup"]> {
+  if (!workspace) return "not-needed";
+  try {
+    await client.workspaces.terminate(workspace.id);
+    return "terminated";
+  } catch (error) {
+    console.error(`Could not terminate ${label} workspace ${workspace.id}: ${errorMessage(error)}`);
+    return "failed";
+  }
+}
+
 async function reviewRevision({
   client,
   repository,
@@ -127,16 +222,13 @@ async function reviewRevision({
   commit,
   instructions,
 }: {
-  client: ReturnType<typeof createGittermClient>;
+  client: GittermClient;
   repository: string;
   pullRequest: PullRequest;
-  label: "before" | "after";
+  label: ReviewLabel;
   commit: string;
   instructions: string;
 }): Promise<Review> {
-  let workspace: Workspace | undefined;
-  let cleanup: Review["cleanup"] = "not-needed";
-  let review!: Review;
   console.log(`Starting ${label} review at ${commit}`);
 
   // The head branch of an external PR lives in the contributor's fork.
@@ -145,6 +237,7 @@ async function reviewRevision({
       ? (pullRequest.head.repo?.clone_url ?? `https://github.com/${repository}.git`)
       : `https://github.com/${repository}.git`;
 
+  let workspace: Workspace | undefined;
   try {
     const created = await client.workspaces.create({
       idempotencyKey: `external-pr-review-${reviewId}-${label}`,
@@ -156,10 +249,10 @@ async function reviewRevision({
       provider,
       modelCredentials,
       environmentVariables: {
-        R2_ACCOUNT_ID: r2.accountId!,
-        R2_ACCESS_KEY_ID: r2.accessKeyId!,
-        R2_BUCKET: r2.bucket!,
-        R2_SECRET_ACCESS_KEY: r2.secretAccessKey!,
+        R2_ACCOUNT_ID: r2.accountId,
+        R2_ACCESS_KEY_ID: r2.accessKeyId,
+        R2_BUCKET: r2.bucket,
+        R2_SECRET_ACCESS_KEY: r2.secretAccessKey,
         REVIEW_ID: reviewId,
         REVIEW_LABEL: label,
         ...(r2.publicUrl ? { R2_PUBLIC_URL: r2.publicUrl } : {}),
@@ -195,40 +288,25 @@ async function reviewRevision({
       );
     }
 
-    review = {
+    return {
       label,
       commit,
       workspaceId: workspace.id,
       status: "completed",
       report: completed.finalText ?? "The agent completed without a final report.",
-      cleanup,
+      cleanup: await terminateWorkspace(client, label, workspace),
     };
   } catch (error) {
     console.error(`${label} review failed: ${errorMessage(error)}`);
-    review = {
+    return {
       label,
       commit,
       workspaceId: workspace?.id,
       status: "failed",
       report: errorMessage(error),
-      cleanup,
+      cleanup: await terminateWorkspace(client, label, workspace),
     };
-  } finally {
-    if (workspace) {
-      try {
-        await client.workspaces.terminate(workspace.id);
-        cleanup = "terminated";
-      } catch (error) {
-        cleanup = "failed";
-        console.error(
-          `Could not terminate ${label} workspace ${workspace.id}: ${errorMessage(error)}`,
-        );
-      }
-    }
-    review.cleanup = cleanup;
   }
-
-  return review;
 }
 
 function asMarkdown(pullRequest: PullRequest, reviews: Review[]): string {
@@ -259,27 +337,9 @@ async function main() {
   if (!Number.isSafeInteger(pullRequestNumber) || pullRequestNumber < 1) {
     throw new Error("TARGET_PR must be a positive integer");
   }
-  if (!Number.isFinite(runTimeoutMs) || runTimeoutMs < 1_000) {
-    throw new Error("GITTERM_PR_REVIEW_TIMEOUT_MS must be at least 1000");
-  }
-  if (!r2.accountId) throw new Error("R2_ACCOUNT_ID is required");
-  if (!r2.accessKeyId) throw new Error("R2_ACCESS_KEY_ID is required");
-  if (!r2.bucket) throw new Error("R2_BUCKET is required");
-  if (!r2.secretAccessKey) throw new Error("R2_SECRET_ACCESS_KEY is required");
-  if (model && !/^[^/]+\/.+$/.test(model)) {
-    throw new Error(
-      "GITTERM_MODEL must use the provider/model format, e.g. anthropic/claude-sonnet-4-20250514",
-    );
-  }
-  if (modelApiKey && !model) {
-    console.warn(
-      "GITTERM_MODEL_API_KEY is only used together with GITTERM_MODEL; using dashboard credentials instead.",
-    );
-  }
-
-  const outputDir = process.env.OUTPUT_DIR?.trim() || "artifacts/external-pr-review";
   const instructions =
     process.env.GITTERM_PROMPT?.trim() || "Review the most relevant user-facing change.";
+
   const pullRequest = await getPullRequest(repository, pullRequestNumber);
   const client = createGittermClient({
     token: requiredEnv("GITTERM_API_TOKEN"),
@@ -316,12 +376,7 @@ async function main() {
     };
   });
 
-  await mkdir(outputDir, { recursive: true });
-  await Bun.write(
-    `${outputDir}/review.json`,
-    JSON.stringify({ repository, pullRequest, reviews }, null, 2),
-  );
-  await Bun.write(`${outputDir}/review.md`, asMarkdown(pullRequest, reviews));
+  console.log(`\n${asMarkdown(pullRequest, reviews)}`);
 
   const failures = reviews.filter(
     (review) => review.status === "failed" || review.cleanup === "failed",
