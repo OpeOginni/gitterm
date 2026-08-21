@@ -103,6 +103,7 @@ import {
 } from "../../providers/ssh-access";
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
 import { imageSupportsProvider } from "../../providers/image-compat";
+import { RAILWAY_RUNTIME_PORT } from "../../providers/railway";
 import { applyMachineProfile } from "../../providers/machine-profile";
 import type { CloudProviderType, ImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { normalizeBaseCommit } from "../../utils/workspace-base-commit";
@@ -657,6 +658,18 @@ export const workspaceRouter = router({
       db.query.image.findMany({ where: eq(image.isEnabled, true) }),
     ]);
 
+    // Daytona Tier 1/2 orgs block workspace -> API egress, so in-workspace
+    // features (scoped CLI, credential refresh) are unavailable there.
+    const daytonaWorkspaceApiAccess = providers.some(
+      (provider) => provider.providerKey?.toLowerCase() === "daytona",
+    )
+      ? (
+          (await getProviderConfigService().getProviderConfigForUse("daytona")) as {
+            tier3NetworkAccess?: boolean;
+          } | null
+        )?.tier3NetworkAccess === true
+      : true;
+
     const catalogProviders = providers.flatMap((provider) => {
       const parsedKey = providerKeySchema.safeParse(provider.providerKey);
       if (
@@ -714,6 +727,7 @@ export const workspaceRouter = router({
           })),
           agentKeys,
           ssh: normalizeProvidersshAccessSupport(provider.sshAccessSupport).supported,
+          workspaceApiAccess: parsedKey.data === "daytona" ? daytonaWorkspaceApiAccess : true,
         },
       ];
     });
@@ -2228,14 +2242,30 @@ export const workspaceRouter = router({
           requestedCommands: input.setupCommands,
         });
         const setupExecutionId = setupCommands.length > 0 ? randomUUID() : undefined;
-        const setupCommand = buildWorkspaceSetupCommand(
-          setupCommands,
-          agentProvisioning.serve?.port,
-          { executionId: setupExecutionId },
-        );
+        // The setup script's readiness probe must target the port the runtime
+        // actually listens on. SDK providers launch serve.command themselves,
+        // so serve.port is correct; Railway and AWS run the image entrypoint,
+        // which serves on the image's fixed port instead.
+        const setupProbePort = ["railway", "aws"].includes(providerKey)
+          ? RAILWAY_RUNTIME_PORT
+          : agentProvisioning.serve?.port;
+        // Tier 1/2 Daytona sandboxes cannot reach the API: skip push reports
+        // (their retry backoff would delay setup ~30s per report) and rely on
+        // the server-side polling reconciler instead.
+        const workspaceCanPushSetupStatus =
+          providerKey !== "daytona" ||
+          (
+            (await getProviderConfigService().getProviderConfigForUse("daytona")) as {
+              tier3NetworkAccess?: boolean;
+            } | null
+          )?.tier3NetworkAccess === true;
+        const setupCommand = buildWorkspaceSetupCommand(setupCommands, setupProbePort, {
+          executionId: setupExecutionId,
+          disablePush: !workspaceCanPushSetupStatus,
+        });
         const runtimeSetupCommand =
-          setupCommand && agentProvisioning.serve && !["railway", "aws"].includes(providerKey)
-            ? withWorkspaceSetupPort(setupCommand, agentProvisioning.serve.port)
+          setupCommand && setupProbePort !== undefined
+            ? withWorkspaceSetupPort(setupCommand, setupProbePort)
             : setupCommand;
 
         if (runtimeSetupCommand && agentProvisioning.serve) {
@@ -2739,8 +2769,9 @@ export const workspaceRouter = router({
           }
 
           const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+          let resumeResult: void | { upstreamUrl?: string };
           try {
-            await computeProvider.resumeWorkspace(
+            resumeResult = await computeProvider.resumeWorkspace(
               existingWorkspace.externalInstanceId,
               workspaceRegion?.externalRegionIdentifier,
               existingWorkspace.externalRunningDeploymentId ?? undefined,
@@ -2769,6 +2800,7 @@ export const workspaceRouter = router({
               pausedAt: null,
               lastActiveAt: now,
               updatedAt: now,
+              ...(resumeResult?.upstreamUrl ? { upstreamUrl: resumeResult.upstreamUrl } : {}),
             },
             existingWorkspace.subdomain,
           );
@@ -3070,7 +3102,7 @@ export const workspaceRouter = router({
 
         // Get compute provider and restart the workspace
         const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
-        await computeProvider.resumeWorkspace(
+        const resumeResult = await computeProvider.resumeWorkspace(
           existingWorkspace.externalInstanceId,
           workspaceRegion?.externalRegionIdentifier,
           existingWorkspace.externalRunningDeploymentId ?? undefined,
@@ -3088,6 +3120,7 @@ export const workspaceRouter = router({
             pausedAt: null,
             lastActiveAt: now,
             updatedAt: now,
+            ...(resumeResult?.upstreamUrl ? { upstreamUrl: resumeResult.upstreamUrl } : {}),
           },
           existingWorkspace.subdomain,
         );

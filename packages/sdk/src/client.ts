@@ -354,7 +354,11 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         );
       }
       if (Date.now() >= deadline) {
-        throw new GittermError("NETWORK", `Timed out waiting for workspace ${workspaceId} setup`);
+        const log = result.log?.trim();
+        throw new GittermError(
+          "NETWORK",
+          `Timed out waiting for workspace ${workspaceId} setup (last status: ${result.status})${log ? `\n${log}` : ""}`,
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }

@@ -23,6 +23,30 @@ import { getProviderByCloudProviderId } from "../../providers";
 import { getWorkspacePortUrl, getWorkspaceUrl } from "../../utils/routing";
 
 const workspacePortSchema = z.number().int().min(1).max(65535);
+const PORT_DOMAIN_TIMEOUT_MS = 15_000;
+
+async function withPortDomainTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () =>
+            reject(
+              new TRPCError({
+                code: "TIMEOUT",
+                message: `Timed out creating a public domain for port after ${PORT_DOMAIN_TIMEOUT_MS / 1000}s`,
+              }),
+            ),
+          PORT_DOMAIN_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 async function getAuthenticatedWorkspace(workspaceId: string, userId: string) {
   const ws = await db.query.workspace.findFirst({
@@ -114,9 +138,8 @@ export const workspaceOperationsRouter = router({
       }
 
       const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
-      const exposed = await computeProvider.createOrGetExposedPortDomain(
-        ws.externalInstanceId,
-        input.port,
+      const exposed = await withPortDomainTimeout(
+        computeProvider.createOrGetExposedPortDomain(ws.externalInstanceId, input.port),
       );
       await updateWorkspaceRoutingAndInvalidate(
         ws.id,

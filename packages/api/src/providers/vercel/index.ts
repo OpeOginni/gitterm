@@ -204,7 +204,12 @@ export class VercelProvider implements ComputeProvider {
       Sandbox.create({
         ...credentials,
         name: this.getSandboxName(config.workspaceId),
-        persistent,
+        // Vercel only restores the filesystem across stop/resume when the
+        // sandbox is persistent; without it a restarted workspace comes back
+        // with a fresh FS (no repo, no installed agent) and never gets healthy.
+        // Every gitterm workspace supports pause/restart, so always opt in.
+        persistent: true,
+        keepLastSnapshots: { count: 1 },
         ports: [serve.port],
         env: this.getEnvironment(config, spec),
         tags: {
@@ -337,18 +342,24 @@ esac
     if (sandbox.status !== "stopped") await sandbox.stop();
   }
 
-  async resumeWorkspace(externalId: string): Promise<void> {
+  async resumeWorkspace(externalId: string): Promise<{ upstreamUrl: string }> {
     const credentials = await this.getSdkCredentials();
-    await Sandbox.get({
+    const sandbox = await Sandbox.get({
       name: externalId,
       ...credentials,
-      onResume: async (sandbox) =>
+      // The API only resumes when the flag is sent explicitly; without it a
+      // stopped sandbox is returned as-is and onResume never fires.
+      resume: true,
+      onResume: async (resumed) =>
         this.startAgentServer(
-          sandbox,
-          this.getRepoDirFromSandbox(sandbox),
-          this.getServeSpec(sandbox),
+          resumed,
+          this.getRepoDirFromSandbox(resumed),
+          this.getServeSpec(resumed),
         ),
     });
+    // Route subdomains are session-scoped: a resume mints a new session with
+    // new routes, so the upstream URL captured at creation no longer resolves.
+    return { upstreamUrl: sandbox.domain(this.getServeSpec(sandbox).port) };
   }
 
   async terminateWorkspace(externalId: string): Promise<void> {

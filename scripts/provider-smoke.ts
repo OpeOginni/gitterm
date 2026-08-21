@@ -16,7 +16,7 @@ const PROVIDERS = [
 ] as const satisfies readonly ProviderKey[];
 
 const HOSTED_PROVIDERS = ["railway", "e2b", "daytona"] as const satisfies readonly ProviderKey[];
-const MAX_ENSURE_RUNNING_TIMEOUT_MS = 240_000;
+const MAX_ENSURE_RUNNING_TIMEOUT_MS = 360_000;
 
 type StepResult = {
   name: string;
@@ -142,7 +142,9 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
   const token = requiredEnv("GITTERM_API_TOKEN");
   const repo = requiredEnv("GITTERM_E2E_REPO");
   const agent = process.env.GITTERM_E2E_AGENT?.trim() || "opencode";
-  // Keep this in sync with workspace.ensureRunning's API validation limit.
+  const model = process.env.GITTERM_E2E_MODEL?.trim() || "opencode/big-pickle";
+  // Overall per-step budget; must exceed the setup wrapper's 300s readiness
+  // probe so probe failures can report before the smoke gives up.
   const timeoutMs = Number(process.env.GITTERM_E2E_TIMEOUT_MS ?? MAX_ENSURE_RUNNING_TIMEOUT_MS);
   if (
     !Number.isInteger(timeoutMs) ||
@@ -154,6 +156,10 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
     );
   }
   const runTimeoutMs = Number(process.env.GITTERM_E2E_RUN_TIMEOUT_MS ?? 30 * 60_000);
+  // ensureRunning is a server-held wait capped at 240s by API validation
+  // (Bun's ~255s idle timeout); the setup wait polls client-side, so it can
+  // use the full timeout to outlast the workspace's 300s readiness probe.
+  const ensureRunningTimeoutMs = Math.min(timeoutMs, 240_000);
   const runId = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const client = createGittermClient({ serverUrl, token });
   const result: ProviderResult = { provider, steps: [], cleanup: "not-needed" };
@@ -163,14 +169,24 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
   console.log(`\n${provider}`);
   try {
     await step(result.steps, "authenticate SDK", () => client.auth.status());
-    await step(result.steps, "validate catalog", async () => {
+    const catalogProvider = await step(result.steps, "validate catalog", async () => {
       const catalog = await client.catalog.workspaceOptions();
       const configuredProvider = catalog.providers.find((entry) => entry.type === provider);
       if (!configuredProvider) throw new Error(`${provider} is not enabled on ${serverUrl}`);
       if (!configuredProvider.agentKeys.includes(agent)) {
         throw new Error(`${provider} does not support agent ${agent}`);
       }
+      return configuredProvider;
     });
+    // Providers without workspace -> API access (e.g. Daytona Tier 1/2) can't
+    // run the scoped CLI inside the workspace; exercise plain setup commands
+    // instead and rely on server-side polling to deliver the outcome.
+    const workspaceApiAccess = catalogProvider.workspaceApiAccess !== false;
+    if (!workspaceApiAccess) {
+      console.log(
+        "  note: provider org is below Tier 3 (no workspace API access) - scoped CLI checks skipped",
+      );
+    }
 
     const created = await step(result.steps, "create workspace with SDK", () =>
       client.workspaces.create({
@@ -180,13 +196,34 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
         agent,
         provider: { type: provider } as WorkspaceProviderSelection,
         setupCommands: [
-          [
-            "set -eu",
-            "gitterm workspace info --json",
-            "gitterm ports list --json",
-            "gitterm ports open 43117 --name gitterm-e2e --json",
-            "gitterm ports close 43117 --json",
-          ].join("; "),
+          (workspaceApiAccess
+            ? [
+                "set -eu",
+                'echo "=== marker: env ($(date -u +%H:%M:%SZ))"',
+                'env | grep -E "^WORKSPACE_(API_URL|SETUP_PORT)=" || echo "missing workspace env"',
+                'echo "=== marker: cli ($(date -u +%H:%M:%SZ))"',
+                "command -v gitterm && timeout 15 gitterm --version",
+                'echo "=== marker: api reachability ($(date -u +%H:%M:%SZ))"',
+                'curl -sS -m 10 -o /dev/null -w "api http %{http_code}\\n" "$WORKSPACE_API_URL" || echo "api unreachable"',
+                'echo "=== marker: workspace info ($(date -u +%H:%M:%SZ))"',
+                "timeout 30 gitterm workspace info --json",
+                'echo "=== marker: ports list ($(date -u +%H:%M:%SZ))"',
+                "timeout 30 gitterm ports list --json",
+                'echo "=== marker: ports open ($(date -u +%H:%M:%SZ))"',
+                "timeout 45 gitterm ports open 43117 --name gitterm-e2e --json",
+                'echo "=== marker: ports close ($(date -u +%H:%M:%SZ))"',
+                "timeout 30 gitterm ports close 43117 --json",
+                'echo "=== marker: done ($(date -u +%H:%M:%SZ))"',
+              ]
+            : [
+                "set -eu",
+                'echo "=== marker: env ($(date -u +%H:%M:%SZ))"',
+                'env | grep -E "^WORKSPACE_(API_URL|SETUP_PORT)=" || echo "missing workspace env"',
+                'echo "=== marker: plain setup ($(date -u +%H:%M:%SZ))"',
+                "git rev-parse --short HEAD",
+                'echo "=== marker: done ($(date -u +%H:%M:%SZ))"',
+              ]
+          ).join("\n"),
         ],
       }),
     );
@@ -194,7 +231,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
     result.workspaceId = workspaceId;
 
     const running = await step(result.steps, "wait for running workspace", () =>
-      client.workspaces.ensureRunning(workspaceId!, { timeoutMs }),
+      client.workspaces.ensureRunning(workspaceId!, { timeoutMs: ensureRunningTimeoutMs }),
     );
     if (running.workspace.status !== "running") {
       throw new Error(`Expected running workspace, received ${running.workspace.status}`);
@@ -205,8 +242,10 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
       );
     }
 
-    const setup = await step(result.steps, "exercise scoped CLI", () =>
-      client.workspaces.waitForSetup(workspaceId!, { timeoutMs }),
+    const setup = await step(
+      result.steps,
+      workspaceApiAccess ? "exercise scoped CLI" : "run setup (scoped CLI unavailable)",
+      () => client.workspaces.waitForSetup(workspaceId!, { timeoutMs }),
     );
     if (setup.status !== "succeeded") throw new Error(`Setup finished with ${setup.status}`);
 
@@ -221,6 +260,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
         idempotencyKey: `provider-smoke-run-${provider}-${runId}`,
         title: `Provider smoke test: ${provider}`,
         prompt: "Respond with exactly GITTERM_E2E_OK and no other text.",
+        model,
         waitForSetup: true,
         setupTimeoutMs: timeoutMs,
       }),
@@ -234,7 +274,19 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
       );
     }
     if (!completedRun.finalText?.includes("GITTERM_E2E_OK")) {
-      throw new Error(`Agent run returned unexpected text: ${completedRun.finalText ?? "<empty>"}`);
+      const messages = await client.runs.messages(workspaceId!, agentRun.id).catch((error) => [
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      ]);
+      throw new Error(
+        `Agent run returned unexpected text for ${model}: ${JSON.stringify({
+          status: completedRun.status,
+          error: completedRun.error,
+          finalText: completedRun.finalText,
+          messages,
+        })}`,
+      );
     }
 
     await step(result.steps, "pause with account CLI", () =>
@@ -244,7 +296,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
       runCli(["workspace", "restart", workspaceId!]),
     );
     await step(result.steps, "verify restarted workspace", () =>
-      client.workspaces.ensureRunning(workspaceId!, { timeoutMs }),
+      client.workspaces.ensureRunning(workspaceId!, { timeoutMs: ensureRunningTimeoutMs }),
     );
     await step(result.steps, "terminate with account CLI", () =>
       runCli(["workspace", "terminate", workspaceId!, "--yes"]),

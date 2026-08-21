@@ -258,5 +258,12 @@ export type WorkspaceCatalog = {
     }>;
     agentKeys: string[];
     ssh: boolean;
+    /**
+     * Whether workspaces on this provider can call the gitterm API from
+     * inside the sandbox (scoped CLI, setup push reports, credential
+     * refresh). False for e.g. Daytona Tier 1/2 organizations, where setup
+     * status is reconciled by server-side polling instead.
+     */
+    workspaceApiAccess: boolean;
   }>;
 };

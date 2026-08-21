@@ -286,13 +286,15 @@ export interface ComputeProvider {
   ): Promise<void>;
 
   /**
-   * Resume a paused workspace and its preserved resources.
+   * Resume a paused workspace and its preserved resources. Providers whose
+   * runtime URL changes across a resume (e.g. Vercel session-scoped routes)
+   * return the fresh upstream URL so the caller can persist it.
    */
   resumeWorkspace(
     externalId: string,
     regionIdentifier?: string,
     externalRunningDeploymentId?: string,
-  ): Promise<void>;
+  ): Promise<void | { upstreamUrl?: string }>;
 
   /**
    * Permanently delete/terminate a workspace

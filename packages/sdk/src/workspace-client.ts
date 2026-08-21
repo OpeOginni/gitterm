@@ -63,6 +63,11 @@ function errorCode(code: string | undefined): GittermErrorCode {
   return "SERVER_ERROR";
 }
 
+function toWorkspaceTrpcUrl(serverUrl: string): string {
+  const url = new URL(serverUrl);
+  return url.pathname.endsWith("/trpc") ? serverUrl : new URL("/trpc", url).toString();
+}
+
 export function createGittermWorkspaceClient(
   options: WorkspaceClientOptions = {},
 ): GittermWorkspaceClient {
@@ -79,7 +84,7 @@ export function createGittermWorkspaceClient(
   const trpc = createTRPCClient<AppRouter>({
     links: [
       httpBatchLink({
-        url: new URL("/trpc", serverUrl).toString(),
+        url: toWorkspaceTrpcUrl(serverUrl),
         fetch: createNoRedirectFetch(options.fetch),
         headers: () => ({ authorization: `Bearer ${token}` }),
       }),

@@ -318,6 +318,10 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       apiKey: z.string().min(1, "API KEY is required"),
       defaultTargetRegion: z.enum(["us", "eu"], "region of eu or us is required"),
       webhookSecret: z.string().optional(),
+      // Daytona Tier 1/2 orgs lock sandbox egress to an allowlist, so
+      // workspaces cannot call the gitterm API. Off by default; only enable
+      // on Tier 3+ orgs, where the normal push-based flows work.
+      tier3NetworkAccess: z.boolean().optional(),
     }),
     fields: [
       {
@@ -347,6 +351,14 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         isRequired: false,
         isEncrypted: true,
         sortOrder: 3,
+      },
+      {
+        fieldName: "tier3NetworkAccess",
+        fieldLabel: "Tier 3+ organization (sandboxes have unrestricted network access)",
+        fieldType: "boolean",
+        isRequired: false,
+        isEncrypted: false,
+        sortOrder: 4,
       },
     ],
   },

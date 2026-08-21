@@ -259,11 +259,29 @@ export class DaytonaProvider implements ComputeProvider {
       return;
     }
 
+    // The post-start payload is a multi-KB, multi-line script; inlining it in
+    // the session-command channel has proven unreliable (the command silently
+    // never executes while short commands in the same session work). Upload
+    // it as a file instead and launch it with a short one-liner, detached via
+    // setsid (like E2B) so it survives the session command finishing.
+    const repoDir = getRepoDir(spec?.repo?.name);
+    const scriptPath = "/tmp/gitterm-post-start.sh";
+    try {
+      const script = `#!/usr/bin/env bash\ncd "${repoDir}" || exit 1\n${command}\n`;
+      await sandbox.fs.uploadFile(Buffer.from(script), scriptPath);
+    } catch (error) {
+      console.error("Daytona Sandbox Error (post-start upload)", error);
+      return;
+    }
+
+    // Do NOT use the agent-server session here: session commands execute
+    // serially in one shell, and the serve command before us never exits, so
+    // anything queued behind it in the session never runs. A one-off exec
+    // with a setsid detach launches immediately and survives the exec shell.
     await sandbox.process
-      .executeSessionCommand(AGENT_SERVER_SESSION_ID, {
-        command: `(${command}) > /tmp/agent-post-start.log 2>&1`,
-        runAsync: true,
-      })
+      .executeCommand(
+        `nohup setsid bash ${scriptPath} > /tmp/agent-post-start.log 2>&1 < /dev/null &`,
+      )
       .catch((error) => {
         console.error("Daytona Sandbox Error (post-start command)", error);
       });
@@ -336,6 +354,10 @@ export class DaytonaProvider implements ComputeProvider {
           {
             image,
             resources,
+            // Tier 3+ orgs can lift the network policy per sandbox so
+            // workspaces reach the gitterm API; Tier 1/2 orgs ignore this
+            // (egress stays limited to Daytona's essential-services list).
+            ...(providerConfig.tier3NetworkAccess ? { networkBlockAll: false } : {}),
             labels: this.getWorkspaceLabels(config, spec, persistent),
             envVars: Object.fromEntries(
               Object.entries({

@@ -1,5 +1,6 @@
 import { asc, db, eq } from "@gitterm/db";
 import { workspaceSetup, workspaceSetupCommandDefault } from "@gitterm/db/schema/workspace-setup";
+import { reconcileWorkspaceSetupStatus } from "./workspace-setup-reconcile";
 
 export type WorkspaceSetupStatus = {
   status: "not_requested" | "waiting" | "running" | "succeeded" | "failed";
@@ -49,27 +50,36 @@ export function withWorkspaceSetupPort(command: string, port: number): string {
 export function buildWorkspaceSetupCommand(
   commands: string[],
   fallbackPort = 7681,
-  options?: { executionId?: string },
+  options?: {
+    executionId?: string;
+    /**
+     * Skip push reports entirely (their retry backoff delays setup by ~30s
+     * per report). Use when the workspace cannot reach the API and status is
+     * reconciled by server-side polling instead.
+     */
+    disablePush?: boolean;
+  },
 ): string | undefined {
   if (commands.length === 0) return undefined;
 
   const body = commands.join("\n");
   const encoded = Buffer.from(body).toString("base64");
-  const reportFunction = options?.executionId
-    ? [
-        "report_setup() {",
-        '  [ -n "$WORKSPACE_API_URL" ] && [ -n "$WORKSPACE_SETUP_AUTH_TOKEN" ] || return 0',
-        '  REPORT_STATUS="$1"; REPORT_EXIT="$2"; REPORT_STARTED="$3"; REPORT_FINISHED="$4"; REPORT_LOG="$5"',
-        `  REPORT_PAYLOAD=$(printf '{"executionId":"${options.executionId}","status":"%s","exitCode":%s,"startedAt":%s,"finishedAt":%s,"logBase64":"%s"}' "$REPORT_STATUS" "$REPORT_EXIT" "$REPORT_STARTED" "$REPORT_FINISHED" "$REPORT_LOG")`,
-        "  for REPORT_DELAY in 0 1 2 4 8 16; do",
-        '    [ "$REPORT_DELAY" -eq 0 ] || sleep "$REPORT_DELAY"',
-        '    REPORT_HTTP=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${WORKSPACE_API_URL%/}/workspaceOps.reportSetupStatus" -H "Authorization: Bearer $WORKSPACE_SETUP_AUTH_TOKEN" -H "Content-Type: application/json" --data "$REPORT_PAYLOAD" 2>/dev/null || true)',
-        '    case "$REPORT_HTTP" in 2[0-9][0-9]) return 0 ;; 404|408|409|429|5[0-9][0-9]|000) ;; *) return 1 ;; esac',
-        "  done",
-        "  return 1",
-        "}",
-      ].join("\n")
-    : "report_setup() { return 0; }";
+  const reportFunction =
+    options?.executionId && !options.disablePush
+      ? [
+          "report_setup() {",
+          '  [ -n "$WORKSPACE_API_URL" ] && [ -n "$WORKSPACE_SETUP_AUTH_TOKEN" ] || return 0',
+          '  REPORT_STATUS="$1"; REPORT_EXIT="$2"; REPORT_STARTED="$3"; REPORT_FINISHED="$4"; REPORT_LOG="$5"',
+          `  REPORT_PAYLOAD=$(printf '{"executionId":"${options.executionId}","status":"%s","exitCode":%s,"startedAt":%s,"finishedAt":%s,"logBase64":"%s"}' "$REPORT_STATUS" "$REPORT_EXIT" "$REPORT_STARTED" "$REPORT_FINISHED" "$REPORT_LOG")`,
+          "  for REPORT_DELAY in 0 1 2 4 8 16; do",
+          '    [ "$REPORT_DELAY" -eq 0 ] || sleep "$REPORT_DELAY"',
+          '    REPORT_HTTP=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${WORKSPACE_API_URL%/}/workspaceOps.reportSetupStatus" -H "Authorization: Bearer $WORKSPACE_SETUP_AUTH_TOKEN" -H "Content-Type: application/json" --data "$REPORT_PAYLOAD" 2>/dev/null || true)',
+          '    case "$REPORT_HTTP" in 2[0-9][0-9]) return 0 ;; 404|408|409|429|5[0-9][0-9]|000) ;; *) return 1 ;; esac',
+          "  done",
+          "  return 1",
+          "}",
+        ].join("\n")
+      : "report_setup() { return 0; }";
   const script = [
     'SETUP_DIR="$PWD/.gitterm/setup"',
     'mkdir -p "$SETUP_DIR"',
@@ -117,9 +127,19 @@ export async function getWorkspaceSetupStatus(
     };
   }
 
-  const record = await db.query.workspaceSetup.findFirst({
+  let record = await db.query.workspaceSetup.findFirst({
     where: eq(workspaceSetup.workspaceId, workspaceId),
   });
+  if (record && record.status !== "succeeded" && record.status !== "failed") {
+    // Pull-based fallback for providers whose sandboxes cannot push reports
+    // (throttled internally; a no-op for providers that can reach the API).
+    const polled = await reconcileWorkspaceSetupStatus(workspaceId);
+    if (polled) {
+      record = await db.query.workspaceSetup.findFirst({
+        where: eq(workspaceSetup.workspaceId, workspaceId),
+      });
+    }
+  }
   if (!record) {
     return {
       status: "waiting",

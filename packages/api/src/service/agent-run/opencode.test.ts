@@ -14,6 +14,7 @@ describe("mapOpencodeRunStatus", () => {
     expect(mapOpencodeRunStatus({ type: "idle" })).toBe("completed");
     expect(mapOpencodeRunStatus(undefined, undefined, false)).toBe("running");
     expect(mapOpencodeRunStatus(undefined, undefined, false, true)).toBe("failed");
+    expect(mapOpencodeRunStatus({ type: "idle" }, undefined, true, false, false)).toBe("running");
   });
 
   test("reports native assistant failures and cancellation", () => {

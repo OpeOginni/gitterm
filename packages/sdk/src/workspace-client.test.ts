@@ -41,4 +41,38 @@ describe("getWorkspaceEnvironment", () => {
       else process.env.WORKSPACE_ID = previous;
     }
   });
+
+  test("preserves a public proxy tRPC path", async () => {
+    let requestedUrl = "";
+    const client = createGittermWorkspaceClient({
+      workspaceId: "workspace",
+      serverUrl: "https://tunnel.example.com/api/trpc",
+      token: "token",
+      fetch: (async (input) => {
+        requestedUrl = String(input);
+        return new Response("upstream unavailable", { status: 502 });
+      }) as typeof fetch,
+    });
+
+    await client.self.get().catch(() => undefined);
+
+    expect(requestedUrl).toStartWith("https://tunnel.example.com/api/trpc/");
+  });
+
+  test("adds the direct server tRPC path", async () => {
+    let requestedUrl = "";
+    const client = createGittermWorkspaceClient({
+      workspaceId: "workspace",
+      serverUrl: "https://api.example.com",
+      token: "token",
+      fetch: (async (input) => {
+        requestedUrl = String(input);
+        return new Response("upstream unavailable", { status: 502 });
+      }) as typeof fetch,
+    });
+
+    await client.self.get().catch(() => undefined);
+
+    expect(requestedUrl).toStartWith("https://api.example.com/trpc/");
+  });
 });

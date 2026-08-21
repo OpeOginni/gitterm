@@ -24,11 +24,13 @@ export function mapOpencodeRunStatus(
   errorName?: string,
   hasAssistantMessage = true,
   missingAssistantIsFailure = false,
+  assistantCompleted = true,
 ): AgentRunStatus {
   if (errorName === "MessageAbortedError") return "cancelled";
   if (errorName) return "failed";
   if (status?.type === "busy") return "running";
   if (status?.type === "retry") return "retrying";
+  if (hasAssistantMessage && !assistantCompleted) return "running";
   if (!hasAssistantMessage) return missingAssistantIsFailure ? "failed" : "running";
   return "completed";
 }
@@ -141,6 +143,8 @@ export async function getOpencodeRun(input: {
     .map((part) => (part.type === "text" ? part.text : ""))
     .join("\n")
     .trim();
+  const assistantCompleted =
+    assistant?.info.role === "assistant" && assistant.info.time.completed != null;
 
   return {
     id: session.data.id,
@@ -151,6 +155,7 @@ export async function getOpencodeRun(input: {
       assistantError?.name,
       Boolean(assistant),
       input.missingAssistantIsFailure,
+      assistantCompleted,
     ),
     error: assistantError ? errorMessage(assistantError) : missingAssistantError,
     finalText: finalText || null,

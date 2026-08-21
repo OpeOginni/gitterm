@@ -24,6 +24,13 @@ export type { RailwayConfig } from "./types";
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
 
+/**
+ * Railway runs the workspace image's own entrypoint/CMD, which serves the
+ * runtime on the image's fixed port (ttyd / `opencode serve --port 7681`)
+ * rather than the provisioner-declared serve port used by SDK providers.
+ */
+export const RAILWAY_RUNTIME_PORT = 7681;
+
 export class RailwayProvider implements ComputeProvider {
   readonly name = "railway";
 
@@ -145,7 +152,7 @@ export class RailwayProvider implements ComputeProvider {
         .ServiceDomainCreate({
           environmentId,
           serviceId: serviceCreate.id,
-          targetPort: 7681,
+          targetPort: RAILWAY_RUNTIME_PORT,
         })
         .catch(async (error) => {
           console.error("Railway API Error (ServiceDomainCreate):", error);
@@ -302,7 +309,7 @@ export class RailwayProvider implements ComputeProvider {
         .ServiceDomainCreate({
           environmentId: environmentId,
           serviceId: serviceCreate.id,
-          targetPort: 7681,
+          targetPort: RAILWAY_RUNTIME_PORT,
         })
         .catch(async (error) => {
           console.error("Railway API Error (ServiceDomainCreate):", error);
