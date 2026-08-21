@@ -276,14 +276,13 @@ async function main() {
   });
 
   console.log(`Reviewing ${repository}#${pullRequest.number}`);
-  const reviews: Review[] = [];
-  for (const revision of [
+  const revisions = [
     { label: "before" as const, commit: pullRequest.base.sha },
     { label: "after" as const, commit: pullRequest.head.sha },
-  ]) {
-    // Run one large browser sandbox at a time to avoid provider capacity races.
-    reviews.push(
-      await reviewRevision({
+  ];
+  const settledReviews = await Promise.allSettled(
+    revisions.map((revision) =>
+      reviewRevision({
         client,
         repository,
         pullRequest,
@@ -291,8 +290,21 @@ async function main() {
         commit: revision.commit,
         instructions,
       }),
-    );
-  }
+    ),
+  );
+  const reviews: Review[] = settledReviews.map((result, index) => {
+    const revision = revisions[index]!;
+    if (result.status === "fulfilled") return result.value;
+    const report = errorMessage(result.reason);
+    console.error(`${revision.label} review crashed: ${report}`);
+    return {
+      label: revision.label,
+      commit: revision.commit,
+      status: "failed",
+      report,
+      cleanup: "failed",
+    };
+  });
 
   await mkdir(outputDir, { recursive: true });
   await Bun.write(
