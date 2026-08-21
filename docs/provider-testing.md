@@ -24,6 +24,16 @@ E2B:     https://<tunnel-domain>/listener/trpc/e2b.handleWebhook
 
 Before testing scoped CLI commands, publish the current `@gitterm/cli`, rebuild the Docker and E2B agent images with the `Build Agent Images` workflow, and reseed the server database so provider metadata references the current images and setup commands.
 
+The go-to local smoke test for the hosted providers is:
+
+```bash
+GITTERM_E2E_TIMEOUT_MS=360000 GITTERM_SERVER_URL=http://localhost:3000 GITTERM_API_TOKEN=<your-token> GITTERM_E2E_REPO=https://github.com/OpeOginni/opencode-copilot-auto bun run test:providers --provider railway,e2b,daytona,vercel
+```
+
+Replace `<your-token>` with a valid GitTerm API token. The server must be running at `http://localhost:3000`, and the local proxy, listener, and tunnel requirements above still apply when cloud providers need to reach the local server.
+
+For a staging deployment, set the same values as exports and choose the providers explicitly:
+
 ```bash
 export GITTERM_SERVER_URL=https://staging-api.example.com
 export GITTERM_API_TOKEN=gt_...
@@ -38,6 +48,7 @@ Optional settings:
 
 ```bash
 export GITTERM_E2E_AGENT=opencode
+export GITTERM_E2E_MODEL=opencode/big-pickle
 export GITTERM_E2E_TIMEOUT_MS=240000
 export GITTERM_E2E_RUN_TIMEOUT_MS=1800000
 ```
