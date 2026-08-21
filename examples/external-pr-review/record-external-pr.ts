@@ -31,23 +31,31 @@ const modelCredentials =
     : undefined;
 const r2 = {
   accountId: process.env.R2_ACCOUNT_ID?.trim(),
-  apiToken: process.env.R2_API_TOKEN?.trim(),
+  accessKeyId: process.env.R2_ACCESS_KEY_ID?.trim(),
   bucket: process.env.R2_BUCKET?.trim(),
   publicUrl: process.env.R2_PUBLIC_URL?.trim().replace(/\/$/, ""),
+  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY?.trim(),
 };
 const reviewToolsSetup = [
   "set -eu",
   'TOOLS_DIR="$HOME/.gitterm/review-tools"',
   'mkdir -p "$TOOLS_DIR" "$HOME/.local/bin"',
-  'npm install --prefix "$TOOLS_DIR" wrangler playwright',
+  'npm install --prefix "$TOOLS_DIR" @aws-sdk/client-s3 playwright',
   '"$TOOLS_DIR/node_modules/.bin/playwright" install --with-deps chromium',
+  "cat > \"$TOOLS_DIR/upload-r2.mjs\" <<'UPLOAD_MODULE'",
+  'import { readFile } from "node:fs/promises";',
+  'import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";',
+  "const [file, key, contentType] = process.argv.slice(2);",
+  'const client = new S3Client({ region: "auto", endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY } });',
+  "await client.send(new PutObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key, Body: await readFile(file), ContentType: contentType }));",
+  "UPLOAD_MODULE",
   "cat > \"$HOME/.local/bin/gitterm-upload-artifact\" <<'UPLOAD_SCRIPT'",
   "#!/bin/sh",
   "set -eu",
   'file="$1"',
   'key="${2:?usage: gitterm-upload-artifact FILE KEY}"',
   'case "$file" in *.png) content_type=image/png ;; *.jpg|*.jpeg) content_type=image/jpeg ;; *.webm) content_type=video/webm ;; *.mp4) content_type=video/mp4 ;; *) content_type=application/octet-stream ;; esac',
-  '"$HOME/.gitterm/review-tools/node_modules/.bin/wrangler" r2 object put "$R2_BUCKET/$key" --file "$file" --remote --content-type "$content_type" >/dev/null',
+  'node "$HOME/.gitterm/review-tools/upload-r2.mjs" "$file" "$key" "$content_type"',
   'if [ -n "${R2_PUBLIC_URL:-}" ]; then printf \'%s/%s\\n\' "${R2_PUBLIC_URL%/}" "$key"; else printf \'r2://%s/%s\\n\' "$R2_BUCKET" "$key"; fi',
   "UPLOAD_SCRIPT",
   'chmod +x "$HOME/.local/bin/gitterm-upload-artifact"',
@@ -148,9 +156,10 @@ async function reviewRevision({
       provider,
       modelCredentials,
       environmentVariables: {
-        CLOUDFLARE_ACCOUNT_ID: r2.accountId!,
-        CLOUDFLARE_API_TOKEN: r2.apiToken!,
+        R2_ACCOUNT_ID: r2.accountId!,
+        R2_ACCESS_KEY_ID: r2.accessKeyId!,
         R2_BUCKET: r2.bucket!,
+        R2_SECRET_ACCESS_KEY: r2.secretAccessKey!,
         REVIEW_ID: reviewId,
         REVIEW_LABEL: label,
         ...(r2.publicUrl ? { R2_PUBLIC_URL: r2.publicUrl } : {}),
@@ -254,8 +263,9 @@ async function main() {
     throw new Error("GITTERM_PR_REVIEW_TIMEOUT_MS must be at least 1000");
   }
   if (!r2.accountId) throw new Error("R2_ACCOUNT_ID is required");
-  if (!r2.apiToken) throw new Error("R2_API_TOKEN is required");
+  if (!r2.accessKeyId) throw new Error("R2_ACCESS_KEY_ID is required");
   if (!r2.bucket) throw new Error("R2_BUCKET is required");
+  if (!r2.secretAccessKey) throw new Error("R2_SECRET_ACCESS_KEY is required");
   if (model && !/^[^/]+\/.+$/.test(model)) {
     throw new Error(
       "GITTERM_MODEL must use the provider/model format, e.g. anthropic/claude-sonnet-4-20250514",
