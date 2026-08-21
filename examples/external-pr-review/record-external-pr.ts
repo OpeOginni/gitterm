@@ -120,7 +120,14 @@ async function reviewRevision({
       modelCredentials,
       opencode: {
         // Disposable, unauthenticated sandbox: skip tool approval prompts.
-        config: { permission: { edit: "allow", bash: "allow", webfetch: "allow" } },
+        config: {
+          permission: {
+            edit: "allow",
+            bash: "allow",
+            webfetch: "allow",
+            external_directory: "allow",
+          },
+        },
       },
     });
     workspace = created.workspace;
