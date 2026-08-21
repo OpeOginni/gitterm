@@ -160,6 +160,32 @@ async function validateModelCredential(
   });
 }
 
+/**
+ * A workspace can report "running" while its agent server is still booting,
+ * during which the proxy answers 502/503/504. Wait until the runtime answers
+ * with anything else (200/401/404 all prove it is listening) before talking
+ * OpenCode to it.
+ */
+async function waitForRuntimeReady(url: string, timeoutMs = 120_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+      await response.body?.cancel().catch(() => undefined);
+      if (![502, 503, 504].includes(response.status)) return;
+    } catch {
+      // Connection refused/timeout: keep waiting.
+    }
+    if (Date.now() >= deadline) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Workspace agent server did not become reachable within ${Math.round(timeoutMs / 1000)}s`,
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+}
+
 async function withNativeTimeout(operation: Promise<unknown>, message: string) {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -308,6 +334,7 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
   if (input.waitForSetup) {
     await waitForSetup(input.workspaceId, userId, input.setupTimeoutMs ?? 10 * 60_000);
   }
+  await waitForRuntimeReady(target.url);
 
   const id = randomUUID();
   const nativeMessageId = `msg_${id.replaceAll("-", "")}`;
