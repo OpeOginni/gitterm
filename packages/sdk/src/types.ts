@@ -122,7 +122,9 @@ export type WorkspaceCreateInput = {
   name?: string;
   repo: string;
   branch?: string;
+  /** Commit SHA to pin the checkout to after cloning `branch`/`checkoutRef`. */
   baseCommit?: string;
+  /** Branch or tag to clone when distinct from the display `branch`. Not a commit SHA — use `baseCommit` to pin a revision. */
   checkoutRef?: string;
   subdomain?: string;
   /** Stable agent key. Defaults to `opencode`. */

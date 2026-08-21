@@ -7,7 +7,8 @@ type PullRequest = {
   title: string;
   html_url: string;
   base: { ref: string; sha: string };
-  head: { ref: string; sha: string };
+  // head.repo points at the fork for external PRs; null if the fork was deleted.
+  head: { ref: string; sha: string; repo: { clone_url: string } | null };
 };
 
 type Review = {
@@ -102,14 +103,20 @@ async function reviewRevision({
   let cleanup: Review["cleanup"] = "not-needed";
   let review!: Review;
 
+  // The head branch of an external PR lives in the contributor's fork.
+  const repoUrl =
+    label === "after"
+      ? (pullRequest.head.repo?.clone_url ?? `https://github.com/${repository}.git`)
+      : `https://github.com/${repository}.git`;
+
   try {
     const created = await client.workspaces.create({
       idempotencyKey: `external-pr-review-${reviewId}-${label}`,
       name: `PR #${pullRequest.number} ${label}`,
-      repo: `https://github.com/${repository}.git`,
+      repo: repoUrl,
       branch: label === "before" ? pullRequest.base.ref : pullRequest.head.ref,
+      // baseCommit pins the exact revision; checkoutRef is branch/tag only.
       baseCommit: commit,
-      checkoutRef: commit,
       persistent: false,
       modelCredentials,
     });
