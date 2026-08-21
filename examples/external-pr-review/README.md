@@ -4,7 +4,6 @@ Create a disposable before/after review for a public GitHub pull request without
 
 ```sh
 bun install
-export GITTERM_SERVER_URL=https://api.gitterm.dev
 export GITTERM_API_TOKEN=gt_...
 export TARGET_REPOSITORY=anomalyco/opencode
 export TARGET_PR=123

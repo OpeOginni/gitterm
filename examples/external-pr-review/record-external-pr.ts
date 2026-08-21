@@ -211,7 +211,6 @@ async function main() {
     process.env.GITTERM_PROMPT?.trim() || "Review the most relevant user-facing change.";
   const pullRequest = await getPullRequest(repository, pullRequestNumber);
   const client = createGittermClient({
-    serverUrl: requiredEnv("GITTERM_SERVER_URL"),
     token: requiredEnv("GITTERM_API_TOKEN"),
   });
 

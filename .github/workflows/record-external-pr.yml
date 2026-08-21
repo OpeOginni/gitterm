@@ -33,7 +33,6 @@ jobs:
     permissions:
       contents: read
     env:
-      GITTERM_SERVER_URL: ${{ secrets.GITTERM_SERVER_URL }}
       GITTERM_API_TOKEN: ${{ secrets.GITTERM_API_TOKEN }}
       TARGET_REPOSITORY: ${{ inputs.repository }}
       TARGET_PR: ${{ inputs.pull_request }}
