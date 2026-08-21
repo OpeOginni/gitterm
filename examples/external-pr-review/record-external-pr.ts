@@ -128,6 +128,7 @@ async function reviewRevision({
   let workspace: Workspace | undefined;
   let cleanup: Review["cleanup"] = "not-needed";
   let review!: Review;
+  console.log(`Starting ${label} review at ${commit}`);
 
   // The head branch of an external PR lives in the contributor's fork.
   const repoUrl =
@@ -193,6 +194,7 @@ async function reviewRevision({
       cleanup,
     };
   } catch (error) {
+    console.error(`${label} review failed: ${errorMessage(error)}`);
     review = {
       label,
       commit,
@@ -273,24 +275,23 @@ async function main() {
   });
 
   console.log(`Reviewing ${repository}#${pullRequest.number}`);
-  const reviews = await Promise.all([
-    reviewRevision({
-      client,
-      repository,
-      pullRequest,
-      label: "before",
-      commit: pullRequest.base.sha,
-      instructions,
-    }),
-    reviewRevision({
-      client,
-      repository,
-      pullRequest,
-      label: "after",
-      commit: pullRequest.head.sha,
-      instructions,
-    }),
-  ]);
+  const reviews: Review[] = [];
+  for (const revision of [
+    { label: "before" as const, commit: pullRequest.base.sha },
+    { label: "after" as const, commit: pullRequest.head.sha },
+  ]) {
+    // Run one large browser sandbox at a time to avoid provider capacity races.
+    reviews.push(
+      await reviewRevision({
+        client,
+        repository,
+        pullRequest,
+        label: revision.label,
+        commit: revision.commit,
+        instructions,
+      }),
+    );
+  }
 
   await mkdir(outputDir, { recursive: true });
   await Bun.write(
