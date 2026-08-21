@@ -161,10 +161,8 @@ async function validateModelCredential(
 }
 
 /**
- * A workspace can report "running" while its agent server is still booting,
- * during which the proxy answers 502/503/504. Wait until the runtime answers
- * with anything else (200/401/404 all prove it is listening) before talking
- * OpenCode to it.
+ * A workspace reports "running" while its agent server may still be booting,
+ * so wait until the proxy answers with anything but a gateway error.
  */
 async function waitForRuntimeReady(url: string, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs;
@@ -173,9 +171,7 @@ async function waitForRuntimeReady(url: string, timeoutMs = 120_000) {
       const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
       await response.body?.cancel().catch(() => undefined);
       if (![502, 503, 504].includes(response.status)) return;
-    } catch {
-      // Connection refused/timeout: keep waiting.
-    }
+    } catch {}
     if (Date.now() >= deadline) {
       throw new TRPCError({
         code: "BAD_REQUEST",

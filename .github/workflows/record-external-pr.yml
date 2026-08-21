@@ -41,9 +41,8 @@ jobs:
       TARGET_PR: ${{ inputs.pull_request }}
       GITTERM_PROMPT: ${{ inputs.prompt }}
       GITTERM_MODEL: ${{ inputs.model }}
-      # Optional API key for the model's provider, used with the model input.
-      # Injected into the disposable workspaces only, never stored in Gitterm;
-      # leave the secret unset to use your Gitterm dashboard credentials.
+      # Used with the model input; injected into the disposable workspaces only.
+      # Leave the secret unset to use your Gitterm dashboard credentials.
       GITTERM_MODEL_API_KEY: ${{ secrets.GITTERM_MODEL_API_KEY }}
       OUTPUT_DIR: artifacts/external-pr-review
 

@@ -36,4 +36,26 @@ describe("OpenCode workspace capabilities", () => {
       "~/.config/opencode/skills/browser-demo/SKILL.md",
     );
   });
+
+  test("merges request config over the saved config, request wins per key", () => {
+    const provisioned = opencodeProvisioner.provision({
+      userId: "user",
+      userDisplayName: "User",
+      workspaceHostname: "workspace.example.com",
+      agentTypeName: "OpenCode",
+      serverOnly: true,
+      credentials: [],
+      agentConfigs: { opencode: { theme: "dark", permission: { bash: "ask" } } },
+      opencode: {
+        config: { permission: { edit: "allow", bash: "allow", webfetch: "allow" } },
+      },
+    });
+
+    const configFile = provisioned.files.find(
+      (file) => file.path === "~/.config/opencode/opencode.json",
+    );
+    const config = JSON.parse(Buffer.from(configFile!.contentBase64, "base64").toString());
+    expect(config.permission).toEqual({ edit: "allow", bash: "allow", webfetch: "allow" });
+    expect(config.username).toBe("Gitterm: User");
+  });
 });

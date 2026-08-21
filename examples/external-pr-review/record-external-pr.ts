@@ -7,7 +7,6 @@ type PullRequest = {
   title: string;
   html_url: string;
   base: { ref: string; sha: string };
-  // head.repo points at the fork for external PRs; null if the fork was deleted.
   head: { ref: string; sha: string; repo: { clone_url: string } | null };
 };
 
@@ -22,16 +21,20 @@ type Review = {
 
 const repositoryPattern = /^[\w.-]+\/[\w.-]+$/;
 const runTimeoutMs = Number(process.env.GITTERM_PR_REVIEW_TIMEOUT_MS ?? 30 * 60_000);
-// Optional: GITTERM_MODEL ("provider/model") picks the model for each run, and
-// GITTERM_MODEL_API_KEY supplies that provider's key inline — it only lives
-// inside the disposable workspaces, never in the Gitterm dashboard. Leave both
-// unset to use your dashboard credentials.
+// GITTERM_MODEL + GITTERM_MODEL_API_KEY inject a key for these workspaces only;
+// leave both unset to use your dashboard credentials.
 const model = process.env.GITTERM_MODEL?.trim() || undefined;
 const modelApiKey = process.env.GITTERM_MODEL_API_KEY?.trim() || undefined;
 const modelCredentials =
   model && modelApiKey
     ? [{ providerName: model.slice(0, model.indexOf("/")), apiKey: modelApiKey }]
     : undefined;
+// 4 vCPU / 8 GB sandboxes for app + browser capture.
+const e2bTemplate = "gitterm-opencode-server-lg";
+const provider = {
+  type: "e2b",
+  machine: { type: "custom", resources: { templateId: e2bTemplate } },
+} as const;
 const reviewId = process.env.GITHUB_RUN_ID
   ? `${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`
   : crypto.randomUUID();
@@ -115,10 +118,14 @@ async function reviewRevision({
       name: `PR #${pullRequest.number} ${label}`,
       repo: repoUrl,
       branch: label === "before" ? pullRequest.base.ref : pullRequest.head.ref,
-      // baseCommit pins the exact revision; checkoutRef is branch/tag only.
       baseCommit: commit,
       persistent: false,
+      provider,
       modelCredentials,
+      opencode: {
+        // Disposable, unauthenticated sandbox: skip tool approval prompts.
+        config: { permission: { edit: "allow", bash: "allow", webfetch: "allow" } },
+      },
     });
     workspace = created.workspace;
 
@@ -128,7 +135,6 @@ async function reviewRevision({
       title: `PR #${pullRequest.number} ${label} visual review`,
       model,
       waitForSetup: true,
-      // The server caps setup waits at 10 minutes.
       setupTimeoutMs: Math.min(runTimeoutMs, 600_000),
       prompt: buildPrompt({ repository, pullRequest, label, instructions }),
     });

@@ -25,6 +25,8 @@ export interface AgentProvisionerContext {
   opencode?: {
     skills?: Array<{ name: string; content: string }>;
     plugins?: string[];
+    /** Merged over the user's saved OpenCode config; request wins per key. */
+    config?: Record<string, unknown>;
   };
 }
 

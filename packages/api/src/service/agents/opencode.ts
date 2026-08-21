@@ -89,16 +89,16 @@ export const opencodeProvisioner: AgentProvisioner = {
       env.OPENCODE_SERVER_PASSWORD = ctx.serverPassword;
     }
 
+    const opencodeConfig = ctx.opencode?.config
+      ? { ...ctx.agentConfigs?.opencode, ...ctx.opencode.config }
+      : ctx.agentConfigs?.opencode;
+
     return {
       files: [
         {
           path: OPENCODE_CONFIG_PATH,
           contentBase64: toBase64(
-            buildOpencodeConfigJson(
-              ctx.agentConfigs?.opencode,
-              ctx.userDisplayName,
-              ctx.opencode?.plugins,
-            ),
+            buildOpencodeConfigJson(opencodeConfig, ctx.userDisplayName, ctx.opencode?.plugins),
           ),
         },
         {

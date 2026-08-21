@@ -242,6 +242,10 @@ const workspaceCreateBaseSchema = z.object({
         .max(50)
         .optional(),
       plugins: z.array(z.string().trim().min(1).max(500)).max(50).optional(),
+      config: z
+        .record(z.string(), z.unknown())
+        .refine((config) => JSON.stringify(config).length <= 20_000, "OpenCode config too large")
+        .optional(),
     })
     .optional(),
 });

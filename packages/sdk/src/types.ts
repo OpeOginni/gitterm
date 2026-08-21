@@ -96,6 +96,8 @@ type DaytonaResources = {
 };
 type VercelResources = { vcpus?: number };
 type ExeDevResources = { cpu?: number; memory?: string; disk?: string };
+/** E2B fixes CPU/RAM per template, so resources select a template build. */
+type E2bResources = { templateId?: string; sshTemplateId?: string };
 
 export type WorkspaceProviderSelection =
   | { type: "railway"; providerId?: string; region?: string }
@@ -111,7 +113,10 @@ export type WorkspaceProviderSelection =
   | ({ type: "exedev" } & Omit<ProviderSelectionBase, "machine"> & {
         machine?: FlexibleMachine<ExeDevResources>;
       })
-  | ({ type: "e2b" | "ascii" } & ProviderSelectionBase)
+  | ({ type: "e2b" } & Omit<ProviderSelectionBase, "machine"> & {
+        machine?: FlexibleMachine<E2bResources>;
+      })
+  | ({ type: "ascii" } & ProviderSelectionBase)
   | { type: "cloudflare"; providerId?: string };
 
 export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";
@@ -155,6 +160,12 @@ export type WorkspaceCreateInput = {
     skills?: Array<{ name: string; content: string }>;
     /** NPM package specs or plugin paths accepted by OpenCode. Pin versions for repeatable runs. */
     plugins?: string[];
+    /**
+     * OpenCode config (opencode.json keys) merged over your saved config for
+     * this workspace only. e.g. { permission: { edit: "allow", bash: "allow",
+     * webfetch: "allow" } } disables tool approval prompts in headless runs.
+     */
+    config?: Record<string, unknown>;
   };
 };
 
