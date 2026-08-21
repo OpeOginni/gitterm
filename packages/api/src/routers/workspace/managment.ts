@@ -224,6 +224,11 @@ const workspaceCreateBaseSchema = z.object({
     .optional(),
   /** Injected into this workspace only; never stored in the dashboard. */
   modelCredentials: z.array(inlineModelCredentialSchema).max(20).optional(),
+  /** Injected into this workspace only; never stored as dashboard environment settings. */
+  environmentVariables: z
+    .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(20_000))
+    .refine((variables) => Object.keys(variables).length <= 50, "Too many environment variables")
+    .optional(),
   setupCommands: workspaceSetupCommandsSchema.optional(),
   opencode: z
     .object({
@@ -2340,11 +2345,14 @@ export const workspaceRouter = router({
           workspaceApiUrl: WORKSPACE_API_URL,
           workspaceProvider: providerKey,
           userEnv: userWorkspaceEnvironmentVariables
-            ? (userWorkspaceEnvironmentVariables.environmentVariables as Record<
-                string,
-                string | undefined
-              >)
-            : undefined,
+            ? {
+                ...(userWorkspaceEnvironmentVariables.environmentVariables as Record<
+                  string,
+                  string | undefined
+                >),
+                ...input.environmentVariables,
+              }
+            : input.environmentVariables,
         });
 
         // Get compute provider

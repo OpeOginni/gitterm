@@ -149,6 +149,8 @@ export type WorkspaceCreateInput = {
    * inline; connect those in the dashboard.
    */
   modelCredentials?: WorkspaceModelCredentialInput[];
+  /** Ephemeral environment variables injected into this workspace only. */
+  environmentVariables?: Record<string, string>;
   /**
    * Ordered commands launched in the repository after the agent server starts.
    * They do not block workspace readiness; inspect ~/.gitterm/setup for status

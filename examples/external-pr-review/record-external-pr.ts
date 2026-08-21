@@ -29,6 +29,28 @@ const modelCredentials =
   model && modelApiKey
     ? [{ providerName: model.slice(0, model.indexOf("/")), apiKey: modelApiKey }]
     : undefined;
+const r2 = {
+  accountId: process.env.R2_ACCOUNT_ID?.trim(),
+  apiToken: process.env.R2_API_TOKEN?.trim(),
+  bucket: process.env.R2_BUCKET?.trim(),
+  publicUrl: process.env.R2_PUBLIC_URL?.trim().replace(/\/$/, ""),
+};
+const reviewToolsSetup = [
+  "set -eu",
+  "npm install --global wrangler playwright",
+  "playwright install chromium",
+  'mkdir -p "$HOME/.local/bin"',
+  "cat > \"$HOME/.local/bin/gitterm-upload-artifact\" <<'UPLOAD_SCRIPT'",
+  "#!/bin/sh",
+  "set -eu",
+  'file="$1"',
+  'key="${2:?usage: gitterm-upload-artifact FILE KEY}"',
+  'content_type="$(file --brief --mime-type "$file")"',
+  'wrangler r2 object put "$R2_BUCKET/$key" --file "$file" --remote --content-type "$content_type" >/dev/null',
+  'printf \'%s/%s\\n\' "${R2_PUBLIC_URL%/}" "$key"',
+  "UPLOAD_SCRIPT",
+  'chmod +x "$HOME/.local/bin/gitterm-upload-artifact"',
+].join("\n");
 // 4 vCPU / 8 GB sandboxes for app + browser capture.
 const provider = { type: "e2b", machine: { type: "profile", key: "large" } } as const;
 const reviewId = process.env.GITHUB_RUN_ID
@@ -75,9 +97,14 @@ function buildPrompt({
 }): string {
   return `You are capturing the "${label}" half of a before/after visual for ${repository} pull request #${pullRequest.number}: ${pullRequest.title}. This workspace is checked out at the ${label} revision.
 
-Set up and run the application (prefer mock or seeded data), then capture the flow the PR changes as a screenshot or short recording using the available browser tooling. Do not create commits, pull requests, or any GitHub changes, and do not use secrets or production services.
+Your required workflow:
+1. Inspect the repository and identify the user-facing flow changed by this PR.
+2. Install dependencies and run the app using mock or seeded data only. Do not use production services.
+3. Use Playwright with Chromium to capture at least one useful screenshot or short recording of the changed flow. Save captures under \`/tmp/gitterm-review/${label}\`.
+4. Upload every capture immediately with \`~/.local/bin/gitterm-upload-artifact FILE KEY\`, using keys under \`external-pr-reviews/${REVIEW_ID}/${label}/\`. The command prints the public URL; record each URL.
+5. Reply with a concise summary and every uploaded URL. If capture or upload fails, explain the exact reason and continue with any other useful capture.
 
-Reply with the local paths of your captures and one or two sentences on what they show. If you could not capture, say why.
+Do not create commits, pull requests, or GitHub changes. Do not print, inspect, or modify the R2 credentials; the upload helper handles them.
 
 Additional instructions from the workflow operator:
 ${instructions}`;
@@ -118,6 +145,15 @@ async function reviewRevision({
       persistent: false,
       provider,
       modelCredentials,
+      environmentVariables: {
+        CLOUDFLARE_ACCOUNT_ID: r2.accountId!,
+        CLOUDFLARE_API_TOKEN: r2.apiToken!,
+        R2_BUCKET: r2.bucket!,
+        R2_PUBLIC_URL: r2.publicUrl!,
+        REVIEW_ID: reviewId,
+        REVIEW_LABEL: label,
+      },
+      setupCommands: [reviewToolsSetup],
       opencode: {
         // Disposable, unauthenticated sandbox: skip tool approval prompts.
         config: {
@@ -214,6 +250,10 @@ async function main() {
   if (!Number.isFinite(runTimeoutMs) || runTimeoutMs < 1_000) {
     throw new Error("GITTERM_PR_REVIEW_TIMEOUT_MS must be at least 1000");
   }
+  if (!r2.accountId) throw new Error("R2_ACCOUNT_ID is required");
+  if (!r2.apiToken) throw new Error("R2_API_TOKEN is required");
+  if (!r2.bucket) throw new Error("R2_BUCKET is required");
+  if (!r2.publicUrl) throw new Error("R2_PUBLIC_URL is required");
   if (model && !/^[^/]+\/.+$/.test(model)) {
     throw new Error(
       "GITTERM_MODEL must use the provider/model format, e.g. anthropic/claude-sonnet-4-20250514",

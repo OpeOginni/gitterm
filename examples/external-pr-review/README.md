@@ -5,6 +5,10 @@ Create a disposable before/after review for a public GitHub pull request without
 ```sh
 bun install
 export GITTERM_API_TOKEN=gt_...
+export R2_ACCOUNT_ID=...
+export R2_API_TOKEN=...
+export R2_BUCKET=external-pr-reviews
+export R2_PUBLIC_URL=https://assets.example.com
 export TARGET_REPOSITORY=anomalyco/opencode
 export TARGET_PR=123
 bun record-external-pr.ts
