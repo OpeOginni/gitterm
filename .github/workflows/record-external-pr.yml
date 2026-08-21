@@ -36,6 +36,7 @@ jobs:
       # Optional; the SDK defaults to https://api.gitterm.dev when unset.
       GITTERM_SERVER_URL: ${{ secrets.GITTERM_SERVER_URL }}
       GITTERM_API_TOKEN: ${{ secrets.GITTERM_API_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
       TARGET_REPOSITORY: ${{ inputs.repository }}
       TARGET_PR: ${{ inputs.pull_request }}
       GITTERM_PROMPT: ${{ inputs.prompt }}

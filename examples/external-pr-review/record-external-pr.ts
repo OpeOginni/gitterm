@@ -46,10 +46,12 @@ function errorMessage(error: unknown): string {
 }
 
 async function getPullRequest(repository: string, number: number): Promise<PullRequest> {
+  const githubToken = process.env.GITHUB_TOKEN?.trim();
   const response = await fetch(`https://api.github.com/repos/${repository}/pulls/${number}`, {
     headers: {
       Accept: "application/vnd.github+json",
       "User-Agent": "gitterm-external-pr-review",
+      ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
     },
   });
   if (!response.ok) {
