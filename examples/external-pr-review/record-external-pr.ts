@@ -37,16 +37,17 @@ const r2 = {
 };
 const reviewToolsSetup = [
   "set -eu",
-  "npm install --global wrangler playwright",
-  "playwright install chromium",
-  'mkdir -p "$HOME/.local/bin"',
+  'TOOLS_DIR="$HOME/.gitterm/review-tools"',
+  'mkdir -p "$TOOLS_DIR" "$HOME/.local/bin"',
+  'npm install --prefix "$TOOLS_DIR" wrangler playwright',
+  '"$TOOLS_DIR/node_modules/.bin/playwright" install --with-deps chromium',
   "cat > \"$HOME/.local/bin/gitterm-upload-artifact\" <<'UPLOAD_SCRIPT'",
   "#!/bin/sh",
   "set -eu",
   'file="$1"',
   'key="${2:?usage: gitterm-upload-artifact FILE KEY}"',
-  'content_type="$(file --brief --mime-type "$file")"',
-  'wrangler r2 object put "$R2_BUCKET/$key" --file "$file" --remote --content-type "$content_type" >/dev/null',
+  'case "$file" in *.png) content_type=image/png ;; *.jpg|*.jpeg) content_type=image/jpeg ;; *.webm) content_type=video/webm ;; *.mp4) content_type=video/mp4 ;; *) content_type=application/octet-stream ;; esac',
+  '"$HOME/.gitterm/review-tools/node_modules/.bin/wrangler" r2 object put "$R2_BUCKET/$key" --file "$file" --remote --content-type "$content_type" >/dev/null',
   'if [ -n "${R2_PUBLIC_URL:-}" ]; then printf \'%s/%s\\n\' "${R2_PUBLIC_URL%/}" "$key"; else printf \'r2://%s/%s\\n\' "$R2_BUCKET" "$key"; fi',
   "UPLOAD_SCRIPT",
   'chmod +x "$HOME/.local/bin/gitterm-upload-artifact"',
@@ -101,7 +102,7 @@ Your required workflow:
 1. Inspect the repository and identify the user-facing flow changed by this PR.
 2. Install dependencies and run the app using mock or seeded data only. Do not use production services.
 3. Use Playwright with Chromium to capture at least one useful screenshot or short recording of the changed flow. Save captures under \`/tmp/gitterm-review/${label}\`.
-4. Upload every capture immediately with \`~/.local/bin/gitterm-upload-artifact FILE KEY\`, using keys under \`external-pr-reviews/${REVIEW_ID}/${label}/\`. The command prints the public URL; record each URL.
+4. Upload every capture immediately with \`~/.local/bin/gitterm-upload-artifact FILE KEY\`, using keys under \`external-pr-reviews/\${REVIEW_ID}/${label}/\`. The command prints the public URL; record each URL.
 5. Reply with a concise summary and every uploaded URL. If capture or upload fails, explain the exact reason and continue with any other useful capture.
 
 Do not create commits, pull requests, or GitHub changes. Do not print, inspect, or modify the R2 credentials; the upload helper handles them.
