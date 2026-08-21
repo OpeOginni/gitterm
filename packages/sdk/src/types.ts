@@ -200,6 +200,7 @@ export type AgentRunCreateInput = {
   context?: { type: "isolated" } | { type: "continue"; runId: string };
   /** Wait for workspace setup commands before submitting the prompt. */
   waitForSetup?: boolean;
+  /** How long to wait for setup, in ms. Server maximum is 600000 (10 minutes). */
   setupTimeoutMs?: number;
 };
 

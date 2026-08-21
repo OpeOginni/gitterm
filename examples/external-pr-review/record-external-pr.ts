@@ -128,7 +128,8 @@ async function reviewRevision({
       title: `PR #${pullRequest.number} ${label} visual review`,
       model,
       waitForSetup: true,
-      setupTimeoutMs: runTimeoutMs,
+      // The server caps setup waits at 10 minutes.
+      setupTimeoutMs: Math.min(runTimeoutMs, 600_000),
       prompt: buildPrompt({ repository, pullRequest, label, instructions }),
     });
     const completed = await client.runs.wait(workspace.id, run.id, { timeoutMs: runTimeoutMs });
