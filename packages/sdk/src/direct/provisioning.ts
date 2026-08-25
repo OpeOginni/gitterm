@@ -2,12 +2,39 @@ import type {
   DirectAgentFile,
   DirectProviderWorkspaceInput,
   DirectProvisioningPlan,
+  DirectModelCredential,
   DirectWorkspaceCreateInput,
   DirectWorkspaceRuntime,
 } from "./types.js";
 
 export const DIRECT_OPENCODE_PORT = 4096;
 export const DIRECT_OPENCODE_COMMAND = `opencode serve --hostname 0.0.0.0 --port ${DIRECT_OPENCODE_PORT}`;
+
+export function directModelAuth(credential: DirectModelCredential) {
+  if (credential.type === "oauth") {
+    if (!credential.refreshToken.trim()) throw new Error("OAuth refreshToken is required");
+    if (
+      credential.expiresAt != null &&
+      (!Number.isFinite(credential.expiresAt) || credential.expiresAt < 0)
+    ) {
+      throw new Error("OAuth expiresAt must be a non-negative Unix epoch time in milliseconds");
+    }
+    return {
+      type: "oauth" as const,
+      refresh: credential.refreshToken,
+      access: credential.accessToken ?? "",
+      expires: credential.expiresAt ?? 0,
+      ...(credential.accountId ? { accountId: credential.accountId } : {}),
+      ...(credential.enterpriseUrl ? { enterpriseUrl: credential.enterpriseUrl } : {}),
+    };
+  }
+  if (!credential.apiKey.trim()) throw new Error("Model credential apiKey is required");
+  return {
+    type: "api" as const,
+    key: credential.apiKey,
+    ...(credential.metadata ? { metadata: credential.metadata } : {}),
+  };
+}
 
 function base64(value: string): string {
   return Buffer.from(value).toString("base64");
@@ -44,15 +71,14 @@ export function buildDirectProvisioningPlan(
   },
 ): DirectProvisioningPlan {
   if (input.baseCommit && !input.repo) throw new Error("baseCommit requires repo");
-  const credentials = new Map<string, string>();
+  const credentials = new Map<string, ReturnType<typeof directModelAuth>>();
   for (const credential of input.modelCredentials ?? []) {
-    if (!credential.providerName.trim() || !credential.apiKey.trim()) {
-      throw new Error("Model credential providerName and apiKey are required");
-    }
+    if (!credential.providerName.trim())
+      throw new Error("Model credential providerName is required");
     if (credentials.has(credential.providerName)) {
       throw new Error(`Duplicate model credential: ${credential.providerName}`);
     }
-    credentials.set(credential.providerName, credential.apiKey);
+    credentials.set(credential.providerName, directModelAuth(credential));
   }
   const configuredPlugins = Array.isArray(input.opencode?.config?.plugin)
     ? input.opencode.config.plugin.filter((plugin): plugin is string => typeof plugin === "string")
@@ -67,16 +93,7 @@ export function buildDirectProvisioningPlan(
   const files: DirectAgentFile[] = [
     {
       path: "~/.local/share/opencode/auth.json",
-      contentBase64: base64(
-        JSON.stringify(
-          Object.fromEntries(
-            [...credentials].map(([providerName, apiKey]) => [
-              providerName,
-              { type: "api", key: apiKey },
-            ]),
-          ),
-        ),
-      ),
+      contentBase64: base64(JSON.stringify(Object.fromEntries(credentials))),
     },
     {
       path: "~/.config/opencode/opencode.json",

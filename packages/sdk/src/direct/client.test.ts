@@ -82,4 +82,113 @@ describe("createDirectGittermClient", () => {
     const workspace = await client.workspaces.create({ lifecycle: "ephemeral" });
     expect(client.workspaces.pause(workspace)).rejects.toThrow("without losing state");
   });
+
+  test("runs a headless OAuth flow through the workspace runtime", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: Array<{ method: string; path: string; authorization: string | null }> = [];
+    let statusRequests = 0;
+    globalThis.fetch = (async (input, init) => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      requests.push({
+        method: request.method,
+        path: url.pathname,
+        authorization: request.headers.get("authorization"),
+      });
+      const location = {
+        directory: "/workspace",
+        project: { id: "project", directory: "/workspace" },
+      };
+
+      if (request.method === "PUT" && url.pathname === "/auth/openai") {
+        expect(await request.json()).toEqual({
+          type: "oauth",
+          refresh: "refresh-token",
+          access: "access-token",
+          expires: 123_000,
+          accountId: "account-1",
+        });
+        return Response.json(true);
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/integration/openai") {
+        return Response.json({
+          location,
+          data: {
+            id: "openai",
+            name: "OpenAI",
+            methods: [{ type: "oauth", id: "chatgpt-headless", label: "ChatGPT" }],
+            connections: [],
+          },
+        });
+      }
+      if (request.method === "POST" && url.pathname === "/api/integration/openai/connect/oauth") {
+        expect(await request.json()).toEqual({
+          methodID: "chatgpt-headless",
+          inputs: {},
+          label: "Slack bot",
+        });
+        return Response.json({
+          location,
+          data: {
+            attemptID: "attempt-1",
+            url: "https://auth.example/device",
+            instructions: "Enter ABCD",
+            mode: "auto",
+            time: { created: 1_000, expires: Date.now() + 60_000 },
+          },
+        });
+      }
+      if (request.method === "GET" && url.pathname === "/api/integration/attempt/attempt-1") {
+        statusRequests += 1;
+        return Response.json({
+          location,
+          data: {
+            status: statusRequests === 1 ? "pending" : "complete",
+            time: { created: 1_000, expires: Date.now() + 60_000 },
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${request.method} ${url.pathname}`);
+    }) as typeof fetch;
+
+    try {
+      const { provider } = fakeProvider();
+      const client = createDirectGittermClient({ provider });
+      const workspace = await client.workspaces.create({ lifecycle: "persistent" });
+      workspace.runtime.password = "secret";
+
+      await client.auth.setCredential(workspace, {
+        type: "oauth",
+        providerName: "openai",
+        refreshToken: "refresh-token",
+        accessToken: "access-token",
+        expiresAt: 123_000,
+        accountId: "account-1",
+      });
+
+      const integration = await client.auth.get(workspace, "openai");
+      expect(integration.methods[0]).toMatchObject({ id: "chatgpt-headless", type: "oauth" });
+
+      const attempt = await client.auth.connectOAuth({
+        workspace,
+        integrationId: "openai",
+        methodId: "chatgpt-headless",
+        label: "Slack bot",
+      });
+      expect(attempt).toMatchObject({
+        id: "attempt-1",
+        workspaceId: workspace.id,
+        mode: "auto",
+      });
+      expect(await client.auth.wait(attempt, workspace, { pollIntervalMs: 0 })).toMatchObject({
+        status: "complete",
+      });
+      expect(
+        requests.every((request) => request.authorization === "Basic b3BlbmNvZGU6c2VjcmV0"),
+      ).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

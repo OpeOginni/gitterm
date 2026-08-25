@@ -11,8 +11,16 @@ export { createRailwayDirectProvider } from "./railway.js";
 export { createVercelDirectProvider } from "./vercel.js";
 export type {
   AsciiDirectProviderConfig,
+  DirectAuthAttempt,
+  DirectAuthAttemptStatus,
+  DirectAuthIntegration,
+  DirectAuthMethod,
+  DirectAuthPrompt,
+  DirectAuthWaitOptions,
+  DirectApiModelCredential,
   DaytonaDirectProviderConfig,
   DirectModelCredential,
+  DirectOAuthModelCredential,
   DirectProviderAdapter,
   DirectProviderCapabilities,
   DirectProviderConfig,

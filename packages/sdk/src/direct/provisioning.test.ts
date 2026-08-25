@@ -46,4 +46,31 @@ describe("direct provisioning plan", () => {
       }),
     ).toThrow("Duplicate model credential");
   });
+
+  test("writes portable OAuth credentials into OpenCode auth", () => {
+    const plan = buildDirectProvisioningPlan({
+      id: "workspace-1",
+      lifecycle: "ephemeral",
+      password: "password",
+      modelCredentials: [
+        {
+          type: "oauth",
+          providerName: "openai",
+          refreshToken: "refresh-token",
+          accessToken: "access-token",
+          expiresAt: 123_000,
+          accountId: "account-1",
+        },
+      ],
+    });
+    const auth = JSON.parse(Buffer.from(plan.agent.files[0]!.contentBase64, "base64").toString());
+
+    expect(auth.openai).toEqual({
+      type: "oauth",
+      refresh: "refresh-token",
+      access: "access-token",
+      expires: 123_000,
+      accountId: "account-1",
+    });
+  });
 });

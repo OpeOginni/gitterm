@@ -53,6 +53,66 @@ try {
 
 Every adapter receives the same normalized plan: repository/ref and optional Git credentials, agent files, model credentials, environment, setup commands, serve command, and port. Provider-specific configuration only describes how to allocate and expose compute.
 
+### Provider authentication
+
+Direct workspaces can start OpenCode provider authentication without shell access. Discover the provider's methods and select a headless or device-code OAuth method when OpenCode is running remotely:
+
+```ts
+const openai = await direct.auth.get(workspace, "openai");
+const method = openai.methods.find(
+  (item) => item.type === "oauth" && item.id === "chatgpt-headless",
+);
+if (!method || method.type !== "oauth") throw new Error("OpenAI device OAuth is unavailable");
+
+const attempt = await direct.auth.connectOAuth({
+  workspace,
+  integrationId: "openai",
+  methodId: method.id,
+  label: "Slack bot",
+});
+
+// Present these through your application UI.
+console.log(attempt.url, attempt.instructions);
+
+if (attempt.mode === "auto") {
+  await direct.auth.wait(attempt, workspace);
+} else {
+  await direct.auth.complete(attempt, workspace, await getCodeFromUser());
+}
+```
+
+OAuth started this way is stored and refreshed by OpenCode inside the workspace. Reusing a persistent workspace avoids repeated authentication; terminating an ephemeral workspace also destroys its credential store. OpenCode does not export OAuth tokens from this flow.
+
+Applications that own OAuth separately can keep the token bundle in encrypted storage and inject it into every new workspace instead:
+
+```ts
+const credential = await credentialStore.get(slackInstallationId);
+const workspace = await direct.workspaces.create({
+  lifecycle: "ephemeral",
+  modelCredentials: [
+    {
+      type: "oauth",
+      providerName: "openai",
+      refreshToken: credential.refreshToken,
+      accessToken: credential.accessToken,
+      expiresAt: credential.expiresAt,
+      accountId: credential.accountId,
+    },
+  ],
+});
+
+// Credentials can also be added or rotated on an existing runtime.
+await direct.auth.setCredential(workspace, {
+  type: "oauth",
+  providerName: "openai",
+  refreshToken: credential.refreshToken,
+  accessToken: credential.accessToken,
+  expiresAt: credential.expiresAt,
+});
+```
+
+In this mode the application owns encryption, tenant scoping, refresh, and persistence. OpenCode may refresh its workspace-local copy; the direct SDK does not copy rotated tokens back into application storage. Use the Gitterm control plane when those credential-management responsibilities should be managed centrally.
+
 ## Install
 
 ```sh

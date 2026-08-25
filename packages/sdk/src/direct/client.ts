@@ -1,15 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { createOpencodeClient, type SessionStatus } from "@opencode-ai/sdk";
+import {
+  createOpencodeClient as createOpencodeV2Client,
+  type IntegrationAttemptStatus,
+} from "@opencode-ai/sdk/v2";
 import { createAsciiDirectProvider } from "./ascii.js";
 import { createDaytonaDirectProvider } from "./daytona.js";
 import { createE2BDirectProvider } from "./e2b.js";
 import { createExeDevDirectProvider } from "./exedev.js";
-import { buildDirectProvisioningPlan } from "./provisioning.js";
+import { buildDirectProvisioningPlan, directModelAuth } from "./provisioning.js";
 import { createRailwayDirectProvider } from "./railway.js";
 import { createVercelDirectProvider } from "./vercel.js";
 import type {
   DirectProviderAdapter,
   DirectProviderConfig,
+  DirectAuthAttempt,
+  DirectAuthAttemptStatus,
+  DirectAuthIntegration,
+  DirectAuthWaitOptions,
+  DirectModelCredential,
   DirectRun,
   DirectRunCreateInput,
   DirectRunMessage,
@@ -54,6 +63,20 @@ function runtimeClient(workspace: DirectWorkspace) {
   });
 }
 
+function authClient(workspace: DirectWorkspace) {
+  const authorization = workspace.runtime.password
+    ? `Basic ${Buffer.from(`opencode:${workspace.runtime.password}`).toString("base64")}`
+    : undefined;
+  return createOpencodeV2Client({
+    baseUrl: workspace.runtime.url,
+    directory: workspace.runtime.directory,
+    headers: {
+      ...workspace.runtime.headers,
+      ...(authorization ? { Authorization: authorization } : {}),
+    },
+  });
+}
+
 function errorMessage(error: unknown): string {
   if (!error) return "OpenCode request failed";
   if (typeof error === "string") return error;
@@ -61,7 +84,20 @@ function errorMessage(error: unknown): string {
     const data = (error as { data?: { message?: unknown } }).data;
     if (typeof data?.message === "string") return data.message;
   }
+  if (typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
   return error instanceof Error ? error.message : JSON.stringify(error);
+}
+
+function authStatus(status: IntegrationAttemptStatus): DirectAuthAttemptStatus {
+  const common = {
+    createdAt: Number(status.time.created),
+    expiresAt: Number(status.time.expires),
+  };
+  if (status.status === "failed") return { status: "failed", message: status.message, ...common };
+  return { status: status.status, ...common };
 }
 
 function mapStatus(
@@ -100,6 +136,27 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
     if (run.workspaceId !== workspace.id) {
       throw new Error(`Run belongs to workspace ${run.workspaceId}, not ${workspace.id}`);
     }
+  }
+
+  function assertAuthAttempt(attempt: DirectAuthAttempt, workspace: DirectWorkspace) {
+    assertWorkspace(workspace);
+    if (attempt.workspaceId !== workspace.id) {
+      throw new Error(
+        `OAuth attempt belongs to workspace ${attempt.workspaceId}, not ${workspace.id}`,
+      );
+    }
+  }
+
+  async function getAuthStatus(
+    attempt: DirectAuthAttempt,
+    workspace: DirectWorkspace,
+  ): Promise<DirectAuthAttemptStatus> {
+    assertAuthAttempt(attempt, workspace);
+    const result = await authClient(workspace).v2.integration.attempt.status({
+      attemptID: attempt.id,
+    });
+    if (result.error || !result.data) throw new Error(errorMessage(result.error));
+    return authStatus(result.data.data);
   }
 
   async function getRun(run: DirectRun, workspace: DirectWorkspace) {
@@ -149,6 +206,124 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
 
   return {
     provider: { name: provider.name, capabilities: provider.capabilities },
+    auth: {
+      async setCredential(
+        workspace: DirectWorkspace,
+        credential: DirectModelCredential,
+      ): Promise<void> {
+        assertWorkspace(workspace);
+        if (!credential.providerName.trim()) {
+          throw new Error("Model credential providerName is required");
+        }
+        const result = await runtimeClient(workspace).auth.set({
+          path: { id: credential.providerName },
+          query: { directory: workspace.runtime.directory },
+          body: directModelAuth(credential),
+        });
+        if (result.error) throw new Error(errorMessage(result.error));
+      },
+      async list(workspace: DirectWorkspace): Promise<DirectAuthIntegration[]> {
+        assertWorkspace(workspace);
+        const result = await authClient(workspace).v2.integration.list();
+        if (result.error || !result.data) throw new Error(errorMessage(result.error));
+        return result.data.data;
+      },
+      async get(workspace: DirectWorkspace, integrationId: string): Promise<DirectAuthIntegration> {
+        assertWorkspace(workspace);
+        const result = await authClient(workspace).v2.integration.get({
+          integrationID: integrationId,
+        });
+        if (result.error || !result.data) throw new Error(errorMessage(result.error));
+        return result.data.data;
+      },
+      async connectKey(input: {
+        workspace: DirectWorkspace;
+        integrationId: string;
+        key: string;
+        label?: string;
+      }): Promise<void> {
+        assertWorkspace(input.workspace);
+        const result = await authClient(input.workspace).v2.integration.connect.key({
+          integrationID: input.integrationId,
+          key: input.key,
+          label: input.label,
+        });
+        if (result.error) throw new Error(errorMessage(result.error));
+      },
+      async connectOAuth(input: {
+        workspace: DirectWorkspace;
+        integrationId: string;
+        methodId: string;
+        inputs?: Record<string, string>;
+        label?: string;
+      }): Promise<DirectAuthAttempt> {
+        assertWorkspace(input.workspace);
+        const result = await authClient(input.workspace).v2.integration.connect.oauth({
+          integrationID: input.integrationId,
+          methodID: input.methodId,
+          inputs: input.inputs ?? {},
+          label: input.label,
+        });
+        if (result.error || !result.data) throw new Error(errorMessage(result.error));
+        const attempt = result.data.data;
+        return {
+          id: attempt.attemptID,
+          workspaceId: input.workspace.id,
+          integrationId: input.integrationId,
+          url: attempt.url,
+          instructions: attempt.instructions,
+          mode: attempt.mode,
+          createdAt: Number(attempt.time.created),
+          expiresAt: Number(attempt.time.expires),
+        };
+      },
+      async status(
+        attempt: DirectAuthAttempt,
+        workspace: DirectWorkspace,
+      ): Promise<DirectAuthAttemptStatus> {
+        return getAuthStatus(attempt, workspace);
+      },
+      async complete(
+        attempt: DirectAuthAttempt,
+        workspace: DirectWorkspace,
+        code: string,
+      ): Promise<void> {
+        assertAuthAttempt(attempt, workspace);
+        if (attempt.mode !== "code")
+          throw new Error("Only code-based OAuth attempts are completed manually");
+        if (!code.trim()) throw new Error("OAuth authorization code is required");
+        const result = await authClient(workspace).v2.integration.attempt.complete({
+          attemptID: attempt.id,
+          code,
+        });
+        if (result.error) throw new Error(errorMessage(result.error));
+      },
+      async wait(
+        attempt: DirectAuthAttempt,
+        workspace: DirectWorkspace,
+        wait: DirectAuthWaitOptions = {},
+      ): Promise<DirectAuthAttemptStatus> {
+        assertAuthAttempt(attempt, workspace);
+        const timeoutMs = wait.timeoutMs ?? Math.max(0, attempt.expiresAt - Date.now());
+        const pollIntervalMs = wait.pollIntervalMs ?? 1_000;
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() <= deadline) {
+          const status = await getAuthStatus(attempt, workspace);
+          if (status.status === "complete") return status;
+          if (status.status === "failed") throw new Error(status.message);
+          if (status.status === "expired") throw new Error("OAuth attempt expired");
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        }
+        throw new Error(`OAuth attempt timed out after ${timeoutMs}ms`);
+      },
+      async cancel(attempt: DirectAuthAttempt, workspace: DirectWorkspace): Promise<void> {
+        assertAuthAttempt(attempt, workspace);
+        const result = await authClient(workspace).v2.integration.attempt.cancel({
+          attemptID: attempt.id,
+        });
+        if (result.error) throw new Error(errorMessage(result.error));
+      },
+    },
     workspaces: {
       async create(input: DirectWorkspaceCreateInput = {}): Promise<DirectWorkspace> {
         const lifecycle = input.lifecycle ?? provider.capabilities.recommendedLifecycle;

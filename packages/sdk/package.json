@@ -23,7 +23,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts --outdir dist --target node --format esm --external @trpc/client --external @opencode-ai/sdk --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts --outdir dist --target node --format esm --external @trpc/client --external @opencode-ai/sdk --external @opencode-ai/sdk/v2 --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },

@@ -16,9 +16,77 @@ export type DirectProviderCapabilities = {
   supportsKeepAlive: boolean;
 };
 
-export type DirectModelCredential = {
+export type DirectApiModelCredential = {
   providerName: string;
+  type?: "api";
   apiKey: string;
+  metadata?: Record<string, string>;
+};
+
+export type DirectOAuthModelCredential = {
+  providerName: string;
+  type: "oauth";
+  refreshToken: string;
+  /** May be omitted when OpenCode should refresh immediately. */
+  accessToken?: string;
+  /** Unix epoch time in milliseconds. Defaults to expired when omitted. */
+  expiresAt?: number;
+  accountId?: string;
+  enterpriseUrl?: string;
+};
+
+export type DirectModelCredential = DirectApiModelCredential | DirectOAuthModelCredential;
+
+export type DirectAuthPrompt =
+  | {
+      type: "text";
+      key: string;
+      message: string;
+      placeholder?: string;
+      when?: { key: string; op: "eq" | "neq"; value: string };
+    }
+  | {
+      type: "select";
+      key: string;
+      message: string;
+      options: Array<{ label: string; value: string; hint?: string }>;
+      when?: { key: string; op: "eq" | "neq"; value: string };
+    };
+
+export type DirectAuthMethod =
+  | { type: "oauth"; id: string; label: string; prompts?: DirectAuthPrompt[] }
+  | { type: "key"; label?: string }
+  | { type: "env"; names: string[] };
+
+export type DirectAuthIntegration = {
+  id: string;
+  name: string;
+  methods: DirectAuthMethod[];
+  connections: Array<
+    { type: "credential"; id: string; label: string } | { type: "env"; name: string }
+  >;
+};
+
+export type DirectAuthAttempt = {
+  id: string;
+  workspaceId: string;
+  integrationId: string;
+  url: string;
+  instructions: string;
+  mode: "auto" | "code";
+  createdAt: number;
+  expiresAt: number;
+};
+
+export type DirectAuthAttemptStatus =
+  | { status: "pending"; createdAt: number; expiresAt: number }
+  | { status: "complete"; createdAt: number; expiresAt: number }
+  | { status: "failed"; message: string; createdAt: number; expiresAt: number }
+  | { status: "expired"; createdAt: number; expiresAt: number };
+
+export type DirectAuthWaitOptions = {
+  timeoutMs?: number;
+  pollIntervalMs?: number;
 };
 
 export type DirectWorkspaceCreateInput = {

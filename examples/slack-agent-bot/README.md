@@ -27,6 +27,10 @@ Select `GITTERM_PROVIDER` and fill in its block in `.env.example`. E2B requires 
 
 Railway requires persistent storage for thread pause/resume; the bot requests persistent workspaces in `thread` and `persistent` modes.
 
+Provider subscription OAuth can be initiated with `gitterm.auth.connectOAuth()` and the authorization URL and device instructions can be posted back to Slack. Use `thread` or `persistent` lifecycle when doing this: OpenCode keeps and refreshes the credential inside the reused workspace, so users authenticate once for that workspace.
+
+For `ephemeral`, the bot can instead own each Slack installation's encrypted OAuth token bundle and pass it through `modelCredentials` when creating every sandbox, or call `gitterm.auth.setCredential()` on a running sandbox. The bot then owns token refresh and persistence; workspace-local token refreshes are not synchronized back to the bot. Use the managed Gitterm control plane when that credential lifecycle should be managed centrally.
+
 ## Context
 
 - `thread` sends the current Slack thread transcript in a fresh OpenCode session.
