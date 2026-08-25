@@ -4,7 +4,8 @@
   "workspaces": {
     "packages": [
       "apps/*",
-      "packages/*"
+      "packages/*",
+      "examples/slack-agent-bot"
     ],
     "catalog": {
       "hono": "^4.12.25",

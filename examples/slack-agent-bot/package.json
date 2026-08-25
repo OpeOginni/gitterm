@@ -1,0 +1,17 @@
+{
+  "name": "gitterm-slack-agent-bot-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run slack-bot.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gitterm/sdk": "workspace:*",
+    "@slack/bolt": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.6",
+    "typescript": "^5.8.2"
+  }
+}

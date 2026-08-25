@@ -4,6 +4,55 @@ TypeScript SDK for the [GitTerm](https://gitterm.dev) API. Used by the `gitterm`
 the OpenCode plugin, and any integration that needs to manage GitTerm workspaces with
 a user API token.
 
+## Direct provider mode
+
+Direct mode runs an agent using your cloud-provider account without a Gitterm server. It intentionally omits managed billing, proxying, policy, durable run history, and automatic cleanup; your application owns workspace state and lifecycle.
+
+All built-in compute providers use the same provisioning plan and workspace/run API:
+
+| Provider | Direct prerequisite                            | Persistent pause | Keep-alive |
+| -------- | ---------------------------------------------- | ---------------- | ---------- |
+| E2B      | OpenCode-compatible template                   | Yes              | Yes        |
+| Daytona  | Compatible OCI image (a default is provided)   | Yes              | Yes        |
+| Vercel   | Vercel Sandbox project                         | Yes              | Yes        |
+| Ascii    | Box API key                                    | Yes              | Yes        |
+| exe.dev  | API token and a Node-capable image/default VM  | Yes              | No         |
+| Railway  | Project/environment and public service domains | With a volume    | No         |
+
+AWS remains available through `createGittermClient()` and the Gitterm control plane; it is intentionally not exposed in direct mode.
+
+Cloudflare remains available through the Gitterm control plane. Direct Cloudflare support is deferred until the OpenCode v2 Workerd runtime is stable.
+
+```ts
+import { createDirectGittermClient } from "@gitterm/sdk/direct";
+
+const direct = createDirectGittermClient({
+  provider: {
+    type: "e2b",
+    apiKey: process.env.E2B_API_KEY!,
+    templateId: process.env.E2B_TEMPLATE_ID!,
+  },
+});
+
+let workspace = await direct.workspaces.create({
+  repo: "https://github.com/acme/project",
+  lifecycle: "ephemeral",
+  modelCredentials: [{ providerName: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY! }],
+});
+
+try {
+  const run = await direct.runs.create({ workspace, prompt: "Review the open pull request" });
+  const completed = await direct.runs.wait(run, workspace);
+  console.log(completed.finalText);
+} finally {
+  workspace = await direct.workspaces.terminate(workspace);
+}
+```
+
+`DirectWorkspace` is JSON-serializable. Persist it together with the returned `sessionId` to resume provider lifecycle and OpenCode conversation context after an application restart. The serialized workspace contains the OpenCode password and may contain provider routing tokens, so encrypt it as credential material. Custom providers can implement `DirectProviderAdapter`; use `client.provider.capabilities` rather than hard-coding lifecycle assumptions.
+
+Every adapter receives the same normalized plan: repository/ref and optional Git credentials, agent files, model credentials, environment, setup commands, serve command, and port. Provider-specific configuration only describes how to allocate and expose compute.
+
 ## Install
 
 ```sh
