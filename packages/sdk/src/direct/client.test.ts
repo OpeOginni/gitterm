@@ -17,7 +17,11 @@ function fakeProvider() {
       calls.push(`create:${input.lifecycle}`);
       return {
         externalId: "external-1",
-        runtime: { url: "https://runtime.example", directory: "/workspace" },
+        runtime: {
+          url: "https://runtime.example",
+          directory: "/workspace",
+          password: input.password,
+        },
       };
     },
     async status() {
@@ -270,7 +274,11 @@ describe("createDirectGittermClient", () => {
         status: "complete",
       });
       expect(
-        requests.every((request) => request.authorization === "Basic b3BlbmNvZGU6c2VjcmV0"),
+        requests.every(
+          (request) =>
+            request.authorization ===
+            `Basic ${Buffer.from(`opencode:${workspace.runtime.password}`).toString("base64")}`,
+        ),
       ).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;

@@ -121,6 +121,9 @@ export class AsciiProvider implements ComputeProvider {
       boxId,
       commandRequest: { command, cwd, timeoutSeconds },
     });
+    if (result.type !== "command.finished") {
+      throw new Error("Ascii Box command did not finish");
+    }
     if (!result.success || result.exitCode !== 0) {
       throw new Error(`Ascii Box command failed: ${result.stderr || result.stdout}`);
     }
@@ -307,6 +310,9 @@ export class AsciiProvider implements ComputeProvider {
       boxId: handle.boxId,
       commandRequest: { command, cwd: handle.repoDir, timeoutSeconds: 60 },
     });
+    if (result.type !== "command.finished") {
+      return { exitCode: 1, stdout: "" };
+    }
     return { exitCode: result.exitCode ?? 1, stdout: result.stdout };
   }
 

@@ -53,6 +53,9 @@ export function createAsciiDirectProvider(
       boxId,
       commandRequest: { command, cwd, timeoutSeconds },
     });
+    if (result.type !== "command.finished") {
+      throw new Error("Ascii Box command did not finish");
+    }
     if (!result.success || result.exitCode !== 0) {
       throw new Error(`Ascii Box command failed: ${result.stderr || result.stdout}`);
     }
