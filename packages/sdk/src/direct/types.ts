@@ -171,8 +171,10 @@ export interface DirectProviderAdapter {
 export type E2BDirectProviderConfig = {
   type: "e2b";
   apiKey: string;
-  /** An E2B template containing Node.js, git, and the `opencode` binary. */
-  templateId: string;
+  /** Optional. Defaults to standard. */
+  size?: "standard" | "large";
+  /** Optional. Overrides size with a specific E2B template. */
+  templateId?: string;
   timeoutMs?: number;
 };
 
@@ -180,6 +182,7 @@ export type DaytonaDirectProviderConfig = {
   type: "daytona";
   apiKey: string;
   target: "us" | "eu";
+  /** Optional. Defaults to the public Gitterm OpenCode server image. Floating tags are pinned to a digest. */
   image?: string;
   cpu?: number;
   memory?: number;
@@ -191,6 +194,7 @@ export type VercelDirectProviderConfig = {
   apiToken: string;
   teamId: string;
   projectId: string;
+  /** Optional VCR image. When omitted, the configured Node runtime is used. */
   image?: string;
   runtime?: "node26" | "node24" | "node22" | "python3.13";
   runtimeSetupCommands?: string[];
@@ -208,7 +212,12 @@ export type AsciiDirectProviderConfig = {
 
 export type ExeDevDirectProviderConfig = {
   type: "exedev";
+  /**
+   * Token `cmds` must include `new`, `ls`, `ssh`, `share`, `ssh-key`, `pause`, `resume`, and `rm`.
+   * Default tokens cannot provision or clean up a Gitterm workspace.
+   */
   apiToken: string;
+  /** Optional. Defaults to the public Gitterm OpenCode server image. */
   image?: string;
   cpu?: number;
   memory?: string;
@@ -223,6 +232,7 @@ export type RailwayDirectProviderConfig = {
   projectId: string;
   environmentId: string;
   region?: string;
+  /** Optional. Defaults to the public Gitterm OpenCode server image. */
   image?: string;
   runtimePort?: number;
 };

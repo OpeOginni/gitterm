@@ -107,10 +107,24 @@ function mapStatus(
 ): DirectRun["status"] {
   if (errorName === "MessageAbortedError") return "cancelled";
   if (errorName) return "failed";
-  if (status?.type === "busy") return "running";
+  if (assistantCompleted) return "completed";
   if (status?.type === "retry") return "retrying";
-  if (!assistantCompleted) return "running";
-  return "completed";
+  return "running";
+}
+
+function pollTiming(
+  wait: { timeoutMs?: number; pollIntervalMs?: number },
+  fallbackTimeoutMs: number,
+) {
+  const timeoutMs = wait.timeoutMs ?? fallbackTimeoutMs;
+  const pollIntervalMs = wait.pollIntervalMs ?? 1_000;
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+    throw new Error("timeoutMs must be a finite, non-negative number");
+  }
+  if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < 0) {
+    throw new Error("pollIntervalMs must be a finite, non-negative number");
+  }
+  return { timeoutMs, pollIntervalMs };
 }
 
 function modelParts(model?: string) {
@@ -185,21 +199,14 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
       .map((part) => (part.type === "text" ? part.text : ""))
       .join("\n")
       .trim();
+    const sessionStatus = statuses.data[run.sessionId];
     const status = assistant
-      ? mapStatus(statuses.data[run.sessionId], assistantError?.name, assistantCompleted)
-      : statuses.data[run.sessionId]?.type === "idle"
-        ? Date.now() - new Date(run.submittedAt).getTime() < 5_000
-          ? "running"
-          : "failed"
-        : mapStatus(statuses.data[run.sessionId]);
+      ? mapStatus(sessionStatus, assistantError?.name, Boolean(assistantCompleted))
+      : mapStatus(sessionStatus, undefined, false);
     return {
       ...run,
       status,
-      error: assistantError
-        ? errorMessage(assistantError)
-        : status === "failed"
-          ? "OpenCode stopped before producing an assistant response"
-          : null,
+      error: assistantError ? errorMessage(assistantError) : null,
       finalText: finalText || null,
     } satisfies DirectRun;
   }
@@ -212,11 +219,12 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         credential: DirectModelCredential,
       ): Promise<void> {
         assertWorkspace(workspace);
-        if (!credential.providerName.trim()) {
+        const providerName = credential.providerName.trim();
+        if (!providerName) {
           throw new Error("Model credential providerName is required");
         }
         const result = await runtimeClient(workspace).auth.set({
-          path: { id: credential.providerName },
+          path: { id: providerName },
           query: { directory: workspace.runtime.directory },
           body: directModelAuth(credential),
         });
@@ -304,15 +312,19 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         wait: DirectAuthWaitOptions = {},
       ): Promise<DirectAuthAttemptStatus> {
         assertAuthAttempt(attempt, workspace);
-        const timeoutMs = wait.timeoutMs ?? Math.max(0, attempt.expiresAt - Date.now());
-        const pollIntervalMs = wait.pollIntervalMs ?? 1_000;
+        const { timeoutMs, pollIntervalMs } = pollTiming(
+          wait,
+          Math.max(0, attempt.expiresAt - Date.now()),
+        );
         const deadline = Date.now() + timeoutMs;
         while (Date.now() <= deadline) {
           const status = await getAuthStatus(attempt, workspace);
           if (status.status === "complete") return status;
           if (status.status === "failed") throw new Error(status.message);
           if (status.status === "expired") throw new Error("OAuth attempt expired");
-          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) break;
+          await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, remaining)));
         }
         throw new Error(`OAuth attempt timed out after ${timeoutMs}ms`);
       },
@@ -428,14 +440,15 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         workspace: DirectWorkspace,
         wait: DirectRunWaitOptions = {},
       ): Promise<DirectRun> {
-        const timeoutMs = wait.timeoutMs ?? 10 * 60_000;
-        const pollIntervalMs = wait.pollIntervalMs ?? 1_000;
+        const { timeoutMs, pollIntervalMs } = pollTiming(wait, 10 * 60_000);
         const deadline = Date.now() + timeoutMs;
         let current = run;
         while (Date.now() < deadline) {
           current = await getRun(current, workspace);
           if (!["running", "retrying"].includes(current.status)) return current;
-          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) break;
+          await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, remaining)));
         }
         throw new Error(`Agent run timed out after ${timeoutMs}ms`);
       },
@@ -467,7 +480,8 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
           }));
       },
       async cancel(run: DirectRun, workspace: DirectWorkspace): Promise<boolean> {
-        assertRunWorkspace(run, workspace);
+        const current = await getRun(run, workspace);
+        if (!["running", "retrying"].includes(current.status)) return false;
         const result = await runtimeClient(workspace).session.abort({
           path: { id: run.sessionId },
           query: { directory: workspace.runtime.directory },

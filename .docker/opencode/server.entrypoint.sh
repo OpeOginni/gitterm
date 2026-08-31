@@ -5,6 +5,8 @@ WORKSPACE="/workspace"
 RUNTIME_DIR="/run/gitterm"
 GIT_CREDENTIAL_HELPER="$RUNTIME_DIR/git-credential-helper.sh"
 GIT_TOKEN_FILE="$RUNTIME_DIR/github-token"
+GITTERM_GIT_TOKEN_FILE="$RUNTIME_DIR/git-token"
+GIT_USERNAME_FILE="$RUNTIME_DIR/git-username"
 USER_GITHUB_USERNAME="${USER_GITHUB_USERNAME}"
 GITHUB_APP_TOKEN="${GITHUB_APP_TOKEN}"
 GITHUB_APP_TOKEN_EXPIRY="${GITHUB_APP_TOKEN_EXPIRY}"
@@ -97,14 +99,41 @@ if [ ! -z "$USER_EMAIL" ]; then
     git config --file /root/.gitconfig user.email "$USER_EMAIL"
 fi
 
-if [ ! -z "$GITHUB_APP_TOKEN" ]; then
+if [ "$GITTERM_DIRECT_PROVIDER" = "railway" ] && [ -n "$GITTERM_GIT_TOKEN" ]; then
+    echo "Configuring git authentication..."
+    printf '%s' "$GITTERM_GIT_TOKEN" > "$GITTERM_GIT_TOKEN_FILE"
+    printf '%s' "${GITTERM_GIT_USERNAME:-x-access-token}" > "$GIT_USERNAME_FILE"
+    chmod 600 "$GITTERM_GIT_TOKEN_FILE" "$GIT_USERNAME_FILE"
+
+    # Disable interactive credential helper
+    git config --global credential.helper ''
+
+    # The helper reads a runtime-only token file so the token never enters this script.
+    cat > "$GIT_CREDENTIAL_HELPER" <<'CRED_HELPER'
+#!/bin/sh
+if [ "$1" = "get" ]; then
+    echo "username=$(cat /run/gitterm/git-username 2>/dev/null)"
+    echo "password=$(cat /run/gitterm/git-token 2>/dev/null)"
+fi
+CRED_HELPER
+
+    chmod 700 "$GIT_CREDENTIAL_HELPER"
+    git config --global credential.helper "$GIT_CREDENTIAL_HELPER"
+    export GIT_TERMINAL_PROMPT=0
+
+    echo "✓ Git authentication configured"
+    if [ -n "$GITHUB_APP_TOKEN_EXPIRY" ]; then
+        echo "  Token expires at: $GITHUB_APP_TOKEN_EXPIRY"
+    fi
+    unset GITTERM_GIT_TOKEN GITTERM_GIT_USERNAME
+elif [ ! -z "$GITHUB_APP_TOKEN" ]; then
     echo "Configuring git with GitHub App authentication..."
     printf '%s' "$GITHUB_APP_TOKEN" > "$GIT_TOKEN_FILE"
     chmod 600 "$GIT_TOKEN_FILE"
 
     # Disable interactive credential helper
     git config --global credential.helper ''
-    
+
     # The helper reads a runtime-only token file so the token never enters this script.
     cat > "$GIT_CREDENTIAL_HELPER" <<'CRED_HELPER'
 #!/bin/sh
@@ -115,11 +144,11 @@ if [ "$1" = "get" ]; then
     echo "password=$(cat /run/gitterm/github-token 2>/dev/null)"
 fi
 CRED_HELPER
-    
+
     chmod 700 "$GIT_CREDENTIAL_HELPER"
     git config --global credential.helper "$GIT_CREDENTIAL_HELPER"
     export GIT_TERMINAL_PROMPT=0
-    
+
     echo "✓ Git configured with GitHub App token"
     echo "  Token expires at: $GITHUB_APP_TOKEN_EXPIRY"
 else
@@ -188,6 +217,10 @@ NODE
         rm -f "$RUNTIME_DIR/agent-files.json"
     fi
 
+    if [ "$GITTERM_DIRECT_PROVIDER" = "railway" ] && [ -n "$WORKSPACE_SETUP_COMMAND_BASE64" ]; then
+        GITTERM_WORKSPACE_SETUP_STRICT=1 /usr/local/bin/gitterm-workspace-setup "/workspace/$(cat .repo_name)"
+    fi
+
     touch .initialized
 fi
 
@@ -229,7 +262,7 @@ fi
 
 echo "opencode version: $(opencode --version)"
 
-if [ -n "$WORKSPACE_SETUP_COMMAND_BASE64" ]; then
+if [ -n "$WORKSPACE_SETUP_COMMAND_BASE64" ] && [ "$GITTERM_DIRECT_PROVIDER" != "railway" ]; then
     nohup /usr/local/bin/gitterm-workspace-setup "$REPO_DIR" >/dev/null 2>&1 &
 fi
 

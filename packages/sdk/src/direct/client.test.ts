@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createDirectGittermClient } from "./client";
-import type { DirectProviderAdapter } from "./types";
+import type { DirectProviderAdapter, DirectRun } from "./types";
 
 function fakeProvider() {
   const calls: string[] = [];
@@ -81,6 +81,91 @@ describe("createDirectGittermClient", () => {
     const client = createDirectGittermClient({ provider });
     const workspace = await client.workspaces.create({ lifecycle: "ephemeral" });
     expect(client.workspaces.pause(workspace)).rejects.toThrow("without losing state");
+  });
+
+  test("keeps a run running until an assistant message exists", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path === "/session/status") return Response.json({});
+      if (path === "/session/session-1/message") return Response.json([]);
+      throw new Error(`Unexpected request: ${request.method} ${path}`);
+    }) as typeof fetch;
+
+    try {
+      const { provider } = fakeProvider();
+      const client = createDirectGittermClient({ provider });
+      const workspace = await client.workspaces.create();
+      const run: DirectRun = {
+        id: "run-1",
+        workspaceId: workspace.id,
+        sessionId: "session-1",
+        messageId: "message-1",
+        title: "Run",
+        status: "running",
+        error: null,
+        finalText: null,
+        submittedAt: new Date(Date.now() - 30_000).toISOString(),
+      };
+
+      expect(await client.runs.get(run, workspace)).toMatchObject({
+        status: "running",
+        error: null,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("keeps a completed run terminal when the session is busy with a later prompt", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path === "/session/status") {
+        return Response.json({ "session-1": { type: "busy" } });
+      }
+      if (path === "/session/session-1/message") {
+        return Response.json([
+          {
+            info: {
+              id: "assistant-1",
+              role: "assistant",
+              parentID: "message-1",
+              time: { completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "done", ignored: false }],
+          },
+        ]);
+      }
+      throw new Error(`Unexpected request: ${request.method} ${path}`);
+    }) as typeof fetch;
+
+    try {
+      const { provider } = fakeProvider();
+      const client = createDirectGittermClient({ provider });
+      const workspace = await client.workspaces.create();
+      const run: DirectRun = {
+        id: "run-1",
+        workspaceId: workspace.id,
+        sessionId: "session-1",
+        messageId: "message-1",
+        title: "Run",
+        status: "running",
+        error: null,
+        finalText: null,
+        submittedAt: new Date().toISOString(),
+      };
+
+      expect(await client.runs.get(run, workspace)).toMatchObject({
+        status: "completed",
+        finalText: "done",
+      });
+      expect(await client.runs.cancel(run, workspace)).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   test("runs a headless OAuth flow through the workspace runtime", async () => {

@@ -1,5 +1,10 @@
 import { BoxApi, Configuration, waitUntilReady } from "@asciidev/box-sdk";
-import { shellQuote, waitForDirectRuntime } from "./provisioning.js";
+import {
+  cloneRepositoryScript,
+  setupCommandScript,
+  shellQuote,
+  waitForDirectRuntime,
+} from "./provisioning.js";
 import type { AsciiDirectProviderConfig, DirectProviderAdapter } from "./types.js";
 
 const HOME = "/home/user";
@@ -102,15 +107,7 @@ export function createAsciiDirectProvider(
           ttlSeconds:
             config.timeoutMs === null ? null : Math.ceil((config.timeoutMs ?? 10 * 60_000) / 1000),
           noEnv: true,
-          env: {
-            ...plan.agent.environmentVariables,
-            ...(plan.repository?.authToken
-              ? {
-                  GITHUB_APP_TOKEN: plan.repository.authToken,
-                  GITTERM_GIT_USERNAME: plan.repository.authUsername ?? "x-access-token",
-                }
-              : {}),
-          },
+          env: plan.agent.environmentVariables,
         },
       });
       const handle: AsciiHandle = {
@@ -132,25 +129,12 @@ export function createAsciiDirectProvider(
           await runCommand(handle.boxId, command, undefined, 600);
         }
         if (plan.repository) {
-          if (plan.repository.authToken) {
-            const helper =
-              '!f() { [ "$1" = get ] || exit 0; printf "%s\\n" "username=$GITTERM_GIT_USERNAME" "password=$GITHUB_APP_TOKEN"; }; f';
-            await runCommand(
-              handle.boxId,
-              `git config --global credential.helper ${shellQuote(helper)}`,
-            );
-          }
-          const branch = plan.repository.checkoutRef ?? plan.repository.branch;
           await runCommand(
             handle.boxId,
-            `GIT_TERMINAL_PROMPT=0 git clone ${branch ? `--branch ${shellQuote(branch)}` : ""} ${shellQuote(plan.repository.url)} ${shellQuote(directory)}`,
+            cloneRepositoryScript(plan.repository, directory),
+            "/",
+            600,
           );
-          if (plan.repository.baseCommit) {
-            await runCommand(
-              handle.boxId,
-              `GIT_TERMINAL_PROMPT=0 git -C ${shellQuote(directory)} fetch --depth 1 origin ${shellQuote(plan.repository.baseCommit)} && git -C ${shellQuote(directory)} checkout --detach ${shellQuote(plan.repository.baseCommit)}`,
-            );
-          }
         }
         for (const file of plan.agent.files) {
           const path = file.path.startsWith("~/") ? file.path.slice(2) : file.path;
@@ -159,8 +143,8 @@ export function createAsciiDirectProvider(
             fileWriteRequest: { path, content: file.contentBase64, encoding: "base64" },
           });
         }
-        for (const command of plan.setupCommands) {
-          await runCommand(handle.boxId, command, directory, 600);
+        if (plan.setupCommands.length) {
+          await runCommand(handle.boxId, setupCommandScript(plan.setupCommands), directory, 600);
         }
         await startRuntime(handle);
         const runtime = {

@@ -1,9 +1,10 @@
 # Provider testing
 
-GitTerm's provider test suite has two layers:
+GitTerm's provider test suite has three layers:
 
 - `bun run test` runs fast provider contract and unit tests without real cloud resources.
 - `bun run test:providers` runs the SDK, API, provider, workspace-scoped CLI, agent run, and account CLI against real resources.
+- `bun run test:providers:direct` runs the direct SDK against provider accounts without a GitTerm server.
 
 ## Local smoke tests
 
@@ -56,6 +57,71 @@ export GITTERM_E2E_RUN_TIMEOUT_MS=1800000
 Providers run sequentially to limit cost. Every workspace receives a unique idempotency key and is terminated in a `finally` block after a normal test failure. The summary reports cleanup failures separately so leaked resources are visible.
 
 `--all` is local-only. It includes every implemented provider, including providers that are not available in GitTerm's hosted product. Do not set `CI` when running it locally.
+
+## Direct SDK smoke tests
+
+The direct smoke runner uses the current SDK source and real provider resources, but does not require a GitTerm server, API token, listener, proxy, tunnel, or provider webhook. Run one or more providers from your machine:
+
+```bash
+export GITTERM_E2E_REPO=https://github.com/octocat/Hello-World
+export GITTERM_E2E_MODEL=opencode/big-pickle
+
+bun run test:providers:direct --provider e2b
+bun run test:providers:direct --provider railway,daytona
+bun run test:providers:direct --all
+```
+
+Set credentials only for the selected providers:
+
+```bash
+# E2B
+export E2B_API_KEY=e2b_...
+# Optional. Defaults to standard (gitterm-opencode-server). Use large for gitterm-opencode-server-lg.
+export E2B_SIZE=standard
+
+# Daytona
+export DAYTONA_API_KEY=...
+export DAYTONA_TARGET=us
+# Optional. Defaults to opeoginni/gitterm-opencode-server:latest, pinned to a digest.
+
+# Vercel Sandbox
+export VERCEL_API_TOKEN=...
+export VERCEL_TEAM_ID=...
+export VERCEL_PROJECT_ID=...
+
+# Ascii
+export ASCII_API_KEY=...
+
+# exe.dev
+export EXEDEV_API_TOKEN=...
+# Token cmds must include new, ls, ssh, share, ssh-key, pause, resume, and rm.
+
+# Railway
+export RAILWAY_API_TOKEN=...
+export RAILWAY_PROJECT_ID=...
+export RAILWAY_ENVIRONMENT_ID=...
+export RAILWAY_REGION=...
+```
+
+Optional common settings:
+
+```bash
+export GITTERM_DIRECT_E2E_PROVIDERS=e2b,daytona
+export GITTERM_E2E_BRANCH=main
+export GITTERM_E2E_CHECKOUT_REF=main
+export GITTERM_E2E_BASE_COMMIT=<full-commit-sha>
+export GITTERM_E2E_REPO_USERNAME=x-access-token
+export GITTERM_E2E_REPO_TOKEN=...
+export GITTERM_MODEL_API_KEY=...
+export GITTERM_E2E_TIMEOUT_MS=360000
+export GITTERM_E2E_RUN_TIMEOUT_MS=1800000
+```
+
+Provider image overrides are available through `DAYTONA_IMAGE`, `EXEDEV_IMAGE`, and `RAILWAY_IMAGE`. To test unpublished Railway entrypoint changes, build and push a temporary public image and set `RAILWAY_IMAGE` to that tag.
+
+Each provider test creates a persistent workspace, verifies repository cloning and synchronous setup, round-trips the serialized workspace handle, checks runtime status, runs OpenCode and reads its messages, exercises keep-alive and pause/resume when supported, then terminates and verifies termination. Providers run sequentially to limit cost. Cleanup runs in `finally`, and the summary prints the workspace ID and any cleanup failure so leaked resources can be found.
+
+Managed-only authentication, catalog, account CLI, and workspace-scoped CLI checks are not applicable in direct mode because there is no GitTerm control plane. The repository/setup marker and direct runtime checks replace those stages.
 
 ## Hosted GitHub Actions
 

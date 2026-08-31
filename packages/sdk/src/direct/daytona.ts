@@ -1,10 +1,15 @@
 import { Daytona, Image } from "@daytonaio/sdk";
-import { shellQuote, waitForDirectRuntime } from "./provisioning.js";
+import {
+  pinFloatingDockerImage,
+  resolveDirectImage,
+  setupCommandScript,
+  shellQuote,
+  waitForDirectRuntime,
+} from "./provisioning.js";
 import type { DaytonaDirectProviderConfig, DirectProviderAdapter } from "./types.js";
 
 const WORKSPACE_ROOT = "/workspace";
 const AGENT_SESSION_ID = "gitterm-direct-agent";
-const DEFAULT_IMAGE = "opeoginni/gitterm-opencode-server:latest";
 
 type DaytonaHandle = {
   id: string;
@@ -110,7 +115,9 @@ export function createDaytonaDirectProvider(
       const sandbox = await client().create(
         {
           ...common,
-          image: Image.base(config.image ?? DEFAULT_IMAGE).entrypoint(["sleep", "infinity"]),
+          image: Image.base(
+            await pinFloatingDockerImage(resolveDirectImage(config.image)),
+          ).entrypoint(["sleep", "infinity"]),
           resources: {
             ...(config.cpu != null ? { cpu: config.cpu } : {}),
             ...(config.memory != null ? { memory: config.memory } : {}),
@@ -152,7 +159,7 @@ export function createDaytonaDirectProvider(
           );
         }
         if (plan.setupCommands.length) {
-          await execute(sandbox, plan.setupCommands.join(" && "), directory);
+          await execute(sandbox, setupCommandScript(plan.setupCommands), directory);
         }
         await startAgent(sandbox, handle);
         const runtime = await runtimeFor(sandbox, handle, input.password);
@@ -193,15 +200,14 @@ export function createDaytonaDirectProvider(
     async pause(workspace) {
       const { sandbox } = await getSandbox(workspace.externalId);
       await sandbox.refreshData();
-      if ((sandbox.state as string | undefined) !== "paused") await sandbox.pause();
+      if ((sandbox.state as string | undefined) !== "stopped") await sandbox.stop();
     },
     async resume(workspace) {
       const { handle, sandbox } = await getSandbox(workspace.externalId);
       await sandbox.refreshData();
       const previousState = sandbox.state as string | undefined;
       if (previousState !== "started") await sandbox.start();
-      // Native pause preserves processes; stopped or archived sandboxes need a fresh server process.
-      if (previousState !== "started" && previousState !== "paused") {
+      if (previousState !== "started") {
         await startAgent(sandbox, handle);
       }
       const runtime = await runtimeFor(sandbox, handle, workspace.runtime.password);

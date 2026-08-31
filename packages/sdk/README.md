@@ -10,14 +10,14 @@ Direct mode runs an agent using your cloud-provider account without a Gitterm se
 
 All built-in compute providers use the same provisioning plan and workspace/run API:
 
-| Provider | Direct prerequisite                            | Persistent pause | Keep-alive |
-| -------- | ---------------------------------------------- | ---------------- | ---------- |
-| E2B      | OpenCode-compatible template                   | Yes              | Yes        |
-| Daytona  | Compatible OCI image (a default is provided)   | Yes              | Yes        |
-| Vercel   | Vercel Sandbox project                         | Yes              | Yes        |
-| Ascii    | Box API key                                    | Yes              | Yes        |
-| exe.dev  | API token and a Node-capable image/default VM  | Yes              | No         |
-| Railway  | Project/environment and public service domains | With a volume    | No         |
+| Provider | Direct prerequisite                                                                     | Persistent pause | Keep-alive |
+| -------- | --------------------------------------------------------------------------------------- | ---------------- | ---------- |
+| E2B      | OpenCode-compatible template                                                            | Yes              | Yes        |
+| Daytona  | Public Gitterm OpenCode server image by default                                         | Yes              | Yes        |
+| Vercel   | Vercel Sandbox project                                                                  | Yes              | Yes        |
+| Ascii    | Box API key                                                                             | Yes              | Yes        |
+| exe.dev  | Token with `new,ls,ssh,share,ssh-key,pause,resume,rm`; public OpenCode image by default | Yes              | No         |
+| Railway  | Project/environment and public service domains                                          | With a volume    | No         |
 
 AWS remains available through `createGittermClient()` and the Gitterm control plane; it is intentionally not exposed in direct mode.
 
@@ -30,7 +30,7 @@ const direct = createDirectGittermClient({
   provider: {
     type: "e2b",
     apiKey: process.env.E2B_API_KEY!,
-    templateId: process.env.E2B_TEMPLATE_ID!,
+    size: "standard",
   },
 });
 

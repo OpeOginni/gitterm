@@ -1,5 +1,7 @@
 # Gitterm direct-provider Slack agent
 
+This is a **demo**. Anyone in a channel the bot can read can mention it and run an agent with `bash` and `edit` allowed against the configured repository and compute account. Do not install it in a shared or public Slack workspace without adding your own authorization.
+
 This Socket Mode Slack bot runs OpenCode agents on the team's own compute account. It supports E2B, Daytona, Vercel Sandbox, Ascii Box, exe.dev, and Railway without connecting to a hosted or self-hosted Gitterm server. Gitterm billing, proxying, team policy, durable run history, and managed cleanup are not involved.
 
 ## Configure Slack

@@ -3,7 +3,7 @@ import { createDirectGittermClient } from "./client";
 import type { DirectProviderConfig } from "./types";
 
 const configs: DirectProviderConfig[] = [
-  { type: "e2b", apiKey: "key", templateId: "template" },
+  { type: "e2b", apiKey: "key" },
   { type: "daytona", apiKey: "key", target: "us" },
   { type: "vercel", apiToken: "key", teamId: "team", projectId: "project" },
   { type: "ascii", apiKey: "key" },

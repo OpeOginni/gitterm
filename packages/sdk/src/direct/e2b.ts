@@ -1,12 +1,21 @@
 import { Sandbox } from "e2b";
-import { shellQuote, waitForDirectRuntime } from "./provisioning.js";
+import {
+  DIRECT_E2B_TEMPLATES,
+  setupCommandScript,
+  shellQuote,
+  waitForDirectRuntime,
+} from "./provisioning.js";
 import type { DirectProviderAdapter, E2BDirectProviderConfig } from "./types.js";
 
 const WORKSPACE_ROOT = "/home/user/workspace";
 
 export function createE2BDirectProvider(config: E2BDirectProviderConfig): DirectProviderAdapter {
   if (!config.apiKey.trim()) throw new Error("E2B apiKey is required");
-  if (!config.templateId.trim()) throw new Error("E2B templateId is required");
+  const size = config.size ?? "standard";
+  if (size !== "standard" && size !== "large") {
+    throw new Error("E2B size must be standard or large");
+  }
+  const templateId = config.templateId?.trim() || DIRECT_E2B_TEMPLATES[size];
 
   const connect = (externalId: string) => Sandbox.connect(externalId, { apiKey: config.apiKey });
 
@@ -21,7 +30,7 @@ export function createE2BDirectProvider(config: E2BDirectProviderConfig): Direct
     },
     async create(input) {
       const plan = input.provisioning;
-      const sandbox = await Sandbox.create(config.templateId, {
+      const sandbox = await Sandbox.create(templateId, {
         apiKey: config.apiKey,
         timeoutMs: config.timeoutMs ?? 10 * 60_000,
         lifecycle: { onTimeout: input.lifecycle === "persistent" ? "pause" : "kill" },
@@ -57,7 +66,7 @@ export function createE2BDirectProvider(config: E2BDirectProviderConfig): Direct
           );
         }
         if (plan.setupCommands.length) {
-          await sandbox.commands.run(plan.setupCommands.join(" && "), { cwd: directory });
+          await sandbox.commands.run(setupCommandScript(plan.setupCommands), { cwd: directory });
         }
         await sandbox.commands.run(plan.agent.command, {
           cwd: directory,

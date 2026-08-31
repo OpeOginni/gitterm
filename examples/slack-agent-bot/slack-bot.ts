@@ -6,7 +6,7 @@ import {
   type DirectWorkspace,
   type DirectWorkspaceLifecycle,
 } from "@gitterm/sdk/direct";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 type ContextMode = "thread" | "session" | "both";
@@ -58,7 +58,7 @@ function providerConfig(): DirectProviderConfig {
         type: "daytona",
         apiKey: required("DAYTONA_API_KEY"),
         target: choice("DAYTONA_TARGET", ["us", "eu"], "us"),
-        image: process.env.DAYTONA_IMAGE?.trim(),
+        image: process.env.DAYTONA_IMAGE?.trim() || undefined,
       };
     case "vercel":
       return {
@@ -66,6 +66,7 @@ function providerConfig(): DirectProviderConfig {
         apiToken: required("VERCEL_API_TOKEN"),
         teamId: required("VERCEL_TEAM_ID"),
         projectId: required("VERCEL_PROJECT_ID"),
+        image: process.env.VERCEL_IMAGE?.trim() || undefined,
         runtime: "node24",
         timeoutMs: Math.max(runTimeoutMs + 60_000, keepAliveMs),
       };
@@ -75,7 +76,7 @@ function providerConfig(): DirectProviderConfig {
       return {
         type: "exedev",
         apiToken: required("EXEDEV_API_TOKEN"),
-        image: process.env.EXEDEV_IMAGE?.trim(),
+        image: process.env.EXEDEV_IMAGE?.trim() || undefined,
       };
     case "railway":
       return {
@@ -84,6 +85,7 @@ function providerConfig(): DirectProviderConfig {
         projectId: required("RAILWAY_PROJECT_ID"),
         environmentId: required("RAILWAY_ENVIRONMENT_ID"),
         region: process.env.RAILWAY_REGION?.trim(),
+        image: process.env.RAILWAY_IMAGE?.trim() || undefined,
       };
     default:
       throw new Error(`Unsupported GITTERM_PROVIDER: ${provider}`);
@@ -126,7 +128,9 @@ function saveState() {
     .then(async () => {
       await mkdir(dirname(stateFile), { recursive: true });
       const temporary = `${stateFile}.tmp`;
+      await unlink(temporary).catch(() => undefined);
       await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+      await chmod(temporary, 0o600);
       await rename(temporary, stateFile);
     });
   return saveQueue;
@@ -285,10 +289,12 @@ app.event("app_mention", async ({ event, client, context, logger }) => {
     } finally {
       if (threadState) {
         if (lifecycle === "ephemeral") {
-          await gitterm.workspaces
-            .terminate(threadState.workspace)
-            .catch((error) => logger.error(error));
-          activeEphemeral.delete(key);
+          try {
+            await gitterm.workspaces.terminate(threadState.workspace);
+            activeEphemeral.delete(key);
+          } catch (error) {
+            logger.error(error);
+          }
         } else if (lifecycle === "thread") {
           threadState.workspace = await gitterm.workspaces
             .pause(threadState.workspace)
@@ -309,7 +315,9 @@ app.event("app_mention", async ({ event, client, context, logger }) => {
 });
 
 await app.start();
-console.log(`Gitterm Slack agent is running (${lifecycle} lifecycle, ${contextMode} context)`);
+console.log(
+  `Gitterm Slack agent demo is running (${lifecycle} lifecycle, ${contextMode} context). Anyone in this channel can mention the bot and run an agent.`,
+);
 
 let stopping = false;
 async function shutdown() {

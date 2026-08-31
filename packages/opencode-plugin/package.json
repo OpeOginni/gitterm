@@ -35,12 +35,12 @@
   },
   "devDependencies": {
     "@gitterm/sdk": "workspace:*",
-    "@opencode-ai/plugin": "^1.18.19",
+    "@opencode-ai/plugin": "^1.18.25",
     "@types/bun": "^1.2.6",
     "typescript": "^5.8.2"
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": "^1.18.19"
+    "@opencode-ai/plugin": "^1.18.25"
   },
   "engines": {
     "bun": ">=1.2.0"

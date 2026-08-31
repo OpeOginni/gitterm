@@ -28,12 +28,12 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@asciidev/box-sdk": "^0.0.26",
-    "@daytonaio/sdk": "^0.196.0",
-    "@opencode-ai/sdk": "^1.18.19",
+    "@asciidev/box-sdk": "^0.0.34",
+    "@daytonaio/sdk": "^0.207.0",
+    "@opencode-ai/sdk": "^1.18.25",
     "@trpc/client": "^11.8.1",
-    "@vercel/sandbox": "^2.9.2",
-    "e2b": "^2.32.0"
+    "@vercel/sandbox": "^3.2.1",
+    "e2b": "^2.46.1"
   },
   "devDependencies": {
     "@gitterm/api": "workspace:*",

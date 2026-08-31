@@ -1,4 +1,10 @@
-import { shellQuote, waitForDirectRuntime } from "./provisioning.js";
+import {
+  cloneRepositoryScript,
+  resolveDirectImage,
+  setupCommandScript,
+  shellQuote,
+  waitForDirectRuntime,
+} from "./provisioning.js";
 import type {
   DirectProviderAdapter,
   DirectWorkspaceStatus,
@@ -59,7 +65,13 @@ export function createExeDevDirectProvider(
       body: command,
     });
     const text = await response.text();
-    if (!response.ok) throw new Error(`exe.dev command failed (${response.status}): ${text}`);
+    if (!response.ok) {
+      const permissionHint =
+        response.status === 401 || response.status === 403 || /permission|forbidden/i.test(text)
+          ? " exe.dev tokens need cmds covering new, ls, ssh, share, ssh-key, pause, resume, and rm."
+          : "";
+      throw new Error(`exe.dev command failed (${response.status}): ${text}.${permissionHint}`);
+    }
     try {
       return JSON.parse(text) as unknown;
     } catch {
@@ -128,24 +140,15 @@ export function createExeDevDirectProvider(
         repoDir: `${HOME}/${plan.repository?.name ?? "workspace"}`,
         serve: { command: plan.agent.command, port: plan.agent.port },
       };
-      const environment = {
-        ...plan.agent.environmentVariables,
-        ...(plan.repository?.authToken
-          ? {
-              GITHUB_APP_TOKEN: plan.repository.authToken,
-              GITTERM_GIT_USERNAME: plan.repository.authUsername ?? "x-access-token",
-            }
-          : {}),
-      };
       const createArgs = [
         `new --name=${vmName}`,
         "--no-email",
-        `--tag=gitterm-${input.id}`,
-        config.image ? `--image=${shellQuote(config.image)}` : "",
+        `--tag=${shellQuote(`gitterm-${input.id}`)}`,
+        `--image=${shellQuote(resolveDirectImage(config.image))}`,
         config.cpu ? `--cpu=${config.cpu}` : "",
         config.memory ? `--memory=${shellQuote(config.memory)}` : "",
         config.disk ? `--disk=${shellQuote(config.disk)}` : "",
-        ...Object.entries(environment).map(
+        ...Object.entries(plan.agent.environmentVariables).map(
           ([key, value]) => `--env=${shellQuote(`${key}=${value}`)}`,
         ),
       ]
@@ -156,31 +159,11 @@ export function createExeDevDirectProvider(
       try {
         await waitUntilRunning(vmName);
         await runVmCommand(handle, `mkdir -p ${shellQuote(handle.repoDir)}`);
-        for (const command of config.runtimeSetupCommands ?? [
-          "npm install -g opencode-ai --no-audit --fund=false",
-        ]) {
+        for (const command of config.runtimeSetupCommands ?? []) {
           await runVmCommand(handle, command);
         }
         if (plan.repository) {
-          if (plan.repository.authToken) {
-            const helper =
-              '!f() { [ "$1" = get ] || exit 0; printf "%s\\n" "username=$GITTERM_GIT_USERNAME" "password=$GITHUB_APP_TOKEN"; }; f';
-            await runVmCommand(
-              handle,
-              `git config --global credential.helper ${shellQuote(helper)}`,
-            );
-          }
-          const branch = plan.repository.checkoutRef ?? plan.repository.branch;
-          await runVmCommand(
-            handle,
-            `GIT_TERMINAL_PROMPT=0 git clone ${branch ? `--branch ${shellQuote(branch)}` : ""} ${shellQuote(plan.repository.url)} ${shellQuote(handle.repoDir)}`,
-          );
-          if (plan.repository.baseCommit) {
-            await runVmCommand(
-              handle,
-              `GIT_TERMINAL_PROMPT=0 git -C ${shellQuote(handle.repoDir)} fetch --depth 1 origin ${shellQuote(plan.repository.baseCommit)} && git -C ${shellQuote(handle.repoDir)} checkout --detach ${shellQuote(plan.repository.baseCommit)}`,
-            );
-          }
+          await runVmCommand(handle, cloneRepositoryScript(plan.repository, handle.repoDir));
         }
         for (const file of plan.agent.files) {
           const path = file.path.startsWith("~/") ? `${HOME}/${file.path.slice(2)}` : file.path;
@@ -189,8 +172,11 @@ export function createExeDevDirectProvider(
             `mkdir -p ${shellQuote(path.slice(0, path.lastIndexOf("/")))} && printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${shellQuote(path)}`,
           );
         }
-        for (const command of plan.setupCommands) {
-          await runVmCommand(handle, `cd ${shellQuote(handle.repoDir)} && ${command}`);
+        if (plan.setupCommands.length) {
+          await runVmCommand(
+            handle,
+            `cd ${shellQuote(handle.repoDir)} && ${setupCommandScript(plan.setupCommands)}`,
+          );
         }
         await startRuntime(handle);
         await execute(`share port ${vmName} ${handle.serve.port}`);

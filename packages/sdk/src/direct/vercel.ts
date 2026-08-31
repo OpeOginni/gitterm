@@ -1,5 +1,5 @@
 import { Sandbox } from "@vercel/sandbox";
-import { shellQuote, waitForDirectRuntime } from "./provisioning.js";
+import { setupCommandScript, shellQuote, waitForDirectRuntime } from "./provisioning.js";
 import type { DirectProviderAdapter, VercelDirectProviderConfig } from "./types.js";
 
 const WORKSPACE_ROOT = "/vercel/sandbox";
@@ -160,7 +160,7 @@ export function createVercelDirectProvider(
           ]);
         }
         if (plan.setupCommands.length) {
-          await run(sandbox, plan.setupCommands.join(" && "), handle.directory);
+          await run(sandbox, setupCommandScript(plan.setupCommands), handle.directory);
         }
         await startAgent(sandbox, handle);
         const runtime = {

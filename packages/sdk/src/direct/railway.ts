@@ -1,4 +1,8 @@
-import { containerEnvironment, waitForDirectRuntime } from "./provisioning.js";
+import {
+  railwayContainerEnvironment,
+  resolveDirectImage,
+  waitForDirectRuntime,
+} from "./provisioning.js";
 import type {
   DirectProviderAdapter,
   DirectWorkspaceStatus,
@@ -6,7 +10,6 @@ import type {
 } from "./types.js";
 
 const DEFAULT_API_URL = "https://backboard.railway.app/graphql/v2";
-const OPENCODE_SERVER_IMAGE = "opeoginni/gitterm-opencode-server:latest";
 const OPENCODE_SERVER_PORT = 7681;
 const WORKSPACE_ROOT = "/workspace";
 const DEPLOYMENT_TIMEOUT_MS = 5 * 60_000;
@@ -91,6 +94,11 @@ const VOLUME_DELETE = `
 `;
 const DOMAIN_DELETE = `
   mutation DirectDomainDelete($id: String!) { serviceDomainDelete(id: $id) }
+`;
+const VARIABLE_UPSERT = `
+  mutation DirectVariableUpsert($input: VariableUpsertInput!) {
+    variableUpsert(input: $input)
+  }
 `;
 
 function parseHandle(externalId: string): RailwayHandle {
@@ -249,7 +257,7 @@ export function createRailwayDirectProvider(
             projectId: config.projectId,
             environmentId: config.environmentId,
             name: input.id,
-            variables: containerEnvironment(plan),
+            variables: railwayContainerEnvironment(plan),
           },
         });
         handle.serviceId = created.serviceCreate.id;
@@ -258,7 +266,7 @@ export function createRailwayDirectProvider(
           environmentId: config.environmentId,
           serviceId: handle.serviceId,
           input: {
-            source: { image: config.image?.trim() || OPENCODE_SERVER_IMAGE },
+            source: { image: resolveDirectImage(config.image) },
             ...(region ? { multiRegionConfig: { [region]: { numReplicas: 1 } } } : {}),
           },
         });
@@ -304,6 +312,19 @@ export function createRailwayDirectProvider(
         };
         await waitForDirectRuntime(runtime);
 
+        if (plan.repository?.authToken && handle.serviceId) {
+          await request(VARIABLE_UPSERT, {
+            input: {
+              environmentId: config.environmentId,
+              projectId: config.projectId,
+              serviceId: handle.serviceId,
+              name: "GITTERM_GIT_TOKEN",
+              value: "",
+              skipDeploys: true,
+            },
+          });
+        }
+
         if (!handle.serviceId || !handle.domainId || !handle.domain || !handle.deploymentId) {
           throw new Error("Railway provisioning completed without all resource identifiers");
         }
@@ -316,7 +337,18 @@ export function createRailwayDirectProvider(
         };
         return { externalId: JSON.stringify(completedHandle), runtime };
       } catch (error) {
-        await removeResources(handle).catch(() => undefined);
+        const identifiers = Object.entries(handle)
+          .filter(([, value]) => value)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(", ");
+        try {
+          await removeResources(handle);
+        } catch (cleanupError) {
+          throw new Error(
+            `${error instanceof Error ? error.message : String(error)}; cleanup failed${identifiers ? ` (${identifiers})` : ""}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+            { cause: cleanupError },
+          );
+        }
         throw error;
       }
     },
