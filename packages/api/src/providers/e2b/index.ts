@@ -186,6 +186,13 @@ export class E2BProvider implements ComputeProvider {
     }
 
     const cloneBranch = spec.repo.checkoutRef || spec.repo.branch;
+    if (spec.repo.authToken) {
+      await this.runCommand(
+        sandbox,
+        `git config --global credential.helper '!f() { [ "$1" = get ] || exit 0; printf "%s\\n" "protocol=https" "host=github.com" "username=x-access-token" "password=$GITHUB_APP_TOKEN"; }; f'`,
+        "configure git auth",
+      );
+    }
     await sandbox.git
       .clone(this.getRepositoryUrl(spec.repo.url), {
         path: repoDir,
@@ -202,7 +209,7 @@ export class E2BProvider implements ComputeProvider {
     if (spec.repo.baseCommit) {
       await this.runCommand(
         sandbox,
-        `git -C ${repoDir} fetch --depth 1 origin ${spec.repo.baseCommit} && git -C ${repoDir} cat-file -e ${spec.repo.baseCommit}^{commit} && git -C ${repoDir} checkout --detach ${spec.repo.baseCommit} && test "$(git -C ${repoDir} rev-parse HEAD)" = "${spec.repo.baseCommit}"`,
+        `GIT_TERMINAL_PROMPT=0 git -C ${repoDir} fetch --depth 1 origin ${spec.repo.baseCommit} && git -C ${repoDir} cat-file -e ${spec.repo.baseCommit}^{commit} && git -C ${repoDir} checkout --detach ${spec.repo.baseCommit} && test "$(git -C ${repoDir} rev-parse HEAD)" = "${spec.repo.baseCommit}"`,
         "checkout base commit",
       );
     }
