@@ -48,6 +48,7 @@ import {
 import type { E2BConfig } from "../../providers/e2b";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { ANON_WORKSPACE_TTL_SECONDS } from "../../service/anon/anon-lifetime";
+import { isAnonEmail } from "../../service/anon/anon-user";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
 
 /**
@@ -130,6 +131,7 @@ export const internalRouter = router({
         domain: workspace.domain,
         lastActiveAt: workspace.lastActiveAt,
         plan: user.plan,
+        email: user.email,
       })
       .from(workspace)
       .leftJoin(user, eq(workspace.userId, user.id))
@@ -148,9 +150,12 @@ export const internalRouter = router({
       thresholdFor,
     );
 
-    return idleWorkspaces.map(
-      ({ lastActiveAt: _lastActiveAt, plan: _plan, ...idleWorkspace }) => idleWorkspace,
-    );
+    return idleWorkspaces
+      .filter((workspace) => !isAnonEmail(workspace.email))
+      .map(
+        ({ lastActiveAt: _lastActiveAt, plan: _plan, email: _email, ...idleWorkspace }) =>
+          idleWorkspace,
+      );
   }),
 
   getQuotaExceededWorkspaces: internalProcedure.query(async () => {
@@ -168,6 +173,7 @@ export const internalRouter = router({
         domain: workspace.domain,
         minutesUsed: dailyUsage.minutesUsed,
         plan: user.plan,
+        email: user.email,
       })
       .from(workspace)
       .leftJoin(user, eq(workspace.userId, user.id))
@@ -192,6 +198,7 @@ export const internalRouter = router({
     // If no usage record exists (null), they haven't exceeded (0 minutes used).
     const exceededChecks = await Promise.all(
       workspacesWithUsage.map(async (ws) => {
+        if (isAnonEmail(ws.email)) return null;
         const quota = await quotaForPlan((ws.plan ?? "free") as UserPlan);
         if (!Number.isFinite(quota)) return null;
         return (ws.minutesUsed ?? 0) >= quota ? ws : null;

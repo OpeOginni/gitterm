@@ -288,7 +288,7 @@ export const anonRouter = router({
         const workspaceAuthToken = workspaceJWT.generateToken(
           workspaceId,
           anonUser.id,
-          ["workspace:read", "port:*"],
+          ["workspace:read"],
           "workspace",
         );
         const workspaceAgentAuthToken = workspaceJWT.generateToken(
