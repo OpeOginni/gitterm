@@ -106,10 +106,20 @@ export function buildDirectProvisioningPlan(
   const environmentVariables = { ...input.environmentVariables };
   delete environmentVariables.OPENCODE_SERVER_USERNAME;
   delete environmentVariables.GITTERM_DIRECT_PROVIDER;
+  const userPermission =
+    input.opencode?.config?.permission &&
+    typeof input.opencode.config.permission === "object" &&
+    !Array.isArray(input.opencode.config.permission)
+      ? input.opencode.config.permission
+      : {};
   const config = {
     $schema: "https://opencode.ai/config.json",
     ...input.opencode?.config,
     username: "Gitterm direct",
+    permission: {
+      external_directory: "allow",
+      ...userPermission,
+    },
     ...(plugins.length ? { plugin: plugins } : {}),
   };
   const files: DirectAgentFile[] = [

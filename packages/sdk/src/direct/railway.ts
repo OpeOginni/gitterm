@@ -78,6 +78,7 @@ const SERVICE_DEPLOY = `
 `;
 const LATEST_DEPLOYMENT = `
   query DirectLatestDeployment($environmentId: String!, $serviceId: String!) {
+    service(id: $serviceId) { id deletedAt }
     serviceInstance(environmentId: $environmentId, serviceId: $serviceId) {
       latestDeployment { id status }
     }
@@ -184,12 +185,44 @@ export function createRailwayDirectProvider(
     return result.data;
   };
 
-  const latestDeployment = async (serviceId: string): Promise<LatestDeployment | undefined> => {
-    const result = await request<{
-      serviceInstance?: { latestDeployment?: LatestDeployment | null } | null;
-    }>(LATEST_DEPLOYMENT, { environmentId: config.environmentId, serviceId });
-    return result.serviceInstance?.latestDeployment ?? undefined;
+  type ServiceSnapshot = {
+    service?: { id: string; deletedAt?: string | null } | null;
+    serviceInstance?: { latestDeployment?: LatestDeployment | null } | null;
   };
+
+  const missingService = (error: unknown) =>
+    error instanceof Error && /not found|does not exist|deleted|no service/i.test(error.message);
+
+  const serviceSnapshot = async (serviceId: string): Promise<ServiceSnapshot> => {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiToken}`,
+      },
+      body: JSON.stringify({
+        query: LATEST_DEPLOYMENT,
+        variables: { environmentId: config.environmentId, serviceId },
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Railway API request failed (${response.status} ${response.statusText})`);
+    }
+    const result = (await response.json()) as {
+      data?: ServiceSnapshot | null;
+      errors?: Array<{ message: string }>;
+    };
+    if (result.data) return result.data;
+    if (result.errors?.length) {
+      throw new Error(
+        `Railway GraphQL error: ${result.errors.map((error) => error.message).join(", ")}`,
+      );
+    }
+    throw new Error("Railway GraphQL response did not include data");
+  };
+
+  const latestDeployment = async (serviceId: string): Promise<LatestDeployment | undefined> =>
+    (await serviceSnapshot(serviceId)).serviceInstance?.latestDeployment ?? undefined;
 
   const waitForDeployment = async (
     serviceId: string,
@@ -355,12 +388,13 @@ export function createRailwayDirectProvider(
     async status(workspace) {
       const handle = parseHandle(workspace.externalId);
       try {
-        const deployment = await latestDeployment(handle.serviceId);
-        return deployment ? workspaceStatus(deployment.status) : "terminated";
+        const snapshot = await serviceSnapshot(handle.serviceId);
+        if (!snapshot.service || snapshot.service.deletedAt) return "terminated";
+        const deployment = snapshot.serviceInstance?.latestDeployment;
+        if (!deployment) return "paused";
+        return workspaceStatus(deployment.status);
       } catch (error) {
-        if (error instanceof Error && /not found|does not exist/i.test(error.message)) {
-          return "terminated";
-        }
+        if (missingService(error)) return "terminated";
         throw error;
       }
     },

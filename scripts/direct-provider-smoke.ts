@@ -284,7 +284,9 @@ async function runProvider(
             'printf "%s\n" "$GITTERM_DIRECT_E2E_MARKER" > .gitterm-direct-smoke',
           ].join("\n"),
         ],
-        opencode: { config: { permission: { read: "allow", bash: "allow" } } },
+        opencode: {
+          config: { permission: { read: "allow", bash: "allow", external_directory: "allow" } },
+        },
       }),
     );
 
