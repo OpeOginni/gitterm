@@ -11,18 +11,29 @@
       "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./direct": {
+      "types": "./dist/direct/index.d.ts",
+      "bun": "./dist/direct/index.js",
+      "import": "./dist/direct/index.js",
+      "default": "./dist/direct/index.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @trpc/client && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts --outdir dist --target node --format esm --external @trpc/client --external @opencode-ai/sdk --external @opencode-ai/sdk/v2 --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@trpc/client": "^11.8.1"
+    "@asciidev/box-sdk": "^0.0.34",
+    "@daytonaio/sdk": "^0.207.0",
+    "@opencode-ai/sdk": "^1.18.25",
+    "@trpc/client": "^11.8.1",
+    "@vercel/sandbox": "^3.2.1",
+    "e2b": "^2.46.1"
   },
   "devDependencies": {
     "@gitterm/api": "workspace:*",
@@ -31,6 +42,6 @@
     "typescript": "^5.8.2"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.18.1"
   }
 }

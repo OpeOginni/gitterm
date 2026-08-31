@@ -4,7 +4,8 @@
   "workspaces": {
     "packages": [
       "apps/*",
-      "packages/*"
+      "packages/*",
+      "examples/slack-agent-bot"
     ],
     "catalog": {
       "hono": "^4.12.25",
@@ -26,6 +27,7 @@
     "test": "bun test packages/*/src apps/*/src benchmarks",
     "test:providers": "bun run scripts/provider-smoke.ts",
     "test:providers:hosted": "bun run test:providers --hosted",
+    "test:providers:direct": "bun run scripts/direct-provider-smoke.ts",
     "benchmark:providers": "bun run benchmarks/providers/run.ts",
     "benchmark:providers:hosted": "bun run benchmark:providers --hosted",
     "lint": "oxlint",

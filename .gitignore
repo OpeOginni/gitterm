@@ -11,6 +11,8 @@ build
 # Environment variables
 .env
 .env*.local
+.gitterm-slack-state.json
+.gitterm-slack-state.json.tmp
 
 # IDEs and editors
 .vscode/*

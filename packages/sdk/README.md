@@ -4,6 +4,115 @@ TypeScript SDK for the [GitTerm](https://gitterm.dev) API. Used by the `gitterm`
 the OpenCode plugin, and any integration that needs to manage GitTerm workspaces with
 a user API token.
 
+## Direct provider mode
+
+Direct mode runs an agent using your cloud-provider account without a Gitterm server. It intentionally omits managed billing, proxying, policy, durable run history, and automatic cleanup; your application owns workspace state and lifecycle.
+
+All built-in compute providers use the same provisioning plan and workspace/run API:
+
+| Provider | Direct prerequisite                                                                     | Persistent pause | Keep-alive |
+| -------- | --------------------------------------------------------------------------------------- | ---------------- | ---------- |
+| E2B      | OpenCode-compatible template                                                            | Yes              | Yes        |
+| Daytona  | Public Gitterm OpenCode server image by default                                         | Yes              | Yes        |
+| Vercel   | Vercel Sandbox project                                                                  | Yes              | Yes        |
+| Ascii    | Box API key                                                                             | Yes              | Yes        |
+| exe.dev  | Token with `new,ls,ssh,share,ssh-key,pause,resume,rm`; public OpenCode image by default | Yes              | No         |
+| Railway  | Project/environment and public service domains                                          | With a volume    | No         |
+
+AWS remains available through `createGittermClient()` and the Gitterm control plane; it is intentionally not exposed in direct mode.
+
+Cloudflare remains available through the Gitterm control plane. Direct Cloudflare support is deferred until the OpenCode v2 Workerd runtime is stable.
+
+```ts
+import { createDirectGittermClient } from "@gitterm/sdk/direct";
+
+const direct = createDirectGittermClient({
+  provider: {
+    type: "e2b",
+    apiKey: process.env.E2B_API_KEY!,
+    size: "standard",
+  },
+});
+
+let workspace = await direct.workspaces.create({
+  repo: "https://github.com/acme/project",
+  lifecycle: "ephemeral",
+  modelCredentials: [{ providerName: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY! }],
+});
+
+try {
+  const run = await direct.runs.create({ workspace, prompt: "Review the open pull request" });
+  const completed = await direct.runs.wait(run, workspace);
+  console.log(completed.finalText);
+} finally {
+  workspace = await direct.workspaces.terminate(workspace);
+}
+```
+
+`DirectWorkspace` is JSON-serializable. Persist it together with the returned `sessionId` to resume provider lifecycle and OpenCode conversation context after an application restart. The serialized workspace contains the OpenCode password and may contain provider routing tokens, so encrypt it as credential material. Custom providers can implement `DirectProviderAdapter`; use `client.provider.capabilities` rather than hard-coding lifecycle assumptions.
+
+Every adapter receives the same normalized plan: repository/ref and optional Git credentials, agent files, model credentials, environment, setup commands, serve command, and port. Provider-specific configuration only describes how to allocate and expose compute.
+
+### Provider authentication
+
+Direct workspaces can start OpenCode provider authentication without shell access. Discover the provider's methods and select a headless or device-code OAuth method when OpenCode is running remotely:
+
+```ts
+const openai = await direct.auth.get(workspace, "openai");
+const method = openai.methods.find(
+  (item) => item.type === "oauth" && item.id === "chatgpt-headless",
+);
+if (!method || method.type !== "oauth") throw new Error("OpenAI device OAuth is unavailable");
+
+const attempt = await direct.auth.connectOAuth({
+  workspace,
+  integrationId: "openai",
+  methodId: method.id,
+  label: "Slack bot",
+});
+
+// Present these through your application UI.
+console.log(attempt.url, attempt.instructions);
+
+if (attempt.mode === "auto") {
+  await direct.auth.wait(attempt, workspace);
+} else {
+  await direct.auth.complete(attempt, workspace, await getCodeFromUser());
+}
+```
+
+OAuth started this way is stored and refreshed by OpenCode inside the workspace. Reusing a persistent workspace avoids repeated authentication; terminating an ephemeral workspace also destroys its credential store. OpenCode does not export OAuth tokens from this flow.
+
+Applications that own OAuth separately can keep the token bundle in encrypted storage and inject it into every new workspace instead:
+
+```ts
+const credential = await credentialStore.get(slackInstallationId);
+const workspace = await direct.workspaces.create({
+  lifecycle: "ephemeral",
+  modelCredentials: [
+    {
+      type: "oauth",
+      providerName: "openai",
+      refreshToken: credential.refreshToken,
+      accessToken: credential.accessToken,
+      expiresAt: credential.expiresAt,
+      accountId: credential.accountId,
+    },
+  ],
+});
+
+// Credentials can also be added or rotated on an existing runtime.
+await direct.auth.setCredential(workspace, {
+  type: "oauth",
+  providerName: "openai",
+  refreshToken: credential.refreshToken,
+  accessToken: credential.accessToken,
+  expiresAt: credential.expiresAt,
+});
+```
+
+In this mode the application owns encryption, tenant scoping, refresh, and persistence. OpenCode may refresh its workspace-local copy; the direct SDK does not copy rotated tokens back into application storage. Use the Gitterm control plane when those credential-management responsibilities should be managed centrally.
+
 ## Install
 
 ```sh
