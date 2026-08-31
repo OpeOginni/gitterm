@@ -114,7 +114,7 @@ export function buildAnonCookieHeader(params: { token: string; ttlSeconds: numbe
   const attrs = [
     `${ANON_COOKIE_NAME}=${params.token}`,
     `Max-Age=${params.ttlSeconds}`,
-    "Path=/api",
+    "Path=/trpc",
     "HttpOnly",
     "SameSite=Lax",
   ];
