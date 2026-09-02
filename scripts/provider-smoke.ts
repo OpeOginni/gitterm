@@ -15,7 +15,12 @@ const PROVIDERS = [
   "exedev",
 ] as const satisfies readonly ProviderKey[];
 
-const HOSTED_PROVIDERS = ["railway", "e2b", "daytona"] as const satisfies readonly ProviderKey[];
+const HOSTED_PROVIDERS = [
+  "railway",
+  "e2b",
+  "daytona",
+  "vercel",
+] as const satisfies readonly ProviderKey[];
 const MAX_ENSURE_RUNNING_TIMEOUT_MS = 360_000;
 
 type StepResult = {

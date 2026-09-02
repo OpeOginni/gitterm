@@ -21,7 +21,12 @@ const ALL_PROVIDERS = [
   "ascii",
   "exedev",
 ] as const satisfies readonly ProviderKey[];
-const HOSTED_PROVIDERS = ["railway", "e2b", "daytona"] as const satisfies readonly ProviderKey[];
+const HOSTED_PROVIDERS = [
+  "railway",
+  "e2b",
+  "daytona",
+  "vercel",
+] as const satisfies readonly ProviderKey[];
 
 type ProviderBenchmarkResult = {
   provider: ProviderKey;

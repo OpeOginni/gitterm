@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        provider: [railway, e2b, daytona]
+        provider: [railway, e2b, daytona, vercel]
     env:
       GITTERM_SERVER_URL: ${{ secrets.GITTERM_SERVER_URL }}
       GITTERM_API_TOKEN: ${{ secrets.GITTERM_API_TOKEN }}
