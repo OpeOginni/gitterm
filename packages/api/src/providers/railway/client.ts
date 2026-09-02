@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { getSdk } from "./graphql/generated/railway";
+import { getSdk, type DeploymentStatus } from "./graphql/generated/railway";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import type { RailwayConfig } from "./types";
 
@@ -78,7 +78,30 @@ function createRequester(url: string, token?: string) {
 // Railway Client Factory
 // ============================================================================
 
-export type RailwayClient = ReturnType<typeof getSdk>;
+const SERVICE_DEPLOYMENT_STATUS_QUERY = `
+  query ServiceDeploymentStatus($id: String!) {
+    service(id: $id) {
+      deployments(first: 1) {
+        edges {
+          node {
+            id
+            status
+          }
+        }
+      }
+    }
+  }
+`;
+
+type ServiceDeploymentStatusResult = {
+  service: {
+    deployments: { edges: Array<{ node: { id: string; status: DeploymentStatus } }> };
+  } | null;
+};
+
+export type RailwayClient = ReturnType<typeof getSdk> & {
+  ServiceDeploymentStatus(variables: { id: string }): Promise<ServiceDeploymentStatusResult>;
+};
 
 export async function createRailwayClient(): Promise<RailwayClient | null> {
   const dbConfig = (await getProviderConfigService().getProviderConfigForUse(
@@ -88,7 +111,14 @@ export async function createRailwayClient(): Promise<RailwayClient | null> {
     return null;
   }
   const requester = createRequester(dbConfig.apiUrl, dbConfig.apiToken);
-  return getSdk(requester);
+  return {
+    ...getSdk(requester),
+    ServiceDeploymentStatus: (variables) =>
+      requester<ServiceDeploymentStatusResult, typeof variables>(
+        SERVICE_DEPLOYMENT_STATUS_QUERY,
+        variables,
+      ),
+  };
 }
 
 export async function getRailwayClient(): Promise<RailwayClient | null> {

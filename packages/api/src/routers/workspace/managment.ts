@@ -2820,6 +2820,47 @@ export const workspaceRouter = router({
         });
       }
 
+      const [runtimeProvider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
+      const statusProvider =
+        runtimeProvider && existingWorkspace.externalInstanceId
+          ? await getProviderByCloudProviderId(runtimeProvider.providerKey)
+          : null;
+
+      const reconcileProviderStatus = async () => {
+        const workspaceRecord = existingWorkspace;
+        if (!statusProvider || !workspaceRecord?.externalInstanceId) return;
+
+        const live = await statusProvider.getStatus(workspaceRecord.externalInstanceId);
+        const shouldUpdate =
+          (workspaceRecord.status === "pending" || workspaceRecord.status === "running") &&
+          live.status !== workspaceRecord.status;
+        if (!shouldUpdate) return;
+
+        const now = new Date();
+        const [reconciled] = await updateWorkspaceStatusAndInvalidate(
+          and(eq(workspace.id, workspaceRecord.id), eq(workspace.status, workspaceRecord.status)),
+          {
+            status: live.status,
+            updatedAt: now,
+            ...(live.status === "paused" ? { pausedAt: now } : {}),
+            ...(live.status === "terminated" ? { terminatedAt: now } : {}),
+          },
+        );
+        if (!reconciled) return;
+
+        WORKSPACE_EVENTS.emitStatus({
+          workspaceId: reconciled.id,
+          status: reconciled.status,
+          updatedAt: reconciled.updatedAt,
+          userId,
+          workspaceDomain: reconciled.workspaceDomain,
+        });
+        existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
+      };
+
       if (isResumableWorkspaceStatus(existingWorkspace.status)) {
         // Atomically claim the restart. Concurrent callers observe pending and
         // wait for the same provider operation instead of starting another one.
@@ -2943,6 +2984,7 @@ export const workspaceRouter = router({
       if (existingWorkspace.status === "pending" || existingWorkspace.status === "running") {
         while (Date.now() < deadline) {
           existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
+          await reconcileProviderStatus();
           if (existingWorkspace.status === "running" && existingWorkspace.subdomain) {
             break;
           }
@@ -2973,11 +3015,6 @@ export const workspaceRouter = router({
         });
       }
 
-      const [provider] = await db
-        .select()
-        .from(cloudProvider)
-        .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
-
       let password: string | null = null;
       if (existingWorkspace.serverPassword) {
         try {
@@ -2992,8 +3029,8 @@ export const workspaceRouter = router({
         workspace: existingWorkspace,
         headers,
         password,
-        providerKey: provider?.providerKey ?? null,
-        providerCanResume: provider?.providerKey !== "cloudflare",
+        providerKey: runtimeProvider?.providerKey ?? null,
+        providerCanResume: runtimeProvider?.providerKey !== "cloudflare",
       });
 
       if (!runtime.url) {
@@ -3009,6 +3046,16 @@ export const workspaceRouter = router({
         intervalMs: pollIntervalMs,
         // Authentication failures still prove that the runtime server is up.
         isHealthy: (response) => response.status < 500,
+        onUnhealthy: async () => {
+          await reconcileProviderStatus();
+          const status = existingWorkspace?.status;
+          if (status === "paused" || status === "terminated") {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `WORKSPACE_START_FAILED: provider reported ${status}`,
+            });
+          }
+        },
       });
       if (!healthy) {
         throw new TRPCError({
