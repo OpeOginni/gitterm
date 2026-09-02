@@ -14,6 +14,7 @@ import {
   Shield,
   RefreshCw,
   Loader2,
+  Copy,
 } from "lucide-react";
 import { GitHub as Github } from "@/components/logos/Github";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -64,6 +65,16 @@ export function GitHubConnection() {
       });
     } catch {
       toast.error("Failed to disconnect GitHub App");
+    }
+  };
+
+  const handleCopyIntegrationId = async () => {
+    if (!installation?.integrationId) return;
+    try {
+      await navigator.clipboard.writeText(installation.integrationId);
+      toast.success("Integration ID copied to clipboard");
+    } catch {
+      toast.error("Failed to copy integration ID");
     }
   };
 
@@ -176,6 +187,25 @@ export function GitHubConnection() {
                       })}
                     </p>
                   )}
+                  <div className="mt-2 flex max-w-full items-center gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/70">
+                        SDK integration ID
+                      </p>
+                      <code className="block truncate font-mono text-xs text-foreground/80">
+                        {installation.integrationId}
+                      </code>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyIntegrationId}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                      aria-label="Copy SDK integration ID"
+                      title="Copy integration ID"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

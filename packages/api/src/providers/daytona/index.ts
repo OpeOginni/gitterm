@@ -27,7 +27,9 @@ import {
   type WorkspaceSSHAccessConfig,
 } from "../ssh-access";
 import { createProvisionLogger } from "../provision-logger";
+import { inlineGitAuthCommands } from "../git-auth";
 import type { DaytonaConfig } from "./types";
+import { redactSecrets } from "../../utils/redact-secrets";
 
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
@@ -193,12 +195,13 @@ export class DaytonaProvider implements ComputeProvider {
     sandbox: DaytonaSandbox,
     command: string,
     deleteOnError = false,
+    secrets: readonly string[] = [],
   ): Promise<void> {
     const response = await sandbox.process.executeCommand(command).catch(async (err) => {
       if (deleteOnError) {
         await sandbox.delete().catch(() => undefined);
       }
-      console.error("Daytona sandbox command failed:", err);
+      console.error("Daytona sandbox command failed:", redactSecrets(err, secrets));
       throw err;
     });
 
@@ -207,7 +210,7 @@ export class DaytonaProvider implements ComputeProvider {
         await sandbox.delete().catch(() => undefined);
       }
       console.error("Exit code:", response.exitCode);
-      console.error("Error output:", response.result);
+      console.error("Error output:", redactSecrets(response.result, secrets));
       throw new Error(`Daytona command failed with exit code ${response.exitCode}`);
     }
   }
@@ -336,10 +339,14 @@ export class DaytonaProvider implements ComputeProvider {
     config: WorkspaceConfig,
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const provisionLogger = createProvisionLogger(this.name, config.workspaceId);
+    const spec = resolveProvisioningSpec(config);
+    const provisionLogger = createProvisionLogger(
+      this.name,
+      config.workspaceId,
+      spec?.repo?.authToken ? [spec.repo.authToken] : [],
+    );
     const providerConfig = await this.getConfig();
     const targetRegion = this.getTargetRegion(config, providerConfig);
-    const spec = resolveProvisioningSpec(config);
     const editorAccess = this.isEditorAccessWorkspace(spec);
     const { imageRef, resources } = this.getImageCreateParams(config, editorAccess);
     const daytona = await this.createClient(targetRegion);
@@ -393,11 +400,18 @@ export class DaytonaProvider implements ComputeProvider {
           .clone(parsedGitRepoUrl, repoDir, repoBranch, undefined, username, password)
           .catch(async (err) => {
             await sandbox.delete().catch(() => undefined);
-            console.error("Daytona killed sandbox because of err:", err);
+            console.error(
+              "Daytona killed sandbox because of err:",
+              redactSecrets(err, spec.repo?.authToken ? [spec.repo.authToken] : []),
+            );
             throw err;
           }),
       );
 
+      const inlineAuth = inlineGitAuthCommands(spec.repo);
+      if (inlineAuth) {
+        await this.executeCommand(sandbox, inlineAuth.configure, true, [spec.repo.authToken!]);
+      }
       if (spec.repo.baseCommit) {
         await provisionLogger.step("checkout-base-commit", () =>
           this.executeCommand(
@@ -406,7 +420,10 @@ export class DaytonaProvider implements ComputeProvider {
             true,
           ).catch(async (err) => {
             await sandbox.delete().catch(() => undefined);
-            console.error("Daytona killed sandbox because of err:", err);
+            console.error(
+              "Daytona killed sandbox because of err:",
+              redactSecrets(err, spec.repo?.authToken ? [spec.repo.authToken] : []),
+            );
             throw err;
           }),
         );

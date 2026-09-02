@@ -69,6 +69,75 @@ function getGitHubErrorStatus(error: unknown): number | undefined {
   return undefined;
 }
 
+export type GitHubRepositoryValidation = {
+  valid: boolean;
+  exists: boolean;
+  canClone: boolean;
+  branchExists: boolean;
+  commitExists: boolean;
+};
+
+export async function checkGitHubRepositoryWithToken(
+  repositoryUrl: string,
+  token: string,
+  branch?: string,
+  commit?: string,
+): Promise<GitHubRepositoryValidation> {
+  const invalid = {
+    valid: false,
+    exists: false,
+    canClone: false,
+    branchExists: false,
+    commitExists: false,
+  };
+  const parsed = parseGitHubRepoUrl(repositoryUrl);
+  if (!parsed) return invalid;
+  const octokit = new Octokit({ auth: token });
+  try {
+    await octokit.repos.get(parsed);
+    let branchExists = true;
+    let commitExists = true;
+    if (branch) {
+      branchExists = await octokit.repos
+        .getBranch({ ...parsed, branch })
+        .then(() => true)
+        .catch(() => false);
+    }
+    if (commit) {
+      commitExists = await octokit.repos
+        .getCommit({ ...parsed, ref: commit })
+        .then(() => true)
+        .catch(() => false);
+    }
+    return { valid: true, exists: true, canClone: true, branchExists, commitExists };
+  } catch (error) {
+    const forbidden = getGitHubErrorStatus(error) === 403;
+    return { ...invalid, valid: true, exists: forbidden };
+  }
+}
+
+export async function resolveGitHubBranchHeadWithToken(
+  repositoryUrl: string,
+  token: string,
+  branch?: string,
+): Promise<string | null> {
+  const parsed = parseGitHubRepoUrl(repositoryUrl);
+  if (!parsed) return null;
+  const octokit = new Octokit({ auth: token });
+  try {
+    if (branch) {
+      const { data } = await octokit.repos.getBranch({ ...parsed, branch });
+      return data.commit.sha ?? null;
+    }
+    const { data } = await octokit.repos.get(parsed);
+    if (!data.default_branch) return null;
+    const result = await octokit.repos.getBranch({ ...parsed, branch: data.default_branch });
+    return result.data.commit.sha ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GitHub App Service
  *
@@ -123,33 +192,52 @@ export class GitHubAppService {
     repositoryUrl: string,
     options?: { userId: string; gitIntegrationId: string },
     branch?: string,
-  ): Promise<{ valid: boolean; exists: boolean; canClone: boolean; branchExists: boolean }> {
+    commit?: string,
+  ): Promise<GitHubRepositoryValidation> {
+    const invalid = {
+      valid: false,
+      exists: false,
+      canClone: false,
+      branchExists: false,
+      commitExists: false,
+    };
     const parsed = this.parseRepoUrl(repositoryUrl);
     if (!parsed) {
-      return { valid: false, exists: false, canClone: false, branchExists: false };
+      return invalid;
     }
     const { owner, repo } = parsed;
 
-    if (!options?.userId || !options?.gitIntegrationId) {
+    const validateWithOctokit = async (octokit: Octokit) => {
+      await octokit.repos.get({ owner, repo });
+      let branchExists = true;
+      let commitExists = true;
+      if (branch) {
+        try {
+          await octokit.repos.getBranch({ owner, repo, branch });
+        } catch {
+          branchExists = false;
+        }
+      }
+      if (commit) {
+        try {
+          await octokit.repos.getCommit({ owner, repo, ref: commit });
+        } catch {
+          commitExists = false;
+        }
+      }
+      return { valid: true, exists: true, canClone: true, branchExists, commitExists };
+    };
+
+    if (!options?.userId || !options.gitIntegrationId) {
       // Try unauthenticated (public repos)
       const anonOctokit = new Octokit();
       try {
-        await anonOctokit.repos.get({ owner, repo });
-
-        if (branch) {
-          try {
-            await anonOctokit.repos.getBranch({ owner, repo, branch });
-          } catch {
-            return { valid: true, exists: true, canClone: true, branchExists: false };
-          }
-        }
-
-        return { valid: true, exists: true, canClone: true, branchExists: true };
+        return await validateWithOctokit(anonOctokit);
       } catch {
         logger.warn(`checkIfValidRepository: unauthenticated request failed for ${owner}/${repo}`, {
           action: "check_if_valid_repo",
         });
-        return { valid: true, exists: false, canClone: false, branchExists: false };
+        return { ...invalid, valid: true };
         // 404: not found or private - try with user's integration if provided
       }
     }
@@ -167,7 +255,7 @@ export class GitHubAppService {
       .limit(1);
 
     if (!integration) {
-      return { valid: true, exists: false, canClone: false, branchExists: false };
+      return { ...invalid, valid: true };
     }
 
     const installation = await this.getUserInstallation(
@@ -176,29 +264,19 @@ export class GitHubAppService {
     );
 
     if (!installation) {
-      return { valid: true, exists: false, canClone: false, branchExists: false };
+      return { ...invalid, valid: true };
     }
 
     try {
       const { token } = await this.getUserToServerToken(installation.installationId);
       const userOctokit = new Octokit({ auth: token });
-      await userOctokit.repos.get({ owner, repo });
-
-      if (branch) {
-        try {
-          await userOctokit.repos.getBranch({ owner, repo, branch });
-        } catch {
-          return { valid: true, exists: true, canClone: true, branchExists: false };
-        }
-      }
-
-      return { valid: true, exists: true, canClone: true, branchExists: true };
+      return await validateWithOctokit(userOctokit);
     } catch (e: unknown) {
       if (isNotFoundError(e)) {
-        return { valid: true, exists: false, canClone: false, branchExists: false };
+        return { ...invalid, valid: true };
       }
       if (e && typeof e === "object" && "status" in e && (e as { status: number }).status === 403) {
-        return { valid: true, exists: true, canClone: false, branchExists: false };
+        return { ...invalid, valid: true, exists: true };
       }
       logger.error(
         `checkIfValidRepository: auth request failed for ${owner}/${repo}`,
@@ -207,7 +285,7 @@ export class GitHubAppService {
         },
         e as Error,
       );
-      return { valid: true, exists: false, canClone: false, branchExists: false };
+      return { ...invalid, valid: true };
     }
   }
 
@@ -253,7 +331,7 @@ export class GitHubAppService {
       }
     }
 
-    if (options?.userId && options?.gitIntegrationId) {
+    if (options?.userId && options.gitIntegrationId) {
       const [integration] = await db
         .select()
         .from(gitIntegration)

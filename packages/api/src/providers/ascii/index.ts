@@ -15,6 +15,7 @@ import type {
 } from "../compute";
 import { resolveProvisioningSpec } from "../provisioning-spec";
 import { createProvisionLogger } from "../provision-logger";
+import { inlineGitAuthCommands } from "../git-auth";
 import {
   buildHostAlias,
   buildSshCommand,
@@ -195,9 +196,13 @@ export class AsciiProvider implements ComputeProvider {
     config: WorkspaceConfig,
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const logger = createProvisionLogger(this.name, config.workspaceId);
-    const client = await this.getClient();
     const spec = resolveProvisioningSpec(config);
+    const logger = createProvisionLogger(
+      this.name,
+      config.workspaceId,
+      spec?.repo?.authToken ? [spec.repo.authToken] : [],
+    );
+    const client = await this.getClient();
     const metadata = this.getImageMetadata(config);
     const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
     const repoDir = spec?.repo?.name ?? "workspace";
@@ -235,7 +240,12 @@ export class AsciiProvider implements ComputeProvider {
 
       if (spec?.repo) {
         const repoUrl = spec.repo.url.endsWith(".git") ? spec.repo.url : `${spec.repo.url}.git`;
-        if (spec.repo.authToken) {
+        const inlineAuth = inlineGitAuthCommands(spec.repo);
+        if (inlineAuth) {
+          await logger.step("configure-git-auth", () =>
+            this.runCommand(client, handle.boxId, inlineAuth.configure),
+          );
+        } else if (spec.repo.authToken) {
           await logger.step("configure-git-auth", () =>
             this.runCommand(
               client,

@@ -24,9 +24,11 @@ import {
   type WorkspaceSSHAccessConfig,
 } from "../ssh-access";
 import { createProvisionLogger } from "../provision-logger";
+import { inlineGitAuthCommands } from "../git-auth";
 import type { E2BConfig } from "./types";
 import { getWorkspaceIdleTimeoutMs } from "../../service/workspace-timeouts";
 import { ANON_WORKSPACE_TTL_SECONDS } from "../../service/anon/anon-lifetime";
+import { redactSecrets } from "../../utils/redact-secrets";
 
 export type { E2BConfig } from "./types";
 
@@ -168,10 +170,11 @@ export class E2BProvider implements ComputeProvider {
     command: string,
     errorContext: string,
     options?: { user?: string; cwd?: string },
+    secrets: readonly string[] = [],
   ): Promise<void> {
     await sandbox.commands.run(command, options).catch(async (error) => {
       await sandbox.kill().catch(() => undefined);
-      console.error(`E2B Sandbox Error (${errorContext})`, error);
+      console.error(`E2B Sandbox Error (${errorContext})`, redactSecrets(error, secrets));
       throw error;
     });
   }
@@ -189,7 +192,8 @@ export class E2BProvider implements ComputeProvider {
     }
 
     const cloneBranch = spec.repo.checkoutRef || spec.repo.branch;
-    if (spec.repo.authToken) {
+    const inlineAuth = inlineGitAuthCommands(spec.repo);
+    if (spec.repo.authToken && !inlineAuth) {
       await this.runCommand(
         sandbox,
         `git config --global credential.helper '!f() { [ "$1" = get ] || exit 0; printf "%s\\n" "protocol=https" "host=github.com" "username=x-access-token" "password=$GITHUB_APP_TOKEN"; }; f'`,
@@ -205,10 +209,18 @@ export class E2BProvider implements ComputeProvider {
       })
       .catch(async (error) => {
         await sandbox.kill().catch(() => undefined);
-        console.error("E2B Sandbox Error (git.clone)", error);
+        console.error(
+          "E2B Sandbox Error (git.clone)",
+          redactSecrets(error, spec.repo?.authToken ? [spec.repo.authToken] : []),
+        );
         throw error;
       });
 
+    if (inlineAuth) {
+      await this.runCommand(sandbox, inlineAuth.configure, "configure inline git auth", undefined, [
+        spec.repo.authToken!,
+      ]);
+    }
     if (spec.repo.baseCommit) {
       await this.runCommand(
         sandbox,
@@ -386,8 +398,12 @@ export class E2BProvider implements ComputeProvider {
     persistent: boolean,
     timeoutOverrideMs?: number,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const provisionLogger = createProvisionLogger(this.name, config.workspaceId);
     const spec = resolveProvisioningSpec(config);
+    const provisionLogger = createProvisionLogger(
+      this.name,
+      config.workspaceId,
+      spec?.repo?.authToken ? [spec.repo.authToken] : [],
+    );
     const sandbox = await provisionLogger.step("create-sandbox", () =>
       this.createSandbox(config, onTimeout, this.isSshEnabledWorkspace(spec), timeoutOverrideMs),
     );

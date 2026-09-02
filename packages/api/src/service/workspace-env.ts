@@ -102,6 +102,8 @@ export function buildWorkspaceEnv(
   spec: WorkspaceProvisioningSpec,
   runtime: BuildWorkspaceEnvRuntimeParams,
 ): WorkspaceEnvironmentVariables {
+  const containerCloneCredential =
+    spec.repo?.inlineAuth && ["railway", "aws"].includes(runtime.workspaceProvider);
   const system: SystemWorkspaceEnv = {
     REPO_URL: spec.repo?.url,
     REPO_BRANCH: spec.repo?.branch,
@@ -111,6 +113,10 @@ export function buildWorkspaceEnv(
     USER_GITHUB_USERNAME: runtime.githubUsername,
     GITHUB_APP_TOKEN: runtime.githubAppToken,
     GITHUB_APP_TOKEN_EXPIRY: runtime.githubAppTokenExpiry,
+    GITTERM_REPOSITORY_USERNAME: containerCloneCredential
+      ? (spec.repo?.authUsername ?? "x-access-token")
+      : undefined,
+    GITTERM_REPOSITORY_TOKEN: containerCloneCredential ? spec.repo?.authToken : undefined,
     WORKSPACE_TOOLING_MANIFEST_BASE64: runtime.toolingManifestBase64,
     REPO_OWNER: runtime.repoOwner,
     REPO_NAME: spec.repo?.name,

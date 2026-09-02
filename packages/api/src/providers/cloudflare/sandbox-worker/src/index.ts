@@ -51,6 +51,7 @@ interface ProvisionRepo {
   name?: string;
   authUsername?: string;
   authToken?: string;
+  inlineAuth?: boolean;
 }
 
 /**
@@ -104,10 +105,22 @@ function normalizeRepoUrl(url: string): string {
 export class GittermSandbox extends Sandbox<Env> {
   /** Persist the provisioning payload and build the workspace. */
   async gittermProvision(payload: ProvisionPayload): Promise<BootResult> {
-    await this.ctx.storage.put(PROVISION_STORAGE_KEY, payload);
-    const result = await this.gittermBoot();
+    const result = await this.boot(payload);
 
-    if (!result.ready) {
+    if (result.ready) {
+      const persisted = payload.repo?.inlineAuth
+        ? {
+            ...payload,
+            repo: {
+              ...payload.repo,
+              authUsername: undefined,
+              authToken: undefined,
+              inlineAuth: undefined,
+            },
+          }
+        : payload;
+      await this.ctx.storage.put(PROVISION_STORAGE_KEY, persisted);
+    } else {
       await this.ctx.storage.delete(PROVISION_STORAGE_KEY).catch(() => undefined);
       await this.destroy().catch(() => undefined);
     }
@@ -135,6 +148,10 @@ export class GittermSandbox extends Sandbox<Env> {
       };
     }
 
+    return this.boot(payload);
+  }
+
+  private async boot(payload: ProvisionPayload): Promise<BootResult> {
     const repoDir = repoDirFor(payload);
 
     try {
@@ -162,10 +179,13 @@ export class GittermSandbox extends Sandbox<Env> {
 
       return { ready: true, repoDir };
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       return {
         ready: false,
         repoDir,
-        error: error instanceof Error ? error.message : String(error),
+        error: payload.repo?.authToken
+          ? message.replaceAll(payload.repo.authToken, "[REDACTED]")
+          : message,
       };
     }
   }
@@ -229,10 +249,15 @@ export class GittermSandbox extends Sandbox<Env> {
     const githubUsername =
       payload.environmentVariables?.USER_GITHUB_USERNAME?.trim() || repo.authUsername?.trim();
 
-    // Configure git identity + credential helper so the agent can push.
+    // Configure git identity + credential helper without putting the token in git config.
     if (repo.authToken) {
       const helperPath = "/workspace/.git-credential-helper.sh";
+      const tokenPath = "/run/gitterm/repository-token";
+      const usernamePath = "/run/gitterm/repository-username";
       const credentialUsername = repo.authUsername || githubUsername || "x-access-token";
+      await this.mkdir("/run/gitterm", { recursive: true });
+      await this.writeFile(tokenPath, repo.authToken);
+      await this.writeFile(usernamePath, credentialUsername);
       await this.writeFile(
         helperPath,
         [
@@ -240,13 +265,14 @@ export class GittermSandbox extends Sandbox<Env> {
           'if [ "$1" = "get" ]; then',
           '  echo "protocol=https"',
           '  echo "host=github.com"',
-          `  echo "username=${credentialUsername}"`,
-          '  echo "password=$GITHUB_APP_TOKEN"',
+          `  echo "username=$(cat ${usernamePath})"`,
+          `  echo "password=$(cat ${tokenPath})"`,
           "fi",
           "",
         ].join("\n"),
       );
       await this.exec(`chmod +x ${helperPath}`);
+      await this.exec(`chmod 600 ${tokenPath} ${usernamePath}`);
       await this.exec(`git config --global credential.helper '${helperPath}'`);
     }
 

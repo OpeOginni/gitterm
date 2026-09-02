@@ -43,6 +43,7 @@ interface ProvisionRepo {
   name?: string;
   authUsername?: string;
   authToken?: string;
+  inlineAuth?: boolean;
 }
 
 interface ProvisionPayload {
@@ -202,6 +203,7 @@ export class CloudflareComputeProvider implements ComputeProvider {
             name: spec.repo.name,
             authUsername: spec.repo.authUsername,
             authToken: spec.repo.authToken,
+            inlineAuth: spec.repo.inlineAuth,
           }
         : undefined,
       agentFiles: spec?.agent.files,
@@ -236,9 +238,13 @@ export class CloudflareComputeProvider implements ComputeProvider {
     config: WorkspaceConfig,
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const logger = createProvisionLogger(this.name, config.workspaceId);
-    const { workerUrl, internalApiKey } = await this.requireConfig();
     const spec = resolveProvisioningSpec(config);
+    const logger = createProvisionLogger(
+      this.name,
+      config.workspaceId,
+      spec?.repo?.authToken ? [spec.repo.authToken] : [],
+    );
+    const { workerUrl, internalApiKey } = await this.requireConfig();
     const sandboxId = this.sandboxIdFor(config.workspaceId);
     const runtime = this.resolveAgentRuntime(config);
     const payload = this.buildProvisionPayload(sandboxId, spec, config, runtime);

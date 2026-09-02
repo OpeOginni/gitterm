@@ -14,6 +14,7 @@ import type {
 } from "../compute";
 import { resolveProvisioningSpec } from "../provisioning-spec";
 import { createProvisionLogger } from "../provision-logger";
+import { inlineGitAuthCommands } from "../git-auth";
 import type {
   WorkspaceSSHAccess,
   WorkspaceSSHAccessCleanupConfig,
@@ -200,9 +201,13 @@ export class VercelProvider implements ComputeProvider {
     config: WorkspaceConfig,
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const logger = createProvisionLogger(this.name, config.workspaceId);
-    const credentials = await this.getSdkCredentials();
     const spec = resolveProvisioningSpec(config);
+    const logger = createProvisionLogger(
+      this.name,
+      config.workspaceId,
+      spec?.repo?.authToken ? [spec.repo.authToken] : [],
+    );
+    const credentials = await this.getSdkCredentials();
     const metadata = this.getImageMetadata(config);
     const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
     const repoDir = this.getRepoDir(spec);
@@ -275,20 +280,38 @@ esac
                 : undefined,
             }),
           );
+          if (repo.baseCommit) {
+            await logger.step("checkout-base-commit", () =>
+              sandbox.runCommand({
+                cmd: "git",
+                args: ["-C", repoDir, "fetch", "--depth", "1", "origin", repo.baseCommit!],
+                env: repo.authToken
+                  ? {
+                      GIT_ASKPASS: askPassPath,
+                      GIT_TERMINAL_PROMPT: "0",
+                      GITTERM_GIT_USERNAME: repo.authUsername ?? "x-access-token",
+                      GITTERM_GIT_TOKEN: repo.authToken,
+                    }
+                  : undefined,
+              }),
+            );
+            await sandbox.runCommand("git", [
+              "-C",
+              repoDir,
+              "checkout",
+              "--detach",
+              repo.baseCommit,
+            ]);
+          }
         } finally {
           if (repo.authToken) {
             await sandbox.runCommand("rm", ["-f", askPassPath]).catch(() => undefined);
           }
         }
-        if (repo.baseCommit) {
-          await logger.step("checkout-base-commit", () =>
-            sandbox.runCommand({
-              cmd: "bash",
-              args: [
-                "-lc",
-                `git -C "${repoDir}" fetch --depth 1 origin ${repo.baseCommit} && git -C "${repoDir}" checkout --detach ${repo.baseCommit}`,
-              ],
-            }),
+        const inlineAuth = inlineGitAuthCommands(repo);
+        if (inlineAuth) {
+          await logger.step("configure-runtime-git-auth", () =>
+            sandbox.runCommand({ cmd: "bash", args: ["-lc", inlineAuth.configure] }),
           );
         }
       }

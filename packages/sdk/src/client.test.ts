@@ -35,6 +35,7 @@ test("provider selections retain their discriminated fields", () => {
 
 const phasedSetup: WorkspaceCreateInput = {
   repo: "https://github.com/gitterm/example",
+  repositoryCredentials: { token: "github-pat" },
   setup: { beforeAgent: ["bun install"], afterAgent: ["bun test"] },
   secretFiles: [{ path: ".env", content: "TOKEN=secret", mode: "0400" }],
 };
@@ -42,4 +43,5 @@ const phasedSetup: WorkspaceCreateInput = {
 test("hosted workspace input exposes phased setup and strict secret modes", () => {
   expect(phasedSetup.setup?.beforeAgent).toEqual(["bun install"]);
   expect(phasedSetup.secretFiles?.[0]?.mode).toBe("0400");
+  expect(phasedSetup.repositoryCredentials?.token).toBe("github-pat");
 });

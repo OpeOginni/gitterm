@@ -1,6 +1,12 @@
+import { redactSecrets } from "../utils/redact-secrets";
+
 type AsyncStepResult<T> = Promise<T> | T;
 
-export function createProvisionLogger(providerName: string, workspaceId: string) {
+export function createProvisionLogger(
+  providerName: string,
+  workspaceId: string,
+  secrets: readonly string[] = [],
+) {
   const startedAt = Date.now();
   const prefix = `[workspace-provision][${providerName}][${workspaceId}]`;
 
@@ -21,7 +27,7 @@ export function createProvisionLogger(providerName: string, workspaceId: string)
       } catch (error) {
         console.error(
           `${prefix} ${name} failed stepMs=${Date.now() - stepStartedAt} totalMs=${Date.now() - startedAt}`,
-          error,
+          redactSecrets(error, secrets),
         );
         throw error;
       }

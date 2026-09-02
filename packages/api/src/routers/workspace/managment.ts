@@ -40,6 +40,8 @@ import {
   getGitHubAppService,
   isGitHubAppConfigured,
   parseGitHubRepoUrl,
+  checkGitHubRepositoryWithToken,
+  resolveGitHubBranchHeadWithToken,
 } from "../../service/github";
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
@@ -196,6 +198,29 @@ const inlineModelCredentialSchema = z.object({
   apiKey: z.string().min(1).max(10_000),
 });
 
+export const repositoryCredentialsSchema = z.object({
+  username: z.string().trim().min(1).max(255).optional(),
+  token: z.string().min(1).max(10_000),
+});
+
+export function resolveRepositoryProvisioningAuth(
+  repositoryCredentials: { username?: string; token: string } | undefined,
+  githubApp: { username?: string; token?: string },
+) {
+  if (repositoryCredentials) {
+    return {
+      authUsername: repositoryCredentials.username ?? "x-access-token",
+      authToken: repositoryCredentials.token,
+      inlineAuth: true,
+    };
+  }
+  return {
+    authUsername: githubApp.token ? githubApp.username : undefined,
+    authToken: githubApp.token,
+    inlineAuth: false,
+  };
+}
+
 const workspaceCreateBaseSchema = z.object({
   name: z.string().optional(),
   idempotencyKey: z.string().trim().min(1).max(255).optional(),
@@ -226,6 +251,7 @@ const workspaceCreateBaseSchema = z.object({
     ])
     .optional(),
   gitIntegrationId: z.string().optional(),
+  repositoryCredentials: repositoryCredentialsSchema.optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
   modelCredentialIds: z
     .array(z.uuid())
@@ -287,7 +313,10 @@ const intentWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
   persistent: z.boolean().optional(),
 });
 
-const workspaceCreateSchema = z.union([legacyWorkspaceCreateSchema, intentWorkspaceCreateSchema]);
+export const workspaceCreateSchema = z.union([
+  legacyWorkspaceCreateSchema,
+  intentWorkspaceCreateSchema,
+]);
 type ResolvedWorkspaceCreateInput = z.infer<typeof legacyWorkspaceCreateSchema>;
 
 function matchesRegion(
@@ -1548,7 +1577,12 @@ export const workspaceRouter = router({
     .mutation(async ({ input: rawInput, ctx }) => {
       const userId = ctx.session.user.id;
       const workspaceId = randomUUID();
-      const workspaceCreateLogger = createProvisionLogger("workspace-router", workspaceId);
+      const inlineRepositoryToken = rawInput.repositoryCredentials?.token;
+      const workspaceCreateLogger = createProvisionLogger(
+        "workspace-router",
+        workspaceId,
+        inlineRepositoryToken ? [inlineRepositoryToken] : [],
+      );
 
       if (!userId) {
         throw new TRPCError({
@@ -1559,6 +1593,13 @@ export const workspaceRouter = router({
 
       const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
       const input = await resolveWorkspaceCreateIntent(rawInput, userId, viewerPlan);
+
+      if (input.repositoryCredentials && !input.repo) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "repositoryCredentials require repo",
+        });
+      }
 
       let resolvedBaseCommit: string | null = null;
       try {
@@ -2000,7 +2041,7 @@ export const workspaceRouter = router({
         let githubInstallationId: string | undefined;
         let selectedGitIntegration: typeof gitIntegration.$inferSelect | undefined;
 
-        if (input.gitIntegrationId) {
+        if (input.gitIntegrationId && !input.repositoryCredentials) {
           if (!isGitHubAppConfigured()) {
             throw new TRPCError({
               code: "BAD_REQUEST",
@@ -2032,7 +2073,7 @@ export const workspaceRouter = router({
         }
 
         if (input.repo) {
-          if (!isGitHubAppConfigured()) {
+          if (!input.repositoryCredentials && !isGitHubAppConfigured()) {
             const parsed = parseGitHubRepoUrl(input.repo);
             if (!parsed) {
               throw new TRPCError({
@@ -2051,11 +2092,19 @@ export const workspaceRouter = router({
               ? { userId: userId, gitIntegrationId: selectedGitIntegration.id }
               : undefined;
 
-            const repoValidation = await getGitHubAppService().checkIfValidRepository(
-              input.repo,
-              options,
-              input.branch,
-            );
+            const repoValidation = input.repositoryCredentials
+              ? await checkGitHubRepositoryWithToken(
+                  input.repo,
+                  input.repositoryCredentials.token,
+                  input.branch,
+                  resolvedBaseCommit ?? undefined,
+                )
+              : await getGitHubAppService().checkIfValidRepository(
+                  input.repo,
+                  options,
+                  input.branch,
+                  resolvedBaseCommit ?? undefined,
+                );
 
             if (!repoValidation.valid)
               throw new TRPCError({
@@ -2064,6 +2113,12 @@ export const workspaceRouter = router({
               });
 
             if (!repoValidation.exists) {
+              if (input.repositoryCredentials) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: "Can't access repository with the supplied repository credentials",
+                });
+              }
               if (!selectedGitIntegration && userExistingGithubAppInstallation) {
                 throw new TRPCError({
                   code: "BAD_REQUEST",
@@ -2081,13 +2136,21 @@ export const workspaceRouter = router({
             if (!repoValidation.canClone)
               throw new TRPCError({
                 code: "BAD_REQUEST",
-                message: "Can't clone repository, check github integration",
+                message: input.repositoryCredentials
+                  ? "Can't clone repository with the supplied repository credentials"
+                  : "Can't clone repository, check github integration",
               });
 
             if (input.branch && !repoValidation.branchExists)
               throw new TRPCError({
                 code: "BAD_REQUEST",
                 message: `Branch "${input.branch}" not found in this repository`,
+              });
+
+            if (resolvedBaseCommit && !repoValidation.commitExists)
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Commit "${resolvedBaseCommit}" not found in this repository`,
               });
           }
         }
@@ -2122,17 +2185,23 @@ export const workspaceRouter = router({
         // Resolve exact base commit when not provided by the caller.
         if (input.repo && !resolvedBaseCommit) {
           try {
-            const headSha = await getGitHubAppService().resolveBranchHeadSha(
-              input.repo,
-              input.branch,
-              selectedGitIntegration
-                ? {
-                    userId,
-                    gitIntegrationId: selectedGitIntegration.id,
-                    installationId: githubInstallationId,
-                  }
-                : undefined,
-            );
+            const headSha = input.repositoryCredentials
+              ? await resolveGitHubBranchHeadWithToken(
+                  input.repo,
+                  input.repositoryCredentials.token,
+                  input.branch,
+                )
+              : await getGitHubAppService().resolveBranchHeadSha(
+                  input.repo,
+                  input.branch,
+                  selectedGitIntegration
+                    ? {
+                        userId,
+                        gitIntegrationId: selectedGitIntegration.id,
+                        installationId: githubInstallationId,
+                      }
+                    : undefined,
+                );
             if (headSha) {
               resolvedBaseCommit = normalizeBaseCommit(headSha);
             }
@@ -2381,8 +2450,10 @@ export const workspaceRouter = router({
                 baseCommit: resolvedBaseCommit ?? undefined,
                 checkoutRef: resolvedCheckoutRef ?? undefined,
                 name: repoInfo?.repo,
-                authUsername: githubAppToken ? githubUsername : undefined,
-                authToken: githubAppToken,
+                ...resolveRepositoryProvisioningAuth(input.repositoryCredentials, {
+                  username: githubUsername,
+                  token: githubAppToken,
+                }),
               }
             : null,
           serverPassword,

@@ -224,6 +224,49 @@ const client = createGittermClient({
 const { workspaces } = await client.workspaces.list();
 ```
 
+### Managed private repositories
+
+For renewable, short-lived repository authentication, connect the GitHub App in the GitTerm
+dashboard and copy its **SDK integration ID** from the Integrations page:
+
+```ts
+const { workspace, runtime } = await client.workspaces.create({
+  repo: "https://github.com/acme/private-repo",
+  branch: "main",
+  gitIntegrationId: "your-dashboard-integration-id",
+});
+```
+
+Managed workspaces can also use dashboard-managed model subscriptions while accepting an
+application-owned GitHub PAT inline:
+
+```ts
+const client = createGittermClient({
+  token: process.env.GITTERM_API_TOKEN,
+});
+
+const { workspace, runtime } = await client.workspaces.create({
+  repo: "https://github.com/acme/private-repo",
+  branch: "main",
+  repositoryCredentials: {
+    username: "x-access-token",
+    token: process.env.GITHUB_TOKEN!,
+  },
+});
+```
+
+The username defaults to `x-access-token`. Inline repository credentials take precedence over
+`gitIntegrationId` and authenticate repository validation, cloning, and runtime Git operations such
+as pull and push. Without inline credentials, `gitIntegrationId` continues to use the connected
+dashboard integration. Omitting `modelCredentialIds` and `modelCredentials` likewise continues to
+use dashboard-managed model credentials.
+
+GitTerm does not save inline PATs in its application database. Inline PATs must be delivered to the
+selected compute provider and retained on the workspace machine for runtime Git operations, so
+provider infrastructure and processes running in that workspace may be able to access them. Prefer
+`gitIntegrationId` for durable managed workspaces and use narrowly scoped, short-lived PATs when
+inline credentials are necessary.
+
 The SDK deliberately exposes two clients. `createGittermClient()` uses a user API token and
 can manage the user's workspaces. `createGittermWorkspaceClient()` uses the scoped identity
 injected into a GitTerm workspace and can inspect only that workspace and its ports:

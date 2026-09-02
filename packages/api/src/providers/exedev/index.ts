@@ -14,6 +14,7 @@ import type {
 } from "../compute";
 import { resolveProvisioningSpec } from "../provisioning-spec";
 import { createProvisionLogger } from "../provision-logger";
+import { inlineGitAuthCommands } from "../git-auth";
 import {
   buildHostAlias,
   buildSshCommand,
@@ -183,8 +184,12 @@ export class ExeDevProvider implements ComputeProvider {
     config: WorkspaceConfig,
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const logger = createProvisionLogger(this.name, config.workspaceId);
     const spec = resolveProvisioningSpec(config);
+    const logger = createProvisionLogger(
+      this.name,
+      config.workspaceId,
+      spec?.repo?.authToken ? [spec.repo.authToken] : [],
+    );
     const metadata = this.getMetadata(config);
     const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
     const vmName = `gitterm-${config.workspaceId.replaceAll("-", "").slice(0, 20)}`;
@@ -224,7 +229,12 @@ export class ExeDevProvider implements ComputeProvider {
       }
       if (spec?.repo) {
         const repoUrl = spec.repo.url.endsWith(".git") ? spec.repo.url : `${spec.repo.url}.git`;
-        if (spec.repo.authToken) {
+        const inlineAuth = inlineGitAuthCommands(spec.repo);
+        if (inlineAuth) {
+          await logger.step("configure-git-auth", () =>
+            this.runVmCommand(handle, inlineAuth.configure),
+          );
+        } else if (spec.repo.authToken) {
           const helper =
             '!f() { [ "$1" = get ] || exit 0; printf "%s\\n" "protocol=https" "host=github.com" "username=x-access-token" "password=$GITHUB_APP_TOKEN"; }; f';
           await logger.step("configure-git-auth", () =>

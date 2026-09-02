@@ -53,6 +53,7 @@ export const githubRouter = router({
         connected: true,
         installation: {
           id: installation.installationId,
+          integrationId: gitIntegrationRecord.id,
           accountLogin: installation.accountLogin,
           accountType: installation.accountType,
           repositorySelection: installation.repositorySelection,

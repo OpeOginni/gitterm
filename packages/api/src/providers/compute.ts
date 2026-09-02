@@ -40,6 +40,9 @@ export interface SystemWorkspaceEnv {
   USER_GITHUB_USERNAME?: string;
   GITHUB_APP_TOKEN?: string;
   GITHUB_APP_TOKEN_EXPIRY?: string;
+  /** Inline repository credential consumed by container entrypoints. */
+  GITTERM_REPOSITORY_USERNAME?: string;
+  GITTERM_REPOSITORY_TOKEN?: string;
   WORKSPACE_TOOLING_MANIFEST_BASE64: string;
   REPO_OWNER?: string;
   REPO_NAME?: string;
@@ -76,6 +79,8 @@ export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "USER_GITHUB_USERNAME",
   "GITHUB_APP_TOKEN",
   "GITHUB_APP_TOKEN_EXPIRY",
+  "GITTERM_REPOSITORY_USERNAME",
+  "GITTERM_REPOSITORY_TOKEN",
   "WORKSPACE_TOOLING_MANIFEST_BASE64",
   "REPO_OWNER",
   "REPO_NAME",
@@ -140,6 +145,8 @@ export interface WorkspaceRepoProvisioning {
   authUsername?: string;
   /** Git basic-auth password / GitHub App token. */
   authToken?: string;
+  /** Caller-supplied auth that overrides the dashboard integration for this workspace. */
+  inlineAuth?: boolean;
 }
 
 /** A file an agent needs on disk before it starts. `~` expands to $HOME. */

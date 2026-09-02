@@ -5,6 +5,8 @@ WORKSPACE="/workspace"
 RUNTIME_DIR="/run/gitterm"
 GIT_CREDENTIAL_HELPER="$RUNTIME_DIR/git-credential-helper.sh"
 GIT_TOKEN_FILE="$RUNTIME_DIR/github-token"
+REPOSITORY_TOKEN_FILE="$RUNTIME_DIR/repository-token"
+REPOSITORY_USERNAME_FILE="$RUNTIME_DIR/repository-username"
 USER_GITHUB_USERNAME="${USER_GITHUB_USERNAME}"
 GITHUB_APP_TOKEN="${GITHUB_APP_TOKEN}"
 GITHUB_APP_TOKEN_EXPIRY="${GITHUB_APP_TOKEN_EXPIRY}"
@@ -54,7 +56,23 @@ if [ ! -z "$USER_EMAIL" ]; then
     git config --file /root/.gitconfig user.email "$USER_EMAIL"
 fi
 
-if [ ! -z "$GITHUB_APP_TOKEN" ]; then
+if [ -n "$GITTERM_REPOSITORY_TOKEN" ]; then
+    printf '%s' "$GITTERM_REPOSITORY_TOKEN" > "$REPOSITORY_TOKEN_FILE"
+    printf '%s' "${GITTERM_REPOSITORY_USERNAME:-x-access-token}" > "$REPOSITORY_USERNAME_FILE"
+    chmod 600 "$REPOSITORY_TOKEN_FILE" "$REPOSITORY_USERNAME_FILE"
+    git config --global credential.helper ''
+    cat > "$GIT_CREDENTIAL_HELPER" <<'CRED_HELPER'
+#!/bin/sh
+if [ "$1" = "get" ]; then
+    echo "username=$(cat /run/gitterm/repository-username 2>/dev/null)"
+    echo "password=$(cat /run/gitterm/repository-token 2>/dev/null)"
+fi
+CRED_HELPER
+    chmod 700 "$GIT_CREDENTIAL_HELPER"
+    git config --global credential.helper "$GIT_CREDENTIAL_HELPER"
+    export GIT_TERMINAL_PROMPT=0
+    unset GITTERM_REPOSITORY_TOKEN GITTERM_REPOSITORY_USERNAME
+elif [ ! -z "$GITHUB_APP_TOKEN" ]; then
     echo "Configuring git with GitHub App authentication..."
     printf '%s' "$GITHUB_APP_TOKEN" > "$GIT_TOKEN_FILE"
     chmod 600 "$GIT_TOKEN_FILE"
@@ -115,7 +133,7 @@ if [ ! -f ".initialized" ]; then
             git -C "$REPO_DIR_NAME" checkout --detach "$REPO_BASE_COMMIT"
             test "$(git -C "$REPO_DIR_NAME" rev-parse HEAD)" = "$REPO_BASE_COMMIT"
         fi
-        
+
         echo "$REPO_OWNER" > .repo_owner
     else
         echo "No repo URL - using empty workspace."

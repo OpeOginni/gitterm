@@ -136,6 +136,8 @@ export type WorkspaceCreateInput = {
   agent?: AgentKey;
   /** Provider intent. Defaults to the user's or deployment's preferred provider. */
   provider?: WorkspaceProviderSelection;
+  /** Inline Git credentials for repository validation, cloning, and runtime pull/push. */
+  repositoryCredentials?: { username?: string; token: string };
   gitIntegrationId?: string;
   /** Defaults from the selected provider. */
   persistent?: boolean;
