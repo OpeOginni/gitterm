@@ -296,7 +296,7 @@ async function runWithServer<T>(serverUrl: string, operation: () => Promise<T>):
       throw new GittermError(
         code,
         code === "UNAUTHORIZED"
-          ? "Not logged in or token expired. Run: gitterm login"
+          ? `Authentication failed: ${error.message}. Check that the API token is valid and has not expired.`
           : error.message,
         { cause: error },
       );

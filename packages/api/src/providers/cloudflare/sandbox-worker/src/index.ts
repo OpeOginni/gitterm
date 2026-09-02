@@ -61,7 +61,12 @@ interface ProvisionPayload {
   sandboxId: string;
   repo?: ProvisionRepo;
   /** Agent files (base64 content) to write before starting the server. */
-  agentFiles?: { path: string; contentBase64: string }[];
+  agentFiles?: {
+    path: string;
+    contentBase64: string;
+    mode?: 0o400 | 0o600;
+    relativeToRepo?: boolean;
+  }[];
   serverPassword?: string;
   environmentVariables?: Record<string, string>;
   workspaceProfile?: string;
@@ -71,6 +76,7 @@ interface ProvisionPayload {
   port: number;
   /** Commands to run before starting the server (e.g. install the agent). */
   setupCommands?: string[];
+  beforeAgentCommand?: string;
   /** Best-effort command launched after the server is ready. */
   postStartCommand?: string;
 }
@@ -137,9 +143,16 @@ export class GittermSandbox extends Sandbox<Env> {
       }
 
       await this.mkdir(WORKSPACE_DIR, { recursive: true });
-      await this.writeAgentFiles(payload);
       await this.cloneRepo(payload, repoDir);
+      await this.writeAgentFiles(payload, repoDir);
       await this.runSetupCommands(payload, repoDir);
+      if (payload.beforeAgentCommand) {
+        const before = await this.exec(payload.beforeAgentCommand, { cwd: repoDir });
+        if (before.exitCode !== 0) {
+          const tail = (before.stderr || before.stdout || "").trim().slice(-4000);
+          throw new Error(`Before-agent setup failed${tail ? `:\n${tail}` : ""}`);
+        }
+      }
       await this.startAgentServer(payload, repoDir);
       if (payload.postStartCommand) {
         await this.startProcess(payload.postStartCommand, { cwd: repoDir }).catch((error) =>
@@ -180,11 +193,15 @@ export class GittermSandbox extends Sandbox<Env> {
     await this.setKeepAlive(false).catch(() => undefined);
   }
 
-  private async writeAgentFiles(payload: ProvisionPayload): Promise<void> {
+  private async writeAgentFiles(payload: ProvisionPayload, repoDir: string): Promise<void> {
     // The container runs as root, so expand agent-relative homes to /root.
     const files = (payload.agentFiles ?? []).map((file) => ({
       ...file,
-      path: file.path.startsWith("~/") ? `/root/${file.path.slice(2)}` : file.path,
+      path: file.relativeToRepo
+        ? `${repoDir}/${file.path}`
+        : file.path.startsWith("~/")
+          ? `/root/${file.path.slice(2)}`
+          : file.path,
     }));
 
     for (const file of files) {
@@ -192,8 +209,11 @@ export class GittermSandbox extends Sandbox<Env> {
       if (dir) {
         await this.mkdir(dir, { recursive: true });
       }
-      const bytes = Uint8Array.from(atob(file.contentBase64), (c) => c.charCodeAt(0));
-      await this.writeFile(file.path, new TextDecoder().decode(bytes));
+      // Decode inside the container so binary secrets are not mangled by text decoding.
+      const write = await this.exec(
+        `printf %s '${file.contentBase64}' | base64 -d > '${file.path}'${file.mode ? ` && chmod ${file.mode.toString(8)} '${file.path}'` : ""}`,
+      );
+      if (write.exitCode !== 0) throw new Error(`Failed to write agent file ${file.path}`);
     }
   }
 

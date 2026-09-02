@@ -72,6 +72,26 @@ Follow the user's instructions for branches, commits, pull requests, ports, uplo
 Do not assume a requested product outcome succeeded only because an agent run completed.
 `;
 
+export function buildGittermInstructions(additional?: string): string {
+  const trimmed = additional?.trim();
+  return trimmed ? `${GITTERM_INSTRUCTIONS}\n${trimmed}\n` : GITTERM_INSTRUCTIONS;
+}
+
+export function buildAwsRuntimeInstructions(input: {
+  region: string;
+  location?: string;
+  taskRoleArn?: string;
+}): string {
+  const location = input.location?.trim();
+  const role = input.taskRoleArn?.trim();
+  const roleName = role?.split("/").at(-1);
+  return `AWS runtime:
+- Compute: AWS ECS in \`${input.region}\`${location ? ` (${location})` : ""}. AWS commands default to this region.
+- Identity: temporary ECS task-role credentials${role ? ` for \`${role}\`` : ""}; never print, copy, or replace them with static keys.
+- Permission discovery:${roleName ? ` inspect attached and inline policies for role \`${roleName}\` with the AWS IAM CLI before making AWS changes;` : " inspect the current task role's attached and inline policies before making AWS changes;"} read only policy documents relevant to the task. Do not assume administrator access.
+- If access is denied, report the exact action and resource and ask for that permission instead of retrying, changing regions, or bypassing the role.`;
+}
+
 export function buildOpencodeTuiConfigJson(
   agentConfig: Record<string, unknown> | null | undefined,
 ): string {
@@ -111,7 +131,7 @@ export const opencodeProvisioner: AgentProvisioner = {
         },
         {
           path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,
-          contentBase64: toBase64(GITTERM_INSTRUCTIONS),
+          contentBase64: toBase64(buildGittermInstructions(ctx.additionalAgentInstructions)),
         },
         ...(ctx.opencode?.skills ?? []).map((skill) => ({
           path: `~/.config/opencode/skills/${skill.name}/SKILL.md`,

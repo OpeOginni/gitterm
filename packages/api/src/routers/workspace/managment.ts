@@ -29,7 +29,11 @@ import {
   isProviderImplemented,
   type PersistentWorkspaceInfo,
 } from "../../providers";
-import type { ComputeProvider } from "../../providers/compute";
+import {
+  BeforeAgentSetupError,
+  RESERVED_WORKSPACE_ENV_KEYS,
+  type ComputeProvider,
+} from "../../providers/compute";
 import { createProvisionLogger } from "../../providers/provision-logger";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import {
@@ -67,18 +71,23 @@ function decryptServerPasswordSafe(
     return null;
   }
 }
-import { getProviderConfigService } from "../../service/config/provider-config";
+import {
+  getProviderConfigService,
+  type DecryptedProviderConfig,
+} from "../../service/config/provider-config";
 import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooling";
 import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "../../service/workspace-env";
 import { getAgentProvisioner, resolveWorkspaceProviderCredentials } from "../../service/agents";
 import type { AgentConfigByKind } from "../../service/agents/types";
+import { buildAwsRuntimeInstructions } from "../../service/agents/opencode";
 import { T3_PAIRING_CREATE_COMMAND } from "../../service/agents/t3code";
 import {
   configKindsForAgentType,
   parseProviderMachineOptions,
   providerKeySchema,
   workspaceProviderSelectionSchema,
-  workspaceSetupCommandsSchema,
+  workspaceSecretFilesSchema,
+  workspaceSetupSchema,
   type AgentConfigKind,
   type ProviderKey,
 } from "@gitterm/schema";
@@ -115,6 +124,7 @@ import {
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
 import {
+  buildGitExcludeCommand,
   buildWorkspaceSetupCommand,
   getWorkspaceSetupStatus,
   resolveWorkspaceSetupCommands,
@@ -228,8 +238,14 @@ const workspaceCreateBaseSchema = z.object({
   environmentVariables: z
     .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(20_000))
     .refine((variables) => Object.keys(variables).length <= 50, "Too many environment variables")
+    .refine(
+      (variables) => Object.keys(variables).every((name) => !RESERVED_WORKSPACE_ENV_KEYS.has(name)),
+      "Environment variables cannot override reserved workspace keys",
+    )
     .optional(),
-  setupCommands: workspaceSetupCommandsSchema.optional(),
+  setup: workspaceSetupSchema.optional(),
+  secretFiles: workspaceSecretFilesSchema.optional(),
+  additionalAgentInstructions: z.string().trim().max(50_000).optional(),
   opencode: z
     .object({
       skills: z
@@ -1610,6 +1626,8 @@ export const workspaceRouter = router({
         }
       }
 
+      let selectedProviderName = "unknown provider";
+      let selectedProviderKey = "unknown";
       try {
         // Get cloud provider info first to determine if local
         const [cloudProviderRecord] = await db
@@ -1631,7 +1649,11 @@ export const workspaceRouter = router({
           });
         }
 
+        selectedProviderName = cloudProviderRecord.name;
+        selectedProviderKey = cloudProviderRecord.providerKey;
+
         const providerConfigService = getProviderConfigService();
+        let selectedProviderConfig: DecryptedProviderConfig | null = null;
 
         const providerKey = (cloudProviderRecord.providerKey ?? "local").toLowerCase();
         if (providerKey !== "local" && !isProviderImplemented(providerKey)) {
@@ -1671,11 +1693,11 @@ export const workspaceRouter = router({
             });
           }
 
-          const providerConfig = await providerConfigService.getProviderConfigById(
+          selectedProviderConfig = await providerConfigService.getProviderConfigById(
             cloudProviderRecord.providerConfigId,
           );
 
-          if (!providerConfig || !providerConfig.isEnabled) {
+          if (!selectedProviderConfig || !selectedProviderConfig.isEnabled) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: "Selected cloud provider is not configured",
@@ -2249,6 +2271,23 @@ export const workspaceRouter = router({
             inlineCredentials: input.modelCredentials,
           }),
         );
+        const awsRuntimeInstructions =
+          providerKey === "aws" && regionRecord
+            ? buildAwsRuntimeInstructions({
+                region: regionRecord.externalRegionIdentifier,
+                location: regionRecord.location,
+                taskRoleArn:
+                  typeof selectedProviderConfig?.config.taskRoleArn === "string"
+                    ? selectedProviderConfig.config.taskRoleArn
+                    : undefined,
+              })
+            : undefined;
+        const additionalAgentInstructions = [
+          awsRuntimeInstructions,
+          input.additionalAgentInstructions?.trim(),
+        ]
+          .filter((instructions): instructions is string => Boolean(instructions))
+          .join("\n\n");
         const agentProvisioning = getAgentProvisioner(agentTypeRecord.provisionerKey).provision({
           userId,
           userDisplayName: fetchedUser.name,
@@ -2258,15 +2297,34 @@ export const workspaceRouter = router({
           agentConfigs,
           serverPassword,
           credentials,
+          additionalAgentInstructions: additionalAgentInstructions || undefined,
           opencode: input.opencode,
         });
+        agentProvisioning.files.push(
+          ...(input.secretFiles ?? []).map((file) => ({
+            path: file.path,
+            contentBase64: Buffer.from(file.content).toString("base64"),
+            mode: Number.parseInt(file.mode ?? "0600", 8) as 0o400 | 0o600,
+            relativeToRepo: true,
+          })),
+        );
 
-        const setupCommands = await resolveWorkspaceSetupCommands({
-          cloudProviderId: input.cloudProviderId,
-          agentTypeId: input.agentTypeId,
-          requestedCommands: input.setupCommands,
-        });
-        const setupExecutionId = setupCommands.length > 0 ? randomUUID() : undefined;
+        // Secret files live under the repository; exclude them from git before the
+        // agent can `git add -A` them. Runs as the first blocking before-agent step.
+        const secretFileExcludeCommand = buildGitExcludeCommand(
+          (input.secretFiles ?? []).map((file) => file.path),
+        );
+        const beforeAgentCommands = [
+          ...(secretFileExcludeCommand ? [secretFileExcludeCommand] : []),
+          ...(await resolveWorkspaceSetupCommands({
+            cloudProviderId: input.cloudProviderId,
+            agentTypeId: input.agentTypeId,
+            requestedCommands: input.setup?.beforeAgent,
+          })),
+        ];
+        const afterAgentCommands = input.setup?.afterAgent ?? [];
+        const setupRequested = beforeAgentCommands.length > 0 || afterAgentCommands.length > 0;
+        const setupExecutionId = setupRequested ? randomUUID() : undefined;
         // The setup script's readiness probe must target the port the runtime
         // actually listens on. SDK providers launch serve.command themselves,
         // so serve.port is correct; Railway and AWS run the image entrypoint,
@@ -2284,9 +2342,17 @@ export const workspaceRouter = router({
               tier3NetworkAccess?: boolean;
             } | null
           )?.tier3NetworkAccess === true;
-        const setupCommand = buildWorkspaceSetupCommand(setupCommands, setupProbePort, {
+        const beforeAgentCommand = buildWorkspaceSetupCommand(beforeAgentCommands, setupProbePort, {
+          phase: "before-agent",
+          waitForAgent: false,
+          detached: false,
+          failOnError: true,
+          disablePush: true,
+        });
+        const setupCommand = buildWorkspaceSetupCommand(afterAgentCommands, setupProbePort, {
           executionId: setupExecutionId,
           disablePush: !workspaceCanPushSetupStatus,
+          phase: "after-agent",
         });
         const runtimeSetupCommand =
           setupCommand && setupProbePort !== undefined
@@ -2327,11 +2393,21 @@ export const workspaceRouter = router({
           workspaceProfile,
           editorAccessEnabled,
           setupCommand: runtimeSetupCommand,
+          beforeAgentCommand,
         });
 
         // Serialize the spec + runtime vars into the env handed to the compute
         // provider. User-defined vars are merged here, with reserved system keys
         // stripped so they cannot clobber WORKSPACE_AUTH_TOKEN and friends.
+        const workspaceUserEnv = userWorkspaceEnvironmentVariables
+          ? {
+              ...(userWorkspaceEnvironmentVariables.environmentVariables as Record<
+                string,
+                string | undefined
+              >),
+              ...input.environmentVariables,
+            }
+          : input.environmentVariables;
         const DEFAULT_DOCKER_ENV_VARS = buildWorkspaceEnv(provisioningSpec, {
           githubUsername,
           githubAppToken,
@@ -2344,16 +2420,12 @@ export const workspaceRouter = router({
           workspaceSetupAuthToken,
           workspaceApiUrl: WORKSPACE_API_URL,
           workspaceProvider: providerKey,
-          userEnv: userWorkspaceEnvironmentVariables
-            ? {
-                ...(userWorkspaceEnvironmentVariables.environmentVariables as Record<
-                  string,
-                  string | undefined
-                >),
-                ...input.environmentVariables,
-              }
-            : input.environmentVariables,
+          userEnv: workspaceUserEnv,
         });
+        if (providerKey === "aws" && regionRecord) {
+          DEFAULT_DOCKER_ENV_VARS.AWS_REGION = regionRecord.externalRegionIdentifier;
+          DEFAULT_DOCKER_ENV_VARS.AWS_DEFAULT_REGION = regionRecord.externalRegionIdentifier;
+        }
 
         // Get compute provider
         const computeProvider = await getProviderByCloudProviderId(providerKey);
@@ -2454,7 +2526,7 @@ export const workspaceRouter = router({
             inlineModelProviders: credentials
               .filter((credential) => credential.credentialId === null)
               .map((credential) => credential.logicalProviderKey),
-            setupRequired: Boolean(runtimeSetupCommand),
+            setupRequired: setupRequested,
             persistent: effectivePersistent,
             regionId: regionRecord?.id,
             repositoryUrl: input.repo ?? null,
@@ -2487,11 +2559,16 @@ export const workspaceRouter = router({
           });
         }
 
-        if (runtimeSetupCommand && setupExecutionId) {
+        if (setupRequested && setupExecutionId) {
           await db.insert(workspaceSetup).values({
             workspaceId,
             executionId: setupExecutionId,
-            command: runtimeSetupCommand,
+            command: runtimeSetupCommand ?? "",
+            status: runtimeSetupCommand ? "waiting" : "succeeded",
+            // Only a blocking phase was requested and it already ran during provisioning.
+            ...(runtimeSetupCommand
+              ? {}
+              : { exitCode: 0, startedAt: new Date(), finishedAt: new Date() }),
           });
         }
 
@@ -2576,14 +2653,20 @@ export const workspaceRouter = router({
           runtime,
         };
       } catch (error) {
-        console.error("createWorkspace failed:", error);
+        console.error("createWorkspace failed", {
+          workspaceId,
+          providerKey: selectedProviderKey,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        });
         // Throw a user-friendly error to the client
         if (error instanceof TRPCError) throw error;
+        if (error instanceof BeforeAgentSetupError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create workspace. Please try again later.",
-          cause: error instanceof Error ? error.message : "Unknown error",
+          message: `Failed to create workspace using ${selectedProviderName} (${selectedProviderKey}); reference: ${workspaceId}`,
         });
       }
     }),

@@ -22,6 +22,8 @@ export interface AgentProvisionerContext {
   agentConfigs?: AgentConfigByKind;
   serverPassword?: string;
   credentials: UserProviderCredential[];
+  /** Trusted integration context appended to the generated global AGENTS.md. */
+  additionalAgentInstructions?: string;
   opencode?: {
     skills?: Array<{ name: string; content: string }>;
     plugins?: string[];

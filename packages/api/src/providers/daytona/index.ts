@@ -4,6 +4,7 @@ import type { DaytonaImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import path from "path";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { getEncryptionService } from "../../service/encryption";
+import { BeforeAgentSetupError } from "../compute";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -362,6 +363,7 @@ export class DaytonaProvider implements ComputeProvider {
             envVars: Object.fromEntries(
               Object.entries({
                 ...config.environmentVariables,
+                AGENT_FILES_BASE64: undefined,
                 AGENT_RUNTIME_UPGRADE: "1",
               }).filter((entry): entry is [string, string] => entry[1] !== undefined),
             ),
@@ -414,15 +416,36 @@ export class DaytonaProvider implements ComputeProvider {
     if (spec && spec.agent.files.length > 0) {
       await provisionLogger.step("write-agent-files", async () => {
         for (const file of spec.agent.files) {
-          const dir = file.path.substring(0, file.path.lastIndexOf("/"));
-          if (dir) {
-            await this.executeCommand(sandbox, `mkdir -p ${dir}`, true);
+          if (!file.relativeToRepo) {
+            const dir = file.path.substring(0, file.path.lastIndexOf("/"));
+            if (dir) await this.executeCommand(sandbox, `mkdir -p ${dir}`, true);
+            await this.executeCommand(
+              sandbox,
+              `echo "${file.contentBase64}" | base64 -d > ${file.path}`,
+              true,
+            );
+            continue;
           }
-          await this.executeCommand(
-            sandbox,
-            `echo "${file.contentBase64}" | base64 -d > ${file.path}`,
-            true,
-          );
+          const target = `${repoDir}/${file.path}`;
+          const dir = target.substring(0, target.lastIndexOf("/"));
+          if (dir) {
+            await this.executeCommand(sandbox, `mkdir -p '${dir}'`, true);
+          }
+          await sandbox.fs.uploadFile(Buffer.from(file.contentBase64, "base64"), target);
+          if (file.mode)
+            await this.executeCommand(sandbox, `chmod ${file.mode.toString(8)} '${target}'`, true);
+        }
+      });
+    }
+
+    if (spec?.beforeAgentCommand) {
+      await provisionLogger.step("before-agent-setup", async () => {
+        const response = await sandbox.process.executeCommand(
+          `cd '${repoDir}' && ${spec.beforeAgentCommand}`,
+        );
+        if (response.exitCode !== 0) {
+          await sandbox.delete().catch(() => undefined);
+          throw new BeforeAgentSetupError(response.result ?? "");
         }
       });
     }

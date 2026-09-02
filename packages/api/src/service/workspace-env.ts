@@ -21,6 +21,7 @@ import {
   type WorkspaceProvisioningSpec,
   type WorkspaceRepoProvisioning,
 } from "../providers/compute";
+import { resolveProjectDirectory } from "./workspace-runtime";
 
 function toBase64(json: string): string {
   return Buffer.from(json).toString("base64");
@@ -50,6 +51,7 @@ export interface BuildWorkspaceProvisioningSpecParams {
   workspaceProfile: string;
   editorAccessEnabled: boolean;
   setupCommand?: string;
+  beforeAgentCommand?: string;
 }
 
 /**
@@ -67,6 +69,7 @@ export function buildWorkspaceProvisioningSpec(
     workspaceProfile: params.workspaceProfile,
     editorAccessEnabled: params.editorAccessEnabled,
     setupCommand: params.setupCommand,
+    beforeAgentCommand: params.beforeAgentCommand,
   };
 }
 
@@ -123,6 +126,10 @@ export function buildWorkspaceEnv(
     WORKSPACE_SETUP_COMMAND_BASE64: spec.setupCommand
       ? Buffer.from(spec.setupCommand).toString("base64")
       : undefined,
+    WORKSPACE_BEFORE_AGENT_COMMAND_BASE64: spec.beforeAgentCommand
+      ? Buffer.from(spec.beforeAgentCommand).toString("base64")
+      : undefined,
+    WORKSPACE_REPO_DIR: resolveProjectDirectory(spec.repo?.url, runtime.workspaceProvider),
   };
 
   return mergeEnv(system, spec.agent.env, runtime.userEnv);

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "bun run slack-bot.ts",
+    "start:direct": "bun run slack-bot-direct.ts",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {

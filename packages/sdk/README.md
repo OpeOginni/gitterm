@@ -10,14 +10,14 @@ Direct mode runs an agent using your cloud-provider account without a Gitterm se
 
 All built-in compute providers use the same provisioning plan and workspace/run API:
 
-| Provider | Direct prerequisite                                                                     | Persistent pause | Keep-alive |
-| -------- | --------------------------------------------------------------------------------------- | ---------------- | ---------- |
-| E2B      | OpenCode-compatible template                                                            | Yes              | Yes        |
-| Daytona  | Public Gitterm OpenCode server image by default                                         | Yes              | Yes        |
-| Vercel   | Vercel Sandbox project                                                                  | Yes              | Yes        |
-| Ascii    | Box API key                                                                             | Yes              | Yes        |
-| exe.dev  | Token with `new,ls,ssh,share,ssh-key,pause,resume,rm`; public OpenCode image by default | Yes              | No         |
-| Railway  | Project/environment and public service domains                                          | With a volume    | No         |
+| Provider | Direct prerequisite                                            | Persistent pause | Keep-alive |
+| -------- | -------------------------------------------------------------- | ---------------- | ---------- |
+| E2B      | OpenCode-compatible template                                   | Yes              | Yes        |
+| Daytona  | Public Gitterm OpenCode server image by default                | Yes              | Yes        |
+| Vercel   | Vercel Sandbox project                                         | Yes              | Yes        |
+| Ascii    | Box API key                                                    | Yes              | Yes        |
+| exe.dev  | Lifecycle token, or an existing VM with `ls,ssh,share,ssh-key` | Yes              | No         |
+| Railway  | Project/environment and public service domains                 | With a volume    | No         |
 
 AWS remains available through `createGittermClient()` and the Gitterm control plane; it is intentionally not exposed in direct mode.
 
@@ -52,6 +52,43 @@ try {
 `DirectWorkspace` is JSON-serializable. Persist it together with the returned `sessionId` to resume provider lifecycle and OpenCode conversation context after an application restart. The serialized workspace contains the OpenCode password and may contain provider routing tokens, so encrypt it as credential material. Custom providers can implement `DirectProviderAdapter`; use `client.provider.capabilities` rather than hard-coding lifecycle assumptions.
 
 Every adapter receives the same normalized plan: repository/ref and optional Git credentials, agent files, model credentials, environment, setup commands, serve command, and port. Provider-specific configuration only describes how to allocate and expose compute.
+
+Direct setup has explicit phases. `beforeAgent` blocks workspace creation, while
+`afterAgent` runs in the background and can be observed with `setupStatus()` or
+`waitForSetup()`:
+
+```ts
+const workspace = await direct.workspaces.create({
+  repo: "https://github.com/acme/project",
+  setup: {
+    beforeAgent: ["npm install"],
+    afterAgent: ["npm run generate"],
+  },
+  secretFiles: [
+    {
+      path: "~/.config/gcloud/service-account.json",
+      content: process.env.GCP_SERVICE_ACCOUNT_JSON!,
+      mode: 0o600,
+    },
+  ],
+});
+
+await direct.workspaces.waitForSetup(workspace);
+```
+
+To attach to an existing exe.dev VM without giving Gitterm ownership of that VM, pass
+`exedev: { existingVmName: "acme-agent-machine" }` to `workspaces.create()`. Terminating
+that workspace stops only its tracked agent process and does not remove the VM.
+
+Trusted integration context can be appended to the generated global `AGENTS.md` without changing the model system prompt:
+
+```ts
+await direct.workspaces.create({
+  repo: "https://github.com/acme/project",
+  additionalAgentInstructions:
+    "You are running as a Slack bot. Keep responses concise and suitable for a thread.",
+});
+```
 
 ### Provider authentication
 
@@ -237,7 +274,10 @@ Override only the placement decisions your integration cares about:
 await client.workspaces.create({
   repo: "https://github.com/acme/product",
   agent: "opencode",
-  setupCommands: ["npm install", "npm run generate"],
+  setup: {
+    beforeAgent: ["npm install"],
+    afterAgent: ["npm run generate"],
+  },
   opencode: {
     skills: [
       {
@@ -259,12 +299,38 @@ Follow the repository's release-demo workflow.`,
 });
 ```
 
-Setup commands run in order from the checked-out repository after the agent server is
-ready. They do not delay workspace creation or stop the agent if they fail. Provider and
-agent defaults configured by an administrator run first. Use
-`client.workspaces.setupStatus(workspaceId)` or `waitForSetup(workspaceId)` to inspect them.
-GitTerm persists the reported state and bounded log; a recovery copy also lives in the
-repository's git-excluded `.gitterm/setup/` directory.
+Setup commands run in order from the checked-out repository. `beforeAgent` blocks agent
+startup; when it fails, `create()` rejects with the tail of its log. `afterAgent` starts
+after the agent is reachable and reports status independently. Provider and agent defaults
+configured by an administrator run first. Use `client.workspaces.setupStatus(workspaceId)`
+or `waitForSetup(workspaceId)` to inspect the `afterAgent` phase. GitTerm persists bounded
+logs and a recovery copy in the repository's git-excluded `.gitterm/setup/` directory.
+Setup commands can reference the checkout with `$WORKSPACE_REPO_DIR`, which is the same on
+every provider even though the underlying path differs.
+
+Secret files are created relative to the repository with restrictive permissions and are
+added to `.git/info/exclude` so the agent cannot commit them. GitTerm does not retain their
+contents; to rotate a secret, recreate the workspace. Like model credentials, they are
+delivered to the sandbox through its launch environment, so anyone who can read the
+provider's task or container definition can read them:
+
+```ts
+await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  secretFiles: [
+    {
+      path: ".secrets/gcp.json",
+      content: process.env.GCP_SERVICE_ACCOUNT_JSON!,
+      mode: "0600",
+    },
+  ],
+  setup: {
+    beforeAgent: [
+      'gcloud auth activate-service-account --key-file "$WORKSPACE_REPO_DIR/.secrets/gcp.json"',
+    ],
+  },
+});
+```
 
 `provider` is a discriminated union, so TypeScript only offers `region` for providers
 where GitTerm supports caller-selected placement. Machine keys are configured by admins
@@ -286,7 +352,7 @@ it does not claim that a pull request, upload, or other product outcome succeede
 ```ts
 const { workspace } = await client.workspaces.create({
   repo: "https://github.com/acme/product",
-  setupCommands: ["npm install", "npm run db:seed"],
+  setup: { afterAgent: ["npm install", "npm run db:seed"] },
 });
 
 const run = await client.runs.create({

@@ -137,6 +137,9 @@ async function validateModelCredential(
   if (registeredModel?.isFree) return;
 
   const provider = selectedModel.slice(0, separator);
+  // OpenCode periodically changes its free model catalog, so let OpenCode itself
+  // decide whether a model from its own provider needs authentication.
+  if (provider === "opencode") return;
   if (workspaceRecord.inlineModelProviders.includes(provider)) return;
 
   const credentialIds = workspaceRecord.modelCredentialIds;
@@ -156,7 +159,7 @@ async function validateModelCredential(
 
   throw new TRPCError({
     code: "BAD_REQUEST",
-    message: `MODEL_CREDENTIAL_REQUIRED: Workspace has no credential for ${provider}. Recreate it with a matching dashboard credential (modelCredentialIds) or an inline credential (modelCredentials).`,
+    message: `MODEL_CREDENTIAL_REQUIRED: Model "${selectedModel}" requires a credential for provider "${provider}". Recreate the workspace with a matching dashboard credential (modelCredentialIds) or an inline credential (modelCredentials).`,
   });
 }
 

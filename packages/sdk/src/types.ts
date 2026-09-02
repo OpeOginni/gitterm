@@ -152,11 +152,15 @@ export type WorkspaceCreateInput = {
   /** Ephemeral environment variables injected into this workspace only. */
   environmentVariables?: Record<string, string>;
   /**
-   * Ordered commands launched in the repository after the agent server starts.
-   * They do not block workspace readiness; inspect ~/.gitterm/setup for status
-   * and logs through workspaces.setupStatus()/waitForSetup().
+   * Setup phases run in order. `beforeAgent` blocks agent startup and fails
+   * create() when it exits non-zero; `afterAgent` starts after the agent is
+   * reachable and is observable with setupStatus()/waitForSetup().
    */
-  setupCommands?: string[];
+  setup?: { beforeAgent?: string[]; afterAgent?: string[] };
+  /** Secret files written relative to the repository and excluded from git. Rotate by recreating the workspace. */
+  secretFiles?: Array<{ path: string; content: string; mode?: "0400" | "0600" }>;
+  /** Trusted integration context appended to the workspace's global AGENTS.md. */
+  additionalAgentInstructions?: string;
   /** OpenCode capabilities materialized only in this workspace. */
   opencode?: {
     skills?: Array<{ name: string; content: string }>;

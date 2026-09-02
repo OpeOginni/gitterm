@@ -10,15 +10,28 @@ export type WorkspaceSetupStatus = {
   log: string | null;
 };
 
+/**
+ * Shell command that adds repository-relative paths to `.git/info/exclude` so
+ * an agent running `git add -A` cannot commit provisioned secret files.
+ */
+export function buildGitExcludeCommand(paths: string[]): string | undefined {
+  if (paths.length === 0) return undefined;
+  const entries = paths.map((path) => `'/${path.replaceAll("'", `'"'"'`)}'`).join(" ");
+  return `if [ -d .git/info ]; then for p in ${entries}; do grep -qxF "$p" .git/info/exclude 2>/dev/null || printf '%s\\n' "$p" >> .git/info/exclude; done; fi`;
+}
+
 export const AWS_CLI_SETUP_COMMAND = `if ! command -v aws >/dev/null 2>&1; then
   tmp_dir=$(mktemp -d)
+  aws_install_dir="$HOME/.gitterm/aws-cli"
+  aws_bin_dir="$HOME/.bun/bin"
   case "$(uname -m)" in
     aarch64|arm64) aws_arch=aarch64 ;;
     *) aws_arch=x86_64 ;;
   esac
   curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$aws_arch.zip" -o "$tmp_dir/awscliv2.zip"
   unzip -q "$tmp_dir/awscliv2.zip" -d "$tmp_dir"
-  "$tmp_dir/aws/install" --update
+  mkdir -p "$aws_install_dir" "$aws_bin_dir"
+  "$tmp_dir/aws/install" --install-dir "$aws_install_dir" --bin-dir "$aws_bin_dir" --update
   rm -rf "$tmp_dir"
 fi`;
 
@@ -58,6 +71,10 @@ export function buildWorkspaceSetupCommand(
      * reconciled by server-side polling instead.
      */
     disablePush?: boolean;
+    phase?: "before-agent" | "after-agent";
+    waitForAgent?: boolean;
+    detached?: boolean;
+    failOnError?: boolean;
   },
 ): string | undefined {
   if (commands.length === 0) return undefined;
@@ -80,8 +97,18 @@ export function buildWorkspaceSetupCommand(
           "}",
         ].join("\n")
       : "report_setup() { return 0; }";
+  const phase = options?.phase ?? "after-agent";
+  const readiness =
+    options?.waitForAgent === false
+      ? []
+      : [
+          `SETUP_PORT="\${WORKSPACE_SETUP_PORT:-\${PORT:-${fallbackPort}}}"`,
+          "ready=0",
+          'for attempt in $(seq 1 150); do status=$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:$SETUP_PORT" 2>/dev/null || true); case "$status" in [234][0-9][0-9]) ready=1; break ;; esac; sleep 2; done',
+          'if [ "$ready" -ne 1 ]; then date -u +%Y-%m-%dT%H:%M:%SZ > "$SETUP_DIR/finished-at"; printf "Agent did not become ready on port %s\\n" "$SETUP_PORT" > "$SETUP_DIR/setup.log"; printf "124\\n" > "$SETUP_DIR/exit-code"; printf "failed\\n" > "$SETUP_DIR/state"; SETUP_FINISHED=$(cat "$SETUP_DIR/finished-at"); SETUP_LOG=$(base64 < "$SETUP_DIR/setup.log" | tr -d "\\n"); report_setup failed 124 null "\\"$SETUP_FINISHED\\"" "$SETUP_LOG" || true; exit 0; fi',
+        ];
   const script = [
-    'SETUP_DIR="$PWD/.gitterm/setup"',
+    `SETUP_DIR="$PWD/.gitterm/setup/${phase}"`,
     'mkdir -p "$SETUP_DIR"',
     reportFunction,
     'if [ -d .git/info ]; then grep -qxF "/.gitterm/" .git/info/exclude 2>/dev/null || printf "/.gitterm/\\n" >> .git/info/exclude; fi',
@@ -92,10 +119,7 @@ export function buildWorkspaceSetupCommand(
     'printf "%s\n" "$$" > "$SETUP_DIR/claim/pid"',
     "trap 'rm -rf \"$SETUP_DIR/claim\"' EXIT HUP INT TERM",
     'printf "waiting\\n" > "$SETUP_DIR/state"',
-    `SETUP_PORT="\${WORKSPACE_SETUP_PORT:-\${PORT:-${fallbackPort}}}"`,
-    "ready=0",
-    'for attempt in $(seq 1 150); do status=$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:$SETUP_PORT" 2>/dev/null || true); case "$status" in [234][0-9][0-9]) ready=1; break ;; esac; sleep 2; done',
-    'if [ "$ready" -ne 1 ]; then date -u +%Y-%m-%dT%H:%M:%SZ > "$SETUP_DIR/finished-at"; printf "Agent did not become ready on port %s\\n" "$SETUP_PORT" > "$SETUP_DIR/setup.log"; printf "124\\n" > "$SETUP_DIR/exit-code"; printf "failed\\n" > "$SETUP_DIR/state"; SETUP_FINISHED=$(cat "$SETUP_DIR/finished-at"); SETUP_LOG=$(base64 < "$SETUP_DIR/setup.log" | tr -d "\\n"); report_setup failed 124 null "\\"$SETUP_FINISHED\\"" "$SETUP_LOG" || true; exit 0; fi',
+    ...readiness,
     'printf "running\\n" > "$SETUP_DIR/state"',
     'date -u +%Y-%m-%dT%H:%M:%SZ > "$SETUP_DIR/started-at"',
     'SETUP_STARTED=$(cat "$SETUP_DIR/started-at"); report_setup running null "\\"$SETUP_STARTED\\"" null "" || true',
@@ -106,11 +130,15 @@ export function buildWorkspaceSetupCommand(
     'printf "%s\\n" "$code" > "$SETUP_DIR/exit-code"',
     'date -u +%Y-%m-%dT%H:%M:%SZ > "$SETUP_DIR/finished-at"',
     'if [ "$code" -eq 0 ]; then printf "succeeded\\n" > "$SETUP_DIR/state"; else printf "failed\\n" > "$SETUP_DIR/state"; fi',
+    // Blocking phases surface their log through the provisioning error, so echo the tail to stderr.
+    ...(options?.failOnError
+      ? ['if [ "$code" -ne 0 ]; then tail -c 4000 "$SETUP_DIR/setup.log" >&2; fi']
+      : []),
     'SETUP_STATUS=$(cat "$SETUP_DIR/state"); SETUP_STARTED=$(cat "$SETUP_DIR/started-at"); SETUP_FINISHED=$(cat "$SETUP_DIR/finished-at"); SETUP_LOG=$(tail -c 50000 "$SETUP_DIR/setup.log" | base64 | tr -d "\\n"); report_setup "$SETUP_STATUS" "$code" "\\"$SETUP_STARTED\\"" "\\"$SETUP_FINISHED\\"" "$SETUP_LOG" || true',
-    "exit 0",
+    options?.failOnError ? 'exit "$code"' : "exit 0",
   ].join("\n");
 
-  return `( ${script} ) >/dev/null 2>&1 &`;
+  return options?.detached === false ? `( ${script} )` : `( ${script} ) >/dev/null 2>&1 &`;
 }
 
 export async function getWorkspaceSetupStatus(

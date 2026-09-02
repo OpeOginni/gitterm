@@ -155,11 +155,11 @@ export function createDaytonaDirectProvider(
           const parent = target.slice(0, target.lastIndexOf("/"));
           await execute(
             sandbox,
-            `mkdir -p ${shellQuote(parent)} && printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${shellQuote(target)}`,
+            `mkdir -p ${shellQuote(parent)} && printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${shellQuote(target)}${file.mode == null ? "" : ` && chmod ${file.mode.toString(8)} ${shellQuote(target)}`}`,
           );
         }
-        if (plan.setupCommands.length) {
-          await execute(sandbox, setupCommandScript(plan.setupCommands), directory);
+        if (plan.setup.beforeAgent.length) {
+          await execute(sandbox, setupCommandScript(plan.setup.beforeAgent), directory);
         }
         await startAgent(sandbox, handle);
         const runtime = await runtimeFor(sandbox, handle, input.password);

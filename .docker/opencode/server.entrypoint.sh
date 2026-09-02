@@ -206,15 +206,26 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const files = JSON.parse(fs.readFileSync("/run/gitterm/agent-files.json", "utf8"));
+const repoName = fs.readFileSync("/workspace/.repo_name", "utf8").trim() || "workspace";
 for (const file of files) {
-  const target = file.path.startsWith("~/")
+  const target = file.relativeToRepo
+    ? path.join("/workspace", repoName, file.path)
+    : file.path.startsWith("~/")
     ? path.join(os.homedir(), file.path.slice(2))
     : file.path;
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, Buffer.from(file.contentBase64, "base64"));
+  fs.writeFileSync(target, Buffer.from(file.contentBase64, "base64"), {
+    mode: file.mode || 0o600,
+  });
+  if (file.mode) fs.chmodSync(target, file.mode);
 }
 NODE
         rm -f "$RUNTIME_DIR/agent-files.json"
+        unset AGENT_FILES_BASE64
+    fi
+
+    if [ -n "$WORKSPACE_BEFORE_AGENT_COMMAND_BASE64" ]; then
+        GITTERM_WORKSPACE_SETUP_STRICT=1 /usr/local/bin/gitterm-workspace-setup "/workspace/$(cat .repo_name)" before-agent
     fi
 
     if [ "$GITTERM_DIRECT_PROVIDER" = "railway" ] && [ -n "$WORKSPACE_SETUP_COMMAND_BASE64" ]; then

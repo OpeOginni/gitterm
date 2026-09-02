@@ -15,6 +15,10 @@ export const DIRECT_E2B_TEMPLATES = {
   large: "gitterm-opencode-server-lg",
 } as const;
 
+export const DIRECT_GITTERM_INSTRUCTIONS =
+  "You are running in a direct Gitterm workspace. Follow the user's instructions and verify outcomes before reporting success.";
+const MAX_ADDITIONAL_AGENT_INSTRUCTIONS = 50_000;
+
 export function resolveDirectImage(image?: string): string {
   return image?.trim() || DIRECT_OPENCODE_SERVER_IMAGE;
 }
@@ -47,6 +51,34 @@ export function directModelAuth(credential: DirectModelCredential) {
 
 function base64(value: string): string {
   return Buffer.from(value).toString("base64");
+}
+
+export function validateDirectFilePath(path: string): string {
+  if (
+    path.includes("\0") ||
+    (!path.startsWith("/") && !path.startsWith("~/")) ||
+    path.split("/").some((part) => part === ".." || part === ".") ||
+    path === "/" ||
+    path === "~/"
+  ) {
+    throw new Error(`Invalid secret file path: ${path}`);
+  }
+  return path;
+}
+
+export function validateDirectFileMode(mode = 0o600): number {
+  if (!Number.isInteger(mode) || mode < 0 || mode > 0o777) {
+    throw new Error("Secret file mode must be an integer between 0000 and 0777");
+  }
+  return mode;
+}
+
+export function buildDirectGittermInstructions(additional?: string): string {
+  const trimmed = additional?.trim();
+  if (trimmed && trimmed.length > MAX_ADDITIONAL_AGENT_INSTRUCTIONS) {
+    throw new Error("additionalAgentInstructions is too large");
+  }
+  return trimmed ? `${DIRECT_GITTERM_INSTRUCTIONS}\n\n${trimmed}\n` : DIRECT_GITTERM_INSTRUCTIONS;
 }
 
 function validateName(value: string, kind: string): string {
@@ -133,15 +165,22 @@ export function buildDirectProvisioningPlan(
     },
     {
       path: "~/.config/opencode/AGENTS.md",
-      contentBase64: base64(
-        "You are running in a direct Gitterm workspace. Follow the user's instructions and verify outcomes before reporting success.",
-      ),
+      contentBase64: base64(buildDirectGittermInstructions(input.additionalAgentInstructions)),
     },
     ...(input.opencode?.skills ?? []).map((skill) => ({
       path: `~/.config/opencode/skills/${validateName(skill.name, "skill name")}/SKILL.md`,
       contentBase64: base64(skill.content),
     })),
+    ...(input.secretFiles ?? []).map((file) => ({
+      path: validateDirectFilePath(file.path),
+      contentBase64: base64(file.content),
+      mode: validateDirectFileMode(file.mode),
+    })),
   ];
+  const duplicatePath = files.find(
+    (file, index) => files.findIndex((candidate) => candidate.path === file.path) !== index,
+  );
+  if (duplicatePath) throw new Error(`Duplicate provisioned file path: ${duplicatePath.path}`);
   return {
     workspaceId: input.id,
     lifecycle: input.lifecycle,
@@ -165,12 +204,21 @@ export function buildDirectProvisioningPlan(
       command: DIRECT_OPENCODE_COMMAND,
       port: DIRECT_OPENCODE_PORT,
     },
-    setupCommands: input.setupCommands ?? [],
+    setup: {
+      beforeAgent: input.setup?.beforeAgent ?? [],
+      afterAgent: input.setup?.afterAgent ?? [],
+    },
   };
 }
 
 export function railwayContainerEnvironment(plan: DirectProvisioningPlan): Record<string, string> {
   const repository = plan.repository;
+  const beforeAgent = [
+    ...plan.agent.files.flatMap((file) =>
+      file.mode == null ? [] : [`chmod ${file.mode.toString(8)} ${shellPath(file.path)}`],
+    ),
+    ...plan.setup.beforeAgent,
+  ];
   return {
     ...plan.agent.environmentVariables,
     ...(repository
@@ -189,8 +237,8 @@ export function railwayContainerEnvironment(plan: DirectProvisioningPlan): Recor
         }
       : {}),
     AGENT_FILES_BASE64: base64(JSON.stringify(plan.agent.files)),
-    ...(plan.setupCommands.length
-      ? { WORKSPACE_SETUP_COMMAND_BASE64: base64(setupCommandScript(plan.setupCommands)) }
+    ...(beforeAgent.length
+      ? { WORKSPACE_SETUP_COMMAND_BASE64: base64(setupCommandScript(beforeAgent)) }
       : {}),
     GITTERM_DIRECT_PROVIDER: "railway",
   };
@@ -202,6 +250,10 @@ export function setupCommandScript(commands: string[]): string {
 
 export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+export function shellPath(path: string): string {
+  return path.startsWith("~/") ? `"$HOME"/${shellQuote(path.slice(2))}` : shellQuote(path);
 }
 
 export function cloneRepositoryScript(

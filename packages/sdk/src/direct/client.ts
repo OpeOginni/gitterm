@@ -8,7 +8,12 @@ import { createAsciiDirectProvider } from "./ascii.js";
 import { createDaytonaDirectProvider } from "./daytona.js";
 import { createE2BDirectProvider } from "./e2b.js";
 import { createExeDevDirectProvider } from "./exedev.js";
-import { buildDirectProvisioningPlan, directModelAuth } from "./provisioning.js";
+import {
+  buildDirectProvisioningPlan,
+  directModelAuth,
+  setupCommandScript,
+  shellQuote,
+} from "./provisioning.js";
 import { createRailwayDirectProvider } from "./railway.js";
 import { createVercelDirectProvider } from "./vercel.js";
 import type {
@@ -25,7 +30,11 @@ import type {
   DirectRunWaitOptions,
   DirectWorkspace,
   DirectWorkspaceCreateInput,
+  DirectWorkspaceSetupStatus,
+  DirectWorkspaceSetupWaitOptions,
 } from "./types.js";
+
+const SETUP_DIR = ".gitterm/setup";
 
 export type DirectGittermClientOptions = {
   provider: DirectProviderAdapter | DirectProviderConfig;
@@ -136,6 +145,43 @@ function modelParts(model?: string) {
   return { providerID: model.slice(0, separator), modelID: model.slice(separator + 1) };
 }
 
+function validateEnvironmentVariables(values: Record<string, string>): Record<string, string> {
+  for (const key of Object.keys(values)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      throw new Error(`Invalid environment variable name: ${key}`);
+    }
+    if (
+      key === "OPENCODE_SERVER_PASSWORD" ||
+      key === "OPENCODE_SERVER_USERNAME" ||
+      key === "GITTERM_DIRECT_PROVIDER"
+    ) {
+      throw new Error(`Environment variable ${key} is managed by Gitterm`);
+    }
+  }
+  return values;
+}
+
+function setupRunner(commands: string[]): string {
+  const body = Buffer.from(setupCommandScript(commands)).toString("base64");
+  return [
+    "set -u",
+    `SETUP_DIR=${shellQuote(SETUP_DIR)}`,
+    'mkdir -p "$SETUP_DIR"',
+    'if [ -d .git/info ]; then grep -qxF "/.gitterm/" .git/info/exclude 2>/dev/null || printf "/.gitterm/\\n" >> .git/info/exclude; fi',
+    'printf "waiting\\n" > "$SETUP_DIR/state"',
+    `printf %s ${shellQuote(body)} | base64 -d > "$SETUP_DIR/script.sh"`,
+    'chmod 700 "$SETUP_DIR/script.sh"',
+    'date -u +%Y-%m-%dT%H:%M:%SZ > "$SETUP_DIR/started-at"',
+    'printf "running\\n" > "$SETUP_DIR/state"',
+    'bash -e "$SETUP_DIR/script.sh" > "$SETUP_DIR/setup.log" 2>&1',
+    "code=$?",
+    'printf "%s\\n" "$code" > "$SETUP_DIR/exit-code"',
+    'date -u +%Y-%m-%dT%H:%M:%SZ > "$SETUP_DIR/finished-at"',
+    'if [ "$code" -eq 0 ]; then printf "succeeded\\n" > "$SETUP_DIR/state"; else printf "failed\\n" > "$SETUP_DIR/state"; fi',
+    "exit $code",
+  ].join("\n");
+}
+
 export function createDirectGittermClient(options: DirectGittermClientOptions) {
   const provider = resolveProvider(options.provider);
 
@@ -209,6 +255,66 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
       error: assistantError ? errorMessage(assistantError) : null,
       finalText: finalText || null,
     } satisfies DirectRun;
+  }
+
+  async function startPty(workspace: DirectWorkspace, command: string, title: string) {
+    const result = await authClient(workspace).pty.create({
+      command: "bash",
+      args: ["-lc", command],
+      cwd: workspace.runtime.directory,
+      directory: workspace.runtime.directory,
+      title,
+    });
+    if (result.error || !result.data) throw new Error(errorMessage(result.error));
+    return result.data;
+  }
+
+  async function setupFile(workspace: DirectWorkspace, name: string): Promise<string | null> {
+    const result = await authClient(workspace).file.read({
+      directory: workspace.runtime.directory,
+      path: `${SETUP_DIR}/${name}`,
+    });
+    if (result.error || !result.data || result.data.type !== "text") return null;
+    return result.data.content.trim();
+  }
+
+  async function getSetupStatus(workspace: DirectWorkspace): Promise<DirectWorkspaceSetupStatus> {
+    assertWorkspace(workspace);
+    if (workspace.setup === "not_requested") {
+      return {
+        status: "not_requested",
+        exitCode: null,
+        startedAt: null,
+        finishedAt: null,
+        log: null,
+      };
+    }
+    if (workspace.setup === "before_agent_complete") {
+      return {
+        status: "succeeded",
+        exitCode: 0,
+        startedAt: null,
+        finishedAt: null,
+        log: null,
+      };
+    }
+    const [state, exitCode, startedAt, finishedAt, log] = await Promise.all([
+      setupFile(workspace, "state"),
+      setupFile(workspace, "exit-code"),
+      setupFile(workspace, "started-at"),
+      setupFile(workspace, "finished-at"),
+      setupFile(workspace, "setup.log"),
+    ]);
+    const status = ["waiting", "running", "succeeded", "failed"].includes(state ?? "")
+      ? (state as DirectWorkspaceSetupStatus["status"])
+      : "waiting";
+    return {
+      status,
+      exitCode: exitCode != null && Number.isInteger(Number(exitCode)) ? Number(exitCode) : null,
+      startedAt,
+      finishedAt,
+      log: log?.slice(-50_000) ?? null,
+    };
   }
 
   return {
@@ -344,17 +450,32 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         }
         const id = input.id ?? randomUUID();
         const password = randomUUID();
+        validateEnvironmentVariables(input.environmentVariables ?? {});
         const provisioning = buildDirectProvisioningPlan({ ...input, id, lifecycle, password });
         const created = await provider.create({ ...input, id, lifecycle, password, provisioning });
-        return {
+        const workspace: DirectWorkspace = {
           id,
           provider: provider.name,
           externalId: created.externalId,
           status: "running",
           lifecycle,
           runtime: created.runtime,
+          setup: provisioning.setup.afterAgent.length
+            ? "after_agent"
+            : provisioning.setup.beforeAgent.length
+              ? "before_agent_complete"
+              : "not_requested",
           createdAt: new Date().toISOString(),
         };
+        if (provisioning.setup.afterAgent.length) {
+          try {
+            await startPty(workspace, setupRunner(provisioning.setup.afterAgent), "Gitterm setup");
+          } catch (error) {
+            await provider.terminate(workspace).catch(() => undefined);
+            throw error;
+          }
+        }
+        return workspace;
       },
       async status(workspace: DirectWorkspace): Promise<DirectWorkspace> {
         assertWorkspace(workspace);
@@ -393,6 +514,27 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         assertWorkspace(workspace);
         if (!provider.keepAlive) throw new Error(`${provider.name} does not support keep-alive`);
         await provider.keepAlive(workspace, timeoutMs);
+      },
+      setupStatus: getSetupStatus,
+      async waitForSetup(
+        workspace: DirectWorkspace,
+        wait: DirectWorkspaceSetupWaitOptions = {},
+      ): Promise<DirectWorkspaceSetupStatus> {
+        const { timeoutMs, pollIntervalMs } = pollTiming(wait, 10 * 60_000);
+        const deadline = Date.now() + timeoutMs;
+        while (true) {
+          const status = await getSetupStatus(workspace);
+          if (status.status === "not_requested" || status.status === "succeeded") return status;
+          if (status.status === "failed") {
+            throw new Error(
+              `Workspace setup failed${status.exitCode == null ? "" : ` with exit code ${status.exitCode}`}${status.log ? `\n${status.log}` : ""}`,
+            );
+          }
+          if (Date.now() >= deadline) {
+            throw new Error(`Workspace setup timed out after ${timeoutMs}ms`);
+          }
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        }
       },
     },
     runs: {

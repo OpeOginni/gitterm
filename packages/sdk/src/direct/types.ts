@@ -89,6 +89,19 @@ export type DirectAuthWaitOptions = {
   pollIntervalMs?: number;
 };
 
+export type DirectSecretFile = {
+  /** Absolute path or a path below the workspace user's home (`~/...`). */
+  path: string;
+  content: string;
+  /** Unix permission bits. Defaults to owner read/write (0600). */
+  mode?: number;
+};
+
+export type DirectWorkspaceSetup = {
+  beforeAgent?: string[];
+  afterAgent?: string[];
+};
+
 export type DirectWorkspaceCreateInput = {
   id?: string;
   repo?: string;
@@ -99,7 +112,12 @@ export type DirectWorkspaceCreateInput = {
   lifecycle?: DirectWorkspaceLifecycle;
   environmentVariables?: Record<string, string>;
   modelCredentials?: DirectModelCredential[];
-  setupCommands?: string[];
+  setup?: DirectWorkspaceSetup;
+  secretFiles?: DirectSecretFile[];
+  /** Provider-specific attachment settings. */
+  exedev?: { existingVmName: string };
+  /** Trusted integration context appended to the generated global AGENTS.md. */
+  additionalAgentInstructions?: string;
   opencode?: {
     config?: Record<string, unknown>;
     plugins?: string[];
@@ -121,7 +139,21 @@ export type DirectWorkspace = {
   status: DirectWorkspaceStatus;
   lifecycle: DirectWorkspaceLifecycle;
   runtime: DirectWorkspaceRuntime;
+  setup: "not_requested" | "before_agent_complete" | "after_agent";
   createdAt: string;
+};
+
+export type DirectWorkspaceSetupStatus = {
+  status: "not_requested" | "waiting" | "running" | "succeeded" | "failed";
+  exitCode: number | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  log: string | null;
+};
+
+export type DirectWorkspaceSetupWaitOptions = {
+  timeoutMs?: number;
+  pollIntervalMs?: number;
 };
 
 export type DirectProviderWorkspaceInput = DirectWorkspaceCreateInput & {
@@ -131,7 +163,7 @@ export type DirectProviderWorkspaceInput = DirectWorkspaceCreateInput & {
   provisioning: DirectProvisioningPlan;
 };
 
-export type DirectAgentFile = { path: string; contentBase64: string };
+export type DirectAgentFile = { path: string; contentBase64: string; mode?: number };
 
 export type DirectProvisioningPlan = {
   workspaceId: string;
@@ -151,7 +183,10 @@ export type DirectProvisioningPlan = {
     command: string;
     port: number;
   };
-  setupCommands: string[];
+  setup: {
+    beforeAgent: string[];
+    afterAgent: string[];
+  };
 };
 
 export interface DirectProviderAdapter {

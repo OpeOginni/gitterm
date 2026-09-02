@@ -257,7 +257,7 @@ async function reviewRevision({
         REVIEW_LABEL: label,
         ...(r2.publicUrl ? { R2_PUBLIC_URL: r2.publicUrl } : {}),
       },
-      setupCommands: [reviewToolsSetup],
+      setup: { afterAgent: [reviewToolsSetup] },
       opencode: {
         // Disposable, unauthenticated sandbox: skip tool approval prompts.
         config: {

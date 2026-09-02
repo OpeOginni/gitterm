@@ -2,6 +2,7 @@ import { Sandbox } from "@vercel/sandbox";
 import env from "@gitterm/env/server";
 import type { VercelImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import { BeforeAgentSetupError } from "../compute";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -148,19 +149,25 @@ export class VercelProvider implements ComputeProvider {
     }
   }
 
-  private async writeAgentFiles(sandbox: VercelSandbox, spec: WorkspaceProvisioningSpec | null) {
+  private async writeAgentFiles(
+    sandbox: VercelSandbox,
+    spec: WorkspaceProvisioningSpec | null,
+    repoDir: string,
+  ) {
     const homeResult = await sandbox.runCommand("printenv", ["HOME"]);
     const homeDirectory = (await homeResult.stdout()).trim() || "/home/vercel-sandbox";
     for (const file of spec?.agent.files ?? []) {
-      const target = file.path.startsWith("~/")
-        ? `${homeDirectory}/${file.path.slice(2)}`
-        : file.path;
+      const target = file.relativeToRepo
+        ? `${repoDir}/${file.path}`
+        : file.path.startsWith("~/")
+          ? `${homeDirectory}/${file.path.slice(2)}`
+          : file.path;
       const directory = target.substring(0, target.lastIndexOf("/"));
       if (directory) {
         await sandbox.runCommand("mkdir", ["-p", directory]);
       }
       await sandbox.writeFiles([
-        { path: target, content: Buffer.from(file.contentBase64, "base64") },
+        { path: target, content: Buffer.from(file.contentBase64, "base64"), mode: file.mode },
       ]);
     }
   }
@@ -285,7 +292,19 @@ esac
           );
         }
       }
-      await logger.step("write-agent-files", () => this.writeAgentFiles(sandbox, spec));
+      await logger.step("write-agent-files", () => this.writeAgentFiles(sandbox, spec, repoDir));
+      if (spec?.beforeAgentCommand) {
+        await logger.step("before-agent-setup", async () => {
+          const result = await sandbox.runCommand({
+            cmd: "bash",
+            args: ["-lc", spec.beforeAgentCommand!],
+            cwd: repoDir,
+          });
+          if (result.exitCode !== 0) {
+            throw new BeforeAgentSetupError(await result.stderr());
+          }
+        });
+      }
       accessCredential = await logger.step("capture-access-credential", () =>
         this.captureAccessCredential(sandbox, spec, repoDir),
       );

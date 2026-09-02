@@ -1,6 +1,7 @@
 import { Sandbox } from "e2b";
 import env from "@gitterm/env/server";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import { BeforeAgentSetupError } from "../compute";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -90,7 +91,9 @@ export class E2BProvider implements ComputeProvider {
     const envs = (config.environmentVariables ?? {}) as WorkspaceEnvironmentVariables;
 
     return Object.fromEntries(
-      Object.entries(envs).filter(([, value]) => value !== undefined),
+      Object.entries(envs).filter(
+        ([name, value]) => name !== "AGENT_FILES_BASE64" && value !== undefined,
+      ),
     ) as Record<string, string>;
   }
 
@@ -218,15 +221,16 @@ export class E2BProvider implements ComputeProvider {
   private async writeAgentFiles(
     sandbox: E2BSandbox,
     spec: WorkspaceProvisioningSpec | null,
+    repoDir: string,
   ): Promise<void> {
     for (const file of spec?.agent.files ?? []) {
-      const dir = file.path.substring(0, file.path.lastIndexOf("/"));
-      if (dir) {
-        await this.runCommand(sandbox, `mkdir -p ${dir}`, `mkdir dir for ${file.path}`);
-      }
+      // Decode base64 in the sandbox so binary secrets survive intact.
+      const target = file.relativeToRepo ? `${repoDir}/${file.path}` : file.path;
+      const dir = target.substring(0, target.lastIndexOf("/"));
+      if (dir) await this.runCommand(sandbox, `mkdir -p '${dir}'`, `mkdir dir for ${file.path}`);
       await this.runCommand(
         sandbox,
-        `echo "${file.contentBase64}" | base64 -d > ${file.path}`,
+        `echo "${file.contentBase64}" | base64 -d > '${target}'${file.mode ? ` && chmod ${file.mode.toString(8)} '${target}'` : ""}`,
         `write agent file ${file.path}`,
       );
     }
@@ -392,10 +396,32 @@ export class E2BProvider implements ComputeProvider {
     await provisionLogger.step("clone-repository", () =>
       this.cloneRepository(sandbox, spec, repoDir),
     );
-    await provisionLogger.step("write-agent-files", () => this.writeAgentFiles(sandbox, spec));
+    await provisionLogger.step("write-agent-files", () =>
+      this.writeAgentFiles(sandbox, spec, repoDir),
+    );
     await provisionLogger.step("configure-ssh-runtime", () =>
       this.configureSshRuntime(sandbox, spec),
     );
+    if (spec?.beforeAgentCommand) {
+      await provisionLogger.step("before-agent-setup", async () => {
+        const result = await sandbox.commands
+          .run(spec.beforeAgentCommand!, { cwd: repoDir })
+          .catch((error: unknown) => {
+            // The E2B SDK throws on non-zero exit; keep the command output.
+            const failed = error as { exitCode?: number; stderr?: string; stdout?: string };
+            if (typeof failed.exitCode !== "number") throw error;
+            return {
+              exitCode: failed.exitCode,
+              stderr: failed.stderr ?? "",
+              stdout: failed.stdout ?? "",
+            };
+          });
+        if (result.exitCode !== 0) {
+          await sandbox.kill().catch(() => undefined);
+          throw new BeforeAgentSetupError(result.stderr || result.stdout);
+        }
+      });
+    }
     const accessCredential = await provisionLogger.step("capture-access-credential", () =>
       this.captureAccessCredential(sandbox, spec, repoDir),
     );

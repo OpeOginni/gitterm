@@ -195,36 +195,38 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
         repo,
         agent,
         provider: { type: provider } as WorkspaceProviderSelection,
-        setupCommands: [
-          (workspaceApiAccess
-            ? [
-                "set -eu",
-                'echo "=== marker: env ($(date -u +%H:%M:%SZ))"',
-                'env | grep -E "^WORKSPACE_(API_URL|SETUP_PORT)=" || echo "missing workspace env"',
-                'echo "=== marker: cli ($(date -u +%H:%M:%SZ))"',
-                "command -v gitterm && timeout 15 gitterm --version",
-                'echo "=== marker: api reachability ($(date -u +%H:%M:%SZ))"',
-                'curl -sS -m 10 -o /dev/null -w "api http %{http_code}\\n" "$WORKSPACE_API_URL" || echo "api unreachable"',
-                'echo "=== marker: workspace info ($(date -u +%H:%M:%SZ))"',
-                "timeout 30 gitterm workspace info --json",
-                'echo "=== marker: ports list ($(date -u +%H:%M:%SZ))"',
-                "timeout 30 gitterm ports list --json",
-                'echo "=== marker: ports open ($(date -u +%H:%M:%SZ))"',
-                "timeout 45 gitterm ports open 43117 --name gitterm-e2e --json",
-                'echo "=== marker: ports close ($(date -u +%H:%M:%SZ))"',
-                "timeout 30 gitterm ports close 43117 --json",
-                'echo "=== marker: done ($(date -u +%H:%M:%SZ))"',
-              ]
-            : [
-                "set -eu",
-                'echo "=== marker: env ($(date -u +%H:%M:%SZ))"',
-                'env | grep -E "^WORKSPACE_(API_URL|SETUP_PORT)=" || echo "missing workspace env"',
-                'echo "=== marker: plain setup ($(date -u +%H:%M:%SZ))"',
-                "git rev-parse --short HEAD",
-                'echo "=== marker: done ($(date -u +%H:%M:%SZ))"',
-              ]
-          ).join("\n"),
-        ],
+        setup: {
+          afterAgent: [
+            (workspaceApiAccess
+              ? [
+                  "set -eu",
+                  'echo "=== marker: env ($(date -u +%H:%M:%SZ))"',
+                  'env | grep -E "^WORKSPACE_(API_URL|SETUP_PORT)=" || echo "missing workspace env"',
+                  'echo "=== marker: cli ($(date -u +%H:%M:%SZ))"',
+                  "command -v gitterm && timeout 15 gitterm --version",
+                  'echo "=== marker: api reachability ($(date -u +%H:%M:%SZ))"',
+                  'curl -sS -m 10 -o /dev/null -w "api http %{http_code}\\n" "$WORKSPACE_API_URL" || echo "api unreachable"',
+                  'echo "=== marker: workspace info ($(date -u +%H:%M:%SZ))"',
+                  "timeout 30 gitterm workspace info --json",
+                  'echo "=== marker: ports list ($(date -u +%H:%M:%SZ))"',
+                  "timeout 30 gitterm ports list --json",
+                  'echo "=== marker: ports open ($(date -u +%H:%M:%SZ))"',
+                  "timeout 45 gitterm ports open 43117 --name gitterm-e2e --json",
+                  'echo "=== marker: ports close ($(date -u +%H:%M:%SZ))"',
+                  "timeout 30 gitterm ports close 43117 --json",
+                  'echo "=== marker: done ($(date -u +%H:%M:%SZ))"',
+                ]
+              : [
+                  "set -eu",
+                  'echo "=== marker: env ($(date -u +%H:%M:%SZ))"',
+                  'env | grep -E "^WORKSPACE_(API_URL|SETUP_PORT)=" || echo "missing workspace env"',
+                  'echo "=== marker: plain setup ($(date -u +%H:%M:%SZ))"',
+                  "git rev-parse --short HEAD",
+                  'echo "=== marker: done ($(date -u +%H:%M:%SZ))"',
+                ]
+            ).join("\n"),
+          ],
+        },
       }),
     );
     workspaceId = created.workspace.id;

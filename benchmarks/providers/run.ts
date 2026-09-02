@@ -123,7 +123,9 @@ async function benchmarkProvider(provider: ProviderKey): Promise<ProviderBenchma
         repo,
         agent,
         provider: { type: provider } as WorkspaceProviderSelection,
-        setupCommands: [buildWorkspaceBenchmarkCommand({ cpuIterations, diskSizeMiB })],
+        setup: {
+          afterAgent: [buildWorkspaceBenchmarkCommand({ cpuIterations, diskSizeMiB })],
+        },
       }),
     );
     result.controlPlane.createApiMs = created.durationMs;
