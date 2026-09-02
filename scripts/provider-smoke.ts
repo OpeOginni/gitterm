@@ -1,8 +1,12 @@
+import { join } from "node:path";
+import dotenv from "dotenv";
 import {
   createGittermClient,
   type ProviderKey,
   type WorkspaceProviderSelection,
 } from "../packages/sdk/src/index.ts";
+
+dotenv.config({ path: join(import.meta.dir, ".env") });
 
 const PROVIDERS = [
   "railway",
