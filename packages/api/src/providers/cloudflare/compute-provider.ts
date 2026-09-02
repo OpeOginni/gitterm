@@ -49,7 +49,12 @@ interface ProvisionPayload {
   sandboxId: string;
   repo?: ProvisionRepo;
   /** Agent files to write before starting the server. */
-  agentFiles?: { path: string; contentBase64: string }[];
+  agentFiles?: Array<{
+    path: string;
+    contentBase64: string;
+    mode?: 0o400 | 0o600;
+    relativeToRepo?: boolean;
+  }>;
   serverPassword?: string;
   environmentVariables?: Record<string, string>;
   workspaceProfile?: string;
@@ -59,6 +64,7 @@ interface ProvisionPayload {
   port: number;
   /** Commands to run before starting the server (e.g. install the agent). */
   setupCommands?: string[];
+  beforeAgentCommand?: string;
   /** Best-effort command launched after the server is ready. */
   postStartCommand?: string;
 }
@@ -180,7 +186,8 @@ export class CloudflareComputeProvider implements ComputeProvider {
   ): ProvisionPayload {
     const environmentVariables = Object.fromEntries(
       Object.entries(config.environmentVariables ?? {}).filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string",
+        (entry): entry is [string, string] =>
+          entry[0] !== "AGENT_FILES_BASE64" && typeof entry[1] === "string",
       ),
     );
 
@@ -204,6 +211,7 @@ export class CloudflareComputeProvider implements ComputeProvider {
       startCommand: runtime.startCommand,
       port: runtime.port,
       setupCommands: runtime.setupCommands,
+      beforeAgentCommand: spec?.beforeAgentCommand,
       postStartCommand: spec?.setupCommand,
     };
   }

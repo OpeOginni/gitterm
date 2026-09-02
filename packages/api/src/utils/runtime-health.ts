@@ -8,6 +8,7 @@ export type HttpRuntimeHealthPollOptions = {
     init?: Parameters<typeof globalThis.fetch>[1],
   ) => Promise<Response>;
   isHealthy?: (response: Response) => boolean;
+  onUnhealthy?: () => void | Promise<void>;
 };
 
 const MAX_FETCH_ATTEMPT_MS = 10_000;
@@ -44,6 +45,7 @@ export async function pollHttpRuntimeHealth({
   intervalMs = 1_000,
   fetch: fetchImpl = globalThis.fetch,
   isHealthy = (response) => response.ok,
+  onUnhealthy,
 }: HttpRuntimeHealthPollOptions): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
 
@@ -55,6 +57,8 @@ export async function pollHttpRuntimeHealth({
     } catch {
       // Connection failures are expected while a runtime is starting.
     }
+
+    await onUnhealthy?.();
 
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) return false;

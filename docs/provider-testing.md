@@ -125,11 +125,12 @@ Managed-only authentication, catalog, account CLI, and workspace-scoped CLI chec
 
 ## Hosted GitHub Actions
 
-Run the `Provider smoke tests` workflow manually to test the hosted GitTerm application. It runs one job each for the three hosted providers:
+Run the `Provider smoke tests` workflow manually to test the hosted GitTerm application. It runs one job each for the four hosted providers:
 
 - Railway
 - E2B
 - Daytona
+- Vercel
 
 The workflow uses the protected `provider-e2e` environment. Configure these secrets there:
 

@@ -2,7 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildWorkspaceSetupCommand, withWorkspaceSetupPort } from "./workspace-setup";
+import {
+  AWS_CLI_SETUP_COMMAND,
+  buildWorkspaceSetupCommand,
+  withWorkspaceSetupPort,
+} from "./workspace-setup";
+
+test("AWS CLI setup persists the install across container replacements", () => {
+  expect(AWS_CLI_SETUP_COMMAND).toContain('--install-dir "$aws_install_dir"');
+  expect(AWS_CLI_SETUP_COMMAND).toContain('--bin-dir "$aws_bin_dir"');
+  expect(AWS_CLI_SETUP_COMMAND).toContain("$HOME/.gitterm/aws-cli");
+  expect(AWS_CLI_SETUP_COMMAND).toContain("$HOME/.bun/bin");
+});
 
 describe("buildWorkspaceSetupCommand", () => {
   test("returns undefined without commands", () => {
@@ -41,7 +52,7 @@ describe("buildWorkspaceSetupCommand", () => {
 
   test("runs after an authenticated readiness response and stale claim", async () => {
     const home = await mkdtemp(join(tmpdir(), "gitterm-setup-"));
-    const claim = join(home, ".gitterm/setup/claim");
+    const claim = join(home, ".gitterm/setup/after-agent/claim");
     await mkdir(claim, { recursive: true });
     await mkdir(join(home, ".git/info"), { recursive: true });
     await writeFile(join(claim, "boot-id"), "stale\n");
@@ -64,7 +75,9 @@ describe("buildWorkspaceSetupCommand", () => {
       let state = "";
       for (let attempt = 0; attempt < 50 && state !== "succeeded"; attempt++) {
         await Bun.sleep(20);
-        state = await readFile(join(home, ".gitterm/setup/state"), "utf8").catch(() => "");
+        state = await readFile(join(home, ".gitterm/setup/after-agent/state"), "utf8").catch(
+          () => "",
+        );
         state = state.trim();
       }
 
@@ -122,6 +135,20 @@ describe("buildWorkspaceSetupCommand", () => {
       server.stop(true);
       await rm(home, { recursive: true, force: true });
     }
+  });
+
+  test("builds a blocking before-agent phase without a readiness probe", () => {
+    const command = buildWorkspaceSetupCommand(["true"], 4096, {
+      phase: "before-agent",
+      waitForAgent: false,
+      detached: false,
+      failOnError: true,
+    });
+
+    expect(command).toContain(".gitterm/setup/before-agent");
+    expect(command).not.toContain("WORKSPACE_SETUP_PORT");
+    expect(command).toEndWith(")");
+    expect(command).toContain('exit "$code"');
   });
 });
 

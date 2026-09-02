@@ -1,7 +1,12 @@
 #!/bin/sh
 
 repo_dir="$1"
-encoded_command="${WORKSPACE_SETUP_COMMAND_BASE64:-}"
+phase="${2:-after-agent}"
+if [ "$phase" = "before-agent" ]; then
+  encoded_command="${WORKSPACE_BEFORE_AGENT_COMMAND_BASE64:-}"
+else
+  encoded_command="${WORKSPACE_SETUP_COMMAND_BASE64:-}"
+fi
 strict="${GITTERM_WORKSPACE_SETUP_STRICT:-}"
 
 if [ -z "$encoded_command" ]; then

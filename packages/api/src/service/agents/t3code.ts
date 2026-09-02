@@ -3,7 +3,7 @@ import {
   buildOpencodeAuthJson,
   buildOpencodeConfigJson,
   buildOpencodeTuiConfigJson,
-  GITTERM_INSTRUCTIONS,
+  buildGittermInstructions,
   OPENCODE_AUTH_PATH,
   OPENCODE_CONFIG_PATH,
   OPENCODE_GITTERM_INSTRUCTIONS_PATH,
@@ -120,7 +120,7 @@ export const t3codeProvisioner: AgentProvisioner = {
     });
     files.push({
       path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,
-      contentBase64: toBase64(GITTERM_INSTRUCTIONS),
+      contentBase64: toBase64(buildGittermInstructions(ctx.additionalAgentInstructions)),
     });
     for (const skill of ctx.opencode?.skills ?? []) {
       files.push({

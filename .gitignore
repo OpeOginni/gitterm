@@ -13,6 +13,10 @@ build
 .env*.local
 .gitterm-slack-state.json
 .gitterm-slack-state.json.tmp
+.gitterm-slack-hosted-state.json
+.gitterm-slack-hosted-state.json.tmp
+.gitterm-slack-direct-state.json
+.gitterm-slack-direct-state.json.tmp
 
 # IDEs and editors
 .vscode/*

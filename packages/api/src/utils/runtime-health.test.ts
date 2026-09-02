@@ -14,4 +14,22 @@ describe("pollHttpRuntimeHealth", () => {
     expect(healthy).toBe(false);
     expect(performance.now() - startedAt).toBeLessThan(500);
   });
+
+  test("checks provider state after an unhealthy response", async () => {
+    let checked = false;
+
+    await expect(
+      pollHttpRuntimeHealth({
+        url: "https://runtime.example.com",
+        timeoutMs: 100,
+        intervalMs: 1,
+        fetch: async () => new Response(null, { status: 502 }),
+        onUnhealthy: () => {
+          checked = true;
+          throw new Error("provider crashed");
+        },
+      }),
+    ).rejects.toThrow("provider crashed");
+    expect(checked).toBe(true);
+  });
 });

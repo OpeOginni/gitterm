@@ -35,14 +35,27 @@ export function mapOpencodeRunStatus(
   return "completed";
 }
 
-function errorMessage(error: unknown): string {
+export function formatOpencodeError(
+  error: unknown,
+  model?: { providerID: string; modelID: string },
+): string {
   if (!error) return "OpenCode request failed";
   if (typeof error === "string") return error;
+  let message: string | undefined;
   if (typeof error === "object" && "data" in error) {
-    const data = (error as { data?: { message?: unknown } }).data;
-    if (typeof data?.message === "string") return data.message;
+    const data = (error as { data?: { message?: unknown; providerID?: unknown } }).data;
+    if (typeof data?.message === "string") message = data.message;
+    const name = "name" in error ? (error as { name?: unknown }).name : undefined;
+    const providerID = typeof data?.providerID === "string" ? data.providerID : model?.providerID;
+    const authenticationFailed =
+      name === "ProviderAuthError" ||
+      (message ? /invalid api key|authentication|unauthorized/i.test(message) : false);
+    if (authenticationFailed && providerID) {
+      const selectedModel = model ? ` for model "${model.providerID}/${model.modelID}"` : "";
+      return `Model provider credential "${providerID}" was rejected${selectedModel}: ${message ?? "Authentication failed"}`;
+    }
   }
-  return JSON.stringify(error) ?? "OpenCode request failed";
+  return message ?? JSON.stringify(error) ?? "OpenCode request failed";
 }
 
 export function createWorkspaceOpencodeClient(input: {
@@ -71,7 +84,7 @@ export async function createOpencodeSession(input: {
     body: input.title ? { title: input.title } : undefined,
     query: { directory: input.directory },
   });
-  if (created.error || !created.data) throw new Error(errorMessage(created.error));
+  if (created.error || !created.data) throw new Error(formatOpencodeError(created.error));
 
   return { id: created.data.id, title: created.data.title };
 }
@@ -107,7 +120,7 @@ export async function submitOpencodePrompt(input: {
         : undefined,
     },
   });
-  if (prompted.error) throw new Error(errorMessage(prompted.error));
+  if (prompted.error) throw new Error(formatOpencodeError(prompted.error));
 }
 
 export async function getOpencodeRun(input: {
@@ -124,16 +137,20 @@ export async function getOpencodeRun(input: {
     client.session.get({ path: { id: input.runId }, query: { directory: input.directory } }),
     client.session.status({ query: { directory: input.directory } }),
   ]);
-  if (session.error || !session.data) throw new Error(errorMessage(session.error));
-  if (statuses.error || !statuses.data) throw new Error(errorMessage(statuses.error));
+  if (session.error || !session.data) throw new Error(formatOpencodeError(session.error));
+  if (statuses.error || !statuses.data) throw new Error(formatOpencodeError(statuses.error));
   const messages = await client.session.messages({
     path: { id: input.runId },
     query: { directory: input.directory },
   });
-  if (messages.error || !messages.data) throw new Error(errorMessage(messages.error));
+  if (messages.error || !messages.data) throw new Error(formatOpencodeError(messages.error));
 
   const assistant = findLastOpencodeRunAssistant(messages.data, input.messageId);
   const assistantError = assistant?.info.role === "assistant" ? assistant.info.error : undefined;
+  const assistantModel =
+    assistant?.info.role === "assistant"
+      ? { providerID: assistant.info.providerID, modelID: assistant.info.modelID }
+      : undefined;
   const missingAssistantError =
     !assistant && input.missingAssistantIsFailure
       ? "OpenCode stopped before producing an assistant response"
@@ -157,7 +174,9 @@ export async function getOpencodeRun(input: {
       input.missingAssistantIsFailure,
       assistantCompleted,
     ),
-    error: assistantError ? errorMessage(assistantError) : missingAssistantError,
+    error: assistantError
+      ? formatOpencodeError(assistantError, assistantModel)
+      : missingAssistantError,
     finalText: finalText || null,
     messages: messages.data
       .filter((message) => isOpencodeRunMessage(message.info, input.messageId))
@@ -176,7 +195,10 @@ export async function getOpencodeRun(input: {
           .trim(),
         error:
           message.info.role === "assistant" && message.info.error
-            ? errorMessage(message.info.error)
+            ? formatOpencodeError(message.info.error, {
+                providerID: message.info.providerID,
+                modelID: message.info.modelID,
+              })
             : null,
       })),
   };
@@ -193,7 +215,7 @@ export async function cancelOpencodeRun(input: {
     path: { id: input.runId },
     query: { directory: input.directory },
   });
-  if (result.error) throw new Error(errorMessage(result.error));
+  if (result.error) throw new Error(formatOpencodeError(result.error));
   return { cancelled: result.data === true };
 }
 
@@ -208,5 +230,5 @@ export async function deleteOpencodeSession(input: {
     path: { id: input.sessionId },
     query: { directory: input.directory },
   });
-  if (result.error) throw new Error(errorMessage(result.error));
+  if (result.error) throw new Error(formatOpencodeError(result.error));
 }

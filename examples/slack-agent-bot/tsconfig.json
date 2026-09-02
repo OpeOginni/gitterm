@@ -7,5 +7,5 @@
     "skipLibCheck": true,
     "types": ["bun"]
   },
-  "include": ["slack-bot.ts"]
+  "include": ["slack-bot.ts", "slack-bot-direct.ts"]
 }

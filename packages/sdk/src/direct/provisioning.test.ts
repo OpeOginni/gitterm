@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildDirectGittermInstructions,
   buildDirectProvisioningPlan,
   DIRECT_OPENCODE_SERVER_IMAGE,
   cloneRepositoryScript,
@@ -23,7 +24,8 @@ describe("direct provisioning plan", () => {
         CUSTOM_VALUE: "custom",
       },
       modelCredentials: [{ providerName: "anthropic", apiKey: "model-key" }],
-      setupCommands: ["bun install"],
+      setup: { beforeAgent: ["bun install"], afterAgent: ["bun test"] },
+      secretFiles: [{ path: "~/.secrets/token", content: "secret", mode: 0o400 }],
     });
 
     expect(plan.repository?.name).toBe("project");
@@ -33,8 +35,10 @@ describe("direct provisioning plan", () => {
       CUSTOM_VALUE: "custom",
       OPENCODE_SERVER_PASSWORD: "password",
     });
-    expect(plan.agent.files).toHaveLength(3);
-    expect(setupCommandScript(plan.setupCommands)).toContain("bun install");
+    expect(plan.agent.files).toHaveLength(4);
+    expect(plan.agent.files.at(-1)).toMatchObject({ path: "~/.secrets/token", mode: 0o400 });
+    expect(setupCommandScript(plan.setup.beforeAgent)).toContain("bun install");
+    expect(plan.setup.afterAgent).toEqual(["bun test"]);
     expect(railwayContainerEnvironment(plan)).toMatchObject({
       REPO_URL: "https://gitlab.com/acme/project.git",
       REPO_NAME: "project",
@@ -87,6 +91,44 @@ describe("direct provisioning plan", () => {
         "/workspace/project",
       ),
     ).toContain("rm -rf /tmp/gitterm");
+    expect(() =>
+      buildDirectProvisioningPlan({
+        id: "workspace-1",
+        lifecycle: "ephemeral",
+        password: "password",
+        secretFiles: [{ path: "~/../token", content: "bad" }],
+      }),
+    ).toThrow("Invalid secret file path");
+    expect(() =>
+      buildDirectProvisioningPlan({
+        id: "workspace-1",
+        lifecycle: "ephemeral",
+        password: "password",
+        secretFiles: [{ path: "/run/token", content: "bad", mode: 0o1000 }],
+      }),
+    ).toThrow("Secret file mode");
+  });
+
+  test("appends additional agent instructions to the global AGENTS.md", () => {
+    const plan = buildDirectProvisioningPlan({
+      id: "workspace-1",
+      lifecycle: "ephemeral",
+      password: "password",
+      additionalAgentInstructions: "You are operating as a Slack bot.\nUse concise replies.",
+    });
+    const instructions = plan.agent.files.find(
+      (file) => file.path === "~/.config/opencode/AGENTS.md",
+    );
+
+    expect(Buffer.from(instructions!.contentBase64, "base64").toString()).toBe(
+      buildDirectGittermInstructions("You are operating as a Slack bot.\nUse concise replies."),
+    );
+    expect(buildDirectGittermInstructions("  ")).toBe(
+      "You are running in a direct Gitterm workspace. Follow the user's instructions and verify outcomes before reporting success.",
+    );
+    expect(() => buildDirectGittermInstructions("x".repeat(50_001))).toThrow(
+      "additionalAgentInstructions is too large",
+    );
   });
 
   test("writes portable OAuth credentials into OpenCode auth", () => {

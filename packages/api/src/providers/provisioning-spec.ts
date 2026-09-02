@@ -57,5 +57,8 @@ export function resolveProvisioningSpec(config: WorkspaceConfig): WorkspaceProvi
     setupCommand: env.WORKSPACE_SETUP_COMMAND_BASE64
       ? Buffer.from(env.WORKSPACE_SETUP_COMMAND_BASE64, "base64").toString("utf8")
       : undefined,
+    beforeAgentCommand: env.WORKSPACE_BEFORE_AGENT_COMMAND_BASE64
+      ? Buffer.from(env.WORKSPACE_BEFORE_AGENT_COMMAND_BASE64, "base64").toString("utf8")
+      : undefined,
   };
 }

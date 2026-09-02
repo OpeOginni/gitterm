@@ -1,9 +1,23 @@
 import { describe, expect, test } from "bun:test";
 import {
   findLastOpencodeRunAssistant,
+  formatOpencodeError,
   isOpencodeRunMessage,
   mapOpencodeRunStatus,
 } from "./opencode";
+
+describe("formatOpencodeError", () => {
+  test("identifies the rejected model-provider credential", () => {
+    expect(
+      formatOpencodeError(
+        { name: "APIError", data: { message: "Invalid API key." } },
+        { providerID: "opencode", modelID: "big-pickle" },
+      ),
+    ).toBe(
+      'Model provider credential "opencode" was rejected for model "opencode/big-pickle": Invalid API key.',
+    );
+  });
+});
 
 describe("mapOpencodeRunStatus", () => {
   test("maps native transport state without claiming workflow success", () => {

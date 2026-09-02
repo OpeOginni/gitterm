@@ -1,6 +1,7 @@
 import env from "@gitterm/env/server";
 import type { ExeDevImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import { BeforeAgentSetupError } from "../compute";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -120,13 +121,32 @@ export class ExeDevProvider implements ComputeProvider {
   private getEnvironment(config: WorkspaceConfig, spec: WorkspaceProvisioningSpec | null) {
     return Object.fromEntries(
       Object.entries({ ...config.environmentVariables, ...spec?.agent.env }).filter(
-        ([, value]) => value !== undefined,
+        ([name, value]) => name !== "AGENT_FILES_BASE64" && value !== undefined,
       ),
     ) as Record<string, string>;
   }
 
   private async runVmCommand(handle: ExeDevHandle, command: string): Promise<unknown> {
     return this.execute(`ssh ${handle.vmName} -- bash -lc ${shellQuote(command)}`);
+  }
+
+  /**
+   * The exe.dev exec API reports only its own HTTP status, not the remote
+   * command's exit code, so the blocking setup phase appends a marker that
+   * carries it back.
+   */
+  private async runBeforeAgentSetup(handle: ExeDevHandle, command: string): Promise<void> {
+    const marker = "__GITTERM_BEFORE_AGENT_EXIT__";
+    const output = await this.runVmCommand(
+      handle,
+      `cd ${shellQuote(handle.repoDir)} && ${command}; printf '\\n${marker}%s\\n' "$?"`,
+    );
+    const text = typeof output === "string" ? output : JSON.stringify(output);
+    const match = new RegExp(`${marker}(\\d+)`).exec(text);
+    const exitCode = match ? Number(match[1]) : -1;
+    if (exitCode !== 0) {
+      throw new BeforeAgentSetupError(text.replace(new RegExp(`${marker}\\d+`), ""));
+    }
   }
 
   private async startAgentServer(handle: ExeDevHandle): Promise<void> {
@@ -138,12 +158,14 @@ export class ExeDevProvider implements ComputeProvider {
 
   private async writeAgentFiles(handle: ExeDevHandle, spec: WorkspaceProvisioningSpec | null) {
     for (const file of spec?.agent.files ?? []) {
-      const path = file.path.startsWith("~/")
-        ? `${WORKSPACE_DIR}/${file.path.slice(2)}`
-        : file.path;
+      const path = file.relativeToRepo
+        ? `${handle.repoDir}/${file.path}`
+        : file.path.startsWith("~/")
+          ? `${WORKSPACE_DIR}/${file.path.slice(2)}`
+          : file.path;
       await this.runVmCommand(
         handle,
-        `mkdir -p ${shellQuote(path.substring(0, path.lastIndexOf("/")))} && printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${shellQuote(path)}`,
+        `mkdir -p ${shellQuote(path.substring(0, path.lastIndexOf("/")))} && printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${shellQuote(path)}${file.mode ? ` && chmod ${file.mode.toString(8)} ${shellQuote(path)}` : ""}`,
       );
     }
   }
@@ -229,6 +251,11 @@ export class ExeDevProvider implements ComputeProvider {
         }
       }
       await logger.step("write-agent-files", () => this.writeAgentFiles(handle, spec));
+      if (spec?.beforeAgentCommand) {
+        await logger.step("before-agent-setup", () =>
+          this.runBeforeAgentSetup(handle, spec.beforeAgentCommand!),
+        );
+      }
       await logger.step("start-agent-server", () => this.startAgentServer(handle));
       if (spec?.agent.serve?.postStartCommand) {
         await logger.step("run-post-start-command", () =>

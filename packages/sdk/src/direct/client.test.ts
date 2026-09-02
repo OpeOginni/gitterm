@@ -284,4 +284,58 @@ describe("createDirectGittermClient", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("tracks non-blocking after-agent setup through OpenCode", async () => {
+    const originalFetch = globalThis.fetch;
+    const files = new Map<string, string>();
+    let statusReads = 0;
+    globalThis.fetch = (async (input, init) => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/pty") {
+        const body = (await request.json()) as { title: string };
+        expect(body.title).toBe("Gitterm setup");
+        return Response.json({
+          id: "pty-1",
+          title: body.title,
+          command: "bash",
+          args: [],
+          cwd: "/workspace",
+          status: "running",
+          pid: 1,
+        });
+      }
+      if (request.method === "GET" && url.pathname === "/file/content") {
+        const path = url.searchParams.get("path")!;
+        if (path.endsWith("state")) {
+          statusReads += 1;
+          return Response.json({
+            type: "text",
+            content: statusReads === 1 ? "running" : "succeeded",
+          });
+        }
+        if (path.endsWith("exit-code")) {
+          return Response.json({ type: "text", content: "0" });
+        }
+        return Response.json({ type: "text", content: files.get(path) ?? "" });
+      }
+      throw new Error(`Unexpected request: ${request.method} ${url.pathname}`);
+    }) as typeof fetch;
+
+    try {
+      const { provider } = fakeProvider();
+      const client = createDirectGittermClient({ provider });
+      const workspace = await client.workspaces.create({
+        setup: { afterAgent: ["bun install"] },
+      });
+      expect(workspace.setup).toBe("after_agent");
+      expect(await client.workspaces.setupStatus(workspace)).toMatchObject({ status: "running" });
+      expect(await client.workspaces.waitForSetup(workspace, { pollIntervalMs: 0 })).toMatchObject({
+        status: "succeeded",
+        exitCode: 0,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

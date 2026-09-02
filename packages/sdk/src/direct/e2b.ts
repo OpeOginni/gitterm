@@ -62,11 +62,13 @@ export function createE2BDirectProvider(config: E2BDirectProviderConfig): Direct
           const path = file.path.replace(/^~/, "/home/user");
           const parent = path.slice(0, path.lastIndexOf("/"));
           await sandbox.commands.run(
-            `mkdir -p ${shellQuote(parent)} && printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${shellQuote(path)}`,
+            `mkdir -p ${shellQuote(parent)} && printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${shellQuote(path)}${file.mode == null ? "" : ` && chmod ${file.mode.toString(8)} ${shellQuote(path)}`}`,
           );
         }
-        if (plan.setupCommands.length) {
-          await sandbox.commands.run(setupCommandScript(plan.setupCommands), { cwd: directory });
+        if (plan.setup.beforeAgent.length) {
+          await sandbox.commands.run(setupCommandScript(plan.setup.beforeAgent), {
+            cwd: directory,
+          });
         }
         await sandbox.commands.run(plan.agent.command, {
           cwd: directory,

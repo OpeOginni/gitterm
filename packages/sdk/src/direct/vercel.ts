@@ -156,11 +156,15 @@ export function createVercelDirectProvider(
           const parent = target.slice(0, target.lastIndexOf("/"));
           await run(sandbox, `mkdir -p ${shellQuote(parent)}`);
           await sandbox.writeFiles([
-            { path: target, content: Buffer.from(file.contentBase64, "base64") },
+            {
+              path: target,
+              content: Buffer.from(file.contentBase64, "base64"),
+              ...(file.mode == null ? {} : { mode: file.mode }),
+            },
           ]);
         }
-        if (plan.setupCommands.length) {
-          await run(sandbox, setupCommandScript(plan.setupCommands), handle.directory);
+        if (plan.setup.beforeAgent.length) {
+          await run(sandbox, setupCommandScript(plan.setup.beforeAgent), handle.directory);
         }
         await startAgent(sandbox, handle);
         const runtime = {

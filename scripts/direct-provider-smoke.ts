@@ -272,18 +272,20 @@ async function runProvider(
           GITTERM_DIRECT_E2E_REPO: settings.repo,
           GITTERM_DIRECT_E2E_BASE_COMMIT: settings.baseCommit ?? "",
         },
-        setupCommands: [
-          [
-            "set -eu",
-            "test -d .git",
-            'test "$(git rev-parse --is-inside-work-tree)" = "true"',
-            'remote="$(git remote get-url origin)"',
-            'expected="$GITTERM_DIRECT_E2E_REPO"',
-            'test "$remote" = "$expected" || test "$remote" = "${expected%.git}.git"',
-            'if [ -n "$GITTERM_DIRECT_E2E_BASE_COMMIT" ]; then test "$(git rev-parse HEAD)" = "$GITTERM_DIRECT_E2E_BASE_COMMIT"; fi',
-            'printf "%s\n" "$GITTERM_DIRECT_E2E_MARKER" > .gitterm-direct-smoke',
-          ].join("\n"),
-        ],
+        setup: {
+          beforeAgent: [
+            [
+              "set -eu",
+              "test -d .git",
+              'test "$(git rev-parse --is-inside-work-tree)" = "true"',
+              'remote="$(git remote get-url origin)"',
+              'expected="$GITTERM_DIRECT_E2E_REPO"',
+              'test "$remote" = "$expected" || test "$remote" = "${expected%.git}.git"',
+              'if [ -n "$GITTERM_DIRECT_E2E_BASE_COMMIT" ]; then test "$(git rev-parse HEAD)" = "$GITTERM_DIRECT_E2E_BASE_COMMIT"; fi',
+              'printf "%s\n" "$GITTERM_DIRECT_E2E_MARKER" > "$HOME/.gitterm-direct-smoke"',
+            ].join("\n"),
+          ],
+        },
         opencode: {
           config: { permission: { read: "allow", bash: "allow", external_directory: "allow" } },
         },
@@ -319,7 +321,7 @@ async function runProvider(
         workspace: workspace!,
         title: `Direct provider smoke test: ${provider}`,
         prompt:
-          "Read .gitterm-direct-smoke from the workspace root and respond with exactly its contents and no other text.",
+          "Read ~/.gitterm-direct-smoke and respond with exactly its contents and no other text.",
         model: settings.model,
       }),
     );

@@ -145,9 +145,20 @@ export function createAsciiDirectProvider(
             boxId: handle.boxId,
             fileWriteRequest: { path, content: file.contentBase64, encoding: "base64" },
           });
+          if (file.mode != null) {
+            await runCommand(
+              handle.boxId,
+              `chmod ${file.mode.toString(8)} ${shellQuote(`${HOME}/${path}`)}`,
+            );
+          }
         }
-        if (plan.setupCommands.length) {
-          await runCommand(handle.boxId, setupCommandScript(plan.setupCommands), directory, 600);
+        if (plan.setup.beforeAgent.length) {
+          await runCommand(
+            handle.boxId,
+            setupCommandScript(plan.setup.beforeAgent),
+            directory,
+            600,
+          );
         }
         await startRuntime(handle);
         const runtime = {

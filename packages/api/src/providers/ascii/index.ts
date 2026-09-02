@@ -2,6 +2,7 @@ import { BoxApi, Configuration, waitUntilReady } from "@asciidev/box-sdk";
 import env from "@gitterm/env/server";
 import type { AsciiImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import { BeforeAgentSetupError } from "../compute";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -105,7 +106,7 @@ export class AsciiProvider implements ComputeProvider {
   private getEnvironment(config: WorkspaceConfig, spec: WorkspaceProvisioningSpec | null) {
     return Object.fromEntries(
       Object.entries({ ...config.environmentVariables, ...spec?.agent.env }).filter(
-        ([, value]) => value !== undefined,
+        ([name, value]) => name !== "AGENT_FILES_BASE64" && value !== undefined,
       ),
     ) as Record<string, string>;
   }
@@ -134,13 +135,20 @@ export class AsciiProvider implements ComputeProvider {
     client: BoxApi,
     boxId: string,
     spec: WorkspaceProvisioningSpec | null,
+    repoDir: string,
   ) {
     for (const file of spec?.agent.files ?? []) {
-      const path = file.path.startsWith("~/") ? file.path.slice(2) : file.path;
+      const path = file.relativeToRepo
+        ? `${repoDir}/${file.path}`
+        : file.path.startsWith("~/")
+          ? file.path.slice(2)
+          : file.path;
       await client.writeFile({
         boxId,
         fileWriteRequest: { path, content: file.contentBase64, encoding: "base64" },
       });
+      if (file.mode)
+        await this.runCommand(client, boxId, `chmod ${file.mode.toString(8)} '${path}'`);
     }
   }
 
@@ -257,8 +265,17 @@ export class AsciiProvider implements ComputeProvider {
       }
 
       await logger.step("write-agent-files", () =>
-        this.writeAgentFiles(client, handle.boxId, spec),
+        this.writeAgentFiles(client, handle.boxId, spec, repoDir),
       );
+      if (spec?.beforeAgentCommand) {
+        await logger.step("before-agent-setup", () =>
+          this.runCommand(client, handle.boxId, spec.beforeAgentCommand!, repoDir, 600).catch(
+            (error: unknown) => {
+              throw new BeforeAgentSetupError(error instanceof Error ? error.message : "");
+            },
+          ),
+        );
+      }
       await logger.step("start-agent-server", () => this.startAgentServer(client, handle));
       const postStartCommand = spec?.agent.serve?.postStartCommand;
       if (postStartCommand) {

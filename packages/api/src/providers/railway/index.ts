@@ -19,10 +19,30 @@ import {
   type WorkspaceSSHAccessConfig,
 } from "../ssh-access";
 import type { RailwayConfig } from "./types";
+import { DeploymentStatus } from "./graphql/generated/railway";
 export type { RailwayConfig } from "./types";
 
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
+
+export function railwayDeploymentStatus(
+  status: DeploymentStatus | undefined,
+): WorkspaceStatusResult {
+  switch (status) {
+    case DeploymentStatus.Success:
+      return { status: "running" };
+    case DeploymentStatus.Sleeping:
+    case DeploymentStatus.Crashed:
+    case DeploymentStatus.Failed:
+    case DeploymentStatus.Skipped:
+      return { status: "paused" };
+    case DeploymentStatus.Removed:
+    case DeploymentStatus.Removing:
+      return { status: "terminated" };
+    default:
+      return { status: "pending" };
+  }
+}
 
 /**
  * Railway runs the workspace image's own entrypoint/CMD, which serves the
@@ -439,17 +459,13 @@ export class RailwayProvider implements ComputeProvider {
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
     const railway = await this.getClient();
-    const result = await railway.Service({ id: externalId });
+    const result = await railway.ServiceDeploymentStatus({ id: externalId });
 
-    // Railway doesn't have a direct status field, so we infer from service existence
-    // In a more complete implementation, we'd check deployments status
     if (!result.service) {
       return { status: "terminated" };
     }
 
-    // For now, assume running if the service exists
-    // The actual status is tracked in our DB via webhooks
-    return { status: "running" };
+    return railwayDeploymentStatus(result.service.deployments.edges[0]?.node.status);
   }
 
   async createOrGetExposedPortDomain(

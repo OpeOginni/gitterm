@@ -17,6 +17,8 @@ type ExeDevHandle = {
   vmName: string;
   repoDir: string;
   serve: { command: string; port: number };
+  pidFile: string;
+  owned: boolean;
 };
 
 function serializeHandle(handle: ExeDevHandle): string {
@@ -26,7 +28,14 @@ function serializeHandle(handle: ExeDevHandle): string {
 function parseHandle(value: string): ExeDevHandle {
   try {
     const handle = JSON.parse(value) as ExeDevHandle;
-    if (!handle.vmName || !handle.repoDir || !handle.serve?.command || !handle.serve.port) {
+    if (
+      !handle.vmName ||
+      !handle.repoDir ||
+      !handle.serve?.command ||
+      !handle.serve.port ||
+      !handle.pidFile ||
+      typeof handle.owned !== "boolean"
+    ) {
       throw new Error("missing required fields");
     }
     return handle;
@@ -85,9 +94,15 @@ export function createExeDevDirectProvider(
   async function startRuntime(handle: ExeDevHandle): Promise<void> {
     await runVmCommand(
       handle,
-      `cd ${shellQuote(handle.repoDir)} && nohup setsid bash -lc ${shellQuote(handle.serve.command)} > /tmp/opencode-server.log 2>&1 </dev/null &`,
+      `cd ${shellQuote(handle.repoDir)} && nohup setsid bash -lc ${shellQuote(handle.serve.command)} > /tmp/opencode-server.log 2>&1 </dev/null & printf %s "$!" > ${shellQuote(handle.pidFile)}`,
     );
   }
+
+  const stopRuntime = (handle: ExeDevHandle) =>
+    runVmCommand(
+      handle,
+      `if [ -f ${shellQuote(handle.pidFile)} ]; then kill "$(cat ${shellQuote(handle.pidFile)})" 2>/dev/null || true; rm -f ${shellQuote(handle.pidFile)}; fi`,
+    );
 
   async function accessToken(vmName: string): Promise<string> {
     const token = findToken(
@@ -134,11 +149,18 @@ export function createExeDevDirectProvider(
         .replace(/[^a-zA-Z0-9]/g, "")
         .slice(0, 20)
         .toLowerCase();
-      const vmName = `gitterm-${vmSuffix}`;
+      const attachedVmName = input.exedev?.existingVmName.trim();
+      if (input.exedev && !attachedVmName) throw new Error("exe.dev existingVmName is required");
+      if (attachedVmName && !/^[a-zA-Z0-9][a-zA-Z0-9-]*$/.test(attachedVmName)) {
+        throw new Error("Invalid exe.dev existingVmName");
+      }
+      const vmName = attachedVmName ?? `gitterm-${vmSuffix}`;
       const handle: ExeDevHandle = {
         vmName,
         repoDir: `${HOME}/${plan.repository?.name ?? "workspace"}`,
         serve: { command: plan.agent.command, port: plan.agent.port },
+        pidFile: `/tmp/gitterm-${vmSuffix}.pid`,
+        owned: !attachedVmName,
       };
       const createArgs = [
         `new --name=${vmName}`,
@@ -155,7 +177,7 @@ export function createExeDevDirectProvider(
         .filter(Boolean)
         .join(" ");
 
-      await execute(createArgs);
+      if (handle.owned) await execute(createArgs);
       try {
         await waitUntilRunning(vmName);
         await runVmCommand(handle, `mkdir -p ${shellQuote(handle.repoDir)}`);
@@ -169,13 +191,13 @@ export function createExeDevDirectProvider(
           const path = file.path.startsWith("~/") ? `${HOME}/${file.path.slice(2)}` : file.path;
           await runVmCommand(
             handle,
-            `mkdir -p ${shellQuote(path.slice(0, path.lastIndexOf("/")))} && printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${shellQuote(path)}`,
+            `mkdir -p ${shellQuote(path.slice(0, path.lastIndexOf("/")))} && printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${shellQuote(path)}${file.mode == null ? "" : ` && chmod ${file.mode.toString(8)} ${shellQuote(path)}`}`,
           );
         }
-        if (plan.setupCommands.length) {
+        if (plan.setup.beforeAgent.length) {
           await runVmCommand(
             handle,
-            `cd ${shellQuote(handle.repoDir)} && ${setupCommandScript(plan.setupCommands)}`,
+            `cd ${shellQuote(handle.repoDir)} && ${setupCommandScript(plan.setup.beforeAgent)}`,
           );
         }
         await startRuntime(handle);
@@ -185,7 +207,11 @@ export function createExeDevDirectProvider(
         await waitForDirectRuntime(directRuntime);
         return { externalId: serializeHandle(handle), runtime: directRuntime };
       } catch (error) {
-        await execute(`rm ${vmName}`).catch(() => undefined);
+        if (handle.owned) {
+          await execute(`rm ${vmName}`).catch(() => undefined);
+        } else {
+          await stopRuntime(handle).catch(() => undefined);
+        }
         throw error;
       }
     },
@@ -214,7 +240,12 @@ export function createExeDevDirectProvider(
       return directRuntime;
     },
     async terminate(workspace) {
-      await execute(`rm ${parseHandle(workspace.externalId).vmName}`);
+      const handle = parseHandle(workspace.externalId);
+      if (handle.owned) {
+        await execute(`rm ${handle.vmName}`);
+      } else {
+        await stopRuntime(handle);
+      }
     },
   };
 }

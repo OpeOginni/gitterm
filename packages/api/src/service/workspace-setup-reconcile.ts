@@ -90,7 +90,7 @@ export async function reconcileWorkspaceSetupStatus(workspaceId: string): Promis
     const computeProvider = await getProviderByCloudProviderId("daytona");
     if (!computeProvider.execCommand) return false;
 
-    const setupDir = `${resolveProjectDirectory(record.repositoryUrl, "daytona")}/.gitterm/setup`;
+    const setupDir = `${resolveProjectDirectory(record.repositoryUrl, "daytona")}/.gitterm/setup/after-agent`;
     const quotedDir = shellQuote(setupDir);
     const readCommand = [
       `D=${quotedDir}`,

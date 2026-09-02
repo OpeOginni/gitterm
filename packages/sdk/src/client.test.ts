@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createGittermClient } from "./client";
-import type { WorkspaceProviderSelection } from "./types";
+import type { WorkspaceCreateInput, WorkspaceProviderSelection } from "./types";
 
 describe("createGittermClient", () => {
   test("uses the hosted API when only a token is supplied", () => {
@@ -31,4 +31,15 @@ test("provider selections retain their discriminated fields", () => {
   expect(awsSelection.type === "aws" && awsSelection.region).toBe("us-east-1");
   expect(invalidE2bSelection.type).toBe("e2b");
   expect(invalidE2bMachine.type).toBe("e2b");
+});
+
+const phasedSetup: WorkspaceCreateInput = {
+  repo: "https://github.com/gitterm/example",
+  setup: { beforeAgent: ["bun install"], afterAgent: ["bun test"] },
+  secretFiles: [{ path: ".env", content: "TOKEN=secret", mode: "0400" }],
+};
+
+test("hosted workspace input exposes phased setup and strict secret modes", () => {
+  expect(phasedSetup.setup?.beforeAgent).toEqual(["bun install"]);
+  expect(phasedSetup.secretFiles?.[0]?.mode).toBe("0400");
 });

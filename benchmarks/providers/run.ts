@@ -21,7 +21,12 @@ const ALL_PROVIDERS = [
   "ascii",
   "exedev",
 ] as const satisfies readonly ProviderKey[];
-const HOSTED_PROVIDERS = ["railway", "e2b", "daytona"] as const satisfies readonly ProviderKey[];
+const HOSTED_PROVIDERS = [
+  "railway",
+  "e2b",
+  "daytona",
+  "vercel",
+] as const satisfies readonly ProviderKey[];
 
 type ProviderBenchmarkResult = {
   provider: ProviderKey;
@@ -123,7 +128,9 @@ async function benchmarkProvider(provider: ProviderKey): Promise<ProviderBenchma
         repo,
         agent,
         provider: { type: provider } as WorkspaceProviderSelection,
-        setupCommands: [buildWorkspaceBenchmarkCommand({ cpuIterations, diskSizeMiB })],
+        setup: {
+          afterAgent: [buildWorkspaceBenchmarkCommand({ cpuIterations, diskSizeMiB })],
+        },
       }),
     );
     result.controlPlane.createApiMs = created.durationMs;

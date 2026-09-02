@@ -54,6 +54,10 @@ export interface SystemWorkspaceEnv {
   USER_SSH_PUBLIC_KEY?: string;
   /** Base64-encoded detached setup command consumed by canonical images. */
   WORKSPACE_SETUP_COMMAND_BASE64?: string;
+  /** Base64-encoded blocking setup command run before the agent. */
+  WORKSPACE_BEFORE_AGENT_COMMAND_BASE64?: string;
+  /** Absolute path of the checked-out repository inside the sandbox. */
+  WORKSPACE_REPO_DIR?: string;
 }
 
 /**
@@ -85,7 +89,21 @@ export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "EDITOR_ACCESS_ENABLED",
   "USER_SSH_PUBLIC_KEY",
   "WORKSPACE_SETUP_COMMAND_BASE64",
+  "WORKSPACE_BEFORE_AGENT_COMMAND_BASE64",
+  "WORKSPACE_REPO_DIR",
 ] as const satisfies readonly (keyof SystemWorkspaceEnv)[];
+
+/**
+ * Thrown by compute providers when the blocking before-agent setup phase exits
+ * non-zero. The message carries the log tail so it can be returned to the caller.
+ */
+export class BeforeAgentSetupError extends Error {
+  constructor(output: string) {
+    const tail = output.trim().slice(-4000);
+    super(`Before-agent setup failed${tail ? `:\n${tail}` : ""}`);
+    this.name = "BeforeAgentSetupError";
+  }
+}
 
 // Compile-time guard: every SystemWorkspaceEnv key must appear above.
 type _MissingSystemEnvKeys = Exclude<
@@ -128,6 +146,9 @@ export interface WorkspaceRepoProvisioning {
 export interface AgentFile {
   path: string;
   contentBase64: string;
+  mode?: 0o400 | 0o600;
+  /** Resolve this path below the cloned repository rather than from process cwd. */
+  relativeToRepo?: boolean;
 }
 
 /**
@@ -202,6 +223,8 @@ export interface WorkspaceProvisioningSpec {
   editorAccessEnabled: boolean;
   /** Restart-safe command launched after the agent starts. */
   setupCommand?: string;
+  /** Blocking command run after files are materialized and before the agent starts. */
+  beforeAgentCommand?: string;
 }
 
 export interface WorkspaceConfig {
