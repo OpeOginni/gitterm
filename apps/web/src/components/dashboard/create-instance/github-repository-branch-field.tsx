@@ -2,13 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Check, ChevronDown, GitBranch, Loader2, Lock, Search } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  ChevronDown,
+  GitBranch,
+  Loader2,
+  Lock,
+  Plus,
+  Search,
+} from "lucide-react";
 import { GitHub as Github } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Branch, Repository, ResolvedGitHubRepository } from "./types";
 import { parseGitHubRepositoryInput } from "./github-repository-utils";
 
@@ -27,13 +37,34 @@ interface GitHubRepositoryBranchFieldProps {
   disabled?: boolean;
 }
 
-function filterBranches(branches: Branch[], query: string): Branch[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) {
-    return branches;
-  }
+/** Shared styling for both dropdown surfaces. Sized to the anchor, capped to the viewport. */
+const DROPDOWN_CONTENT_CLASS =
+  "flex w-(--radix-popover-trigger-width) max-h-[min(22rem,var(--radix-popover-content-available-height))] flex-col overflow-hidden rounded-md border border-border/60 bg-popover p-0 shadow-md";
 
-  return branches.filter((b) => b.name.toLowerCase().includes(normalizedQuery));
+/** Row styling: taller on touch screens so rows are comfortable to tap. */
+const ROW_CLASS =
+  "flex w-full items-center gap-2 rounded-sm px-3 py-2.5 text-sm transition-colors hover:bg-secondary/60 sm:py-1.5";
+
+/** Programmatic focus doesn't open the keyboard on touch devices, so only autofocus with a mouse. */
+function hasFinePointer(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches;
+}
+
+function filterBranches(branches: Branch[], query: string, defaultBranch?: string): Branch[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  const matches = normalizedQuery
+    ? branches.filter((b) => b.name.toLowerCase().includes(normalizedQuery))
+    : branches;
+
+  if (!defaultBranch) {
+    return matches;
+  }
+  // Default branch first, remaining in GitHub's (alphabetical) order.
+  return matches.toSorted((a, b) => {
+    if (a.name === defaultBranch) return -1;
+    if (b.name === defaultBranch) return 1;
+    return 0;
+  });
 }
 
 /** Score a repo against the query for sorting (exact > prefix > contains). */
@@ -77,7 +108,6 @@ export function GitHubRepositoryBranchField({
 
   const [isRepoListOpen, setIsRepoListOpen] = useState(false);
   const repoFieldRef = useRef<HTMLDivElement>(null);
-  const branchFieldRef = useRef<HTMLDivElement>(null);
 
   const branchSourceRef = useRef<"empty" | "default" | "manual" | "url">("empty");
   const repoIdentityRef = useRef("");
@@ -132,9 +162,22 @@ export function GitHubRepositoryBranchField({
   });
 
   const filteredBranches = useMemo(
-    () => filterBranches((branchesQuery.data?.branches ?? []) as Branch[], branchQuery),
-    [branchesQuery.data?.branches, branchQuery],
+    () =>
+      filterBranches(
+        (branchesQuery.data?.branches ?? []) as Branch[],
+        branchQuery,
+        resolvedRepository?.defaultBranch,
+      ),
+    [branchesQuery.data?.branches, branchQuery, resolvedRepository?.defaultBranch],
   );
+
+  // Offer the typed name as a branch when it isn't in the list -- covers
+  // repos past the fetch cap and branches pushed since the list was cached.
+  const trimmedBranchQuery = branchQuery.trim();
+  const showUseTypedBranch =
+    trimmedBranchQuery.length > 0 &&
+    !branchesQuery.isLoading &&
+    !filteredBranches.some((b) => b.name === trimmedBranchQuery);
 
   // -- sync branch state --
 
@@ -175,36 +218,6 @@ export function GitHubRepositoryBranchField({
     resolvedRepository?.defaultBranch,
   ]);
 
-  // focus branch search when opened
-  useEffect(() => {
-    if (isBranchListOpen && branchSearchRef.current) {
-      setTimeout(() => branchSearchRef.current?.focus(), 0);
-    }
-  }, [isBranchListOpen]);
-
-  useEffect(() => {
-    if (!isRepoListOpen) return;
-    const handleClick = (event: MouseEvent) => {
-      if (repoFieldRef.current && !repoFieldRef.current.contains(event.target as Node)) {
-        setIsRepoListOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [isRepoListOpen]);
-
-  // close branch dropdown on outside click
-  useEffect(() => {
-    if (!isBranchListOpen) return;
-    const handleClick = (event: MouseEvent) => {
-      if (branchFieldRef.current && !branchFieldRef.current.contains(event.target as Node)) {
-        setIsBranchListOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [isBranchListOpen]);
-
   const handleRepoSelect = (repo: Repository) => {
     onRepoUrlChange(repo.htmlUrl);
     setIsRepoListOpen(false);
@@ -225,6 +238,11 @@ export function GitHubRepositoryBranchField({
     setBranchQuery("");
   };
 
+  const handleBranchListOpenChange = (open: boolean) => {
+    setIsBranchListOpen(open);
+    if (!open) setBranchQuery("");
+  };
+
   // -- decide what the branch row looks like --
 
   const showBranchPicker = !!parsedRepository;
@@ -232,6 +250,7 @@ export function GitHubRepositoryBranchField({
   const isResolvingRepo = !!integration && !!parsedRepository && repositoryQuery.isLoading;
   const resolveError = !!integration && !!parsedRepository && repositoryQuery.error;
   const canPickBranch = !!integration && !!resolvedRepository && !branchFromUrl;
+  const isRepoDropdownOpen = !!integration && isRepoListOpen && !parsedRepository;
 
   return (
     <div className="grid gap-4">
@@ -240,68 +259,84 @@ export function GitHubRepositoryBranchField({
         <Label htmlFor="repo" className="text-sm font-medium">
           GitHub Repository
         </Label>
-        <div className="relative">
-          <Input
-            id="repo"
-            placeholder={
-              integration ? "Search your repos or paste a URL" : "https://github.com/owner/repo"
-            }
-            value={repoUrl}
-            onChange={(event) => {
-              onRepoUrlChange(event.target.value);
-              if (integration) setIsRepoListOpen(true);
-            }}
-            onFocus={() => {
-              if (integration) setIsRepoListOpen(true);
-            }}
-            disabled={disabled}
-            autoComplete="off"
-          />
+        <Popover open={isRepoDropdownOpen} onOpenChange={setIsRepoListOpen}>
+          <PopoverAnchor asChild>
+            <div className="relative">
+              <Input
+                id="repo"
+                placeholder={
+                  integration ? "Search your repos or paste a URL" : "https://github.com/owner/repo"
+                }
+                value={repoUrl}
+                onChange={(event) => {
+                  onRepoUrlChange(event.target.value);
+                  if (integration) setIsRepoListOpen(true);
+                }}
+                onFocus={() => {
+                  if (integration) setIsRepoListOpen(true);
+                }}
+                disabled={disabled}
+                autoComplete="off"
+              />
+            </div>
+          </PopoverAnchor>
 
           {/* searchable repo dropdown (integration mode only) */}
-          {integration && isRepoListOpen && !parsedRepository && (
-            <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border/60 bg-popover shadow-md">
-              <div className="max-h-60 overflow-y-auto overscroll-contain">
-                {reposQuery.isLoading ? (
-                  <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading repositories...
-                  </div>
-                ) : filteredRepos.length > 0 ? (
-                  <div className="p-1">
-                    {filteredRepos.map((repo) => (
-                      <button
-                        key={repo.id}
-                        type="button"
-                        onClick={() => handleRepoSelect(repo)}
-                        className="flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-secondary/60"
-                      >
-                        <Github className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate text-left font-medium">
-                          {repo.fullName}
-                        </span>
-                        {repo.private && (
-                          <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        )}
-                      </button>
-                    ))}
-                    {!repoUrl.trim() && accessibleRepos.length > 20 && (
-                      <div className="border-t border-border/30 px-3 py-2 text-center text-[11px] text-muted-foreground">
-                        Type to search {accessibleRepos.length} repositories
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="py-6 text-center text-sm text-muted-foreground">
-                    {repoUrl.trim()
-                      ? "No repos match — paste a URL to use any repository"
-                      : "No repositories available"}
-                  </p>
-                )}
-              </div>
+          <PopoverContent
+            align="start"
+            sideOffset={4}
+            collisionPadding={8}
+            className={DROPDOWN_CONTENT_CLASS}
+            // keep focus (and the keyboard) in the input while the list is open
+            onOpenAutoFocus={(event) => event.preventDefault()}
+            onCloseAutoFocus={(event) => event.preventDefault()}
+            onInteractOutside={(event) => {
+              // taps on the input itself shouldn't close the list
+              if (repoFieldRef.current?.contains(event.target as Node)) {
+                event.preventDefault();
+              }
+            }}
+          >
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {reposQuery.isLoading ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading repositories...
+                </div>
+              ) : filteredRepos.length > 0 ? (
+                <div className="p-1">
+                  {filteredRepos.map((repo) => (
+                    <button
+                      key={repo.id}
+                      type="button"
+                      onClick={() => handleRepoSelect(repo)}
+                      className={ROW_CLASS}
+                    >
+                      <Github className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate text-left font-medium">
+                        {repo.fullName}
+                      </span>
+                      {repo.private && (
+                        <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                    </button>
+                  ))}
+                  {!repoUrl.trim() && accessibleRepos.length > 20 && (
+                    <div className="border-t border-border/30 px-3 py-2 text-center text-[11px] text-muted-foreground">
+                      Type to search {accessibleRepos.length} repositories
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  {repoUrl.trim()
+                    ? "No repos match — paste a URL to use any repository"
+                    : "No repositories available"}
+                </p>
+              )}
             </div>
-          )}
-        </div>
+          </PopoverContent>
+        </Popover>
         {/* inline validation hint */}
         <div className="min-h-5 text-xs">
           {parsedRepository ? (
@@ -367,84 +402,127 @@ export function GitHubRepositoryBranchField({
             </div>
           ) : canPickBranch ? (
             /* integration resolved -- show picker trigger */
-            <div className="relative" ref={branchFieldRef}>
-              <button
-                type="button"
-                onClick={() => setIsBranchListOpen((open) => !open)}
-                disabled={disabled}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-md border border-border/40 bg-secondary/20 px-3 py-2 text-sm transition-colors hover:bg-secondary/40",
-                )}
+            <Popover open={isBranchListOpen} onOpenChange={handleBranchListOpenChange}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  className="flex w-full items-center justify-between rounded-md border border-border/40 bg-secondary/20 px-3 py-2 text-sm transition-colors hover:bg-secondary/40"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate font-medium text-foreground">{activeBranch}</span>
+                    {(!branch || branch === resolvedRepository?.defaultBranch) && (
+                      <span className="shrink-0 text-xs text-muted-foreground">default</span>
+                    )}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                      isBranchListOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+              </PopoverTrigger>
+
+              <PopoverContent
+                align="start"
+                sideOffset={4}
+                collisionPadding={8}
+                className={DROPDOWN_CONTENT_CLASS}
+                onOpenAutoFocus={(event) => {
+                  event.preventDefault();
+                  if (hasFinePointer()) branchSearchRef.current?.focus();
+                }}
               >
-                <span className="flex items-center gap-2">
-                  <GitBranch className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-foreground">{activeBranch}</span>
-                  {(!branch || branch === resolvedRepository?.defaultBranch) && (
-                    <span className="text-xs text-muted-foreground">default</span>
-                  )}
-                </span>
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 text-muted-foreground transition-transform",
-                    isBranchListOpen && "rotate-180",
-                  )}
-                />
-              </button>
-
-              {isBranchListOpen && (
-                <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border/60 bg-popover shadow-md">
-                  <div className="border-b border-border/30 p-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        ref={branchSearchRef}
-                        value={branchQuery}
-                        onChange={(event) => setBranchQuery(event.target.value)}
-                        placeholder="Search branches..."
-                        className="h-8 pl-8 text-sm"
-                        disabled={disabled}
-                      />
-                    </div>
+                <div className="shrink-0 border-b border-border/30 p-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      ref={branchSearchRef}
+                      value={branchQuery}
+                      onChange={(event) => setBranchQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && showUseTypedBranch) {
+                          event.preventDefault();
+                          handleBranchSelect(trimmedBranchQuery);
+                        }
+                      }}
+                      placeholder="Search branches..."
+                      className="h-9 pl-8 text-sm sm:h-8"
+                      disabled={disabled}
+                      autoComplete="off"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
                   </div>
+                </div>
 
-                  <div className="max-h-60 overflow-y-auto overscroll-contain p-1">
-                    {branchesQuery.isLoading ? (
-                      <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading branches...
-                      </div>
-                    ) : filteredBranches.length > 0 ? (
-                      filteredBranches.map((item) => {
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
+                  {branchesQuery.isLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading branches...
+                    </div>
+                  ) : (
+                    <>
+                      {filteredBranches.map((item) => {
                         const isSelected = item.name === activeBranch;
                         return (
                           <button
                             key={item.name}
                             type="button"
                             onClick={() => handleBranchSelect(item.name)}
-                            className={cn(
-                              "flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-secondary/60",
-                              isSelected && "bg-secondary/50",
-                            )}
+                            className={cn(ROW_CLASS, isSelected && "bg-secondary/50")}
                           >
                             <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                             <span className="min-w-0 flex-1 truncate text-left font-medium">
                               {item.name}
                             </span>
+                            {item.name === resolvedRepository?.defaultBranch ? (
+                              <span className="shrink-0 text-[11px] text-muted-foreground">
+                                default
+                              </span>
+                            ) : null}
                             {isSelected ? (
                               <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
                             ) : null}
                           </button>
                         );
-                      })
-                    ) : (
-                      <p className="py-6 text-center text-sm text-muted-foreground">
-                        {branchQuery ? `No branches match "${branchQuery}"` : "No branches found"}
-                      </p>
-                    )}
-                  </div>
+                      })}
+
+                      {filteredBranches.length === 0 && !showUseTypedBranch ? (
+                        <p className="py-6 text-center text-sm text-muted-foreground">
+                          No branches found
+                        </p>
+                      ) : null}
+
+                      {showUseTypedBranch ? (
+                        <button
+                          type="button"
+                          onClick={() => handleBranchSelect(trimmedBranchQuery)}
+                          className={cn(
+                            ROW_CLASS,
+                            "text-muted-foreground",
+                            filteredBranches.length > 0 && "mt-1 border-t border-border/30",
+                          )}
+                        >
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                          <span className="min-w-0 flex-1 truncate text-left">
+                            Use{" "}
+                            <span className="font-medium text-foreground">
+                              {trimmedBranchQuery}
+                            </span>
+                            {filteredBranches.length === 0 ? " — no matching branches" : ""}
+                          </span>
+                        </button>
+                      ) : null}
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
+              </PopoverContent>
+            </Popover>
           ) : (
             /* public mode -- simple text input */
             <Input

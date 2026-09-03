@@ -469,7 +469,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         </div>
 
         {/* ── 3. Agent + Cloud (+ Region) ── */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Agent</Label>
             <Select value={selectedAgentTypeId} onValueChange={setUserAgentTypeId}>
@@ -737,7 +737,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                           >
                             <SelectTrigger
                               onClick={(event) => event.stopPropagation()}
-                              className="h-8 w-[150px] text-xs"
+                              className="h-8 w-[120px] text-xs sm:w-[150px]"
                             >
                               <SelectValue />
                             </SelectTrigger>

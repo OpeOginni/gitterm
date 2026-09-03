@@ -1025,11 +1025,13 @@ export class GitHubAppService {
 
   /**
    * List branches for a repository
+   * Paginates through all branches (up to maxBranches limit)
    */
   async listBranches(
     installationId: string,
     owner: string,
     repo: string,
+    maxBranches: number = 1000,
   ): Promise<
     {
       name: string;
@@ -1040,16 +1042,34 @@ export class GitHubAppService {
       const { token } = await this.getUserToServerToken(installationId);
       const userOctokit = new Octokit({ auth: token });
 
-      const { data } = await userOctokit.repos.listBranches({
-        owner,
-        repo,
-        per_page: 100,
-      });
+      const allBranches: { name: string; protected: boolean }[] = [];
+      let page = 1;
+      const perPage = 100;
 
-      return data.map((branch) => ({
-        name: branch.name,
-        protected: branch.protected,
-      }));
+      while (allBranches.length < maxBranches) {
+        const { data } = await userOctokit.repos.listBranches({
+          owner,
+          repo,
+          per_page: perPage,
+          page,
+        });
+
+        allBranches.push(
+          ...data.map((branch) => ({
+            name: branch.name,
+            protected: branch.protected,
+          })),
+        );
+
+        // If we got fewer than perPage, we've reached the end
+        if (data.length < perPage) {
+          break;
+        }
+
+        page++;
+      }
+
+      return allBranches.slice(0, maxBranches);
     } catch (error) {
       if (error instanceof GitHubInstallationNotFoundError) {
         throw error;

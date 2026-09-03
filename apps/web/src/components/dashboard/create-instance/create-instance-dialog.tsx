@@ -83,7 +83,7 @@ export function CreateInstanceDialog() {
           <Plus className="h-4 w-4" /> New Instance
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto p-5 sm:p-6">
+      <DialogContent className="sm:max-w-[620px] max-h-[90dvh] overflow-y-auto p-5 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold text-white sm:text-xl">
             Create New Instance
