@@ -6,6 +6,7 @@ import {
   createAgentRun,
   getAgentRun,
   getAgentRunMessages,
+  listAgentRuns,
 } from "../service/agent-run";
 
 const runTargetSchema = z.object({ workspaceId: z.uuid(), runId: z.uuid() });
@@ -46,10 +47,31 @@ export const runRouter = router({
           .min(1_000)
           .max(10 * 60_000)
           .optional(),
+        /** How long to wait for a `pending` workspace to become `running` before failing. */
+        startTimeoutMs: z.number().int().min(1_000).max(240_000).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) =>
       translateAgentError(() => createAgentRun(input, ctx.session.user.id)),
+    ),
+
+  list: accountProcedure("run:read")
+    .input(
+      z.object({
+        workspaceId: z.uuid(),
+        status: z.enum(["all", "active", "terminal"]).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+        offset: z.number().int().min(0).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) =>
+      translateAgentError(() =>
+        listAgentRuns(input.workspaceId, ctx.session.user.id, {
+          status: input.status ?? "all",
+          limit: input.limit ?? 20,
+          offset: input.offset ?? 0,
+        }),
+      ),
     ),
 
   get: accountProcedure("run:read")

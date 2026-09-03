@@ -206,7 +206,7 @@ export function ModelCredentialsSection() {
             completeOAuthMutation.mutate({
               providerName: selectedProvider?.name ?? "",
               accessToken: data.accessToken,
-              label: label || undefined,
+              label: label.trim(),
             });
         } else if (data.status === "pending") {
           // Keep polling
@@ -216,7 +216,7 @@ export function ModelCredentialsSection() {
                 pollOAuthMutation.mutate({
                   deviceCode: deviceCode.deviceCode,
                   providerName: selectedProvider?.name ?? "",
-                  label: label || undefined,
+                  label: label.trim(),
                 });
               }
             },
@@ -230,7 +230,7 @@ export function ModelCredentialsSection() {
                 pollOAuthMutation.mutate({
                   deviceCode: deviceCode.deviceCode,
                   providerName: selectedProvider?.name ?? "",
-                  label: label || undefined,
+                  label: label.trim(),
                 });
               }
             },
@@ -312,16 +312,26 @@ export function ModelCredentialsSection() {
       return;
     }
 
+    if (!label.trim()) {
+      toast.error("Please give this credential a label");
+      return;
+    }
+
     storeApiKeyMutation.mutate({
       providerName: selectedProvider.name,
       apiKey: apiKey.trim(),
-      label: label || undefined,
+      label: label.trim(),
     });
   };
 
   const handleStartOAuth = () => {
     if (!selectedProvider) {
       toast.error("Please select a provider");
+      return;
+    }
+
+    if (!label.trim()) {
+      toast.error("Please give this credential a label");
       return;
     }
 
@@ -339,7 +349,7 @@ export function ModelCredentialsSection() {
     pollOAuthMutation.mutate({
       deviceCode: deviceCode.deviceCode,
       providerName: selectedProvider.name,
-      label: label || undefined,
+      label: label.trim(),
     });
   };
 
@@ -492,17 +502,22 @@ export function ModelCredentialsSection() {
                 </p>
               </div>
             )}
-            {/* Label (optional) */}
+            {/* Label (required; selects this credential from the SDK/CLI) */}
             <div className="grid gap-2">
               <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-                Label <span className="ml-1 normal-case text-white/30">(optional)</span>
+                Label
               </Label>
               <Input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="e.g., Work account, Personal"
+                placeholder="e.g. default, work, personal"
                 disabled={oauthStep !== "idle"}
+                required
               />
+              <p className="text-[11px] leading-relaxed text-white/35">
+                Unique per provider. Pick it from the SDK with{" "}
+                <code className="font-mono text-white/50">{"{ providerName, label }"}</code>.
+              </p>
             </div>
 
             {/* API Key Input (for api_key providers) */}

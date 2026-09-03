@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, db, eq, inArray } from "@gitterm/db";
+import { and, db, desc, eq, inArray, sql } from "@gitterm/db";
 import { agentRun, type AgentRun } from "@gitterm/db/schema/agent-run";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { model, userModelCredential } from "@gitterm/db/schema/model-credentials";
@@ -31,6 +31,7 @@ type RunCreateInput = {
   model?: string;
   waitForSetup?: boolean;
   setupTimeoutMs?: number;
+  startTimeoutMs?: number;
   context?: { type: "isolated" } | { type: "continue"; runId: string };
 };
 
@@ -63,6 +64,9 @@ function publicRun(run: AgentRun) {
     context: run.parentRunId
       ? { type: "continued" as const, runId: run.parentRunId }
       : { type: "isolated" as const },
+    createdAt: run.createdAt.toISOString(),
+    submittedAt: run.submittedAt?.toISOString() ?? null,
+    completedAt: run.completedAt?.toISOString() ?? null,
   };
 }
 
@@ -92,10 +96,44 @@ async function getRunWorkspace(workspaceId: string, userId: string) {
   return record;
 }
 
+function notRunningError(status: string): TRPCError {
+  if (status === "terminated") {
+    return new TRPCError({
+      code: "BAD_REQUEST",
+      message: "WORKSPACE_TERMINATED: workspace has been terminated",
+    });
+  }
+  return new TRPCError({
+    code: "BAD_REQUEST",
+    message: `WORKSPACE_NOT_RUNNING: workspace is ${status}${status === "paused" ? "; call workspaces.ensureRunning() to resume it" : ""}`,
+  });
+}
+
+/**
+ * Providers with webhook settlement (e.g. Railway) return `pending` from
+ * create until the deployment reports success. Wait for that transition so a
+ * caller can go straight from create() to runs.create().
+ */
+async function waitForWorkspaceRunning(workspaceId: string, userId: string, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const record = await getRunWorkspace(workspaceId, userId);
+    if (record.status === "running") return record;
+    if (record.status !== "pending") throw notRunningError(record.status);
+    if (Date.now() >= deadline) {
+      throw new TRPCError({
+        code: "TIMEOUT",
+        message: `WORKSPACE_START_TIMEOUT: workspace remained pending for ${Math.round(timeoutMs / 1000)}s`,
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+}
+
 async function getRuntimeTarget(workspaceId: string, userId: string) {
   const record = await getRunWorkspace(workspaceId, userId);
   if (record.status !== "running" || !record.subdomain) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace must be running" });
+    throw notRunningError(record.status);
   }
   if (record.image.agentType.provisionerKey !== "opencode" || !record.serverOnly) {
     throw new TRPCError({
@@ -159,7 +197,7 @@ async function validateModelCredential(
 
   throw new TRPCError({
     code: "BAD_REQUEST",
-    message: `MODEL_CREDENTIAL_REQUIRED: Model "${selectedModel}" requires a credential for provider "${provider}". Recreate the workspace with a matching dashboard credential (modelCredentialIds) or an inline credential (modelCredentials).`,
+    message: `MODEL_CREDENTIAL_REQUIRED: Model "${selectedModel}" requires a credential for provider "${provider}". Recreate the workspace with a modelCredentials entry for that provider (a dashboard credential by label, or an inline apiKey).`,
   });
 }
 
@@ -224,7 +262,10 @@ async function waitForSetup(workspaceId: string, userId: string, timeoutMs: numb
   while (true) {
     const record = await getRunWorkspace(workspaceId, userId);
     if (record.status !== "running") {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace stopped during setup" });
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `WORKSPACE_NOT_RUNNING: workspace became ${record.status} during setup`,
+      });
     }
     const setup = await getWorkspaceSetupStatus(workspaceId, record.setupRequired);
     if (setup.status === "not_requested" || setup.status === "succeeded") return;
@@ -328,6 +369,7 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
     return publicRun(await reconcileRun(existing, userId));
   }
 
+  await waitForWorkspaceRunning(input.workspaceId, userId, input.startTimeoutMs ?? 120_000);
   const target = await getRuntimeTarget(input.workspaceId, userId);
   await validateModelCredential(target.workspace, userId, input.model);
   if (input.waitForSetup) {
@@ -456,6 +498,53 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
 export async function getAgentRun(workspaceId: string, runId: string, userId: string) {
   const run = await getOwnedRun(workspaceId, runId, userId);
   return publicRun(await reconcileRun(run, userId));
+}
+
+export async function listAgentRuns(
+  workspaceId: string,
+  userId: string,
+  options: { status: "all" | "active" | "terminal"; limit: number; offset: number },
+) {
+  await getRunWorkspace(workspaceId, userId);
+  const conditions = [eq(agentRun.workspaceId, workspaceId)];
+  if (options.status === "active") {
+    conditions.push(inArray(agentRun.status, [...ACTIVE_RUN_STATUSES]));
+  } else if (options.status === "terminal") {
+    conditions.push(inArray(agentRun.status, ["completed", "failed", "cancelled"]));
+  }
+  const where = and(...conditions);
+
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(agentRun)
+    .where(where);
+  const rows = await db
+    .select()
+    .from(agentRun)
+    .where(where)
+    .orderBy(desc(agentRun.createdAt))
+    .limit(options.limit)
+    .offset(options.offset);
+
+  // Active runs are reconciled against the workspace so callers recovering
+  // after a restart see current statuses; terminal rows are already final.
+  const runs = await Promise.all(
+    rows.map((row) =>
+      ACTIVE_RUN_STATUSES.includes(row.status as (typeof ACTIVE_RUN_STATUSES)[number])
+        ? reconcileRun(row, userId)
+        : Promise.resolve(row),
+    ),
+  );
+  const total = Number(countRow?.count ?? 0);
+  return {
+    runs: runs.map(publicRun),
+    pagination: {
+      total,
+      limit: options.limit,
+      offset: options.offset,
+      hasMore: options.offset + rows.length < total,
+    },
+  };
 }
 
 export async function getAgentRunMessages(workspaceId: string, runId: string, userId: string) {

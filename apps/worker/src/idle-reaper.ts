@@ -139,6 +139,26 @@ async function main() {
     }
 
     // ========================================================================
+    // 3b. Terminate workspaces whose caller-set lifetime (autoTerminateAfterMs)
+    //     has elapsed. Explicit intent, so not gated by idle reaping.
+    // ========================================================================
+    {
+      const dueWorkspaces = await internalClient.internal.getAutoTerminateDueWorkspaces.query();
+      if (dueWorkspaces.length > 0) {
+        console.log(`[idle-reaper] Found ${dueWorkspaces.length} workspace(s) past their lifetime`);
+      }
+      for (const ws of dueWorkspaces) {
+        try {
+          console.log(`[idle-reaper] Terminating workspace ${ws.id} (lifetime elapsed)...`);
+          await internalClient.internal.terminateWorkspaceInternal.mutate({ workspaceId: ws.id });
+          totalTransitions++;
+        } catch (error) {
+          console.error(`[idle-reaper] Failed to terminate workspace ${ws.id}:`, error);
+        }
+      }
+    }
+
+    // ========================================================================
     // 4. Retry AWS cleanup for terminated workspaces and sweep leftovers
     // ========================================================================
     try {

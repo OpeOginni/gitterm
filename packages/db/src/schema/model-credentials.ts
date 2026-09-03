@@ -86,8 +86,9 @@ export const userModelCredential = pgTable(
     // OAuth-specific: when access token expires (for auto-refresh)
     oauthExpiresAt: timestamp("oauth_expires_at"),
 
-    // User-defined label (e.g., "Work account", "Personal")
-    label: text("label"),
+    // User-defined label (e.g., "work", "personal"). Required so credentials
+    // can be selected by provider + label from the SDK/CLI.
+    label: text("label").notNull(),
 
     isActive: boolean("is_active").notNull().default(true),
     isDefault: boolean("is_default").notNull().default(false),

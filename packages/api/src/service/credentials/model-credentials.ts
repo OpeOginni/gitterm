@@ -28,7 +28,8 @@ export interface StoreApiKeyOptions {
   userId: string;
   providerName: string;
   apiKey: string;
-  label?: string;
+  /** Unique per user + provider; used to select the credential from the SDK/CLI. */
+  label: string;
 }
 
 export interface StoreOAuthOptions {
@@ -38,7 +39,8 @@ export interface StoreOAuthOptions {
   accessToken?: string;
   expiresAt?: number;
   enterpriseUrl?: string;
-  label?: string;
+  /** Unique per user + provider; used to select the credential from the SDK/CLI. */
+  label: string;
 }
 
 export interface CredentialMetadata {
@@ -48,7 +50,7 @@ export interface CredentialMetadata {
   providerDisplayName: string;
   logicalProviderKey: string;
   authType: string;
-  label: string | null;
+  label: string;
   keyHash: string;
   isActive: boolean;
   isDefault: boolean;
@@ -159,6 +161,35 @@ export class ModelCredentialsService {
   // ==================== Credential CRUD Operations ====================
 
   /**
+   * Labels are required and unique per user + provider so credentials can be
+   * addressed by `{ providerName, label }`. Surfaces a readable error instead
+   * of the unique-constraint violation.
+   */
+  private async assertLabelAvailable(
+    userId: string,
+    providerId: string,
+    label: string,
+  ): Promise<string> {
+    const normalized = label.trim();
+    if (!normalized) {
+      throw new Error("A label is required for each credential");
+    }
+    const existing = await db.query.userModelCredential.findFirst({
+      where: and(
+        eq(userModelCredential.userId, userId),
+        eq(userModelCredential.providerId, providerId),
+        eq(userModelCredential.label, normalized),
+      ),
+    });
+    if (existing) {
+      throw new Error(
+        `A credential labelled "${normalized}" already exists for this provider. Choose a different label`,
+      );
+    }
+    return normalized;
+  }
+
+  /**
    * Store an API key credential
    */
   async storeApiKey(options: StoreApiKeyOptions): Promise<{ id: string; keyHash: string }> {
@@ -179,6 +210,8 @@ export class ModelCredentialsService {
       type: "api_key",
       apiKey,
     };
+
+    const normalizedLabel = await this.assertLabelAvailable(userId, provider.id, label);
 
     // Encrypt and hash
     const encryptedCredential = this.encryption.encryptCredential(credential);
@@ -202,7 +235,7 @@ export class ModelCredentialsService {
         isDefault: !existingDefault,
         encryptedCredential,
         keyHash,
-        label: label || null,
+        label: normalizedLabel,
       })
       .returning({ id: userModelCredential.id });
 
@@ -243,6 +276,8 @@ export class ModelCredentialsService {
       enterpriseUrl,
     };
 
+    const normalizedLabel = await this.assertLabelAvailable(userId, provider.id, label);
+
     // Encrypt and hash (hash the refresh token for audit)
     const encryptedCredential = this.encryption.encryptCredential(credential);
     const keyHash = this.encryption.hashForAudit(refreshToken);
@@ -269,7 +304,7 @@ export class ModelCredentialsService {
         encryptedCredential,
         keyHash,
         oauthExpiresAt,
-        label: label || null,
+        label: normalizedLabel,
       })
       .returning({ id: userModelCredential.id });
 

@@ -5,7 +5,7 @@
  */
 
 import z from "zod";
-import { protectedProcedure, publicProcedure, router } from "../..";
+import { accountProcedure, protectedProcedure, publicProcedure, router } from "../..";
 import { TRPCError } from "@trpc/server";
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
 import { GitHubCopilotOAuthService } from "../../service/credentials/oauth/github-copilot";
@@ -79,7 +79,7 @@ export const modelCredentialsRouter = router({
   /**
    * List user's stored credentials (metadata only, no secrets)
    */
-  listMyCredentials: protectedProcedure.query(async ({ ctx }) => {
+  listMyCredentials: accountProcedure("workspace:write").query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
     if (!userId) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
@@ -97,7 +97,7 @@ export const modelCredentialsRouter = router({
       z.object({
         providerName: z.string().min(1),
         apiKey: z.string().min(1),
-        label: z.string().max(100).optional(),
+        label: z.string().trim().min(1, "Label is required").max(100),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -138,7 +138,7 @@ export const modelCredentialsRouter = router({
         accessToken: z.string().optional(),
         expiresAt: z.number().optional(),
         enterpriseUrl: z.string().optional(),
-        label: z.string().max(100).optional(),
+        label: z.string().trim().min(1, "Label is required").max(100),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -329,7 +329,7 @@ export const modelCredentialsRouter = router({
         providerName: z.string().min(1),
         deviceCode: z.string().min(1),
         enterpriseUrl: z.string().optional(),
-        label: z.string().max(100).optional(),
+        label: z.string().trim().min(1, "Label is required").max(100),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -420,7 +420,7 @@ export const modelCredentialsRouter = router({
         providerName: z.string().min(1),
         accessToken: z.string().min(1), // This is the OAuth token (stored as refresh for Copilot)
         enterpriseUrl: z.string().optional(),
-        label: z.string().max(100).optional(),
+        label: z.string().trim().min(1, "Label is required").max(100),
       }),
     )
     .mutation(async ({ ctx, input }) => {

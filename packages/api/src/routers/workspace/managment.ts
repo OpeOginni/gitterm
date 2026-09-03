@@ -132,6 +132,7 @@ import {
   resolveWorkspaceSetupCommands,
   withWorkspaceSetupPort,
 } from "../../service/workspace-setup";
+import { resolveCustomWorkspaceImage } from "../../service/workspace-image";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
 import { userCanAccessWorkspace } from "./share";
 
@@ -193,10 +194,21 @@ function normalizeRepoUrl(url: string): string {
   return trimmed.replace(/\.git\/?$/i, "");
 }
 
-const inlineModelCredentialSchema = z.object({
-  providerName: z.string().trim().min(1).max(100),
-  apiKey: z.string().min(1).max(10_000),
-});
+/**
+ * One model credential selection per provider. `apiKey` supplies an inline key
+ * (never stored); `label` picks a dashboard credential by name; neither picks
+ * that provider's dashboard default.
+ */
+const modelCredentialSelectionSchema = z
+  .object({
+    providerName: z.string().trim().min(1).max(100),
+    apiKey: z.string().min(1).max(10_000).optional(),
+    label: z.string().trim().min(1).max(100).optional(),
+  })
+  .refine(
+    (entry) => !(entry.apiKey !== undefined && entry.label !== undefined),
+    "Pass either apiKey (inline) or label (dashboard credential), not both",
+  );
 
 export const repositoryCredentialsSchema = z.object({
   username: z.string().trim().min(1).max(255).optional(),
@@ -221,9 +233,38 @@ export function resolveRepositoryProvisioningAuth(
   };
 }
 
+const MAX_WORKSPACE_METADATA_KEYS = 20;
+export const workspaceMetadataSchema = z
+  .record(
+    z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^[A-Za-z0-9_.:-]+$/, "Metadata keys may contain letters, digits, _ . : -"),
+    z.string().max(500),
+  )
+  .refine(
+    (metadata) => Object.keys(metadata).length <= MAX_WORKSPACE_METADATA_KEYS,
+    `At most ${MAX_WORKSPACE_METADATA_KEYS} metadata keys`,
+  );
+
 const workspaceCreateBaseSchema = z.object({
   name: z.string().optional(),
   idempotencyKey: z.string().trim().min(1).max(255).optional(),
+  /** Caller-owned tags, returned on the workspace and filterable in listWorkspaces. */
+  metadata: workspaceMetadataSchema.optional(),
+  /**
+   * Public image to run instead of the catalog image: an OCI reference for
+   * registry-backed providers, or a public template id/alias for E2B.
+   */
+  image: z.string().trim().min(1).max(400).optional(),
+  /** Terminate automatically this long after creation, regardless of activity. 1 minute to 30 days. */
+  autoTerminateAfterMs: z
+    .number()
+    .int()
+    .min(60_000)
+    .max(30 * 24 * 60 * 60 * 1000)
+    .optional(),
   repo: z.string().optional(),
   branch: z
     .string()
@@ -253,13 +294,8 @@ const workspaceCreateBaseSchema = z.object({
   gitIntegrationId: z.string().optional(),
   repositoryCredentials: repositoryCredentialsSchema.optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
-  modelCredentialIds: z
-    .array(z.uuid())
-    .max(50)
-    .refine((ids) => new Set(ids).size === ids.length, "Credential IDs must be unique")
-    .optional(),
-  /** Injected into this workspace only; never stored in the dashboard. */
-  modelCredentials: z.array(inlineModelCredentialSchema).max(20).optional(),
+  /** Per-provider selection: inline apiKey, dashboard credential by label, or dashboard default. */
+  modelCredentials: z.array(modelCredentialSelectionSchema).max(20).optional(),
   /** Injected into this workspace only; never stored as dashboard environment settings. */
   environmentVariables: z
     .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(20_000))
@@ -817,12 +853,14 @@ export const workspaceRouter = router({
           limit: z.number().min(1).max(100).default(12),
           offset: z.number().min(0).default(0),
           status: z.enum(["all", "active", "terminated"]).default("active"),
+          /** Only workspaces whose metadata contains every given key/value. */
+          metadata: workspaceMetadataSchema.optional(),
         })
         .optional(),
     )
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const { limit = 12, offset = 0, status = "active" } = input ?? {};
+      const { limit = 12, offset = 0, status = "active", metadata } = input ?? {};
 
       if (!userId) {
         throw new TRPCError({
@@ -833,7 +871,7 @@ export const workspaceRouter = router({
 
       try {
         // Build where clause based on status filter
-        const statusCondition =
+        const statusOnlyCondition =
           status === "all"
             ? eq(workspace.userId, userId)
             : status === "terminated"
@@ -846,6 +884,13 @@ export const workspaceRouter = router({
                     eq(workspace.status, "paused"),
                   ),
                 );
+        const statusCondition =
+          metadata && Object.keys(metadata).length > 0
+            ? and(
+                statusOnlyCondition,
+                sql`${workspace.metadata} @> ${JSON.stringify(metadata)}::jsonb`,
+              )
+            : statusOnlyCondition;
 
         // Get total count using efficient COUNT query
         const [countResult] = await db
@@ -2336,8 +2381,7 @@ export const workspaceRouter = router({
         const credentials = await workspaceCreateLogger.step("fetch-model-credentials", () =>
           resolveWorkspaceProviderCredentials({
             userId,
-            credentialIds: input.modelCredentialIds,
-            inlineCredentials: input.modelCredentials,
+            modelCredentials: input.modelCredentials,
           }),
         );
         const awsRuntimeInstructions =
@@ -2500,11 +2544,31 @@ export const workspaceRouter = router({
 
         // Get compute provider
         const computeProvider = await getProviderByCloudProviderId(providerKey);
-        const imageProviderMetadata = applyMachineProfile(
+        let imageProviderMetadata = applyMachineProfile(
           imageRecord.providerMetadata,
           providerKey,
           input.machineOptions ?? selectedMachineProfile?.providerOptions,
         );
+
+        // Bring-your-own image: swap what the provider runs, keep the catalog
+        // record for agent type and provider sizing metadata.
+        let providerImageId = imageRecord.imageId;
+        let customImage: string | null = null;
+        if (input.image) {
+          const resolvedImage = await workspaceCreateLogger.step("resolve-custom-image", () =>
+            resolveCustomWorkspaceImage(input.image!, providerKey),
+          );
+          if (resolvedImage.kind === "registry") {
+            providerImageId = resolvedImage.reference;
+            customImage = resolvedImage.reference;
+          } else {
+            imageProviderMetadata = {
+              ...imageProviderMetadata,
+              e2b: { templateId: resolvedImage.templateId },
+            };
+            customImage = resolvedImage.templateId;
+          }
+        }
 
         // Plan-based persistence gating: free tier cannot opt into persistent
         // (volume-backed) workspaces. Guard server-side even though the UI hides
@@ -2544,7 +2608,7 @@ export const workspaceRouter = router({
               ? computeProvider.createPersistentWorkspace({
                   workspaceId,
                   userId,
-                  imageId: imageRecord.imageId,
+                  imageId: providerImageId,
                   imageProviderMetadata,
                   subdomain,
                   repositoryUrl: input.repo,
@@ -2559,7 +2623,7 @@ export const workspaceRouter = router({
               : computeProvider.createWorkspace({
                   workspaceId,
                   userId,
-                  imageId: imageRecord.imageId,
+                  imageId: providerImageId,
                   imageProviderMetadata,
                   subdomain,
                   repositoryUrl: input.repo,
@@ -2616,6 +2680,11 @@ export const workspaceRouter = router({
             status: initialWorkspaceStatus,
             hostingType: isLocal ? "local" : "cloud",
             name: input.name || subdomain,
+            metadata: input.metadata ?? {},
+            customImage,
+            autoTerminateAt: input.autoTerminateAfterMs
+              ? new Date(Date.now() + input.autoTerminateAfterMs)
+              : null,
             idempotencyKey: input.idempotencyKey ?? null,
             startedAt: new Date(workspaceInfo.serviceCreatedAt),
             lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),

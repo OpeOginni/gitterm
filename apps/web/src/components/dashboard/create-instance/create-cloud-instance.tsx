@@ -44,10 +44,11 @@ interface CreateCloudInstanceProps {
 
 interface WorkspaceCredential {
   id: string;
+  providerName: string;
   providerDisplayName: string;
   logicalProviderKey: string;
   authType: string;
-  label: string | null;
+  label: string;
   isActive: boolean;
   isDefault: boolean;
 }
@@ -139,6 +140,12 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
   const selectedCredentialIds = Object.values(credentialSelections).filter(
     (id): id is string => !!id,
+  );
+  // The API selects dashboard credentials by provider + label.
+  const selectedModelCredentials = credentialGroups.flatMap((group) =>
+    group.credentials
+      .filter((credential) => credential.id === credentialSelections[group.key])
+      .map((credential) => ({ providerName: credential.providerName, label: credential.label })),
   );
 
   // AWS providers are region-scoped: multiple cloud_provider rows share
@@ -381,7 +388,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
-      modelCredentialIds: selectedCredentialIds,
+      modelCredentials: selectedModelCredentials,
     });
   };
 

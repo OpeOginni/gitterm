@@ -7,6 +7,13 @@ export type AuthStatus = {
   authMethod: "session" | "apiToken";
 };
 
+/**
+ * `pending` — compute is being provisioned or resumed; `runtime.url` is null.
+ * `running` — the provider reports the sandbox/container up. The agent may
+ * still be booting; `runs.create()` waits for it to answer.
+ * `paused` — stopped but resumable with `workspaces.ensureRunning()`.
+ * `terminated` — gone for good.
+ */
 export type WorkspaceStatus = "pending" | "running" | "paused" | "terminated";
 export type WorkspaceHostingType = "cloud" | "local";
 
@@ -27,11 +34,30 @@ export type Workspace = {
   cloudProviderId: string;
   agentType: { id: string; name: string; description: string | null } | null;
   image: { id: string; name: string; imageId: string } | null;
+  /** Caller-owned tags supplied at create time. */
+  metadata: Record<string, string>;
+  /** When set, the workspace is terminated at this time regardless of activity. */
+  autoTerminateAt: string | null;
+  /** The caller-supplied image or E2B template this workspace runs, if any. */
+  customImage: string | null;
   startedAt: string | null;
   pausedAt: string | null;
   terminatedAt: string | null;
   lastActiveAt: string | null;
   updatedAt: string | null;
+};
+
+/** A workspace id, or any object carrying one (e.g. a `Workspace`). */
+export type WorkspaceRef = string | { id: string };
+
+/** A run id pair, or any object carrying one (e.g. an `AgentRun`). */
+export type RunRef = { workspaceId: string; id: string } | { workspaceId: string; runId: string };
+
+export type WaitOptions = {
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+  /** Abort the wait early; the promise rejects with code `ABORTED`. */
+  signal?: AbortSignal;
 };
 
 export type WorkspaceRuntimeAccess = {
@@ -59,6 +85,8 @@ export type WorkspaceListOptions = {
   limit?: number;
   offset?: number;
   status?: "all" | "active" | "terminated";
+  /** Only workspaces whose metadata contains every given key/value. */
+  metadata?: Record<string, string>;
 };
 export type WorkspaceListResult = {
   workspaces: Workspace[];
@@ -125,6 +153,27 @@ export type AgentKey = BuiltInAgentKey | (string & {});
 export type WorkspaceCreateInput = {
   idempotencyKey?: string;
   name?: string;
+  /**
+   * Caller-owned tags (e.g. tenant or channel ids). Up to 20 keys of letters,
+   * digits, `_ . : -`; values up to 500 chars. Returned on the workspace and
+   * filterable with `workspaces.list({ metadata })`.
+   */
+  metadata?: Record<string, string>;
+  /**
+   * Terminate automatically this long after creation, whatever its activity.
+   * Between 1 minute and 30 days. Use it as a cost guardrail for ephemeral
+   * workspaces in case the caller crashes before `terminate()`.
+   */
+  autoTerminateAfterMs?: number;
+  /**
+   * Run your own image instead of the catalog image. Registry-backed providers
+   * (railway, aws, daytona, exedev) take an OCI reference such as
+   * `ghcr.io/acme/agent-runner:1.4.0`; E2B takes a public template id or
+   * alias. The managed service only runs images that can be pulled without
+   * credentials, and pins floating tags to a digest at create time. Build on
+   * `opeoginni/gitterm-opencode-server` and keep its entrypoint.
+   */
+  image?: string;
   repo: string;
   branch?: string;
   /** Commit SHA to pin the checkout to after cloning `branch`/`checkoutRef`. */
@@ -142,13 +191,10 @@ export type WorkspaceCreateInput = {
   /** Defaults from the selected provider. */
   persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
-  /** Credential IDs from client.credentials.list(). Omit to inject dashboard defaults. */
-  modelCredentialIds?: string[];
   /**
-   * Inline API keys for this workspace only — injected at provision time and
-   * never stored in the dashboard. An inline key overrides any dashboard
-   * credential for the same provider. OAuth providers can't be supplied
-   * inline; connect those in the dashboard.
+   * One entry per provider. Omit entirely to inject the dashboard defaults.
+   * Naming any dashboard credential (an entry without `apiKey`) turns off the
+   * implicit defaults, so list every provider the workspace needs.
    */
   modelCredentials?: WorkspaceModelCredentialInput[];
   /** Ephemeral environment variables injected into this workspace only. */
@@ -204,12 +250,33 @@ export type AgentRun = {
   error: string | null;
   finalText: string | null;
   context: { type: "isolated" } | { type: "continued"; runId: string };
+  createdAt: string;
+  /** When the prompt reached the agent; null while `pending`. */
+  submittedAt: string | null;
+  completedAt: string | null;
+};
+
+export type AgentRunListOptions = {
+  /** `active` = pending/running/retrying; `terminal` = completed/failed/cancelled. */
+  status?: "all" | "active" | "terminal";
+  /** 1–50, default 20. */
+  limit?: number;
+  offset?: number;
+};
+
+export type AgentRunListResult = {
+  runs: AgentRun[];
+  pagination: { total: number; limit: number; offset: number; hasMore: boolean };
 };
 
 export type AgentRunCreateInput = {
   workspaceId: string;
-  /** Stable key used to return the same run when a request is retried. */
-  idempotencyKey: string;
+  /**
+   * Stable key used to return the same run when a request is retried.
+   * Defaults to a random UUID, which gives no retry protection; pass your own
+   * for anything a retry could duplicate.
+   */
+  idempotencyKey?: string;
   prompt: string;
   title?: string;
   agent?: string;
@@ -217,22 +284,58 @@ export type AgentRunCreateInput = {
   model?: string;
   /** Start with fresh context (default), or continue a terminal run's context. */
   context?: { type: "isolated" } | { type: "continue"; runId: string };
-  /** Wait for workspace setup commands before submitting the prompt. */
+  /**
+   * Wait for the `afterAgent` setup phase to succeed before submitting the
+   * prompt. Fails the call with the setup log if that phase failed.
+   */
   waitForSetup?: boolean;
   /** How long to wait for setup, in ms. Server maximum is 600000 (10 minutes). */
   setupTimeoutMs?: number;
+  /**
+   * How long to wait for a `pending` workspace to become `running`, in ms.
+   * Defaults to 120000; server maximum is 240000. Paused workspaces are not
+   * resumed — call `workspaces.ensureRunning()` first.
+   */
+  startTimeoutMs?: number;
+  /** Abort while waiting for setup or start; rejects with code `ABORTED`. */
+  signal?: AbortSignal;
 };
+
+export type AgentRunMessagePart =
+  | { type: "text"; text: string }
+  | {
+      type: "tool";
+      callId: string;
+      tool: string;
+      status: "pending" | "running" | "completed" | "error";
+      title: string | null;
+      input: Record<string, unknown>;
+      /** Tool output when completed, truncated to 4000 characters. */
+      output: string | null;
+      error: string | null;
+      startedAt: string | null;
+      completedAt: string | null;
+    };
 
 export type AgentRunMessage = {
   id: string;
   role: "user" | "assistant";
   createdAt: string;
   completedAt: string | null;
+  /** Concatenated text parts. */
   text: string;
   error: string | null;
+  /** Ordered text and tool-call parts, for seeing what the agent actually did. */
+  parts: AgentRunMessagePart[];
 };
 
 export type WorkspaceSetupStatus = {
+  /**
+   * `not_requested` — no `afterAgent` commands. `waiting` — the agent isn't
+   * reachable yet, so setup hasn't started. `running`, `succeeded`, `failed`
+   * describe the `afterAgent` phase itself. A setup stuck in `waiting` for
+   * 15 minutes is marked `failed` with the reason in `log`.
+   */
   status: "not_requested" | "waiting" | "running" | "succeeded" | "failed";
   exitCode: number | null;
   startedAt: string | null;
@@ -254,14 +357,21 @@ export type ModelProviderInfo = {
 };
 
 /**
- * An API key passed directly to workspaces.create(). `providerName` must be an
- * API-key provider from credentials.listProviders(), e.g. "anthropic" or
- * "openai"; unknown or OAuth-only providers throw MODEL_CREDENTIAL_INVALID.
+ * Selects the credential for one provider on workspaces.create().
+ * `providerName` comes from credentials.listProviders(), e.g. "anthropic" or
+ * "openai"; unknown providers throw MODEL_CREDENTIAL_INVALID.
+ *
+ * - `{ providerName, apiKey }` — inline key for this workspace only, never
+ *   stored. Overrides any dashboard credential for the same provider.
+ *   OAuth-only providers throw MODEL_CREDENTIAL_INVALID.
+ * - `{ providerName, label }` — the dashboard credential with that label.
+ *   Unknown labels throw MODEL_CREDENTIAL_UNAVAILABLE listing the labels
+ *   that exist.
+ * - `{ providerName }` — that provider's dashboard default credential.
  */
-export type WorkspaceModelCredentialInput = {
-  providerName: string;
-  apiKey: string;
-};
+export type WorkspaceModelCredentialInput =
+  | { providerName: string; apiKey: string; label?: never }
+  | { providerName: string; label?: string; apiKey?: never };
 
 /** Safe dashboard credential metadata. Secret material is never returned by the SDK. */
 export type ModelCredential = {
@@ -271,7 +381,8 @@ export type ModelCredential = {
   providerDisplayName: string;
   logicalProviderKey: string;
   authType: string;
-  label: string | null;
+  /** Unique per provider; use it in `modelCredentials: [{ providerName, label }]`. */
+  label: string;
   keyHash: string;
   isActive: boolean;
   isDefault: boolean;

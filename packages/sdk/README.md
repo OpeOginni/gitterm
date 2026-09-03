@@ -258,7 +258,7 @@ const { workspace, runtime } = await client.workspaces.create({
 The username defaults to `x-access-token`. Inline repository credentials take precedence over
 `gitIntegrationId` and authenticate repository validation, cloning, and runtime Git operations such
 as pull and push. Without inline credentials, `gitIntegrationId` continues to use the connected
-dashboard integration. Omitting `modelCredentialIds` and `modelCredentials` likewise continues to
+dashboard integration. Omitting `modelCredentials` likewise continues to
 use dashboard-managed model credentials.
 
 GitTerm does not save inline PATs in its application database. Inline PATs must be delivered to the
@@ -294,20 +294,99 @@ const status = await client.auth.status();
 
 ```ts
 client.auth.status();                 // -> { userId, email, name, plan, authMethod }
-client.workspaces.list(options?);     // -> { workspaces, pagination }
-client.workspaces.get(workspaceId);
-client.workspaces.getRuntimeAccess(workspaceId); // read-only; never resumes compute
-client.workspaces.ensureRunning(workspaceId, options?);
-client.workspaces.pause(workspaceId);
-client.workspaces.restart(workspaceId);
-client.workspaces.terminate(workspaceId);
+client.workspaces.list(options?);     // -> { workspaces, pagination }; filter by status or metadata
+client.workspaces.get(workspace);      // workspace = id string or any object with an `id`
+client.workspaces.getRuntimeAccess(workspace); // read-only; never resumes compute
+client.workspaces.ensureRunning(workspace, options?); // resume if paused, wait until running
+client.workspaces.setupStatus(workspace);
+client.workspaces.waitForSetup(workspace, options?);
+client.workspaces.pause(workspace);    // -> { durationMinutes } of the usage session just closed
+client.workspaces.restart(workspace);
+client.workspaces.terminate(workspace); // -> { workspace, cleanupInBackground }
 client.workspaces.create({
   repo: "https://github.com/acme/product",
 });
+client.runs.create(input);
+client.runs.list(workspace, options?); // -> { runs, pagination }
+client.runs.get(run);                  // run = AgentRun, { workspaceId, runId }, or (workspaceId, runId)
+client.runs.messages(run);
+client.runs.cancel(run);
+client.runs.wait(run, options?);
 client.catalog.agentTypes();
 client.catalog.cloudProviders();
 client.catalog.workspaceOptions();
 ```
+
+Every wait (`ensureRunning`, `waitForSetup`, `runs.wait`, and `runs.create` with
+`waitForSetup`) accepts `{ timeoutMs, pollIntervalMs, signal }`. Pass an `AbortSignal` to stop
+waiting on shutdown; the promise rejects with code `ABORTED`.
+
+`pause()` returns `durationMinutes`, the length of the usage session it just closed, which is
+what billing records. `terminate()` returns `cleanupInBackground: true` when the provider
+finishes tearing down resources after the call returns.
+
+#### Tagging and lifetime
+
+`metadata` attaches caller-owned tags to a workspace so you can find it again without a
+lookup table of your own, and `autoTerminateAfterMs` caps how long it can live:
+
+```ts
+await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  metadata: { tenant: "acme", channel: "C0123" },
+  autoTerminateAfterMs: 2 * 60 * 60 * 1000, // gone in 2h even if this process crashes
+});
+
+const { workspaces } = await client.workspaces.list({
+  metadata: { tenant: "acme", channel: "C0123" },
+});
+```
+
+Metadata allows up to 20 keys of letters, digits, `_ . : -`, with values up to 500 characters,
+and `list` matches workspaces containing every given pair. `autoTerminateAfterMs` ranges from
+1 minute to 30 days; the reaper terminates the workspace once the time passes regardless of
+activity, and `workspace.autoTerminateAt` shows the deadline. Idle workspaces are still paused
+by the platform's idle policy independently of this.
+
+#### Bring your own image
+
+Pass `image` to run your own build instead of the catalog image. On the managed service the
+image must be pullable without credentials; creation fails immediately with the reason if it
+isn't, rather than leaving a workspace stuck pulling.
+
+```ts
+await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  provider: { type: "railway" },
+  image: "ghcr.io/acme/agent-runner:1.4.0",
+});
+
+// E2B takes a public template id or alias instead of a registry reference.
+await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  provider: { type: "e2b" },
+  image: "acme-python-runner",
+});
+```
+
+Supported on Railway, AWS, Daytona, exe.dev, and E2B. Vercel and Cloudflare run fixed
+runtimes and reject `image`. Floating tags such as `latest` are pinned to the digest verified
+at create time, so a restart months later runs the same image; `workspace.customImage` shows
+what was pinned.
+
+The image has to behave like the stock one, because GitTerm's entrypoint does the clone, writes
+agent files, runs setup phases, and starts the agent. Layer on the published base and keep its
+entrypoint:
+
+```dockerfile
+FROM opeoginni/gitterm-opencode-server:latest
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip poppler-utils \
+  && rm -rf /var/lib/apt/lists/*
+```
+
+Rules: do not override `ENTRYPOINT` or `CMD`; keep global installs outside `/workspace`, which
+is a persisted volume; keep `opencode` and `@gitterm/cli` on `PATH`; keep port 7681. For E2B,
+build your template from the same base and publish it so any account can start it.
 
 The server defaults the agent to `opencode`, selects the user's preferred provider,
 uses that provider's default machine profile, and applies the provider's persistence policy.
@@ -385,12 +464,99 @@ run UI review or browser capture tools in the sandbox, upload the resulting medi
 the changelog in the checked-out repository, then terminate the workspace. Use an
 `idempotencyKey` based on the release SHA when the workflow may be retried.
 
+### Workspace lifecycle and readiness
+
+A workspace has one of four statuses:
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | Compute is being provisioned or resumed. `runtime.url` is `null`. |
+| `running` | The provider reports the sandbox or container up. The agent process may still be booting. |
+| `paused` | Stopped but resumable. |
+| `terminated` | Gone for good. |
+
+Whether `create()` returns `running` or `pending` depends on the provider. Sandbox providers
+(E2B, Daytona, Vercel, Ascii, exe.dev, Cloudflare) settle immediately and return `running`.
+Railway settles by webhook and returns `pending` until its deployment reports success, usually
+within a minute. Code that only ever ran against a sandbox provider will see `pending` for the
+first time when it moves to Railway.
+
+Three things have to be true before a prompt can be delivered, and the SDK handles each:
+
+1. **The workspace is `running`.** `runs.create()` waits for a `pending` workspace to
+   transition on its own, up to `startTimeoutMs` (default 120s). It does not resume a `paused`
+   workspace; call `ensureRunning()` for that, which resumes, polls until `running`, and returns
+   the runtime access.
+2. **The agent answers.** `running` is the provider's view. `runs.create()` then probes the
+   workspace URL until the agent server responds before submitting the prompt, so callers never
+   need their own health check.
+3. **Setup finished (optional).** `afterAgent` commands run in the background once the agent is
+   reachable. Pass `waitForSetup: true` to `runs.create()` to block on them, or poll with
+   `setupStatus()` / `waitForSetup()`. Status `waiting` means the agent isn't reachable yet, so
+   setup hasn't started; `running`, `succeeded`, and `failed` describe the phase itself;
+   `not_requested` means there were no `afterAgent` commands. The SDK polls setup from the
+   client so a long `npm ci` never holds one HTTP request open; that polling needs the
+   `workspace:read` scope on the token in addition to `run:write`. `waiting` cannot last
+   forever: while you poll, the server also reads the setup state files inside the workspace
+   (through the agent when the provider has no exec channel), and if nothing has progressed
+   after 15 minutes it marks the setup `failed` with a log explaining what stalled.
+
+The shortest correct sequence is therefore:
+
+```ts
+const { workspace } = await client.workspaces.create({ repo, setup: { afterAgent: ["npm ci"] } });
+const run = await client.runs.create({
+  workspaceId: workspace.id,
+  idempotencyKey: `review-${sha}`,
+  waitForSetup: true,
+  prompt: "Review the open pull request",
+});
+const done = await client.runs.wait(workspace.id, run.id);
+```
+
+For a workspace you didn't just create, start with `ensureRunning()`:
+
+```ts
+const { workspace, runtime } = await client.workspaces.ensureRunning(workspaceId);
+// runtime.url is set; workspace.status is "running"
+```
+
+Failures surface as `WorkspaceLifecycleError` with stable codes: `WORKSPACE_NOT_RUNNING` (the
+workspace is `paused`, or stopped while waiting), `WORKSPACE_TERMINATED`,
+`WORKSPACE_START_TIMEOUT` (still `pending` after the timeout, or no runtime URL),
+`WORKSPACE_NON_RECOVERABLE`, and `WORKSPACE_RESTART_FAILED`.
+
+Direct provider mode behaves differently: `direct.workspaces.create()` waits for the OpenCode
+runtime to answer before returning, so a direct workspace is ready for `runs.create()` as soon
+as `create()` resolves.
+
 ### Agent runs
 
 Runs use durable GitTerm IDs backed by the workspace's native OpenCode session. Reusing an
 idempotency key with the same input returns the original run, and terminal results remain
-available after the workspace is paused. Completion means the native session became idle;
-it does not claim that a pull request, upload, or other product outcome succeeded.
+available after the workspace is paused. `idempotencyKey` defaults to a random UUID; pass your
+own whenever a retry could otherwise submit the same prompt twice. Completion means the native
+session became idle; it does not claim that a pull request, upload, or other product outcome
+succeeded.
+
+Every run carries `createdAt`, `submittedAt` (when the prompt reached the agent), and
+`completedAt`. `runs.list(workspace, { status: "active" })` returns what is still in flight,
+reconciled against the workspace, so a process recovering after a restart can pick up where it
+left off without having persisted run ids itself.
+
+`runs.messages()` returns each turn's concatenated `text` plus an ordered `parts` array. Tool
+calls appear as `{ type: "tool", tool, status, title, input, output, error }` with output
+truncated to 4000 characters, which is usually enough to see why a run went wrong:
+
+```ts
+for (const message of await client.runs.messages(run)) {
+  for (const part of message.parts) {
+    if (part.type === "tool" && part.status === "error") {
+      console.log(part.tool, part.title, part.error);
+    }
+  }
+}
+```
 
 ```ts
 const { workspace } = await client.workspaces.create({
@@ -423,35 +589,29 @@ const next = await client.runs.create({
 
 ### Model provider credentials
 
-Workspaces can receive model credentials two ways, and they compose:
-
-**Dashboard credentials** — list the account's credential metadata, choose one active credential
-per provider, and pass the IDs when creating a workspace. The SDK never returns credential
-secrets.
+`modelCredentials` takes one entry per provider. Each entry selects where that provider's
+credential comes from, and the three forms compose in one array:
 
 ```ts
-const credentials = await client.credentials.list();
-const selected = credentials.filter(
-  (credential) =>
-    credential.isActive && ["anthropic", "openai"].includes(credential.logicalProviderKey),
-);
-
 const { workspace } = await client.workspaces.create({
   repo: "https://github.com/acme/product",
-  modelCredentialIds: selected.map((credential) => credential.id),
+  modelCredentials: [
+    { providerName: "openai", label: "work" }, // dashboard credential, by label
+    { providerName: "anthropic" }, // that provider's dashboard default
+    { providerName: "google", apiKey: process.env.GOOGLE_API_KEY! }, // inline, this workspace only
+  ],
 });
 ```
 
-**Inline credentials** — pass API keys directly for this workspace only. They are injected into
-the provisioned agent and never stored in the dashboard. Use
-`client.credentials.listProviders()` for valid provider names; OAuth providers (e.g. GitHub
-Copilot) can only be connected through the dashboard.
+**Dashboard credentials** are addressed by `providerName` plus the `label` you gave them in the
+dashboard (labels are unique per provider). Omit `label` to use the provider's default. The SDK
+never returns credential secrets; `client.credentials.list()` returns metadata including labels
+if you need to discover them, and requires an API token with the `workspace:write` scope.
 
-```ts
-const { workspace } = await client.workspaces.create({
-  repo: "https://github.com/acme/product",
-  modelCredentials: [{ providerName: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY! }],
-});
+**Inline credentials** pass an API key directly for this workspace only. They are injected into
+the provisioned agent and never stored in the dashboard. Use `client.credentials.listProviders()`
+for valid provider names; OAuth providers (e.g. GitHub Copilot) can only be connected through
+the dashboard.
 
 const run = await client.runs.create({
   workspaceId: workspace.workspaceId,
@@ -462,12 +622,16 @@ const run = await client.runs.create({
 
 Rules and errors:
 
-- Omit both fields to inject the dashboard defaults.
+- Omit `modelCredentials` to inject every dashboard default.
+- Naming any dashboard credential (an entry without `apiKey`) switches off the implicit defaults,
+  so list each provider the workspace needs. Inline-only arrays keep the defaults for the other
+  providers.
 - One credential per logical provider. An inline credential always overrides the dashboard
-  credential (default or selected) for the same provider; two credentials for the same provider
-  within one field throw `MODEL_CREDENTIAL_DUPLICATE_PROVIDER`.
-- Unknown providers or inline keys for OAuth-only providers throw `MODEL_CREDENTIAL_INVALID`;
-  missing, inactive, or unowned dashboard selections throw `MODEL_CREDENTIAL_UNAVAILABLE`.
+  credential for the same provider; two entries for the same provider throw
+  `MODEL_CREDENTIAL_DUPLICATE_PROVIDER`.
+- Unknown providers or inline keys for OAuth-only providers throw `MODEL_CREDENTIAL_INVALID`.
+  A label that doesn't exist throws `MODEL_CREDENTIAL_UNAVAILABLE` and the message lists the
+  labels that do.
 - A run that requests a credential-backed `provider/model` not available in its workspace throws
   `MODEL_CREDENTIAL_REQUIRED` before the prompt is submitted.
 
@@ -492,10 +656,10 @@ try {
 ```
 
 Workspace lifecycle failures are also exposed as `WorkspaceLifecycleError`, with stable
-`WORKSPACE_TERMINATED`, `WORKSPACE_NON_RECOVERABLE`, `WORKSPACE_START_TIMEOUT`, and
-`WORKSPACE_RESTART_FAILED` codes. General codes are
+`WORKSPACE_NOT_RUNNING`, `WORKSPACE_TERMINATED`, `WORKSPACE_NON_RECOVERABLE`,
+`WORKSPACE_START_TIMEOUT`, and `WORKSPACE_RESTART_FAILED` codes. General codes are
 `NOT_LOGGED_IN`, `UNAUTHORIZED`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`, `CONFLICT`,
-`SERVER_ERROR`, and `NETWORK`.
+`SERVER_ERROR`, `NETWORK`, and `ABORTED` (a wait was cancelled through its `signal`).
 
 The package ships self-contained declarations from `dist`; TypeScript consumers do not
 need GitTerm's API package or tRPC server types.

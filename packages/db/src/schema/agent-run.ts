@@ -21,6 +21,22 @@ export const agentRunStatusEnum = pgEnum("agent_run_status", [
   "cancelled",
 ]);
 
+export type AgentRunMessagePart =
+  | { type: "text"; text: string }
+  | {
+      type: "tool";
+      callId: string;
+      tool: string;
+      status: "pending" | "running" | "completed" | "error";
+      title: string | null;
+      input: Record<string, unknown>;
+      /** Truncated tool output when completed. */
+      output: string | null;
+      error: string | null;
+      startedAt: string | null;
+      completedAt: string | null;
+    };
+
 export type AgentRunMessageSnapshot = {
   id: string;
   role: "user" | "assistant";
@@ -28,6 +44,8 @@ export type AgentRunMessageSnapshot = {
   completedAt: string | null;
   text: string;
   error: string | null;
+  /** Ordered text and tool-call parts; absent on rows captured before parts were recorded. */
+  parts?: AgentRunMessagePart[];
 };
 
 export const agentRun = pgTable(

@@ -115,6 +115,12 @@ export const workspace = pgTable(
     hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"),
     name: text("name"), // Display name for the workspace
     idempotencyKey: text("idempotency_key"),
+    /** Caller-owned key/value tags (e.g. tenant or channel ids), filterable in list. */
+    metadata: jsonb("metadata").$type<Record<string, string>>().notNull().default({}),
+    /** When set, the reaper terminates the workspace at this time regardless of activity. */
+    autoTerminateAt: timestamp("auto_terminate_at"),
+    /** Caller-supplied public image (registry reference or E2B template) used instead of the catalog image. */
+    customImage: text("custom_image"),
     reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
     exposedPorts: jsonb("exposed_ports").$type<
       Record<
