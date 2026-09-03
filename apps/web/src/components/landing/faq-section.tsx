@@ -24,7 +24,7 @@ const faqs = [
 
 export function FaqSection() {
   return (
-    <section id="faq" className="border-t border-white/[0.06] py-14 sm:py-20 md:py-28">
+    <section id="faq" className="border-t border-line py-14 sm:py-20 md:py-28">
       <div className="mx-auto max-w-[820px] px-4 sm:px-6">
         <div className="mx-auto mb-10 max-w-xl text-center sm:mx-0 sm:mb-12 sm:text-left">
           <h2 className="font-display text-[clamp(1.9rem,4vw,3.2rem)] font-light leading-[1.04] tracking-tight text-white">
@@ -32,7 +32,7 @@ export function FaqSection() {
           </h2>
         </div>
 
-        <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+        <div className="divide-y divide-line border-t border-line">
           {faqs.map((faq) => (
             <FaqItem key={faq.q} question={faq.q} answer={faq.a} />
           ))}
@@ -51,12 +51,12 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full cursor-pointer items-center justify-between gap-4 py-5 text-left text-[15px] font-medium text-white/85 transition-colors hover:text-white sm:text-base"
+        className="flex w-full cursor-pointer items-center justify-between gap-4 py-5 text-left text-[15px] font-medium text-fg transition-colors hover:text-fg sm:text-base"
       >
         {question}
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-white/40 transition-transform duration-300 ease-out ${
-            open ? "rotate-180 text-white/70" : ""
+          className={`h-4 w-4 shrink-0 text-fg-4 transition-transform duration-300 ease-out ${
+            open ? "rotate-180 text-fg-2" : ""
           }`}
         />
       </button>
@@ -67,7 +67,7 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
       >
         <div className="overflow-hidden">
           <p
-            className={`max-w-2xl pb-5 text-[13.5px] leading-relaxed text-white/50 transition-opacity duration-300 ease-out sm:text-sm ${
+            className={`max-w-2xl pb-5 text-[13.5px] leading-relaxed text-fg-3 transition-opacity duration-300 ease-out sm:text-sm ${
               open ? "opacity-100" : "opacity-0"
             }`}
           >

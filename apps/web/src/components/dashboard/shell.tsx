@@ -36,7 +36,7 @@ export function DashboardHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 border-b border-white/[0.06] pb-6 sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
     >
@@ -47,7 +47,7 @@ export function DashboardHeader({
             {heading}
           </h1>
         </div>
-        {text ? <p className="text-sm text-white/40 md:text-base">{text}</p> : null}
+        {text ? <p className="text-sm text-fg-4 md:text-base">{text}</p> : null}
       </div>
       {children}
     </div>

@@ -355,7 +355,7 @@ export function GitHubRepositoryBranchField({
             </span>
           ) : hasGitHubUrl ? (
             <span className="inline-flex items-center gap-1 text-amber-400/80">
-              <AlertCircle className="h-3 w-3" />
+              <AlertCircle className="h-3 w-3 text-amber-400 opacity-80" />
               Enter a valid GitHub URL
             </span>
           ) : (

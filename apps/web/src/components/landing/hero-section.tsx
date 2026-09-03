@@ -128,7 +128,7 @@ export function HeroSection() {
           </h1>
 
           <p
-            className="rise mx-auto mt-5 max-w-[34rem] text-balance font-sans text-[15px] leading-[1.6] text-white/55 sm:mt-6 sm:text-[17px] sm:leading-[1.65]"
+            className="rise mx-auto mt-5 max-w-[34rem] text-balance font-sans text-[15px] leading-[1.6] text-fg-3 sm:mt-6 sm:text-[17px] sm:leading-[1.65]"
             style={{ animationDelay: "180ms" }}
           >
             Heavy runs and throwaway sandboxes, on any cloud you pick. Your keys. Open source.
@@ -154,6 +154,7 @@ export function HeroSection() {
                   setRepo={setRepo}
                   isPending={launchMutation.isPending}
                   error={launchMutation.error?.message}
+                  isTrialLimit={launchMutation.error?.data?.code === "TOO_MANY_REQUESTS"}
                   onSubmit={handleLaunch}
                 />
               )}
@@ -166,7 +167,7 @@ export function HeroSection() {
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 ease-out group-hover:translate-x-1" />
                 </Button>
               </Link>
-              <span className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-white/35">
+              <span className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-fg-4">
                 no card required
               </span>
             </div>
@@ -176,24 +177,28 @@ export function HeroSection() {
         <div className="mt-14 text-left sm:mt-20">
           <div className="hairline" />
 
-          <div className="py-8">
-            <div className="mb-5 text-center">
+          <div className="py-9">
+            <div className="mb-5 flex items-center justify-center gap-3">
+              <span className="h-px w-6 bg-line-2" />
               <span className="marker">Runs Everywhere</span>
+              <span className="h-px w-6 bg-line-2" />
             </div>
-            <div className="grid grid-cols-3 gap-x-3 gap-y-4 lg:relative lg:left-1/2 lg:flex lg:w-[min(1120px,calc(100vw-3rem))] lg:-translate-x-1/2 lg:flex-nowrap lg:items-center lg:justify-between">
+            <div className="grid grid-cols-4 gap-x-3 gap-y-6 lg:relative lg:left-1/2 lg:flex lg:w-[min(1120px,calc(100vw-3rem))] lg:-translate-x-1/2 lg:items-center lg:justify-between lg:gap-0">
               {clouds.map((c) => (
                 <div
                   key={c.label}
-                  className="group flex min-w-0 shrink-0 flex-col items-center gap-1.5 whitespace-nowrap text-center text-white/60 transition-colors hover:text-white/90 lg:flex-row lg:gap-2.5 lg:text-left"
+                  className="group flex min-w-0 flex-col items-center gap-2.5 text-center text-fg-2 transition-colors hover:text-fg lg:flex-row lg:gap-3 lg:text-left"
                 >
                   <Image
                     src={c.src}
                     alt={c.label}
-                    width={22}
-                    height={22}
-                    className="h-[22px] w-[22px] opacity-80 transition-opacity group-hover:opacity-100"
+                    width={30}
+                    height={30}
+                    className="h-[30px] w-[30px] object-contain opacity-90 transition-opacity group-hover:opacity-100"
                   />
-                  <span className="font-sans text-[12.5px] lg:text-[15px]">{c.label}</span>
+                  <span className="truncate font-sans text-[13px] font-medium lg:text-[15px]">
+                    {c.label}
+                  </span>
                 </div>
               ))}
             </div>
@@ -201,24 +206,32 @@ export function HeroSection() {
 
           <div className="hairline" />
 
-          <div className="py-8">
-            <div className="mb-5 text-center">
+          <div className="py-9">
+            <div className="mb-5 flex items-center justify-center gap-3">
+              <span className="h-px w-6 bg-line-2" />
               <span className="marker">Agents Supported</span>
+              <span className="h-px w-6 bg-line-2" />
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:gap-x-10">
-              <div className="flex items-center gap-2.5 text-white/85">
+            <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 sm:gap-x-14">
+              <div className="flex items-center gap-3 text-fg">
                 <Image
                   src="/opencode.svg"
                   alt="OpenCode"
-                  width={24}
-                  height={24}
-                  className="h-6 w-6"
+                  width={30}
+                  height={30}
+                  className="h-[30px] w-[30px]"
                 />
-                <span className="font-sans text-[15.5px] sm:text-base">OpenCode</span>
+                <span className="font-sans text-[16px] font-medium">OpenCode</span>
               </div>
-              <div className="flex items-center gap-2.5 text-white/85">
-                <Image src="/t3.svg" alt="T3 Code" width={24} height={24} className="h-6 w-6" />
-                <span className="font-sans text-[15.5px] sm:text-base">T3 Code</span>
+              <div className="flex items-center gap-3 text-fg">
+                <Image
+                  src="/t3.svg"
+                  alt="T3 Code"
+                  width={30}
+                  height={30}
+                  className="h-[30px] w-[30px]"
+                />
+                <span className="font-sans text-[16px] font-medium">T3 Code</span>
               </div>
             </div>
           </div>
@@ -237,12 +250,14 @@ function LaunchForm({
   setRepo,
   isPending,
   error,
+  isTrialLimit,
   onSubmit,
 }: {
   repo: string;
   setRepo: (v: string) => void;
   isPending: boolean;
   error?: string;
+  isTrialLimit: boolean;
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
@@ -250,8 +265,8 @@ function LaunchForm({
       <FormCard className="group/launcher overflow-visible rounded-none border-0 bg-transparent shadow-none">
         <form onSubmit={onSubmit}>
           <FormCardBody className="flex flex-col items-stretch gap-2 p-0 sm:flex-row sm:items-center">
-            <label className="flex min-w-0 flex-1 cursor-text items-center gap-3 rounded-[10px] bg-white/[0.035] px-3.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] transition-[background-color,box-shadow] hover:bg-white/[0.045] focus-within:bg-white/[0.05] focus-within:shadow-[inset_0_0_0_1px_rgba(200,164,78,0.55),0_0_0_3px_rgba(200,164,78,0.07)] sm:px-4">
-              <GitHub className="h-[18px] w-[18px] shrink-0 text-white/55 transition-colors group-focus-within/launcher:text-white/80" />
+            <label className="flex min-w-0 flex-1 cursor-text items-center gap-3 rounded-[10px] bg-fill px-3.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] transition-[background-color,box-shadow] hover:bg-fill focus-within:bg-fill focus-within:shadow-[inset_0_0_0_1px_rgba(200,164,78,0.55),0_0_0_3px_rgba(200,164,78,0.07)] sm:px-4">
+              <GitHub className="h-[18px] w-[18px] shrink-0 text-fg-3 transition-colors group-focus-within/launcher:text-fg" />
               <input
                 type="text"
                 value={repo}
@@ -262,7 +277,7 @@ function LaunchForm({
                 autoCapitalize="off"
                 autoCorrect="off"
                 disabled={isPending}
-                className="h-14 min-w-0 w-full bg-transparent font-mono text-[14px] tracking-[-0.01em] text-white/90 placeholder:text-white/30 focus:outline-none disabled:opacity-50"
+                className="h-14 min-w-0 w-full bg-transparent font-mono text-[14px] tracking-[-0.01em] text-fg placeholder:text-fg-4 focus:outline-none disabled:opacity-50"
               />
             </label>
 
@@ -285,11 +300,34 @@ function LaunchForm({
             </Button>
           </FormCardBody>
 
-          {error ? (
-            <div className="mt-2 rounded-lg bg-destructive/[0.06] px-4 py-2.5 text-[12.5px] text-destructive/90">
-              {error}
-            </div>
-          ) : null}
+          <div
+            aria-live="polite"
+            className={`mt-2 flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-center text-[12.5px] transition-colors ${
+              isTrialLimit
+                ? "bg-primary/[0.07]"
+                : error
+                  ? "bg-destructive/[0.06]"
+                  : "bg-transparent"
+            }`}
+          >
+            {isTrialLimit ? (
+              <p className="text-fg-3">
+                Want to create more workspaces?{" "}
+                <Link
+                  href="/login?redirect=/dashboard"
+                  className="font-medium text-primary underline decoration-primary/40 underline-offset-4 transition-colors hover:text-primary/80 hover:decoration-primary"
+                >
+                  Sign up →
+                </Link>
+              </p>
+            ) : error ? (
+              <p className="text-destructive/90">{error}</p>
+            ) : (
+              <p className="font-mono text-[10px] uppercase tracking-[0.13em] text-fg-4">
+                10-minute sandbox · public repositories
+              </p>
+            )}
+          </div>
         </form>
       </FormCard>
 
@@ -297,7 +335,7 @@ function LaunchForm({
         href="https://e2b.dev"
         target="_blank"
         rel="noreferrer"
-        className="mx-auto mt-3 flex w-fit items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/30 transition-colors hover:text-white/55"
+        className="mx-auto mt-3 flex w-fit items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.16em] text-fg-4 transition-colors hover:text-fg-3"
       >
         <Image src="/E2B.svg" alt="" width={13} height={14} className="h-3.5 w-auto opacity-60" />
         <span>Sponsored by E2B</span>
@@ -357,15 +395,15 @@ function ResultCard({
       <div className="space-y-4 p-4 pt-3 sm:space-y-5 sm:p-5 sm:pt-3">
         {/* Workspace URL */}
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
             Workspace URL
           </p>
           <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-input/70 px-3.5 py-2.5">
-            <span className="flex-1 truncate font-mono text-[13.5px] text-white/85">{url}</span>
+            <span className="flex-1 truncate font-mono text-[13.5px] text-fg">{url}</span>
             <button
               type="button"
               onClick={() => copyText(url, "URL copied")}
-              className="text-white/40 transition-colors hover:text-white/80"
+              className="text-fg-4 transition-colors hover:text-fg"
               aria-label="Copy URL"
             >
               <Copy className="h-3.5 w-3.5" />
@@ -376,32 +414,32 @@ function ResultCard({
         {/* Credentials */}
         <div>
           <div className="mb-1.5">
-            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
               Credentials
             </p>
           </div>
           <div className="grid gap-1.5">
             <div className="flex items-center gap-3 rounded-lg bg-input/70 px-3.5 py-2">
-              <span className="w-[72px] shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
+              <span className="w-[72px] shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-fg-4">
                 Username
               </span>
-              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-white/85">
+              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-fg">
                 {result.serverUsername}
               </span>
               <button
                 type="button"
                 onClick={() => copyText(result.serverUsername, "Username copied")}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-white/40 transition-colors hover:text-white/80"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-fg-4 transition-colors hover:text-fg"
                 aria-label="Copy username"
               >
                 <Copy className="h-3 w-3" />
               </button>
             </div>
             <div className="flex items-center gap-3 rounded-lg bg-input/70 px-3.5 py-2">
-              <span className="w-[72px] shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
+              <span className="w-[72px] shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-fg-4">
                 Password
               </span>
-              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-white/85">
+              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-fg">
                 <span className="sm:hidden">••••••••••••</span>
                 <span className="hidden sm:inline">
                   {showPassword ? result.serverPassword : "••••••••••••"}
@@ -410,7 +448,7 @@ function ResultCard({
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="hidden h-7 w-7 shrink-0 items-center justify-center text-white/40 transition-colors hover:text-white/80 sm:inline-flex"
+                className="hidden h-7 w-7 shrink-0 items-center justify-center text-fg-4 transition-colors hover:text-fg sm:inline-flex"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -418,7 +456,7 @@ function ResultCard({
               <button
                 type="button"
                 onClick={() => copyText(result.serverPassword, "Password copied")}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-white/40 transition-colors hover:text-white/80"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-fg-4 transition-colors hover:text-fg"
                 aria-label="Copy password"
               >
                 <Copy className="h-3 w-3" />
@@ -430,21 +468,21 @@ function ResultCard({
         {/* Connect options */}
         <div>
           <div className="mb-3 flex items-center gap-3">
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
               How to connect
             </span>
-            <span className="h-px flex-1 bg-white/[0.06]" />
+            <span className="h-px flex-1 bg-fill-2" />
           </div>
 
-          <div className="divide-y divide-white/[0.05] overflow-hidden rounded-lg bg-input/40">
+          <div className="divide-y divide-line overflow-hidden rounded-lg bg-input/40">
             {/* Web UI */}
             <div className="flex items-center gap-3 px-3.5 py-3">
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/[0.04]">
-                <Globe className="h-3.5 w-3.5 text-white/60" />
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-fill">
+                <Globe className="h-3.5 w-3.5 text-fg-2" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-white/85">Browser</p>
-                <p className="text-[11.5px] text-white/40">Open the workspace.</p>
+                <p className="text-[13px] font-medium text-fg">Browser</p>
+                <p className="text-[11.5px] text-fg-4">Open the workspace.</p>
               </div>
               <button
                 type="button"
@@ -459,17 +497,17 @@ function ResultCard({
 
             {/* OpenCode CLI */}
             <div className="flex items-center gap-3 px-3.5 py-3">
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/[0.04]">
-                <Terminal className="h-3.5 w-3.5 text-white/60" />
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-fill">
+                <Terminal className="h-3.5 w-3.5 text-fg-2" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-white/85">CLI</p>
-                <p className="truncate font-mono text-[11.5px] text-white/40">{attachDisplay}</p>
+                <p className="text-[13px] font-medium text-fg">CLI</p>
+                <p className="truncate font-mono text-[11.5px] text-fg-4">{attachDisplay}</p>
               </div>
               <button
                 type="button"
                 onClick={() => copyText(attachCommand, "Command copied")}
-                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/70 transition-colors hover:border-white/20 hover:text-white"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line bg-fill px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
               >
                 <Copy className="h-3 w-3" />
                 Copy
@@ -478,19 +516,19 @@ function ResultCard({
 
             {/* OpenCode Desktop */}
             <div className="flex items-center gap-3 px-3.5 py-3">
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/[0.04]">
-                <Monitor className="h-3.5 w-3.5 text-white/60" />
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-fill">
+                <Monitor className="h-3.5 w-3.5 text-fg-2" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-white/85">Desktop</p>
-                <p className="truncate text-[11.5px] text-white/40">
+                <p className="text-[13px] font-medium text-fg">Desktop</p>
+                <p className="truncate text-[11.5px] text-fg-4">
                   Credentials above · project <span className="font-mono">{projectPath}</span>
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => copyText(projectPath, "Project path copied")}
-                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/70 transition-colors hover:border-white/20 hover:text-white"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line bg-fill px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
               >
                 <Copy className="h-3 w-3" />
                 Copy
@@ -505,7 +543,7 @@ function ResultCard({
           variant="outline"
           disabled={isResetting}
           onClick={onReset}
-          className="h-10 w-full border-white/[0.1] bg-transparent font-mono text-[11px] uppercase tracking-[0.18em] text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
+          className="h-10 w-full border-line bg-transparent font-mono text-[11px] uppercase tracking-[0.18em] text-fg-2 hover:border-line-2 hover:text-fg disabled:opacity-40"
         >
           {isResetting ? (
             <Loader2 className="mr-2 h-3 w-3 animate-spin" />

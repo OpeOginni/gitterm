@@ -21,11 +21,11 @@ import {
   X,
   Settings,
   Shield,
-  Share2,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
+import { ShareIcon } from "@/components/icons/share";
 import { Skeleton } from "../ui/skeleton";
 import { PlanBadge } from "./billing-section";
 import type { Route } from "next";
@@ -35,9 +35,8 @@ type UserPlan = "free" | "starter" | "pro";
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
   // { href: "/dashboard/loops", label: "Agent Loops", icon: Repeat },
-  { href: "/dashboard/shared", label: "Shared", icon: Share2 },
+  { href: "/dashboard/shared", label: "Shared", icon: ShareIcon },
   { href: "/dashboard/integrations", label: "Integrations", icon: Link2 },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 export function DashboardNav() {
@@ -47,13 +46,13 @@ export function DashboardNav() {
   const router = useRouter();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-background/80 backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-line bg-background/80 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
-            <span className="font-mono text-sm font-bold uppercase tracking-wider text-white/90">
+            <span className="font-mono text-sm font-bold uppercase tracking-wider text-fg">
               GitTerm
             </span>
           </Link>
@@ -72,7 +71,7 @@ export function DashboardNav() {
                     "flex items-center gap-2 rounded-lg px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors",
                     isActive
                       ? "bg-primary/10 text-primary"
-                      : "text-white/40 hover:bg-white/[0.04] hover:text-white/70",
+                      : "text-fg-4 hover:bg-fill hover:text-fg-2",
                   )}
                 >
                   <item.icon className="h-3.5 w-3.5" />
@@ -85,13 +84,13 @@ export function DashboardNav() {
           {/* Right side */}
           <div className="flex items-center gap-3">
             {isPending ? (
-              <Skeleton className="h-8 w-20 bg-white/[0.04]" />
+              <Skeleton className="h-8 w-20 bg-fill" />
             ) : (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
-                    className="hidden h-8 items-center gap-2 border-white/[0.08] bg-transparent px-2.5 text-xs text-white/60 hover:border-white/[0.15] hover:bg-white/[0.04] hover:text-white/80 md:flex"
+                    className="hidden h-8 items-center gap-2 border-line bg-transparent px-2.5 text-xs text-fg-2 hover:border-line-2 hover:bg-fill hover:text-fg md:flex"
                   >
                     <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
                       <User className="h-3 w-3 text-primary" />
@@ -100,25 +99,32 @@ export function DashboardNav() {
                       {session?.user?.name}
                     </span>
                     <PlanBadge plan={((session?.user as any)?.plan as UserPlan) || "free"} />
-                    <ChevronDown className="h-3 w-3 text-white/30" />
+                    <ChevronDown className="h-3 w-3 text-fg-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-48 border-white/[0.08] bg-popover">
+                <DropdownMenuContent className="w-56 border-line bg-popover">
+                  <DropdownMenuItem
+                    asChild
+                    className="cursor-pointer gap-2 text-fg-2 focus:bg-fill focus:text-fg"
+                  >
+                    <Link href={"/dashboard/settings/account" as Route}>
+                      <Settings className="h-4 w-4" />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
                   {(session?.user as any)?.role === "admin" && (
-                    <>
-                      <DropdownMenuItem
-                        asChild
-                        className="cursor-pointer gap-2 text-white/60 focus:bg-white/[0.04] focus:text-white/80"
-                      >
-                        <Link href={"/admin" as Route}>
-                          <Shield className="h-4 w-4" />
-                          Admin Panel
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-white/[0.06]" />
-                    </>
+                    <DropdownMenuItem
+                      asChild
+                      className="cursor-pointer gap-2 text-fg-2 focus:bg-fill focus:text-fg"
+                    >
+                      <Link href={"/admin" as Route}>
+                        <Shield className="h-4 w-4" />
+                        Admin Panel
+                      </Link>
+                    </DropdownMenuItem>
                   )}
 
+                  <DropdownMenuSeparator className="bg-fill-2" />
                   <DropdownMenuItem
                     onClick={() =>
                       authClient.signOut().then(() => {
@@ -127,7 +133,7 @@ export function DashboardNav() {
                     }
                     className="cursor-pointer gap-2 text-red-400/70 focus:bg-red-500/10 focus:text-red-400"
                   >
-                    <LogOut className="h-4 w-4" />
+                    <LogOut className="h-4 w-4 text-red-400 opacity-70" />
                     Sign Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -137,7 +143,7 @@ export function DashboardNav() {
             <Button
               variant="ghost"
               size="icon"
-              className="text-white/50 hover:bg-white/[0.04] hover:text-white/80 md:hidden"
+              className="text-fg-3 hover:bg-fill hover:text-fg md:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -148,7 +154,7 @@ export function DashboardNav() {
 
       {/* Mobile Navigation */}
       {mobileMenuOpen && (
-        <div className="border-t border-white/[0.06] bg-background md:hidden">
+        <div className="border-t border-line bg-background md:hidden">
           <nav className="space-y-1 px-4 py-3">
             {navItems.map((item) => {
               const isActive =
@@ -163,7 +169,7 @@ export function DashboardNav() {
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                     isActive
                       ? "bg-primary/10 text-primary"
-                      : "text-white/40 hover:bg-white/[0.04] hover:text-white/70",
+                      : "text-fg-4 hover:bg-fill hover:text-fg-2",
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -171,12 +177,20 @@ export function DashboardNav() {
                 </Link>
               );
             })}
-            <div className="mt-2 border-t border-white/[0.06] pt-2">
+            <div className="mt-2 border-t border-line pt-2">
+              <Link
+                href={"/dashboard/settings/account" as Route}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-fg-4 transition-colors hover:bg-fill hover:text-fg-2"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
               {(session?.user as any)?.role === "admin" && (
                 <Link
                   href={"/admin" as Route}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/40 transition-colors hover:bg-white/[0.04] hover:text-white/70"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-fg-4 transition-colors hover:bg-fill hover:text-fg-2"
                 >
                   <Shield className="h-4 w-4" />
                   Admin Panel
@@ -186,7 +200,7 @@ export function DashboardNav() {
                 onClick={() => authClient.signOut().then(() => router.push("/"))}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-400/70 transition-colors hover:bg-red-500/10"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-4 w-4 text-red-400 opacity-70" />
                 Sign Out
               </button>
             </div>

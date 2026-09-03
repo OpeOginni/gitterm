@@ -12,11 +12,11 @@ function InstanceListSkeleton() {
   return (
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(320px,420px))]">
       {Array.from({ length: 6 }, (_, i) => (
-        <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <Skeleton className="mb-4 h-5 w-28 bg-white/[0.04]" />
-          <Skeleton className="mb-2 h-4 w-full bg-white/[0.04]" />
-          <Skeleton className="mb-4 h-4 w-3/4 bg-white/[0.04]" />
-          <Skeleton className="h-9 w-full bg-white/[0.04]" />
+        <div key={i} className="rounded-2xl border border-line bg-fill p-5">
+          <Skeleton className="mb-4 h-5 w-28 bg-fill" />
+          <Skeleton className="mb-2 h-4 w-full bg-fill" />
+          <Skeleton className="mb-4 h-4 w-3/4 bg-fill" />
+          <Skeleton className="h-9 w-full bg-fill" />
         </div>
       ))}
     </div>

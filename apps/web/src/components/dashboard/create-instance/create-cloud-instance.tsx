@@ -6,14 +6,13 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowUpRight, ChevronDown, Key, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowUpRight, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogFooter } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HelpHint } from "@/components/ui/help-hint";
 import {
   Select,
   SelectContent,
@@ -35,6 +34,7 @@ import {
   type WorkspaceProfile,
 } from "./types";
 import { GitHubRepositoryBranchField } from "./github-repository-branch-field";
+import { ModelProviderPicker } from "./model-provider-picker";
 import { normalizeGitHubRepositoryUrl } from "./github-repository-utils";
 
 interface CreateCloudInstanceProps {
@@ -665,161 +665,58 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
         {/* ── 3b. Model providers ── */}
         {credentialGroups.length > 0 && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-md border border-border/40 bg-secondary/10 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-secondary/20"
-              >
-                <Key className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-medium text-foreground">Model providers</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">
-                    {selectedCredentialIds.length === credentialGroups.length
-                      ? `All ${credentialGroups.length} providers included`
-                      : `${selectedCredentialIds.length} of ${credentialGroups.length} providers included`}
-                  </span>
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              sideOffset={8}
-              className="w-[360px] max-w-[calc(100vw-3rem)] p-2"
-            >
-              <div className="px-2 pb-2 pt-1">
-                <p className="text-xs font-medium">Model providers available to this workspace</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Defaults are selected automatically.
-                </p>
-              </div>
-              <div className="grid gap-1">
-                {credentialGroups.map((group) => {
-                  const selectedId = credentialSelections[group.key] ?? null;
-                  const isIncluded = !!selectedId;
-                  return (
-                    <div
-                      key={group.key}
-                      role="checkbox"
-                      tabIndex={0}
-                      aria-checked={isIncluded}
-                      onClick={() =>
-                        setCredentialSelections((current) => ({
-                          ...current,
-                          [group.key]: isIncluded
-                            ? null
-                            : (group.credentials.find((credential) => credential.isDefault)?.id ??
-                              group.credentials[0]?.id ??
-                              null),
-                        }))
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          event.currentTarget.click();
-                        }
-                      }}
-                      className="cursor-pointer rounded-lg px-2 py-2 outline-none transition-colors hover:bg-white/[0.035] focus-visible:bg-white/[0.035] focus-visible:ring-1 focus-visible:ring-ring/30"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Checkbox checked={isIncluded} className="pointer-events-none" />
-                        <span className="min-w-0 flex-1 text-sm font-medium">{group.name}</span>
-                        {group.credentials.length > 1 && isIncluded ? (
-                          <Select
-                            value={selectedId}
-                            onValueChange={(id) =>
-                              setCredentialSelections((current) => ({
-                                ...current,
-                                [group.key]: id,
-                              }))
-                            }
-                          >
-                            <SelectTrigger
-                              onClick={(event) => event.stopPropagation()}
-                              className="h-8 w-[120px] text-xs sm:w-[150px]"
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {group.credentials.map((credential) => (
-                                <SelectItem key={credential.id} value={credential.id}>
-                                  {credential.label ||
-                                    (credential.authType === "oauth" ? "OAuth" : "API key")}
-                                  {credential.isDefault ? " (default)" : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">
-                            {group.credentials[0]?.label ||
-                              (group.credentials[0]?.authType === "oauth" ? "OAuth" : "API key")}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-1 border-t border-border/60 px-2 pt-2">
-                <Link
-                  href={"/dashboard/settings" as Route}
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  Manage credentials
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <ModelProviderPicker
+            groups={credentialGroups}
+            selections={credentialSelections}
+            onChange={(key, credentialId) =>
+              setCredentialSelections((current) => ({ ...current, [key]: credentialId }))
+            }
+          />
         )}
 
         {/* ── 3. GitHub Connection ── */}
         <div className="grid gap-1.5">
-          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="cursor-help decoration-dotted underline-offset-4 hover:underline">
-                  GitHub Connection
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="start" sideOffset={6} className="max-w-xs text-xs">
-                Connect a GitHub account to enable commit, push, fork and private repo access.
-              </TooltipContent>
-            </Tooltip>
-            <Link href="/dashboard/integrations" className="text-primary hover:text-foreground/70">
+          <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            GitHub Connection
+            <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
               <ArrowUpRight className="h-3 w-3" />
             </Link>
           </Label>
-          <Select
-            value={selectedGitIntegrationId}
-            onValueChange={setuserGitIntegrationId}
-            disabled={!hasIntegrations}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder={hasIntegrations ? "Select account" : "No integrations"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None (public repos only)</SelectItem>
-              {integrations?.map((installation) => (
-                <SelectItem
-                  key={installation.git_integration.id}
-                  value={installation.git_integration.id}
-                >
-                  <div className="flex items-center">
-                    <Image
-                      src="/github.svg"
-                      alt="GitHub"
-                      width={16}
-                      height={16}
-                      className="mr-2 h-4 w-4"
-                    />
-                    {installation.git_integration.providerAccountLogin}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select
+              value={selectedGitIntegrationId}
+              onValueChange={setuserGitIntegrationId}
+              disabled={!hasIntegrations}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder={hasIntegrations ? "Select account" : "No integrations"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (public repos only)</SelectItem>
+                {integrations?.map((installation) => (
+                  <SelectItem
+                    key={installation.git_integration.id}
+                    value={installation.git_integration.id}
+                  >
+                    <div className="flex items-center">
+                      <Image
+                        src="/github.svg"
+                        alt="GitHub"
+                        width={16}
+                        height={16}
+                        className="mr-2 h-4 w-4"
+                      />
+                      {installation.git_integration.providerAccountLogin}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* Help sits beside the picker so it never covers the controls above */}
+            <HelpHint label="What does a GitHub connection do?">
+              Connect a GitHub account to enable commit, push, fork and private repo access.
+            </HelpHint>
+          </div>
         </div>
 
         {/* ── 4. SSH Editor Access ── */}
@@ -874,7 +771,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   "requires a server agent type"
                 ) : requiresUserSshKey && !sshPublicKeyData?.hasPublicKey ? (
                   <Link
-                    href={"/dashboard/settings" as Route}
+                    href={"/dashboard/settings/ssh" as Route}
                     onClick={(e) => e.stopPropagation()}
                     className="font-medium text-amber-300 hover:text-amber-200 hover:underline"
                   >

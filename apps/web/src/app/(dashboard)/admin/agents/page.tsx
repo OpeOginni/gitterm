@@ -379,7 +379,7 @@ export default function AgentTypesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-white/35 hover:text-red-400"
+                          className="h-8 w-8 text-fg-4 hover:text-red-400"
                           onClick={() => setDeleteAgentId(agent.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -392,7 +392,7 @@ export default function AgentTypesPage() {
             })}
 
             {agentTypes?.length === 0 && (
-              <div className="py-12 text-center text-white/30">
+              <div className="py-12 text-center text-fg-4">
                 No agent types configured yet. Add one to get started.
               </div>
             )}

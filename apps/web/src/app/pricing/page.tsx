@@ -146,7 +146,7 @@ function FeatureItem({ text }: { text: string }) {
   return (
     <div className="flex items-start gap-2.5">
       <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-      <span className="text-sm leading-relaxed text-white/50">{text}</span>
+      <span className="text-sm leading-relaxed text-fg-3">{text}</span>
     </div>
   );
 }
@@ -156,11 +156,11 @@ function ComparisonValue({ value }: { value: string | boolean }) {
     return value ? (
       <Check className="mx-auto h-4 w-4 text-primary" />
     ) : (
-      <X className="mx-auto h-4 w-4 text-white/20" />
+      <X className="mx-auto h-4 w-4 text-fg-4" />
     );
   }
 
-  return <span className="text-white/55">{value}</span>;
+  return <span className="text-fg-3">{value}</span>;
 }
 
 function PricingCard({
@@ -184,14 +184,12 @@ function PricingCard({
     <div
       className={cn(
         "relative flex w-full max-w-[420px] flex-col justify-between rounded-2xl border p-5 transition-colors sm:p-6 md:max-w-none",
-        plan.popular
-          ? "border-primary/30 bg-primary/[0.04]"
-          : "border-white/[0.06] bg-white/[0.02]",
+        plan.popular ? "border-primary/30 bg-primary/[0.04]" : "border-line bg-fill",
       )}
     >
       <div>
         <div className="mb-5 flex items-center justify-between">
-          <span className="font-mono text-xs uppercase tracking-[0.2em] text-white/40">
+          <span className="font-mono text-xs uppercase tracking-[0.2em] text-fg-4">
             {plan.name}
           </span>
           {plan.popular && (
@@ -206,13 +204,11 @@ function PricingCard({
             {plan.price !== undefined ? `$${plan.price}` : "Free"}
           </span>
           {plan.price !== undefined && plan.price > 0 && (
-            <span className="text-sm text-white/30">/month</span>
+            <span className="text-sm text-fg-4">/month</span>
           )}
         </div>
 
-        <p className="mb-6 min-h-[40px] text-sm leading-relaxed text-white/40">
-          {plan.description}
-        </p>
+        <p className="mb-6 min-h-[40px] text-sm leading-relaxed text-fg-4">{plan.description}</p>
 
         <div className="flex flex-col gap-3">
           {plan.features.map((feature) => (
@@ -223,7 +219,7 @@ function PricingCard({
 
       <div className="mt-8">
         {isCurrentPlan || isFreeCurrentPlan ? (
-          <span className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.06] px-6 py-2.5 font-mono text-sm text-white/30">
+          <span className="inline-flex w-full items-center justify-center rounded-lg border border-line px-6 py-2.5 font-mono text-sm text-fg-4">
             Current Plan
           </span>
         ) : plan.slug ? (
@@ -232,7 +228,7 @@ function PricingCard({
             disabled={isLoading}
             className={cn(
               "inline-flex w-full cursor-pointer items-center justify-center rounded-lg px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-wider transition-all",
-              "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-[#09090b]",
+              "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background",
               "disabled:cursor-not-allowed disabled:opacity-70",
               plan.popular
                 ? "bg-primary text-primary-foreground hover:bg-primary/85"
@@ -254,7 +250,7 @@ function PricingCard({
         ) : (
           <Link
             href="/dashboard"
-            className="inline-flex w-full items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
+            className="inline-flex w-full items-center justify-center rounded-lg border border-line bg-fill px-6 py-2.5 font-mono text-sm font-medium text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
           >
             {plan.actionLabel}
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -348,7 +344,7 @@ function PricingPageContent() {
               We just <span className="font-display-accent text-[color:var(--cream)]">run</span> the
               workspaces.
             </h1>
-            <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-white/55 sm:mt-6 sm:text-[17px] sm:leading-[1.65]">
+            <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-fg-3 sm:mt-6 sm:text-[17px] sm:leading-[1.65]">
               You bring your model API keys. We don't resell them. GitTerm only charges for the
               cloud workspace itself (compute, storage, and networking) so your AI bill stays with
               your provider, not us.
@@ -370,7 +366,7 @@ function PricingPageContent() {
           </div>
 
           {/* Self-hosted option */}
-          <div className="mx-auto mt-5 flex max-w-[420px] flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:px-5 sm:py-4 md:max-w-none md:flex-row md:items-center md:justify-between md:px-6">
+          <div className="mx-auto mt-5 flex max-w-[420px] flex-col gap-4 rounded-2xl border border-line bg-fill p-4 sm:px-5 sm:py-4 md:max-w-none md:flex-row md:items-center md:justify-between md:px-6">
             <div className="max-w-2xl">
               <div className="mb-1 flex items-center gap-3">
                 <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary/80">
@@ -381,7 +377,7 @@ function PricingPageContent() {
               <h2 className="font-display text-xl font-light tracking-tight text-white sm:text-2xl">
                 Get all of GitTerm, free.
               </h2>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-white/45 sm:text-sm">
+              <p className="mt-1.5 text-[13px] leading-relaxed text-fg-3 sm:text-sm">
                 Self-host the complete stack on your own infrastructure. Deploy it in one click or
                 fork the MIT-licensed source and run it anywhere.
               </p>
@@ -404,7 +400,7 @@ function PricingPageContent() {
                 href="https://github.com/OpeOginni/gitterm"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.03] px-5 py-2.5 font-mono text-xs font-medium text-white/70 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                className="inline-flex items-center justify-center rounded-lg border border-line bg-fill px-5 py-2.5 font-mono text-xs font-medium text-fg-2 transition-colors hover:border-line-2 hover:bg-fill-2 hover:text-fg"
               >
                 <GitHub className="mr-2 h-4 w-4" />
                 View on GitHub
@@ -413,14 +409,14 @@ function PricingPageContent() {
           </div>
 
           {/* Plan comparison */}
-          <div className="mt-12 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.015] sm:mt-16">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/[0.06] px-5 py-5 sm:px-6">
+          <div className="mt-12 overflow-hidden rounded-2xl border border-line bg-fill sm:mt-16">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line px-5 py-5 sm:px-6">
               <div>
                 <h2 className="font-display text-2xl font-light tracking-tight text-white md:text-3xl">
                   Same shape, different ceilings.
                 </h2>
               </div>
-              <p className="max-w-md text-sm leading-relaxed text-white/40">
+              <p className="max-w-md text-sm leading-relaxed text-fg-4">
                 Workspace counts mean existing cloud workspaces, whether paused or live. Runtime is
                 only consumed while managed workspaces are active.
               </p>
@@ -429,7 +425,7 @@ function PricingPageContent() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-white/[0.06] bg-white/[0.02] font-mono text-[10px] uppercase tracking-[0.2em] text-white/35">
+                  <tr className="border-b border-line bg-fill font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
                     <th className="px-5 py-3 text-left font-medium">Feature</th>
                     <th className="px-4 py-3 text-center font-medium">Free</th>
                     <th className="px-4 py-3 text-center font-medium">Starter</th>
@@ -439,8 +435,8 @@ function PricingPageContent() {
                 </thead>
                 <tbody>
                   {COMPARISON_ROWS.map((row) => (
-                    <tr key={row.label} className="border-b border-white/[0.035] last:border-b-0">
-                      <td className="px-5 py-4 text-white/75">{row.label}</td>
+                    <tr key={row.label} className="border-b border-line last:border-b-0">
+                      <td className="px-5 py-4 text-fg-2">{row.label}</td>
                       <td className="px-4 py-4 text-center">
                         <ComparisonValue value={row.free} />
                       </td>
@@ -461,11 +457,11 @@ function PricingPageContent() {
           </div>
 
           {/* BYOK explainer */}
-          <div className="mt-12 max-w-2xl border-t border-white/[0.06] pt-10 sm:mt-16 sm:pt-12">
+          <div className="mt-12 max-w-2xl border-t border-line pt-10 sm:mt-16 sm:pt-12">
             <h3 className="mb-3 font-display text-xl font-light tracking-tight text-white">
               No AI markup. No middleman.
             </h3>
-            <p className="text-sm leading-relaxed text-white/50">
+            <p className="text-sm leading-relaxed text-fg-3">
               You bring your own Model Provider keys/subscriptions. <br /> Paid plans only cover the
               cloud workspace itself: compute, storage, and multi-cloud orchestration.
             </p>
@@ -474,18 +470,18 @@ function PricingPageContent() {
           {/* Questions */}
           <section
             id="questions"
-            className="mt-16 border-t border-white/[0.06] pt-12 text-center sm:mt-24 sm:pt-16"
+            className="mt-16 border-t border-line pt-12 text-center sm:mt-24 sm:pt-16"
           >
             <h2 className="mb-3 font-display text-2xl font-light tracking-tight text-white">
               Questions?
             </h2>
-            <p className="mb-8 text-sm text-white/40">
+            <p className="mb-8 text-sm text-fg-4">
               Need help choosing the right plan? Reach out by email.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <Link
                 href="mailto:help@gitterm.dev"
-                className="inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm text-white/60 transition-colors hover:border-white/20 hover:text-white"
+                className="inline-flex items-center justify-center rounded-lg border border-line bg-fill px-6 py-2.5 font-mono text-sm text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
               >
                 Reach out by email
                 <Mail className="ml-2 h-4 w-4" />

@@ -55,11 +55,11 @@ export function DeleteAccountSection() {
     <section className="pt-12">
       {/* Editorial divider */}
       <div className="mb-6 flex items-center gap-3">
-        <span className="h-px flex-1 bg-white/[0.06]" />
+        <span className="h-px flex-1 bg-fill-2" />
         <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-destructive/70">
           Danger zone
         </span>
-        <span className="h-px flex-1 bg-white/[0.06]" />
+        <span className="h-px flex-1 bg-fill-2" />
       </div>
 
       <div className="relative overflow-hidden rounded-2xl border border-destructive/20 bg-destructive/[0.04]">
@@ -70,7 +70,7 @@ export function DeleteAccountSection() {
             </div>
             <div className="space-y-1">
               <h3 className="font-medium text-foreground">Delete account</h3>
-              <p className="text-[13px] leading-relaxed text-white/45">
+              <p className="text-[13px] leading-relaxed text-fg-3">
                 Permanently delete your profile, workspaces, integrations, and usage history. This
                 cannot be undone.
               </p>
@@ -83,7 +83,7 @@ export function DeleteAccountSection() {
                 Delete account
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="border-line bg-settings-dialog sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-destructive">
                   <AlertTriangle className="h-5 w-5" />

@@ -34,9 +34,9 @@ function FormCard({
     <div
       data-slot="form-card"
       className={cn(
-        "relative overflow-hidden rounded-2xl border bg-card shadow-[0_30px_120px_-40px_rgba(0,0,0,0.6)]",
-        tone === "default" && "border-white/[0.08]",
-        tone === "success" && "border-emerald-500/30",
+        "relative overflow-hidden rounded-xl border bg-settings",
+        tone === "default" && "border-line",
+        tone === "success" && "border-primary/35",
         className,
       )}
       {...props}
@@ -49,7 +49,7 @@ function FormCardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="form-card-header"
       className={cn(
-        "flex items-center justify-between gap-3 px-3.5 pt-3.5 pb-2 font-mono text-[9.5px] uppercase tracking-[0.2em] text-white/40 sm:px-4 sm:text-[10px] sm:tracking-[0.22em]",
+        "flex items-center justify-between gap-3 px-3.5 pt-3.5 pb-2 font-mono text-[9.5px] uppercase tracking-[0.2em] text-fg-4 sm:px-4 sm:text-[10px] sm:tracking-[0.22em]",
         className,
       )}
       {...props}
@@ -72,7 +72,7 @@ function FormCardFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="form-card-footer"
       className={cn(
-        "flex items-center justify-between gap-2 border-t border-white/[0.05] bg-white/[0.015] px-3.5 py-2.5 font-mono text-[9px] uppercase tracking-[0.16em] text-white/35 sm:gap-3 sm:px-4 sm:text-[10px] sm:tracking-[0.22em]",
+        "flex items-center justify-between gap-2 border-t border-line px-3.5 py-2.5 font-mono text-[9px] uppercase tracking-[0.16em] text-fg-4 sm:gap-3 sm:px-4 sm:text-[10px] sm:tracking-[0.22em]",
         className,
       )}
       {...props}
@@ -96,11 +96,7 @@ function FormCardStatus({
         ? "bg-red-400/80"
         : "bg-white/40";
   const textClass =
-    tone === "ready"
-      ? "text-emerald-400/85"
-      : tone === "expired"
-        ? "text-red-300/80"
-        : "text-white/50";
+    tone === "ready" ? "text-emerald-400/85" : tone === "expired" ? "text-red-300/80" : "text-fg-3";
 
   return (
     <span
@@ -134,7 +130,7 @@ function SettingsSection({
   className,
   title,
   description,
-  icon: Icon,
+  icon: _Icon,
   action,
   children,
   ...props
@@ -148,25 +144,20 @@ function SettingsSection({
     <section
       data-slot="settings-section"
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-white/[0.08] bg-card shadow-[0_20px_70px_-30px_rgba(0,0,0,0.55)]",
+        "relative overflow-hidden rounded-xl border border-line bg-settings",
         className,
       )}
       {...props}
     >
-      <header className="space-y-2.5 border-b border-white/[0.05] bg-white/[0.02] px-5 py-4">
+      <header className="space-y-2 border-b border-line px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            {Icon && (
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04]">
-                <Icon className="h-4 w-4 text-white/60" />
-              </span>
-            )}
-            <h3 className="text-lg font-semibold tracking-tight text-white">{title}</h3>
+            <h3 className="text-base font-semibold tracking-tight text-fg">{title}</h3>
           </div>
           {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
         </div>
         {description && (
-          <p className="max-w-2xl text-[13px] leading-relaxed text-white/45">{description}</p>
+          <p className="max-w-2xl text-[13px] leading-relaxed text-fg-3">{description}</p>
         )}
       </header>
       {children}
@@ -179,18 +170,14 @@ function SettingsSectionBody({ className, ...props }: React.ComponentProps<"div"
 }
 
 /**
- * Bordered, hairline-divided list container for rows inside a settings card.
- * Use with <SettingsRow> so every section's lists read the same way
- * (tokens, quotas, workspaces, toggles, ...).
+ * Hairline-divided list for rows inside a settings card. Separators only sit
+ * between items; the parent surface already provides the outer boundary.
  */
 function SettingsRowList({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="settings-row-list"
-      className={cn(
-        "divide-y divide-white/[0.05] overflow-hidden rounded-xl border border-white/[0.06] bg-input/40",
-        className,
-      )}
+      className={cn("divide-y divide-line", className)}
       {...props}
     />
   );
@@ -201,7 +188,7 @@ function SettingsRow({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="settings-row"
       className={cn(
-        "flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-white/[0.015] sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-2 px-1 py-3.5 transition-colors sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
       {...props}
@@ -227,22 +214,20 @@ function SettingsEmptyState({
     <div
       data-slot="settings-empty-state"
       className={cn(
-        "flex flex-col items-center gap-3 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] px-6 py-10 text-center",
+        "flex flex-col items-center gap-3 rounded-xl border border-dashed border-line bg-fill px-6 py-10 text-center",
         className,
       )}
       {...props}
     >
       {Icon && (
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04]">
-          <Icon className="h-5 w-5 text-white/30" />
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fill">
+          <Icon className="h-5 w-5 text-fg-4" />
         </span>
       )}
       <div className="space-y-1">
-        <p className="text-sm text-white/60">{title}</p>
+        <p className="text-sm text-fg-2">{title}</p>
         {description && (
-          <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-white/35">
-            {description}
-          </p>
+          <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-fg-4">{description}</p>
         )}
       </div>
       {action}

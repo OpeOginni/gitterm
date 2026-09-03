@@ -1,4 +1,3 @@
-export type WorkspaceType = "cloud" | "agentic-loops";
 export type WorkspaceProfile = "standard" | "ssh-enabled";
 export type EditorTarget = "vscode" | "neovim";
 export type EditorTransportKind = "direct-ssh" | "proxycommand-ssh" | "managed-ssh";
@@ -220,4 +219,23 @@ export const getIcon = (name: string): string => {
     if (key.includes(k)) return v;
   }
   return "/opencode.svg";
+};
+
+/**
+ * Logo for a *model* provider (Anthropic, OpenAI, …). Files in /public are
+ * named after the provider key; OAuth variants share the base provider's mark.
+ * Returns null when we know there is no artwork so callers can fall back.
+ */
+const MODEL_PROVIDER_LOGO_ALIASES: Record<string, string> = {
+  "openai-oauth": "openai",
+  "openai-codex": "openai-codex",
+  "github-copilot": "github-copilot",
+  claude: "anthropic",
+};
+
+export const getModelProviderLogo = (providerKey: string): string | null => {
+  const key = providerKey.toLowerCase();
+  const file = MODEL_PROVIDER_LOGO_ALIASES[key] ?? key;
+  if (!file) return null;
+  return `/${file}.svg`;
 };

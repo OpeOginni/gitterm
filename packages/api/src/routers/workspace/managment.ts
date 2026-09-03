@@ -389,12 +389,12 @@ async function resolveWorkspaceCreateIntent(
     const savedDefault = eligibleProviders.find(
       (candidate) => candidate.id === currentUser?.defaultCloudProviderId,
     );
+    const e2bDefault = eligibleProviders.find(
+      (candidate) => candidate.providerKey.toLowerCase() === "e2b",
+    );
     const preferredDefault = eligibleProviders.find((candidate) => candidate.preferredDefault);
-    candidates = savedDefault
-      ? [savedDefault]
-      : preferredDefault
-        ? [preferredDefault]
-        : eligibleProviders;
+    const effectiveDefault = savedDefault ?? e2bDefault ?? preferredDefault;
+    candidates = effectiveDefault ? [effectiveDefault] : eligibleProviders;
   }
 
   const selectedProvider = candidates[0];
@@ -735,6 +735,22 @@ export const workspaceRouter = router({
         )?.tier3NetworkAccess === true
       : true;
 
+    const eligibleDefaultProviders = providers.filter((provider) => {
+      const parsedKey = providerKeySchema.safeParse(provider.providerKey);
+      return (
+        parsedKey.success &&
+        isProviderImplemented(parsedKey.data) &&
+        canUseProvider(viewerPlan, parsedKey.data)
+      );
+    });
+    const effectiveDefaultProvider =
+      eligibleDefaultProviders.find(
+        (provider) => provider.id === currentUser?.defaultCloudProviderId,
+      ) ??
+      eligibleDefaultProviders.find((provider) => provider.providerKey.toLowerCase() === "e2b") ??
+      eligibleDefaultProviders.find((provider) => provider.preferredDefault) ??
+      eligibleDefaultProviders[0];
+
     const catalogProviders = providers.flatMap((provider) => {
       const parsedKey = providerKeySchema.safeParse(provider.providerKey);
       if (
@@ -764,9 +780,7 @@ export const workspaceRouter = router({
           id: provider.id,
           type: parsedKey.data,
           name: provider.name,
-          isDefault:
-            provider.id === currentUser?.defaultCloudProviderId ||
-            (!currentUser?.defaultCloudProviderId && provider.preferredDefault),
+          isDefault: provider.id === effectiveDefaultProvider?.id,
           persistence: provider.supportsPersistence
             ? provider.autoPersistent
               ? ("required" as const)
@@ -864,6 +878,7 @@ export const workspaceRouter = router({
                 agentType: true,
               },
             },
+            cloudProvider: true,
           },
           orderBy: (workspace, { desc }) =>
             status === "terminated"

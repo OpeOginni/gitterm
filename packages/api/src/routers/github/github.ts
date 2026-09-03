@@ -3,7 +3,11 @@ import { protectedProcedure, router } from "../../index";
 import { GitHubAPIError, getGitHubAppService } from "../../service/github";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and } from "@gitterm/db";
-import { workspaceGitConfig, gitIntegration } from "@gitterm/db/schema/integrations";
+import {
+  githubAppInstallation,
+  workspaceGitConfig,
+  gitIntegration,
+} from "@gitterm/db/schema/integrations";
 import { logger } from "../../utils/logger";
 
 export const githubRouter = router({
@@ -16,50 +20,36 @@ export const githubRouter = router({
     const userId = ctx.session.user.id;
 
     try {
-      const [gitIntegrationRecord] = await db
-        .select()
+      const records = await db
+        .select({
+          integrationId: gitIntegration.id,
+          installationId: githubAppInstallation.installationId,
+          accountLogin: githubAppInstallation.accountLogin,
+          accountType: githubAppInstallation.accountType,
+          repositorySelection: githubAppInstallation.repositorySelection,
+          installedAt: githubAppInstallation.installedAt,
+          suspended: githubAppInstallation.suspended,
+        })
         .from(gitIntegration)
+        .innerJoin(
+          githubAppInstallation,
+          eq(gitIntegration.providerInstallationId, githubAppInstallation.installationId),
+        )
         .where(
           and(
             eq(gitIntegration.userId, userId),
+            eq(githubAppInstallation.userId, userId),
             eq(gitIntegration.provider, "github"),
             eq(gitIntegration.active, true),
           ),
         );
 
-      if (!gitIntegrationRecord) {
-        return {
-          connected: false,
-          installation: null,
-        };
-      }
-
-      // Get installation from our database (don't verify against GitHub API)
-      // Cleanup happens via webhook when the app is uninstalled
-      const installation = await getGitHubAppService().getUserInstallation(
-        userId,
-        gitIntegrationRecord.providerInstallationId,
-        false, // don't verify against GitHub API
-      );
-
-      if (!installation) {
-        return {
-          connected: false,
-          installation: null,
-        };
-      }
-
       return {
-        connected: true,
-        installation: {
-          id: installation.installationId,
-          integrationId: gitIntegrationRecord.id,
-          accountLogin: installation.accountLogin,
-          accountType: installation.accountType,
-          repositorySelection: installation.repositorySelection,
-          installedAt: installation.installedAt,
-          suspended: installation.suspended,
-        },
+        connected: records.length > 0,
+        installations: records.map(({ installationId, ...record }) => ({
+          ...record,
+          id: installationId,
+        })),
       };
     } catch (error) {
       logger.error(
@@ -145,57 +135,65 @@ export const githubRouter = router({
    * Disconnect GitHub App
    * This requests GitHub to uninstall the app - database cleanup happens via webhook
    */
-  disconnectApp: protectedProcedure.mutation(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
+  disconnectApp: protectedProcedure
+    .input(z.object({ integrationId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
 
-    try {
-      const [gitIntegrationRecord] = await db
-        .select()
-        .from(gitIntegration)
-        .where(and(eq(gitIntegration.userId, userId), eq(gitIntegration.provider, "github")));
+      try {
+        const [gitIntegrationRecord] = await db
+          .select()
+          .from(gitIntegration)
+          .where(
+            and(
+              eq(gitIntegration.id, input.integrationId),
+              eq(gitIntegration.userId, userId),
+              eq(gitIntegration.provider, "github"),
+            ),
+          );
 
-      if (!gitIntegrationRecord) {
+        if (!gitIntegrationRecord) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "GitHub App not connected",
+          });
+        }
+
+        // Request GitHub to uninstall the app
+        // Database cleanup will happen via webhook when GitHub sends the "deleted" event
+        await getGitHubAppService().requestUninstallFromGitHub(
+          gitIntegrationRecord.providerInstallationId,
+        );
+
+        logger.info("GitHub App disconnect requested - awaiting webhook for cleanup", {
+          userId,
+          installationId: gitIntegrationRecord.providerInstallationId,
+          action: "disconnect_app",
+        });
+
+        return {
+          success: true,
+          message: "GitHub App disconnect requested. Changes will take effect shortly.",
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
+        logger.error(
+          "Failed to disconnect GitHub App",
+          {
+            userId,
+            action: "disconnect_app",
+          },
+          error as Error,
+        );
+
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "GitHub App not connected",
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to disconnect GitHub App",
+          cause: error instanceof Error ? error.message : "Unknown error",
         });
       }
-
-      // Request GitHub to uninstall the app
-      // Database cleanup will happen via webhook when GitHub sends the "deleted" event
-      await getGitHubAppService().requestUninstallFromGitHub(
-        gitIntegrationRecord.providerInstallationId,
-      );
-
-      logger.info("GitHub App disconnect requested - awaiting webhook for cleanup", {
-        userId,
-        installationId: gitIntegrationRecord.providerInstallationId,
-        action: "disconnect_app",
-      });
-
-      return {
-        success: true,
-        message: "GitHub App disconnect requested. Changes will take effect shortly.",
-      };
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-
-      logger.error(
-        "Failed to disconnect GitHub App",
-        {
-          userId,
-          action: "disconnect_app",
-        },
-        error as Error,
-      );
-
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to disconnect GitHub App",
-        cause: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }),
+    }),
 
   /**
    * List repositories accessible through a GitHub installation

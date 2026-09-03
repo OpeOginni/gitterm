@@ -86,7 +86,7 @@ export function GitHubOnboarding() {
       <button
         onClick={handleDismiss}
         aria-label="Dismiss"
-        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/70"
+        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg text-fg-4 transition-colors hover:bg-fill-2 hover:text-fg-2"
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -98,7 +98,7 @@ export function GitHubOnboarding() {
             Build from your repo, <span className="text-primary">not an empty shell.</span>
           </h2>
 
-          <p className="mt-2.5 max-w-md text-sm leading-relaxed text-white/45">
+          <p className="mt-2.5 max-w-md text-sm leading-relaxed text-fg-3">
             Connect GitHub so every workspace can clone your repositories, commit, push, and open
             pull requests
           </p>
@@ -124,7 +124,7 @@ export function GitHubOnboarding() {
 
             <button
               onClick={handleDismiss}
-              className="inline-flex items-center gap-1 self-center text-xs font-medium text-white/40 transition-colors hover:text-white/70"
+              className="inline-flex items-center gap-1 self-center text-xs font-medium text-fg-4 transition-colors hover:text-fg-2"
             >
               Start without GitHub
               <ArrowUpRight className="h-3 w-3" />
@@ -137,17 +137,17 @@ export function GitHubOnboarding() {
           {STEPS.map((step, i) => (
             <li
               key={step.label}
-              className="rise flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-3 transition-colors hover:border-primary/20"
+              className="rise flex items-center gap-3.5 rounded-xl border border-line bg-fill px-3.5 py-3 transition-colors hover:border-primary/20"
               style={{ animationDelay: `${0.08 * (i + 1)}s` }}
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/[0.08]">
                 <step.icon className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white/85">{step.label}</p>
-                <p className="text-xs text-white/40">{step.desc}</p>
+                <p className="text-sm font-medium text-fg">{step.label}</p>
+                <p className="text-xs text-fg-4">{step.desc}</p>
               </div>
-              <span className="ml-auto font-mono text-[10px] tracking-[0.2em] text-white/20">
+              <span className="ml-auto font-mono text-[10px] tracking-[0.2em] text-fg-4">
                 0{i + 1}
               </span>
             </li>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
@@ -34,6 +34,7 @@ import {
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Image from "next/image";
+import { getModelProviderLogo } from "@/components/dashboard/create-instance/types";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,12 +71,6 @@ interface Credential {
   updatedAt: string;
 }
 
-// Helper to get provider logo path - logos are named after the provider name
-const getProviderLogo = (providerName: string): string => {
-  if (providerName === "openai-oauth") return "/openai.svg";
-  return `/${providerName}.svg`;
-};
-
 export function ModelCredentialsSection() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -103,7 +98,10 @@ export function ModelCredentialsSection() {
     trpc.modelCredentials.listMyCredentials.queryOptions(),
   );
 
-  const providers = (providersData?.providers ?? []) as Provider[];
+  const providers = useMemo(
+    () => (providersData?.providers ?? []) as Provider[],
+    [providersData?.providers],
+  );
   const credentials = (credentialsData?.credentials ?? []) as Credential[];
 
   const selectedProvider = providers.find((p) => p.id === selectedProviderId);
@@ -121,7 +119,7 @@ export function ModelCredentialsSection() {
     const recommended = providers.find((p) => p.isRecommended);
     if (recommended) return recommended;
     return providers[0];
-  }, [providers, providers.length]);
+  }, [providers]);
 
   // Set default provider when data loads
   useEffect(() => {
@@ -374,32 +372,29 @@ export function ModelCredentialsSection() {
           Add credential
         </Button>
       </DialogTrigger>
-      <DialogContent className="grid h-[min(700px,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-border bg-surface-2 p-0 sm:max-w-[760px]">
-        <DialogHeader className="space-y-0 border-b border-white/[0.07] px-6 py-5 sm:px-7">
-          <span className="block font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-            New / Credential
-          </span>
-          <div className="mt-3 flex items-center gap-3.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/[0.08]">
+      <DialogContent className="grid max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-line bg-settings-dialog p-0 sm:max-w-[760px]">
+        <DialogHeader className="border-b border-line px-5 py-4 text-left sm:px-7 sm:py-5">
+          <div className="flex items-center gap-3.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fill-2">
               {selectedProvider ? (
                 <Image
-                  src={getProviderLogo(selectedProvider.name)}
+                  src={getModelProviderLogo(selectedProvider.name) ?? "/opencode.svg"}
                   alt={selectedProvider.displayName}
                   width={18}
                   height={18}
                   className="h-[18px] w-[18px]"
                 />
               ) : (
-                <Shield className="h-[18px] w-[18px] text-white/55" />
+                <Shield className="h-[18px] w-[18px] text-fg-3" />
               )}
             </span>
             <div className="min-w-0">
-              <DialogTitle className="text-xl font-medium tracking-[-0.025em]">
+              <DialogTitle className="text-lg font-semibold tracking-[-0.02em]">
                 {selectedProvider
                   ? `Add ${selectedProvider.displayName} credential`
                   : "Add model credential"}
               </DialogTitle>
-              <DialogDescription className="mt-0.5">
+              <DialogDescription className="mt-1 text-[13px]">
                 {selectedProvider?.authType === "oauth" && isOAuthProvider
                   ? "Connect securely with your ChatGPT account."
                   : selectedProvider?.authType === "oauth"
@@ -412,11 +407,11 @@ export function ModelCredentialsSection() {
 
         <div className="grid min-h-0 overflow-y-auto sm:grid-cols-[220px_minmax(0,1fr)] sm:overflow-hidden">
           {/* Provider Selection -- horizontal scrollable chips */}
-          <div className="border-b border-border bg-white/[0.015] p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
-            <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+          <div className="min-w-0 border-b border-border bg-fill p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
+            <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
               Provider
             </Label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-1 sm:overflow-visible sm:px-0 sm:pb-0">
               {[...visibleProviders]
                 .toSorted((a, b) => {
                   if (a.isRecommended && !b.isRecommended) return -1;
@@ -433,14 +428,14 @@ export function ModelCredentialsSection() {
                       type="button"
                       onClick={() => setSelectedProviderId(provider.id)}
                       disabled={oauthStep !== "idle"}
-                      className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium transition-all ${
+                      className={`flex w-[9.5rem] min-w-0 shrink-0 items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium transition-all sm:w-auto ${
                         isSelected
-                          ? "border-primary/35 bg-primary/[0.09] text-white shadow-[inset_3px_0_0_hsl(var(--primary))]"
-                          : "border-transparent text-white/50 hover:border-white/10 hover:bg-white/[0.035] hover:text-white/80"
+                          ? "border-transparent bg-fill-2 text-fg"
+                          : "border-transparent text-fg-3 hover:bg-fill hover:text-fg"
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <Image
-                        src={getProviderLogo(provider.name)}
+                        src={getModelProviderLogo(provider.name) ?? "/opencode.svg"}
                         alt={provider.displayName}
                         width={16}
                         height={16}
@@ -461,31 +456,39 @@ export function ModelCredentialsSection() {
             </div>
           </div>
 
-          <div className="grid content-start gap-5 p-5 sm:overflow-y-auto sm:p-6">
+          <div className="grid content-center gap-4 p-4 sm:overflow-y-auto sm:p-6">
             {(selectedProvider?.name === "openai" || isOAuthProvider) && (
               <div className="grid gap-2">
-                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
                   Authentication
                 </Label>
-                <div className="grid grid-cols-2 rounded-xl border border-border bg-input/40 p-1">
+                <div
+                  className="flex border-b border-line"
+                  role="tablist"
+                  aria-label="Authentication method"
+                >
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={!isOAuthProvider}
                     onClick={() => openAIProvider && setSelectedProviderId(openAIProvider.id)}
-                    className={`rounded-lg px-3 py-2.5 text-sm transition-colors ${!isOAuthProvider ? "bg-white/[0.09] text-white shadow-sm" : "text-white/45 hover:text-white/75"}`}
+                    className={`-mb-px flex-1 border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${!isOAuthProvider ? "border-primary text-fg" : "border-transparent text-fg-4 hover:text-fg-2"}`}
                   >
                     API key
                   </button>
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={isOAuthProvider}
                     onClick={() =>
                       openAIOAuthProvider && setSelectedProviderId(openAIOAuthProvider.id)
                     }
-                    className={`rounded-lg px-3 py-2.5 text-sm transition-colors ${isOAuthProvider ? "bg-white/[0.09] text-white shadow-sm" : "text-white/45 hover:text-white/75"}`}
+                    className={`-mb-px flex-1 border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${isOAuthProvider ? "border-primary text-fg" : "border-transparent text-fg-4 hover:text-fg-2"}`}
                   >
                     OAuth
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed text-white/35">
+                <p className="text-[11px] leading-relaxed text-fg-4">
                   {isOAuthProvider
                     ? "Uses your ChatGPT subscription. Tokens are encrypted and refreshed automatically."
                     : "Uses usage billed through your OpenAI API account."}
@@ -494,8 +497,8 @@ export function ModelCredentialsSection() {
             )}
             {/* Label (optional) */}
             <div className="grid gap-2">
-              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-                Label <span className="ml-1 normal-case text-white/30">(optional)</span>
+              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
+                Label <span className="ml-1 normal-case text-fg-4">(optional)</span>
               </Label>
               <Input
                 value={label}
@@ -508,7 +511,7 @@ export function ModelCredentialsSection() {
             {/* API Key Input (for api_key providers) */}
             {selectedProvider?.authType === "api_key" && (
               <div className="grid gap-2">
-                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
                   API key
                 </Label>
                 <Input
@@ -523,77 +526,71 @@ export function ModelCredentialsSection() {
 
             {/* GitHub Copilot OAuth Flow (Device Code) */}
             {selectedProvider?.authType === "oauth" && (
-              <div className="grid gap-4">
-                {oauthStep === "idle" && (
-                  <div className="flex flex-col items-center gap-4 rounded-xl border border-white/[0.08] bg-input/40 p-8">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                      <ExternalLink className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-medium">
-                        {isOAuthProvider ? "Connect your ChatGPT account" : "Connect with GitHub"}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {isOAuthProvider
-                          ? "Authorize OpenAI access with a one-time device code."
-                          : "Authorize Copilot access via device code flow."}
-                      </p>
-                    </div>
-                    <Button
-                      onClick={handleStartOAuth}
-                      disabled={initiateOAuthMutation.isPending}
-                      className="gap-2"
-                    >
-                      {initiateOAuthMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Starting...
-                        </>
-                      ) : (
-                        "Start Authorization"
-                      )}
-                    </Button>
-                  </div>
-                )}
-
-                {oauthStep === "pending" && deviceCode && (
-                  <div className="flex flex-col items-center gap-5 rounded-xl border border-white/[0.08] bg-input/40 p-8">
-                    <p className="text-sm text-muted-foreground">
-                      Open the link and enter this code:
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <code className="rounded-lg bg-muted px-5 py-3 text-2xl font-mono font-bold tracking-[0.2em]">
-                        {deviceCode.userCode}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={handleCopyCode}
-                        className="h-8 w-8"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+              <div className="grid gap-2">
+                <div className="flex min-h-4 items-center justify-between gap-3">
+                  <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
+                    {oauthStep === "pending" ? "Device code" : "Authorization"}
+                  </Label>
+                  {oauthStep === "pending" && deviceCode && (
                     <a
                       href={deviceCode.verificationUri}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                      className="inline-flex shrink-0 items-center gap-1 text-[11px] text-primary transition-colors hover:text-primary/80"
                     >
-                      {deviceCode.verificationUri}
+                      Open GitHub
                       <ExternalLink className="h-3 w-3" />
                     </a>
-                    <Button onClick={handleStartPolling} className="gap-2">
-                      <Check className="h-4 w-4" />
-                      I&apos;ve entered the code
+                  )}
+                </div>
+
+                {oauthStep === "idle" && (
+                  <Button
+                    onClick={handleStartOAuth}
+                    disabled={initiateOAuthMutation.isPending}
+                    className="h-10 w-full gap-2 font-mono text-[11px] uppercase tracking-[0.14em]"
+                  >
+                    {initiateOAuthMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        {isOAuthProvider ? "Connect ChatGPT" : "Connect GitHub"}
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                {oauthStep === "pending" && deviceCode && (
+                  <div className="flex h-10 min-w-0 items-stretch gap-2">
+                    <div className="flex min-w-0 flex-1 items-center rounded-lg bg-input px-3">
+                      <code className="min-w-0 flex-1 truncate font-mono text-sm font-semibold tracking-[0.16em] text-fg">
+                        {deviceCode.userCode}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={handleCopyCode}
+                        aria-label="Copy device code"
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-fg-4 transition-colors hover:text-fg"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <Button onClick={handleStartPolling} className="h-10 shrink-0 gap-1.5 px-3">
+                      <Check className="h-3.5 w-3.5" />
+                      <span className="sm:hidden">Done</span>
+                      <span className="hidden sm:inline">I&apos;ve entered it</span>
                     </Button>
                   </div>
                 )}
 
                 {oauthStep === "polling" && (
-                  <div className="flex flex-col items-center gap-4 rounded-xl border border-white/[0.08] bg-input/40 p-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    <p className="text-sm text-muted-foreground">Waiting for authorization...</p>
+                  <div className="flex h-10 items-center justify-center gap-2 rounded-lg bg-input text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <p>Waiting for authorization...</p>
                   </div>
                 )}
               </div>
@@ -601,7 +598,7 @@ export function ModelCredentialsSection() {
           </div>
         </div>
 
-        <DialogFooter className="border-t border-border bg-white/[0.015] px-6 py-4">
+        <DialogFooter className="border-t border-line px-5 py-4 sm:px-6">
           <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
             Cancel
           </Button>
@@ -629,6 +626,8 @@ export function ModelCredentialsSection() {
   return (
     <>
       <SettingsSection
+        id="model-credentials"
+        className="scroll-mt-24"
         icon={Key}
         title="Model credentials"
         description="Bring your own keys. We never resell AI access, and your credentials are only injected into your workspaces."
@@ -636,15 +635,15 @@ export function ModelCredentialsSection() {
       >
         <SettingsSectionBody>
           {isLoadingCredentials || isLoadingProviders ? (
-            <div className="space-y-2">
-              <Skeleton className="h-14 w-full bg-white/[0.04]" />
-              <Skeleton className="h-14 w-full bg-white/[0.04]" />
+            <div className="divide-y divide-line border-y border-line">
+              <Skeleton className="h-14 w-full bg-fill" />
+              <Skeleton className="h-14 w-full bg-fill" />
             </div>
           ) : credentials.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl bg-input/40 px-6 py-10 text-center">
-              <Key className="mb-3 h-8 w-8 text-white/25" />
-              <p className="text-sm text-white/65">No credentials saved</p>
-              <p className="mt-1 text-[12px] text-white/35">
+              <Key className="mb-3 h-8 w-8 text-fg-4" />
+              <p className="text-sm text-fg-2">No credentials saved</p>
+              <p className="mt-1 text-[12px] text-fg-4">
                 Add your first key to unlock automated agent runs.
               </p>
             </div>
@@ -654,12 +653,12 @@ export function ModelCredentialsSection() {
                 return (
                   <div
                     key={credential.id}
-                    className={`flex items-center justify-between gap-3 rounded-lg border border-transparent px-4 py-3 transition-colors ${credential.isActive ? "bg-input/60 hover:border-border hover:bg-input" : "bg-input/20 opacity-60"}`}
+                    className={`flex items-center justify-between gap-3 px-1 py-3.5 transition-opacity ${credential.isActive ? "" : "opacity-60"}`}
                   >
                     <div className="flex items-center gap-4">
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                         <Image
-                          src={getProviderLogo(credential.providerName)}
+                          src={getModelProviderLogo(credential.providerName) ?? "/opencode.svg"}
                           alt={credential.providerDisplayName}
                           width={20}
                           height={20}
@@ -667,18 +666,20 @@ export function ModelCredentialsSection() {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">{credential.providerDisplayName}</p>
-                          {credential.isDefault && credential.isActive && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-primary/[0.08] px-1.5 py-0.5 text-[10px] font-medium text-primary/80">
-                              <Star className="h-2.5 w-2.5 fill-current" />
-                              Default
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <p className="font-medium">
+                            {credential.label || credential.providerDisplayName}
+                          </p>
+                          {credential.label && (
+                            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-fg-4">
+                              · {credential.providerDisplayName}
                             </span>
                           )}
-                          {credential.label && (
-                            <Badge variant="outline" className="text-xs">
-                              {credential.label}
-                            </Badge>
+                          {credential.isDefault && credential.isActive && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-primary/[0.08] px-1.5 py-0.5 text-[10px] font-medium text-primary/80">
+                              <Star className="h-2.5 w-2.5 fill-current text-primary opacity-80" />
+                              Default
+                            </span>
                           )}
                           {!credential.isActive && (
                             <Badge variant="destructive" className="text-xs">
@@ -736,8 +737,8 @@ export function ModelCredentialsSection() {
                           </>
                         )}
                         <DropdownMenuItem
+                          variant="destructive"
                           onClick={() => handleDeleteClick(credential.id)}
-                          className="text-red-600 focus:text-red-600"
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete
@@ -754,7 +755,7 @@ export function ModelCredentialsSection() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="border-line bg-settings-dialog sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Delete Credential</DialogTitle>
             <DialogDescription>

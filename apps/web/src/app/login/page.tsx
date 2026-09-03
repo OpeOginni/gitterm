@@ -14,11 +14,11 @@ function LoginContent() {
   return (
     <div className="flex min-h-screen flex-col bg-background landing-grid dark">
       {/* Minimal header */}
-      <header className="border-b border-white/[0.06] bg-background/80 backdrop-blur-xl">
+      <header className="border-b border-line bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
           <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
-            <span className="font-mono text-sm font-bold uppercase tracking-wider text-white/90">
+            <span className="font-mono text-sm font-bold uppercase tracking-wider text-fg">
               GitTerm
             </span>
           </Link>
@@ -35,9 +35,7 @@ function LoginContent() {
             </div>
             <div className="text-center">
               <h1 className="text-2xl font-bold tracking-tight text-white">Sign in to GitTerm</h1>
-              <p className="mt-2 text-sm text-white/40">
-                Access your workspaces and start shipping.
-              </p>
+              <p className="mt-2 text-sm text-fg-4">Access your workspaces and start shipping.</p>
             </div>
           </div>
 
@@ -45,18 +43,18 @@ function LoginContent() {
           <AuthForm redirectUrl={redirect ?? undefined} authError={error} />
 
           {/* Footer text */}
-          <p className="text-center text-xs text-white/30">
+          <p className="text-center text-xs text-fg-4">
             By signing in, you agree to our{" "}
             <Link
               href="#"
-              className="text-white/50 underline decoration-white/20 underline-offset-2 hover:text-white/70"
+              className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
             >
               Terms of Service
             </Link>{" "}
             and{" "}
             <Link
               href="#"
-              className="text-white/50 underline decoration-white/20 underline-offset-2 hover:text-white/70"
+              className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
             >
               Privacy Policy
             </Link>

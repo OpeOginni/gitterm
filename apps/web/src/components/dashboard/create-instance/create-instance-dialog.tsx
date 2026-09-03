@@ -12,22 +12,16 @@ import {
 } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import { useWorkspaceStatusWatcher } from "@/components/workspace-status-watcher";
-import { WorkspaceTypeSelector } from "./workspace-type-selector";
 import { CliCommandDisplay } from "./cli-command-display";
 import { CreateCloudInstance } from "./create-cloud-instance";
-import { CreateAgentLoop } from "./create-agent-loop";
 import { usePrefetchCreateInstanceData } from "./use-prefetch-create-instance-data";
-import type { WorkspaceType, CreateInstanceResult } from "./types";
+import type { CreateInstanceResult } from "./types";
 import { track } from "@/lib/analytics";
 
-const DIALOG_DESCRIPTIONS: Record<WorkspaceType, string> = {
-  cloud: "Deploy a new development workspace from a GitHub repository.",
-  "agentic-loops": "Create an autonomous agent that executes tasks from your plan file.",
-};
+const DIALOG_DESCRIPTION = "Deploy a new development workspace from a GitHub repository.";
 
 export function CreateInstanceDialog() {
   const [open, setOpen] = useState(false);
-  const [workspaceType, setWorkspaceType] = useState<WorkspaceType>("cloud");
   const [cliCommand, setCliCommand] = useState<string | null>(null);
 
   const { watchWorkspaceStatus } = useWorkspaceStatusWatcher();
@@ -88,25 +82,13 @@ export function CreateInstanceDialog() {
           <DialogTitle className="text-lg font-bold text-white sm:text-xl">
             Create New Instance
           </DialogTitle>
-          <DialogDescription className="text-white/40">
-            {DIALOG_DESCRIPTIONS[workspaceType]}
-          </DialogDescription>
+          <DialogDescription className="text-fg-4">{DIALOG_DESCRIPTION}</DialogDescription>
         </DialogHeader>
 
         {cliCommand ? (
           <CliCommandDisplay command={cliCommand} onDone={handleDialogClose} />
         ) : (
-          <>
-            <WorkspaceTypeSelector value={workspaceType} onChange={setWorkspaceType} />
-
-            {workspaceType === "cloud" && (
-              <CreateCloudInstance onSuccess={handleSuccess} onCancel={handleCancel} />
-            )}
-
-            {workspaceType === "agentic-loops" && (
-              <CreateAgentLoop onSuccess={handleSuccess} onCancel={handleCancel} />
-            )}
-          </>
+          <CreateCloudInstance onSuccess={handleSuccess} onCancel={handleCancel} />
         )}
       </DialogContent>
     </Dialog>

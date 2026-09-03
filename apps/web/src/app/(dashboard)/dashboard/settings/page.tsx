@@ -1,28 +1,26 @@
-import { SettingsShell } from "@/components/dashboard/settings/settings-shell";
-import { authClient } from "@/lib/auth-client";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import type { Route } from "next";
 
-export default async function SettingsPage({
+const SETTINGS_SECTIONS = new Set([
+  "account",
+  "billing",
+  "privacy",
+  "workspace",
+  "providers",
+  "agent-defaults",
+  "ssh",
+  "teams",
+  "api",
+  "usage",
+]);
+
+export default async function SettingsIndexPage({
   searchParams,
 }: {
   searchParams: Promise<{ section?: string }>;
 }) {
-  const requestHeaders = await headers();
-  const cookie = requestHeaders.get("cookie");
-
-  const session = await authClient.getSession({
-    fetchOptions: {
-      headers: cookie ? { cookie } : {},
-    },
-  });
-
-  if (!session.data?.user) {
-    redirect("/login");
-  }
-
   const { section } = await searchParams;
-  const currentPlan = ((session.data.user as any).plan as "free" | "starter" | "pro") || "free";
-
-  return <SettingsShell currentPlan={currentPlan} initialSection={section} />;
+  redirect(
+    `/dashboard/settings/${section && SETTINGS_SECTIONS.has(section) ? section : "account"}` as Route,
+  );
 }

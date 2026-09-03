@@ -368,7 +368,7 @@ export function CreateAgentLoop({ onSuccess, onCancel }: CreateAgentLoopProps) {
           <Label className="text-sm font-medium flex items-center gap-1">
             GitHub Account
             <Link href="/dashboard/integrations" className="text-primary hover:text-primary/80">
-              <ArrowUpRight className="h-3.5 w-3.5" />
+              <ArrowUpRight className="h-3.5 w-3.5 text-primary" />
             </Link>
           </Label>
           <Select value={selectedInstallationId} onValueChange={handleInstallationChange}>

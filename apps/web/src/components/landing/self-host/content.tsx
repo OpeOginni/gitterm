@@ -4,8 +4,31 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowRight, Send, Shield, Lock, GitBranch } from "lucide-react";
+import { ArrowRight, Send, Shield, Lock, GitBranch, Mail } from "lucide-react";
 import env from "@gitterm/env/web";
+
+const CONTACT_EMAIL = "enterprise@gitterm.dev";
+
+const principles = [
+  {
+    icon: Shield,
+    title: "Your sandbox, your cloud",
+    body: "Workspaces run on infrastructure you control. Nothing leaves your account unless you send it.",
+  },
+  {
+    icon: Lock,
+    title: "Your keys, your data",
+    body: "Model keys and repo access stay encrypted in your own database. We never see them.",
+  },
+  {
+    icon: GitBranch,
+    title: "Open source, unlimited",
+    body: "MIT-licensed. No seat caps, no usage meter, and the full stack is yours to read and fork.",
+  },
+];
+
+const fieldClass =
+  "h-11 rounded-lg border-line bg-background text-sm text-fg placeholder:text-fg-4 focus-visible:border-primary/50 focus-visible:ring-primary/20";
 
 export function SelfHostContent() {
   const [submitted, setSubmitted] = useState(false);
@@ -17,7 +40,7 @@ export function SelfHostContent() {
     setError("");
 
     if (!env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY) {
-      setError("The contact form is not configured yet. Please email us directly.");
+      setError("The contact form is not configured yet. Please email us directly at");
       return;
     }
 
@@ -44,7 +67,7 @@ export function SelfHostContent() {
       form.reset();
       setSubmitted(true);
     } catch {
-      setError("We couldn't send your request. Please email us directly at");
+      setError("We couldn't send your message. Please email us directly at");
     } finally {
       setIsSubmitting(false);
     }
@@ -53,7 +76,7 @@ export function SelfHostContent() {
   return (
     <section className="relative overflow-hidden pt-24 pb-16 sm:pt-32 sm:pb-24 md:pt-44 md:pb-32">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute top-0 left-1/2 h-[600px] w-[900px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.04),transparent)]" />
+        <div className="absolute top-0 left-1/2 h-[600px] w-[900px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-[radial-gradient(closest-side,rgba(211,173,85,0.05),transparent)]" />
       </div>
 
       <div className="relative mx-auto max-w-[1200px] px-4 sm:px-6">
@@ -62,58 +85,86 @@ export function SelfHostContent() {
           <span className="font-display-accent text-[color:var(--cream)]">your own infra</span>.
         </h1>
 
-        <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-white/55 sm:mt-6 sm:text-[17px] sm:leading-[1.65]">
-          GitTerm is open source and self-hostable — deploy on Railway, AWS, or bare metal, and keep
-          every key and every line of code on your own infrastructure.
+        <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-fg-3 sm:mt-6 sm:text-[17px] sm:leading-[1.65]">
+          GitTerm is open source and self-hostable. Deploy on Railway, AWS, or bare metal, and keep
+          every key and every line of code on infrastructure you own.
         </p>
-        <div className="mt-10 grid gap-4 sm:mt-14 sm:gap-5 md:grid-cols-3">
-          {[
-            { icon: Shield, title: "Your sandbox, your cloud" },
-            { icon: Lock, title: "Your keys, your data" },
-            { icon: GitBranch, title: "Open source, unlimited" },
-          ].map((item) => (
-            <div
-              key={item.title}
-              className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 sm:p-6"
-            >
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <item.icon className="h-4 w-4 text-primary" />
-              </span>
-              <h3 className="text-[15px] font-semibold text-white/90">{item.title}</h3>
-            </div>
-          ))}
+
+        {/* ── Principles: three facts on the page itself, no boxes ── */}
+        <div className="mt-12 border-y border-line sm:mt-16">
+          <div className="grid divide-y divide-line md:grid-cols-3 md:divide-x md:divide-y-0">
+            {principles.map((item, index) => (
+              <div key={item.title} className="py-6 md:px-7 md:py-8 md:first:pl-0 md:last:pr-0">
+                <div className="mb-4 flex items-center gap-3">
+                  <span className="font-mono text-[10.5px] tracking-[0.18em] text-primary/80">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <item.icon className="h-4 w-4 text-primary" />
+                </div>
+                <h3 className="text-[16px] font-medium text-fg">{item.title}</h3>
+                <p className="mt-2 text-[13.5px] leading-[1.65] text-fg-3">{item.body}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* ── Form card ── */}
-        <div className="mx-auto mt-12 max-w-2xl sm:mt-16">
-          <h2 className="mb-4 font-display text-xl font-light tracking-tight text-white">
-            Want help self-hosting?
-          </h2>
+        {/* ── Talk to us ── */}
+        <div className="mt-14 grid gap-10 sm:mt-20 lg:grid-cols-[1fr_1.15fr] lg:gap-16">
+          <div className="lg:pt-2">
+            <span className="marker">Talk to us</span>
+            <h2 className="mt-4 font-display text-[clamp(1.8rem,3.6vw,2.8rem)] font-light leading-[1.05] tracking-tight text-fg">
+              Deploying somewhere unusual, or setting this up for a team?
+            </h2>
+            <p className="mt-4 max-w-md text-[15px] leading-[1.65] text-fg-3">
+              Tell us a little about where you want GitTerm to run. A real person reads every
+              message and will get back to you.
+            </p>
 
-          <div className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-white/[0.02]">
-            <div className="pointer-events-none absolute inset-0">
-              <div className="absolute -top-24 left-1/2 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.06),transparent)]" />
-            </div>
+            <ul className="mt-7 space-y-3 text-[14px] text-fg-2">
+              {[
+                "Deployment help for Railway, AWS, or your own servers",
+                "Bringing your existing sandbox provider",
+                "Team, SSO, and enterprise questions",
+              ].map((line) => (
+                <li key={line} className="flex items-start gap-3">
+                  <span className="mt-[9px] h-px w-4 shrink-0 bg-primary/70" />
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
 
-            <div className="relative p-5 sm:p-6 md:p-10">
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="mt-8 inline-flex items-center gap-2.5 font-mono text-[13.5px] text-fg-2 underline decoration-line-2 underline-offset-4 transition-colors hover:text-fg hover:decoration-primary/60"
+            >
+              <Mail className="h-4 w-4 text-primary" />
+              {CONTACT_EMAIL}
+            </a>
+          </div>
+
+          <div className="relative overflow-hidden rounded-2xl border border-line bg-card shadow-[0_30px_100px_-40px_rgba(0,0,0,0.7)]">
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
+
+            <div className="p-5 sm:p-7">
               {submitted ? (
-                <div className="flex flex-col items-center py-8 text-center">
-                  <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+                <div className="flex flex-col items-center py-10 text-center">
+                  <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full border border-primary/25 bg-primary/10">
                     <Send className="h-6 w-6 text-primary" />
                   </div>
-                  <h3 className="mb-2 text-xl font-semibold text-white/90">We'll be in touch</h3>
-                  <p className="max-w-sm text-sm leading-relaxed text-white/45">
-                    Your request was sent. If you need to add anything else, email us directly at{" "}
+                  <h3 className="mb-2 text-xl font-semibold text-fg">Thanks, we'll be in touch</h3>
+                  <p className="max-w-sm text-sm leading-relaxed text-fg-3">
+                    Your message was sent. If you want to add anything, email{" "}
                     <a
-                      href="mailto:enterprise@gitterm.dev"
+                      href={`mailto:${CONTACT_EMAIL}`}
                       className="text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:decoration-primary/60"
                     >
-                      enterprise@gitterm.dev
+                      {CONTACT_EMAIL}
                     </a>
+                    .
                   </p>
                   <Button
                     variant="outline"
-                    className="mt-6 h-10 border-white/[0.08] bg-transparent px-5 font-mono text-xs uppercase tracking-wider text-white/60 hover:border-white/20 hover:text-white/90"
+                    className="mt-6 h-10 border-line bg-transparent px-5 font-mono text-xs uppercase tracking-wider text-fg-2 hover:border-line-2 hover:text-fg"
                     onClick={() => {
                       setSubmitted(false);
                       setError("");
@@ -126,18 +177,13 @@ export function SelfHostContent() {
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="grid gap-5 sm:grid-cols-2">
                     <div>
-                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
+                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-fg-3">
                         Name
                       </label>
-                      <Input
-                        name="name"
-                        required
-                        placeholder="Jane Smith"
-                        className="h-11 rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
-                      />
+                      <Input name="name" required placeholder="Jane Smith" className={fieldClass} />
                     </div>
                     <div>
-                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
+                      <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-fg-3">
                         Work email
                       </label>
                       <Input
@@ -145,43 +191,40 @@ export function SelfHostContent() {
                         type="email"
                         required
                         placeholder="jane@company.com"
-                        className="h-11 rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
+                        className={fieldClass}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
-                      Company / project <span className="text-white/20">(optional)</span>
+                    <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-fg-3">
+                      Company / project <span className="text-fg-4">(optional)</span>
                     </label>
-                    <Input
-                      name="company"
-                      placeholder="Acme Inc."
-                      className="h-11 rounded-xl border-white/[0.08] bg-white/[0.03] text-sm text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
-                    />
+                    <Input name="company" placeholder="Acme Inc." className={fieldClass} />
                   </div>
 
                   <div>
-                    <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
-                      What do you need help with?
+                    <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.15em] text-fg-3">
+                      Message
                     </label>
                     <Textarea
                       name="message"
-                      rows={3}
-                      placeholder="Tell us which sandbox or cloud provider you want to use, where you're deploying, and how we can help you get set up."
-                      className="rounded-xl border-white/[0.08] bg-white/[0.03] text-sm leading-relaxed text-white/80 placeholder:text-white/20 focus-visible:border-primary/40 focus-visible:ring-primary/20"
+                      rows={4}
+                      placeholder="Where do you want to run GitTerm, and what would make it easier?"
+                      className="rounded-lg border-line bg-background text-sm leading-relaxed text-fg placeholder:text-fg-4 focus-visible:border-primary/50 focus-visible:ring-primary/20"
                     />
                   </div>
 
                   {error ? (
-                    <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm leading-relaxed text-red-200">
+                    <p className="rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm leading-relaxed text-fg-2">
                       {error}{" "}
                       <a
-                        href="mailto:enterprise@gitterm.dev"
-                        className="underline decoration-red-200/40 underline-offset-2 hover:decoration-red-200/70"
+                        href={`mailto:${CONTACT_EMAIL}`}
+                        className="text-fg underline decoration-line-2 underline-offset-2"
                       >
-                        enterprise@gitterm.dev
+                        {CONTACT_EMAIL}
                       </a>
+                      .
                     </p>
                   ) : null}
 
@@ -189,11 +232,14 @@ export function SelfHostContent() {
                     type="submit"
                     size="lg"
                     disabled={isSubmitting}
-                    className="h-12 w-full bg-primary px-8 font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+                    className="group h-12 w-full bg-primary px-8 font-mono text-[12px] font-bold uppercase tracking-[0.18em] text-primary-foreground hover:bg-primary/90"
                   >
-                    {isSubmitting ? "Sending..." : "Get in touch"}
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    {isSubmitting ? "Sending..." : "Talk to us"}
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                   </Button>
+                  <p className="text-center text-[11.5px] text-fg-4">
+                    No newsletter, no sales sequence. Just a reply.
+                  </p>
                 </form>
               )}
             </div>
@@ -201,11 +247,11 @@ export function SelfHostContent() {
         </div>
 
         {/* ── Deploy CTA ── */}
-        <div className="mt-14 flex flex-col items-start gap-5 border-t border-white/[0.06] pt-10 sm:mt-16 sm:flex-row sm:items-center sm:justify-between sm:pt-12">
+        <div className="mt-16 flex flex-col items-start gap-5 border-t border-line pt-10 sm:mt-20 sm:flex-row sm:items-center sm:justify-between sm:pt-12">
           <div>
-            <h3 className="text-[15px] font-semibold text-white/90">Deploy it yourself</h3>
-            <p className="mt-1 text-sm leading-relaxed text-white/45">
-              One-click deploy, or self-host from source.
+            <h3 className="text-[15px] font-semibold text-fg">Rather do it yourself?</h3>
+            <p className="mt-1 text-sm leading-relaxed text-fg-3">
+              One-click deploy on Railway, or run the stack from source.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-3">
@@ -225,7 +271,7 @@ export function SelfHostContent() {
               href="https://github.com/OpeOginni/gitterm"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-5 font-mono text-sm font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-line bg-fill px-5 font-mono text-sm font-medium text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
             >
               View on GitHub
             </a>
