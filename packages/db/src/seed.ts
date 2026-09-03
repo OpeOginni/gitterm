@@ -228,6 +228,7 @@ const seedImages = [
     imageId: "opeoginni/gitterm-opencode",
     agentTypeName: "OpenCode (TTYD)",
     providerMetadata: {
+      railway: {},
       daytona: {
         image: "opeoginni/gitterm-opencode-server:latest",
         resources: { cpu: 2, memory: 4 },
@@ -246,6 +247,7 @@ const seedImages = [
     imageId: "opeoginni/gitterm-opencode-server",
     agentTypeName: "OpenCode",
     providerMetadata: {
+      railway: {},
       e2b: {
         templateId: "r9xlzvdbcoocvbncrds9",
         sshTemplateId: "nxiezl38gnw32ufyloc0",
@@ -281,6 +283,7 @@ const seedImages = [
     name: "gitterm-opencode-server-lg",
     imageId: "brightoginni123/gitterm-opencode-server-lg",
     agentTypeName: "OpenCode",
+    // E2B template only (4 vCPU / 8 GB); no `railway` key because the imageId is not a registry image.
     providerMetadata: {
       e2b: {
         templateId: "8q4c6rxkpsuq6fuo6l6l",
@@ -292,6 +295,7 @@ const seedImages = [
     imageId: "opeoginni/gitterm-t3code-server",
     agentTypeName: "T3Code",
     providerMetadata: {
+      railway: {},
       // Built by E2B template job in Build Agent Images workflow (alias gitterm-t3code-server).
       e2b: {
         templateId: "gfu36xk02swjo0s9turi",

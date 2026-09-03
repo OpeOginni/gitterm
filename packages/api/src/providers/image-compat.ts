@@ -20,6 +20,7 @@ export function imageSupportsProvider(
     case "exedev":
       return Boolean(metadata?.exedev);
     case "railway":
+      return Boolean(metadata?.railway);
     case "local":
       return true;
     default:

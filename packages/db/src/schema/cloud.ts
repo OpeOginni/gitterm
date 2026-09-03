@@ -316,6 +316,8 @@ export interface ImageProviderMetadata {
   vercel?: VercelImageProviderMetadata;
   ascii?: AsciiImageProviderMetadata;
   exedev?: ExeDevImageProviderMetadata;
+  /** Present when `imageId` is a registry image Railway can pull. E2B-only template records omit it. */
+  railway?: Record<string, never>;
   [provider: string]: unknown;
 }
 
