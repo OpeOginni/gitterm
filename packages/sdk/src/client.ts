@@ -462,16 +462,16 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           });
           return normalizeRuntime(result);
         }),
-      ensureRunning: (ref: WorkspaceRef, options?: WaitOptions) =>
+      ensureRunning: (ref: WorkspaceRef, waitOptions?: WaitOptions) =>
         run(async (): Promise<WorkspaceEnsureRunningResult> => {
-          throwIfAborted(options?.signal, "ensuring the workspace is running");
+          throwIfAborted(waitOptions?.signal, "ensuring the workspace is running");
           const result = await trpc.workspace.ensureRunning.mutate(
             {
               workspaceId: workspaceIdOf(ref),
-              timeoutMs: options?.timeoutMs,
-              pollIntervalMs: options?.pollIntervalMs,
+              timeoutMs: waitOptions?.timeoutMs,
+              pollIntervalMs: waitOptions?.pollIntervalMs,
             },
-            { signal: options?.signal },
+            { signal: waitOptions?.signal },
           );
           const workspace = normalizeWorkspace(result.workspace as RawWorkspace);
           if (!workspace) throw new GittermError("SERVER_ERROR", "ensureRunning failed");
@@ -528,12 +528,12 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
             { signal },
           ) as Promise<AgentRun>;
         }),
-      list: (ref: WorkspaceRef, options?: AgentRunListOptions) =>
+      list: (ref: WorkspaceRef, listOptions?: AgentRunListOptions) =>
         run(
           async (): Promise<AgentRunListResult> =>
             trpc.run.list.query({
               workspaceId: workspaceIdOf(ref),
-              ...options,
+              ...listOptions,
             }) as Promise<AgentRunListResult>,
         ),
       get: (refOrWorkspaceId: RunRef | string, runId?: string) =>
