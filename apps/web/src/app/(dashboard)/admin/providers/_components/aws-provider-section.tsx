@@ -224,8 +224,8 @@ export function AwsProviderSection({ awsProviders }: AwsProviderSectionProps) {
             </span>
             <ChevronDown
               className={cn(
-                "h-4 w-4 text-muted-foreground/70 transition-transform duration-200",
-                isExpanded && "rotate-180 text-foreground/80",
+                "h-4 w-4 text-muted-foreground opacity-70 transition-[color,opacity,transform] duration-200",
+                isExpanded && "rotate-180 text-foreground opacity-80",
               )}
             />
           </div>
@@ -260,7 +260,7 @@ export function AwsProviderSection({ awsProviders }: AwsProviderSectionProps) {
                             <p className="truncate text-sm font-medium text-foreground/90">
                               {primaryRegion?.externalRegionIdentifier ?? provider.name}
                             </p>
-                            <ArrowUpRight className="h-3 w-3 translate-y-0.5 text-muted-foreground/40 opacity-0 transition-all group-hover/card:opacity-100" />
+                            <ArrowUpRight className="h-3 w-3 translate-y-0.5 text-muted-foreground opacity-0 transition-all group-hover/card:opacity-100" />
                           </div>
                           {primaryRegion?.location && (
                             <p className="truncate font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">

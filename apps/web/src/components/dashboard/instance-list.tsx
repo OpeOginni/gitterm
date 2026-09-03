@@ -107,12 +107,12 @@ export function InstanceList() {
 
   if (workspaces.length === 0 && page === 0) {
     return (
-      <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.01] p-8 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03]">
-          <Terminal className="h-7 w-7 text-white/30" />
+      <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-fill p-8 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-fill">
+          <Terminal className="h-7 w-7 text-fg-4" />
         </div>
-        <h3 className="mt-5 text-lg font-medium text-white/80">No active workspaces</h3>
-        <p className="mt-2 max-w-sm text-sm text-white/35">
+        <h3 className="mt-5 text-lg font-medium text-fg">No active workspaces</h3>
+        <p className="mt-2 max-w-sm text-sm text-fg-4">
           Connect a GitHub repo and launch a workspace that can clone, commit, push, and open pull
           requests, or start from a blank terminal.
         </p>
@@ -130,8 +130,8 @@ export function InstanceList() {
 
       {/* Pagination */}
       {pagination && totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4 border-t border-white/[0.06]">
-          <p className="text-sm text-white/30">
+        <div className="flex items-center justify-between pt-4 border-t border-line">
+          <p className="text-sm text-fg-4">
             Showing {pagination.offset + 1} to{" "}
             {Math.min(pagination.offset + workspaces.length, pagination.total)} of{" "}
             {pagination.total} workspaces
@@ -146,7 +146,7 @@ export function InstanceList() {
               <ChevronLeft className="h-4 w-4 mr-1" />
               Previous
             </Button>
-            <span className="text-sm text-white/30 px-2">
+            <span className="text-sm text-fg-4 px-2">
               Page {page + 1} of {totalPages}
             </span>
             <Button
@@ -316,14 +316,14 @@ export function InstanceCard({
         );
       case "pending":
         return (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/50">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-fill px-2.5 py-0.5 text-[11px] font-medium text-fg-3">
             <Loader2 className="h-3 w-3 animate-spin" />
             Pending
           </span>
         );
       case "paused":
         return (
-          <span className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/40">
+          <span className="inline-flex items-center rounded-full border border-line bg-fill px-2.5 py-0.5 text-[11px] font-medium text-fg-4">
             Paused
           </span>
         );
@@ -335,7 +335,7 @@ export function InstanceCard({
         );
       default:
         return (
-          <span className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/40">
+          <span className="inline-flex items-center rounded-full border border-line bg-fill px-2.5 py-0.5 text-[11px] font-medium text-fg-4">
             {status}
           </span>
         );
@@ -736,12 +736,12 @@ export function InstanceCard({
         </DialogContent>
       </Dialog>
 
-      <div className="group flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-card transition-all hover:border-white/[0.12]">
+      <div className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-card transition-all hover:border-line-2">
         <div className="px-5 pt-5 pb-3">
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.04]">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fill">
                   <Image
                     src={agentIcon}
                     alt={workspace.image.agentType.name}
@@ -751,10 +751,10 @@ export function InstanceCard({
                   />
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-semibold text-white/90 truncate">
+                  <span className="text-sm font-semibold text-fg truncate">
                     {workspace.name || workspace.subdomain}
                   </span>
-                  <span className="text-xs text-white/30 truncate">
+                  <span className="text-xs text-fg-4 truncate">
                     {workspace.image.agentType.name}
                   </span>
                 </div>
@@ -769,15 +769,15 @@ export function InstanceCard({
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
                   title={`Open ${workspace.repositoryUrl} on GitHub`}
-                  className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12 transition-colors hover:text-white/60"
+                  className="flex items-center gap-2 text-xs text-fg-4 min-w-0 pl-12 transition-colors hover:text-fg-2"
                 >
                   <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate font-mono underline decoration-white/15 underline-offset-2 hover:decoration-white/40">
+                  <span className="truncate font-mono underline decoration-line-2 underline-offset-2 hover:decoration-line-2">
                     {getRepoName()}
                   </span>
                 </a>
               ) : (
-                <div className="flex items-center gap-2 text-xs text-white/30 min-w-0 pl-12">
+                <div className="flex items-center gap-2 text-xs text-fg-4 min-w-0 pl-12">
                   <GitBranch className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate font-mono" title={workspace.repositoryUrl || ""}>
                     {getRepoName()}
@@ -787,19 +787,19 @@ export function InstanceCard({
           </div>
         </div>
         <div className="pb-4 px-5 flex-1">
-          <div className="grid gap-2.5 text-xs text-white/35 pl-12">
+          <div className="grid gap-2.5 text-xs text-fg-4 pl-12">
             {shared && (
               <div className="flex items-center gap-2 min-w-0">
                 {shared.via.kind === "team" ? (
                   <>
-                    <UsersRound className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+                    <UsersRound className="h-3.5 w-3.5 shrink-0 text-primary opacity-70" />
                     <span className="truncate text-primary/70">
                       Via team {shared.via.teamName} · {shared.role}
                     </span>
                   </>
                 ) : (
                   <>
-                    <Shield className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+                    <Shield className="h-3.5 w-3.5 shrink-0 text-primary opacity-70" />
                     <span className="truncate text-primary/70">
                       Shared directly with you · {shared.role}
                     </span>
@@ -849,7 +849,7 @@ export function InstanceCard({
             </div>
             {workspace.lastActiveAt && isRunning && (
               <div className="flex items-center gap-2">
-                <HeartPlusIcon className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+                <HeartPlusIcon className="h-3.5 w-3.5 shrink-0 text-primary opacity-70" />
                 <span className="truncate text-primary/70">
                   Active{" "}
                   {formatDistanceToNow(new Date(workspace.lastActiveAt), {
@@ -860,7 +860,7 @@ export function InstanceCard({
             )}
             {workspace.domain && isRunning && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                <Globe className="h-3.5 w-3.5 shrink-0 text-primary/60" />
+                <Globe className="h-3.5 w-3.5 shrink-0 text-primary opacity-60" />
                 <button
                   onClick={() => {
                     if (workspaceUrl) {
@@ -877,9 +877,9 @@ export function InstanceCard({
             )}
             {workspace.hasAccessCredential && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400/60" />
+                <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400 opacity-60" />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <span className="text-xs font-mono text-white/40 tracking-widest select-none">
+                  <span className="text-xs font-mono text-fg-4 tracking-widest select-none">
                     {isT3 ? "Pairing link" : "*".repeat(16)}
                   </span>
                   <button
@@ -900,7 +900,7 @@ export function InstanceCard({
                     className="shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-400/70 bg-amber-400/[0.06] border border-amber-400/[0.1] hover:bg-amber-400/[0.12] hover:text-amber-400 transition-colors cursor-pointer"
                     title={isT3 ? "Copy one-time pairing link" : "Copy server password"}
                   >
-                    <Copy className="h-2.5 w-2.5" />
+                    <Copy className="h-2.5 w-2.5 text-amber-400 opacity-70" />
                     Copy
                   </button>
                   {isT3 && !isShared && isRunning && (
@@ -914,9 +914,9 @@ export function InstanceCard({
                       title="Pairing links are one-time; generate a new one for another device"
                     >
                       {regenerateAccessCredentialMutation.isPending ? (
-                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        <Loader2 className="h-2.5 w-2.5 animate-spin text-amber-400 opacity-70" />
                       ) : (
-                        <Plus className="h-2.5 w-2.5" />
+                        <Plus className="h-2.5 w-2.5 text-amber-400 opacity-70" />
                       )}
                       New link
                     </button>
@@ -929,7 +929,7 @@ export function InstanceCard({
                 <Folder className="h-3.5 w-3.5 shrink-0" />
                 <button
                   onClick={() => copyValue(projectPath, "Project path copied!")}
-                  className="text-xs font-mono text-white/40 hover:text-white/70 truncate transition-colors cursor-pointer underline decoration-dotted underline-offset-2 text-left min-w-0"
+                  className="text-xs font-mono text-fg-4 hover:text-fg-2 truncate transition-colors cursor-pointer underline decoration-dotted underline-offset-2 text-left min-w-0"
                   title="Copy project path and paste it into OpenCode when opening this workspace's project"
                 >
                   {projectPath}
@@ -939,7 +939,7 @@ export function InstanceCard({
             {workspace.editorAccessEnabled && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <Monitor className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-xs text-white/30">Editor access enabled</span>
+                <span className="text-xs text-fg-4">Editor access enabled</span>
               </div>
             )}
             {!isShared &&
@@ -983,9 +983,9 @@ export function InstanceCard({
                                 aria-label={`Remove port ${port}`}
                               >
                                 {isClosing ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground opacity-50" />
                                 ) : (
-                                  <X className="h-3 w-3" />
+                                  <X className="h-3 w-3 text-muted-foreground opacity-50" />
                                 )}
                               </button>
                             )}
@@ -1006,7 +1006,7 @@ export function InstanceCard({
                         }`}
                         aria-label="Open port"
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus className="h-3 w-3 text-muted-foreground opacity-70" />
                         Open port
                       </button>
                     )}
@@ -1015,7 +1015,7 @@ export function InstanceCard({
               )}
           </div>
         </div>
-        <div className="flex gap-2 border-t border-white/[0.06] p-4">
+        <div className="flex gap-2 border-t border-line p-4">
           {isRunning &&
             workspaceUrl &&
             (workspace.serverOnly ? (

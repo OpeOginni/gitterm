@@ -13,14 +13,14 @@ export function LandingHeader() {
   const showPricing = isBillingEnabled();
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-background/75 backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-line bg-background/75 backdrop-blur-xl">
       <div className="relative mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6">
         <Link
           href="/"
           className="group flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80"
         >
           <Terminal className="h-5 w-5 text-primary" />
-          <span className="font-mono text-sm font-bold tracking-[0.18em] uppercase text-white/90 max-[359px]:hidden">
+          <span className="font-mono text-sm font-bold tracking-[0.18em] uppercase text-fg max-[359px]:hidden">
             GitTerm
           </span>
         </Link>
@@ -28,27 +28,27 @@ export function LandingHeader() {
         <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 lg:flex">
           <Link
             href="/#features"
-            className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
+            className="font-mono text-xs uppercase tracking-widest text-fg-4 transition-colors hover:text-fg"
           >
             Features
           </Link>
           <Link
             href="/#faq"
-            className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
+            className="font-mono text-xs uppercase tracking-widest text-fg-4 transition-colors hover:text-fg"
           >
             FAQ
           </Link>
           {showPricing && (
             <Link
               href={"/pricing" as Route}
-              className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
+              className="font-mono text-xs uppercase tracking-widest text-fg-4 transition-colors hover:text-fg"
             >
               Pricing
             </Link>
           )}
           <Link
             href={"/self-host" as Route}
-            className="font-mono text-xs uppercase tracking-widest text-white/40 transition-colors hover:text-white/80"
+            className="font-mono text-xs uppercase tracking-widest text-fg-4 transition-colors hover:text-fg"
           >
             Self-host
           </Link>
@@ -64,7 +64,7 @@ export function LandingHeader() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 border-white/8 bg-transparent px-2.5 text-white/50 transition-colors hover:border-primary hover:text-white/80 sm:px-3"
+              className="h-8 border-line bg-transparent px-2.5 text-fg-3 transition-colors hover:border-primary hover:text-fg sm:px-3"
             >
               <Star className="h-3.5 w-3.5 shrink-0 text-primary sm:mr-1.5" />
               <span className="hidden font-mono text-xs sm:inline">Star on Github</span>
@@ -95,7 +95,7 @@ export function LandingHeader() {
             aria-label="Toggle menu"
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((open) => !open)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/8 text-white/60 transition-colors hover:border-primary hover:text-white/90 lg:hidden"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line text-fg-2 transition-colors hover:border-primary hover:text-fg lg:hidden"
           >
             {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
@@ -103,19 +103,19 @@ export function LandingHeader() {
       </div>
 
       {mobileOpen && (
-        <nav className="border-t border-white/[0.06] bg-background/95 backdrop-blur-xl lg:hidden">
+        <nav className="border-t border-line bg-background/95 backdrop-blur-xl lg:hidden">
           <div className="mx-auto flex max-w-[1200px] flex-col px-4 py-2 sm:px-6">
             <Link
               href="/#features"
               onClick={() => setMobileOpen(false)}
-              className="py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90"
+              className="py-3 font-mono text-sm uppercase tracking-widest text-fg-3 transition-colors hover:text-fg"
             >
               Features
             </Link>
             <Link
               href="/#faq"
               onClick={() => setMobileOpen(false)}
-              className="border-t border-white/[0.04] py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90"
+              className="border-t border-line py-3 font-mono text-sm uppercase tracking-widest text-fg-3 transition-colors hover:text-fg"
             >
               FAQ
             </Link>
@@ -123,7 +123,7 @@ export function LandingHeader() {
               <Link
                 href={"/pricing" as Route}
                 onClick={() => setMobileOpen(false)}
-                className="border-t border-white/[0.04] py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90"
+                className="border-t border-line py-3 font-mono text-sm uppercase tracking-widest text-fg-3 transition-colors hover:text-fg"
               >
                 Pricing
               </Link>
@@ -131,7 +131,7 @@ export function LandingHeader() {
             <Link
               href={"/self-host" as Route}
               onClick={() => setMobileOpen(false)}
-              className="border-t border-white/[0.04] py-3 font-mono text-sm uppercase tracking-widest text-white/55 transition-colors hover:text-white/90"
+              className="border-t border-line py-3 font-mono text-sm uppercase tracking-widest text-fg-3 transition-colors hover:text-fg"
             >
               Self-host
             </Link>

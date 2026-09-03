@@ -46,6 +46,10 @@ const SSH_NOTES = [
 
 type E2BSandbox = Awaited<ReturnType<typeof Sandbox.connect>>;
 
+function shellQuote(value: string): string {
+  return "'" + value.replaceAll("'", "'\"'\"'") + "'";
+}
+
 function getTrafficAccessHeaders(token: string): UpstreamAccess {
   return {
     headers: {
@@ -183,6 +187,7 @@ export class E2BProvider implements ComputeProvider {
     sandbox: E2BSandbox,
     spec: WorkspaceProvisioningSpec | null,
     repoDir: string,
+    cloneDepth?: number,
   ): Promise<void> {
     await this.runCommand(sandbox, `mkdir -p ${WORKSPACE_DIR}`, "mkdir workspace");
 
@@ -200,21 +205,30 @@ export class E2BProvider implements ComputeProvider {
         "configure git auth",
       );
     }
-    await sandbox.git
-      .clone(this.getRepositoryUrl(spec.repo.url), {
-        path: repoDir,
-        username: spec.repo.authToken ? spec.repo.authUsername : undefined,
-        password: spec.repo.authToken,
-        branch: cloneBranch,
-      })
-      .catch(async (error) => {
-        await sandbox.kill().catch(() => undefined);
-        console.error(
-          "E2B Sandbox Error (git.clone)",
-          redactSecrets(error, spec.repo?.authToken ? [spec.repo.authToken] : []),
+    try {
+      if (cloneDepth && cloneDepth > 0 && !spec.repo.authToken) {
+        const branchArg = cloneBranch ? ` --branch ${shellQuote(cloneBranch)}` : "";
+        await this.runCommand(
+          sandbox,
+          `git clone --depth ${cloneDepth} --single-branch --no-tags${branchArg} ${shellQuote(this.getRepositoryUrl(spec.repo.url))} ${shellQuote(repoDir)}`,
+          "git.clone (shallow)",
         );
-        throw error;
-      });
+      } else {
+        await sandbox.git.clone(this.getRepositoryUrl(spec.repo.url), {
+          path: repoDir,
+          username: spec.repo.authToken ? spec.repo.authUsername : undefined,
+          password: spec.repo.authToken,
+          branch: cloneBranch,
+        });
+      }
+    } catch (error) {
+      await sandbox.kill().catch(() => undefined);
+      console.error(
+        "E2B Sandbox Error (git.clone)",
+        redactSecrets(error, spec.repo?.authToken ? [spec.repo.authToken] : []),
+      );
+      throw error;
+    }
 
     if (inlineAuth) {
       await this.runCommand(sandbox, inlineAuth.configure, "configure inline git auth", undefined, [
@@ -410,7 +424,7 @@ export class E2BProvider implements ComputeProvider {
     const repoDir = this.getRepoDir(spec);
 
     await provisionLogger.step("clone-repository", () =>
-      this.cloneRepository(sandbox, spec, repoDir),
+      this.cloneRepository(sandbox, spec, repoDir, config.repositoryCloneDepth),
     );
     await provisionLogger.step("write-agent-files", () =>
       this.writeAgentFiles(sandbox, spec, repoDir),

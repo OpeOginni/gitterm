@@ -14,15 +14,15 @@ export default function TermsPage() {
     <div className="min-h-screen bg-background text-white">
       <LandingHeader />
       <main className="mx-auto max-w-[760px] px-4 pt-24 pb-14 sm:px-6 sm:pt-32 sm:pb-20">
-        <header className="border-b border-white/[0.06] pb-8">
+        <header className="border-b border-line pb-8">
           <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-primary/80">Legal</p>
           <h1 className="mt-3 font-display text-4xl font-medium tracking-tight text-white sm:text-5xl">
             Terms of Service
           </h1>
-          <p className="mt-3 text-sm text-white/45">Last updated {LAST_UPDATED}</p>
+          <p className="mt-3 text-sm text-fg-3">Last updated {LAST_UPDATED}</p>
         </header>
 
-        <article className="mt-10 space-y-10 text-[15px] leading-relaxed text-white/75">
+        <article className="mt-10 space-y-10 text-[15px] leading-relaxed text-fg-2">
           <Section title="1. Agreement">
             <p>
               These Terms of Service ("Terms") govern your access to and use of the hosted GitTerm
@@ -48,7 +48,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="3. Plans, billing & refunds">
-            <ul className="list-disc space-y-2 pl-5 marker:text-white/30">
+            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
               <li>
                 Paid plans are billed in advance on a recurring basis through our payments
                 processor. By subscribing you authorize recurring charges until you cancel.
@@ -66,7 +66,7 @@ export default function TermsPage() {
 
           <Section title="4. Acceptable use">
             <p>You agree not to use the Service to:</p>
-            <ul className="list-disc space-y-2 pl-5 marker:text-white/30">
+            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
               <li>break the law or infringe third-party rights;</li>
               <li>
                 run cryptocurrency miners, botnets, denial-of-service tooling, spam infrastructure,

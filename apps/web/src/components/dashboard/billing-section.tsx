@@ -104,14 +104,14 @@ const QUOTAS: QuotaRow[] = [
 function QuotaValue({ value, dim = false }: { value: string | boolean; dim?: boolean }) {
   if (typeof value === "boolean") {
     return value ? (
-      <Check className="h-4 w-4 text-emerald-400" />
+      <Check className="h-4 w-4 text-primary" />
     ) : (
-      <X className={`h-4 w-4 ${dim ? "text-white/25" : "text-white/40"}`} />
+      <X className={`h-4 w-4 ${dim ? "text-fg-4" : "text-fg-4"}`} />
     );
   }
   return (
     <span
-      className={`font-mono text-[11px] leading-tight tabular-nums sm:whitespace-nowrap sm:text-[12px] ${dim ? "text-white/40" : "text-white/85"}`}
+      className={`font-mono text-[11px] leading-tight tabular-nums sm:whitespace-nowrap sm:text-[12px] ${dim ? "text-fg-4" : "text-fg"}`}
     >
       {value}
     </span>
@@ -133,7 +133,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
           <h3 className="text-lg font-semibold tracking-tight text-white">
             All features unlocked.
           </h3>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-white/50">
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-fg-3">
             You're running GitTerm on your own infrastructure - no quotas, no plans, no Polar. Bring
             as many keys, workspaces, and subdomains as your cluster can handle.
           </p>
@@ -156,7 +156,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
 
   const handleUpgrade = async (slug: PaidPlan) => {
     if (isCheckoutLoading) return;
-    track("upgrade_initiated", { plan: slug, source: "settings_account" });
+    track("upgrade_initiated", { plan: slug, source: "settings_billing" });
     setIsCheckoutLoading(true);
     try {
       await initiateCheckout(slug);
@@ -176,7 +176,10 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
       <FormCard tone="success">
         <FormCardHeader>
           <span>Plan</span>
-          <FormCardStatus tone="ready">{currentPlan} · active</FormCardStatus>
+          <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-primary">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            {currentPlan} · active
+          </span>
         </FormCardHeader>
 
         <FormCardBody className="space-y-6">
@@ -186,9 +189,9 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
                 <span className="text-3xl font-semibold tracking-tight text-white">
                   ${PLAN_PRICE[currentPlan]}
                 </span>
-                <span className="text-sm text-white/35">/ month</span>
+                <span className="text-sm text-fg-4">/ month</span>
               </div>
-              <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-white/45">
+              <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-fg-3">
                 {currentPlan === "pro"
                   ? "480 minutes/day, all providers, persistence, and custom subdomains. Your AI spending stays with your provider, we never mark it up."
                   : "180 minutes/day, every provider, and persistent workspaces. Your AI spending stays with your provider, we never mark it up."}
@@ -217,8 +220,8 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
               const Icon = row.icon;
               return (
                 <SettingsRow key={row.label} className="flex-row items-center py-2.5">
-                  <span className="flex items-center gap-2.5 text-[13px] text-white/65">
-                    <Icon className="h-3.5 w-3.5 text-white/35" />
+                  <span className="flex items-center gap-2.5 text-[13px] text-fg-2">
+                    <Icon className="h-3.5 w-3.5 text-fg-4" />
                     {row.label}
                   </span>
                   <QuotaValue value={planQuotaValue(row)} />
@@ -228,8 +231,8 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
           </SettingsRowList>
 
           {currentPlan === "starter" && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.05] pt-4">
-              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/35">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4">
                 Need more? Pro is $25 / month
               </span>
               <Button
@@ -269,14 +272,14 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
           <h3 className="text-xl font-semibold leading-tight tracking-tight text-white">
             We just <span className="italic text-(--cream)">run</span> the workspaces.
           </h3>
-          <p className="mt-2.5 max-w-xl text-[13.5px] leading-relaxed text-white/50">
+          <p className="mt-2.5 max-w-xl text-[13.5px] leading-relaxed text-fg-3">
             Bring your own AI keys. We don't mark them up. Free runs on E2B sandboxes - upgrade to
             unlock every provider, persistent workspaces, and more runtime.
           </p>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-white/[0.05] bg-input/40">
-          <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center border-b border-white/[0.06] bg-white/[0.015] font-mono text-[9px] uppercase tracking-[0.08em] text-white/35 sm:text-[10px] sm:tracking-[0.18em]">
+        <div className="overflow-hidden rounded-xl border border-line bg-input/40">
+          <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center border-b border-line bg-fill font-mono text-[9px] uppercase tracking-[0.08em] text-fg-4 sm:text-[10px] sm:tracking-[0.18em]">
             <span className="px-3 py-2.5 sm:px-4" />
             <span className="px-1.5 py-2.5 text-center sm:px-3">Free</span>
             <span className="px-1.5 py-2.5 text-center text-primary/80 sm:px-3">Starter</span>
@@ -288,11 +291,11 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
               <div
                 key={row.label}
                 className={`grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center ${
-                  idx % 2 === 1 ? "bg-white/[0.012]" : ""
-                } ${idx < QUOTAS.length - 1 ? "border-b border-white/[0.04]" : ""}`}
+                  idx % 2 === 1 ? "bg-fill" : ""
+                } ${idx < QUOTAS.length - 1 ? "border-b border-line" : ""}`}
               >
-                <span className="flex items-center gap-2 px-3 py-3 text-[12px] text-white/75 sm:gap-2.5 sm:px-4 sm:text-[13px]">
-                  <Icon className="h-3.5 w-3.5 shrink-0 text-white/35" />
+                <span className="flex items-center gap-2 px-3 py-3 text-[12px] text-fg-2 sm:gap-2.5 sm:px-4 sm:text-[13px]">
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-fg-4" />
                   {row.label}
                 </span>
                 <span className="flex justify-center px-1.5 py-3 text-center sm:px-3">
@@ -330,7 +333,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
         </Link>
         <Link
           href={"/pricing" as Route}
-          className="inline-flex shrink-0 items-center gap-1.5 text-white/55 hover:text-white"
+          className="inline-flex shrink-0 items-center gap-1.5 text-fg-3 hover:text-fg"
         >
           compare all plans
           <ArrowRight className="h-3 w-3" />

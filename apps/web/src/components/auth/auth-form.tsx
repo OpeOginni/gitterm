@@ -119,11 +119,9 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
           </Button>
           {emailAuthEnabled && (
             <div className="flex w-full items-center gap-4 py-1">
-              <div className="h-px flex-1 bg-white/[0.06]" />
-              <span className="font-mono text-[10px] uppercase tracking-widest text-white/25">
-                or
-              </span>
-              <div className="h-px flex-1 bg-white/[0.06]" />
+              <div className="h-px flex-1 bg-fill-2" />
+              <span className="font-mono text-[10px] uppercase tracking-widest text-fg-4">or</span>
+              <div className="h-px flex-1 bg-fill-2" />
             </div>
           )}
         </>
@@ -136,7 +134,7 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
             <div className="space-y-2">
               <label
                 htmlFor="email"
-                className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30"
+                className="font-mono text-[10px] uppercase tracking-[0.25em] text-fg-4"
               >
                 Email
               </label>
@@ -148,13 +146,13 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isSubmitting}
-                className="border-white/[0.08] bg-white/[0.02] text-white placeholder:text-white/20"
+                className="border-line bg-fill text-white placeholder:text-fg-4"
               />
             </div>
             <div className="space-y-2">
               <label
                 htmlFor="password"
-                className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30"
+                className="font-mono text-[10px] uppercase tracking-[0.25em] text-fg-4"
               >
                 Password
               </label>
@@ -167,7 +165,7 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
                 required
                 minLength={8}
                 disabled={isSubmitting}
-                className="border-white/[0.08] bg-white/[0.02] text-white placeholder:text-white/20"
+                className="border-line bg-fill text-white placeholder:text-fg-4"
               />
             </div>
 
@@ -184,7 +182,7 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
             </Button>
           </form>
 
-          <button type="button" className="text-xs text-white/30 hover:text-white/50">
+          <button type="button" className="text-xs text-fg-4 hover:text-fg-3">
             Want to sign up? Contact the administrator.
           </button>
         </>
@@ -198,14 +196,14 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
 
       {/* Footer */}
       <div className="flex w-full items-center gap-4 py-1">
-        <div className="h-px flex-1 bg-white/[0.06]" />
-        <span className="font-mono text-[10px] uppercase tracking-widest text-white/20">
+        <div className="h-px flex-1 bg-fill-2" />
+        <span className="font-mono text-[10px] uppercase tracking-widest text-fg-4">
           Secure auth
         </span>
-        <div className="h-px flex-1 bg-white/[0.06]" />
+        <div className="h-px flex-1 bg-fill-2" />
       </div>
 
-      <p className="text-center text-xs text-white/25">
+      <p className="text-center text-xs text-fg-4">
         {githubAuthEnabled && emailAuthEnabled
           ? "Sign in with GitHub or email to access your account."
           : githubAuthEnabled

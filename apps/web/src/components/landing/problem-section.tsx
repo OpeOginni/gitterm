@@ -1,4 +1,4 @@
-import { Boxes, Cpu, GitBranch, Network, Smartphone } from "lucide-react";
+import { Boxes, Cpu, GitBranch, ShieldCheck, Smartphone } from "lucide-react";
 
 const capabilities = [
   {
@@ -7,7 +7,7 @@ const capabilities = [
     body: "Big repos and long agent runs on cloud hardware. Keep light work on your laptop.",
   },
   {
-    icon: Network,
+    icon: ShieldCheck,
     title: "Safe sandboxes.",
     body: "Try a repo, open a port, shut it down. Off your machine, still reachable from your devices.",
   },
@@ -32,7 +32,7 @@ export function ProblemSection() {
   return (
     <section
       id="problem"
-      className="relative overflow-hidden border-t border-white/[0.06] py-14 sm:py-20 md:py-28"
+      className="relative overflow-hidden border-t border-line py-14 sm:py-20 md:py-28"
     >
       <div className="relative mx-auto max-w-[1100px] px-4 sm:px-6">
         <div className="mx-auto mb-10 max-w-2xl text-center sm:mx-0 sm:mb-12 sm:text-left">
@@ -43,7 +43,7 @@ export function ProblemSection() {
           </h2>
         </div>
 
-        <div className="grid gap-px bg-white/[0.06] md:grid-cols-6">
+        <div className="grid gap-px bg-fill-2 md:grid-cols-6">
           {capabilities.map((item, idx) => (
             <div
               key={item.title}
@@ -52,16 +52,16 @@ export function ProblemSection() {
               }`}
             >
               <div className="mb-6">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.04] text-white/40 transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-fill text-fg-4 transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                   <item.icon className="h-4 w-4" />
                 </span>
               </div>
 
-              <h3 className="text-[15.5px] font-medium leading-snug text-white/90">{item.title}</h3>
+              <h3 className="text-[15.5px] font-medium leading-snug text-fg">{item.title}</h3>
 
-              <div className="my-4 h-px bg-white/[0.06]" />
+              <div className="my-4 h-px bg-fill-2" />
 
-              <p className="text-[13.5px] leading-relaxed text-white/55">{item.body}</p>
+              <p className="text-[13.5px] leading-relaxed text-fg-3">{item.body}</p>
             </div>
           ))}
         </div>

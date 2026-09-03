@@ -9,7 +9,6 @@ export { CreateCloudInstance } from "./create-cloud-instance";
 export { CreateAgentLoop } from "./create-agent-loop";
 
 // Shared UI components
-export { WorkspaceTypeSelector } from "./workspace-type-selector";
 export { CliCommandDisplay } from "./cli-command-display";
 export { RepoSearch } from "./repo-search";
 export { RepoFileSearch } from "./repo-file-search";

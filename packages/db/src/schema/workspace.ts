@@ -232,6 +232,10 @@ export const workspaceRelations = relations(workspace, ({ one, many }) => ({
     fields: [workspace.imageId],
     references: [image.id],
   }),
+  cloudProvider: one(cloudProvider, {
+    fields: [workspace.cloudProviderId],
+    references: [cloudProvider.id],
+  }),
   machineProfile: one(machineProfile, {
     fields: [workspace.machineProfileId],
     references: [machineProfile.id],

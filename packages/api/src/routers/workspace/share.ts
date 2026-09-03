@@ -1040,7 +1040,7 @@ export const workspaceShareRouter = router({
 
     const rows = await db.query.workspace.findMany({
       where: and(inArray(workspace.id, ids), ne(workspace.status, "terminated")),
-      with: { image: { with: { agentType: true } } },
+      with: { image: { with: { agentType: true } }, cloudProvider: true },
       orderBy: (workspace, { desc }) => [desc(workspace.startedAt)],
     });
 

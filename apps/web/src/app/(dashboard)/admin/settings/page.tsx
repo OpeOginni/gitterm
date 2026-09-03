@@ -155,14 +155,14 @@ export default function SettingsPage() {
                 className="rounded-2xl border border-border bg-card p-6 space-y-4"
               >
                 <div className="flex items-start gap-4">
-                  <div className="rounded-xl bg-white/[0.04] p-2.5">
-                    <Settings className="h-5 w-5 text-white/40" />
+                  <div className="rounded-xl bg-fill p-2.5">
+                    <Settings className="h-5 w-5 text-fg-4" />
                   </div>
                   <div className="flex-1 space-y-1">
-                    <Label htmlFor={setting.key} className="text-base font-medium text-white/90">
+                    <Label htmlFor={setting.key} className="text-base font-medium text-fg">
                       {setting.label}
                     </Label>
-                    <p className="text-sm text-white/40">{setting.description}</p>
+                    <p className="text-sm text-fg-4">{setting.description}</p>
                   </div>
                 </div>
 
@@ -176,10 +176,10 @@ export default function SettingsPage() {
                     onChange={(e) => handleValueChange(setting.key, e.target.value)}
                     className="w-32"
                   />
-                  <span className="text-sm text-white/40">
+                  <span className="text-sm text-fg-4">
                     {setting.key === "idle_timeout_minutes" ? "minutes" : "minutes per day"}
                   </span>
-                  <span className="text-xs text-white/25 ml-auto">
+                  <span className="text-xs text-fg-4 ml-auto">
                     Range: {setting.min} - {setting.max}
                   </span>
                 </div>
@@ -187,7 +187,7 @@ export default function SettingsPage() {
             ))}
 
             {hasChanges && (
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/[0.06]">
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-line">
                 <Button variant="outline" onClick={handleReset}>
                   Reset
                 </Button>

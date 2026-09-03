@@ -788,7 +788,9 @@ export class GitHubAppService {
           .where(eq(githubAppInstallation.id, existingInstallation.id))
           .returning();
 
-        // Also update the gitIntegration record
+        // Also update the matching generic integration record. A user can have
+        // several installations for the same provider, so never update by
+        // provider alone here.
         await db
           .update(gitIntegration)
           .set({
@@ -799,21 +801,27 @@ export class GitHubAppService {
             updatedAt: new Date(),
           })
           .where(
-            and(eq(gitIntegration.userId, data.userId), eq(gitIntegration.provider, "github")),
+            and(
+              eq(gitIntegration.userId, data.userId),
+              eq(gitIntegration.provider, "github"),
+              eq(gitIntegration.providerInstallationId, data.installationId),
+            ),
           );
 
         return updated!;
       }
 
-      // Check if user has an existing GitHub integration (possibly with old installationId)
+      // Check for the generic record belonging to this exact installation.
       const [existingIntegration] = await db
         .select()
         .from(gitIntegration)
-        .where(and(eq(gitIntegration.userId, data.userId), eq(gitIntegration.provider, "github")));
-
-      // Delete any old githubAppInstallation records for this user
-      // (they reinstalled with a new installation ID)
-      await db.delete(githubAppInstallation).where(eq(githubAppInstallation.userId, data.userId));
+        .where(
+          and(
+            eq(gitIntegration.userId, data.userId),
+            eq(gitIntegration.provider, "github"),
+            eq(gitIntegration.providerInstallationId, data.installationId),
+          ),
+        );
 
       logger.info("Creating new GitHub installation", {
         userId: data.userId,
@@ -1025,11 +1033,13 @@ export class GitHubAppService {
 
   /**
    * List branches for a repository
+   * Paginates through all branches (up to maxBranches limit)
    */
   async listBranches(
     installationId: string,
     owner: string,
     repo: string,
+    maxBranches: number = 1000,
   ): Promise<
     {
       name: string;
@@ -1040,16 +1050,34 @@ export class GitHubAppService {
       const { token } = await this.getUserToServerToken(installationId);
       const userOctokit = new Octokit({ auth: token });
 
-      const { data } = await userOctokit.repos.listBranches({
-        owner,
-        repo,
-        per_page: 100,
-      });
+      const allBranches: { name: string; protected: boolean }[] = [];
+      let page = 1;
+      const perPage = 100;
 
-      return data.map((branch) => ({
-        name: branch.name,
-        protected: branch.protected,
-      }));
+      while (allBranches.length < maxBranches) {
+        const { data } = await userOctokit.repos.listBranches({
+          owner,
+          repo,
+          per_page: perPage,
+          page,
+        });
+
+        allBranches.push(
+          ...data.map((branch) => ({
+            name: branch.name,
+            protected: branch.protected,
+          })),
+        );
+
+        // If we got fewer than perPage, we've reached the end
+        if (data.length < perPage) {
+          break;
+        }
+
+        page++;
+      }
+
+      return allBranches.slice(0, maxBranches);
     } catch (error) {
       if (error instanceof GitHubInstallationNotFoundError) {
         throw error;

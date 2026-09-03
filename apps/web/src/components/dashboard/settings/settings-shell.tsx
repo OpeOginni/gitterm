@@ -1,207 +1,220 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { cn } from "@/lib/utils";
-import { DashboardShell, DashboardHeader } from "@/components/dashboard/shell";
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import type { Route } from "next";
 import {
   BarChart3,
+  Braces,
+  CloudCog,
   CreditCard,
-  KeySquare,
-  Shield,
+  KeyRound,
+  ShieldCheck,
+  SlidersHorizontal,
+  UserRound,
   UsersRound,
-  Wrench,
   type LucideIcon,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-import { UsageSection } from "./usage-section";
-import { WorkspaceSection } from "./workspace-section";
-import { AccountSection } from "./account-section";
-import { ApiSection } from "./api-section";
-import { PrivacySection } from "./privacy-section";
-import { TeamsSection } from "./teams-section";
-
-type SettingsSection = "usage" | "workspace" | "teams" | "account" | "api" | "privacy";
-
-interface SidebarItem {
-  id: SettingsSection;
+type SettingsItem = {
+  id: string;
   label: string;
-  icon: LucideIcon;
   description: string;
-}
+  icon: LucideIcon;
+};
 
-const sidebarItems: SidebarItem[] = [
+type SettingsGroup = {
+  label: string;
+  items: SettingsItem[];
+};
+
+const SETTINGS_GROUPS: SettingsGroup[] = [
   {
-    id: "usage",
-    label: "Usage",
-    icon: BarChart3,
-    description: "Quota and workspace history",
+    label: "Personal",
+    items: [
+      {
+        id: "account",
+        label: "Account",
+        description: "Profile and account access",
+        icon: UserRound,
+      },
+      {
+        id: "usage",
+        label: "Usage",
+        description: "Runtime and workspace history",
+        icon: BarChart3,
+      },
+    ],
   },
   {
-    id: "workspace",
     label: "Workspace",
-    icon: Wrench,
-    description: "SSH, credentials, and config",
+    items: [
+      {
+        id: "providers",
+        label: "Providers",
+        description: "Cloud and model credentials",
+        icon: CloudCog,
+      },
+      {
+        id: "agent-defaults",
+        label: "Agent defaults",
+        description: "Reusable agent configuration",
+        icon: SlidersHorizontal,
+      },
+      {
+        id: "ssh",
+        label: "SSH keys",
+        description: "Editor access identity",
+        icon: KeyRound,
+      },
+      {
+        id: "teams",
+        label: "Teams",
+        description: "Members and shared access",
+        icon: UsersRound,
+      },
+    ],
   },
   {
-    id: "teams",
-    label: "Teams",
-    icon: UsersRound,
-    description: "Collaborators and shared access",
+    label: "Developer",
+    items: [
+      {
+        id: "api",
+        label: "API & tokens",
+        description: "CLI, SDK, and access tokens",
+        icon: Braces,
+      },
+    ],
   },
   {
-    id: "account",
-    label: "Account",
-    icon: CreditCard,
-    description: "Profile, plan, and billing",
-  },
-  {
-    id: "api",
-    label: "API",
-    icon: KeySquare,
-    description: "Tokens for CLI, SDK, and integrations",
-  },
-  {
-    id: "privacy",
-    label: "Privacy",
-    icon: Shield,
-    description: "Analytics and data preferences",
+    label: "Plan & data",
+    items: [
+      {
+        id: "billing",
+        label: "Billing",
+        description: "Plan and subscription",
+        icon: CreditCard,
+      },
+      {
+        id: "privacy",
+        label: "Privacy",
+        description: "Analytics and data choices",
+        icon: ShieldCheck,
+      },
+    ],
   },
 ];
 
-const SECTION_IDS: SettingsSection[] = ["usage", "workspace", "teams", "account", "api", "privacy"];
+const SETTINGS_ITEMS = SETTINGS_GROUPS.flatMap((group) => group.items);
 
-function isSettingsSection(value: string | undefined): value is SettingsSection {
-  return !!value && SECTION_IDS.includes(value as SettingsSection);
+function currentSection(pathname: string): string {
+  const section = pathname.split("/").filter(Boolean).at(-1);
+  return SETTINGS_ITEMS.some((item) => item.id === section) ? section! : "account";
 }
 
-interface SettingsShellProps {
-  currentPlan: "free" | "starter" | "pro";
-  initialSection?: string;
-}
-
-export function SettingsShell({ currentPlan, initialSection }: SettingsShellProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection>(
-    isSettingsSection(initialSection) ? initialSection : "usage",
-  );
-
-  const handleSectionChange = useCallback((section: SettingsSection) => {
-    setActiveSection(section);
-  }, []);
+export function SettingsShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const activeSection = currentSection(pathname);
+  const activeItem = SETTINGS_ITEMS.find((item) => item.id === activeSection)!;
 
   return (
-    <DashboardShell>
+    <DashboardShell className="lg:px-12">
       <DashboardHeader
         heading="Settings"
-        text="Manage your usage, workspace configuration, and account."
+        text="Manage your account, workspace infrastructure, and developer access."
       />
 
-      <div>
-        {/* Mobile tab bar */}
-        <div className="grid grid-cols-3 gap-1 border-b border-white/[0.06] pb-3 lg:hidden">
-          {sidebarItems.map((item) => {
-            const isActive = activeSection === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleSectionChange(item.id)}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-1.5 rounded-lg px-1 py-2.5 text-xs font-medium transition-colors",
-                  isActive
-                    ? "bg-white/[0.08] text-white"
-                    : "text-white/40 hover:bg-white/[0.04] hover:text-white/60",
-                )}
-              >
-                <item.icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-white/30")} />
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
+      <div className="lg:hidden">
+        <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+          Settings area
+        </label>
+        <Select
+          value={activeSection}
+          onValueChange={(section) => router.push(`/dashboard/settings/${section}` as Route)}
+        >
+          <SelectTrigger className="h-11 w-full border border-line bg-card px-3">
+            <SelectValue>
+              <activeItem.icon className="size-4 text-primary" />
+              <span>{activeItem.label}</span>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
+            {SETTINGS_GROUPS.map((group, groupIndex) => (
+              <SelectGroup key={group.label}>
+                {groupIndex > 0 ? <SelectSeparator /> : null}
+                <SelectLabel className="font-mono uppercase tracking-[0.16em]">
+                  {group.label}
+                </SelectLabel>
+                {group.items.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    <item.icon className="size-4" />
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-        {/* Desktop: sidebar + content */}
-        <div className="flex gap-8 pt-6 lg:pt-2">
-          {/* Sidebar -- desktop only */}
-          <nav className="hidden w-64 shrink-0 lg:block">
-            <div className="sticky top-20 overflow-hidden rounded-2xl border border-white/[0.06] bg-card">
-              <div className="border-b border-white/[0.04] bg-white/[0.015] px-4 py-3">
-                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-                  Settings
-                </span>
-              </div>
-              <div className="space-y-0.5 p-2">
-                {sidebarItems.map((item, index) => {
-                  const isActive = activeSection === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => handleSectionChange(item.id)}
-                      className={cn(
-                        "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-all",
-                        isActive
-                          ? "bg-primary/[0.07] text-white"
-                          : "text-white/40 hover:bg-white/[0.03] hover:text-white/65",
-                      )}
-                    >
-                      {/* active accent bar */}
-                      <span
+      <div className="grid items-start gap-10 lg:grid-cols-[224px_minmax(0,1fr)] xl:gap-14">
+        <aside className="sticky top-20 hidden border-r border-line pr-6 lg:block">
+          <nav aria-label="Settings navigation" className="space-y-7">
+            {SETTINGS_GROUPS.map((group) => (
+              <div key={group.label}>
+                <p className="mb-2 px-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+                  {group.label}
+                </p>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const isActive = activeSection === item.id;
+                    return (
+                      <Link
+                        key={item.id}
+                        href={`/dashboard/settings/${item.id}` as Route}
+                        aria-current={isActive ? "page" : undefined}
                         className={cn(
-                          "absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary transition-all",
-                          isActive ? "opacity-100" : "opacity-0",
-                        )}
-                      />
-                      <span
-                        className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
-                          isActive
-                            ? "bg-primary/15"
-                            : "bg-white/[0.04] group-hover:bg-white/[0.06]",
+                          "group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
+                          isActive ? "bg-fill-2 text-fg" : "text-fg-3 hover:bg-fill hover:text-fg",
                         )}
                       >
-                        <item.icon
+                        <span
                           className={cn(
-                            "h-4 w-4 transition-colors",
-                            isActive ? "text-primary" : "text-white/35 group-hover:text-white/55",
+                            "absolute inset-y-2 -left-[25px] w-px bg-primary transition-opacity",
+                            isActive ? "opacity-100" : "opacity-0",
                           )}
                         />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <span className="block font-medium">{item.label}</span>
-                        <p
+                        <item.icon
                           className={cn(
-                            "truncate text-xs",
-                            isActive ? "text-white/40" : "text-white/20",
+                            "size-4 shrink-0 transition-colors",
+                            isActive ? "text-primary" : "text-fg-4 group-hover:text-fg-2",
                           )}
-                        >
-                          {item.description}
-                        </p>
-                      </div>
-                      <span
-                        className={cn(
-                          "font-mono text-[10px] tabular-nums transition-colors",
-                          isActive ? "text-primary/60" : "text-white/15",
-                        )}
-                      >
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                    </button>
-                  );
-                })}
+                        />
+                        <span className="truncate text-[13px] font-medium">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ))}
           </nav>
+        </aside>
 
-          {/* Content */}
-          <div className="min-w-0 flex-1">
-            <div className="space-y-6">
-              {activeSection === "usage" && <UsageSection />}
-              {activeSection === "workspace" && <WorkspaceSection />}
-              {activeSection === "teams" && <TeamsSection />}
-              {activeSection === "account" && <AccountSection currentPlan={currentPlan} />}
-              {activeSection === "api" && <ApiSection />}
-              {activeSection === "privacy" && <PrivacySection />}
-            </div>
-          </div>
-        </div>
+        <main className="min-w-0 max-w-4xl">{children}</main>
       </div>
     </DashboardShell>
   );

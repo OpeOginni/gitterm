@@ -268,10 +268,10 @@ export default function ProvidersPage() {
                     <span className="font-mono text-foreground">cloudflare</span>.
                   </p>
                 </div>
-                <div className="flex items-center justify-between rounded-xl border border-border bg-white/[0.02] px-3 py-2">
+                <div className="flex items-center justify-between rounded-xl border border-border bg-fill px-3 py-2">
                   <div>
                     <Label htmlFor="supports-regions">Supports Regions</Label>
-                    <p className="text-xs text-white/40">
+                    <p className="text-xs text-fg-4">
                       Disable for providers that do not expose region selection.
                     </p>
                   </div>
@@ -378,7 +378,7 @@ export default function ProvidersPage() {
                       </p>
                     </div>
                     <div className="hidden items-center gap-2 text-xs text-muted-foreground transition-colors group-hover:text-foreground/70 sm:flex">
-                      <KeyRound className="h-3.5 w-3.5" />
+                      <KeyRound className="h-3.5 w-3.5 text-muted-foreground group-hover:text-fg-2" />
                       <span className="font-mono uppercase tracking-[0.18em]">Settings</span>
                     </div>
                   </div>

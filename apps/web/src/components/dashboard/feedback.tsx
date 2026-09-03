@@ -61,7 +61,7 @@ export function FeedbackForm() {
         <DialogContent>
           <div className="flex flex-col gap-4">
             <h1 className="text-xl font-bold text-white">Thank you!</h1>
-            <p className="text-sm text-white/40">
+            <p className="text-sm text-fg-4">
               We appreciate your feedback and will use it to improve GitTerm.
             </p>
           </div>
@@ -82,7 +82,7 @@ export function FeedbackForm() {
           <form className="space-y-4" onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle className="text-white">Feedback</DialogTitle>
-              <DialogDescription className="text-white/40">
+              <DialogDescription className="text-fg-4">
                 Share your thoughts and suggestions with us.
               </DialogDescription>
             </DialogHeader>

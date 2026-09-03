@@ -154,6 +154,10 @@ export const anonRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const requestStartedAt = Date.now();
+      const logPhase = (phase: string) =>
+        logger.info(`[anon-try] ${phase} totalMs=${Date.now() - requestStartedAt}`);
+
       if (!isAnonTryReady()) {
         throw new TRPCError({
           code: "SERVICE_UNAVAILABLE",
@@ -186,13 +190,15 @@ export const anonRouter = router({
       if (!slot.ok) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
-          message: "You've used your trial workspace. Sign in for unlimited workspaces.",
+          message: "Your trial workspace has already been used.",
         });
       }
 
       try {
-        // ── 2. Validate repo is public + exists ─────────────────────────
-        try {
+        // Resolve independent GitHub and database prerequisites concurrently.
+        // These used to add several sequential network round trips before E2B
+        // provisioning could begin.
+        const validateRepository = async () => {
           const validation = await checkPublicGitHubRepository(repoUrl, input.branch);
           if (!validation.valid) {
             throw new TRPCError({
@@ -219,23 +225,39 @@ export const anonRouter = router({
               message: `Branch "${input.branch}" not found in this repository.`,
             });
           }
-        } catch (err) {
-          if (err instanceof TRPCError) throw err;
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Could not validate the repository. Make sure it's a public GitHub repo.",
-          });
-        }
+        };
 
-        // ── 3. Resolve the synthetic anon user ──────────────────────────
-        const anonUser = await getOrCreateAnonUser(ipHash);
+        const [anonUser, [providerRecord], [agentAndImage], subdomain] = await Promise.all([
+          getOrCreateAnonUser(ipHash),
+          db
+            .select()
+            .from(cloudProvider)
+            .where(and(eq(cloudProvider.providerKey, "e2b"), eq(cloudProvider.isEnabled, true)))
+            .limit(1),
+          db
+            .select({ agent: agentType, image })
+            .from(agentType)
+            .innerJoin(image, eq(image.agentTypeId, agentType.id))
+            .where(
+              and(
+                eq(agentType.name, variant.agentTypeName),
+                eq(agentType.isEnabled, true),
+                eq(image.name, variant.imageName),
+                eq(image.isEnabled, true),
+              ),
+            )
+            .limit(1),
+          generateUniqueSubdomain(),
+          validateRepository().catch((err) => {
+            if (err instanceof TRPCError) throw err;
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Could not validate the repository. Make sure it's a public GitHub repo.",
+            });
+          }),
+        ]);
+        logPhase("prerequisites-ready");
 
-        // ── 4. Resolve E2B provider + chosen agent + image ──────────────
-        const [providerRecord] = await db
-          .select()
-          .from(cloudProvider)
-          .where(and(eq(cloudProvider.providerKey, "e2b"), eq(cloudProvider.isEnabled, true)))
-          .limit(1);
         if (!providerRecord) {
           throw new TRPCError({
             code: "SERVICE_UNAVAILABLE",
@@ -243,11 +265,8 @@ export const anonRouter = router({
           });
         }
 
-        const [agentRecord] = await db
-          .select()
-          .from(agentType)
-          .where(and(eq(agentType.name, variant.agentTypeName), eq(agentType.isEnabled, true)))
-          .limit(1);
+        const agentRecord = agentAndImage?.agent;
+        const imageRecord = agentAndImage?.image;
         if (!agentRecord) {
           throw new TRPCError({
             code: "SERVICE_UNAVAILABLE",
@@ -262,17 +281,6 @@ export const anonRouter = router({
           });
         }
 
-        const [imageRecord] = await db
-          .select()
-          .from(image)
-          .where(
-            and(
-              eq(image.agentTypeId, agentRecord.id),
-              eq(image.name, variant.imageName),
-              eq(image.isEnabled, true),
-            ),
-          )
-          .limit(1);
         if (!imageRecord) {
           throw new TRPCError({
             code: "SERVICE_UNAVAILABLE",
@@ -282,7 +290,6 @@ export const anonRouter = router({
 
         // ── 5. Generate workspace identity ───────────────────────────────
         const workspaceId = randomUUID();
-        const subdomain = await generateUniqueSubdomain();
         const domain = getWorkspaceDomain(subdomain);
 
         const workspaceAuthToken = workspaceJWT.generateToken(
@@ -366,9 +373,11 @@ export const anonRouter = router({
           subdomain,
           repositoryUrl: repoUrl,
           repositoryBranch: input.branch,
+          repositoryCloneDepth: 1,
           regionIdentifier: undefined,
           environmentVariables: envVars,
         });
+        logPhase("provider-ready");
 
         // ── 8. Persist workspace row ─────────────────────────────────────
         const startedAt = new Date(workspaceInfo.serviceCreatedAt);
@@ -408,11 +417,15 @@ export const anonRouter = router({
             message: "Failed to record workspace.",
           });
         }
+        logPhase("workspace-persisted");
 
-        if (workspaceInfo.upstreamAccess?.headers) {
-          await upsertWorkspaceRouteAccess(workspaceId, null, workspaceInfo.upstreamAccess.headers);
-        }
-        await invalidateWorkspaceCacheAfterMutation(workspaceId, subdomain);
+        await Promise.all([
+          workspaceInfo.upstreamAccess?.headers
+            ? upsertWorkspaceRouteAccess(workspaceId, null, workspaceInfo.upstreamAccess.headers)
+            : Promise.resolve(),
+          invalidateWorkspaceCacheAfterMutation(workspaceId, subdomain),
+        ]);
+        logPhase("routing-ready");
 
         // ── 9. Mint and set anon access cookie ───────────────────────────
         const signed = signAnonAccessToken({ subdomain, workspaceId });
