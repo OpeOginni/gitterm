@@ -468,12 +468,12 @@ the changelog in the checked-out repository, then terminate the workspace. Use a
 
 A workspace has one of four statuses:
 
-| Status | Meaning |
-| --- | --- |
-| `pending` | Compute is being provisioned or resumed. `runtime.url` is `null`. |
-| `running` | The provider reports the sandbox or container up. The agent process may still be booting. |
-| `paused` | Stopped but resumable. |
-| `terminated` | Gone for good. |
+| Status       | Meaning                                                                                   |
+| ------------ | ----------------------------------------------------------------------------------------- |
+| `pending`    | Compute is being provisioned or resumed. `runtime.url` is `null`.                         |
+| `running`    | The provider reports the sandbox or container up. The agent process may still be booting. |
+| `paused`     | Stopped but resumable.                                                                    |
+| `terminated` | Gone for good.                                                                            |
 
 Whether `create()` returns `running` or `pending` depends on the provider. Sandbox providers
 (E2B, Daytona, Vercel, Ascii, exe.dev, Cloudflare) settle immediately and return `running`.
@@ -614,11 +614,12 @@ for valid provider names; OAuth providers (e.g. GitHub Copilot) can only be conn
 the dashboard.
 
 const run = await client.runs.create({
-  workspaceId: workspace.workspaceId,
-  model: "anthropic/claude-sonnet-4-20250514",
-  prompt: "Record before/after videos of the changes in PR #42",
+workspaceId: workspace.workspaceId,
+model: "anthropic/claude-sonnet-4-20250514",
+prompt: "Record before/after videos of the changes in PR #42",
 });
-```
+
+````
 
 Rules and errors:
 
@@ -653,7 +654,7 @@ try {
     // "Not logged in. Run: gitterm login"
   }
 }
-```
+````
 
 Workspace lifecycle failures are also exposed as `WorkspaceLifecycleError`, with stable
 `WORKSPACE_NOT_RUNNING`, `WORKSPACE_TERMINATED`, `WORKSPACE_NON_RECOVERABLE`,
