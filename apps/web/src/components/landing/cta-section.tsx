@@ -5,7 +5,7 @@ import type { Route } from "next";
 
 export function CTASection() {
   return (
-    <section className="border-t border-white/[0.06] py-14 sm:py-20 md:py-28">
+    <section className="border-t border-line py-14 sm:py-20 md:py-28">
       <div className="relative mx-auto max-w-[720px] px-4 text-center sm:px-6">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -top-24 left-1/2 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(200,164,78,0.06),transparent)]" />
@@ -16,7 +16,7 @@ export function CTASection() {
             Your agents.{" "}
             <span className="font-display-accent text-[color:var(--cream)]">Your cloud.</span>
           </h2>
-          <p className="mx-auto mb-9 max-w-md text-base leading-[1.65] text-white/50">
+          <p className="mx-auto mb-9 max-w-md text-base leading-[1.65] text-fg-3">
             Hosted or self-hosted. No lock-in.
           </p>
 
@@ -30,7 +30,7 @@ export function CTASection() {
             <Link href="https://github.com/OpeOginni/gitterm" target="_blank">
               <Button
                 variant="outline"
-                className="h-11 border-white/[0.1] bg-transparent px-6 font-mono text-[12px] uppercase tracking-[0.18em] text-white/60 hover:border-primary hover:text-white/90"
+                className="h-11 border-line bg-transparent px-6 font-mono text-[12px] uppercase tracking-[0.18em] text-fg-2 hover:border-primary hover:text-fg"
               >
                 <Star className="mr-2 h-3.5 w-3.5 text-primary" />
                 Star on GitHub
@@ -39,7 +39,7 @@ export function CTASection() {
           </div>
 
           <div className="mt-10">
-            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-white/30">
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-fg-4">
               Or run it on your own infra
             </p>
             <div className="flex flex-col items-center gap-2">
@@ -56,7 +56,7 @@ export function CTASection() {
               </Link>
               <Link
                 href={"/self-host" as Route}
-                className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/35 underline decoration-white/15 underline-offset-4 transition-colors hover:text-white/70"
+                className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4 underline decoration-line-2 underline-offset-4 transition-colors hover:text-fg-2"
               >
                 Self-hosting guide
               </Link>

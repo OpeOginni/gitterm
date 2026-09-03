@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type React from "react";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
@@ -10,11 +11,26 @@ import { authClient } from "@/lib/auth-client";
 
 function GitHubConnectionSkeleton() {
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
-      <Skeleton className="mb-2 h-5 w-40 bg-white/[0.04]" />
-      <Skeleton className="h-4 w-72 bg-white/[0.04]" />
-      <div className="mt-6 flex items-center justify-center py-4">
-        <Skeleton className="h-6 w-6 bg-white/[0.04]" />
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <Skeleton className="size-7 rounded-full bg-fill-2" />
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-20 bg-fill-2" />
+          <Skeleton className="h-3 w-56 bg-fill" />
+        </div>
+      </div>
+      <div className="rounded-xl border border-line bg-settings p-5">
+        <div className="flex items-center gap-3.5">
+          <Skeleton className="size-11 rounded-full bg-fill-2" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32 bg-fill-2" />
+            <Skeleton className="h-3 w-24 bg-fill" />
+          </div>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-8">
+          <Skeleton className="h-10 bg-fill" />
+          <Skeleton className="h-10 bg-fill" />
+        </div>
       </div>
     </div>
   );
@@ -36,6 +52,17 @@ function BitbucketIcon({ className }: { className?: string }) {
   );
 }
 
+function SectionEyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
+        {children}
+      </span>
+      <span className="h-px flex-1 bg-line" />
+    </div>
+  );
+}
+
 function ComingSoonCards() {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -53,19 +80,16 @@ function ComingSoonCards() {
           features: ["Private repository access", "Jira integration support"],
         },
       ].map((item) => (
-        <div
-          key={item.name}
-          className="rounded-2xl border border-dashed border-white/[0.06] bg-white/[0.01] p-6"
-        >
+        <div key={item.name} className="rounded-2xl border border-dashed border-line bg-fill p-6">
           <div className="mb-3 flex items-center gap-2">
-            <item.icon className="h-4 w-4 text-white/30" />
-            <span className="text-sm font-medium text-white/50">{item.name}</span>
-            <span className="ml-auto rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/30">
+            <item.icon className="h-4 w-4 text-fg-4" />
+            <span className="text-sm font-medium text-fg-3">{item.name}</span>
+            <span className="ml-auto rounded-full border border-line px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-fg-4">
               Soon
             </span>
           </div>
-          <p className="mb-4 text-sm text-white/30">{item.description}</p>
-          <div className="space-y-2 text-sm text-white/25">
+          <p className="mb-4 text-sm text-fg-4">{item.description}</p>
+          <div className="space-y-2 text-sm text-fg-4">
             {item.features.map((feat) => (
               <div key={feat} className="flex items-center gap-2">
                 {feat.includes("CI/CD") || feat.includes("Jira") ? (
@@ -101,27 +125,22 @@ export default async function IntegrationsPage() {
     <DashboardShell>
       <DashboardHeader
         heading="Integrations"
-        text="Connect external services to enhance your workspaces."
+        text="Connect the services your workspaces pull code from."
       />
-      <div className="mx-auto max-w-4xl space-y-6 pt-2">
+      <div className="mx-auto max-w-4xl space-y-10 pt-2">
         <Suspense fallback={null}>
           <IntegrationCallbackHandler />
         </Suspense>
 
         <section className="space-y-4">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-medium text-white/90">Available</h2>
-            <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] text-primary">
-              1
-            </span>
-          </div>
+          <SectionEyebrow>Git providers</SectionEyebrow>
           <Suspense fallback={<GitHubConnectionSkeleton />}>
             <GitHubConnection />
           </Suspense>
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-lg font-medium text-white/90">Coming Soon</h2>
+          <SectionEyebrow>Coming soon</SectionEyebrow>
           <ComingSoonCards />
         </section>
       </div>

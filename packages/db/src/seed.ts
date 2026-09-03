@@ -91,6 +91,7 @@ const seedCloudProviders: Array<{
     providerKey: "e2b",
     isEnabled: false,
     isSandbox: true,
+    preferredDefault: true,
     autoPersistent: true,
     supportsRegions: false,
     machineSelectionPolicy: { mode: "profiles" },

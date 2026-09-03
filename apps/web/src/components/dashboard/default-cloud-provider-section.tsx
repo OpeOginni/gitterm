@@ -1,17 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Check, Cloud, Loader2, MapPin, Sparkles } from "lucide-react";
+import { ArrowUpRight, Check, CircleHelp, Cloud, Loader2, MapPin, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { queryClient, trpc } from "@/utils/trpc";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
 import { getIcon } from "@/components/dashboard/create-instance/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface CloudProviderOption {
   id: string;
@@ -50,12 +50,8 @@ export function DefaultCloudProviderSection() {
         toast.error(error.message);
       },
       onSuccess: (result) => {
-        if (result.cloudProviderId) {
-          const provider = providers.find((p) => p.id === result.cloudProviderId);
-          toast.success(`Default provider set to ${provider?.name ?? "selection"}`);
-        } else {
-          toast.success("Default provider cleared");
-        }
+        const provider = providers.find((p) => p.id === result.cloudProviderId);
+        toast.success(`Default provider set to ${provider?.name ?? "selection"}`);
       },
       onSettled: () => {
         queryClient.invalidateQueries({
@@ -72,11 +68,7 @@ export function DefaultCloudProviderSection() {
 
   const hasProviders = providers.length > 0;
 
-  // The unset state still resolves to *something* in the create dialogs (first
-  // available). Surface that so the choice is never a mystery.
-  const fallbackName = useMemo(() => providers[0]?.name ?? null, [providers]);
-
-  const handleSelect = (id: string | null) => {
+  const handleSelect = (id: string) => {
     if (id === selectedId) return;
     setDefaultMutation.mutate({ cloudProviderId: id });
   };
@@ -89,13 +81,13 @@ export function DefaultCloudProviderSection() {
     >
       <SettingsSectionBody className="space-y-4">
         {isBusy ? (
-          <div className="flex items-center gap-2 py-8 text-sm text-white/40">
+          <div className="flex items-center gap-2 py-8 text-sm text-fg-4">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading providers...
           </div>
         ) : !hasProviders ? (
-          <div className="flex flex-col items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.015] px-4 py-6">
-            <p className="text-sm text-white/55">No cloud providers are enabled yet.</p>
+          <div className="flex flex-col items-start gap-3 rounded-xl border border-line bg-fill px-4 py-6">
+            <p className="text-sm text-fg-3">No cloud providers are enabled yet.</p>
             {session?.user.role === "admin" && (
               <Link
                 href={"/admin/providers" as Route}
@@ -123,13 +115,13 @@ export function DefaultCloudProviderSection() {
                       "group relative flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-all",
                       isSelected
                         ? "border-primary/50 bg-primary/[0.07] shadow-[0_0_0_1px_rgba(200,164,78,0.25)]"
-                        : "border-white/[0.07] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.04]",
+                        : "border-line bg-fill hover:border-line-2 hover:bg-fill",
                     )}
                   >
                     <span
                       className={cn(
                         "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
-                        isSelected ? "bg-primary/15" : "bg-white/[0.05]",
+                        isSelected ? "bg-primary/15" : "bg-fill",
                       )}
                     >
                       <Image
@@ -141,8 +133,8 @@ export function DefaultCloudProviderSection() {
                       />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-white/90">{provider.name}</p>
-                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-white/35">
+                      <p className="truncate text-sm font-medium text-fg">{provider.name}</p>
+                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-fg-4">
                         {regionCount > 0 && (
                           <span className="inline-flex items-center gap-1">
                             <MapPin className="h-3 w-3" />
@@ -150,10 +142,24 @@ export function DefaultCloudProviderSection() {
                           </span>
                         )}
                         {provider.autoPersistent && (
-                          <span className="inline-flex items-center gap-1">
-                            <Sparkles className="h-3 w-3" />
-                            Persistent
-                          </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="inline-flex cursor-help items-center gap-1"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <Sparkles className="h-3 w-3" />
+                                Auto-persistent
+                                <CircleHelp className="h-3 w-3" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="right"
+                              className="max-w-none whitespace-nowrap bg-settings-dialog px-2.5 py-1.5 text-[11px] text-fg-2"
+                            >
+                              Data persists through pauses. No volume setup.
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
                     </div>
@@ -163,32 +169,12 @@ export function DefaultCloudProviderSection() {
                       ) : isSelected ? (
                         <Check className="h-4 w-4 text-primary" />
                       ) : (
-                        <span className="h-3.5 w-3.5 rounded-full border border-white/15 transition-colors group-hover:border-white/30" />
+                        <span className="h-3.5 w-3.5 rounded-full border border-line-2 transition-colors group-hover:border-line-2" />
                       )}
                     </span>
                   </button>
                 );
               })}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.04] pt-3">
-              <p className="text-[11px] text-white/30">
-                {selectedId
-                  ? "Used as the starting selection. You can still change it per instance."
-                  : fallbackName
-                    ? `No default set — new instances start on ${fallbackName}.`
-                    : "No default set."}
-              </p>
-              {selectedId && (
-                <button
-                  type="button"
-                  onClick={() => handleSelect(null)}
-                  disabled={setDefaultMutation.isPending}
-                  className="text-[11px] font-medium text-white/45 transition-colors hover:text-white/70 disabled:opacity-50"
-                >
-                  Clear default
-                </button>
-              )}
             </div>
           </>
         )}

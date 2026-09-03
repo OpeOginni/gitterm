@@ -55,52 +55,50 @@ export function CookieConsentBanner() {
       aria-label="Cookie consent"
       className={cn(
         "fixed inset-x-3 bottom-3 z-[60] mx-auto max-w-[680px]",
-        "rounded-xl border border-white/[0.08] bg-background/95 p-4 shadow-2xl backdrop-blur-xl sm:p-5",
+        "rounded-xl border border-line bg-background/95 p-4 shadow-2xl backdrop-blur-xl sm:p-5",
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.03]">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line bg-fill">
           <Cookie className="h-4 w-4 text-primary" />
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
-              Privacy
-            </p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">Privacy</p>
             <button
               type="button"
               aria-label="Dismiss"
               onClick={handleRejectAll}
-              className="rounded-md p-1 text-white/30 transition-colors hover:bg-white/[0.04] hover:text-white/70"
+              className="rounded-md p-1 text-fg-4 transition-colors hover:bg-fill hover:text-fg-2"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <p className="mt-1.5 text-sm text-white/75">
+          <p className="mt-1.5 text-sm text-fg-2">
             We use cookies to keep you signed in and, with your permission, anonymous product
             analytics to improve GitTerm. We don't sell your data or run ads.
           </p>
 
           {showDetails ? (
-            <div className="mt-4 space-y-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <div className="mt-4 space-y-3 rounded-lg border border-line bg-fill p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-white/85">Necessary</p>
-                  <p className="text-xs text-white/45">
+                  <p className="text-sm font-medium text-fg">Necessary</p>
+                  <p className="text-xs text-fg-3">
                     Sign-in session, workspace access, and UI preferences. Required.
                   </p>
                 </div>
-                <span className="shrink-0 rounded-md border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/50">
+                <span className="shrink-0 rounded-md border border-line bg-fill px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-fg-3">
                   Always on
                 </span>
               </div>
 
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-white/85">Analytics</p>
-                  <p className="text-xs text-white/45">
+                  <p className="text-sm font-medium text-fg">Analytics</p>
+                  <p className="text-xs text-fg-3">
                     Anonymous, aggregate usage data so we know which features matter.
                   </p>
                 </div>
@@ -125,7 +123,7 @@ export function CookieConsentBanner() {
               size="sm"
               variant="outline"
               onClick={handleRejectAll}
-              className="h-8 border-white/[0.08] bg-transparent px-3.5 font-mono text-xs uppercase tracking-wider text-white/70 hover:border-white/20 hover:text-white"
+              className="h-8 border-line bg-transparent px-3.5 font-mono text-xs uppercase tracking-wider text-fg-2 hover:border-line-2 hover:text-fg"
             >
               Reject optional
             </Button>
@@ -134,7 +132,7 @@ export function CookieConsentBanner() {
                 size="sm"
                 variant="ghost"
                 onClick={handleSavePrefs}
-                className="h-8 px-3.5 font-mono text-xs uppercase tracking-wider text-white/60 hover:text-white"
+                className="h-8 px-3.5 font-mono text-xs uppercase tracking-wider text-fg-2 hover:text-fg"
               >
                 Save preferences
               </Button>
@@ -142,14 +140,14 @@ export function CookieConsentBanner() {
               <button
                 type="button"
                 onClick={() => setShowDetails(true)}
-                className="ml-1 font-mono text-[11px] uppercase tracking-wider text-white/45 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
+                className="ml-1 font-mono text-[11px] uppercase tracking-wider text-fg-3 underline-offset-2 transition-colors hover:text-fg-2 hover:underline"
               >
                 Customize
               </button>
             )}
             <Link
               href={"/privacy" as Route}
-              className="ml-auto font-mono text-[11px] uppercase tracking-wider text-white/40 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
+              className="ml-auto font-mono text-[11px] uppercase tracking-wider text-fg-4 underline-offset-2 transition-colors hover:text-fg-2 hover:underline"
             >
               Privacy policy
             </Link>

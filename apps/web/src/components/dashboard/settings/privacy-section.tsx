@@ -34,7 +34,7 @@ export function PrivacySection() {
         <SettingsSectionBody>
           {!ANALYTICS_ENABLED ? (
             <SettingsRowList>
-              <SettingsRow className="text-sm text-white/55">
+              <SettingsRow className="text-sm text-fg-3">
                 Analytics is not configured on this deployment. Nothing is being collected.
               </SettingsRow>
             </SettingsRowList>
@@ -42,8 +42,8 @@ export function PrivacySection() {
             <SettingsRowList>
               <SettingsRow className="sm:items-start">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-white/90">Share anonymous usage data</p>
-                  <p className="mt-1 text-[13px] leading-relaxed text-white/50">
+                  <p className="text-sm font-medium text-fg">Share anonymous usage data</p>
+                  <p className="mt-1 text-[13px] leading-relaxed text-fg-3">
                     Page views and feature events. No content from your workspaces, no selling of
                     data, no advertising.
                   </p>
@@ -62,14 +62,14 @@ export function PrivacySection() {
             <Link
               href={"/privacy" as Route}
               target="_blank"
-              className="inline-flex items-center gap-1.5 font-mono uppercase tracking-wider text-white/45 transition-colors hover:text-white/80"
+              className="inline-flex items-center gap-1.5 font-mono uppercase tracking-wider text-fg-3 transition-colors hover:text-fg"
             >
               Privacy policy <ExternalLink className="h-3 w-3" />
             </Link>
             <Link
               href={"/terms" as Route}
               target="_blank"
-              className="inline-flex items-center gap-1.5 font-mono uppercase tracking-wider text-white/45 transition-colors hover:text-white/80"
+              className="inline-flex items-center gap-1.5 font-mono uppercase tracking-wider text-fg-3 transition-colors hover:text-fg"
             >
               Terms of service <ExternalLink className="h-3 w-3" />
             </Link>

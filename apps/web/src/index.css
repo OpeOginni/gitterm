@@ -10,6 +10,55 @@ body {
   overflow-x: clip;
 }
 
+/* ── Text, line & fill scale ─────────────────────────────────────────────
+ * THE central contrast system. Every piece of UI text picks one of four
+ * steps; every hairline picks one of two; every subtle fill picks one of two.
+ * Use the Tailwind utilities, never raw `white/NN` opacities:
+ *
+ *   text-fg     primary copy, headings, values            (95%)
+ *   text-fg-2   secondary copy, nav, labels you must read (80%)
+ *   text-fg-3   supporting copy, descriptions             (66%)
+ *   text-fg-4   eyebrows, hints, disabled, mono markers   (55%)  ← readable floor
+ *
+ * The floor is ~6:1 against the page. Small letter-spaced caps need it.
+ *
+ *   border-line   default hairline        border-line-2   emphasised / hover
+ *   bg-fill       subtle inset surface    bg-fill-2       raised chip / hover
+ *
+ * Both themes define the same names so components never branch on theme.
+ */
+:root {
+  --fg: oklch(0.12 0 0);
+  --fg-2: oklch(0.3 0 0);
+  --fg-3: oklch(0.45 0 0);
+  --fg-4: oklch(0.56 0 0);
+  --line: rgba(0 0 0 / 0.1);
+  --line-2: rgba(0 0 0 / 0.18);
+  --fill: rgba(0 0 0 / 0.035);
+  --fill-2: rgba(0 0 0 / 0.06);
+  --settings-surface: #f1f1f3;
+  --settings-dialog: #ffffff;
+}
+
+.dark {
+  /* Keep foreground tokens opaque. Lucide icons are composed from separate,
+   * overlapping SVG strokes; putting alpha in currentColor makes intersections
+   * composite twice and look artificially bold. These values are the opaque
+   * equivalents of the former white alpha scale over --background. Dim an
+   * individual icon with element opacity (e.g. `text-primary opacity-70`), not
+   * a translucent text color (e.g. `text-primary/70`). */
+  --fg: #f3f3f3;
+  --fg-2: #cfcfd0;
+  --fg-3: #aeaeb0;
+  --fg-4: #939395;
+  --line: rgba(255 255 255 / 0.11);
+  --line-2: rgba(255 255 255 / 0.2);
+  --fill: rgba(255 255 255 / 0.045);
+  --fill-2: rgba(255 255 255 / 0.08);
+  --settings-surface: #202028;
+  --settings-dialog: #292933;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.08 0 0);
@@ -74,41 +123,44 @@ body {
    *   bg-card        → elevated cards / terminal previews
    *   bg-popover     → dropdowns, header backdrops
    *   bg-surface-2   → modals, select content, sheets (highest)
+   *
+   * Lifted from near-black in Sept 2026: the old #09090b page made every
+   * low-opacity label unreadable. Keep the page dark, but not void-dark.
    */
-  --background: #09090b;
-  --foreground: rgba(255 255 255 / 0.9);
-  --card: #0c0c10;
-  --card-foreground: rgba(255 255 255 / 0.85);
-  --popover: #0e0e11;
-  --popover-foreground: rgba(255 255 255 / 0.85);
-  --surface-2: #151518;
-  --surface-2-foreground: rgba(255 255 255 / 0.9);
-  --primary: #c8a44e;
-  --primary-foreground: #09090b;
-  --secondary: rgba(255 255 255 / 0.06);
-  --secondary-foreground: rgba(255 255 255 / 0.8);
-  --muted: rgba(255 255 255 / 0.04);
-  --muted-foreground: rgba(255 255 255 / 0.4);
-  --accent: rgba(255 255 255 / 0.06);
-  --accent-foreground: rgba(255 255 255 / 0.7);
+  --background: #101014;
+  --foreground: var(--fg);
+  --card: #16161b;
+  --card-foreground: var(--fg);
+  --popover: #191920;
+  --popover-foreground: var(--fg);
+  --surface-2: #1f1f26;
+  --surface-2-foreground: var(--fg);
+  --primary: #d3ad55;
+  --primary-foreground: #101014;
+  --secondary: var(--fill-2);
+  --secondary-foreground: var(--fg-2);
+  --muted: var(--fill);
+  --muted-foreground: var(--fg-3);
+  --accent: var(--fill-2);
+  --accent-foreground: var(--fg-2);
   --destructive: #ef4444;
   --destructive-foreground: #fff;
-  --border: rgba(255 255 255 / 0.08);
-  --input: rgba(255 255 255 / 0.06);
-  --ring: #c8a44e;
+  --border: var(--line);
+  --input: var(--fill-2);
+  --ring: #d3ad55;
   --chart-1: oklch(0.7 0 0);
   --chart-2: oklch(0.5 0 0);
   --chart-3: oklch(0.3 0 0);
   --chart-4: oklch(0.85 0 0);
   --chart-5: oklch(0.15 0 0);
-  --sidebar: oklch(0.1 0 0);
-  --sidebar-foreground: oklch(0.92 0 0);
-  --sidebar-primary: oklch(0.92 0 0);
-  --sidebar-primary-foreground: oklch(0.05 0 0);
-  --sidebar-accent: oklch(0.22 0 0);
-  --sidebar-accent-foreground: oklch(0.7 0 0);
-  --sidebar-border: oklch(0.22 0 0);
-  --sidebar-ring: oklch(0.92 0 0);
+  --sidebar: #131317;
+  --sidebar-foreground: var(--fg);
+  --sidebar-primary: var(--fg);
+  --sidebar-primary-foreground: #101014;
+  --sidebar-accent: var(--fill-2);
+  --sidebar-accent-foreground: var(--fg-2);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--fg);
   --font-sans: sans-serif;
   --font-serif: serif;
   --font-mono: monospace;
@@ -165,6 +217,17 @@ body {
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-fill: var(--fill);
+  --color-fill-2: var(--fill-2);
+  --color-settings: var(--settings-surface);
+  --color-settings-dialog: var(--settings-dialog);
+
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
 
@@ -195,8 +258,8 @@ body {
 .landing-grid {
   background-color: var(--background) !important;
   background-image:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.09) 1.2px, transparent 1.5px),
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.035) 1px, transparent 1.3px) !important;
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.11) 1.2px, transparent 1.5px),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.045) 1px, transparent 1.3px) !important;
   background-size:
     140px 140px,
     32px 32px !important;
@@ -212,8 +275,8 @@ body {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255 255 255 / 0.12) 12%,
-    rgba(255 255 255 / 0.12) 88%,
+    var(--line-2) 12%,
+    var(--line-2) 88%,
     transparent 100%
   );
 }
@@ -343,10 +406,49 @@ body {
 }
 
 /* Small mono label above a group (e.g. the hero's "Runs on" logo strip) */
+/* Eyebrow labels sit in the brand gold: ~8:1 on the page, and they stop
+ * competing with the neutral copy around them. */
 .marker {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 10px;
-  letter-spacing: 0.3em;
+  font-size: 11px;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: rgba(255 255 255 / 0.35);
+  color: var(--primary);
+  opacity: 0.9;
+}
+
+/* Blueprint grid frame: crosshair ticks on the four outer corners */
+.blueprint::before,
+.blueprint::after,
+.blueprint > .grid::before,
+.blueprint > .grid::after {
+  /* alt text is empty so screen readers skip the decorative ticks */
+  content: "+" / "";
+  position: absolute;
+  z-index: 1;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--fg-4);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.blueprint::before {
+  top: 0;
+  left: 0;
+}
+.blueprint::after {
+  top: 0;
+  left: 100%;
+}
+.blueprint > .grid {
+  position: relative;
+}
+.blueprint > .grid::before {
+  top: 100%;
+  left: 0;
+}
+.blueprint > .grid::after {
+  top: 100%;
+  left: 100%;
 }

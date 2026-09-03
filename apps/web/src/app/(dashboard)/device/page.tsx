@@ -48,7 +48,7 @@ export default function DevicePage() {
   if (isPending || !session) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-white/30" />
+        <Loader2 className="h-8 w-8 animate-spin text-fg-4" />
       </div>
     );
   }
@@ -63,7 +63,7 @@ export default function DevicePage() {
               <Terminal className="h-7 w-7 text-primary" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Authorize Device</h1>
-            <p className="mt-2 text-sm text-white/40">
+            <p className="mt-2 text-sm text-fg-4">
               Enter the code from your terminal to connect this CLI session.
             </p>
           </div>
@@ -72,7 +72,7 @@ export default function DevicePage() {
           <div className="space-y-2">
             <label
               htmlFor="code"
-              className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30"
+              className="font-mono text-[10px] uppercase tracking-[0.25em] text-fg-4"
             >
               Authorization Code
             </label>
@@ -83,7 +83,7 @@ export default function DevicePage() {
               onChange={(e) => setUserCode(e.target.value)}
               autoCapitalize="characters"
               spellCheck={false}
-              className="h-14 border-white/[0.08] bg-white/[0.02] text-center font-mono text-2xl tracking-[0.3em] text-white placeholder:text-white/20"
+              className="h-14 border-line bg-fill text-center font-mono text-2xl tracking-[0.3em] text-white placeholder:text-fg-4"
               disabled={isSubmitting}
             />
           </div>
@@ -102,7 +102,7 @@ export default function DevicePage() {
               variant="outline"
               onClick={() => submit("deny")}
               disabled={isSubmitting || !normalized}
-              className="flex-1 border-white/[0.08] bg-transparent font-mono text-sm text-white/60 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+              className="flex-1 border-line bg-transparent font-mono text-sm text-fg-2 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
             >
               <XCircle className="mr-2 h-4 w-4" />
               Deny
@@ -110,9 +110,9 @@ export default function DevicePage() {
           </div>
 
           {/* Security notice */}
-          <div className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-white/30" />
-            <p className="text-xs leading-relaxed text-white/35">
+          <div className="flex items-start gap-3 rounded-xl border border-line bg-fill p-4">
+            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-fg-4" />
+            <p className="text-xs leading-relaxed text-fg-4">
               Only approve devices you personally control. This grants access to your GitTerm
               workspaces.
             </p>
@@ -122,11 +122,11 @@ export default function DevicePage() {
 
       {/* Footer */}
       <footer className="py-6 text-center">
-        <p className="text-xs text-white/25">
+        <p className="text-xs text-fg-4">
           Need help?{" "}
           <Link
             href="/"
-            className="text-white/40 underline decoration-white/20 underline-offset-2 hover:text-white/60"
+            className="text-fg-4 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
           >
             Return home
           </Link>

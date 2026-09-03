@@ -16,7 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertCircle,
@@ -76,6 +75,12 @@ function kindAppliesTo(kind: string | null | undefined): string {
     .join(", ");
 }
 
+function invalidateConfigs() {
+  queryClient.invalidateQueries({
+    queryKey: [["user", "listAgentConfigurations"]],
+  });
+}
+
 export function AgentConfigSection() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -116,12 +121,6 @@ export function AgentConfigSection() {
       setJsonError("Invalid JSON format");
     }
   }, [formData.configJson]);
-
-  const invalidateConfigs = () => {
-    queryClient.invalidateQueries({
-      queryKey: [["user", "listAgentConfigurations"]],
-    });
-  };
 
   const { mutate: addConfig, isPending: isAdding } = useMutation(
     trpc.user.addAgentConfiguration.mutationOptions({
@@ -242,13 +241,10 @@ export function AgentConfigSection() {
           Add configuration
         </Button>
       </DialogTrigger>
-      <DialogContent className="grid h-[min(700px,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-border bg-surface-2 p-0 sm:max-w-[760px]">
-        <DialogHeader className="space-y-0 border-b border-white/[0.07] px-6 py-5 sm:px-7">
-          <span className="block font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
-            {isEditing ? "Edit / Configuration" : "New / Configuration"}
-          </span>
-          <div className="mt-3 flex items-center gap-3.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/[0.08]">
+      <DialogContent className="grid max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-line bg-settings-dialog p-0 sm:max-w-[760px]">
+        <DialogHeader className="border-b border-line px-5 py-4 text-left sm:px-7 sm:py-5">
+          <div className="flex items-center gap-3.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fill-2">
               <Image
                 src={selectedMeta.icon}
                 alt={selectedMeta.label}
@@ -258,10 +254,10 @@ export function AgentConfigSection() {
               />
             </span>
             <div className="min-w-0">
-              <DialogTitle className="text-xl font-medium tracking-[-0.025em]">
+              <DialogTitle className="text-lg font-semibold tracking-[-0.02em]">
                 {isEditing ? "Edit configuration" : "New agent configuration"}
               </DialogTitle>
-              <DialogDescription className="mt-0.5">
+              <DialogDescription className="mt-1 text-[13px]">
                 {isEditing
                   ? `Update the ${selectedMeta.label} configuration.`
                   : selectedMeta.description}
@@ -271,11 +267,11 @@ export function AgentConfigSection() {
         </DialogHeader>
 
         <div className="grid min-h-0 overflow-y-auto sm:grid-cols-[220px_minmax(0,1fr)] sm:overflow-hidden">
-          <aside className="border-b border-border bg-white/[0.015] p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
-            <Label className="mb-3 block font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+          <aside className="min-w-0 border-b border-border bg-fill p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
+            <Label className="mb-3 block font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
               Runtime
             </Label>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-1 sm:overflow-visible sm:px-0 sm:pb-0">
               {AGENT_CONFIG_KINDS.map((kind) => {
                 const meta = AGENT_CONFIG_KIND_META[kind];
                 const isSelected = formData.kind === kind;
@@ -291,7 +287,7 @@ export function AgentConfigSection() {
                       }))
                     }
                     disabled={isEditing}
-                    className={`group flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${isSelected ? "border-primary/35 bg-primary/[0.09] text-white shadow-[inset_3px_0_0_hsl(var(--primary))]" : "border-transparent text-white/50 hover:border-white/10 hover:bg-white/[0.035] hover:text-white/80"} disabled:cursor-not-allowed disabled:opacity-50`}
+                    className={`group flex w-[9rem] min-w-0 shrink-0 items-center gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors sm:w-auto ${isSelected ? "bg-fill-2 text-fg" : "text-fg-3 hover:bg-fill hover:text-fg"} disabled:cursor-not-allowed disabled:opacity-50`}
                   >
                     <Image
                       src={meta.icon}
@@ -302,7 +298,7 @@ export function AgentConfigSection() {
                     />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium">{meta.label}</span>
-                      <span className="mt-0.5 hidden truncate text-[10px] text-white/30 sm:block">
+                      <span className="mt-0.5 hidden truncate text-[10px] text-fg-4 sm:block">
                         {kindAppliesTo(kind)}
                       </span>
                     </span>
@@ -312,9 +308,9 @@ export function AgentConfigSection() {
             </div>
           </aside>
 
-          <div className="grid content-start gap-5 p-5 sm:overflow-y-auto sm:p-6">
+          <div className="grid content-start gap-5 p-4 sm:overflow-y-auto sm:p-6">
             <div className="grid gap-2">
-              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
                 Name
               </Label>
               <Input
@@ -325,11 +321,11 @@ export function AgentConfigSection() {
             </div>
 
             {!isEditing && (
-              <div className="flex items-start gap-2.5 border-l border-amber-400/35 pl-3 text-[11px] leading-relaxed text-white/40">
-                <Terminal className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400/70" />
+              <div className="flex items-start gap-2.5 border-l border-amber-400/35 pl-3 text-[11px] leading-relaxed text-fg-4">
+                <Terminal className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400 opacity-70" />
                 <span>
                   Validate locally at{" "}
-                  <code className="font-mono text-white/70">{selectedMeta.testHint}</code> before
+                  <code className="font-mono text-fg-2">{selectedMeta.testHint}</code> before
                   saving.
                 </span>
               </div>
@@ -337,7 +333,7 @@ export function AgentConfigSection() {
 
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
                   Configuration{" "}
                   {selectedMeta.docsUrl && (
                     <a
@@ -354,7 +350,7 @@ export function AgentConfigSection() {
                   <button
                     type="button"
                     onClick={handleLoadExample}
-                    className="text-xs text-white/40 transition-colors hover:text-white/70"
+                    className="text-xs text-fg-4 transition-colors hover:text-fg-2"
                   >
                     Load example
                   </button>
@@ -397,7 +393,7 @@ export function AgentConfigSection() {
           </div>
         </div>
 
-        <DialogFooter className="border-t border-border bg-white/[0.015] px-6 py-4">
+        <DialogFooter className="border-t border-line px-5 py-4 sm:px-6">
           <Button variant="outline" onClick={() => setDialogOpen(false)}>
             Cancel
           </Button>
@@ -434,15 +430,15 @@ export function AgentConfigSection() {
       >
         <SettingsSectionBody>
           {isLoadingConfigs ? (
-            <div className="space-y-2">
-              <Skeleton className="h-14 w-full bg-white/[0.04]" />
-              <Skeleton className="h-14 w-full bg-white/[0.04]" />
+            <div className="divide-y divide-line border-y border-line">
+              <Skeleton className="h-14 w-full bg-fill" />
+              <Skeleton className="h-14 w-full bg-fill" />
             </div>
           ) : configurations.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl bg-input/40 px-6 py-10 text-center">
-              <Code2 className="mb-3 h-8 w-8 text-white/25" />
-              <p className="text-sm text-white/65">No configurations yet</p>
-              <p className="mt-1 text-[12px] text-white/35">
+              <Code2 className="mb-3 h-8 w-8 text-fg-4" />
+              <p className="text-sm text-fg-2">No configurations yet</p>
+              <p className="mt-1 text-[12px] text-fg-4">
                 Save OpenCode, Claude Code, or Codex configs to reuse across workspaces.
               </p>
             </div>
@@ -451,7 +447,7 @@ export function AgentConfigSection() {
               {configurations.map((config) => (
                 <div
                   key={config.id}
-                  className="flex items-center justify-between gap-3 rounded-lg bg-input/60 px-4 py-3 transition-colors hover:bg-input"
+                  className="flex items-center justify-between gap-3 px-1 py-3.5"
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -463,11 +459,11 @@ export function AgentConfigSection() {
                       />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                         <p className="font-medium">{config.name}</p>
-                        <Badge variant="secondary" className="text-xs">
-                          {kindLabel(config.kind)}
-                        </Badge>
+                        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-fg-4">
+                          · {kindLabel(config.kind)}
+                        </span>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {kindAppliesTo(config.kind)
@@ -503,8 +499,8 @@ export function AgentConfigSection() {
                         Edit
                       </DropdownMenuItem>
                       <DropdownMenuItem
+                        variant="destructive"
                         onClick={() => handleDeleteClick(config.id)}
-                        className="text-red-600 focus:text-red-600"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Delete
@@ -519,7 +515,7 @@ export function AgentConfigSection() {
       </SettingsSection>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="border-line bg-settings-dialog sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Delete Configuration</DialogTitle>
             <DialogDescription>

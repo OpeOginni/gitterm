@@ -196,6 +196,7 @@ export const cloudProviderRelations = relations(cloudProvider, ({ one, many }) =
   machineProfiles: many(machineProfile),
   launchProfiles: many(providerLaunchProfile),
   volumes: many(volume),
+  workspaces: many(workspace),
 }));
 
 export const regionRelations = relations(region, ({ one, many }) => ({

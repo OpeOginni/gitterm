@@ -16,11 +16,11 @@ type InviteType = "workspace" | "team";
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-background landing-grid dark">
-      <header className="border-b border-white/[0.06] bg-background/80 backdrop-blur-xl">
+      <header className="border-b border-line bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
           <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
-            <span className="font-mono text-sm font-bold uppercase tracking-wider text-white/90">
+            <span className="font-mono text-sm font-bold uppercase tracking-wider text-fg">
               GitTerm
             </span>
           </Link>
@@ -35,7 +35,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function InviteCard({ children, eyebrow }: { children: React.ReactNode; eyebrow: string }) {
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-surface-2 p-8 shadow-2xl">
+    <div className="rounded-2xl border border-line bg-surface-2 p-8 shadow-2xl">
       <p className="mb-5 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
         {eyebrow}
       </p>
@@ -80,7 +80,7 @@ function InviteContent() {
     trpc.workspaceShare.acceptTeamInvite.mutationOptions({
       onSuccess: () => {
         toast.success("You joined the team");
-        router.push("/dashboard/settings?section=teams" as Route);
+        router.push("/dashboard/settings/teams" as Route);
       },
       onError: (e) => toast.error(e.message),
     }),
@@ -100,7 +100,7 @@ function InviteContent() {
       <Shell>
         <InviteCard eyebrow="Invitation">
           <h1 className="text-2xl text-white">Invalid link</h1>
-          <p className="mt-2 text-sm text-white/40">
+          <p className="mt-2 text-sm text-fg-4">
             This invitation link is missing required information.
           </p>
         </InviteCard>
@@ -125,7 +125,7 @@ function InviteContent() {
       <Shell>
         <InviteCard eyebrow="Invitation">
           <h1 className="text-2xl text-white">Invitation not found</h1>
-          <p className="mt-2 text-sm text-white/40">
+          <p className="mt-2 text-sm text-fg-4">
             This invitation may have been revoked or already used.
           </p>
         </InviteCard>
@@ -161,7 +161,7 @@ function InviteContent() {
       <Shell>
         <InviteCard eyebrow={isTeam ? "Team invitation" : "Workspace invitation"}>
           <h1 className="text-2xl text-white">Invitation {invite.status}</h1>
-          <p className="mt-2 text-sm text-white/40">
+          <p className="mt-2 text-sm text-fg-4">
             This invitation has already been {invite.status}.
           </p>
           <Button asChild className="mt-6 w-full">
@@ -177,7 +177,7 @@ function InviteContent() {
       <Shell>
         <InviteCard eyebrow={isTeam ? "Team invitation" : "Workspace invitation"}>
           <h1 className="text-2xl text-white">Invitation expired</h1>
-          <p className="mt-2 text-sm text-white/40">Ask the sender to invite you again.</p>
+          <p className="mt-2 text-sm text-fg-4">Ask the sender to invite you again.</p>
         </InviteCard>
       </Shell>
     );
@@ -203,7 +203,7 @@ function InviteContent() {
             <h1 className="truncate text-xl text-white">
               {isTeam ? teamName : (workspaceName ?? "A workspace")}
             </h1>
-            <p className="text-sm text-white/40">
+            <p className="text-sm text-fg-4">
               {isTeam
                 ? "You've been invited to join this team"
                 : "You've been invited to collaborate"}
@@ -212,34 +212,33 @@ function InviteContent() {
         </div>
 
         {inviterEmail ? (
-          <p className="mb-5 text-sm text-white/50">
-            Invited by{" "}
-            <span className="font-medium text-white/85">{inviterName ?? inviterEmail}</span>
+          <p className="mb-5 text-sm text-fg-3">
+            Invited by <span className="font-medium text-fg">{inviterName ?? inviterEmail}</span>
             {inviterName ? (
               <>
                 {" "}
-                <span className="text-white/35">({inviterEmail})</span>
+                <span className="text-fg-4">({inviterEmail})</span>
               </>
             ) : null}
           </p>
         ) : null}
 
         {!isTeam && repositoryUrl ? (
-          <div className="mb-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 font-mono text-xs text-white/50">
+          <div className="mb-5 rounded-xl border border-line bg-fill px-3 py-2.5 font-mono text-xs text-fg-3">
             {repositoryUrl.replace(/^https?:\/\//, "")}
           </div>
         ) : null}
 
-        <p className="mb-6 inline-flex items-center gap-1.5 text-xs text-white/35">
+        <p className="mb-6 inline-flex items-center gap-1.5 text-xs text-fg-4">
           <Clock className="h-3 w-3" />
           Expires {new Date(invite.expiresAt).toLocaleDateString()}
         </p>
 
         {!isLoggedIn ? (
           <div className="space-y-3">
-            <p className="text-sm text-white/50">
-              Sign in as <span className="font-medium text-white/80">{invite.email}</span> to
-              respond to this invitation.
+            <p className="text-sm text-fg-3">
+              Sign in as <span className="font-medium text-fg">{invite.email}</span> to respond to
+              this invitation.
             </p>
             <Button asChild className="w-full">
               <Link href={`/login?redirect=${encodeURIComponent(target)}`}>

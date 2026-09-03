@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Clock, FolderGit2, GitBranch, History, Infinity as InfinityIcon } from "lucide-react";
@@ -16,8 +17,9 @@ import {
 } from "@/components/ui/form-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/utils/trpc";
+import { getIcon } from "@/components/dashboard/create-instance/types";
 
-const TERMINATED_PAGE_SIZE = 8;
+const TERMINATED_PAGE_SIZE = 10;
 const historyTabsListClassName =
   "inline-flex h-auto w-auto items-center gap-5 rounded-none border-b border-border/60 bg-transparent p-0";
 const historyTabsTriggerClassName =
@@ -52,12 +54,12 @@ function UsageQuota() {
     >
       <SettingsSectionBody className="space-y-5">
         {isLoading ? (
-          <Skeleton className="h-16 w-full bg-white/[0.04]" />
+          <Skeleton className="h-16 w-full bg-fill" />
         ) : isUnlimited ? (
           <div className="flex items-center justify-between">
             <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
               {usage.minutesUsed}
-              <span className="text-base font-normal text-white/40"> min</span>
+              <span className="text-base font-normal text-fg-4"> min</span>
             </p>
             <div className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm text-primary">
               <InfinityIcon className="h-4 w-4" />
@@ -69,17 +71,14 @@ function UsageQuota() {
             <div className="flex items-end justify-between gap-4">
               <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
                 {usage.minutesUsed}
-                <span className="text-base font-normal text-white/40">
-                  {" "}
-                  / {usage.dailyLimit} min
-                </span>
+                <span className="text-base font-normal text-fg-4"> / {usage.dailyLimit} min</span>
               </p>
-              <p className="pb-1 font-mono text-[12px] tabular-nums text-white/45">
+              <p className="pb-1 font-mono text-[12px] tabular-nums text-fg-3">
                 {usage.minutesRemaining} min left
               </p>
             </div>
 
-            <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-fill-2">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${barColor}`}
                 style={{ width: `${percent}%` }}
@@ -138,8 +137,8 @@ function WorkspaceHistory() {
       <SettingsSectionBody>
         {isLoadingActive || isLoadingTerminated ? (
           <div className="space-y-2">
-            <Skeleton className="h-16 w-full bg-white/[0.04]" />
-            <Skeleton className="h-16 w-full bg-white/[0.04]" />
+            <Skeleton className="h-16 w-full bg-fill" />
+            <Skeleton className="h-16 w-full bg-fill" />
           </div>
         ) : (
           <Tabs defaultValue="active" className="w-full">
@@ -167,6 +166,7 @@ function WorkspaceHistory() {
               <WorkspaceList
                 workspaces={activeWorkspaces as any[]}
                 emptyMessage="No active workspaces"
+                individualCards
               />
             </TabsContent>
 
@@ -175,6 +175,8 @@ function WorkspaceHistory() {
                 workspaces={terminatedWorkspaces as any[]}
                 emptyMessage="No terminated workspaces"
                 muted={isFetchingTerminated}
+                hideStatus
+                individualCards
               />
 
               {terminatedTotal > TERMINATED_PAGE_SIZE && (
@@ -214,42 +216,82 @@ function WorkspaceList({
   workspaces,
   emptyMessage,
   muted = false,
+  hideStatus = false,
+  individualCards = false,
 }: {
   workspaces: any[];
   emptyMessage: string;
   muted?: boolean;
+  hideStatus?: boolean;
+  individualCards?: boolean;
 }) {
   if (workspaces.length === 0) {
     return <SettingsEmptyState icon={FolderGit2} title={emptyMessage} />;
   }
 
   return (
-    <SettingsRowList className={muted ? "opacity-60 transition-opacity" : undefined}>
+    <SettingsRowList
+      className={`${individualCards ? "divide-y-0 space-y-2" : ""} overflow-visible rounded-none border-0 bg-transparent p-2 ${muted ? "opacity-60 transition-opacity" : ""}`}
+    >
       {workspaces.map((ws) => {
         const repoLabel = ws.repositoryUrl
           ? ws.repositoryUrl.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/i, "")
           : null;
+        const shortRepoLabel = repoLabel
+          ? repoLabel.length > 32
+            ? `${repoLabel.slice(0, 18)}…${repoLabel.slice(-11)}`
+            : repoLabel
+          : null;
 
         return (
-          <SettingsRow key={ws.id}>
+          <SettingsRow
+            key={ws.id}
+            className={
+              individualCards ? "rounded-lg border border-line bg-settings px-3" : undefined
+            }
+          >
             <div className="space-y-1.5 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-medium truncate">{ws.name ?? ws.subdomain}</p>
-                <StatusBadge status={ws.status} />
+                {!hideStatus && <StatusBadge status={ws.status} />}
               </div>
 
-              {(repoLabel || ws.repositoryBranch) && (
+              {(repoLabel || ws.repositoryBranch || ws.cloudProvider?.name) && (
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   {repoLabel && (
-                    <span className="inline-flex items-center gap-1.5 font-mono">
-                      <FolderGit2 className="h-3 w-3" />
-                      {repoLabel}
-                    </span>
+                    <a
+                      href={ws.repositoryUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={repoLabel}
+                      className="inline-flex min-w-0 items-center gap-1.5 font-mono transition-colors hover:text-fg-2"
+                    >
+                      <Image
+                        src="/github.svg"
+                        alt="GitHub"
+                        width={13}
+                        height={13}
+                        className="size-3.5"
+                      />
+                      <span className="truncate">{shortRepoLabel}</span>
+                    </a>
                   )}
                   {ws.repositoryBranch && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-primary">
                       <GitBranch className="h-3 w-3" />
                       <span className="font-mono">{ws.repositoryBranch}</span>
+                    </span>
+                  )}
+                  {ws.cloudProvider?.name && (
+                    <span className="inline-flex items-center gap-1.5 border-l border-line pl-2">
+                      <Image
+                        src={getIcon(ws.cloudProvider.name)}
+                        alt=""
+                        width={13}
+                        height={13}
+                        className="size-3.5 object-contain"
+                      />
+                      <span>{ws.cloudProvider.name}</span>
                     </span>
                   )}
                 </div>

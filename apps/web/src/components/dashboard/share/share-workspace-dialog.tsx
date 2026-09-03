@@ -32,7 +32,7 @@ const DEFAULT_SHARE_ROLE = "viewer" as const;
 function Avatar({ label }: { label: string }) {
   const initials = label.trim().slice(0, 2).toUpperCase() || "?";
   return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] font-mono text-[11px] font-medium text-white/70">
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-fill font-mono text-[11px] font-medium text-fg-2">
       {initials}
     </div>
   );
@@ -192,7 +192,7 @@ export function ShareWorkspaceDialog({
               <form onSubmit={submitInvite} className="space-y-3">
                 <Label
                   htmlFor="invite-email"
-                  className="font-mono text-[11px] uppercase tracking-wider text-white/40"
+                  className="font-mono text-[11px] uppercase tracking-wider text-fg-4"
                 >
                   Invite by email
                 </Label>
@@ -292,14 +292,14 @@ export function ShareWorkspaceDialog({
               <ShareUpgradeNotice message="Grant whole teams access to your workspaces at once." />
             ) : (
               <div className="space-y-3">
-                <Label className="font-mono text-[11px] uppercase tracking-wider text-white/40">
+                <Label className="font-mono text-[11px] uppercase tracking-wider text-fg-4">
                   Give a team access
                 </Label>
                 {availableTeams.length === 0 ? (
-                  <p className="text-sm text-white/40">
+                  <p className="text-sm text-fg-4">
                     No teams available.{" "}
                     <a
-                      href="/dashboard/settings?section=teams"
+                      href="/dashboard/settings/teams"
                       className="text-primary underline-offset-2 hover:underline"
                     >
                       Create a team
@@ -352,7 +352,7 @@ export function ShareWorkspaceDialog({
                 teamsWithAccess.map((team) => (
                   <Row
                     key={team.id}
-                    icon={<UsersRound className="h-4 w-4 text-white/60" />}
+                    icon={<UsersRound className="h-4 w-4 text-fg-2" />}
                     title={team.name}
                     subtitle="Team"
                     right={
@@ -399,18 +399,18 @@ function Row({
   muted?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-fill px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
         {icon ? (
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04]">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-fill">
             {icon}
           </div>
         ) : (
           <Avatar label={avatar ?? title} />
         )}
         <div className="min-w-0">
-          <p className={`truncate text-sm ${muted ? "text-white/60" : "text-white/85"}`}>{title}</p>
-          {subtitle ? <p className="truncate text-xs text-white/35">{subtitle}</p> : null}
+          <p className={`truncate text-sm ${muted ? "text-fg-2" : "text-fg"}`}>{title}</p>
+          {subtitle ? <p className="truncate text-xs text-fg-4">{subtitle}</p> : null}
         </div>
       </div>
       {right}
@@ -433,7 +433,7 @@ function RowAction({
       onClick={onClick}
       disabled={pending}
       aria-label={label}
-      className="shrink-0 rounded-md p-1.5 text-white/40 transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
+      className="shrink-0 rounded-md p-1.5 text-fg-4 transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
     >
       {pending ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -448,10 +448,7 @@ function RowSkeleton() {
   return (
     <div className="space-y-2">
       {[0, 1].map((i) => (
-        <div
-          key={i}
-          className="h-[58px] animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.02]"
-        />
+        <div key={i} className="h-[58px] animate-pulse rounded-xl border border-line bg-fill" />
       ))}
     </div>
   );
@@ -461,8 +458,8 @@ function ShareUpgradeNotice({ message }: { message: string }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-dashed border-primary/20 bg-primary/[0.03] px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
-        <p className="text-sm font-medium text-white/85">Upgrade to share workspaces</p>
-        <p className="text-xs leading-relaxed text-white/45">{message}</p>
+        <p className="text-sm font-medium text-fg">Upgrade to share workspaces</p>
+        <p className="text-xs leading-relaxed text-fg-3">{message}</p>
       </div>
       <a
         href="/pricing"
@@ -477,7 +474,7 @@ function ShareUpgradeNotice({ message }: { message: string }) {
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] px-4 py-6 text-center text-sm text-white/35">
+    <div className="rounded-xl border border-dashed border-line bg-fill px-4 py-6 text-center text-sm text-fg-4">
       {text}
     </div>
   );

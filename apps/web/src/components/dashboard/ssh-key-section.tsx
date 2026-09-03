@@ -43,7 +43,7 @@ export function SshKeySection() {
         <div className="space-y-2">
           <Label
             htmlFor="ssh-public-key"
-            className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35"
+            className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4"
           >
             OpenSSH public key
           </Label>
@@ -57,7 +57,7 @@ export function SshKeySection() {
           />
         </div>
 
-        <p className="text-[12px] leading-relaxed text-white/40">
+        <p className="text-[12px] leading-relaxed text-fg-4">
           We only store your public key. Use the same key your editor already trusts (VS Code Remote
           SSH, Cursor, Neovim, etc).
         </p>

@@ -38,11 +38,11 @@ function CheckoutSuccessContent() {
   return (
     <div className="flex min-h-screen flex-col bg-background landing-grid dark">
       {/* Header */}
-      <header className="border-b border-white/[0.06] bg-background/80 backdrop-blur-xl">
+      <header className="border-b border-line bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
           <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Terminal className="h-5 w-5 text-primary" />
-            <span className="font-mono text-sm font-bold uppercase tracking-wider text-white/90">
+            <span className="font-mono text-sm font-bold uppercase tracking-wider text-fg">
               GitTerm
             </span>
           </Link>
@@ -65,15 +65,13 @@ function CheckoutSuccessContent() {
           {/* Message */}
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white">Payment successful.</h1>
-            <p className="mt-2 text-white/50">
-              Your account has been upgraded. You're ready to build.
-            </p>
+            <p className="mt-2 text-fg-3">Your account has been upgraded. You're ready to build.</p>
           </div>
 
           {/* Plan card */}
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 text-left">
+          <div className="rounded-2xl border border-line bg-fill p-5 text-left">
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/30">
+              <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-fg-4">
                 Your plan
               </span>
               <span
@@ -81,15 +79,15 @@ function CheckoutSuccessContent() {
                   "rounded-full border px-3 py-0.5 font-mono text-xs font-bold uppercase tracking-wider",
                   isPaidPlan
                     ? "border-primary/30 bg-primary/10 text-primary"
-                    : "border-white/[0.08] text-white/50",
+                    : "border-line text-fg-3",
                 )}
               >
                 {isPending && !checkoutPlan ? "..." : planName}
               </span>
             </div>
             {checkoutId && (
-              <div className="mt-4 border-t border-white/[0.06] pt-3">
-                <span className="font-mono text-[10px] text-white/20">ID: {checkoutId}</span>
+              <div className="mt-4 border-t border-line pt-3">
+                <span className="font-mono text-[10px] text-fg-4">ID: {checkoutId}</span>
               </div>
             )}
           </div>
@@ -108,7 +106,7 @@ function CheckoutSuccessContent() {
                   : []),
               "Manage your subscription anytime from Settings",
             ].map((item) => (
-              <div key={item} className="flex items-start gap-2.5 text-sm text-white/50">
+              <div key={item} className="flex items-start gap-2.5 text-sm text-fg-3">
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 {item}
               </div>
@@ -125,8 +123,8 @@ function CheckoutSuccessContent() {
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
             <Link
-              href="/dashboard/settings"
-              className="inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-2.5 font-mono text-sm text-white/60 transition-colors hover:border-white/20 hover:text-white"
+              href="/dashboard/settings/billing"
+              className="inline-flex items-center justify-center rounded-lg border border-line bg-fill px-6 py-2.5 font-mono text-sm text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
             >
               Manage Subscription
             </Link>

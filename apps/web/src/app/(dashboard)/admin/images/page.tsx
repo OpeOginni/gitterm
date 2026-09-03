@@ -292,7 +292,7 @@ export default function ImagesPage() {
                     onChange={(e) => setNewImage({ ...newImage, imageId: e.target.value })}
                     placeholder="e.g., opeoginni/gitterm-opencode:latest"
                   />
-                  <p className="text-xs text-white/40">
+                  <p className="text-xs text-fg-4">
                     Full Docker image reference including registry and tag
                   </p>
                 </div>
@@ -325,7 +325,7 @@ export default function ImagesPage() {
                     className="min-h-52 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground shadow-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     spellCheck={false}
                   />
-                  <p className="text-xs text-white/40">
+                  <p className="text-xs text-fg-4">
                     Optional provider-specific config such as AWS resources, E2B templates, or
                     Daytona image/resources.
                   </p>
@@ -428,7 +428,7 @@ export default function ImagesPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-white/35 hover:text-amber-300"
+                        className="h-8 w-8 text-fg-4 hover:text-amber-300"
                         onClick={() =>
                           setEditingImage({
                             id: image.id,
@@ -448,7 +448,7 @@ export default function ImagesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-white/35 hover:text-red-400"
+                          className="h-8 w-8 text-fg-4 hover:text-red-400"
                           onClick={() => setDeleteImageId(image.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -468,7 +468,7 @@ export default function ImagesPage() {
             })}
 
             {images?.length === 0 && (
-              <div className="py-12 text-center text-white/30">
+              <div className="py-12 text-center text-fg-4">
                 No images configured yet. Add one to get started.
               </div>
             )}

@@ -15,15 +15,15 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-background text-white">
       <LandingHeader />
       <main className="mx-auto max-w-[760px] px-4 pt-24 pb-14 sm:px-6 sm:pt-32 sm:pb-20">
-        <header className="border-b border-white/[0.06] pb-8">
+        <header className="border-b border-line pb-8">
           <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-primary/80">Legal</p>
           <h1 className="mt-3 font-display text-4xl font-medium tracking-tight text-white sm:text-5xl">
             Privacy Policy
           </h1>
-          <p className="mt-3 text-sm text-white/45">Last updated {LAST_UPDATED}</p>
+          <p className="mt-3 text-sm text-fg-3">Last updated {LAST_UPDATED}</p>
         </header>
 
-        <article className="prose-policy mt-10 space-y-10 text-[15px] leading-relaxed text-white/75">
+        <article className="prose-policy mt-10 space-y-10 text-[15px] leading-relaxed text-fg-2">
           <section className="space-y-3">
             <p>
               This Privacy Policy explains what information GitTerm ("GitTerm", "we", "us") collects
@@ -45,39 +45,38 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="2. Information we collect">
-            <ul className="list-disc space-y-2 pl-5 marker:text-white/30">
+            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
               <li>
-                <strong className="text-white/90">Account data.</strong> When you sign up we receive
-                your email address and, if you sign in with GitHub, your GitHub username and avatar.
-                We store a hashed identifier so we can recognize you on return visits.
+                <strong className="text-fg">Account data.</strong> When you sign up we receive your
+                email address and, if you sign in with GitHub, your GitHub username and avatar. We
+                store a hashed identifier so we can recognize you on return visits.
               </li>
               <li>
-                <strong className="text-white/90">Workspace data.</strong> The Git repositories,
-                files, and command history inside your workspaces are stored on infrastructure we
-                operate so that we can deliver the service. We treat this content as confidential
-                and only access it when required to operate, secure, or debug the service.
+                <strong className="text-fg">Workspace data.</strong> The Git repositories, files,
+                and command history inside your workspaces are stored on infrastructure we operate
+                so that we can deliver the service. We treat this content as confidential and only
+                access it when required to operate, secure, or debug the service.
               </li>
               <li>
-                <strong className="text-white/90">Billing data.</strong> If you subscribe to a paid
-                plan, payment is processed by our payments provider. We receive a customer
-                identifier and subscription status. We do not receive or store your full card
-                details.
+                <strong className="text-fg">Billing data.</strong> If you subscribe to a paid plan,
+                payment is processed by our payments provider. We receive a customer identifier and
+                subscription status. We do not receive or store your full card details.
               </li>
               <li>
-                <strong className="text-white/90">Product analytics.</strong> If you consent, we
-                record anonymous events (such as page views and feature clicks) so we can understand
-                how the product is used. See section 4.
+                <strong className="text-fg">Product analytics.</strong> If you consent, we record
+                anonymous events (such as page views and feature clicks) so we can understand how
+                the product is used. See section 4.
               </li>
               <li>
-                <strong className="text-white/90">Logs.</strong> Our servers automatically log
-                requests (IP address, user agent, timestamp, request path, status code) for security
-                and operational purposes. These logs are retained for a limited period.
+                <strong className="text-fg">Logs.</strong> Our servers automatically log requests
+                (IP address, user agent, timestamp, request path, status code) for security and
+                operational purposes. These logs are retained for a limited period.
               </li>
             </ul>
           </Section>
 
           <Section title="3. How we use your information">
-            <ul className="list-disc space-y-2 pl-5 marker:text-white/30">
+            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
               <li>To provide, secure, and operate the GitTerm service.</li>
               <li>To authenticate you and keep your session active across devices.</li>
               <li>To process payments and manage your subscription.</li>
@@ -89,23 +88,23 @@ export default function PrivacyPage() {
               <li>To comply with legal obligations.</li>
             </ul>
             <p>
-              We do <strong className="text-white/90">not</strong> sell your personal data, and we
-              do not run advertising on GitTerm.
+              We do <strong className="text-fg">not</strong> sell your personal data, and we do not
+              run advertising on GitTerm.
             </p>
           </Section>
 
           <Section title="4. Cookies and similar technologies">
             <p>We use a small number of cookies. They fall into two categories:</p>
-            <div className="mt-4 overflow-x-auto rounded-lg border border-white/[0.06]">
+            <div className="mt-4 overflow-x-auto rounded-lg border border-line">
               <table className="w-full min-w-[480px] border-collapse text-left text-sm">
-                <thead className="bg-white/[0.03] font-mono text-[11px] uppercase tracking-wider text-white/50">
+                <thead className="bg-fill font-mono text-[11px] uppercase tracking-wider text-fg-3">
                   <tr>
                     <th className="px-3 py-2.5">Cookie</th>
                     <th className="px-3 py-2.5">Purpose</th>
                     <th className="px-3 py-2.5">Category</th>
                   </tr>
                 </thead>
-                <tbody className="text-white/70">
+                <tbody className="text-fg-2">
                   <Row
                     name="Session cookie"
                     purpose="Keeps you signed in. Set by our authentication system; HTTP-only and secure."
@@ -136,7 +135,7 @@ export default function PrivacyPage() {
             </div>
             <p className="mt-3">
               You can change your choice at any time from{" "}
-              <strong className="text-white/90">Settings → Privacy</strong> in the dashboard, or by
+              <strong className="text-fg">Settings → Privacy</strong> in the dashboard, or by
               clearing the <code>gitterm_consent</code> cookie.
             </p>
           </Section>
@@ -146,7 +145,7 @@ export default function PrivacyPage() {
               When enabled, our analytics provider sets cookies and processes pseudonymous usage
               data on our behalf. We have configured it to:
             </p>
-            <ul className="list-disc space-y-2 pl-5 marker:text-white/30">
+            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
               <li>only create user profiles for signed-in users,</li>
               <li>not auto-capture form inputs or session recordings,</li>
               <li>only run when you have given consent.</li>
@@ -174,7 +173,7 @@ export default function PrivacyPage() {
           <Section title="7. Data retention">
             <p>
               Account data is retained while your account is active. If you delete your account from{" "}
-              <strong className="text-white/90">Settings → Account</strong>, we delete your account
+              <strong className="text-fg">Settings → Account</strong>, we delete your account
               record, your workspaces, and associated metadata within 30 days, except where
               retention is required for legal, accounting, or fraud-prevention purposes. Server logs
               are retained for a limited operational period.
@@ -193,7 +192,7 @@ export default function PrivacyPage() {
             <p>
               Depending on where you live (e.g. EEA, UK, California), you may have the right to:
             </p>
-            <ul className="list-disc space-y-2 pl-5 marker:text-white/30">
+            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
               <li>access the personal data we hold about you,</li>
               <li>correct inaccurate data,</li>
               <li>delete your account and associated data,</li>
@@ -272,14 +271,14 @@ function Row({
   category: "Necessary" | "Optional";
 }) {
   return (
-    <tr className="border-t border-white/[0.06]">
-      <td className="px-3 py-3 align-top font-mono text-[12px] text-white/85">{name}</td>
-      <td className="px-3 py-3 align-top text-[13px] text-white/65">{purpose}</td>
+    <tr className="border-t border-line">
+      <td className="px-3 py-3 align-top font-mono text-[12px] text-fg">{name}</td>
+      <td className="px-3 py-3 align-top text-[13px] text-fg-2">{purpose}</td>
       <td className="px-3 py-3 align-top">
         <span
           className={
             category === "Necessary"
-              ? "rounded-md border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/55"
+              ? "rounded-md border border-line bg-fill px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-fg-3"
               : "rounded-md border border-primary/30 bg-primary/[0.08] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary/90"
           }
         >

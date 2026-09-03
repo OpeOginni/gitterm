@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CalendarClock, Copy, KeyRound, KeySquare, Loader2, Plus } from "lucide-react";
+import { CalendarClock, ChevronDown, Copy, KeyRound, KeySquare, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
@@ -26,13 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  SettingsEmptyState,
-  SettingsRow,
-  SettingsRowList,
-  SettingsSection,
-  SettingsSectionBody,
-} from "@/components/ui/form-card";
+import { SettingsEmptyState } from "@/components/ui/form-card";
 
 const EXPIRY_OPTIONS = [
   { value: "30", label: "30 days" },
@@ -48,6 +42,12 @@ function formatDate(value: Date | string | null): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function accessSummary(scopes: readonly string[]): string {
+  return API_TOKEN_SCOPES.every((scope) => scopes.includes(scope))
+    ? "Full API access"
+    : `${scopes.length} permission${scopes.length === 1 ? "" : "s"}`;
 }
 
 export function ApiTokensSection() {
@@ -114,18 +114,22 @@ export function ApiTokensSection() {
   const tokens = data?.tokens ?? [];
 
   return (
-    <SettingsSection
-      icon={KeySquare}
-      title="API tokens"
-      description="Tokens are limited to selected SDK permissions and can be revoked here at any time. CLI device-code logins show up in this list too."
-      action={
+    <section className="space-y-5">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-fg">API tokens</h3>
+          <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-fg-3">
+            Scoped credentials for the SDK, CLI, and automations. Device-code logins also appear
+            here.
+          </p>
+        </div>
         <Button size="sm" className="gap-2" onClick={() => handleOpenChange(true)}>
           <Plus className="h-4 w-4" />
           New token
         </Button>
-      }
-    >
-      <SettingsSectionBody className="space-y-3">
+      </header>
+
+      <div>
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-12 w-full" />
@@ -138,8 +142,7 @@ export function ApiTokensSection() {
             description={
               <>
                 Create one for the CLI, SDK, or CI, or run{" "}
-                <span className="font-mono text-white/55">gitterm login</span> and it will appear
-                here.
+                <span className="font-mono text-fg-3">gitterm login</span> and it will appear here.
               </>
             }
             action={
@@ -155,21 +158,55 @@ export function ApiTokensSection() {
             }
           />
         ) : (
-          <SettingsRowList>
+          <div className="divide-y divide-line">
             {tokens.map((token) => (
-              <SettingsRow key={token.id}>
+              <div
+                key={token.id}
+                className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-6"
+              >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm text-white/80">{token.name}</span>
-                    <span className="font-mono text-[11px] text-white/35">
-                      {token.tokenPrefix}…
-                    </span>
+                    <span className="truncate text-sm font-medium text-fg">{token.name}</span>
+                    <span className="font-mono text-[11px] text-fg-4">{token.tokenPrefix}…</span>
                   </div>
-                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
-                    Created {formatDate(token.createdAt)} · Expires {formatDate(token.expiresAt)} ·
-                    Last used {formatDate(token.lastUsedAt)}
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-3">
+                    <span>
+                      {token.lastUsedAt
+                        ? `Last used ${formatDate(token.lastUsedAt)}`
+                        : "Never used"}
+                    </span>
+                    <span aria-hidden="true" className="text-fg-4">
+                      ·
+                    </span>
+                    <span>
+                      {token.expiresAt ? `Expires ${formatDate(token.expiresAt)}` : "No expiration"}
+                    </span>
+                    <span aria-hidden="true" className="text-fg-4">
+                      ·
+                    </span>
+                    <span>{accessSummary(token.scopes)}</span>
                   </p>
-                  <p className="mt-1 text-[11px] text-white/35">{token.scopes.join(" · ")}</p>
+                  <details className="group mt-2 text-xs text-fg-4">
+                    <summary className="inline-flex cursor-pointer list-none items-center gap-1 transition-colors hover:text-fg-2">
+                      Details
+                      <ChevronDown className="size-3 transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="mt-2 space-y-2 border-l border-line pl-3">
+                      <p>Created {formatDate(token.createdAt)}</p>
+                      <div>
+                        <p className="mb-1 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-fg-3">
+                          Permissions
+                        </p>
+                        <ul className="flex flex-wrap gap-x-3 gap-y-1.5">
+                          {token.scopes.map((scope) => (
+                            <li key={scope} className="font-mono text-[11px] text-fg-2">
+                              {scope}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </details>
                 </div>
                 {confirmingId === token.id ? (
                   <div className="flex shrink-0 items-center gap-2">
@@ -199,134 +236,133 @@ export function ApiTokensSection() {
                     Revoke
                   </Button>
                 )}
-              </SettingsRow>
+              </div>
             ))}
-          </SettingsRowList>
+          </div>
         )}
+      </div>
 
-        <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
-          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
-            {createdToken ? (
-              <>
-                <DialogHeader>
-                  <div className="mb-1 flex size-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                    <KeyRound className="size-5" />
-                  </div>
-                  <DialogTitle>Your token is ready</DialogTitle>
-                  <DialogDescription>
-                    Copy it now and store it somewhere secure. You won&apos;t be able to see it
-                    again.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-white/[0.09] bg-input/70 p-1.5 pl-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
-                  <div className="min-w-0">
-                    <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-white/35">
-                      API token
-                    </span>
-                    <code
-                      className="mt-0.5 block truncate font-mono text-xs text-white/80 selection:bg-primary selection:text-primary-foreground"
-                      title={createdToken}
-                    >
-                      {createdToken}
-                    </code>
-                  </div>
-                  <Button variant="secondary" className="h-10 gap-2" onClick={handleCopyToken}>
-                    <Copy className="h-4 w-4" />
-                    Copy
-                  </Button>
+      <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-line bg-settings-dialog sm:max-w-xl">
+          {createdToken ? (
+            <>
+              <DialogHeader>
+                <div className="mb-1 flex size-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                  <KeyRound className="size-5" />
                 </div>
-                <DialogFooter className="mt-1">
-                  <Button onClick={() => handleOpenChange(false)}>Done</Button>
-                </DialogFooter>
-              </>
-            ) : (
-              <>
-                <DialogHeader>
-                  <DialogTitle>New API token</DialogTitle>
-                  <DialogDescription>
-                    Select only the SDK permissions this token needs. It cannot manage tokens,
-                    integrations, credentials, sharing, or administration.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="api-token-name">Name</Label>
-                    <Input
-                      id="api-token-name"
-                      placeholder="e.g. opencode-plugin, ci"
-                      value={tokenName}
-                      onChange={(event) => setTokenName(event.target.value)}
-                      maxLength={100}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Permissions</Label>
-                    <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.015] px-1.5">
-                      {API_TOKEN_SCOPE_DETAILS.map((detail) => (
-                        <label
-                          key={detail.scope}
-                          className="group flex min-h-14 cursor-pointer items-center gap-3 rounded-lg border-b border-white/[0.06] px-2.5 py-2 text-sm transition-colors last:border-b-0 hover:bg-white/[0.035]"
-                        >
-                          <Checkbox
-                            className="size-[18px] group-hover:border-white/40"
-                            checked={scopes.includes(detail.scope)}
-                            onCheckedChange={(checked) =>
-                              setScopes((current) =>
-                                checked
-                                  ? [...new Set([...current, detail.scope])]
-                                  : current.filter((scope) => scope !== detail.scope),
-                              )
-                            }
-                          />
-                          <span className="min-w-0 leading-tight">
-                            <span className="block font-medium text-white/80">{detail.label}</span>
-                            <span className="mt-1 block text-xs leading-tight text-white/40">
-                              {detail.description}
-                            </span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Expiration</Label>
-                    <Select value={expiry} onValueChange={setExpiry}>
-                      <SelectTrigger className="h-12 w-full border border-white/[0.08] bg-input/70 px-3.5 hover:border-white/[0.12] hover:bg-input focus-visible:border-primary/35 sm:w-48">
-                        <CalendarClock className="size-4 text-primary/80" />
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent align="start" className="border-white/[0.09] bg-surface-2 p-1">
-                        {EXPIRY_OPTIONS.map((option) => (
-                          <SelectItem
-                            key={option.value}
-                            value={option.value}
-                            className="rounded-md py-2.5 pr-9 pl-3 focus:bg-white/[0.06]"
-                          >
-                            <span className="text-white/85">{option.label}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleCreate}
-                    disabled={!tokenName.trim() || scopes.length === 0 || createMutation.isPending}
-                    className="gap-2"
+                <DialogTitle>Your token is ready</DialogTitle>
+                <DialogDescription>
+                  Copy it now and store it somewhere secure. You won&apos;t be able to see it again.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-line bg-input/70 p-1.5 pl-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+                <div className="min-w-0">
+                  <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-fg-4">
+                    API token
+                  </span>
+                  <code
+                    className="mt-0.5 block truncate font-mono text-xs text-fg selection:bg-primary selection:text-primary-foreground"
+                    title={createdToken}
                   >
-                    {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Create token
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
-      </SettingsSectionBody>
-    </SettingsSection>
+                    {createdToken}
+                  </code>
+                </div>
+                <Button variant="secondary" className="h-10 gap-2" onClick={handleCopyToken}>
+                  <Copy className="h-4 w-4" />
+                  Copy
+                </Button>
+              </div>
+              <DialogFooter className="mt-1">
+                <Button onClick={() => handleOpenChange(false)}>Done</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>New API token</DialogTitle>
+                <DialogDescription>
+                  Select only the SDK permissions this token needs. It cannot manage tokens,
+                  integrations, credentials, sharing, or administration.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="api-token-name">Name</Label>
+                  <Input
+                    id="api-token-name"
+                    placeholder="e.g. opencode-plugin, ci"
+                    value={tokenName}
+                    onChange={(event) => setTokenName(event.target.value)}
+                    maxLength={100}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Permissions</Label>
+                  <div className="overflow-hidden rounded-xl border border-line bg-fill px-1.5">
+                    {API_TOKEN_SCOPE_DETAILS.map((detail) => (
+                      <label
+                        key={detail.scope}
+                        className="group flex min-h-14 cursor-pointer items-center gap-3 rounded-lg border-b border-line px-2.5 py-2 text-sm transition-colors last:border-b-0 hover:bg-fill"
+                      >
+                        <Checkbox
+                          className="size-[18px] group-hover:border-line-2"
+                          checked={scopes.includes(detail.scope)}
+                          onCheckedChange={(checked) =>
+                            setScopes((current) =>
+                              checked
+                                ? [...new Set([...current, detail.scope])]
+                                : current.filter((scope) => scope !== detail.scope),
+                            )
+                          }
+                        />
+                        <span className="min-w-0 leading-tight">
+                          <span className="block font-medium text-fg">{detail.label}</span>
+                          <span className="mt-1 block text-xs leading-tight text-fg-4">
+                            {detail.description}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Expiration</Label>
+                  <Select value={expiry} onValueChange={setExpiry}>
+                    <SelectTrigger className="h-12 w-full border border-line bg-input/70 px-3.5 hover:border-line-2 hover:bg-input focus-visible:border-primary/35 sm:w-48">
+                      <CalendarClock className="size-4 text-primary opacity-80" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start" className="border-line bg-surface-2 p-1">
+                      {EXPIRY_OPTIONS.map((option) => (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value}
+                          className="rounded-md py-2.5 pr-9 pl-3 focus:bg-fill-2"
+                        >
+                          <span className="text-fg">{option.label}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreate}
+                  disabled={!tokenName.trim() || scopes.length === 0 || createMutation.isPending}
+                  className="gap-2"
+                >
+                  {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Create token
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </section>
   );
 }

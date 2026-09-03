@@ -19,6 +19,26 @@ import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-acc
 import { updateWorkspaceByIdAndInvalidate } from "../../service/workspace-mutations";
 import { isValidSshPublicKey, normalizeSshPublicKey } from "../../utils/ssh-public-key";
 
+async function resolveDefaultCloudProviderId(storedId?: string | null): Promise<string | null> {
+  const availableProviders = await db.query.cloudProvider.findMany({
+    where: eq(cloudProvider.isEnabled, true),
+    columns: { id: true, providerKey: true, preferredDefault: true },
+    orderBy: [desc(cloudProvider.preferredDefault)],
+  });
+
+  const storedProvider = availableProviders.find((provider) => provider.id === storedId);
+  if (storedProvider) return storedProvider.id;
+
+  // E2B is the product default. An explicit user preference still wins, but a
+  // missing or disabled preference should behave consistently across the API
+  // and UI instead of depending on alphabetical provider ordering.
+  return (
+    availableProviders.find((provider) => provider.providerKey.toLowerCase() === "e2b")?.id ??
+    availableProviders[0]?.id ??
+    null
+  );
+}
+
 export const userRouter = router({
   getSshPublicKey: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
@@ -93,17 +113,9 @@ export const userRouter = router({
       columns: { defaultCloudProviderId: true },
     });
 
-    const storedId = record?.defaultCloudProviderId ?? null;
-    if (!storedId) {
-      return { cloudProviderId: null };
-    }
-
-    const provider = await db.query.cloudProvider.findFirst({
-      where: and(eq(cloudProvider.id, storedId), eq(cloudProvider.isEnabled, true)),
-      columns: { id: true },
-    });
-
-    return { cloudProviderId: provider?.id ?? null };
+    return {
+      cloudProviderId: await resolveDefaultCloudProviderId(record?.defaultCloudProviderId),
+    };
   }),
 
   setDefaultCloudProvider: protectedProcedure
@@ -149,7 +161,7 @@ export const userRouter = router({
 
       return {
         success: true,
-        cloudProviderId: updated?.defaultCloudProviderId ?? null,
+        cloudProviderId: await resolveDefaultCloudProviderId(updated?.defaultCloudProviderId),
       };
     }),
 

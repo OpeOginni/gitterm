@@ -244,6 +244,8 @@ export interface WorkspaceConfig {
   repositoryBranch?: string;
   repositoryBaseCommit?: string;
   repositoryCheckoutRef?: string;
+  /** Optional clone depth for providers that support shallow repositories. */
+  repositoryCloneDepth?: number;
   regionIdentifier?: string;
   /**
    * Runtime + container-transport env. Always present; container providers pass

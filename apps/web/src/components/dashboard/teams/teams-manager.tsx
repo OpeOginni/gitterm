@@ -97,8 +97,8 @@ export function TeamsManager() {
         {sharingLocked ? (
           <div className="flex flex-col gap-4 rounded-xl border border-dashed border-primary/20 bg-primary/[0.03] px-5 py-5">
             <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium text-white/85">Upgrade to create teams</p>
-              <p className="text-xs leading-relaxed text-white/45">
+              <p className="text-sm font-medium text-fg">Upgrade to create teams</p>
+              <p className="text-xs leading-relaxed text-fg-3">
                 Group collaborators and grant whole teams access at once. You can still join and
                 leave teams you&rsquo;ve been invited to.
               </p>
@@ -122,11 +122,11 @@ export function TeamsManager() {
               }
               createTeamMutation.mutate({ name });
             }}
-            className="rounded-2xl border border-white/[0.06] bg-card p-5"
+            className="rounded-xl border border-line bg-settings p-5"
           >
             <Label
               htmlFor="team-name"
-              className="font-mono text-[11px] uppercase tracking-wider text-white/40"
+              className="font-mono text-[11px] uppercase tracking-wider text-fg-4"
             >
               New team
             </Label>
@@ -152,7 +152,7 @@ export function TeamsManager() {
         <div className="space-y-2">
           {teams.length > 0 && (
             <div className="flex items-center justify-between px-1 pb-1">
-              <span className="font-mono text-[11px] uppercase tracking-wider text-white/40">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-fg-4">
                 Teams
               </span>
               <div className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-wider">
@@ -162,11 +162,11 @@ export function TeamsManager() {
                     type="button"
                     onClick={() => selectFilter(key)}
                     className={`transition-colors ${
-                      filter === key ? "text-primary" : "text-white/30 hover:text-white/60"
+                      filter === key ? "text-primary" : "text-fg-4 hover:text-fg-2"
                     }`}
                   >
                     {key}
-                    <span className="ml-1 text-white/25">{filterCounts[key]}</span>
+                    <span className="ml-1 text-fg-4">{filterCounts[key]}</span>
                   </button>
                 ))}
               </div>
@@ -174,13 +174,13 @@ export function TeamsManager() {
           )}
 
           {teamsQuery.isLoading ? (
-            <div className="h-16 animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.02]" />
+            <div className="h-16 animate-pulse rounded-xl border border-line bg-fill" />
           ) : teams.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] px-4 py-8 text-center text-sm text-white/35">
+            <div className="rounded-xl border border-dashed border-line bg-fill px-4 py-8 text-center text-sm text-fg-4">
               No teams yet. Create one to start grouping collaborators.
             </div>
           ) : filteredTeams.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] px-4 py-8 text-center text-sm text-white/35">
+            <div className="rounded-xl border border-dashed border-line bg-fill px-4 py-8 text-center text-sm text-fg-4">
               {filter === "owned"
                 ? "You haven't created any teams yet."
                 : "You haven't joined any teams created by others."}
@@ -198,17 +198,15 @@ export function TeamsManager() {
                   className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors ${
                     isActive
                       ? "border-primary/30 bg-primary/[0.06]"
-                      : "border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]"
+                      : "border-line bg-fill hover:border-line-2"
                   }`}
                 >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.04]">
-                    <UsersRound className="h-4 w-4 text-white/60" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-fill">
+                    <UsersRound className="h-4 w-4 text-fg-2" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-white/85">{team.name}</p>
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-white/35">
-                      Team
-                    </p>
+                    <p className="truncate text-sm text-fg">{team.name}</p>
+                    <p className="font-mono text-[10px] uppercase tracking-wider text-fg-4">Team</p>
                   </div>
                   {isOwner ? (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
@@ -216,7 +214,7 @@ export function TeamsManager() {
                       Owner
                     </span>
                   ) : isManager ? (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.12] bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/55">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line-2 bg-fill px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-fg-3">
                       Manager
                     </span>
                   ) : null}
@@ -226,13 +224,13 @@ export function TeamsManager() {
           )}
 
           {pageCount > 1 && (
-            <div className="flex items-center justify-end gap-3 px-1 pt-1 font-mono text-[10px] uppercase tracking-wider text-white/40">
+            <div className="flex items-center justify-end gap-3 px-1 pt-1 font-mono text-[10px] uppercase tracking-wider text-fg-4">
               <button
                 type="button"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={safePage === 0}
                 aria-label="Previous page"
-                className="rounded-md p-1 transition-colors hover:text-white/70 disabled:opacity-30 disabled:hover:text-white/40"
+                className="rounded-md p-1 transition-colors hover:text-fg-2 disabled:opacity-30 disabled:hover:text-fg-4"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
@@ -244,7 +242,7 @@ export function TeamsManager() {
                 onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                 disabled={safePage === pageCount - 1}
                 aria-label="Next page"
-                className="rounded-md p-1 transition-colors hover:text-white/70 disabled:opacity-30 disabled:hover:text-white/40"
+                className="rounded-md p-1 transition-colors hover:text-fg-2 disabled:opacity-30 disabled:hover:text-fg-4"
               >
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
@@ -262,8 +260,8 @@ export function TeamsManager() {
             onLeave={() => setActiveTeamId(null)}
           />
         ) : (
-          <div className="flex h-full min-h-[280px] items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.01] p-8 text-center">
-            <p className="max-w-xs text-sm text-white/35">
+          <div className="flex h-full min-h-[280px] items-center justify-center rounded-xl border border-dashed border-line bg-fill/40 p-8 text-center">
+            <p className="max-w-xs text-sm text-fg-4">
               Select a team to manage its members, or create a new one to get started.
             </p>
           </div>
@@ -350,15 +348,13 @@ function TeamDetail({
   );
 
   if (teamQuery.isLoading) {
-    return (
-      <div className="h-[280px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.02]" />
-    );
+    return <div className="h-[280px] animate-pulse rounded-xl border border-line bg-fill/40" />;
   }
 
   const data = teamQuery.data;
   if (!data?.team) {
     return (
-      <div className="rounded-2xl border border-white/[0.06] bg-card p-6 text-sm text-white/40">
+      <div className="rounded-xl border border-line bg-settings p-6 text-sm text-fg-4">
         Team not found.
       </div>
     );
@@ -368,11 +364,11 @@ function TeamDetail({
   const invites = data.invites ?? [];
 
   return (
-    <div className="space-y-6 rounded-2xl border border-white/[0.06] bg-card p-6">
-      <div className="flex items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+    <div className="space-y-6 rounded-xl border border-line bg-settings p-6">
+      <div className="flex items-start justify-between gap-3 border-b border-line pb-5">
         <div>
           <h2 className="font-display text-xl text-white">{data.team.name}</h2>
-          <p className="mt-1 text-sm text-white/40">
+          <p className="mt-1 text-sm text-fg-4">
             {members.length} member{members.length === 1 ? "" : "s"}
             {invites.length > 0 ? ` · ${invites.length} pending` : ""}
           </p>
@@ -427,7 +423,7 @@ function TeamDetail({
           }}
           className="space-y-3"
         >
-          <Label className="font-mono text-[11px] uppercase tracking-wider text-white/40">
+          <Label className="font-mono text-[11px] uppercase tracking-wider text-fg-4">
             Invite a member
           </Label>
           <div className="flex gap-2">
@@ -452,19 +448,16 @@ function TeamDetail({
         </form>
       )}
 
-      <div className="space-y-2">
+      <div className="divide-y divide-line border-y border-line">
         {members.map((member) => (
-          <div
-            key={member.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
-          >
+          <div key={member.id} className="flex items-center justify-between gap-3 px-1 py-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] font-mono text-[11px] text-white/70">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-fill font-mono text-[11px] text-fg-2">
                 {(member.name || member.email).slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm text-white/85">{member.name || member.email}</p>
-                <p className="truncate text-xs text-white/35">{member.email}</p>
+                <p className="truncate text-sm text-fg">{member.name || member.email}</p>
+                <p className="truncate text-xs text-fg-4">{member.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -483,7 +476,7 @@ function TeamDetail({
                     removeMemberMutation.variables?.userId === member.userId
                   }
                   aria-label="Remove member"
-                  className="shrink-0 rounded-md p-1.5 text-white/40 transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
+                  className="shrink-0 rounded-md p-1.5 text-fg-4 transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
                 >
                   {removeMemberMutation.isPending &&
                   removeMemberMutation.variables?.userId === member.userId ? (
@@ -498,15 +491,12 @@ function TeamDetail({
         ))}
 
         {invites.map((invite) => (
-          <div
-            key={invite.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
-          >
+          <div key={invite.id} className="flex items-center justify-between gap-3 px-1 py-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04]">
-                <Mail className="h-3.5 w-3.5 text-white/50" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-fill">
+                <Mail className="h-3.5 w-3.5 text-fg-3" />
               </div>
-              <p className="truncate text-sm text-white/60">{invite.email}</p>
+              <p className="truncate text-sm text-fg-2">{invite.email}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-amber-400">
@@ -522,7 +512,7 @@ function TeamDetail({
                     cancelInviteMutation.variables?.inviteId === invite.id
                   }
                   aria-label="Cancel invitation"
-                  className="shrink-0 rounded-md p-1.5 text-white/40 transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
+                  className="shrink-0 rounded-md p-1.5 text-fg-4 transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
                 >
                   {cancelInviteMutation.isPending &&
                   cancelInviteMutation.variables?.inviteId === invite.id ? (

@@ -128,7 +128,7 @@ export function CredentialSelector({
           </div>
         </div>
         <Link
-          href="/dashboard/settings"
+          href="/dashboard/settings/providers"
           className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
         >
           Add API Key in Settings
