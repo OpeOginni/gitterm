@@ -16,6 +16,9 @@ export const RedisKeys = {
   workspaceLastActivePersistThrottle: (workspaceId: string) =>
     `workspace:last_active:persist_throttle:${workspaceId}`,
 
+  // Which apps/server replica watches a workspace's OpenCode event stream
+  runWatcherLease: (workspaceId: string) => `run:watcher:lease:${workspaceId}`,
+
   // Anonymous "try gitterm" homepage sandbox
   anonTryIp: (ipHash: string) => `anon:try:ip:${ipHash}`,
   anonTryUser: (ipHash: string) => `anon:try:user:${ipHash}`,

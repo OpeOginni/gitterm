@@ -22,6 +22,10 @@ import {
 import { relations } from "drizzle-orm";
 import { gitIntegration } from "./integrations";
 
+/** Which OpenCode HTTP API generation the workspace's agent server speaks. */
+export const opencodeApiEnum = pgEnum("opencode_api", ["v1", "v2"] as const);
+export type OpencodeApi = (typeof opencodeApiEnum.enumValues)[number];
+
 export const instanceStatusEnum = pgEnum("instance_status", [
   "pending",
   "running",
@@ -110,6 +114,11 @@ export const workspace = pgTable(
     modelCredentialIds: jsonb("model_credential_ids").$type<string[]>().notNull().default([]),
     inlineModelProviders: jsonb("inline_model_providers").$type<string[]>().notNull().default([]),
     setupRequired: boolean("setup_required").notNull().default(false),
+    /**
+     * v1 = the legacy `/event` + `/session/*` API served by OpenCode 1.x images.
+     * v2 = the `/api/*` API of OpenCode 2 (experimental until 2.0 ships).
+     */
+    opencodeApi: opencodeApiEnum("opencode_api").notNull().default("v1"),
 
     // Workspace hosting configuration
     hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"),

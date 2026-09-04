@@ -7,6 +7,7 @@ import { auth } from "@gitterm/auth";
 import { DeviceCodeService } from "@gitterm/api/service/auth/cli/device-code";
 import { getGitHubAppService } from "@gitterm/api/service/github";
 import { workspaceJWT } from "@gitterm/api/service/auth/workspace-jwt";
+import { startRunWatcherSweep } from "@gitterm/api/service/agent-run";
 import { updateLastActive, hasRemainingQuota } from "@gitterm/api/utils/metering";
 import { db, eq } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
@@ -206,6 +207,10 @@ app.get("/", (c) => {
 app.get("/api/health", (c) => {
   return c.json({ status: "healthy" });
 });
+
+// Active runs are advanced only by a watcher; this re-attaches after a restart
+// and keeps ownership balanced across replicas.
+startRunWatcherSweep();
 
 export default {
   fetch: app.fetch,

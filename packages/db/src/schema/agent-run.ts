@@ -16,6 +16,7 @@ export const agentRunStatusEnum = pgEnum("agent_run_status", [
   "pending",
   "running",
   "retrying",
+  "awaiting_input",
   "completed",
   "failed",
   "cancelled",
@@ -35,6 +36,47 @@ export type AgentRunMessagePart =
       error: string | null;
       startedAt: string | null;
       completedAt: string | null;
+    };
+
+/**
+ * A prompt the agent is blocked on: an OpenCode permission request or a
+ * `question` tool call. Answered through `run.respond`.
+ */
+export type AgentRunInputRequest =
+  | {
+      id: string;
+      kind: "permission";
+      createdAt: string;
+      /** OpenCode tool call that raised the request, when known. */
+      toolCallId: string | null;
+      /** Permission action, e.g. "bash" or "edit". */
+      permission: string;
+      /** Resources the action applies to, e.g. shell commands or file paths. */
+      patterns: string[];
+      /** Patterns OpenCode would remember when replied with "always". */
+      always: string[];
+      title: string;
+    }
+  | {
+      id: string;
+      kind: "question";
+      createdAt: string;
+      toolCallId: string | null;
+      questions: Array<{
+        /** Runtime field key the answer is submitted under. */
+        key: string;
+        header: string;
+        question: string;
+        options: Array<{
+          label: string;
+          description: string;
+          /** Runtime value submitted for this option when it differs from the label. */
+          value?: string;
+        }>;
+        multiple: boolean;
+        /** Whether a free-text answer outside `options` is accepted. */
+        custom: boolean;
+      }>;
     };
 
 export type AgentRunMessageSnapshot = {
@@ -67,6 +109,8 @@ export const agentRun = pgTable(
     errorMessage: text("error_message"),
     finalText: text("final_text"),
     messages: jsonb("messages").$type<AgentRunMessageSnapshot[]>().notNull().default([]),
+    /** Prompts the agent is blocked on; non-empty exactly while `awaiting_input`. */
+    pendingInputs: jsonb("pending_inputs").$type<AgentRunInputRequest[]>().notNull().default([]),
     submittedAt: timestamp("submitted_at"),
     completedAt: timestamp("completed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

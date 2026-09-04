@@ -134,6 +134,7 @@ import {
 } from "../../service/workspace-setup";
 import { resolveCustomWorkspaceImage } from "../../service/workspace-image";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
+import { DEFAULT_OPENCODE_API } from "../../service/agent-run/runtime";
 import { userCanAccessWorkspace } from "./share";
 
 function shellQuote(value: string): string {
@@ -329,6 +330,11 @@ const workspaceCreateBaseSchema = z.object({
         .record(z.string(), z.unknown())
         .refine((config) => JSON.stringify(config).length <= 20_000, "OpenCode config too large")
         .optional(),
+      /**
+       * OpenCode HTTP API generation the image serves. "v2" is the OpenCode 2
+       * `/api/*` API and needs an image built with `@opencode-ai/cli` (experimental).
+       */
+      api: z.enum(["v1", "v2"]).optional(),
     })
     .optional(),
 });
@@ -2696,6 +2702,7 @@ export const workspaceRouter = router({
             hostingType: isLocal ? "local" : "cloud",
             name: input.name || subdomain,
             metadata: input.metadata ?? {},
+            opencodeApi: input.opencode?.api ?? DEFAULT_OPENCODE_API,
             customImage,
             autoTerminateAt: input.autoTerminateAfterMs
               ? new Date(Date.now() + input.autoTerminateAfterMs)

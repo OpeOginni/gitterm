@@ -1,24 +1,31 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, db, desc, eq, inArray, sql } from "@gitterm/db";
-import { agentRun, type AgentRun } from "@gitterm/db/schema/agent-run";
-import { cloudProvider } from "@gitterm/db/schema/cloud";
+import { agentRun, type AgentRun, type AgentRunInputRequest } from "@gitterm/db/schema/agent-run";
 import { model, userModelCredential } from "@gitterm/db/schema/model-credentials";
-import { workspace } from "@gitterm/db/schema/workspace";
 import { TRPCError } from "@trpc/server";
+import { RUN_LIFECYCLE_EVENTS } from "../../events/run-lifecycle";
 import { getWorkspaceSetupStatus } from "../workspace-setup";
-import { resolveProjectDirectory } from "../workspace-runtime";
-import { getWorkspaceUrl } from "../../utils/routing";
-import { decryptWorkspacePassword } from "../../utils/workspace-password";
+import { publicRun } from "./public";
 import {
-  cancelOpencodeRun,
-  createOpencodeSession,
-  deleteOpencodeSession,
-  getOpencodeRun,
-  submitOpencodePrompt,
-} from "./opencode";
+  ACTIVE_RUN_STATUSES,
+  TERMINAL_RUN_STATUSES,
+  getRuntime,
+  isActiveRunStatus,
+  type OpencodeRuntime,
+  type PermissionReply,
+} from "./runtime";
+import {
+  getOwnedRun,
+  getRunWorkspace,
+  getRuntimeTarget,
+  notRunningError,
+  type RunWorkspace,
+} from "./target";
+import { ensureWorkspaceWatcher, stoppedWorkspaceMessage, untrackRun } from "./watcher";
 
-const ACTIVE_RUN_STATUSES = ["pending", "running", "retrying"] as const;
-const MISSING_ASSISTANT_GRACE_MS = 10_000;
+export { publicRun, type PublicAgentRun } from "./public";
+export { startRunWatcherSweep } from "./watcher";
+
 const ABANDONED_PENDING_MS = 30_000;
 const NATIVE_CANCEL_TIMEOUT_MS = 2_000;
 
@@ -34,6 +41,11 @@ type RunCreateInput = {
   startTimeoutMs?: number;
   context?: { type: "isolated" } | { type: "continue"; runId: string };
 };
+
+export type RunReply =
+  | { type: "permission"; response: PermissionReply }
+  | { type: "question"; answers: string[][] }
+  | { type: "question"; reject: true };
 
 function requestHash(input: RunCreateInput): string {
   return createHash("sha256")
@@ -51,62 +63,6 @@ function requestHash(input: RunCreateInput): string {
       }),
     )
     .digest("hex");
-}
-
-function publicRun(run: AgentRun) {
-  return {
-    id: run.id,
-    workspaceId: run.workspaceId,
-    title: run.title,
-    status: run.status,
-    error: run.errorMessage,
-    finalText: run.finalText,
-    context: run.parentRunId
-      ? { type: "continued" as const, runId: run.parentRunId }
-      : { type: "isolated" as const },
-    createdAt: run.createdAt.toISOString(),
-    submittedAt: run.submittedAt?.toISOString() ?? null,
-    completedAt: run.completedAt?.toISOString() ?? null,
-  };
-}
-
-async function getOwnedRun(workspaceId: string, runId: string, userId: string) {
-  const [result] = await db
-    .select({ run: agentRun })
-    .from(agentRun)
-    .innerJoin(workspace, eq(workspace.id, agentRun.workspaceId))
-    .where(
-      and(
-        eq(agentRun.id, runId),
-        eq(agentRun.workspaceId, workspaceId),
-        eq(workspace.userId, userId),
-      ),
-    )
-    .limit(1);
-  if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "Run not found" });
-  return result.run;
-}
-
-async function getRunWorkspace(workspaceId: string, userId: string) {
-  const record = await db.query.workspace.findFirst({
-    where: and(eq(workspace.id, workspaceId), eq(workspace.userId, userId)),
-    with: { image: { with: { agentType: true } } },
-  });
-  if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
-  return record;
-}
-
-function notRunningError(status: string): TRPCError {
-  if (status === "terminated") {
-    return new TRPCError({
-      code: "BAD_REQUEST",
-      message: "WORKSPACE_TERMINATED: workspace has been terminated",
-    });
-  }
-  return new TRPCError({
-    code: "BAD_REQUEST",
-    message: `WORKSPACE_NOT_RUNNING: workspace is ${status}${status === "paused" ? "; call workspaces.ensureRunning() to resume it" : ""}`,
-  });
 }
 
 /**
@@ -130,31 +86,8 @@ async function waitForWorkspaceRunning(workspaceId: string, userId: string, time
   }
 }
 
-async function getRuntimeTarget(workspaceId: string, userId: string) {
-  const record = await getRunWorkspace(workspaceId, userId);
-  if (record.status !== "running" || !record.subdomain) {
-    throw notRunningError(record.status);
-  }
-  if (record.image.agentType.provisionerKey !== "opencode" || !record.serverOnly) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Runs require an OpenCode server workspace",
-    });
-  }
-  const [provider] = await db
-    .select({ providerKey: cloudProvider.providerKey })
-    .from(cloudProvider)
-    .where(eq(cloudProvider.id, record.cloudProviderId));
-  return {
-    workspace: record,
-    url: getWorkspaceUrl(record.subdomain),
-    directory: resolveProjectDirectory(record.repositoryUrl, provider?.providerKey),
-    password: record.serverPassword ? decryptWorkspacePassword(record.serverPassword) : null,
-  };
-}
-
 async function validateModelCredential(
-  workspaceRecord: Awaited<ReturnType<typeof getRunWorkspace>>,
+  workspaceRecord: RunWorkspace,
   userId: string,
   selectedModel: string | undefined,
 ) {
@@ -237,24 +170,30 @@ async function withNativeTimeout(operation: Promise<unknown>, message: string) {
   }
 }
 
-async function cancelNativeRun(
-  target: Awaited<ReturnType<typeof getRuntimeTarget>>,
-  nativeSessionId: string,
-) {
+async function cancelNativeRun(runtime: OpencodeRuntime, nativeSessionId: string) {
+  await withNativeTimeout(runtime.abort(nativeSessionId), "Timed out cancelling native agent run");
+}
+
+async function deleteNativeSession(runtime: OpencodeRuntime, nativeSessionId: string) {
   await withNativeTimeout(
-    cancelOpencodeRun({ ...target, runId: nativeSessionId }),
-    "Timed out cancelling native agent run",
+    runtime.deleteSession(nativeSessionId),
+    "Timed out deleting native agent session",
   );
 }
 
-async function deleteNativeSession(
-  target: Awaited<ReturnType<typeof getRuntimeTarget>>,
+/** Reject whatever the agent is blocked on so OpenCode doesn't keep the prompt open after we abort. */
+async function rejectPendingInputs(
+  runtime: OpencodeRuntime,
   nativeSessionId: string,
+  pendingInputs: AgentRunInputRequest[],
 ) {
-  await withNativeTimeout(
-    deleteOpencodeSession({ ...target, sessionId: nativeSessionId }),
-    "Timed out deleting native agent session",
-  );
+  for (const request of pendingInputs) {
+    const rejection =
+      request.kind === "permission"
+        ? runtime.replyPermission(nativeSessionId, request.id, "reject")
+        : runtime.rejectQuestion(nativeSessionId, request.id);
+    await withNativeTimeout(rejection, "Timed out rejecting pending input").catch(() => undefined);
+  }
 }
 
 async function waitForSetup(workspaceId: string, userId: string, timeoutMs: number) {
@@ -282,22 +221,50 @@ async function waitForSetup(workspaceId: string, userId: string, timeoutMs: numb
   }
 }
 
+function publishRun(run: AgentRun) {
+  RUN_LIFECYCLE_EVENTS.publish(run.id, { type: "run.updated", run: publicRun(run) });
+}
+
 async function failRun(runId: string, message: string) {
   const [updated] = await db
     .update(agentRun)
     .set({
       status: "failed",
       errorMessage: message,
+      pendingInputs: [],
       completedAt: new Date(),
       updatedAt: new Date(),
     })
     .where(and(eq(agentRun.id, runId), inArray(agentRun.status, [...ACTIVE_RUN_STATUSES])))
     .returning();
+  if (updated) publishRun(updated);
   return updated;
 }
 
+async function cancelStoppedWorkspaceRun(run: AgentRun) {
+  const [updated] = await db
+    .update(agentRun)
+    .set({
+      status: "cancelled",
+      errorMessage: stoppedWorkspaceMessage(run.status),
+      pendingInputs: [],
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(agentRun.id, run.id), inArray(agentRun.status, [...ACTIVE_RUN_STATUSES])))
+    .returning();
+  if (updated) publishRun(updated);
+  untrackRun(run.workspaceId, run.id);
+  return updated;
+}
+
+/**
+ * Active runs are kept current by the workspace watcher, so reads return the
+ * stored row. This only repairs rows the watcher cannot own: abandoned
+ * submissions and runs whose workspace has since stopped.
+ */
 async function reconcileRun(run: AgentRun, userId: string): Promise<AgentRun> {
-  if (!ACTIVE_RUN_STATUSES.includes(run.status as (typeof ACTIVE_RUN_STATUSES)[number])) return run;
+  if (!isActiveRunStatus(run.status)) return run;
 
   if (run.status === "pending") {
     if (Date.now() - run.updatedAt.getTime() < ABANDONED_PENDING_MS) return run;
@@ -309,45 +276,13 @@ async function reconcileRun(run: AgentRun, userId: string): Promise<AgentRun> {
 
   const workspaceRecord = await getRunWorkspace(run.workspaceId, userId);
   if (workspaceRecord.status !== "running" || !run.nativeSessionId) {
-    const [updated] = await db
-      .update(agentRun)
-      .set({
-        status: "cancelled",
-        errorMessage: "Workspace stopped before the run completed",
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(agentRun.id, run.id), inArray(agentRun.status, [...ACTIVE_RUN_STATUSES])))
-      .returning();
-    return updated ?? (await getOwnedRun(run.workspaceId, run.id, userId));
+    return (
+      (await cancelStoppedWorkspaceRun(run)) ?? (await getOwnedRun(run.workspaceId, run.id, userId))
+    );
   }
 
-  const target = await getRuntimeTarget(run.workspaceId, userId);
-  const missingAssistantIsFailure =
-    Boolean(run.submittedAt) &&
-    Date.now() - (run.submittedAt?.getTime() ?? Date.now()) >= MISSING_ASSISTANT_GRACE_MS;
-  const native = await getOpencodeRun({
-    ...target,
-    workspaceId: run.workspaceId,
-    runId: run.nativeSessionId,
-    messageId: run.nativeMessageId,
-    missingAssistantIsFailure,
-  });
-  const terminal =
-    native.status === "completed" || native.status === "failed" || native.status === "cancelled";
-  const [updated] = await db
-    .update(agentRun)
-    .set({
-      status: native.status,
-      errorMessage: native.error,
-      finalText: native.finalText,
-      messages: native.messages,
-      completedAt: terminal ? new Date() : null,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(agentRun.id, run.id), inArray(agentRun.status, [...ACTIVE_RUN_STATUSES])))
-    .returning();
-  return updated ?? (await getOwnedRun(run.workspaceId, run.id, userId));
+  (await ensureWorkspaceWatcher(run.workspaceId)).track(run);
+  return run;
 }
 
 export async function createAgentRun(input: RunCreateInput, userId: string) {
@@ -376,13 +311,14 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
     await waitForSetup(input.workspaceId, userId, input.setupTimeoutMs ?? 10 * 60_000);
   }
   await waitForRuntimeReady(target.url);
+  const runtime = getRuntime(target);
 
   const id = randomUUID();
   const nativeMessageId = `msg_${id.replaceAll("-", "")}`;
   let parentRun: AgentRun | undefined;
   if (input.context?.type === "continue") {
     parentRun = await getOwnedRun(input.workspaceId, input.context.runId, userId);
-    if (ACTIVE_RUN_STATUSES.includes(parentRun.status as (typeof ACTIVE_RUN_STATUSES)[number])) {
+    if (isActiveRunStatus(parentRun.status)) {
       throw new TRPCError({
         code: "CONFLICT",
         message: "The previous run must finish before its context can be continued",
@@ -437,7 +373,11 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
   try {
     let nativeTitle = inserted.title;
     if (!nativeSessionId) {
-      const native = await createOpencodeSession({ ...target, title: input.title });
+      const native = await runtime.createSession({
+        title: input.title,
+        agent: input.agent,
+        model: input.model,
+      });
       nativeSessionId = native.id;
       nativeTitle = native.title;
       ownsNativeSession = true;
@@ -455,13 +395,14 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       .returning();
     if (!submitting) {
       if (ownsNativeSession) {
-        await cancelNativeRun(target, nativeSessionId).catch(() => undefined);
-        await deleteNativeSession(target, nativeSessionId).catch(() => undefined);
+        await cancelNativeRun(runtime, nativeSessionId).catch(() => undefined);
+        await deleteNativeSession(runtime, nativeSessionId).catch(() => undefined);
       }
       return publicRun(await getOwnedRun(input.workspaceId, inserted.id, userId));
     }
-    await submitOpencodePrompt({
-      ...target,
+    // Attach before prompting so the first events land on a live watcher.
+    (await ensureWorkspaceWatcher(input.workspaceId)).track(submitting);
+    await runtime.prompt({
       sessionId: nativeSessionId,
       messageId: nativeMessageId,
       prompt: input.prompt,
@@ -469,18 +410,19 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       model: input.model,
     });
     const current = await getOwnedRun(input.workspaceId, inserted.id, userId);
-    if (!ACTIVE_RUN_STATUSES.includes(current.status as (typeof ACTIVE_RUN_STATUSES)[number])) {
-      await cancelNativeRun(target, nativeSessionId).catch(() => undefined);
+    if (!isActiveRunStatus(current.status)) {
+      await cancelNativeRun(runtime, nativeSessionId).catch(() => undefined);
       if (ownsNativeSession) {
-        await deleteNativeSession(target, nativeSessionId).catch(() => undefined);
+        await deleteNativeSession(runtime, nativeSessionId).catch(() => undefined);
       }
     }
     return publicRun(current);
   } catch (error) {
+    untrackRun(input.workspaceId, inserted.id);
     if (nativeSessionId) {
-      await cancelNativeRun(target, nativeSessionId).catch(() => undefined);
+      await cancelNativeRun(runtime, nativeSessionId).catch(() => undefined);
       if (ownsNativeSession) {
-        await deleteNativeSession(target, nativeSessionId).catch(() => undefined);
+        await deleteNativeSession(runtime, nativeSessionId).catch(() => undefined);
         await db
           .update(agentRun)
           .set({ nativeSessionId: null, updatedAt: new Date() })
@@ -510,7 +452,7 @@ export async function listAgentRuns(
   if (options.status === "active") {
     conditions.push(inArray(agentRun.status, [...ACTIVE_RUN_STATUSES]));
   } else if (options.status === "terminal") {
-    conditions.push(inArray(agentRun.status, ["completed", "failed", "cancelled"]));
+    conditions.push(inArray(agentRun.status, [...TERMINAL_RUN_STATUSES]));
   }
   const where = and(...conditions);
 
@@ -526,14 +468,8 @@ export async function listAgentRuns(
     .limit(options.limit)
     .offset(options.offset);
 
-  // Active runs are reconciled against the workspace so callers recovering
-  // after a restart see current statuses; terminal rows are already final.
   const runs = await Promise.all(
-    rows.map((row) =>
-      ACTIVE_RUN_STATUSES.includes(row.status as (typeof ACTIVE_RUN_STATUSES)[number])
-        ? reconcileRun(row, userId)
-        : Promise.resolve(row),
-    ),
+    rows.map((row) => (isActiveRunStatus(row.status) ? reconcileRun(row, userId) : row)),
   );
   const total = Number(countRow?.count ?? 0);
   return {
@@ -552,9 +488,50 @@ export async function getAgentRunMessages(workspaceId: string, runId: string, us
   return (await reconcileRun(run, userId)).messages;
 }
 
-export async function cancelAgentRun(workspaceId: string, runId: string, userId: string) {
+export async function respondToAgentRun(
+  input: { workspaceId: string; runId: string; requestId: string; reply: RunReply },
+  userId: string,
+) {
+  const run = await getOwnedRun(input.workspaceId, input.runId, userId);
+  if (run.status !== "awaiting_input" || !run.nativeSessionId) {
+    throw new TRPCError({ code: "CONFLICT", message: "Run is not waiting for input" });
+  }
+  const request = run.pendingInputs.find((candidate) => candidate.id === input.requestId);
+  if (!request) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Input request not found or already answered",
+    });
+  }
+  if (request.kind !== input.reply.type) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Request ${request.id} is a ${request.kind} request`,
+    });
+  }
+
+  const runtime = getRuntime(await getRuntimeTarget(input.workspaceId, userId));
+  if (request.kind === "permission" && input.reply.type === "permission") {
+    await runtime.replyPermission(run.nativeSessionId, request.id, input.reply.response);
+  } else if (request.kind === "question" && input.reply.type === "question") {
+    if ("reject" in input.reply) await runtime.rejectQuestion(run.nativeSessionId, request.id);
+    else await runtime.replyQuestion(run.nativeSessionId, request, input.reply.answers);
+  }
+
+  const watcher = await ensureWorkspaceWatcher(input.workspaceId);
+  watcher.track(run);
+  await watcher.resolveInput(run.id, request.id);
+  return publicRun(await getOwnedRun(input.workspaceId, input.runId, userId));
+}
+
+export async function cancelAgentRun(
+  workspaceId: string,
+  runId: string,
+  userId: string,
+  options: { reason?: string } = {},
+) {
   const run = await getOwnedRun(workspaceId, runId, userId);
-  if (!ACTIVE_RUN_STATUSES.includes(run.status as (typeof ACTIVE_RUN_STATUSES)[number])) {
+  if (!isActiveRunStatus(run.status)) {
     return { cancelled: run.status === "cancelled" };
   }
 
@@ -562,32 +539,40 @@ export async function cancelAgentRun(workspaceId: string, runId: string, userId:
   if (run.nativeSessionId) {
     const workspaceRecord = await getRunWorkspace(workspaceId, userId);
     if (workspaceRecord.status === "running") {
-      const target = await getRuntimeTarget(workspaceId, userId);
-      contextReusable = await cancelNativeRun(target, run.nativeSessionId)
+      const runtime = getRuntime(await getRuntimeTarget(workspaceId, userId));
+      await rejectPendingInputs(runtime, run.nativeSessionId, run.pendingInputs);
+      contextReusable = await cancelNativeRun(runtime, run.nativeSessionId)
         .then(() => true)
         .catch(() => false);
     }
   }
 
+  untrackRun(workspaceId, run.id);
   const [updated] = await db
     .update(agentRun)
     .set({
       status: "cancelled",
+      errorMessage: options.reason ?? null,
+      pendingInputs: [],
       completedAt: new Date(),
       updatedAt: new Date(),
       nativeSessionId: contextReusable ? run.nativeSessionId : null,
     })
     .where(and(eq(agentRun.id, run.id), inArray(agentRun.status, [...ACTIVE_RUN_STATUSES])))
     .returning();
-  if (updated) return { cancelled: true };
+  if (updated) {
+    publishRun(updated);
+    return { cancelled: true };
+  }
 
   const current = await getOwnedRun(workspaceId, runId, userId);
   return { cancelled: current.status === "cancelled" };
 }
 
+/** The workspace is pausing or terminating: end every active run with a reason. */
 export async function finalizeWorkspaceAgentRuns(workspaceId: string, userId: string) {
   const runs = await db
-    .select({ id: agentRun.id })
+    .select({ id: agentRun.id, status: agentRun.status })
     .from(agentRun)
     .where(
       and(
@@ -595,5 +580,9 @@ export async function finalizeWorkspaceAgentRuns(workspaceId: string, userId: st
         inArray(agentRun.status, [...ACTIVE_RUN_STATUSES]),
       ),
     );
-  await Promise.all(runs.map((run) => cancelAgentRun(workspaceId, run.id, userId)));
+  await Promise.all(
+    runs.map((run) =>
+      cancelAgentRun(workspaceId, run.id, userId, { reason: stoppedWorkspaceMessage(run.status) }),
+    ),
+  );
 }
