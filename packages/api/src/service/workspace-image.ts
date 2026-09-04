@@ -20,7 +20,7 @@ const PROVIDER_IMAGE_KIND: Record<string, CustomImageKind> = {
   e2b: "e2b-template",
 };
 
-export function customImageKindForProvider(providerKey: string): CustomImageKind | null {
+function customImageKindForProvider(providerKey: string): CustomImageKind | null {
   return PROVIDER_IMAGE_KIND[providerKey.toLowerCase()] ?? null;
 }
 
@@ -105,7 +105,7 @@ function imageError(message: string): TRPCError {
  * means the image is private (or does not exist, which registries report the
  * same way for anonymous callers).
  */
-export async function verifyPublicImage(
+async function verifyPublicImage(
   parsed: ParsedImageReference,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ digest: string | null }> {

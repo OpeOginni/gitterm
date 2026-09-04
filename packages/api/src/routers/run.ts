@@ -102,7 +102,6 @@ export const runRouter = router({
       ),
     ),
 
-  /** Answer a permission prompt or `question` tool call the run is blocked on. */
   respond: accountProcedure("run:write")
     .input(runTargetSchema.extend({ requestId: z.string().min(1).max(255), reply: runReplySchema }))
     .mutation(async ({ input, ctx }) =>
@@ -117,10 +116,7 @@ export const runRouter = router({
       ),
     ),
 
-  /**
-   * Minimal lifecycle stream used by SDK waits. Detailed message, tool, and
-   * token events belong to the OpenCode API exposed by `getRuntimeAccess`.
-   */
+  /** Lifecycle only; detailed OpenCode events come from `getRuntimeAccess`. */
   lifecycle: accountProcedure("run:read")
     .input(runTargetSchema)
     .subscription(async function* ({ input, ctx, signal }) {

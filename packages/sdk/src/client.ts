@@ -360,7 +360,6 @@ async function runWithServer<T>(serverUrl: string, operation: () => Promise<T>):
   }
 }
 
-type RunLifecycleClient = Pick<ReturnType<typeof createTRPCClient<AppRouter>>, "run">;
 type RunLifecycleEvent =
   | { type: "snapshot"; run: AgentRun }
   | { type: "run.updated"; run: AgentRun };
@@ -370,108 +369,54 @@ function settlesWait(status: AgentRun["status"], until: RunWaitOptions["until"])
   return status === "awaiting_input" && until !== "terminal";
 }
 
-/** Bridge a tRPC subscription into an async iterable that ends with the run. */
-function subscribeToRun(
-  trpc: RunLifecycleClient,
-  target: { workspaceId: string; runId: string },
-  signal?: AbortSignal,
-): AsyncIterable<RunLifecycleEvent> {
-  return {
-    [Symbol.asyncIterator]() {
-      type Item = { event: RunLifecycleEvent } | { error: unknown } | { done: true };
-      const queue: Item[] = [];
-      let pending: { resolve: (item: Item) => void } | null = null;
-      let closed = false;
-
-      const push = (item: Item) => {
-        if (closed) return;
-        if ("event" in item === false) closed = true;
-        if (pending) {
-          const waiter = pending;
-          pending = null;
-          waiter.resolve(item);
-        } else {
-          queue.push(item);
-        }
-      };
-      const take = () =>
-        new Promise<Item>((resolve) => {
-          const item = queue.shift();
-          if (item) resolve(item);
-          else if (closed) resolve({ done: true });
-          else pending = { resolve };
-        });
-
-      const subscription = trpc.run.lifecycle.subscribe(target, {
-        signal,
-        onData: (event) => push({ event: event as RunLifecycleEvent }),
-        onError: (error) => push({ error }),
-        onComplete: () => push({ done: true }),
-      });
-      const onAbort = () =>
-        push({ error: new GittermError("ABORTED", `Aborted while streaming run ${target.runId}`) });
-      signal?.addEventListener("abort", onAbort, { once: true });
-      const close = () => {
-        signal?.removeEventListener("abort", onAbort);
-        subscription.unsubscribe();
-        push({ done: true });
-      };
-
-      return {
-        async next(): Promise<IteratorResult<RunLifecycleEvent>> {
-          const item = await take();
-          if ("event" in item) return { value: item.event, done: false };
-          close();
-          if ("error" in item) throw item.error;
-          return { value: undefined, done: true };
-        },
-        async return(): Promise<IteratorResult<RunLifecycleEvent>> {
-          close();
-          return { value: undefined, done: true };
-        },
-        async throw(error: unknown): Promise<IteratorResult<RunLifecycleEvent>> {
-          close();
-          throw error;
-        },
-      };
-    },
-  };
-}
-
-async function waitForRun(
-  lifecycle: (
-    target: { workspaceId: string; runId: string },
-    signal?: AbortSignal,
-  ) => AsyncIterable<RunLifecycleEvent>,
+/** Resolves with the first lifecycle state that settles the wait. */
+function waitForRun(
+  trpc: ReturnType<typeof createTRPCClient<AppRouter>>,
   target: { workspaceId: string; runId: string },
   options?: RunWaitOptions,
 ): Promise<AgentRun> {
   const timeoutMs = options?.timeoutMs ?? 30 * 60_000;
-  const controller = new AbortController();
-  const onAbort = () => controller.abort();
-  options?.signal?.addEventListener("abort", onAbort, { once: true });
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    throwIfAborted(options?.signal, `waiting for run ${target.runId}`);
+  const what = `waiting for run ${target.runId}`;
+
+  return new Promise<AgentRun>((resolve, reject) => {
+    throwIfAborted(options?.signal, what);
     let last: AgentRun | undefined;
-    for await (const event of lifecycle(target, controller.signal)) {
-      last = event.run;
-      if (settlesWait(event.run.status, options?.until)) return event.run;
-    }
-    if (last && settlesWait(last.status, options?.until)) return last;
-    throw new GittermError("NETWORK", `Run ${target.runId} event stream ended unexpectedly`);
-  } catch (error) {
-    if (options?.signal?.aborted) {
-      throw new GittermError("ABORTED", `Aborted while waiting for run ${target.runId}`);
-    }
-    if (controller.signal.aborted) {
-      throw new GittermError("NETWORK", `Timed out waiting for run ${target.runId}`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-    options?.signal?.removeEventListener("abort", onAbort);
-  }
+    let subscription: { unsubscribe(): void } | undefined;
+    // Settle before tearing down so a callback fired by unsubscribe() is a no-op.
+    const finish = (settle: () => void) => {
+      clearTimeout(timer);
+      options?.signal?.removeEventListener("abort", onAbort);
+      settle();
+      subscription?.unsubscribe();
+    };
+    const onAbort = () =>
+      finish(() => reject(new GittermError("ABORTED", `Aborted while ${what}`)));
+    const timer = setTimeout(
+      () => finish(() => reject(new GittermError("NETWORK", `Timed out ${what}`))),
+      timeoutMs,
+    );
+    options?.signal?.addEventListener("abort", onAbort, { once: true });
+
+    subscription = trpc.run.lifecycle.subscribe(target, {
+      onData: (event) => {
+        last = (event as RunLifecycleEvent).run;
+        if (settlesWait(last.status, options?.until)) {
+          const run = last;
+          finish(() => resolve(run));
+        }
+      },
+      onError: (error) => finish(() => reject(error)),
+      onComplete: () =>
+        finish(() => {
+          if (last && settlesWait(last.status, options?.until)) resolve(last);
+          else {
+            reject(
+              new GittermError("NETWORK", `Run ${target.runId} event stream ended unexpectedly`),
+            );
+          }
+        }),
+    });
+  });
 }
 
 export function createGittermClient(options: GittermClientOptions = {}): GittermClient {
@@ -499,9 +444,6 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
       }),
     ],
   });
-
-  const runLifecycle = (target: { workspaceId: string; runId: string }, signal?: AbortSignal) =>
-    subscribeToRun(trpc, target, signal);
 
   const run = <T>(operation: () => Promise<T>) => runWithServer(credentials.serverUrl, operation);
 
@@ -718,7 +660,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
             typeof refOrWorkspaceId === "string"
               ? maybeOptions
               : (runIdOrOptions as RunWaitOptions | undefined);
-          return waitForRun(runLifecycle, target, waitOptions);
+          return waitForRun(trpc, target, waitOptions);
         }),
     },
     catalog: {

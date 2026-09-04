@@ -104,7 +104,7 @@ export function buildWorkspaceSetupCommand(
       : [
           `SETUP_PORT="\${WORKSPACE_SETUP_PORT:-\${PORT:-${fallbackPort}}}"`,
           "ready=0",
-          'for attempt in $(seq 1 150); do status=$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:$SETUP_PORT" 2>/dev/null || true); case "$status" in [234][0-9][0-9]) ready=1; break ;; esac; sleep 2; done',
+          'for attempt in $(seq 1 150); do status=$(curl -sS --connect-timeout 2 --max-time 2 -o /dev/null -w "%{http_code}" "http://127.0.0.1:$SETUP_PORT" 2>/dev/null || true); case "$status" in [234][0-9][0-9]) ready=1; break ;; esac; sleep 2; done',
           'if [ "$ready" -ne 1 ]; then date -u +%Y-%m-%dT%H:%M:%SZ > "$SETUP_DIR/finished-at"; printf "Agent did not become ready on port %s\\n" "$SETUP_PORT" > "$SETUP_DIR/setup.log"; printf "124\\n" > "$SETUP_DIR/exit-code"; printf "failed\\n" > "$SETUP_DIR/state"; SETUP_FINISHED=$(cat "$SETUP_DIR/finished-at"); SETUP_LOG=$(base64 < "$SETUP_DIR/setup.log" | tr -d "\\n"); report_setup failed 124 null "\\"$SETUP_FINISHED\\"" "$SETUP_LOG" || true; exit 0; fi',
         ];
   const script = [
@@ -116,7 +116,7 @@ export function buildWorkspaceSetupCommand(
     "BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || printf unknown)",
     'if ! mkdir "$SETUP_DIR/claim" 2>/dev/null; then OLD_BOOT_ID=$(cat "$SETUP_DIR/claim/boot-id" 2>/dev/null || true); OLD_PID=$(cat "$SETUP_DIR/claim/pid" 2>/dev/null || true); if [ "$OLD_BOOT_ID" = "$BOOT_ID" ] && [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then exit 0; fi; rm -rf "$SETUP_DIR/claim"; mkdir "$SETUP_DIR/claim" 2>/dev/null || exit 0; fi',
     'printf "%s\n" "$BOOT_ID" > "$SETUP_DIR/claim/boot-id"',
-    'printf "%s\n" "$$" > "$SETUP_DIR/claim/pid"',
+    'printf "%s\n" "${BASHPID:-$$}" > "$SETUP_DIR/claim/pid"',
     "trap 'rm -rf \"$SETUP_DIR/claim\"' EXIT HUP INT TERM",
     'printf "waiting\\n" > "$SETUP_DIR/state"',
     ...readiness,

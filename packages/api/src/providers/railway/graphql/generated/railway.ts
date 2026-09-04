@@ -6333,6 +6333,12 @@ export type DeploymentRedeployMutation = {
   };
 };
 
+export type DeploymentStopMutationVariables = Exact<{
+  id: Scalars["String"]["input"];
+}>;
+
+export type DeploymentStopMutation = { __typename?: "Mutation"; deploymentStop: boolean };
+
 export type DeploymentRemoveMutationVariables = Exact<{
   id: Scalars["String"]["input"];
 }>;
@@ -6492,6 +6498,11 @@ export const DeploymentRedeployDocument = `
   }
 }
     `;
+export const DeploymentStopDocument = `
+    mutation DeploymentStop($id: String!) {
+  deploymentStop(id: $id)
+}
+    `;
 export const DeploymentRemoveDocument = `
     mutation DeploymentRemove($id: String!) {
   deploymentRemove(id: $id)
@@ -6626,6 +6637,16 @@ export function getSdk<C>(requester: Requester<C>) {
         variables,
         options,
       ) as Promise<DeploymentRedeployMutation>;
+    },
+    DeploymentStop(
+      variables: DeploymentStopMutationVariables,
+      options?: C,
+    ): Promise<DeploymentStopMutation> {
+      return requester<DeploymentStopMutation, DeploymentStopMutationVariables>(
+        DeploymentStopDocument,
+        variables,
+        options,
+      ) as Promise<DeploymentStopMutation>;
     },
     DeploymentRemove(
       variables: DeploymentRemoveMutationVariables,

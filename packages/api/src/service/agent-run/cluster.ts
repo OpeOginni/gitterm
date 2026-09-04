@@ -2,20 +2,13 @@ import { randomUUID } from "node:crypto";
 import { getRedisClient, RedisKeys, type RedisClient } from "@gitterm/redis";
 
 /**
- * Coordination between `apps/server` replicas for agent runs.
- *
- * - One replica owns a workspace's OpenCode event stream at a time, decided by
- *   a Redis lease keyed on the workspace. Leases expire, so a crashed owner is
- *   replaced by whichever replica sweeps next.
- * - Run events and watcher control messages fan out over Redis pub/sub so an
- *   SSE subscriber or a `respond` call can land on any replica.
- *
- * When Redis is unreachable every replica behaves as if it were the only one:
- * that risks duplicate (idempotent) writers, never a stalled run.
+ * Replica coordination: a Redis lease per workspace picks the replica that watches
+ * its OpenCode stream; run events and watcher control fan out over pub/sub.
+ * Without Redis each replica acts alone (duplicate writers are idempotent).
  */
 export const INSTANCE_ID = randomUUID();
 
-export const LEASE_TTL_MS = 90_000;
+const LEASE_TTL_MS = 90_000;
 const RUN_LIFECYCLE_CHANNEL = "gitterm:run-lifecycle";
 const WATCH_CONTROL_CHANNEL = "gitterm:run-watch";
 
@@ -89,7 +82,7 @@ export type WatchControl =
 
 type Envelope<T> = { origin: string; payload: T };
 
-const handlers = new Map<string, Set<(payload: unknown) => void>>();
+const handlers = new Map<string, (payload: unknown) => void>();
 let subscriber: RedisClient | null = null;
 
 function ensureSubscriber() {
@@ -109,25 +102,16 @@ function ensureSubscriber() {
       return;
     }
     if (envelope.origin === INSTANCE_ID) return;
-    for (const handler of handlers.get(channel) ?? []) handler(envelope.payload);
+    handlers.get(channel)?.(envelope.payload);
   });
   void subscriber
     .subscribe(RUN_LIFECYCLE_CHANNEL, WATCH_CONTROL_CHANNEL)
     .catch((error) => log("warn", "pub/sub subscribe failed", { error }));
 }
 
-function subscribeChannel<T>(channel: string, handler: (payload: T) => void): () => void {
+function subscribeChannel<T>(channel: string, handler: (payload: T) => void): void {
   ensureSubscriber();
-  let set = handlers.get(channel);
-  if (!set) {
-    set = new Set();
-    handlers.set(channel, set);
-  }
-  const wrapped = handler as (payload: unknown) => void;
-  set.add(wrapped);
-  return () => {
-    set?.delete(wrapped);
-  };
+  handlers.set(channel, handler as (payload: unknown) => void);
 }
 
 function publishChannel<T>(channel: string, payload: T): void {
@@ -143,17 +127,16 @@ function publishChannel<T>(channel: string, payload: T): void {
   });
 }
 
-/** Run events from other replicas (own events are emitted locally, not echoed). */
-export function onRemoteRunLifecycleEvent<T>(handler: (message: T) => void): () => void {
-  return subscribeChannel(RUN_LIFECYCLE_CHANNEL, handler);
+export function onRemoteRunLifecycleEvent<T>(handler: (message: T) => void): void {
+  subscribeChannel(RUN_LIFECYCLE_CHANNEL, handler);
 }
 
 export function publishRunLifecycleEventRemote<T>(message: T): void {
   publishChannel(RUN_LIFECYCLE_CHANNEL, message);
 }
 
-export function onWatchControl(handler: (message: WatchControl) => void): () => void {
-  return subscribeChannel(WATCH_CONTROL_CHANNEL, handler);
+export function onWatchControl(handler: (message: WatchControl) => void): void {
+  subscribeChannel(WATCH_CONTROL_CHANNEL, handler);
 }
 
 export function publishWatchControl(message: WatchControl): void {

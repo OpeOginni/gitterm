@@ -1,5 +1,5 @@
 import { and, db, eq } from "@gitterm/db";
-import { agentRun } from "@gitterm/db/schema/agent-run";
+import { agentRun, type AgentRun } from "@gitterm/db/schema/agent-run";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { TRPCError } from "@trpc/server";
@@ -8,9 +8,13 @@ import { decryptWorkspacePassword } from "../../utils/workspace-password";
 import { resolveProjectDirectory } from "../workspace-runtime";
 import type { RuntimeTarget } from "./runtime";
 
-export async function getOwnedRun(workspaceId: string, runId: string, userId: string) {
+export async function getOwnedRun(
+  workspaceId: string,
+  runId: string,
+  userId: string,
+): Promise<{ run: AgentRun; workspaceStatus: string }> {
   const [result] = await db
-    .select({ run: agentRun })
+    .select({ run: agentRun, workspaceStatus: workspace.status })
     .from(agentRun)
     .innerJoin(workspace, eq(workspace.id, agentRun.workspaceId))
     .where(
@@ -22,7 +26,7 @@ export async function getOwnedRun(workspaceId: string, runId: string, userId: st
     )
     .limit(1);
   if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "Run not found" });
-  return result.run;
+  return result;
 }
 
 async function findWorkspace(workspaceId: string, userId?: string) {
@@ -59,6 +63,10 @@ function isOpencodeServerWorkspace(record: RunWorkspace): boolean {
   return record.image.agentType.provisionerKey === "opencode" && record.serverOnly;
 }
 
+function canServeRuns(record: RunWorkspace): record is RunWorkspace & { subdomain: string } {
+  return record.status === "running" && !!record.subdomain && isOpencodeServerWorkspace(record);
+}
+
 async function buildTarget(record: RunWorkspace & { subdomain: string }): Promise<RuntimeTarget> {
   const [provider] = await db
     .select({ providerKey: cloudProvider.providerKey })
@@ -72,32 +80,32 @@ async function buildTarget(record: RunWorkspace & { subdomain: string }): Promis
   };
 }
 
-export async function getRuntimeTarget(workspaceId: string, userId: string) {
-  const record = await getRunWorkspace(workspaceId, userId);
-  if (record.status !== "running" || !record.subdomain) {
-    throw notRunningError(record.status);
-  }
-  if (!isOpencodeServerWorkspace(record)) {
+export async function runtimeTargetFor(record: RunWorkspace): Promise<RuntimeTarget> {
+  if (record.status !== "running" || !record.subdomain) throw notRunningError(record.status);
+  if (!canServeRuns(record)) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Runs require an OpenCode server workspace",
     });
   }
-  return { workspace: record, ...(await buildTarget({ ...record, subdomain: record.subdomain })) };
+  return buildTarget(record);
+}
+
+export async function getRuntimeTarget(workspaceId: string, userId: string) {
+  const record = await getRunWorkspace(workspaceId, userId);
+  return { workspace: record, ...(await runtimeTargetFor(record)) };
 }
 
 export type WorkspaceRuntimeLookup =
   | { kind: "ok"; target: RuntimeTarget }
   | { kind: "unavailable"; status: string };
 
-/** Resolve a workspace's agent server without a user context (for the run watcher). */
+/** No user context; used by the watcher. */
 export async function getRuntimeTargetForWorkspace(
   workspaceId: string,
 ): Promise<WorkspaceRuntimeLookup> {
   const record = await findWorkspace(workspaceId);
   if (!record) return { kind: "unavailable", status: "missing" };
-  if (record.status !== "running" || !record.subdomain || !isOpencodeServerWorkspace(record)) {
-    return { kind: "unavailable", status: record.status };
-  }
-  return { kind: "ok", target: await buildTarget({ ...record, subdomain: record.subdomain }) };
+  if (!canServeRuns(record)) return { kind: "unavailable", status: record.status };
+  return { kind: "ok", target: await buildTarget(record) };
 }

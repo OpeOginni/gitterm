@@ -7,30 +7,23 @@ import {
   asRecord,
   asString,
   asStringArray,
-  authorizationHeader,
   createRuntimeHttp,
   isSessionNotFound,
-  parseEventData,
-  readServerSentEvents,
-  runtimeUrl,
+  signalStream,
 } from "./http";
 import {
+  missingSessionSnapshot,
   parseModelRef,
   permissionTitle,
+  sessionStatusOf,
+  truncateToolOutput,
   type OpencodeRuntime,
   type QuestionInputRequest,
   type RuntimeSignal,
-  type RuntimeSnapshot,
   type RuntimeTarget,
 } from "./types";
 
-const TOOL_OUTPUT_LIMIT = 4_000;
-
-/**
- * The OpenCode 2 API: everything under `/api/*`, events on `/api/event` with a
- * `{ id, type, data }` envelope, and the `question` tool surfaced as a form.
- * Verified against `@opencode-ai/cli@beta` (0.0.0-beta-19059).
- */
+/** OpenCode 2 (`/api/*`, `{ id, type, data }` events, questions as forms). Verified on beta-19059. */
 function session(sessionId: string): string {
   return `/api/session/${encodeURIComponent(sessionId)}`;
 }
@@ -91,7 +84,7 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
       try {
         await http.send(session(sessionId));
       } catch (error) {
-        if (isSessionNotFound(error)) return missingSession();
+        if (isSessionNotFound(error)) return missingSessionSnapshot();
         throw error;
       }
       const [active, messages, permissions, forms] = await Promise.all([
@@ -130,22 +123,7 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
       };
     },
 
-    async *subscribe(signal) {
-      const stream = readServerSentEvents(runtimeUrl(target, "/api/event"), {
-        headers: authorizationHeader(target.password),
-        signal,
-      });
-      for await (const item of stream) {
-        if (item.event === "open") {
-          yield { type: "connected" };
-          continue;
-        }
-        const raw = parseEventData(item.data);
-        if (!raw) continue;
-        const signalValue = parseV2Signal(raw);
-        if (signalValue) yield signalValue;
-      }
-    },
+    subscribe: (signal) => signalStream(target, "/api/event", parseV2Signal, signal),
 
     async replyPermission(sessionId, requestId, reply) {
       await http.send(`${session(sessionId)}/permission/${encodeURIComponent(requestId)}/reply`, {
@@ -194,23 +172,7 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
   }
 }
 
-function missingSession(): RuntimeSnapshot {
-  return {
-    sessionExists: false,
-    busy: false,
-    retry: false,
-    messages: [],
-    finalText: null,
-    assistant: { exists: false, completed: false, error: null },
-    pendingInputs: [],
-  };
-}
-
-/**
- * v2 assistant messages carry no parent id, so the run owns its user message
- * and every assistant message that follows it up to the next user message.
- * Runs never share a live session, so that window is exactly one turn.
- */
+/** v2 assistant messages have no parent id: a run owns its user message through the next user message. */
 export function selectRunMessages(
   messages: Record<string, unknown>[],
   messageId: string,
@@ -231,12 +193,6 @@ function assistantText(message: Record<string, unknown>): string {
     .map((item) => asString(item.text) ?? "")
     .join("\n")
     .trim();
-}
-
-function truncate(value: string, limit: number): string {
-  return value.length > limit
-    ? `${value.slice(0, limit)}\n…[truncated ${value.length - limit} chars]`
-    : value;
 }
 
 function toIso(value: unknown): string | null {
@@ -279,7 +235,7 @@ export function normalizeMessage(message: Record<string, unknown>): AgentRunMess
           status === "running" || status === "completed" || status === "error" ? status : "pending",
         title: asString(asRecord(state.metadata).title),
         input: typeof state.input === "object" && state.input ? asRecord(state.input) : {},
-        output: status === "completed" ? truncate(output, TOOL_OUTPUT_LIMIT) : null,
+        output: status === "completed" ? truncateToolOutput(output) : null,
         error:
           status === "error" ? (asString(asRecord(state.error).message) ?? "Tool failed") : null,
         startedAt: toIso(toolTime.ran) ?? toIso(toolTime.created),
@@ -375,14 +331,8 @@ export function parseV2Signal(raw: Record<string, unknown>): RuntimeSignal | nul
     case "session.retry.scheduled":
       return sessionId ? { type: "session.status", sessionId, status: "retry" } : null;
     case "session.status": {
-      const status = asString(asRecord(data.status).type);
-      return sessionId
-        ? {
-            type: "session.status",
-            sessionId,
-            status: status === "busy" ? "busy" : status === "retry" ? "retry" : "idle",
-          }
-        : null;
+      const status = sessionStatusOf(asString(asRecord(data.status).type));
+      return sessionId ? { type: "session.status", sessionId, status } : null;
     }
     case "session.error":
       return sessionId

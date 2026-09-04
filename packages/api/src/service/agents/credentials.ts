@@ -203,16 +203,14 @@ export async function resolveWorkspaceProviderCredentials(options: {
   ]);
 
   const inlineProviders = new Set(inline.map((credential) => credential.logicalProviderKey));
-  if (
-    selectorEntries.length > 0 &&
-    stored.some((credential) => inlineProviders.has(credential.logicalProviderKey))
-  ) {
-    const duplicate = stored.find((credential) =>
-      inlineProviders.has(credential.logicalProviderKey),
-    )!;
+  const clash =
+    selectorEntries.length > 0
+      ? stored.find((credential) => inlineProviders.has(credential.logicalProviderKey))
+      : undefined;
+  if (clash) {
     throw credentialError(
       "MODEL_CREDENTIAL_DUPLICATE_PROVIDER",
-      `Only one credential can be selected for ${duplicate.logicalProviderKey}`,
+      `Only one credential can be selected for ${clash.logicalProviderKey}`,
     );
   }
   return [

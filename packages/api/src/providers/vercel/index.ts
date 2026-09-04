@@ -35,6 +35,7 @@ const WORKSPACE_ID_TAG = "gitterm_workspace";
 const REPO_NAME_TAG = "gitterm_repo";
 const AGENT_COMMAND_TAG = "gitterm_command";
 const AGENT_PORT_TAG = "gitterm_port";
+const POST_START_SCRIPT = "/tmp/gitterm-agent-post-start.sh";
 const CONTAINER_PROVISIONING_ENV_KEYS = new Set([
   "AGENT_FILES_BASE64",
   "GITHUB_APP_TOKEN",
@@ -135,13 +136,37 @@ export class VercelProvider implements ComputeProvider {
     sandbox: VercelSandbox,
     repoDir: string,
     serve: { command: string; port: number },
+    postStartCommand?: string,
   ): Promise<void> {
+    if (postStartCommand) {
+      await sandbox.writeFiles([
+        { path: POST_START_SCRIPT, content: Buffer.from(postStartCommand), mode: 0o700 },
+      ]);
+    }
+    const command = postStartCommand
+      ? `${serve.command} > /tmp/agent-server.log 2>&1 & agent_pid=$!; ${POST_START_SCRIPT} > /tmp/agent-post-start.log 2>&1; wait "$agent_pid"`
+      : `exec ${serve.command} > /tmp/agent-server.log 2>&1`;
     await sandbox.runCommand({
       cmd: "bash",
-      args: ["-lc", `exec ${serve.command} > /tmp/agent-server.log 2>&1`],
+      args: ["-lc", command],
       cwd: repoDir,
       detached: true,
     });
+    if (postStartCommand) {
+      const launched = await sandbox.runCommand({
+        cmd: "bash",
+        args: [
+          "-lc",
+          "for attempt in $(seq 1 10); do [ -f .gitterm/setup/after-agent/state ] && exit 0; sleep 1; done; cat /tmp/agent-post-start.log >&2 2>/dev/null || true; exit 1",
+        ],
+        cwd: repoDir,
+      });
+      if (launched.exitCode !== 0) {
+        throw new Error(
+          `Vercel post-start command did not launch: ${(await launched.stderr()).trim() || "no diagnostic log"}`,
+        );
+      }
+    }
   }
 
   private async setupAgent(sandbox: VercelSandbox, commands: string[] | undefined): Promise<void> {
@@ -331,17 +356,9 @@ esac
       accessCredential = await logger.step("capture-access-credential", () =>
         this.captureAccessCredential(sandbox, spec, repoDir),
       );
-      await logger.step("start-agent-server", () => this.startAgentServer(sandbox, repoDir, serve));
-      if (spec?.agent.serve?.postStartCommand) {
-        await logger.step("run-post-start-command", () =>
-          sandbox.runCommand({
-            cmd: "bash",
-            args: ["-lc", spec.agent.serve!.postStartCommand!],
-            cwd: repoDir,
-            detached: true,
-          }),
-        );
-      }
+      await logger.step("start-agent-server", () =>
+        this.startAgentServer(sandbox, repoDir, serve, spec?.agent.serve?.postStartCommand),
+      );
     } catch (error) {
       await sandbox.delete().catch(() => undefined);
       throw error;

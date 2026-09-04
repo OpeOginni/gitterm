@@ -35,6 +35,8 @@ describe("buildWorkspaceSetupCommand", () => {
     expect(command).toContain('mkdir "$SETUP_DIR/claim"');
     expect(command).toContain('kill -0 "$OLD_PID"');
     expect(command).toContain('rm -rf "$SETUP_DIR/claim"');
+    expect(command).toContain("${BASHPID:-$$}");
+    expect(command).toContain("--max-time 2");
     expect(command).toContain("[234][0-9][0-9]");
     expect(command).toEndWith(") >/dev/null 2>&1 &");
   });
