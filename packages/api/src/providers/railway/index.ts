@@ -413,9 +413,9 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error("No running deployment found");
     }
 
-    await railway.DeploymentRemove({ id: externalRunningDeploymentId }).catch((error) => {
-      console.error("Railway API Error (DeploymentRemove):", error);
-      throw new Error(`Railway API Error (DeploymentRemove): ${error.message}`);
+    await railway.DeploymentStop({ id: externalRunningDeploymentId }).catch((error) => {
+      console.error("Railway API Error (DeploymentStop):", error);
+      throw new Error(`Railway API Error (DeploymentStop): ${error.message}`);
     });
   }
 

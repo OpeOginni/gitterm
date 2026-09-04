@@ -152,6 +152,8 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
   const repo = requiredEnv("GITTERM_E2E_REPO");
   const agent = process.env.GITTERM_E2E_AGENT?.trim() || "opencode";
   const model = process.env.GITTERM_E2E_MODEL?.trim() || "opencode/big-pickle";
+  const modelCredentials =
+    model === "opencode/big-pickle" ? [{ providerName: "opencode", apiKey: "public" }] : undefined;
   // Overall per-step budget; must exceed the setup wrapper's 300s readiness
   // probe so probe failures can report before the smoke gives up.
   const timeoutMs = Number(process.env.GITTERM_E2E_TIMEOUT_MS ?? MAX_ENSURE_RUNNING_TIMEOUT_MS);
@@ -181,7 +183,11 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
     const catalogProvider = await step(result.steps, "validate catalog", async () => {
       const catalog = await client.catalog.workspaceOptions();
       const configuredProvider = catalog.providers.find((entry) => entry.type === provider);
-      if (!configuredProvider) throw new Error(`${provider} is not enabled on ${serverUrl}`);
+      if (!configuredProvider) {
+        throw new Error(
+          `${provider} is unavailable on ${serverUrl} (catalog providers: ${catalog.providers.map((entry) => entry.type).join(", ") || "none"})`,
+        );
+      }
       if (!configuredProvider.agentKeys.includes(agent)) {
         throw new Error(`${provider} does not support agent ${agent}`);
       }
@@ -204,6 +210,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
         repo,
         agent,
         provider: { type: provider } as WorkspaceProviderSelection,
+        modelCredentials,
         setup: {
           afterAgent: [
             (workspaceApiAccess
@@ -216,7 +223,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
                   'echo "=== marker: api reachability ($(date -u +%H:%M:%SZ))"',
                   'curl -sS -m 10 -o /dev/null -w "api http %{http_code}\\n" "$WORKSPACE_API_URL" || echo "api unreachable"',
                   'echo "=== marker: workspace info ($(date -u +%H:%M:%SZ))"',
-                  "timeout 30 gitterm workspace info --json",
+                  `workspace_ready=0; for attempt in $(seq 1 60); do workspace_info=$(timeout 30 gitterm workspace info --json); printf "%s\\n" "$workspace_info"; if printf "%s\\n" "$workspace_info" | grep -Eq '"status":[[:space:]]*"running"'; then workspace_ready=1; break; fi; sleep 2; done; [ "$workspace_ready" -eq 1 ] || { echo "workspace did not reach running status"; exit 1; }`,
                   'echo "=== marker: ports list ($(date -u +%H:%M:%SZ))"',
                   "timeout 30 gitterm ports list --json",
                   'echo "=== marker: ports open ($(date -u +%H:%M:%SZ))"',

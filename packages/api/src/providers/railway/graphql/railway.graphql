@@ -75,6 +75,10 @@ mutation DeploymentRedeploy($id: String!) {
   }
 }
 
+mutation DeploymentStop($id: String!) {
+  deploymentStop(id: $id)
+}
+
 mutation DeploymentRemove($id: String!) {
   deploymentRemove(id: $id)
 }
