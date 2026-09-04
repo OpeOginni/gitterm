@@ -6,7 +6,7 @@ export type AgentRunStatus = (typeof agentRunStatusEnum.enumValues)[number];
 export const ACTIVE_RUN_STATUSES = ["pending", "running", "retrying", "awaiting_input"] as const;
 export const TERMINAL_RUN_STATUSES = ["completed", "failed", "cancelled"] as const;
 
-/** OpenCode has been prompted but produced no assistant message yet: give it this long before failing. */
+/** Grace before a prompted session with no assistant message counts as failed. */
 export const MISSING_ASSISTANT_GRACE_MS = 10_000;
 
 export function isActiveRunStatus(status: string): boolean {
@@ -19,10 +19,6 @@ export function isTerminalRunStatus(status: string): boolean {
 
 export type DerivedRunState = { status: AgentRunStatus; errorMessage: string | null };
 
-/**
- * Turn a session snapshot into a run status. Pure so both OpenCode API
- * generations and the tests share one definition of "done".
- */
 export function deriveRunState(
   snapshot: RuntimeSnapshot,
   context: { submittedAt: Date | null; sessionError?: string | null; now?: number },

@@ -6,31 +6,20 @@ import {
   isOpencodeRunMessage,
   snapshotParts,
 } from "../opencode";
+import { asRecord, asString, asStringArray, createRuntimeHttp, signalStream } from "./http";
 import {
-  asRecord,
-  asString,
-  asStringArray,
-  authorizationHeader,
-  createRuntimeHttp,
-  parseEventData,
-  readServerSentEvents,
-  runtimeUrl,
-} from "./http";
-import {
+  missingSessionSnapshot,
   parseModelRef,
   permissionTitle,
+  sessionStatusOf,
   type OpencodeRuntime,
   type PermissionReply,
   type QuestionInputRequest,
   type RuntimeSignal,
-  type RuntimeSnapshot,
   type RuntimeTarget,
 } from "./types";
 
-/**
- * The legacy OpenCode API (1.x images): `/event`, `/session/*`, and the
- * global `/permission` + `/question` request lists.
- */
+/** OpenCode 1.x: `/event`, `/session/*`, global `/permission` + `/question` lists. */
 export function createV1Runtime(target: RuntimeTarget): OpencodeRuntime {
   const client = () => createWorkspaceOpencodeClient(target);
   const http = createRuntimeHttp(target);
@@ -88,7 +77,7 @@ export function createV1Runtime(target: RuntimeTarget): OpencodeRuntime {
         http.json<unknown>(`/permission${directoryQuery}`).catch(() => []),
         http.json<unknown>(`/question${directoryQuery}`).catch(() => []),
       ]);
-      if (session.response.status === 404) return missingSession();
+      if (session.response.status === 404) return missingSessionSnapshot();
       if (session.error || !session.data) throw new Error(formatOpencodeError(session.error));
       if (statuses.error || !statuses.data) throw new Error(formatOpencodeError(statuses.error));
       if (messages.error || !messages.data) throw new Error(formatOpencodeError(messages.error));
@@ -153,22 +142,7 @@ export function createV1Runtime(target: RuntimeTarget): OpencodeRuntime {
       };
     },
 
-    async *subscribe(signal) {
-      const stream = readServerSentEvents(runtimeUrl(target, `/event${directoryQuery}`), {
-        headers: authorizationHeader(target.password),
-        signal,
-      });
-      for await (const item of stream) {
-        if (item.event === "open") {
-          yield { type: "connected" };
-          continue;
-        }
-        const raw = parseEventData(item.data);
-        if (!raw) continue;
-        const signalValue = parseV1Signal(raw);
-        if (signalValue) yield signalValue;
-      }
-    },
+    subscribe: (signal) => signalStream(target, `/event${directoryQuery}`, parseV1Signal, signal),
 
     async replyPermission(sessionId, requestId, reply) {
       const result = await client().postSessionIdPermissionsPermissionId({
@@ -192,18 +166,6 @@ export function createV1Runtime(target: RuntimeTarget): OpencodeRuntime {
         json: {},
       });
     },
-  };
-}
-
-function missingSession(): RuntimeSnapshot {
-  return {
-    sessionExists: false,
-    busy: false,
-    retry: false,
-    messages: [],
-    finalText: null,
-    assistant: { exists: false, completed: false, error: null },
-    pendingInputs: [],
   };
 }
 
@@ -281,13 +243,8 @@ export function parseV1Signal(raw: Record<string, unknown>): RuntimeSignal | nul
       );
     case "session.status": {
       const sessionId = asString(properties.sessionID);
-      const status = asString(asRecord(properties.status).type);
-      if (!sessionId) return null;
-      return {
-        type: "session.status",
-        sessionId,
-        status: status === "busy" ? "busy" : status === "retry" ? "retry" : "idle",
-      };
+      const status = sessionStatusOf(asString(asRecord(properties.status).type));
+      return sessionId ? { type: "session.status", sessionId, status } : null;
     }
     case "session.idle": {
       const sessionId = asString(properties.sessionID);

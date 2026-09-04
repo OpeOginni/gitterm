@@ -1,4 +1,4 @@
-import type { RuntimeTarget } from "./types";
+import type { RuntimeSignal, RuntimeTarget } from "./types";
 
 export class RuntimeHttpError extends Error {
   constructor(
@@ -24,7 +24,6 @@ export function runtimeUrl(target: Pick<RuntimeTarget, "url">, path: string): st
   return `${target.url.replace(/\/$/, "")}${path}`;
 }
 
-/** Minimal JSON client for the OpenCode routes the generated SDKs don't cover. */
 export function createRuntimeHttp(target: RuntimeTarget) {
   const headers = authorizationHeader(target.password);
   async function send(path: string, init: RequestInit & { json?: unknown } = {}) {
@@ -69,12 +68,7 @@ export function createRuntimeHttp(target: RuntimeTarget) {
 
 type ServerSentEvent = { event: string | null; data: string };
 
-/**
- * Read a `text/event-stream` response. The first yielded item is a synthetic
- * `open` event so callers know the connection is established. The generator
- * ends when the server closes the stream and throws when the request fails or
- * `signal` aborts.
- */
+/** Yields a synthetic `open` event first; ends on server close, throws on failure or abort. */
 export async function* readServerSentEvents(
   url: string,
   init: { headers?: Record<string, string>; signal: AbortSignal },
@@ -122,6 +116,27 @@ export async function* readServerSentEvents(
     }
   } finally {
     await reader.cancel().catch(() => undefined);
+  }
+}
+
+export async function* signalStream(
+  target: RuntimeTarget,
+  path: string,
+  parse: (raw: Record<string, unknown>) => RuntimeSignal | null,
+  signal: AbortSignal,
+): AsyncGenerator<RuntimeSignal, void, undefined> {
+  const stream = readServerSentEvents(runtimeUrl(target, path), {
+    headers: authorizationHeader(target.password),
+    signal,
+  });
+  for await (const item of stream) {
+    if (item.event === "open") {
+      yield { type: "connected" };
+      continue;
+    }
+    const raw = parseEventData(item.data);
+    const parsed = raw && parse(raw);
+    if (parsed) yield parsed;
   }
 }
 

@@ -99,13 +99,18 @@ function toMarkers(files: {
   };
 }
 
-function withTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
-  return Promise.race([
-    operation,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out`)), READ_TIMEOUT_MS),
-    ),
-  ]);
+async function withTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out`)), READ_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

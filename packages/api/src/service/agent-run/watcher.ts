@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, db, eq, inArray } from "@gitterm/db";
-import { agentRun, type AgentRun } from "@gitterm/db/schema/agent-run";
+import { agentRun } from "@gitterm/db/schema/agent-run";
 import { RUN_LIFECYCLE_EVENTS } from "../../events/run-lifecycle";
 import { recordWorkspaceActivity } from "../workspace-activity";
 import {
@@ -11,7 +11,6 @@ import {
   releaseWatcherLease,
   renewWatcherLease,
 } from "./cluster";
-import { publicRun } from "./public";
 import {
   ACTIVE_RUN_STATUSES,
   deriveRunState,
@@ -20,6 +19,14 @@ import {
   type OpencodeRuntime,
   type RuntimeSignal,
 } from "./runtime";
+import {
+  loadRun,
+  publishRun,
+  settleRun,
+  sleep,
+  trackableRunColumns,
+  type TrackableRun,
+} from "./store";
 import { getRuntimeTargetForWorkspace } from "./target";
 
 const HEARTBEAT_MS = 30_000;
@@ -29,23 +36,19 @@ const RECONNECT_MIN_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 const SWEEP_MS = 30_000;
 
-export const WORKSPACE_STOPPED_MESSAGE = "Workspace stopped before the run completed";
-export const WORKSPACE_PAUSED_AWAITING_INPUT_MESSAGE = "Workspace paused while waiting for input";
+const WATCHED_STATUSES = ACTIVE_RUN_STATUSES.filter((status) => status !== "pending");
 
-type TrackableRun = Pick<
-  AgentRun,
-  "id" | "nativeSessionId" | "nativeMessageId" | "submittedAt" | "status" | "pendingInputs"
->;
+export function stoppedWorkspaceMessage(status: string): string {
+  return status === "awaiting_input"
+    ? "Workspace paused while waiting for input"
+    : "Workspace stopped before the run completed";
+}
 
-/**
- * What callers get from `ensureWorkspaceWatcher`: the local watcher when this
- * replica owns the workspace, otherwise a proxy that forwards to the owner.
- */
+/** The local watcher when this replica holds the lease, otherwise a proxy to the owner. */
 export interface RunWatcherHandle {
   readonly local: boolean;
   track(run: TrackableRun): void;
   untrack(runId: string): void;
-  /** Re-read a run right after a reply so callers see the new status. */
   resolveInput(runId: string, requestId: string): Promise<void>;
 }
 
@@ -57,7 +60,6 @@ type TrackedRun = {
   status: string;
   pendingInputs: string;
   sessionError: string | null;
-  lastRun: string | null;
   debounce: ReturnType<typeof setTimeout> | null;
   refreshing: Promise<void> | null;
   dirty: boolean;
@@ -67,31 +69,9 @@ function log(level: "info" | "warn", message: string, context: Record<string, un
   console[level](`[run-watcher] ${message}`, context);
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export function stoppedWorkspaceMessage(status: string): string {
-  return status === "awaiting_input"
-    ? WORKSPACE_PAUSED_AWAITING_INPUT_MESSAGE
-    : WORKSPACE_STOPPED_MESSAGE;
-}
-
-/**
- * Holds one OpenCode event stream per workspace with active runs and keeps
- * those runs' rows current. Events only tell it *which* session changed; the
- * authoritative state always comes from `runtime.snapshot()`, so a missed or
- * reordered event costs at most one extra fetch, never a wrong status.
- *
- * The watcher is the sole writer of active run rows apart from cancel/fail,
- * which win via the `status IN (active)` guard on every update here.
- */
-/**
- * The answered request is removed from the row directly when no live watcher
- * can re-read the session, so the run isn't left stuck on it.
- */
+/** For when no live watcher can re-read the session. */
 async function dropAnsweredInput(runId: string, requestId: string): Promise<void> {
-  const [row] = await db.select().from(agentRun).where(eq(agentRun.id, runId)).limit(1);
+  const row = await loadRun(runId);
   if (!row || row.status !== "awaiting_input") return;
   const remaining = row.pendingInputs.filter((request) => request.id !== requestId);
   const [updated] = await db
@@ -103,12 +83,15 @@ async function dropAnsweredInput(runId: string, requestId: string): Promise<void
     })
     .where(and(eq(agentRun.id, runId), eq(agentRun.status, "awaiting_input")))
     .returning();
-  if (updated) {
-    RUN_LIFECYCLE_EVENTS.publish(runId, { type: "run.updated", run: publicRun(updated) });
-  }
+  if (updated) publishRun(updated);
 }
 
-export class WorkspaceWatcher implements RunWatcherHandle {
+/**
+ * One OpenCode event stream per workspace with active runs. Events only say which
+ * session changed; state always comes from `runtime.snapshot()`, so a missed event
+ * costs one extra fetch, never a wrong status. Cancel/fail win via the ACTIVE guard.
+ */
+class WorkspaceWatcher implements RunWatcherHandle {
   readonly local = true;
   /** Unique per watcher, so a retired watcher cannot release its replacement's lease. */
   private readonly leaseId: string;
@@ -132,6 +115,10 @@ export class WorkspaceWatcher implements RunWatcherHandle {
     void this.loop();
   }
 
+  isTracking(runId: string): boolean {
+    return this.tracked.has(runId);
+  }
+
   track(run: TrackableRun) {
     if (!run.nativeSessionId || this.tracked.has(run.id) || this.stopped) return;
     const tracked: TrackedRun = {
@@ -142,7 +129,6 @@ export class WorkspaceWatcher implements RunWatcherHandle {
       status: run.status,
       pendingInputs: JSON.stringify(run.pendingInputs),
       sessionError: null,
-      lastRun: null,
       debounce: null,
       refreshing: null,
       dirty: false,
@@ -170,7 +156,6 @@ export class WorkspaceWatcher implements RunWatcherHandle {
     await dropAnsweredInput(runId, requestId);
   }
 
-  /** Re-snapshot one run now (another replica answered or cancelled it). */
   refreshRun(runId: string) {
     const tracked = this.tracked.get(runId);
     if (tracked && this.connected) void this.refresh(tracked);
@@ -239,18 +224,16 @@ export class WorkspaceWatcher implements RunWatcherHandle {
     }
   }
 
-  private handle(signal: RuntimeSignal) {
-    if (signal.type === "connected") return;
+  private handle(signal: Exclude<RuntimeSignal, { type: "connected" }>) {
     const tracked = this.bySession.get(signal.sessionId);
     if (!tracked) return;
     if (signal.type === "session.error") tracked.sessionError = signal.message;
     if (signal.type === "session.changed") {
-      if (!tracked.debounce) {
-        tracked.debounce = setTimeout(() => {
-          tracked.debounce = null;
-          void this.refresh(tracked);
-        }, CHANGE_DEBOUNCE_MS);
-      }
+      // Message/part updates arrive in bursts; one snapshot per burst is enough.
+      tracked.debounce ??= setTimeout(() => {
+        tracked.debounce = null;
+        void this.refresh(tracked);
+      }, CHANGE_DEBOUNCE_MS);
       return;
     }
     if (tracked.debounce) {
@@ -260,7 +243,7 @@ export class WorkspaceWatcher implements RunWatcherHandle {
     void this.refresh(tracked);
   }
 
-  /** Snapshot → derive → persist, serialized per run so writes never reorder. */
+  /** Serialized per run so writes never reorder. */
   private refresh(tracked: TrackedRun): Promise<void> {
     if (tracked.refreshing) {
       tracked.dirty = true;
@@ -290,8 +273,7 @@ export class WorkspaceWatcher implements RunWatcherHandle {
       sessionError: tracked.sessionError,
     });
     const pendingInputs = JSON.stringify(snapshot.pendingInputs);
-    // Message/token events are useful for the native OpenCode stream, but they
-    // are not GitTerm lifecycle changes. Avoid rewriting the row for each one.
+    // Only lifecycle changes are persisted; message and token churn stays in OpenCode.
     if (derived.status === tracked.status && pendingInputs === tracked.pendingInputs) return;
     const terminal = isTerminalRunStatus(derived.status);
     const [updated] = await db
@@ -309,45 +291,25 @@ export class WorkspaceWatcher implements RunWatcherHandle {
       .returning();
     if (!updated) {
       // Cancelled or failed by someone else while we were reading.
-      const [row] = await db.select().from(agentRun).where(eq(agentRun.id, tracked.id)).limit(1);
-      if (row) {
-        RUN_LIFECYCLE_EVENTS.publish(tracked.id, { type: "run.updated", run: publicRun(row) });
-      }
+      const row = await loadRun(tracked.id);
+      if (row) publishRun(row);
       this.untrack(tracked.id);
       return;
     }
-    const run = publicRun(updated);
-    const serializedRun = JSON.stringify(run);
-    if (serializedRun !== tracked.lastRun) {
-      tracked.lastRun = serializedRun;
-      RUN_LIFECYCLE_EVENTS.publish(tracked.id, { type: "run.updated", run });
-    }
+    publishRun(updated);
     tracked.status = updated.status;
     tracked.pendingInputs = JSON.stringify(updated.pendingInputs);
     if (terminal) this.untrack(tracked.id);
   }
 
-  /** The workspace is no longer running: every tracked run is over. */
   private async workspaceUnavailable() {
     for (const tracked of Array.from(this.tracked.values())) {
-      const [updated] = await db
-        .update(agentRun)
-        .set({
-          status: "cancelled",
-          errorMessage: stoppedWorkspaceMessage(tracked.status),
-          pendingInputs: [],
-          completedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(agentRun.id, tracked.id), inArray(agentRun.status, [...ACTIVE_RUN_STATUSES])))
-        .returning()
-        .catch(() => [] as AgentRun[]);
-      if (updated) {
-        RUN_LIFECYCLE_EVENTS.publish(tracked.id, {
-          type: "run.updated",
-          run: publicRun(updated),
-        });
-      }
+      await settleRun(tracked.id, {
+        status: "cancelled",
+        errorMessage: stoppedWorkspaceMessage(tracked.status),
+      }).catch((error) => {
+        log("warn", "failed to settle run", { runId: tracked.id, error });
+      });
       this.untrack(tracked.id);
     }
     this.stop();
@@ -382,7 +344,6 @@ export class WorkspaceWatcher implements RunWatcherHandle {
 const watchers = new Map<string, WorkspaceWatcher>();
 const ensuring = new Map<string, Promise<RunWatcherHandle>>();
 
-/** Forwards to whichever replica holds the workspace's lease. */
 class RemoteWatcherHandle implements RunWatcherHandle {
   readonly local = false;
   constructor(readonly workspaceId: string) {}
@@ -398,10 +359,7 @@ class RemoteWatcherHandle implements RunWatcherHandle {
   }
 }
 
-/**
- * Get the watcher for a workspace: this replica's if it holds (or can take) the
- * lease, otherwise a proxy to the owner. Concurrent callers share one attempt.
- */
+/** Concurrent callers share one lease attempt. */
 export function ensureWorkspaceWatcher(workspaceId: string): Promise<RunWatcherHandle> {
   const local = watchers.get(workspaceId);
   if (local) return Promise.resolve(local);
@@ -412,45 +370,18 @@ export function ensureWorkspaceWatcher(workspaceId: string): Promise<RunWatcherH
     if (!(await acquireWatcherLease(workspaceId, leaseId))) {
       return new RemoteWatcherHandle(workspaceId);
     }
-    let watcher = watchers.get(workspaceId);
-    if (!watcher) {
-      watcher = new WorkspaceWatcher(workspaceId, leaseId);
-      watchers.set(workspaceId, watcher);
-    } else {
-      // Another local caller installed a watcher while the lease request was in flight.
-      void releaseWatcherLease(workspaceId, leaseId);
-    }
+    const watcher = new WorkspaceWatcher(workspaceId, leaseId);
+    watchers.set(workspaceId, watcher);
     return watcher;
   })().finally(() => ensuring.delete(workspaceId));
   ensuring.set(workspaceId, attempt);
   return attempt;
 }
 
-export function getWorkspaceWatcher(workspaceId: string): WorkspaceWatcher | undefined {
-  return watchers.get(workspaceId);
-}
-
-/** Stop tracking a run wherever its watcher lives. */
 export function untrackRun(workspaceId: string, runId: string) {
   const local = watchers.get(workspaceId);
   if (local) local.untrack(runId);
   else publishWatchControl({ type: "untrack", workspaceId, runId });
-}
-
-async function loadTrackableRun(runId: string): Promise<TrackableRun | undefined> {
-  const [row] = await db
-    .select({
-      id: agentRun.id,
-      nativeSessionId: agentRun.nativeSessionId,
-      nativeMessageId: agentRun.nativeMessageId,
-      submittedAt: agentRun.submittedAt,
-      status: agentRun.status,
-      pendingInputs: agentRun.pendingInputs,
-    })
-    .from(agentRun)
-    .where(eq(agentRun.id, runId))
-    .limit(1);
-  return row;
 }
 
 let controlSubscribed = false;
@@ -462,9 +393,15 @@ function subscribeToWatchControl() {
     if (!watcher) return;
     switch (message.type) {
       case "track":
-        void loadTrackableRun(message.runId).then((row) => {
-          if (row && row.nativeSessionId) watcher.track(row);
-        });
+        if (watcher.isTracking(message.runId)) break;
+        void db
+          .select(trackableRunColumns)
+          .from(agentRun)
+          .where(eq(agentRun.id, message.runId))
+          .limit(1)
+          .then(([row]) => {
+            if (row) watcher.track(row);
+          });
         break;
       case "untrack":
         watcher.untrack(message.runId);
@@ -476,24 +413,12 @@ function subscribeToWatchControl() {
   });
 }
 
-/**
- * Make sure every active run is watched by some replica. Runs once at boot to
- * re-attach after a restart, then periodically so a lease dropped by a dead
- * replica is picked up within one sweep plus the lease TTL.
- */
+/** Re-attaches after a restart and picks up leases dropped by dead replicas. */
 async function sweepActiveRuns(): Promise<void> {
   const rows = await db
-    .select({
-      id: agentRun.id,
-      workspaceId: agentRun.workspaceId,
-      nativeSessionId: agentRun.nativeSessionId,
-      nativeMessageId: agentRun.nativeMessageId,
-      submittedAt: agentRun.submittedAt,
-      status: agentRun.status,
-      pendingInputs: agentRun.pendingInputs,
-    })
+    .select(trackableRunColumns)
     .from(agentRun)
-    .where(inArray(agentRun.status, ["running", "retrying", "awaiting_input"]));
+    .where(inArray(agentRun.status, WATCHED_STATUSES));
   const byWorkspace = new Map<string, typeof rows>();
   for (const row of rows) {
     if (!row.nativeSessionId) continue;
@@ -515,7 +440,6 @@ async function sweepActiveRuns(): Promise<void> {
 
 let sweeping: ReturnType<typeof setInterval> | null = null;
 
-/** Start cross-replica coordination for this process; idempotent. */
 export function startRunWatcherSweep(): void {
   if (sweeping) return;
   RUN_LIFECYCLE_EVENTS.bridge();

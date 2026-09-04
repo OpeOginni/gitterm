@@ -1,5 +1,6 @@
 import { createOpencodeClient, type Part } from "@opencode-ai/sdk";
 import type { AgentRunMessagePart } from "@gitterm/db/schema/agent-run";
+import { truncateToolOutput } from "./runtime/types";
 
 export function isOpencodeRunMessage(
   info: { id: string; role: "user" } | { id: string; role: "assistant"; parentID: string },
@@ -8,15 +9,6 @@ export function isOpencodeRunMessage(
   return info.id === messageId || (info.role === "assistant" && info.parentID === messageId);
 }
 
-const TOOL_OUTPUT_LIMIT = 4_000;
-
-function truncate(value: string, limit: number): string {
-  return value.length > limit
-    ? `${value.slice(0, limit)}\n…[truncated ${value.length - limit} chars]`
-    : value;
-}
-
-/** Keep the text and tool-call parts a caller needs to see what the agent did. */
 export function snapshotParts(parts: Part[]): AgentRunMessagePart[] {
   const result: AgentRunMessagePart[] = [];
   for (const part of parts) {
@@ -31,7 +23,7 @@ export function snapshotParts(parts: Part[]): AgentRunMessagePart[] {
         status: state.status,
         title: "title" in state && state.title ? state.title : null,
         input: state.input,
-        output: state.status === "completed" ? truncate(state.output, TOOL_OUTPUT_LIMIT) : null,
+        output: state.status === "completed" ? truncateToolOutput(state.output) : null,
         error: state.status === "error" ? state.error : null,
         startedAt: "time" in state ? new Date(state.time.start).toISOString() : null,
         completedAt:

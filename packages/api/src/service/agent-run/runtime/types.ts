@@ -8,11 +8,7 @@ export type RuntimeTarget = {
   api: OpencodeApi;
 };
 
-/**
- * Version-neutral view of what the OpenCode event stream is telling us. Signals
- * carry no message content: the watcher re-reads a `RuntimeSnapshot` for the
- * session, so a missed or reordered event can never corrupt run state.
- */
+/** Signals carry no content; the watcher re-reads a snapshot, so a missed event can't corrupt state. */
 export type RuntimeSignal =
   | { type: "connected" }
   | { type: "session.changed"; sessionId: string }
@@ -28,7 +24,6 @@ export type RuntimeSnapshot = {
   busy: boolean;
   /** OpenCode is backing off before retrying the model provider. */
   retry: boolean;
-  /** The run's user message and the assistant messages answering it. */
   messages: AgentRunMessageSnapshot[];
   finalText: string | null;
   assistant: {
@@ -60,10 +55,7 @@ export interface OpencodeRuntime {
   abort(sessionId: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
   snapshot(sessionId: string, messageId: string): Promise<RuntimeSnapshot>;
-  /**
-   * A single connection attempt. Yields `connected` once the stream is open and
-   * ends when the stream fails or `signal` aborts; the caller owns reconnects.
-   */
+  /** One connection attempt; the caller owns reconnects. */
   subscribe(signal: AbortSignal): AsyncIterable<RuntimeSignal>;
   replyPermission(sessionId: string, requestId: string, reply: PermissionReply): Promise<void>;
   replyQuestion(
@@ -85,4 +77,28 @@ export function parseModelRef(model: string | undefined) {
 
 export function permissionTitle(permission: string, patterns: string[]): string {
   return patterns.length > 0 ? `${permission}: ${patterns.join(", ")}` : permission;
+}
+
+export function sessionStatusOf(status: string | null): "busy" | "retry" | "idle" {
+  return status === "busy" ? "busy" : status === "retry" ? "retry" : "idle";
+}
+
+export function missingSessionSnapshot(): RuntimeSnapshot {
+  return {
+    sessionExists: false,
+    busy: false,
+    retry: false,
+    messages: [],
+    finalText: null,
+    assistant: { exists: false, completed: false, error: null },
+    pendingInputs: [],
+  };
+}
+
+const TOOL_OUTPUT_LIMIT = 4_000;
+
+export function truncateToolOutput(value: string): string {
+  return value.length > TOOL_OUTPUT_LIMIT
+    ? `${value.slice(0, TOOL_OUTPUT_LIMIT)}\n…[truncated ${value.length - TOOL_OUTPUT_LIMIT} chars]`
+    : value;
 }
