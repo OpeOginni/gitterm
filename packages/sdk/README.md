@@ -311,15 +311,17 @@ client.runs.list(workspace, options?); // -> { runs, pagination }
 client.runs.get(run);                  // run = AgentRun, { workspaceId, runId }, or (workspaceId, runId)
 client.runs.messages(run);
 client.runs.cancel(run);
-client.runs.wait(run, options?);
+client.runs.wait(run, options?);        // resolves when terminal or awaiting_input (push-based)
+client.runs.respond(run, { requestId, reply }); // answer a permission prompt or agent question
 client.catalog.agentTypes();
 client.catalog.cloudProviders();
 client.catalog.workspaceOptions();
 ```
 
-Every wait (`ensureRunning`, `waitForSetup`, `runs.wait`, and `runs.create` with
-`waitForSetup`) accepts `{ timeoutMs, pollIntervalMs, signal }`. Pass an `AbortSignal` to stop
-waiting on shutdown; the promise rejects with code `ABORTED`.
+Every wait (`ensureRunning`, `waitForSetup`, and `runs.create` with `waitForSetup`) accepts
+`{ timeoutMs, pollIntervalMs, signal }`. `runs.wait` is push-based (server-sent events) and
+accepts `{ timeoutMs, signal, until }`. Pass an `AbortSignal` to stop waiting on shutdown; the
+promise rejects with code `ABORTED`.
 
 `pause()` returns `durationMinutes`, the length of the usage session it just closed, which is
 what billing records. `terminate()` returns `cleanupInBackground: true` when the provider
@@ -540,9 +542,14 @@ session became idle; it does not claim that a pull request, upload, or other pro
 succeeded.
 
 Every run carries `createdAt`, `submittedAt` (when the prompt reached the agent), and
-`completedAt`. `runs.list(workspace, { status: "active" })` returns what is still in flight,
-reconciled against the workspace, so a process recovering after a restart can pick up where it
-left off without having persisted run ids itself.
+`completedAt`. `runs.list(workspace, { status: "active" })` returns what is still in flight, so a
+process recovering after a restart can pick up where it left off without having persisted run
+ids itself. The server watches every active run's OpenCode session and keeps the run current;
+`get`/`list`/`messages` read that state without touching the workspace.
+
+Statuses: `pending` → `running` (or `retrying` while OpenCode backs off from the model
+provider) → `completed` | `failed` | `cancelled`. A run that stops to ask something is
+`awaiting_input` until you answer it (below).
 
 `runs.messages()` returns each turn's concatenated `text` plus an ordered `parts` array. Tool
 calls appear as `{ type: "tool", tool, status, title, input, output, error }` with output
@@ -574,6 +581,50 @@ const run = await client.runs.create({
 const completed = await client.runs.wait(workspace.id, run.id);
 const messages = await client.runs.messages(workspace.id, run.id);
 ```
+
+#### Questions and permission prompts
+
+When the agent calls OpenCode's `question` tool, or a tool needs approval under your
+`permission` config, the run becomes `awaiting_input` and `run.pendingInputs` describes what it
+is waiting for. `runs.wait()` returns at that point by default; answer with `runs.respond()` and
+wait again. This is what makes a chat bot able to relay "should I do A or B?" to a human.
+
+```ts
+let run = await client.runs.wait(workspace.id, created.id);
+while (run.status === "awaiting_input") {
+  for (const request of run.pendingInputs) {
+    if (request.kind === "permission") {
+      // request.title, e.g. "bash: rm -rf dist"; also permission / patterns / always
+      await client.runs.respond(run, {
+        requestId: request.id,
+        reply: { type: "permission", response: "once" }, // "once" | "always" | "reject"
+      });
+    } else {
+      // request.questions[i] has header, question, options[{ label, description }], multiple, custom
+      const answers = request.questions.map((question) => [question.options[0]!.label]);
+      await client.runs.respond(run, {
+        requestId: request.id,
+        reply: { type: "question", answers },
+      });
+      // or: reply: { type: "question", reject: true }
+    }
+  }
+  run = await client.runs.wait(workspace.id, created.id);
+}
+```
+
+Rejecting a permission or dismissing a question ends the turn: OpenCode records a failed tool
+call and the run finishes. Pass `{ until: "terminal" }` to `runs.wait()` to keep waiting through
+`awaiting_input` (for example when a separate process answers). A run left `awaiting_input` does
+not keep its workspace awake; if nobody answers before the workspace's idle timeout pauses it,
+the run is cancelled with `"Workspace paused while waiting for input"`. To avoid prompts entirely
+in headless runs, allow the relevant tools in `opencode.config.permission` when creating the
+workspace.
+
+`runs.wait()` uses a lightweight lifecycle stream internally; it does not mirror OpenCode's
+native message, tool, or token events. `runs.messages()` provides the persisted transcript at
+lifecycle checkpoints and completion. For live execution details, use
+`workspaces.getRuntimeAccess()` with the official OpenCode SDK.
 
 Runs are isolated by default and can execute in parallel. To preserve conversational context,
 continue a terminal run; continued runs sharing context must remain sequential:
@@ -636,9 +687,18 @@ Rules and errors:
 - A run that requests a credential-backed `provider/model` not available in its workspace throws
   `MODEL_CREDENTIAL_REQUIRED` before the prompt is submitted.
 
-Use `client.runs.cancel(workspaceId, runId)` to abort the current run. GitTerm keeps the
-underlying OpenCode session private. For native session control, use
-`workspaces.getRuntimeAccess()` and connect with the official OpenCode SDK.
+Use `client.runs.cancel(workspaceId, runId)` to abort the current run; a run that is
+`awaiting_input` has its pending prompt rejected first. GitTerm keeps the underlying OpenCode
+session private. For native session control, use `workspaces.getRuntimeAccess()` and connect
+with the official OpenCode SDK.
+
+### OpenCode API versions
+
+Managed workspaces continue to run `opencode-ai@latest` (`opencodeApi: "v1"`). OpenCode 2
+changes the server API; callers testing it must supply their own compatible image and create the
+workspace with `opencode: { api: "v2" }`. Runs, questions, permissions, and events behave the
+same from the SDK's point of view; the flag only tells GitTerm which protocol to speak to the
+workspace. `v2` is experimental until OpenCode 2 ships.
 
 ### Errors
 

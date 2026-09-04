@@ -1,0 +1,149 @@
+import type { RuntimeTarget } from "./types";
+
+export class RuntimeHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: string,
+    readonly tag: string | null,
+  ) {
+    super(`OpenCode request failed with status ${status}${tag ? ` (${tag})` : ""}`);
+  }
+}
+
+export function isSessionNotFound(error: unknown): boolean {
+  return error instanceof RuntimeHttpError && error.status === 404;
+}
+
+export function authorizationHeader(password: string | null): Record<string, string> {
+  return password
+    ? { authorization: `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}` }
+    : {};
+}
+
+export function runtimeUrl(target: Pick<RuntimeTarget, "url">, path: string): string {
+  return `${target.url.replace(/\/$/, "")}${path}`;
+}
+
+/** Minimal JSON client for the OpenCode routes the generated SDKs don't cover. */
+export function createRuntimeHttp(target: RuntimeTarget) {
+  const headers = authorizationHeader(target.password);
+  async function send(path: string, init: RequestInit & { json?: unknown } = {}) {
+    const { json, ...rest } = init;
+    const response = await fetch(runtimeUrl(target, path), {
+      ...rest,
+      headers: {
+        accept: "application/json",
+        ...(json === undefined ? {} : { "content-type": "application/json" }),
+        ...headers,
+        ...(rest.headers as Record<string, string> | undefined),
+      },
+      body: json === undefined ? rest.body : JSON.stringify(json),
+      signal: rest.signal ?? AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      let tag: string | null = null;
+      try {
+        const parsed = JSON.parse(body) as { _tag?: unknown; name?: unknown };
+        tag =
+          typeof parsed._tag === "string"
+            ? parsed._tag
+            : typeof parsed.name === "string"
+              ? parsed.name
+              : null;
+      } catch {}
+      throw new RuntimeHttpError(response.status, body, tag);
+    }
+    return response;
+  }
+
+  return {
+    send,
+    async json<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
+      const response = await send(path, init);
+      const text = await response.text();
+      return (text ? JSON.parse(text) : undefined) as T;
+    },
+  };
+}
+
+type ServerSentEvent = { event: string | null; data: string };
+
+/**
+ * Read a `text/event-stream` response. The first yielded item is a synthetic
+ * `open` event so callers know the connection is established. The generator
+ * ends when the server closes the stream and throws when the request fails or
+ * `signal` aborts.
+ */
+export async function* readServerSentEvents(
+  url: string,
+  init: { headers?: Record<string, string>; signal: AbortSignal },
+): AsyncGenerator<ServerSentEvent, void, undefined> {
+  const response = await fetch(url, {
+    headers: { accept: "text/event-stream", ...init.headers },
+    signal: init.signal,
+  });
+  if (!response.ok || !response.body) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new RuntimeHttpError(response.status, "", null);
+  }
+  yield { event: "open", data: "" };
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let data: string[] = [];
+  let event: string | null = null;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline = buffer.indexOf("\n");
+      while (newline >= 0) {
+        let line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        newline = buffer.indexOf("\n");
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (line === "") {
+          if (data.length > 0) yield { event, data: data.join("\n") };
+          data = [];
+          event = null;
+          continue;
+        }
+        if (line.startsWith(":")) continue;
+        const colon = line.indexOf(":");
+        const field = colon === -1 ? line : line.slice(0, colon);
+        let fieldValue = colon === -1 ? "" : line.slice(colon + 1);
+        if (fieldValue.startsWith(" ")) fieldValue = fieldValue.slice(1);
+        if (field === "data") data.push(fieldValue);
+        else if (field === "event") event = fieldValue;
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+}
+
+export function parseEventData(data: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(data);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+export function asString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+export function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}

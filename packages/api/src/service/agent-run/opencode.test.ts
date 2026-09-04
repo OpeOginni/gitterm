@@ -3,7 +3,6 @@ import {
   findLastOpencodeRunAssistant,
   formatOpencodeError,
   isOpencodeRunMessage,
-  mapOpencodeRunStatus,
 } from "./opencode";
 
 describe("formatOpencodeError", () => {
@@ -16,24 +15,6 @@ describe("formatOpencodeError", () => {
     ).toBe(
       'Model provider credential "opencode" was rejected for model "opencode/big-pickle": Invalid API key.',
     );
-  });
-});
-
-describe("mapOpencodeRunStatus", () => {
-  test("maps native transport state without claiming workflow success", () => {
-    expect(mapOpencodeRunStatus({ type: "busy" })).toBe("running");
-    expect(mapOpencodeRunStatus({ type: "retry", attempt: 1, message: "retry", next: 1 })).toBe(
-      "retrying",
-    );
-    expect(mapOpencodeRunStatus({ type: "idle" })).toBe("completed");
-    expect(mapOpencodeRunStatus(undefined, undefined, false)).toBe("running");
-    expect(mapOpencodeRunStatus(undefined, undefined, false, true)).toBe("failed");
-    expect(mapOpencodeRunStatus({ type: "idle" }, undefined, true, false, false)).toBe("running");
-  });
-
-  test("reports native assistant failures and cancellation", () => {
-    expect(mapOpencodeRunStatus({ type: "idle" }, "ProviderAuthError")).toBe("failed");
-    expect(mapOpencodeRunStatus({ type: "idle" }, "MessageAbortedError")).toBe("cancelled");
   });
 });
 

@@ -25,7 +25,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts --outdir dist --target node --format esm --external @trpc/client --external @opencode-ai/sdk --external @opencode-ai/sdk/v2 --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts --outdir dist --target node --format esm --external @trpc/client --external eventsource --external @opencode-ai/sdk --external @opencode-ai/sdk/v2 --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },
@@ -35,7 +35,8 @@
     "@opencode-ai/sdk": "^1.18.25",
     "@trpc/client": "^11.8.1",
     "@vercel/sandbox": "^3.2.1",
-    "e2b": "^2.46.1"
+    "e2b": "^2.46.1",
+    "eventsource": "^5.1.1"
   },
   "devDependencies": {
     "@gitterm/api": "workspace:*",
@@ -44,6 +45,6 @@
     "typescript": "^5.8.2"
   },
   "engines": {
-    "node": ">=20.18.1"
+    "node": ">=22.12.0"
   }
 }

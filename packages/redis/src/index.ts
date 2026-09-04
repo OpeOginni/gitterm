@@ -1,4 +1,4 @@
-export { getRedisClient, closeRedisClient } from "./client";
+export { getRedisClient, closeRedisClient, type RedisClient } from "./client";
 export { RedisKeys } from "./keys";
 export { RateLimitRepository } from "./repositories/rate-limit";
 export { DeviceCodeRepository } from "./repositories/device-code";

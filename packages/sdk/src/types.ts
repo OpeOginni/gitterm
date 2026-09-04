@@ -36,6 +36,8 @@ export type Workspace = {
   image: { id: string; name: string; imageId: string } | null;
   /** Caller-owned tags supplied at create time. */
   metadata: Record<string, string>;
+  /** OpenCode HTTP API generation the workspace's agent server speaks. */
+  opencodeApi: OpencodeApi;
   /** When set, the workspace is terminated at this time regardless of activity. */
   autoTerminateAt: string | null;
   /** The caller-supplied image or E2B template this workspace runs, if any. */
@@ -52,6 +54,9 @@ export type WorkspaceRef = string | { id: string };
 
 /** A run id pair, or any object carrying one (e.g. an `AgentRun`). */
 export type RunRef = { workspaceId: string; id: string } | { workspaceId: string; runId: string };
+
+/** `v1` = OpenCode 1.x (`/event`, `/session/*`); `v2` = OpenCode 2 (`/api/*`), experimental until 2.0 ships. */
+export type OpencodeApi = "v1" | "v2";
 
 export type WaitOptions = {
   timeoutMs?: number;
@@ -220,6 +225,11 @@ export type WorkspaceCreateInput = {
      * webfetch: "allow" } } disables tool approval prompts in headless runs.
      */
     config?: Record<string, unknown>;
+    /**
+     * OpenCode API generation served by the image. Defaults to `v1`. Use `v2`
+     * with an image built on OpenCode 2 (`@opencode-ai/cli`); experimental.
+     */
+    api?: OpencodeApi;
   };
 };
 
@@ -238,9 +248,49 @@ export type AgentRunStatus =
   | "pending"
   | "running"
   | "retrying"
+  /** Blocked on a permission prompt or agent question; answer with `runs.respond()`. */
+  | "awaiting_input"
   | "completed"
   | "failed"
   | "cancelled";
+
+/** A prompt the agent is blocked on. `permission` = OpenCode tool approval; `question` = the agent's `question` tool. */
+export type AgentRunInputRequest =
+  | {
+      id: string;
+      kind: "permission";
+      createdAt: string;
+      toolCallId: string | null;
+      /** Permission action, e.g. "bash" or "edit". */
+      permission: string;
+      /** What the action applies to, e.g. the shell command or file paths. */
+      patterns: string[];
+      /** Patterns OpenCode remembers when answered with "always". */
+      always: string[];
+      title: string;
+    }
+  | {
+      id: string;
+      kind: "question";
+      createdAt: string;
+      toolCallId: string | null;
+      questions: Array<{
+        key: string;
+        header: string;
+        question: string;
+        options: Array<{ label: string; description: string; value?: string }>;
+        /** More than one option may be selected. */
+        multiple: boolean;
+        /** A free-text answer outside `options` is accepted. */
+        custom: boolean;
+      }>;
+    };
+
+export type AgentRunReply =
+  | { type: "permission"; response: "once" | "always" | "reject" }
+  /** One entry per question, each the selected option labels (or a custom answer when allowed). */
+  | { type: "question"; answers: string[][] }
+  | { type: "question"; reject: true };
 
 export type AgentRun = {
   id: string;
@@ -249,6 +299,8 @@ export type AgentRun = {
   status: AgentRunStatus;
   error: string | null;
   finalText: string | null;
+  /** Non-empty exactly while `status` is `awaiting_input`. */
+  pendingInputs: AgentRunInputRequest[];
   context: { type: "isolated" } | { type: "continued"; runId: string };
   createdAt: string;
   /** When the prompt reached the agent; null while `pending`. */
@@ -257,7 +309,7 @@ export type AgentRun = {
 };
 
 export type AgentRunListOptions = {
-  /** `active` = pending/running/retrying; `terminal` = completed/failed/cancelled. */
+  /** `active` = pending/running/retrying/awaiting_input; `terminal` = completed/failed/cancelled. */
   status?: "all" | "active" | "terminal";
   /** 1–50, default 20. */
   limit?: number;
@@ -316,6 +368,18 @@ export type AgentRunMessagePart =
       startedAt: string | null;
       completedAt: string | null;
     };
+
+export type RunWaitOptions = {
+  /** Default 30 minutes. */
+  timeoutMs?: number;
+  /** Abort the wait early; the promise rejects with code `ABORTED`. */
+  signal?: AbortSignal;
+  /**
+   * `input-or-terminal` (default) also returns when the run is `awaiting_input`
+   * so the caller can answer with `runs.respond()`; `terminal` keeps waiting.
+   */
+  until?: "input-or-terminal" | "terminal";
+};
 
 export type AgentRunMessage = {
   id: string;

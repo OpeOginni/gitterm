@@ -47,6 +47,8 @@ A Slack thread is one agent session, like a Discord thread:
 
 Hosted mode uses one persistent workspace per Slack channel and a separate OpenCode session per Slack thread. New top-level mentions start isolated sessions; replies continue that thread's run. Requests are serialized per thread, so different threads in a channel run concurrently on the shared workspace. The bot leaves the workspace running between requests and relies on Gitterm's idle timeout to pause it; a mention that arrives while it is paused resumes it first. If Gitterm has deleted or terminated it, the bot creates a replacement and starts the requesting thread with its Slack transcript as context.
 
+When the agent asks a question (OpenCode's `question` tool) or a tool needs permission, the hosted bot posts the question with numbered options into the thread and parks the run. Mention the bot again in that thread with a number, an option name, or (for permissions) `yes` / `always` / `no`, and it passes the answer back with `runs.respond()` and resumes waiting. Unanswered questions don't keep the workspace awake; once the idle timeout pauses it the run is cancelled and the bot reports it.
+
 Hosted responses use Slack blocks. Markdown tables are converted to aligned, monospaced table sections; longer responses are split across safe-sized block messages.
 
 Direct mode continues to use one workspace per Slack thread.

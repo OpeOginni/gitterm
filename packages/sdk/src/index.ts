@@ -28,8 +28,13 @@ export type {
 export type {
   AgentRun,
   AgentRunCreateInput,
+  AgentRunInputRequest,
   AgentRunMessage,
+  AgentRunMessagePart,
+  AgentRunReply,
   AgentRunStatus,
+  RunWaitOptions,
+  OpencodeApi,
   AgentType,
   AgentKey,
   AuthStatus,

@@ -78,31 +78,106 @@ function trpcOk(result: unknown): Response {
   });
 }
 
-test("run helpers accept the run object instead of an id pair", async () => {
-  const seen: string[] = [];
-  const completed = {
-    id: "11111111-1111-4111-8111-111111111111",
-    workspaceId: "22222222-2222-4222-8222-222222222222",
-    title: "t",
-    status: "completed",
-    error: null,
-    finalText: "done",
-    context: { type: "isolated" },
-    createdAt: "2026-09-03T00:00:00.000Z",
-    submittedAt: null,
-    completedAt: "2026-09-03T00:00:01.000Z",
-  };
+/** A tRPC subscription response: one SSE frame per event, then the stream ends. */
+function trpcEvents(events: unknown[]): Response {
+  const body = [
+    "event: connected\ndata: {}\n\n",
+    ...events.map((event) => `data: ${JSON.stringify(event)}\n\n`),
+    "event: return\ndata: \n\n",
+  ].join("");
+  return new Response(body, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" },
+  });
+}
+
+const completed = {
+  id: "11111111-1111-4111-8111-111111111111",
+  workspaceId: "22222222-2222-4222-8222-222222222222",
+  title: "t",
+  status: "completed",
+  error: null,
+  finalText: "done",
+  pendingInputs: [],
+  context: { type: "isolated" },
+  createdAt: "2026-09-03T00:00:00.000Z",
+  submittedAt: null,
+  completedAt: "2026-09-03T00:00:01.000Z",
+};
+const awaiting = {
+  ...completed,
+  status: "awaiting_input",
+  finalText: null,
+  completedAt: null,
+  pendingInputs: [
+    {
+      id: "per_1",
+      kind: "permission",
+      createdAt: "2026-09-03T00:00:00.500Z",
+      toolCallId: "call_1",
+      permission: "bash",
+      patterns: ["echo hi"],
+      always: ["echo *"],
+      title: "bash: echo hi",
+    },
+  ],
+};
+
+function eventClient(frames: unknown[][], seen: string[] = []) {
+  let call = 0;
   const fetchStub = (async (input: RequestInfo | URL) => {
-    seen.push(decodeURIComponent(String(input instanceof Request ? input.url : input)));
+    const url = decodeURIComponent(String(input instanceof Request ? input.url : input));
+    seen.push(url);
+    if (url.includes("run.lifecycle"))
+      return trpcEvents(frames[Math.min(call++, frames.length - 1)] ?? []);
     return trpcOk(completed);
   }) as unknown as typeof fetch;
-  const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
+  return createGittermClient({ token: "gt_test", fetch: fetchStub });
+}
+
+test("run helpers accept the run object instead of an id pair", async () => {
+  const seen: string[] = [];
+  const client = eventClient(
+    [
+      [
+        { type: "snapshot", run: { ...completed, status: "running" } },
+        { type: "run.updated", run: completed },
+      ],
+    ],
+    seen,
+  );
 
   const result = await client.runs.wait(completed as never);
 
   expect(result.status).toBe("completed");
+  expect(seen[0]).toContain("run.lifecycle");
   expect(seen[0]).toContain(`"runId":"${completed.id}"`);
   expect(seen[0]).toContain(`"workspaceId":"${completed.workspaceId}"`);
+});
+
+test("wait returns as soon as the run needs input", async () => {
+  const client = eventClient([
+    [
+      { type: "snapshot", run: { ...completed, status: "running" } },
+      { type: "run.updated", run: awaiting },
+      { type: "run.updated", run: completed },
+    ],
+  ]);
+
+  const result = await client.runs.wait(completed.workspaceId, completed.id);
+  expect(result.status).toBe("awaiting_input");
+  expect(result.pendingInputs[0]?.kind).toBe("permission");
+});
+
+test("wait with until: terminal skips the awaiting_input stop", async () => {
+  const client = eventClient([
+    [
+      { type: "snapshot", run: awaiting },
+      { type: "run.updated", run: completed },
+    ],
+  ]);
+  const result = await client.runs.wait(completed as never, { until: "terminal" });
+  expect(result.status).toBe("completed");
 });
 
 test("waits reject with ABORTED when the signal is already aborted", async () => {

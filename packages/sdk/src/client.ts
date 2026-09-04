@@ -1,5 +1,12 @@
-import { createTRPCClient, httpBatchLink, TRPCClientError } from "@trpc/client";
+import {
+  createTRPCClient,
+  httpBatchLink,
+  httpSubscriptionLink,
+  splitLink,
+  TRPCClientError,
+} from "@trpc/client";
 import type { AppRouter } from "@gitterm/api/routers/index";
+import { EventSource } from "eventsource";
 import { DEFAULT_GITTERM_SERVER_URL, loadConfigSync } from "./config.js";
 import {
   GittermError,
@@ -15,9 +22,11 @@ import type {
   AgentRunListOptions,
   AgentRunListResult,
   AgentRunMessage,
+  AgentRunReply,
   AuthStatus,
   CloudProvider,
   RunRef,
+  RunWaitOptions,
   WaitOptions,
   Workspace,
   WorkspaceCreateInput,
@@ -75,6 +84,7 @@ type RawWorkspace = {
     agentType?: { id: string; name: string; description: string | null } | null;
   } | null;
   metadata?: Record<string, string> | null;
+  opencodeApi?: Workspace["opencodeApi"] | null;
   autoTerminateAt?: Date | string | null;
   customImage?: string | null;
   startedAt: Date | string | null;
@@ -128,8 +138,14 @@ export type GittermClient = {
     messages(workspaceId: string, runId: string): Promise<AgentRunMessage[]>;
     cancel(run: RunRef): Promise<{ cancelled: boolean }>;
     cancel(workspaceId: string, runId: string): Promise<{ cancelled: boolean }>;
-    wait(run: RunRef, options?: WaitOptions): Promise<AgentRun>;
-    wait(workspaceId: string, runId: string, options?: WaitOptions): Promise<AgentRun>;
+    /** Answer the permission prompt or question a run is `awaiting_input` on. */
+    respond(run: RunRef, input: { requestId: string; reply: AgentRunReply }): Promise<AgentRun>;
+    /**
+     * Resolve once the run needs attention: terminal, or `awaiting_input`
+     * unless `until: "terminal"`. Push-based; no polling.
+     */
+    wait(run: RunRef, options?: RunWaitOptions): Promise<AgentRun>;
+    wait(workspaceId: string, runId: string, options?: RunWaitOptions): Promise<AgentRun>;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
@@ -250,6 +266,7 @@ function normalizeWorkspace(workspace: RawWorkspace | null | undefined): Workspa
         }
       : null,
     metadata: workspace.metadata ?? {},
+    opencodeApi: workspace.opencodeApi ?? "v1",
     autoTerminateAt: toIso(workspace.autoTerminateAt),
     customImage: workspace.customImage ?? null,
     startedAt: toIso(workspace.startedAt),
@@ -343,17 +360,148 @@ async function runWithServer<T>(serverUrl: string, operation: () => Promise<T>):
   }
 }
 
+type RunLifecycleClient = Pick<ReturnType<typeof createTRPCClient<AppRouter>>, "run">;
+type RunLifecycleEvent =
+  | { type: "snapshot"; run: AgentRun }
+  | { type: "run.updated"; run: AgentRun };
+
+function settlesWait(status: AgentRun["status"], until: RunWaitOptions["until"]): boolean {
+  if (status === "completed" || status === "failed" || status === "cancelled") return true;
+  return status === "awaiting_input" && until !== "terminal";
+}
+
+/** Bridge a tRPC subscription into an async iterable that ends with the run. */
+function subscribeToRun(
+  trpc: RunLifecycleClient,
+  target: { workspaceId: string; runId: string },
+  signal?: AbortSignal,
+): AsyncIterable<RunLifecycleEvent> {
+  return {
+    [Symbol.asyncIterator]() {
+      type Item = { event: RunLifecycleEvent } | { error: unknown } | { done: true };
+      const queue: Item[] = [];
+      let pending: { resolve: (item: Item) => void } | null = null;
+      let closed = false;
+
+      const push = (item: Item) => {
+        if (closed) return;
+        if ("event" in item === false) closed = true;
+        if (pending) {
+          const waiter = pending;
+          pending = null;
+          waiter.resolve(item);
+        } else {
+          queue.push(item);
+        }
+      };
+      const take = () =>
+        new Promise<Item>((resolve) => {
+          const item = queue.shift();
+          if (item) resolve(item);
+          else if (closed) resolve({ done: true });
+          else pending = { resolve };
+        });
+
+      const subscription = trpc.run.lifecycle.subscribe(target, {
+        signal,
+        onData: (event) => push({ event: event as RunLifecycleEvent }),
+        onError: (error) => push({ error }),
+        onComplete: () => push({ done: true }),
+      });
+      const onAbort = () =>
+        push({ error: new GittermError("ABORTED", `Aborted while streaming run ${target.runId}`) });
+      signal?.addEventListener("abort", onAbort, { once: true });
+      const close = () => {
+        signal?.removeEventListener("abort", onAbort);
+        subscription.unsubscribe();
+        push({ done: true });
+      };
+
+      return {
+        async next(): Promise<IteratorResult<RunLifecycleEvent>> {
+          const item = await take();
+          if ("event" in item) return { value: item.event, done: false };
+          close();
+          if ("error" in item) throw item.error;
+          return { value: undefined, done: true };
+        },
+        async return(): Promise<IteratorResult<RunLifecycleEvent>> {
+          close();
+          return { value: undefined, done: true };
+        },
+        async throw(error: unknown): Promise<IteratorResult<RunLifecycleEvent>> {
+          close();
+          throw error;
+        },
+      };
+    },
+  };
+}
+
+async function waitForRun(
+  lifecycle: (
+    target: { workspaceId: string; runId: string },
+    signal?: AbortSignal,
+  ) => AsyncIterable<RunLifecycleEvent>,
+  target: { workspaceId: string; runId: string },
+  options?: RunWaitOptions,
+): Promise<AgentRun> {
+  const timeoutMs = options?.timeoutMs ?? 30 * 60_000;
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  options?.signal?.addEventListener("abort", onAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    throwIfAborted(options?.signal, `waiting for run ${target.runId}`);
+    let last: AgentRun | undefined;
+    for await (const event of lifecycle(target, controller.signal)) {
+      last = event.run;
+      if (settlesWait(event.run.status, options?.until)) return event.run;
+    }
+    if (last && settlesWait(last.status, options?.until)) return last;
+    throw new GittermError("NETWORK", `Run ${target.runId} event stream ended unexpectedly`);
+  } catch (error) {
+    if (options?.signal?.aborted) {
+      throw new GittermError("ABORTED", `Aborted while waiting for run ${target.runId}`);
+    }
+    if (controller.signal.aborted) {
+      throw new GittermError("NETWORK", `Timed out waiting for run ${target.runId}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    options?.signal?.removeEventListener("abort", onAbort);
+  }
+}
+
 export function createGittermClient(options: GittermClientOptions = {}): GittermClient {
   const credentials = resolveCredentials(options);
+  const fetchImpl = createNoRedirectFetch(options.fetch);
+  const authorization = `Bearer ${credentials.token}`;
   const trpc = createTRPCClient<AppRouter>({
     links: [
-      httpBatchLink({
-        url: toTrpcUrl(credentials.serverUrl),
-        fetch: createNoRedirectFetch(options.fetch) as HttpBatchLinkOptions["fetch"],
-        headers: () => ({ authorization: `Bearer ${credentials.token}` }),
+      splitLink({
+        condition: (operation) => operation.type === "subscription",
+        // EventSource cannot set headers itself, so the ponyfill's fetch adds the token.
+        true: httpSubscriptionLink({
+          url: toTrpcUrl(credentials.serverUrl),
+          EventSource,
+          eventSourceOptions: {
+            fetch: (url, init) =>
+              fetchImpl(url, { ...init, headers: { ...init.headers, authorization } }),
+          },
+        }),
+        false: httpBatchLink({
+          url: toTrpcUrl(credentials.serverUrl),
+          fetch: fetchImpl as HttpBatchLinkOptions["fetch"],
+          headers: () => ({ authorization }),
+        }),
       }),
     ],
   });
+
+  const runLifecycle = (target: { workspaceId: string; runId: string }, signal?: AbortSignal) =>
+    subscribeToRun(trpc, target, signal);
 
   const run = <T>(operation: () => Promise<T>) => runWithServer(credentials.serverUrl, operation);
 
@@ -551,10 +699,15 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         }),
       cancel: (refOrWorkspaceId: RunRef | string, runId?: string) =>
         run(async () => trpc.run.cancel.mutate(runTargetOf(refOrWorkspaceId, runId))),
+      respond: (ref: RunRef, input: { requestId: string; reply: AgentRunReply }) =>
+        run(
+          async (): Promise<AgentRun> =>
+            trpc.run.respond.mutate({ ...runTargetOf(ref), ...input }) as Promise<AgentRun>,
+        ),
       wait: (
         refOrWorkspaceId: RunRef | string,
-        runIdOrOptions?: string | WaitOptions,
-        maybeOptions?: WaitOptions,
+        runIdOrOptions?: string | RunWaitOptions,
+        maybeOptions?: RunWaitOptions,
       ) =>
         run(async (): Promise<AgentRun> => {
           const target =
@@ -564,25 +717,8 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           const waitOptions =
             typeof refOrWorkspaceId === "string"
               ? maybeOptions
-              : (runIdOrOptions as WaitOptions | undefined);
-          const timeoutMs = waitOptions?.timeoutMs ?? 30 * 60_000;
-          const pollIntervalMs = waitOptions?.pollIntervalMs ?? 2_000;
-          const signal = waitOptions?.signal;
-          const deadline = Date.now() + timeoutMs;
-          while (true) {
-            throwIfAborted(signal, `waiting for run ${target.runId}`);
-            const result = (await trpc.run.get.query(target, { signal })) as AgentRun;
-            if (
-              result.status !== "pending" &&
-              result.status !== "running" &&
-              result.status !== "retrying"
-            )
-              return result;
-            if (Date.now() >= deadline) {
-              throw new GittermError("NETWORK", `Timed out waiting for run ${target.runId}`);
-            }
-            await sleep(pollIntervalMs, signal, `waiting for run ${target.runId}`);
-          }
+              : (runIdOrOptions as RunWaitOptions | undefined);
+          return waitForRun(runLifecycle, target, waitOptions);
         }),
     },
     catalog: {
