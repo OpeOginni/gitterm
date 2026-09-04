@@ -1,6 +1,6 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
-import { db, eq, and, sql, lt, or, isNull } from "@gitterm/db";
+import { db, eq, and, sql, lt, or, isNull, inArray } from "@gitterm/db";
 import {
   workspace,
   dailyUsage,
@@ -459,6 +459,19 @@ export const internalRouter = router({
       );
 
     return stragglers;
+  }),
+
+  /** Workspaces whose caller-set autoTerminateAt has passed and are not yet terminated. */
+  getAutoTerminateDueWorkspaces: internalProcedure.query(async () => {
+    return db
+      .select({ id: workspace.id, autoTerminateAt: workspace.autoTerminateAt })
+      .from(workspace)
+      .where(
+        and(
+          inArray(workspace.status, ["pending", "running", "paused"]),
+          lt(workspace.autoTerminateAt, new Date()),
+        ),
+      );
   }),
 
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {

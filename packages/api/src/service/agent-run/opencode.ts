@@ -1,4 +1,5 @@
-import { createOpencodeClient, type SessionStatus } from "@opencode-ai/sdk";
+import { createOpencodeClient, type Part, type SessionStatus } from "@opencode-ai/sdk";
+import type { AgentRunMessagePart } from "@gitterm/db/schema/agent-run";
 
 export type AgentRunStatus = "running" | "retrying" | "completed" | "failed" | "cancelled";
 
@@ -7,6 +8,42 @@ export function isOpencodeRunMessage(
   messageId: string,
 ): boolean {
   return info.id === messageId || (info.role === "assistant" && info.parentID === messageId);
+}
+
+const TOOL_OUTPUT_LIMIT = 4_000;
+
+function truncate(value: string, limit: number): string {
+  return value.length > limit
+    ? `${value.slice(0, limit)}\n…[truncated ${value.length - limit} chars]`
+    : value;
+}
+
+/** Keep the text and tool-call parts a caller needs to see what the agent did. */
+function snapshotParts(parts: Part[]): AgentRunMessagePart[] {
+  const result: AgentRunMessagePart[] = [];
+  for (const part of parts) {
+    if (part.type === "text") {
+      if (!part.ignored && part.text.trim()) result.push({ type: "text", text: part.text });
+    } else if (part.type === "tool") {
+      const state = part.state;
+      result.push({
+        type: "tool",
+        callId: part.callID,
+        tool: part.tool,
+        status: state.status,
+        title: "title" in state && state.title ? state.title : null,
+        input: state.input,
+        output: state.status === "completed" ? truncate(state.output, TOOL_OUTPUT_LIMIT) : null,
+        error: state.status === "error" ? state.error : null,
+        startedAt: "time" in state ? new Date(state.time.start).toISOString() : null,
+        completedAt:
+          (state.status === "completed" || state.status === "error") && state.time.end
+            ? new Date(state.time.end).toISOString()
+            : null,
+      });
+    }
+  }
+  return result;
 }
 
 export function findLastOpencodeRunAssistant<
@@ -193,6 +230,7 @@ export async function getOpencodeRun(input: {
           .map((part) => (part.type === "text" ? part.text : ""))
           .join("\n")
           .trim(),
+        parts: snapshotParts(message.parts),
         error:
           message.info.role === "assistant" && message.info.error
             ? formatOpencodeError(message.info.error, {

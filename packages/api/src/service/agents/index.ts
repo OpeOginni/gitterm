@@ -3,7 +3,7 @@ import { t3codeProvisioner } from "./t3code";
 import type { AgentProvisioner } from "./types";
 
 export { getUserProviderCredentials, resolveWorkspaceProviderCredentials } from "./credentials";
-export type { InlineProviderCredentialInput } from "./credentials";
+export type { WorkspaceModelCredentialInput } from "./credentials";
 export type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 
 export function getAgentProvisioner(provisionerKey: string): AgentProvisioner {

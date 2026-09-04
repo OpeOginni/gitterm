@@ -7,6 +7,7 @@ export type GittermErrorCode =
   | "CONFLICT"
   | "SERVER_ERROR"
   | "NETWORK"
+  | "ABORTED"
   | CredentialErrorCode
   | WorkspaceLifecycleErrorCode;
 
@@ -17,10 +18,19 @@ export type CredentialErrorCode =
   | "MODEL_CREDENTIAL_REQUIRED";
 
 export type WorkspaceLifecycleErrorCode =
+  | "WORKSPACE_NOT_RUNNING"
   | "WORKSPACE_TERMINATED"
   | "WORKSPACE_NON_RECOVERABLE"
   | "WORKSPACE_START_TIMEOUT"
   | "WORKSPACE_RESTART_FAILED";
+
+export const WORKSPACE_LIFECYCLE_ERROR_CODES: readonly WorkspaceLifecycleErrorCode[] = [
+  "WORKSPACE_NOT_RUNNING",
+  "WORKSPACE_TERMINATED",
+  "WORKSPACE_NON_RECOVERABLE",
+  "WORKSPACE_START_TIMEOUT",
+  "WORKSPACE_RESTART_FAILED",
+];
 
 export class GittermError extends Error {
   readonly code: GittermErrorCode;

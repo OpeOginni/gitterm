@@ -5,69 +5,131 @@ import { getEncryptionService } from "../encryption";
 import type { UserProviderCredential } from "./types";
 
 /**
- * An API key supplied directly in the workspace create call. Injected into
- * the provisioned workspace only — never persisted to the dashboard. OAuth
- * providers require the dashboard flow (device-code + refresh handling).
+ * One entry of `modelCredentials` on workspace create. Each entry picks the
+ * credential for a single provider:
+ *
+ * - `{ providerName, apiKey }` — inline key, injected into the workspace only
+ *   and never persisted. OAuth providers require the dashboard flow.
+ * - `{ providerName, label }` — the dashboard credential with that label.
+ * - `{ providerName }` — the dashboard default credential for that provider.
  */
-export interface InlineProviderCredentialInput {
+export interface WorkspaceModelCredentialInput {
   providerName: string;
-  apiKey: string;
+  apiKey?: string;
+  label?: string;
 }
+
+type StoredCredentialRow = {
+  user_model_credential: typeof userModelCredential.$inferSelect;
+  model_provider: typeof modelProvider.$inferSelect;
+};
 
 function credentialError(code: string, detail: string): TRPCError {
   return new TRPCError({ code: "BAD_REQUEST", message: `${code}: ${detail}` });
 }
 
-/**
- * Fetch and decrypt the user's stored model credentials. When `credentialIds`
- * is provided every selected credential must resolve; otherwise the user's
- * default credentials are used.
- */
-export async function getUserProviderCredentials(
-  userId: string,
-  credentialIds?: string[],
-): Promise<UserProviderCredential[]> {
-  if (credentialIds?.length === 0) return [];
-
-  const conditions = [
-    eq(userModelCredential.userId, userId),
-    eq(userModelCredential.isActive, true),
-  ];
-  if (credentialIds) conditions.push(inArray(userModelCredential.id, credentialIds));
-  else conditions.push(eq(userModelCredential.isDefault, true));
-
-  const userCredentials = await db
-    .select()
-    .from(userModelCredential)
-    .where(and(...conditions))
-    .innerJoin(modelProvider, eq(userModelCredential.providerId, modelProvider.id));
-
-  if (credentialIds && userCredentials.length !== new Set(credentialIds).size) {
+function assertUniqueLogicalProvider(seen: Set<string>, logicalProviderKey: string, verb: string) {
+  if (seen.has(logicalProviderKey)) {
     throw credentialError(
-      "MODEL_CREDENTIAL_UNAVAILABLE",
-      "One or more selected credentials are missing, inactive, or unavailable to this account",
+      "MODEL_CREDENTIAL_DUPLICATE_PROVIDER",
+      `Only one credential can be ${verb} for ${logicalProviderKey}`,
     );
   }
+  seen.add(logicalProviderKey);
+}
 
-  const logicalProviders = new Set<string>();
-  for (const row of userCredentials) {
-    const logicalProviderKey = row.user_model_credential.logicalProviderKey;
-    if (logicalProviders.has(logicalProviderKey)) {
-      throw credentialError(
-        "MODEL_CREDENTIAL_DUPLICATE_PROVIDER",
-        `Only one credential can be selected for ${logicalProviderKey}`,
-      );
-    }
-    logicalProviders.add(logicalProviderKey);
-  }
-
-  const encryption = getEncryptionService();
-  return userCredentials.map((row) => ({
+function toProviderCredential(row: StoredCredentialRow): UserProviderCredential {
+  return {
     credentialId: row.user_model_credential.id,
     providerName: row.model_provider.name,
     logicalProviderKey: row.user_model_credential.logicalProviderKey,
-    credential: encryption.decryptCredential(row.user_model_credential.encryptedCredential),
-  }));
+    credential: getEncryptionService().decryptCredential(
+      row.user_model_credential.encryptedCredential,
+    ),
+  };
+}
+
+/** Fetch and decrypt the user's default credential for every provider. */
+export async function getUserProviderCredentials(
+  userId: string,
+): Promise<UserProviderCredential[]> {
+  const rows = await db
+    .select()
+    .from(userModelCredential)
+    .where(
+      and(
+        eq(userModelCredential.userId, userId),
+        eq(userModelCredential.isActive, true),
+        eq(userModelCredential.isDefault, true),
+      ),
+    )
+    .innerJoin(modelProvider, eq(userModelCredential.providerId, modelProvider.id));
+
+  return rows.map(toProviderCredential);
+}
+
+/**
+ * Resolve dashboard credentials selected by provider name plus optional label.
+ * Without a label the provider's default credential is used. Errors list the
+ * labels that exist so callers can correct the selection without a list call.
+ */
+async function getUserProviderCredentialsByLabel(
+  userId: string,
+  selectors: WorkspaceModelCredentialInput[],
+): Promise<UserProviderCredential[]> {
+  if (selectors.length === 0) return [];
+
+  const providerNames = [...new Set(selectors.map((selector) => selector.providerName))];
+  const [providers, rows] = await Promise.all([
+    db
+      .select()
+      .from(modelProvider)
+      .where(and(inArray(modelProvider.name, providerNames), eq(modelProvider.isEnabled, true))),
+    db
+      .select()
+      .from(userModelCredential)
+      .innerJoin(modelProvider, eq(userModelCredential.providerId, modelProvider.id))
+      .where(
+        and(
+          eq(userModelCredential.userId, userId),
+          eq(userModelCredential.isActive, true),
+          inArray(modelProvider.name, providerNames),
+        ),
+      ),
+  ]);
+  const providersByName = new Map(providers.map((provider) => [provider.name, provider]));
+
+  const logicalProviders = new Set<string>();
+  return selectors.map((selector) => {
+    const provider = providersByName.get(selector.providerName);
+    if (!provider) {
+      throw credentialError(
+        "MODEL_CREDENTIAL_INVALID",
+        `Unknown or disabled provider "${selector.providerName}". Use credentials.listProviders() for valid names`,
+      );
+    }
+    assertUniqueLogicalProvider(logicalProviders, provider.logicalProviderKey, "selected");
+
+    const candidates = rows.filter((row) => row.model_provider.name === provider.name);
+    if (candidates.length === 0) {
+      throw credentialError(
+        "MODEL_CREDENTIAL_UNAVAILABLE",
+        `No ${provider.name} credential is connected to this account. Add one in the dashboard or pass an inline apiKey`,
+      );
+    }
+
+    const labels = candidates.map((row) => row.user_model_credential.label);
+    const match = selector.label
+      ? candidates.find((row) => row.user_model_credential.label === selector.label)
+      : (candidates.find((row) => row.user_model_credential.isDefault) ?? candidates[0]);
+    if (!match) {
+      throw credentialError(
+        "MODEL_CREDENTIAL_UNAVAILABLE",
+        `No ${provider.name} credential labelled "${selector.label}". Available labels: ${labels.map((label) => `"${label}"`).join(", ")}`,
+      );
+    }
+    return toProviderCredential(match);
+  });
 }
 
 /**
@@ -75,7 +137,7 @@ export async function getUserProviderCredentials(
  * to the shape provisioners consume. Nothing here touches storage.
  */
 async function resolveInlineProviderCredentials(
-  inlineCredentials: InlineProviderCredentialInput[],
+  inlineCredentials: Array<WorkspaceModelCredentialInput & { apiKey: string }>,
 ): Promise<UserProviderCredential[]> {
   if (inlineCredentials.length === 0) return [];
 
@@ -101,13 +163,7 @@ async function resolveInlineProviderCredentials(
         `Provider ${provider.name} uses ${provider.authType}; inline credentials only support API keys. Connect it in the dashboard instead`,
       );
     }
-    if (logicalProviders.has(provider.logicalProviderKey)) {
-      throw credentialError(
-        "MODEL_CREDENTIAL_DUPLICATE_PROVIDER",
-        `Only one credential can be supplied for ${provider.logicalProviderKey}`,
-      );
-    }
-    logicalProviders.add(provider.logicalProviderKey);
+    assertUniqueLogicalProvider(logicalProviders, provider.logicalProviderKey, "supplied");
 
     return {
       credentialId: null,
@@ -119,21 +175,46 @@ async function resolveInlineProviderCredentials(
 }
 
 /**
- * Resolve the full credential set for a new workspace: inline credentials from
- * the request plus stored dashboard credentials. An inline credential always
- * overrides the dashboard credential for the same logical provider.
+ * Resolve the full credential set for a new workspace.
+ *
+ * - Inline entries (`apiKey`) are injected as-is and always override the
+ *   dashboard credential for the same logical provider.
+ * - Dashboard selections (entries without `apiKey`) are resolved exactly;
+ *   naming any dashboard credential disables the implicit "all defaults".
+ * - With no dashboard selection at all, the user's default credentials are
+ *   injected for every provider not covered inline.
  */
 export async function resolveWorkspaceProviderCredentials(options: {
   userId: string;
-  credentialIds?: string[];
-  inlineCredentials?: InlineProviderCredentialInput[];
+  modelCredentials?: WorkspaceModelCredentialInput[];
 }): Promise<UserProviderCredential[]> {
+  const entries = options.modelCredentials ?? [];
+  const inlineEntries = entries.filter(
+    (entry): entry is WorkspaceModelCredentialInput & { apiKey: string } =>
+      entry.apiKey !== undefined,
+  );
+  const selectorEntries = entries.filter((entry) => entry.apiKey === undefined);
+
   const [inline, stored] = await Promise.all([
-    resolveInlineProviderCredentials(options.inlineCredentials ?? []),
-    getUserProviderCredentials(options.userId, options.credentialIds),
+    resolveInlineProviderCredentials(inlineEntries),
+    selectorEntries.length > 0
+      ? getUserProviderCredentialsByLabel(options.userId, selectorEntries)
+      : getUserProviderCredentials(options.userId),
   ]);
 
   const inlineProviders = new Set(inline.map((credential) => credential.logicalProviderKey));
+  if (
+    selectorEntries.length > 0 &&
+    stored.some((credential) => inlineProviders.has(credential.logicalProviderKey))
+  ) {
+    const duplicate = stored.find((credential) =>
+      inlineProviders.has(credential.logicalProviderKey),
+    )!;
+    throw credentialError(
+      "MODEL_CREDENTIAL_DUPLICATE_PROVIDER",
+      `Only one credential can be selected for ${duplicate.logicalProviderKey}`,
+    );
+  }
   return [
     ...inline,
     ...stored.filter((credential) => !inlineProviders.has(credential.logicalProviderKey)),

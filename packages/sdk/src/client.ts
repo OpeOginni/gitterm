@@ -3,6 +3,7 @@ import type { AppRouter } from "@gitterm/api/routers/index";
 import { DEFAULT_GITTERM_SERVER_URL, loadConfigSync } from "./config.js";
 import {
   GittermError,
+  WORKSPACE_LIFECYCLE_ERROR_CODES,
   WorkspaceLifecycleError,
   type CredentialErrorCode,
   type GittermErrorCode,
@@ -11,15 +12,20 @@ import type {
   AgentType,
   AgentRun,
   AgentRunCreateInput,
+  AgentRunListOptions,
+  AgentRunListResult,
   AgentRunMessage,
   AuthStatus,
   CloudProvider,
+  RunRef,
+  WaitOptions,
   Workspace,
   WorkspaceCreateInput,
   WorkspaceCreateResult,
   WorkspaceEnsureRunningResult,
   WorkspaceListOptions,
   WorkspaceListResult,
+  WorkspaceRef,
   WorkspaceRestartResult,
   WorkspaceRuntimeAccess,
   WorkspacePauseResult,
@@ -68,6 +74,9 @@ type RawWorkspace = {
     imageId: string;
     agentType?: { id: string; name: string; description: string | null } | null;
   } | null;
+  metadata?: Record<string, string> | null;
+  autoTerminateAt?: Date | string | null;
+  customImage?: string | null;
   startedAt: Date | string | null;
   pausedAt: Date | string | null;
   terminatedAt: Date | string | null;
@@ -96,32 +105,31 @@ export type GittermClient = {
   auth: { status(): Promise<AuthStatus> };
   workspaces: {
     list(input?: WorkspaceListOptions): Promise<WorkspaceListResult>;
-    get(workspaceId: string): Promise<Workspace>;
-    getRuntimeAccess(workspaceId: string): Promise<WorkspaceRuntimeAccess>;
+    get(workspace: WorkspaceRef): Promise<Workspace>;
+    getRuntimeAccess(workspace: WorkspaceRef): Promise<WorkspaceRuntimeAccess>;
+    /** Resume a paused workspace if needed and wait until it is running. */
     ensureRunning(
-      workspaceId: string,
-      options?: { timeoutMs?: number; pollIntervalMs?: number },
+      workspace: WorkspaceRef,
+      options?: WaitOptions,
     ): Promise<WorkspaceEnsureRunningResult>;
-    pause(workspaceId: string): Promise<WorkspacePauseResult>;
-    restart(workspaceId: string): Promise<WorkspaceRestartResult>;
-    terminate(workspaceId: string): Promise<WorkspaceTerminateResult>;
+    pause(workspace: WorkspaceRef): Promise<WorkspacePauseResult>;
+    restart(workspace: WorkspaceRef): Promise<WorkspaceRestartResult>;
+    terminate(workspace: WorkspaceRef): Promise<WorkspaceTerminateResult>;
     create(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
-    setupStatus(workspaceId: string): Promise<WorkspaceSetupStatus>;
-    waitForSetup(
-      workspaceId: string,
-      options?: { timeoutMs?: number; pollIntervalMs?: number },
-    ): Promise<WorkspaceSetupStatus>;
+    setupStatus(workspace: WorkspaceRef): Promise<WorkspaceSetupStatus>;
+    waitForSetup(workspace: WorkspaceRef, options?: WaitOptions): Promise<WorkspaceSetupStatus>;
   };
   runs: {
     create(input: AgentRunCreateInput): Promise<AgentRun>;
+    list(workspace: WorkspaceRef, options?: AgentRunListOptions): Promise<AgentRunListResult>;
+    get(run: RunRef): Promise<AgentRun>;
     get(workspaceId: string, runId: string): Promise<AgentRun>;
+    messages(run: RunRef): Promise<AgentRunMessage[]>;
     messages(workspaceId: string, runId: string): Promise<AgentRunMessage[]>;
+    cancel(run: RunRef): Promise<{ cancelled: boolean }>;
     cancel(workspaceId: string, runId: string): Promise<{ cancelled: boolean }>;
-    wait(
-      workspaceId: string,
-      runId: string,
-      options?: { timeoutMs?: number; pollIntervalMs?: number },
-    ): Promise<AgentRun>;
+    wait(run: RunRef, options?: WaitOptions): Promise<AgentRun>;
+    wait(workspaceId: string, runId: string, options?: WaitOptions): Promise<AgentRun>;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
@@ -176,6 +184,40 @@ function normalizeBaseCommit(value: string | null | undefined): string | null {
   return /^[0-9a-f]{40}([0-9a-f]{24})?$/i.test(trimmed) ? trimmed.toLowerCase() : trimmed;
 }
 
+function workspaceIdOf(ref: WorkspaceRef): string {
+  return typeof ref === "string" ? ref : ref.id;
+}
+
+function runTargetOf(refOrWorkspaceId: RunRef | string, runId?: string) {
+  if (typeof refOrWorkspaceId === "string") {
+    if (!runId) throw new GittermError("BAD_REQUEST", "runId is required");
+    return { workspaceId: refOrWorkspaceId, runId };
+  }
+  return {
+    workspaceId: refOrWorkspaceId.workspaceId,
+    runId: "runId" in refOrWorkspaceId ? refOrWorkspaceId.runId : refOrWorkspaceId.id,
+  };
+}
+
+function throwIfAborted(signal: AbortSignal | undefined, what: string): void {
+  if (signal?.aborted) throw new GittermError("ABORTED", `Aborted while ${what}`);
+}
+
+/** Sleep that wakes early (and rejects with ABORTED) when the signal fires. */
+function sleep(ms: number, signal: AbortSignal | undefined, what: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new GittermError("ABORTED", `Aborted while ${what}`));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 function normalizeWorkspace(workspace: RawWorkspace | null | undefined): Workspace | null {
   if (!workspace) return null;
   return {
@@ -207,6 +249,9 @@ function normalizeWorkspace(workspace: RawWorkspace | null | undefined): Workspa
           imageId: workspace.image.imageId,
         }
       : null,
+    metadata: workspace.metadata ?? {},
+    autoTerminateAt: toIso(workspace.autoTerminateAt),
+    customImage: workspace.customImage ?? null,
     startedAt: toIso(workspace.startedAt),
     pausedAt: toIso(workspace.pausedAt),
     terminatedAt: toIso(workspace.terminatedAt),
@@ -275,23 +320,11 @@ async function runWithServer<T>(serverUrl: string, operation: () => Promise<T>):
       const code = mapTrpcCode(trpcCode);
       const credentialCode = credentialErrorCode(error.message);
       if (credentialCode) throw new GittermError(credentialCode, error.message, { cause: error });
-      if (/WORKSPACE_TERMINATED/.test(error.message)) {
-        throw new WorkspaceLifecycleError("WORKSPACE_TERMINATED", error.message, { cause: error });
-      }
-      if (/WORKSPACE_NON_RECOVERABLE/.test(error.message)) {
-        throw new WorkspaceLifecycleError("WORKSPACE_NON_RECOVERABLE", error.message, {
-          cause: error,
-        });
-      }
-      if (/WORKSPACE_START_TIMEOUT/.test(error.message)) {
-        throw new WorkspaceLifecycleError("WORKSPACE_START_TIMEOUT", error.message, {
-          cause: error,
-        });
-      }
-      if (/WORKSPACE_RESTART_FAILED/.test(error.message)) {
-        throw new WorkspaceLifecycleError("WORKSPACE_RESTART_FAILED", error.message, {
-          cause: error,
-        });
+      const lifecycleCode = WORKSPACE_LIFECYCLE_ERROR_CODES.find((candidate) =>
+        error.message.includes(candidate),
+      );
+      if (lifecycleCode) {
+        throw new WorkspaceLifecycleError(lifecycleCode, error.message, { cause: error });
       }
       throw new GittermError(
         code,
@@ -358,13 +391,15 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
 
   const waitForWorkspaceSetup = async (
     workspaceId: string,
-    waitOptions?: { timeoutMs?: number; pollIntervalMs?: number },
+    waitOptions?: WaitOptions,
   ): Promise<WorkspaceSetupStatus> => {
     const timeoutMs = waitOptions?.timeoutMs ?? 10 * 60_000;
     const pollIntervalMs = waitOptions?.pollIntervalMs ?? 2_000;
+    const signal = waitOptions?.signal;
     const deadline = Date.now() + timeoutMs;
     while (true) {
-      const result = await trpc.workspace.getSetupStatus.query({ workspaceId });
+      throwIfAborted(signal, "waiting for workspace setup");
+      const result = await trpc.workspace.getSetupStatus.query({ workspaceId }, { signal });
       if (result.status === "not_requested" || result.status === "succeeded") return result;
       if (result.status === "failed") {
         const log = result.log?.trim();
@@ -380,7 +415,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           `Timed out waiting for workspace ${workspaceId} setup (last status: ${result.status})${log ? `\n${log}` : ""}`,
         );
       }
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await sleep(pollIntervalMs, signal, "waiting for workspace setup");
     }
   };
 
@@ -405,34 +440,39 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         run(async (): Promise<WorkspaceListResult> => {
           const result = await trpc.workspace.listWorkspaces.query(input);
           return {
-            workspaces: result.workspaces.map(
-              (workspace: RawWorkspace) => normalizeWorkspace(workspace)!,
-            ),
+            workspaces: (result.workspaces as RawWorkspace[])
+              .map(normalizeWorkspace)
+              .filter((workspace): workspace is Workspace => workspace !== null),
             pagination: result.pagination,
           };
         }),
-      get: (workspaceId: string) =>
+      get: (ref: WorkspaceRef) =>
         run(async (): Promise<Workspace> => {
-          const result = await trpc.workspace.getWorkspace.query({ workspaceId });
-          const workspace = normalizeWorkspace(result.workspace);
+          const result = await trpc.workspace.getWorkspace.query({
+            workspaceId: workspaceIdOf(ref),
+          });
+          const workspace = normalizeWorkspace(result.workspace as RawWorkspace);
           if (!workspace) throw new GittermError("NOT_FOUND", "Workspace not found");
           return workspace;
         }),
-      getRuntimeAccess: (workspaceId: string) =>
+      getRuntimeAccess: (ref: WorkspaceRef) =>
         run(async (): Promise<WorkspaceRuntimeAccess> => {
-          const result = await trpc.workspace.getRuntimeAccess.query({ workspaceId });
+          const result = await trpc.workspace.getRuntimeAccess.query({
+            workspaceId: workspaceIdOf(ref),
+          });
           return normalizeRuntime(result);
         }),
-      ensureRunning: (
-        workspaceId: string,
-        options?: { timeoutMs?: number; pollIntervalMs?: number },
-      ) =>
+      ensureRunning: (ref: WorkspaceRef, waitOptions?: WaitOptions) =>
         run(async (): Promise<WorkspaceEnsureRunningResult> => {
-          const result = await trpc.workspace.ensureRunning.mutate({
-            workspaceId,
-            timeoutMs: options?.timeoutMs,
-            pollIntervalMs: options?.pollIntervalMs,
-          });
+          throwIfAborted(waitOptions?.signal, "ensuring the workspace is running");
+          const result = await trpc.workspace.ensureRunning.mutate(
+            {
+              workspaceId: workspaceIdOf(ref),
+              timeoutMs: waitOptions?.timeoutMs,
+              pollIntervalMs: waitOptions?.pollIntervalMs,
+            },
+            { signal: waitOptions?.signal },
+          );
           const workspace = normalizeWorkspace(result.workspace as RawWorkspace);
           if (!workspace) throw new GittermError("SERVER_ERROR", "ensureRunning failed");
           return {
@@ -440,44 +480,98 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
             runtime: normalizeRuntime(result.runtime),
           };
         }),
-      pause: (workspaceId: string) =>
+      pause: (ref: WorkspaceRef) =>
         run(async (): Promise<WorkspacePauseResult> => {
-          const result = await trpc.workspace.pauseWorkspace.mutate({ workspaceId });
+          const result = await trpc.workspace.pauseWorkspace.mutate({
+            workspaceId: workspaceIdOf(ref),
+          });
           return { durationMinutes: result.durationMinutes };
         }),
-      restart: (workspaceId: string) =>
+      restart: (ref: WorkspaceRef) =>
         run(async (): Promise<WorkspaceRestartResult> => {
-          const result = await trpc.workspace.restartWorkspace.mutate({ workspaceId });
+          const result = await trpc.workspace.restartWorkspace.mutate({
+            workspaceId: workspaceIdOf(ref),
+          });
           return { status: result.status as Workspace["status"] };
         }),
-      terminate: (workspaceId: string) =>
+      terminate: (ref: WorkspaceRef) =>
         run(async (): Promise<WorkspaceTerminateResult> => {
-          const result = await trpc.workspace.deleteWorkspace.mutate({ workspaceId });
+          const result = await trpc.workspace.deleteWorkspace.mutate({
+            workspaceId: workspaceIdOf(ref),
+          });
           return {
             workspace: normalizeWorkspace(result.workspace),
             cleanupInBackground: result.cleanupInBackground,
           };
         }),
       create: createWorkspace,
-      setupStatus: (workspaceId) =>
-        run(async () => trpc.workspace.getSetupStatus.query({ workspaceId })),
-      waitForSetup: (workspaceId, waitOptions) =>
-        run(() => waitForWorkspaceSetup(workspaceId, waitOptions)),
+      setupStatus: (ref: WorkspaceRef) =>
+        run(async () => trpc.workspace.getSetupStatus.query({ workspaceId: workspaceIdOf(ref) })),
+      waitForSetup: (ref: WorkspaceRef, waitOptions?: WaitOptions) =>
+        run(() => waitForWorkspaceSetup(workspaceIdOf(ref), waitOptions)),
     },
     runs: {
-      create: (input) => run(async () => trpc.run.create.mutate(input)),
-      get: (workspaceId, runId) => run(async () => trpc.run.get.query({ workspaceId, runId })),
-      messages: (workspaceId, runId) =>
-        run(async () => trpc.run.messages.query({ workspaceId, runId })),
-      cancel: (workspaceId, runId) =>
-        run(async () => trpc.run.cancel.mutate({ workspaceId, runId })),
-      wait: (workspaceId, runId, waitOptions) =>
-        run(async () => {
+      create: (input: AgentRunCreateInput) =>
+        run(async (): Promise<AgentRun> => {
+          const { signal, ...request } = input;
+          // Setup can legitimately take longer than one HTTP request should be
+          // held open, so poll it from here and let the server do a final check.
+          if (request.waitForSetup) {
+            await waitForWorkspaceSetup(request.workspaceId, {
+              timeoutMs: request.setupTimeoutMs,
+              signal,
+            });
+          }
+          throwIfAborted(signal, "creating the run");
+          return trpc.run.create.mutate(
+            { ...request, idempotencyKey: request.idempotencyKey ?? crypto.randomUUID() },
+            { signal },
+          ) as Promise<AgentRun>;
+        }),
+      list: (ref: WorkspaceRef, listOptions?: AgentRunListOptions) =>
+        run(
+          async (): Promise<AgentRunListResult> =>
+            trpc.run.list.query({
+              workspaceId: workspaceIdOf(ref),
+              ...listOptions,
+            }) as Promise<AgentRunListResult>,
+        ),
+      get: (refOrWorkspaceId: RunRef | string, runId?: string) =>
+        run(async (): Promise<AgentRun> => {
+          const target = runTargetOf(refOrWorkspaceId, runId);
+          return trpc.run.get.query(target) as Promise<AgentRun>;
+        }),
+      messages: (refOrWorkspaceId: RunRef | string, runId?: string) =>
+        run(async (): Promise<AgentRunMessage[]> => {
+          const target = runTargetOf(refOrWorkspaceId, runId);
+          const messages = (await trpc.run.messages.query(target)) as Array<
+            Omit<AgentRunMessage, "parts"> & { parts?: AgentRunMessage["parts"] }
+          >;
+          return messages.map((message) => ({ ...message, parts: message.parts ?? [] }));
+        }),
+      cancel: (refOrWorkspaceId: RunRef | string, runId?: string) =>
+        run(async () => trpc.run.cancel.mutate(runTargetOf(refOrWorkspaceId, runId))),
+      wait: (
+        refOrWorkspaceId: RunRef | string,
+        runIdOrOptions?: string | WaitOptions,
+        maybeOptions?: WaitOptions,
+      ) =>
+        run(async (): Promise<AgentRun> => {
+          const target =
+            typeof refOrWorkspaceId === "string"
+              ? runTargetOf(refOrWorkspaceId, runIdOrOptions as string | undefined)
+              : runTargetOf(refOrWorkspaceId);
+          const waitOptions =
+            typeof refOrWorkspaceId === "string"
+              ? maybeOptions
+              : (runIdOrOptions as WaitOptions | undefined);
           const timeoutMs = waitOptions?.timeoutMs ?? 30 * 60_000;
           const pollIntervalMs = waitOptions?.pollIntervalMs ?? 2_000;
+          const signal = waitOptions?.signal;
           const deadline = Date.now() + timeoutMs;
           while (true) {
-            const result = await trpc.run.get.query({ workspaceId, runId });
+            throwIfAborted(signal, `waiting for run ${target.runId}`);
+            const result = (await trpc.run.get.query(target, { signal })) as AgentRun;
             if (
               result.status !== "pending" &&
               result.status !== "running" &&
@@ -485,9 +579,9 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
             )
               return result;
             if (Date.now() >= deadline) {
-              throw new GittermError("NETWORK", `Timed out waiting for run ${runId}`);
+              throw new GittermError("NETWORK", `Timed out waiting for run ${target.runId}`);
             }
-            await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+            await sleep(pollIntervalMs, signal, `waiting for run ${target.runId}`);
           }
         }),
     },
