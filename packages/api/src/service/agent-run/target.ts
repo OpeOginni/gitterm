@@ -6,7 +6,8 @@ import { TRPCError } from "@trpc/server";
 import { getWorkspaceUrl } from "../../utils/routing";
 import { decryptWorkspacePassword } from "../../utils/workspace-password";
 import { resolveProjectDirectory } from "../workspace-runtime";
-import type { RuntimeTarget } from "./runtime";
+import type { RuntimeTarget } from "@gitterm/agent-runtime";
+import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-error";
 
 export async function getOwnedRun(
   workspaceId: string,
@@ -48,15 +49,12 @@ export async function getRunWorkspace(workspaceId: string, userId: string): Prom
 
 export function notRunningError(status: string): TRPCError {
   if (status === "terminated") {
-    return new TRPCError({
-      code: "BAD_REQUEST",
-      message: "WORKSPACE_TERMINATED: workspace has been terminated",
-    });
+    return new WorkspaceLifecycleTRPCError("WORKSPACE_TERMINATED", "workspace has been terminated");
   }
-  return new TRPCError({
-    code: "BAD_REQUEST",
-    message: `WORKSPACE_NOT_RUNNING: workspace is ${status}${status === "paused" ? "; call workspaces.ensureRunning() to resume it" : ""}`,
-  });
+  return new WorkspaceLifecycleTRPCError(
+    "WORKSPACE_NOT_RUNNING",
+    `workspace is ${status}${status === "paused" ? "; call workspaces.ensureRunning() to resume it" : ""}`,
+  );
 }
 
 function isOpencodeServerWorkspace(record: RunWorkspace): boolean {

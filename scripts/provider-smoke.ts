@@ -80,7 +80,9 @@ function selectedProviders(): ProviderKey[] {
   if (unknown.length > 0) throw new Error(`Unknown providers: ${unknown.join(", ")}`);
   if (providers.length === 0) throw new Error("At least one provider is required");
   const selected = [...new Set(providers)] as ProviderKey[];
-  const nonHosted = selected.filter((provider) => !HOSTED_PROVIDERS.includes(provider));
+  const nonHosted = selected.filter(
+    (provider) => !HOSTED_PROVIDERS.some((hosted) => hosted === provider),
+  );
   if (hostedOnly && nonHosted.length > 0) {
     throw new Error(`Not a hosted provider: ${nonHosted.join(", ")}`);
   }
@@ -152,8 +154,10 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
   const repo = requiredEnv("GITTERM_E2E_REPO");
   const agent = process.env.GITTERM_E2E_AGENT?.trim() || "opencode";
   const model = process.env.GITTERM_E2E_MODEL?.trim() || "opencode/big-pickle";
-  const modelCredentials =
-    model === "opencode/big-pickle" ? [{ providerName: "opencode", apiKey: "public" }] : undefined;
+  const models =
+    model === "opencode/big-pickle"
+      ? { providers: { opencode: { source: "apiKey" as const, apiKey: "public" } } }
+      : undefined;
   // Overall per-step budget; must exceed the setup wrapper's 300s readiness
   // probe so probe failures can report before the smoke gives up.
   const timeoutMs = Number(process.env.GITTERM_E2E_TIMEOUT_MS ?? MAX_ENSURE_RUNNING_TIMEOUT_MS);
@@ -210,7 +214,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
         repo,
         agent,
         provider: { type: provider } as WorkspaceProviderSelection,
-        modelCredentials,
+        models,
         setup: {
           afterAgent: [
             (workspaceApiAccess
@@ -274,7 +278,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
 
     const agentRun = await step(result.steps, "create agent run with SDK", () =>
       client.runs.create({
-        workspaceId: workspaceId!,
+        workspace: workspaceId!,
         idempotencyKey: `provider-smoke-run-${provider}-${runId}`,
         title: `Provider smoke test: ${provider}`,
         prompt: "Respond with exactly GITTERM_E2E_OK and no other text.",
@@ -284,7 +288,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
       }),
     );
     const completedRun = await step(result.steps, "wait for agent run", () =>
-      client.runs.wait(workspaceId!, agentRun.id, { timeoutMs: runTimeoutMs }),
+      client.runs.wait(agentRun, { timeoutMs: runTimeoutMs }),
     );
     if (completedRun.status !== "completed") {
       throw new Error(
@@ -292,7 +296,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
       );
     }
     if (!completedRun.finalText?.includes("GITTERM_E2E_OK")) {
-      const messages = await client.runs.messages(workspaceId!, agentRun.id).catch((error) => [
+      const messages = await client.runs.messages(agentRun).catch((error) => [
         {
           error: error instanceof Error ? error.message : String(error),
         },

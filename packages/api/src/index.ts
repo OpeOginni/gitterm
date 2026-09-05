@@ -7,11 +7,22 @@ import { db, eq } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
 import type { ApiTokenScope } from "@gitterm/schema";
 import type { WorkspaceTokenPurpose } from "./service/auth/workspace-jwt";
+import { WorkspaceLifecycleTRPCError } from "./utils/workspace-lifecycle-error";
 
 // Internal service API key for service-to-service communication
 const INTERNAL_API_KEY = env.INTERNAL_API_KEY;
 
 export const t = initTRPC.context<Context>().create({
+  errorFormatter({ shape, error }) {
+    return {
+      ...shape,
+      data: {
+        ...shape.data,
+        workspaceLifecycleCode:
+          error instanceof WorkspaceLifecycleTRPCError ? error.workspaceLifecycleCode : null,
+      },
+    };
+  },
   sse: {
     maxDurationMs: 5 * 60 * 1_000, // 5 minutes
     ping: {

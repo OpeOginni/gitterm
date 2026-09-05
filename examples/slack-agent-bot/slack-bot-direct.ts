@@ -7,7 +7,7 @@ import {
 import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-type ThreadState = { workspace: DirectWorkspace; sessionId?: string };
+type ThreadState = { workspace: DirectWorkspace; run?: DirectRun };
 type State = Record<string, ThreadState>;
 type SlackMessage = {
   ts?: string;
@@ -177,8 +177,8 @@ async function workspaceFor(key: string): Promise<ThreadState> {
     branch: process.env.GITTERM_BOT_BRANCH?.trim(),
     lifecycle: "persistent",
     additionalAgentInstructions: slackAgentInstructions,
-    modelCredentials: anthropicKey
-      ? [{ providerName: "anthropic", apiKey: anthropicKey }]
+    models: anthropicKey
+      ? { providers: { anthropic: { source: "apiKey", apiKey: anthropicKey } } }
       : undefined,
     opencode: {
       config: {
@@ -266,7 +266,7 @@ async function handleRequest(
   let run: DirectRun | undefined;
   try {
     threadState = await workspaceFor(input.key);
-    const continuing = Boolean(threadState.sessionId);
+    const continuing = Boolean(threadState.run);
     const prompt = continuing
       ? input.request
       : await firstPrompt(client, {
@@ -278,17 +278,19 @@ async function handleRequest(
       prompt,
       title: input.request.slice(0, 120),
       model: process.env.GITTERM_BOT_MODEL?.trim(),
-      sessionId: threadState.sessionId,
+      context: threadState.run ? { type: "continue", run: threadState.run } : undefined,
     });
-    threadState.sessionId = run.sessionId;
+    threadState.run = run;
     state[input.key] = threadState;
     await saveState();
-    const completed = await gitterm.runs.wait(run, threadState.workspace, {
+    const completed = await gitterm.runs.result(run, {
       timeoutMs: runTimeoutMs,
     });
     if (completed.status !== "completed") {
       throw new Error(completed.error ?? `Agent run ended with ${completed.status}`);
     }
+    threadState.run = completed;
+    await saveState();
     if (!working.ts) throw new Error("Slack did not return a status message timestamp");
     await client.chat.update({
       channel: input.channel,
@@ -299,7 +301,7 @@ async function handleRequest(
   } catch (error) {
     logger.error(error);
     if (run && threadState) {
-      await gitterm.runs.cancel(run, threadState.workspace).catch(() => false);
+      await gitterm.runs.cancel(run).catch(() => ({ cancelled: false }));
     }
     if (working.ts) {
       await client.chat.update({

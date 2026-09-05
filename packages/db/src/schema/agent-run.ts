@@ -46,7 +46,7 @@ export type AgentRunInputRequest =
   | {
       id: string;
       kind: "permission";
-      createdAt: string;
+      createdAt: string | null;
       /** OpenCode tool call that raised the request, when known. */
       toolCallId: string | null;
       /** Permission action, e.g. "bash" or "edit". */
@@ -60,7 +60,7 @@ export type AgentRunInputRequest =
   | {
       id: string;
       kind: "question";
-      createdAt: string;
+      createdAt: string | null;
       toolCallId: string | null;
       questions: Array<{
         /** Runtime field key the answer is submitted under. */

@@ -64,12 +64,52 @@ test("maps stable lifecycle prefixes to WorkspaceLifecycleError", async () => {
   const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
 
   const error = await client.runs
-    .create({ workspaceId: crypto.randomUUID(), idempotencyKey: "k", prompt: "hi" })
+    .create({ workspace: crypto.randomUUID(), idempotencyKey: "k", prompt: "hi" })
     .catch((caught: unknown) => caught);
 
   expect(error).toBeInstanceOf(WorkspaceLifecycleError);
   expect((error as WorkspaceLifecycleError).code).toBe("WORKSPACE_NOT_RUNNING");
 });
+
+test.each([
+  ["WORKSPACE_NOT_RUNNING", "Workspace must be running", "WORKSPACE_NOT_RUNNING"],
+  ["WORKSPACE_TERMINATED", "This workspace is gone", "WORKSPACE_TERMINATED"],
+  ["WORKSPACE_START_TIMEOUT", "Startup took too long", "WORKSPACE_START_TIMEOUT"],
+  // Structured data takes precedence even if the message contains another prefix.
+  ["WORKSPACE_NOT_RUNNING", "WORKSPACE_TERMINATED: misleading text", "WORKSPACE_NOT_RUNNING"],
+  ["UNKNOWN_CODE", "Invalid request", "BAD_REQUEST"],
+  [null, "An example mentions WORKSPACE_NOT_RUNNING but is not that error", "BAD_REQUEST"],
+  [null, "WORKSPACE_NOT_RUNNING: workspace is paused", "WORKSPACE_NOT_RUNNING"],
+] as const)(
+  "maps lifecycle data %s with message %s to %s",
+  async (workspaceLifecycleCode, message, expected) => {
+    const fetchStub = (async () =>
+      new Response(
+        JSON.stringify([
+          {
+            error: {
+              message,
+              code: -32600,
+              data: {
+                code: "BAD_REQUEST",
+                httpStatus: 400,
+                path: "run.create",
+                workspaceLifecycleCode,
+              },
+            },
+          },
+        ]),
+        { status: 400, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+    const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
+    const error = await client.runs
+      .create({ workspace: crypto.randomUUID(), prompt: "hi" })
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(GittermError);
+    expect((error as GittermError).code).toBe(expected);
+    if (expected !== "BAD_REQUEST") expect(error).toBeInstanceOf(WorkspaceLifecycleError);
+  },
+);
 
 function trpcOk(result: unknown): Response {
   return new Response(JSON.stringify([{ result: { data: result } }]), {
@@ -164,9 +204,126 @@ test("wait returns as soon as the run needs input", async () => {
     ],
   ]);
 
-  const result = await client.runs.wait(completed.workspaceId, completed.id);
+  const result = await client.runs.wait({ workspaceId: completed.workspaceId, id: completed.id });
   expect(result.status).toBe("awaiting_input");
   expect(result.pendingInputs[0]?.kind).toBe("permission");
+});
+
+test("watch yields every lifecycle state and ends after the terminal one", async () => {
+  const client = eventClient([
+    [
+      { type: "snapshot", run: { ...completed, status: "running" } },
+      { type: "run.updated", run: awaiting },
+      { type: "run.updated", run: { ...completed, status: "running" } },
+      { type: "run.updated", run: completed },
+    ],
+  ]);
+
+  const statuses: string[] = [];
+  for await (const run of client.runs.watch(completed as never)) statuses.push(run.status);
+  expect(statuses).toEqual(["running", "awaiting_input", "running", "completed"]);
+});
+
+test("wait rejects with TIMEOUT when the run does not settle in time", async () => {
+  const fetchStub = (async () =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("event: connected\ndata: {}\n\n"));
+        },
+      }),
+      { status: 200, headers: { "content-type": "text/event-stream" } },
+    )) as unknown as typeof fetch;
+  const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
+
+  const error = await client.runs
+    .wait(completed as never, { timeoutMs: 20 })
+    .catch((caught: unknown) => caught);
+
+  expect(error).toBeInstanceOf(GittermError);
+  expect((error as GittermError).code).toBe("TIMEOUT");
+});
+
+test("respond sends question answers keyed by question key", async () => {
+  let body: unknown;
+  const fetchStub = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    body = JSON.parse(String(init?.body));
+    return trpcOk(completed);
+  }) as unknown as typeof fetch;
+  const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
+
+  await client.runs.respond(completed as never, {
+    requestId: "que_1",
+    reply: { type: "question", answers: { database: ["Postgres"] } },
+  });
+
+  expect(body).toMatchObject({
+    "0": { workspaceId: completed.workspaceId, runId: completed.id, requestId: "que_1" },
+  });
+  expect((body as { "0": { reply: unknown } })["0"].reply).toEqual({
+    type: "question",
+    answers: { database: ["Postgres"] },
+  });
+});
+
+test("model discovery includes logical provider keys and workspace configuration", async () => {
+  const client = createGittermClient({
+    token: "gt_test",
+    fetch: (async (input) => {
+      const url = String(input);
+      if (url.includes("listProviders"))
+        return trpcOk({
+          providers: [
+            {
+              id: "oauth",
+              name: "openai-oauth",
+              logicalProviderKey: "openai",
+              displayName: "OpenAI",
+              authType: "oauth",
+              isRecommended: true,
+            },
+          ],
+        });
+      if (url.includes("getModelAccess"))
+        return trpcOk({
+          providers: [{ provider: "openai", source: "saved", label: "work", active: true }],
+          models: [],
+        });
+      return trpcOk({
+        models: [
+          { modelId: "openai/test", displayName: "Test", isFree: false, isRecommended: true },
+        ],
+      });
+    }) as typeof fetch,
+  });
+  expect((await client.credentials.listProviders())[0]?.logicalProviderKey).toBe("openai");
+  expect((await client.models.list({ provider: "openai" }))[0]?.id).toBe("openai/test");
+  expect((await client.workspaces.models("workspace")).providers[0]?.label).toBe("work");
+});
+
+test("stale reply errors retain a stable code", async () => {
+  const client = createGittermClient({
+    token: "gt_test",
+    fetch: (async () =>
+      Response.json(
+        [
+          {
+            error: {
+              message: "INPUT_NOT_PENDING: Input request was resolved",
+              code: -32009,
+              data: { code: "CONFLICT", httpStatus: 409, path: "run.respond" },
+            },
+          },
+        ],
+        { status: 409 },
+      )) as unknown as typeof fetch,
+  });
+  await expect(
+    client.runs.respond(completed, {
+      requestId: "old",
+      reply: { type: "permission", response: "once" },
+    }),
+  ).rejects.toMatchObject({ code: "INPUT_NOT_PENDING" });
 });
 
 test("wait with until: terminal skips the awaiting_input stop", async () => {
@@ -189,9 +346,13 @@ test("waits reject with ABORTED when the signal is already aborted", async () =>
   controller.abort();
 
   const error = await client.runs
-    .wait("22222222-2222-4222-8222-222222222222", "11111111-1111-4111-8111-111111111111", {
-      signal: controller.signal,
-    })
+    .wait(
+      {
+        workspaceId: "22222222-2222-4222-8222-222222222222",
+        id: "11111111-1111-4111-8111-111111111111",
+      },
+      { signal: controller.signal },
+    )
     .catch((caught: unknown) => caught);
 
   expect(error).toBeInstanceOf(GittermError);

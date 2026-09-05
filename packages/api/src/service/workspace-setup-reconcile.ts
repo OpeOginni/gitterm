@@ -6,7 +6,7 @@ import { getProviderByCloudProviderId } from "../providers";
 import type { DaytonaConfig } from "../providers/daytona/types";
 import { getWorkspaceUrl } from "../utils/routing";
 import { decryptWorkspacePassword } from "../utils/workspace-password";
-import { createWorkspaceOpencodeClient } from "./agent-run/opencode";
+import { createWorkspaceOpencodeClient } from "@gitterm/agent-runtime/opencode";
 import { getProviderConfigService } from "./config/provider-config";
 import { resolveProjectDirectory } from "./workspace-runtime";
 

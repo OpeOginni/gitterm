@@ -253,10 +253,22 @@ export class E2BProvider implements ComputeProvider {
       // Decode base64 in the sandbox so binary secrets survive intact.
       const target = file.relativeToRepo ? `${repoDir}/${file.path}` : file.path;
       const dir = target.substring(0, target.lastIndexOf("/"));
-      if (dir) await this.runCommand(sandbox, `mkdir -p '${dir}'`, `mkdir dir for ${file.path}`);
+      // Quoting '~' literally creates a directory named '~' instead of writing
+      // the config/auth files where the agent looks for them. Expand only the
+      // home prefix; keep the rest quoted (including repository-relative paths).
+      const quotePath = (path: string) =>
+        file.relativeToRepo
+          ? shellQuote(path)
+          : path === "~"
+            ? '"$HOME"'
+            : path.startsWith("~/")
+              ? `"$HOME"/${shellQuote(path.slice(2))}`
+              : shellQuote(path);
+      if (dir)
+        await this.runCommand(sandbox, `mkdir -p ${quotePath(dir)}`, `mkdir dir for ${file.path}`);
       await this.runCommand(
         sandbox,
-        `echo "${file.contentBase64}" | base64 -d > '${target}'${file.mode ? ` && chmod ${file.mode.toString(8)} '${target}'` : ""}`,
+        `printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${quotePath(target)}${file.mode ? ` && chmod ${file.mode.toString(8)} ${quotePath(target)}` : ""}`,
         `write agent file ${file.path}`,
       );
     }

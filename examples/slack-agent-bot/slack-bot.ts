@@ -249,12 +249,7 @@ async function workspaceFor(key: string): Promise<ChannelState> {
     provider: { type: "e2b" },
     persistent: true,
     additionalAgentInstructions: slackAgentInstructions,
-    // modelCredentials: [
-    //   {
-    //     providerName: "opencode",
-    //     apiKey: ""
-    //   }
-    // ],
+    // models: { providers: { openai: { source: "saved", label: "work" } } },
     opencode: {
       config: {
         permission: {
@@ -449,7 +444,7 @@ async function handleRequest(
       excludedTimestamps: [...input.excludedTimestamps, ...(working.ts ? [working.ts] : [])],
     });
     run = await gitterm.runs.create({
-      workspaceId: channelState.workspace.id,
+      workspace: channelState.workspace,
       idempotencyKey: input.idempotencyKey,
       prompt,
       title: input.request.slice(0, 120),
@@ -457,7 +452,12 @@ async function handleRequest(
       waitForSetup: true,
       setupTimeoutMs: Math.min(runTimeoutMs, 10 * 60_000),
       ...(previousSession
-        ? { context: { type: "continue" as const, runId: previousSession.runId } }
+        ? {
+            context: {
+              type: "continue" as const,
+              run: { workspaceId: channelState.workspace.id, id: previousSession.runId },
+            },
+          }
         : {}),
     });
     channelState.runs[input.threadTs] = { runId: run.id, lastHandledTs: input.eventTs };
@@ -472,10 +472,7 @@ async function handleRequest(
     });
   } catch (error) {
     logger.error(error);
-    if (run && channelState)
-      await gitterm.runs
-        .cancel(channelState.workspace.id, run.id)
-        .catch(() => ({ cancelled: false }));
+    if (run && channelState) await gitterm.runs.cancel(run).catch(() => ({ cancelled: false }));
     if (working.ts) {
       await client.chat.update({
         channel: input.channel,
@@ -504,9 +501,10 @@ async function finishRun(
 ) {
   const channelState = state[input.workspaceKey];
   if (!channelState) throw new Error("Unknown workspace for this channel");
-  const result = await gitterm.runs.wait(channelState.workspace.id, input.runId, {
-    timeoutMs: runTimeoutMs,
-  });
+  const result = await gitterm.runs.wait(
+    { workspaceId: channelState.workspace.id, id: input.runId },
+    { timeoutMs: runTimeoutMs },
+  );
   const session = channelState.runs[input.threadTs] ?? { runId: input.runId };
   if (result.status === "awaiting_input") {
     const request = result.pendingInputs[0];
@@ -585,7 +583,7 @@ function parseReply(request: AgentRunInputRequest, text: string): AgentRunReply 
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const answers: string[][] = [];
+  const answers: Record<string, string[]> = {};
   for (const [index, question] of request.questions.entries()) {
     const line = request.questions.length === 1 ? answer : lines[index];
     if (!line) return `Please answer all ${request.questions.length} questions, one per line.`;
@@ -601,7 +599,7 @@ function parseReply(request: AgentRunInputRequest, text: string): AgentRunReply 
       else if (question.custom) labels.push(pick);
       else return `"${pick}" is not one of the options for "${question.header}".`;
     }
-    answers.push(labels);
+    answers[question.key] = labels;
   }
   return { type: "question", answers };
 }
@@ -622,7 +620,7 @@ async function answerPendingRequest(
   const channelState = state[input.workspaceKey];
   if (!channelState) return false;
   const workspaceId = channelState.workspace.id;
-  const run = await gitterm.runs.get(workspaceId, input.session.runId);
+  const run = await gitterm.runs.get({ workspaceId, id: input.session.runId });
   const request = run.pendingInputs.find(
     (candidate) => candidate.id === input.session.pendingRequestId,
   );
@@ -643,7 +641,7 @@ async function answerPendingRequest(
     text: "Passing your answer to the agent...",
   });
   try {
-    await gitterm.runs.respond({ workspaceId, runId: run.id }, { requestId: request.id, reply });
+    await gitterm.runs.respond(run, { requestId: request.id, reply });
     channelState.runs[input.threadTs] = {
       ...input.session,
       lastHandledTs: input.eventTs,

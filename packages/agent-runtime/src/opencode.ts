@@ -1,6 +1,6 @@
 import { createOpencodeClient, type Part } from "@opencode-ai/sdk";
-import type { AgentRunMessagePart } from "@gitterm/db/schema/agent-run";
-import { truncateToolOutput } from "./runtime/types";
+import type { AgentRunMessagePart } from "./contract";
+import { truncateToolOutput } from "./types";
 
 export function isOpencodeRunMessage(
   info: { id: string; role: "user" } | { id: string; role: "assistant"; parentID: string },
@@ -73,6 +73,8 @@ export function createWorkspaceOpencodeClient(input: {
   url: string;
   directory: string;
   password?: string | null;
+  headers?: Record<string, string>;
+  fetch?: typeof fetch;
 }) {
   const authorization = input.password
     ? `Basic ${Buffer.from(`opencode:${input.password}`).toString("base64")}`
@@ -80,6 +82,7 @@ export function createWorkspaceOpencodeClient(input: {
   return createOpencodeClient({
     baseUrl: input.url,
     directory: input.directory,
-    headers: authorization ? { Authorization: authorization } : undefined,
+    headers: { ...input.headers, ...(authorization ? { Authorization: authorization } : {}) },
+    fetch: input.fetch,
   });
 }

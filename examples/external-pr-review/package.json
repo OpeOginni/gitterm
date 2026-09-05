@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@gitterm/sdk": "^0.0.8"
+    "@gitterm/sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.3.6"

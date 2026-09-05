@@ -1,3 +1,5 @@
+import type { AgentRun, AgentRunMessage, OpencodeApi, RunWaitOptions } from "../types.js";
+
 export type DirectWorkspaceLifecycle = "ephemeral" | "persistent";
 export type DirectWorkspaceStatus =
   | "pending"
@@ -18,14 +20,14 @@ export type DirectProviderCapabilities = {
 
 export type DirectApiModelCredential = {
   providerName: string;
-  type?: "api";
+  source: "apiKey";
   apiKey: string;
   metadata?: Record<string, string>;
 };
 
 export type DirectOAuthModelCredential = {
   providerName: string;
-  type: "oauth";
+  source: "oauth";
   refreshToken: string;
   /** May be omitted when OpenCode should refresh immediately. */
   accessToken?: string;
@@ -111,7 +113,15 @@ export type DirectWorkspaceCreateInput = {
   repositoryCredentials?: { username?: string; token: string };
   lifecycle?: DirectWorkspaceLifecycle;
   environmentVariables?: Record<string, string>;
-  modelCredentials?: DirectModelCredential[];
+  models?: {
+    default?: string;
+    inherit?: "none";
+    providers?: Record<
+      string,
+      | Omit<DirectApiModelCredential, "providerName">
+      | Omit<DirectOAuthModelCredential, "providerName">
+    >;
+  };
   setup?: DirectWorkspaceSetup;
   secretFiles?: DirectSecretFile[];
   /** Provider-specific attachment settings. */
@@ -119,6 +129,8 @@ export type DirectWorkspaceCreateInput = {
   /** Trusted integration context appended to the generated global AGENTS.md. */
   additionalAgentInstructions?: string;
   opencode?: {
+    /** Defaults to v1. v2 requires a compatible provider image/template. */
+    api?: OpencodeApi;
     config?: Record<string, unknown>;
     plugins?: string[];
     skills?: Array<{ name: string; content: string }>;
@@ -139,6 +151,7 @@ export type DirectWorkspace = {
   status: DirectWorkspaceStatus;
   lifecycle: DirectWorkspaceLifecycle;
   runtime: DirectWorkspaceRuntime;
+  opencodeApi: OpencodeApi;
   setup: "not_requested" | "before_agent_complete" | "after_agent";
   createdAt: string;
 };
@@ -286,30 +299,19 @@ export type DirectRunCreateInput = {
   title?: string;
   agent?: string;
   model?: string;
-  /** Reuse this native OpenCode session for conversational context. */
-  sessionId?: string;
+  context?: { type: "isolated" } | { type: "continue"; run: DirectRun };
+  waitForSetup?: boolean;
+  setupTimeoutMs?: number;
+  signal?: AbortSignal;
 };
 
-export type DirectRun = {
-  id: string;
-  workspaceId: string;
+/** Contains runtime credentials. Encrypt when persisting; do not send to an untrusted UI. */
+export type DirectRun = AgentRun & {
+  workspace: DirectWorkspace;
   sessionId: string;
   messageId: string;
-  title: string;
-  status: "running" | "retrying" | "completed" | "failed" | "cancelled";
-  error: string | null;
-  finalText: string | null;
-  submittedAt: string;
 };
 
-export type DirectRunMessage = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  error: string | null;
-};
+export type DirectRunMessage = AgentRunMessage;
 
-export type DirectRunWaitOptions = {
-  timeoutMs?: number;
-  pollIntervalMs?: number;
-};
+export type DirectRunWaitOptions = RunWaitOptions;

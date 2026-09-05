@@ -5,7 +5,8 @@
     "packages": [
       "apps/*",
       "packages/*",
-      "examples/slack-agent-bot"
+      "examples/slack-agent-bot",
+      "examples/external-pr-review"
     ],
     "catalog": {
       "hono": "^4.12.25",

@@ -1,12 +1,19 @@
-import type { AgentRunInputRequest, AgentRunMessageSnapshot } from "@gitterm/db/schema/agent-run";
+import type { AgentRunInputRequest, AgentRunMessageSnapshot } from "./contract";
 import {
   createWorkspaceOpencodeClient,
   findLastOpencodeRunAssistant,
   formatOpencodeError,
   isOpencodeRunMessage,
   snapshotParts,
-} from "../opencode";
-import { asRecord, asString, asStringArray, createRuntimeHttp, signalStream } from "./http";
+} from "./opencode";
+import {
+  asRecord,
+  asString,
+  asStringArray,
+  createRuntimeHttp,
+  signalStream,
+  RuntimeHttpError,
+} from "./http";
 import {
   missingSessionSnapshot,
   parseModelRef,
@@ -71,11 +78,19 @@ export function createV1Runtime(target: RuntimeTarget): OpencodeRuntime {
     async snapshot(sessionId, messageId) {
       const api = client();
       const [session, statuses, messages, permissions, questions] = await Promise.all([
-        api.session.get({ path: { id: sessionId }, query: { directory: target.directory } }),
-        api.session.status({ query: { directory: target.directory } }),
-        api.session.messages({ path: { id: sessionId }, query: { directory: target.directory } }),
-        http.json<unknown>(`/permission${directoryQuery}`).catch(() => []),
-        http.json<unknown>(`/question${directoryQuery}`).catch(() => []),
+        api.session.get({
+          path: { id: sessionId },
+          query: { directory: target.directory },
+          signal: target.signal,
+        }),
+        api.session.status({ query: { directory: target.directory }, signal: target.signal }),
+        api.session.messages({
+          path: { id: sessionId },
+          query: { directory: target.directory },
+          signal: target.signal,
+        }),
+        http.json<unknown>(`/permission${directoryQuery}`),
+        http.json<unknown>(`/question${directoryQuery}`),
       ]);
       if (session.response.status === 404) return missingSessionSnapshot();
       if (session.error || !session.data) throw new Error(formatOpencodeError(session.error));
@@ -83,6 +98,10 @@ export function createV1Runtime(target: RuntimeTarget): OpencodeRuntime {
       if (messages.error || !messages.data) throw new Error(formatOpencodeError(messages.error));
 
       const status = statuses.data[sessionId];
+      const userIndex = messages.data.findIndex((message) => message.info.id === messageId);
+      const superseded =
+        userIndex >= 0 &&
+        messages.data.slice(userIndex + 1).some((message) => message.info.role === "user");
       const assistant = findLastOpencodeRunAssistant(messages.data, messageId);
       const assistantInfo = assistant?.info.role === "assistant" ? assistant.info : undefined;
       const assistantModel = assistantInfo
@@ -103,6 +122,7 @@ export function createV1Runtime(target: RuntimeTarget): OpencodeRuntime {
 
       return {
         sessionExists: true,
+        superseded,
         busy: status?.type === "busy",
         retry: status?.type === "retry",
         messages: messages.data
@@ -138,7 +158,7 @@ export function createV1Runtime(target: RuntimeTarget): OpencodeRuntime {
               }
             : null,
         },
-        pendingInputs,
+        pendingInputs: superseded ? [] : pendingInputs,
       };
     },
 
@@ -150,6 +170,7 @@ export function createV1Runtime(target: RuntimeTarget): OpencodeRuntime {
         query: { directory: target.directory },
         body: { response: reply satisfies PermissionReply },
       });
+      if (result.response.status === 404) throw new RuntimeHttpError(404, "", null);
       if (result.error) throw new Error(formatOpencodeError(result.error));
     },
 
@@ -190,7 +211,7 @@ export function permissionRequest(raw: Record<string, unknown>): AgentRunInputRe
   return {
     id: asString(raw.id) ?? "",
     kind: "permission",
-    createdAt: new Date(typeof createdMs === "number" ? createdMs : Date.now()).toISOString(),
+    createdAt: typeof createdMs === "number" ? new Date(createdMs).toISOString() : null,
     toolCallId: asString(tool.callID) ?? asString(raw.callID),
     permission,
     patterns,
@@ -206,7 +227,7 @@ export function questionRequest(raw: Record<string, unknown>): AgentRunInputRequ
   return {
     id: asString(raw.id) ?? "",
     kind: "question",
-    createdAt: new Date().toISOString(),
+    createdAt: null,
     toolCallId: asString(tool.callID),
     questions: questions.map((question, index) => ({
       key: `q${index}`,

@@ -23,7 +23,7 @@ describe("direct provisioning plan", () => {
         GITTERM_DIRECT_PROVIDER: "daytona",
         CUSTOM_VALUE: "custom",
       },
-      modelCredentials: [{ providerName: "anthropic", apiKey: "model-key" }],
+      models: { providers: { anthropic: { source: "apiKey", apiKey: "model-key" } } },
       setup: { beforeAgent: ["bun install"], afterAgent: ["bun test"] },
       secretFiles: [{ path: "~/.secrets/token", content: "secret", mode: 0o400 }],
     });
@@ -63,10 +63,12 @@ describe("direct provisioning plan", () => {
         id: "workspace-1",
         lifecycle: "ephemeral",
         password: "password",
-        modelCredentials: [
-          { providerName: "anthropic", apiKey: "one" },
-          { providerName: "anthropic", apiKey: "two" },
-        ],
+        models: {
+          providers: {
+            anthropic: { source: "apiKey", apiKey: "one" },
+            " anthropic ": { source: "apiKey", apiKey: "two" },
+          },
+        },
       }),
     ).toThrow("Duplicate model credential");
     expect(() =>
@@ -136,16 +138,17 @@ describe("direct provisioning plan", () => {
       id: "workspace-1",
       lifecycle: "ephemeral",
       password: "password",
-      modelCredentials: [
-        {
-          type: "oauth",
-          providerName: "openai",
-          refreshToken: "refresh-token",
-          accessToken: "access-token",
-          expiresAt: 123_000,
-          accountId: "account-1",
+      models: {
+        providers: {
+          openai: {
+            source: "oauth",
+            refreshToken: "refresh-token",
+            accessToken: "access-token",
+            expiresAt: 123_000,
+            accountId: "account-1",
+          },
         },
-      ],
+      },
     });
     const auth = JSON.parse(Buffer.from(plan.agent.files[0]!.contentBase64, "base64").toString());
 

@@ -1,154 +1,8 @@
 # @gitterm/sdk
 
-TypeScript SDK for the [GitTerm](https://gitterm.dev) API. Used by the `gitterm` CLI,
-the OpenCode plugin, and any integration that needs to manage GitTerm workspaces with
-a user API token.
-
-## Direct provider mode
-
-Direct mode runs an agent using your cloud-provider account without a Gitterm server. It intentionally omits managed billing, proxying, policy, durable run history, and automatic cleanup; your application owns workspace state and lifecycle.
-
-All built-in compute providers use the same provisioning plan and workspace/run API:
-
-| Provider | Direct prerequisite                                            | Persistent pause | Keep-alive |
-| -------- | -------------------------------------------------------------- | ---------------- | ---------- |
-| E2B      | OpenCode-compatible template                                   | Yes              | Yes        |
-| Daytona  | Public Gitterm OpenCode server image by default                | Yes              | Yes        |
-| Vercel   | Vercel Sandbox project                                         | Yes              | Yes        |
-| Ascii    | Box API key                                                    | Yes              | Yes        |
-| exe.dev  | Lifecycle token, or an existing VM with `ls,ssh,share,ssh-key` | Yes              | No         |
-| Railway  | Project/environment and public service domains                 | With a volume    | No         |
-
-AWS remains available through `createGittermClient()` and the Gitterm control plane; it is intentionally not exposed in direct mode.
-
-Cloudflare remains available through the Gitterm control plane. Direct Cloudflare support is deferred until the OpenCode v2 Workerd runtime is stable.
-
-```ts
-import { createDirectGittermClient } from "@gitterm/sdk/direct";
-
-const direct = createDirectGittermClient({
-  provider: {
-    type: "e2b",
-    apiKey: process.env.E2B_API_KEY!,
-    size: "standard",
-  },
-});
-
-let workspace = await direct.workspaces.create({
-  repo: "https://github.com/acme/project",
-  lifecycle: "ephemeral",
-  modelCredentials: [{ providerName: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY! }],
-});
-
-try {
-  const run = await direct.runs.create({ workspace, prompt: "Review the open pull request" });
-  const completed = await direct.runs.wait(run, workspace);
-  console.log(completed.finalText);
-} finally {
-  workspace = await direct.workspaces.terminate(workspace);
-}
-```
-
-`DirectWorkspace` is JSON-serializable. Persist it together with the returned `sessionId` to resume provider lifecycle and OpenCode conversation context after an application restart. The serialized workspace contains the OpenCode password and may contain provider routing tokens, so encrypt it as credential material. Custom providers can implement `DirectProviderAdapter`; use `client.provider.capabilities` rather than hard-coding lifecycle assumptions.
-
-Every adapter receives the same normalized plan: repository/ref and optional Git credentials, agent files, model credentials, environment, setup commands, serve command, and port. Provider-specific configuration only describes how to allocate and expose compute.
-
-Direct setup has explicit phases. `beforeAgent` blocks workspace creation, while
-`afterAgent` runs in the background and can be observed with `setupStatus()` or
-`waitForSetup()`:
-
-```ts
-const workspace = await direct.workspaces.create({
-  repo: "https://github.com/acme/project",
-  setup: {
-    beforeAgent: ["npm install"],
-    afterAgent: ["npm run generate"],
-  },
-  secretFiles: [
-    {
-      path: "~/.config/gcloud/service-account.json",
-      content: process.env.GCP_SERVICE_ACCOUNT_JSON!,
-      mode: 0o600,
-    },
-  ],
-});
-
-await direct.workspaces.waitForSetup(workspace);
-```
-
-To attach to an existing exe.dev VM without giving Gitterm ownership of that VM, pass
-`exedev: { existingVmName: "acme-agent-machine" }` to `workspaces.create()`. Terminating
-that workspace stops only its tracked agent process and does not remove the VM.
-
-Trusted integration context can be appended to the generated global `AGENTS.md` without changing the model system prompt:
-
-```ts
-await direct.workspaces.create({
-  repo: "https://github.com/acme/project",
-  additionalAgentInstructions:
-    "You are running as a Slack bot. Keep responses concise and suitable for a thread.",
-});
-```
-
-### Provider authentication
-
-Direct workspaces can start OpenCode provider authentication without shell access. Discover the provider's methods and select a headless or device-code OAuth method when OpenCode is running remotely:
-
-```ts
-const openai = await direct.auth.get(workspace, "openai");
-const method = openai.methods.find(
-  (item) => item.type === "oauth" && item.id === "chatgpt-headless",
-);
-if (!method || method.type !== "oauth") throw new Error("OpenAI device OAuth is unavailable");
-
-const attempt = await direct.auth.connectOAuth({
-  workspace,
-  integrationId: "openai",
-  methodId: method.id,
-  label: "Slack bot",
-});
-
-// Present these through your application UI.
-console.log(attempt.url, attempt.instructions);
-
-if (attempt.mode === "auto") {
-  await direct.auth.wait(attempt, workspace);
-} else {
-  await direct.auth.complete(attempt, workspace, await getCodeFromUser());
-}
-```
-
-OAuth started this way is stored and refreshed by OpenCode inside the workspace. Reusing a persistent workspace avoids repeated authentication; terminating an ephemeral workspace also destroys its credential store. OpenCode does not export OAuth tokens from this flow.
-
-Applications that own OAuth separately can keep the token bundle in encrypted storage and inject it into every new workspace instead:
-
-```ts
-const credential = await credentialStore.get(slackInstallationId);
-const workspace = await direct.workspaces.create({
-  lifecycle: "ephemeral",
-  modelCredentials: [
-    {
-      type: "oauth",
-      providerName: "openai",
-      refreshToken: credential.refreshToken,
-      accessToken: credential.accessToken,
-      expiresAt: credential.expiresAt,
-      accountId: credential.accountId,
-    },
-  ],
-});
-
-// Credentials can also be added or rotated on an existing runtime.
-await direct.auth.setCredential(workspace, {
-  type: "oauth",
-  providerName: "openai",
-  refreshToken: credential.refreshToken,
-  accessToken: credential.accessToken,
-  expiresAt: credential.expiresAt,
-});
-```
-
-In this mode the application owns encryption, tenant scoping, refresh, and persistence. OpenCode may refresh its workspace-local copy; the direct SDK does not copy rotated tokens back into application storage. Use the Gitterm control plane when those credential-management responsibilities should be managed centrally.
+TypeScript SDK for the [GitTerm](https://gitterm.dev) API: create sandboxed workspaces for a
+repository, run an agent in them, and relay the questions it asks back to a human. Used by the
+`gitterm` CLI, the OpenCode plugin, and integrations such as Slack bots.
 
 ## Install
 
@@ -158,71 +12,150 @@ bun add @gitterm/sdk
 npm install @gitterm/sdk
 ```
 
-## Switching servers (hosted vs self-hosted)
+Requires Node 22.12+ or Bun. Create an API token in the dashboard under
+**Settings → Account → API tokens**, or with `gitterm login`.
 
-The default API is the hosted service at `https://api.gitterm.dev`. Self-hosted
-instances use the same SDK — pass your instance’s base URL as `serverUrl`.
+## Quick start
 
-| Deployment  | Example `serverUrl`           |
-| ----------- | ----------------------------- |
-| Hosted      | `https://api.gitterm.dev`     |
-| Self-hosted | `https://gitterm.example.com` |
-| Local dev   | `http://localhost:3000`       |
-
-### Explicit client (recommended for apps)
+Create a workspace, run a prompt, and get the final result:
 
 ```ts
 import { createGittermClient } from "@gitterm/sdk";
 
-// Hosted
-const hosted = createGittermClient({
-  serverUrl: "https://api.gitterm.dev",
-  token: process.env.GITTERM_API_TOKEN,
+const client = createGittermClient({ token: process.env.GITTERM_API_TOKEN });
+
+const { workspace } = await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  repositoryCredentials: { token: process.env.GITHUB_TOKEN! },
+  autoTerminateAfterMs: 2 * 60 * 60 * 1000,
 });
 
-// Self-hosted / local
+try {
+  const run = await client.runs.create({
+    workspace,
+    idempotencyKey: "review-pr-42",
+    prompt: "Review PR #42 and fix the failing tests.",
+  });
+  const result = await client.runs.result(run);
+  console.log(result.finalText);
+} finally {
+  await client.workspaces.terminate(workspace);
+}
+```
+
+`result()` returns only on successful completion. If the agent asks something and no handler is
+registered, it throws `AgentRunError` with code `INPUT_REQUIRED` and the current `error.run`.
+Register `onPermission` / `onQuestion` handlers for interactive runs, or use the event relay below.
+The quick start's `finally` deliberately terminates the workspace on any error; omit that cleanup
+if your application needs to keep a blocked run available for a later answer.
+
+`askHuman` is your side of an event relay: show the request, wait for an answer, and return an
+`AgentRunReply`. This terminal example gives up after ten minutes:
+
+```ts
+import { createInterface } from "node:readline/promises";
+import type { AgentRunInputRequest, AgentRunReply } from "@gitterm/sdk";
+
+async function prompt(text: string, signal: AbortSignal): Promise<string | null> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return (await rl.question(text, { signal })).trim();
+  } catch {
+    return null; // the deadline passed
+  } finally {
+    rl.close();
+  }
+}
+
+async function askHuman(request: AgentRunInputRequest): Promise<AgentRunReply> {
+  const deadline = AbortSignal.timeout(10 * 60_000);
+  if (request.kind === "permission") {
+    // request.title, e.g. "bash: rm -rf dist"
+    const answer = await prompt(`Allow ${request.title}? [yes/always/no] `, deadline);
+    if (answer === null) return { type: "permission", response: "reject" };
+    return {
+      type: "permission",
+      response: answer === "always" ? "always" : answer === "yes" ? "once" : "reject",
+    };
+  }
+  const answers: Record<string, string[]> = {};
+  for (const question of request.questions) {
+    const labels = question.options.map((option) => option.label).join(" | ");
+    const answer = await prompt(`${question.header}: ${question.question} [${labels}] `, deadline);
+    if (answer === null) return { type: "question", reject: true }; // nobody answered in time
+    answers[question.key] = question.multiple ? answer.split(",").map((s) => s.trim()) : [answer];
+  }
+  return { type: "question", answers };
+}
+```
+
+Rejecting a permission or a question ends the agent's turn; the run then finishes as
+`completed` or `failed` with what it managed to do. The rest of this document explains each
+step in depth. Direct provider mode, which runs the same API against your own cloud account
+without a GitTerm server, is described at the [end](#direct-provider-mode).
+
+## Configuration
+
+`createGittermClient()` resolves its server and token in this order: constructor options →
+`GITTERM_SERVER_URL` / `GITTERM_API_TOKEN` → the CLI config at `~/.config/gitterm/cli.json`
+written by `gitterm login`. The default server is the hosted API at `https://api.gitterm.dev`;
+self-hosted instances use the same SDK with their own `serverUrl`:
+
+```ts
+const hosted = createGittermClient({ token: process.env.GITTERM_API_TOKEN });
 const selfHosted = createGittermClient({
   serverUrl: "https://gitterm.example.com", // or http://localhost:3000
   token: process.env.GITTERM_API_TOKEN,
 });
+const fromCli = createGittermClient(); // env vars, then the CLI's saved login
 ```
 
-### Environment variables
+Tokens are the same `gt_...` shape on hosted and self-hosted. `client.auth.status()` and
+`client.serverUrl` show which account and server you hit.
 
-```bash
-export GITTERM_SERVER_URL=https://gitterm.example.com
-export GITTERM_API_TOKEN=gt_...
-```
+## API
 
 ```ts
-// Picks up GITTERM_SERVER_URL + GITTERM_API_TOKEN
-const client = createGittermClient();
+client.auth.status();                 // -> { userId, email, name, plan, authMethod }
+client.workspaces.list(options?);     // -> { workspaces, pagination }; filter by status or metadata
+client.workspaces.get(workspace);      // workspace = id string or any object with an `id`
+client.workspaces.getRuntimeAccess(workspace); // read-only; never resumes compute
+client.workspaces.ensureRunning(workspace, options?); // resume if paused, wait until running
+client.workspaces.setupStatus(workspace);
+client.workspaces.waitForSetup(workspace, options?);
+client.workspaces.pause(workspace);    // -> { durationMinutes } of the usage session just closed
+client.workspaces.restart(workspace);
+client.workspaces.terminate(workspace); // -> { workspace, cleanupInBackground }
+client.workspaces.create({ repo: "https://github.com/acme/product" });
+client.runs.create(input);
+client.runs.list(workspace, options?); // -> { runs, pagination }
+client.runs.get(run);                  // run = AgentRun or any { workspaceId, id }
+client.runs.messages(run);
+client.runs.cancel(run);
+client.runs.watch(run, options?);       // AsyncIterable<AgentRun>: every lifecycle state until terminal
+client.runs.wait(run, options?);        // first state that is terminal or awaiting_input
+client.runs.result(run, options?);      // successful final result; optional input handlers
+client.runs.events(run, options?);      // actionable, subscriber-deduplicated input/lifecycle events
+client.runs.respond(run, { requestId, reply }); // answer a permission prompt or agent question
+client.catalog.agentTypes();
+client.catalog.cloudProviders();
+client.catalog.workspaceOptions();
+client.credentials.list();             // dashboard credential metadata, never secrets
+client.credentials.listProviders();
+client.models.list({ provider: "openai" }); // discover provider/model IDs
+client.workspaces.models(workspace);  // resolved sources + known models; no secrets or runtime wake-up
 ```
 
-### CLI saved login
+Every poll-based wait (`ensureRunning`, `waitForSetup`, and `runs.create` with `waitForSetup`)
+accepts `{ timeoutMs, pollIntervalMs, signal }`. `runs.watch` is push-based (server-sent events)
+and accepts `{ signal }`; `runs.wait` adds `{ timeoutMs, until }`. An `AbortSignal` stops any of
+them with code `ABORTED`; an elapsed `timeoutMs` rejects with code `TIMEOUT`.
 
-If you omit both options, the SDK also reads `~/.config/gitterm/cli.json` written by
-`gitterm login` / `gitterm login --server <url>`.
+`pause()` returns `durationMinutes`, the length of the usage session it just closed, which is
+what billing records. `terminate()` returns `cleanupInBackground: true` when the provider
+finishes tearing down resources after the call returns.
 
-**Resolution order:** constructor options → `GITTERM_SERVER_URL` / `GITTERM_API_TOKEN` → CLI config file.
-
-Create tokens in the dashboard under **Settings → Account → API tokens**, or via
-`gitterm login` (device-code flow). Tokens are the same `gt_...` shape on hosted and
-self-hosted.
-
-## Usage
-
-### With an explicit API token
-
-```ts
-import { createGittermClient } from "@gitterm/sdk";
-
-const client = createGittermClient({
-  token: process.env.GITTERM_API_TOKEN,
-});
-
-const { workspaces } = await client.workspaces.list();
-```
+## Workspaces
 
 ### Managed private repositories
 
@@ -258,7 +191,7 @@ const { workspace, runtime } = await client.workspaces.create({
 The username defaults to `x-access-token`. Inline repository credentials take precedence over
 `gitIntegrationId` and authenticate repository validation, cloning, and runtime Git operations such
 as pull and push. Without inline credentials, `gitIntegrationId` continues to use the connected
-dashboard integration. Omitting `modelCredentials` likewise continues to
+dashboard integration. Omitting `models` likewise continues to
 use dashboard-managed model credentials.
 
 GitTerm does not save inline PATs in its application database. Inline PATs must be delivered to the
@@ -282,52 +215,7 @@ const preview = await workspace.ports.open(3000, { name: "app" });
 The workspace client never reads the CLI's saved account login and has no create, list,
 pause, restart, or terminate operations.
 
-### With the CLI's saved login
-
-```ts
-const client = createGittermClient();
-const status = await client.auth.status();
-// status + client.serverUrl show which account and server you hit
-```
-
-### API
-
-```ts
-client.auth.status();                 // -> { userId, email, name, plan, authMethod }
-client.workspaces.list(options?);     // -> { workspaces, pagination }; filter by status or metadata
-client.workspaces.get(workspace);      // workspace = id string or any object with an `id`
-client.workspaces.getRuntimeAccess(workspace); // read-only; never resumes compute
-client.workspaces.ensureRunning(workspace, options?); // resume if paused, wait until running
-client.workspaces.setupStatus(workspace);
-client.workspaces.waitForSetup(workspace, options?);
-client.workspaces.pause(workspace);    // -> { durationMinutes } of the usage session just closed
-client.workspaces.restart(workspace);
-client.workspaces.terminate(workspace); // -> { workspace, cleanupInBackground }
-client.workspaces.create({
-  repo: "https://github.com/acme/product",
-});
-client.runs.create(input);
-client.runs.list(workspace, options?); // -> { runs, pagination }
-client.runs.get(run);                  // run = AgentRun, { workspaceId, runId }, or (workspaceId, runId)
-client.runs.messages(run);
-client.runs.cancel(run);
-client.runs.wait(run, options?);        // resolves when terminal or awaiting_input (push-based)
-client.runs.respond(run, { requestId, reply }); // answer a permission prompt or agent question
-client.catalog.agentTypes();
-client.catalog.cloudProviders();
-client.catalog.workspaceOptions();
-```
-
-Every wait (`ensureRunning`, `waitForSetup`, and `runs.create` with `waitForSetup`) accepts
-`{ timeoutMs, pollIntervalMs, signal }`. `runs.wait` is push-based (server-sent events) and
-accepts `{ timeoutMs, signal, until }`. Pass an `AbortSignal` to stop waiting on shutdown; the
-promise rejects with code `ABORTED`.
-
-`pause()` returns `durationMinutes`, the length of the usage session it just closed, which is
-what billing records. `terminate()` returns `cleanupInBackground: true` when the provider
-finishes tearing down resources after the call returns.
-
-#### Tagging and lifetime
+### Tagging and lifetime
 
 `metadata` attaches caller-owned tags to a workspace so you can find it again without a
 lookup table of your own, and `autoTerminateAfterMs` caps how long it can live:
@@ -350,7 +238,7 @@ and `list` matches workspaces containing every given pair. `autoTerminateAfterMs
 activity, and `workspace.autoTerminateAt` shows the deadline. Idle workspaces are still paused
 by the platform's idle policy independently of this.
 
-#### Bring your own image
+### Bring your own image
 
 Pass `image` to run your own build instead of the catalog image. On the managed service the
 image must be pullable without credentials; creation fails immediately with the reason if it
@@ -508,12 +396,12 @@ The shortest correct sequence is therefore:
 ```ts
 const { workspace } = await client.workspaces.create({ repo, setup: { afterAgent: ["npm ci"] } });
 const run = await client.runs.create({
-  workspaceId: workspace.id,
+  workspace,
   idempotencyKey: `review-${sha}`,
   waitForSetup: true,
   prompt: "Review the open pull request",
 });
-const done = await client.runs.wait(workspace.id, run.id);
+const done = await client.runs.result(run);
 ```
 
 For a workspace you didn't just create, start with `ensureRunning()`:
@@ -532,7 +420,7 @@ Direct provider mode behaves differently: `direct.workspaces.create()` waits for
 runtime to answer before returning, so a direct workspace is ready for `runs.create()` as soon
 as `create()` resolves.
 
-### Agent runs
+## Agent runs
 
 Runs use durable GitTerm IDs backed by the workspace's native OpenCode session. Reusing an
 idempotency key with the same input returns the original run, and terminal results remain
@@ -551,6 +439,94 @@ Statuses: `pending` → `running` (or `retrying` while OpenCode backs off from t
 provider) → `completed` | `failed` | `cancelled`. A run that stops to ask something is
 `awaiting_input` until you answer it (below).
 
+### Following a run
+
+For the common interactive case, let the SDK drive the loop:
+
+```ts
+const result = await client.runs.result(run, {
+  timeoutMs: 30 * 60_000,
+  onPermission: async (request, { signal }) => {
+    // Your UI returns "once", "always", or "reject". Never approve implicitly.
+    return await askForApproval(request, signal);
+  },
+  onQuestion: async (request, { signal }) => {
+    // Return { answers: { [question.key]: [selectedLabel] } } or { reject: true }.
+    return await collectAnswers(request, signal);
+  },
+});
+console.log(result.finalText);
+```
+
+The total deadline includes handler time. A timeout or abort stops observation, **not the agent**;
+call `runs.cancel(run)` to stop it. Handlers receive a signal to close their own UI. Handlers are
+not invoked twice for the same request during one `result()` call. Failed/cancelled runs throw
+`AgentRunError` with `RUN_FAILED` / `RUN_CANCELLED`, retaining the run snapshot on `error.run`.
+
+For a bot or queue-based relay, use actionable events instead of processing every state snapshot:
+
+```ts
+for await (const event of client.runs.events(run)) {
+  if (event.type === "input.required") {
+    await client.runs.respond(run, {
+      requestId: event.request.id,
+      reply: await askHuman(event.request),
+    });
+  }
+}
+```
+
+For a deferred reply, publish the request to your UI/queue instead, persist the run reference and
+request ID, and call `respond()` from the later handler. Event types are `run.status`,
+`input.required`, `input.resolved`, `run.completed`, `run.failed`, and `run.cancelled`.
+Deduplication is per iterator, not durable exactly-once delivery: a new subscriber receives any
+still-pending input again. Persist `(run.id, request.id)` as your UI/queue deduplication key.
+`INPUT_NOT_PENDING` means a stale or already-resolved request; refresh the run rather than retrying
+the answer blindly. The API does not claim that a repeated answer is idempotent.
+
+`runs.watch(run)` is an async iterable of the run's lifecycle states. It starts with the current
+state, yields a new `AgentRun` whenever the status or the pending inputs change, and ends after
+the terminal state. It is push-based (server-sent events), so there is nothing to poll:
+
+```ts
+for await (const state of client.runs.watch(run, { signal })) {
+  console.log(state.status);
+}
+```
+
+`runs.wait(run, options?)` is a helper over `watch()` that resolves with the first state that
+needs attention: a terminal state, or `awaiting_input` unless you pass `until: "terminal"`.
+It takes `timeoutMs` (default 30 minutes; rejects with code `TIMEOUT`) and `signal` (rejects
+with `ABORTED`). Use `wait()` when you want a separate timeout per phase, as a chat bot that
+gives the agent twenty minutes per turn but a human thirty minutes per question would;
+otherwise `watch()` with one `AbortSignal` is simpler.
+
+### Questions and permission prompts
+
+When the agent calls OpenCode's `question` tool, or a tool needs approval under your
+`permission` config, the run becomes `awaiting_input` and `run.pendingInputs` lists what it is
+waiting for. There is usually one request; there are several when the agent issued parallel tool
+calls that each need approval. Answer each with `runs.respond()`; the run resumes once none
+remain. The exported types are `AgentPermissionRequest`, `AgentQuestionRequest`, and
+`AgentQuestion`.
+
+- A **permission** request has `title` (e.g. `bash: rm -rf dist`), `permission`, `patterns`, and
+  `always`. Reply `{ type: "permission", response: "once" | "always" | "reject" }`.
+- A **question** request has `questions[]`, each with a `key`, `header`, `question`,
+  `options[{ label, description }]`, `multiple`, and `custom`. Reply with the selected option
+  **labels** keyed by question `key`, or one free-text string when `custom` is true:
+  `{ type: "question", answers: { [question.key]: string[] } }`. Every question needs an entry.
+  Or dismiss all of them with `{ type: "question", reject: true }`.
+
+The quick start above shows a complete relay. Rejecting a permission or dismissing a question
+ends the turn: OpenCode records a failed tool call and the run finishes. A run left
+`awaiting_input` does not keep its workspace awake; if nobody answers before the workspace's
+idle timeout pauses it, the run is cancelled with `"Workspace paused while waiting for input"`.
+To avoid prompts entirely in headless runs, allow the relevant tools in
+`opencode.config.permission` when creating the workspace.
+
+### Transcript
+
 `runs.messages()` returns each turn's concatenated `text` plus an ordered `parts` array. Tool
 calls appear as `{ type: "tool", tool, status, title, input, output, error }` with output
 truncated to 4000 characters, which is usually enough to see why a run went wrong:
@@ -565,134 +541,84 @@ for (const message of await client.runs.messages(run)) {
 }
 ```
 
-```ts
-const { workspace } = await client.workspaces.create({
-  repo: "https://github.com/acme/product",
-  setup: { afterAgent: ["npm install", "npm run db:seed"] },
-});
+The lifecycle stream does not mirror OpenCode's native message, tool, or token events. For live
+execution details, use `workspaces.getRuntimeAccess()` with the official OpenCode SDK.
 
-const run = await client.runs.create({
-  workspaceId: workspace.id,
-  idempotencyKey: "onboarding-v2",
-  waitForSetup: true,
-  prompt: "Record the new onboarding flow and open a pull request adding it to the changelog.",
-});
-
-const completed = await client.runs.wait(workspace.id, run.id);
-const messages = await client.runs.messages(workspace.id, run.id);
-```
-
-#### Questions and permission prompts
-
-When the agent calls OpenCode's `question` tool, or a tool needs approval under your
-`permission` config, the run becomes `awaiting_input` and `run.pendingInputs` describes what it
-is waiting for. `runs.wait()` returns at that point by default; answer with `runs.respond()` and
-wait again. This is what makes a chat bot able to relay "should I do A or B?" to a human.
-
-```ts
-let run = await client.runs.wait(workspace.id, created.id);
-while (run.status === "awaiting_input") {
-  for (const request of run.pendingInputs) {
-    if (request.kind === "permission") {
-      // request.title, e.g. "bash: rm -rf dist"; also permission / patterns / always
-      await client.runs.respond(run, {
-        requestId: request.id,
-        reply: { type: "permission", response: "once" }, // "once" | "always" | "reject"
-      });
-    } else {
-      // request.questions[i] has header, question, options[{ label, description }], multiple, custom
-      const answers = request.questions.map((question) => [question.options[0]!.label]);
-      await client.runs.respond(run, {
-        requestId: request.id,
-        reply: { type: "question", answers },
-      });
-      // or: reply: { type: "question", reject: true }
-    }
-  }
-  run = await client.runs.wait(workspace.id, created.id);
-}
-```
-
-Rejecting a permission or dismissing a question ends the turn: OpenCode records a failed tool
-call and the run finishes. Pass `{ until: "terminal" }` to `runs.wait()` to keep waiting through
-`awaiting_input` (for example when a separate process answers). A run left `awaiting_input` does
-not keep its workspace awake; if nobody answers before the workspace's idle timeout pauses it,
-the run is cancelled with `"Workspace paused while waiting for input"`. To avoid prompts entirely
-in headless runs, allow the relevant tools in `opencode.config.permission` when creating the
-workspace.
-
-`runs.wait()` uses a lightweight lifecycle stream internally; it does not mirror OpenCode's
-native message, tool, or token events. `runs.messages()` provides the persisted transcript at
-lifecycle checkpoints and completion. For live execution details, use
-`workspaces.getRuntimeAccess()` with the official OpenCode SDK.
+### Continuing context
 
 Runs are isolated by default and can execute in parallel. To preserve conversational context,
 continue a terminal run; continued runs sharing context must remain sequential:
 
 ```ts
 const next = await client.runs.create({
-  workspaceId: workspace.id,
+  workspace,
   idempotencyKey: "onboarding-tests-v1",
   prompt: "Now add tests for that change.",
-  context: { type: "continue", runId: completed.id },
+  context: { type: "continue", run: completed },
 });
 ```
 
-### Model provider credentials
+`runs.cancel(run)` aborts the current run; a run that is `awaiting_input` has its pending
+prompt rejected first. GitTerm keeps the underlying OpenCode session private.
 
-`modelCredentials` takes one entry per provider. Each entry selects where that provider's
-credential comes from, and the three forms compose in one array:
+## Model provider credentials
+
+Model selection and credential selection are separate decisions, grouped under `models`:
 
 ```ts
 const { workspace } = await client.workspaces.create({
   repo: "https://github.com/acme/product",
-  modelCredentials: [
-    { providerName: "openai", label: "work" }, // dashboard credential, by label
-    { providerName: "anthropic" }, // that provider's dashboard default
-    { providerName: "google", apiKey: process.env.GOOGLE_API_KEY! }, // inline, this workspace only
-  ],
+  models: {
+    default: "openai/<model-id>",
+    inherit: "none", // only the providers listed here receive credentials
+    providers: {
+      openai: { source: "saved", label: "work" },
+      anthropic: { source: "default" },
+      google: { source: "apiKey", apiKey: process.env.GOOGLE_API_KEY! },
+    },
+  },
+});
+
+const run = await client.runs.create({
+  workspace,
+  model: "anthropic/claude-sonnet-4-20250514",
+  prompt: "Record before/after videos of the changes in PR #42",
 });
 ```
 
-**Dashboard credentials** are addressed by `providerName` plus the `label` you gave them in the
-dashboard (labels are unique per provider). Omit `label` to use the provider's default. The SDK
-never returns credential secrets; `client.credentials.list()` returns metadata including labels
-if you need to discover them, and requires an API token with the `workspace:write` scope.
+**Saved credentials use labels, not IDs.** Choose `{ source: "saved", label: "work" }` or
+`{ source: "default" }`. Provider keys are logical model providers: use `openai` for both OpenAI
+API keys and saved ChatGPT subscriptions, not `openai-oauth`. `credentials.list()` returns labels
+and `logicalProviderKey`, never secrets. If an API key and subscription share the same label,
+selection fails explicitly; give them distinct dashboard labels. Discovery requires `workspace:write`.
 
-**Inline credentials** pass an API key directly for this workspace only. They are injected into
-the provisioned agent and never stored in the dashboard. Use `client.credentials.listProviders()`
-for valid provider names; OAuth providers (e.g. GitHub Copilot) can only be connected through
-the dashboard.
+**Inline credentials** use `{ source: "apiKey", apiKey }` for this workspace only. A missing or
+blank key fails validation; it never falls back to a saved credential. Keys are injected into
+the sandbox, not saved in the dashboard. `credentials.listProviders()` includes each authentication
+integration's `logicalProviderKey`. `models.list({ provider: "openai" })` discovers model IDs.
+Managed OAuth credentials must be connected through the dashboard.
 
-const run = await client.runs.create({
-workspaceId: workspace.workspaceId,
-model: "anthropic/claude-sonnet-4-20250514",
-prompt: "Record before/after videos of the changes in PR #42",
-});
-
-````
+`workspaces.models(workspace)` shows which sources were configured and the matching catalog models.
+It reads control-plane metadata only: it does not verify a key with the model provider, discover
+custom runtime models, or resume a paused workspace. A saved credential's label/active status is
+its current dashboard metadata.
 
 Rules and errors:
 
-- Omit `modelCredentials` to inject every dashboard default.
-- Naming any dashboard credential (an entry without `apiKey`) switches off the implicit defaults,
-  so list each provider the workspace needs. Inline-only arrays keep the defaults for the other
-  providers.
-- One credential per logical provider. An inline credential always overrides the dashboard
-  credential for the same provider; two entries for the same provider throw
-  `MODEL_CREDENTIAL_DUPLICATE_PROVIDER`.
+- Omitting `models` uses dashboard defaults. An explicit `models` block defaults to
+  `inherit: "none"`; `models: {}` injects no dashboard credentials.
+- Use `inherit: "defaults"` to inherit every unlisted provider's dashboard default. Explicit
+  sources override only their own provider. Each provider map key selects exactly one source.
 - Unknown providers or inline keys for OAuth-only providers throw `MODEL_CREDENTIAL_INVALID`.
-  A label that doesn't exist throws `MODEL_CREDENTIAL_UNAVAILABLE` and the message lists the
-  labels that do.
+  A missing or ambiguous label throws `MODEL_CREDENTIAL_UNAVAILABLE`.
 - A run that requests a credential-backed `provider/model` not available in its workspace throws
   `MODEL_CREDENTIAL_REQUIRED` before the prompt is submitted.
 
-Use `client.runs.cancel(workspaceId, runId)` to abort the current run; a run that is
-`awaiting_input` has its pending prompt rejected first. GitTerm keeps the underlying OpenCode
-session private. For native session control, use `workspaces.getRuntimeAccess()` and connect
-with the official OpenCode SDK.
+`models.default` sets the workspace's agent default; `runs.create({ model })` overrides the model
+for that run. Credentials remain workspace-scoped: changing credentials for one concurrent run
+would otherwise change them for other runs on the same runtime.
 
-### OpenCode API versions
+## OpenCode API versions
 
 Managed workspaces continue to run `opencode-ai@latest` (`opencodeApi: "v1"`). OpenCode 2
 changes the server API; callers testing it must supply their own compatible image and create the
@@ -700,32 +626,42 @@ workspace with `opencode: { api: "v2" }`. Runs, questions, permissions, and even
 same from the SDK's point of view; the flag only tells GitTerm which protocol to speak to the
 workspace. `v2` is experimental until OpenCode 2 ships.
 
-### Errors
+## Errors
 
-Every method throws `GittermError` with a stable `code`:
+Managed methods and the shared run APIs throw `GittermError` with a stable `code`; never match on messages.
+Direct provider lifecycle/authentication methods may also propagate provider errors.
 
 ```ts
-import { GittermError } from "@gitterm/sdk";
+import { GittermError, WorkspaceLifecycleError } from "@gitterm/sdk";
 
 try {
-  await client.workspaces.get(id);
+  await client.runs.create({ workspace: workspaceId, prompt });
 } catch (error) {
-  if (error instanceof GittermError && error.code === "NOT_LOGGED_IN") {
-    // "Not logged in. Run: gitterm login"
-  }
+  if (error instanceof WorkspaceLifecycleError && error.code === "WORKSPACE_NOT_RUNNING") {
+    await client.workspaces.ensureRunning(workspaceId); // paused; resume and retry
+  } else if (error instanceof GittermError && error.code === "TIMEOUT") {
+    // the wait elapsed; the run itself may still be going
+  } else throw error;
 }
-````
+```
 
-Workspace lifecycle failures are also exposed as `WorkspaceLifecycleError`, with stable
-`WORKSPACE_NOT_RUNNING`, `WORKSPACE_TERMINATED`, `WORKSPACE_NON_RECOVERABLE`,
-`WORKSPACE_START_TIMEOUT`, and `WORKSPACE_RESTART_FAILED` codes. General codes are
-`NOT_LOGGED_IN`, `UNAUTHORIZED`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`, `CONFLICT`,
-`SERVER_ERROR`, `NETWORK`, and `ABORTED` (a wait was cancelled through its `signal`).
+Workspace lifecycle failures are `WorkspaceLifecycleError` with codes `WORKSPACE_NOT_RUNNING`,
+`WORKSPACE_TERMINATED`, `WORKSPACE_NON_RECOVERABLE`, `WORKSPACE_START_TIMEOUT`, and
+`WORKSPACE_RESTART_FAILED`. Credential failures use the `MODEL_CREDENTIAL_*` codes listed above.
+General codes are `NOT_LOGGED_IN`, `UNAUTHORIZED`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`,
+`CONFLICT`, `SERVER_ERROR`, `NETWORK`, `TIMEOUT` (a `timeoutMs` elapsed), and `ABORTED` (a wait
+was cancelled through its `signal`).
 
 The package ships self-contained declarations from `dist`; TypeScript consumers do not
 need GitTerm's API package or tRPC server types.
 
-### Obtaining a token programmatically
+## Versioning
+
+`@gitterm/sdk` follows semver. Before 1.0, a minor bump (`0.1` → `0.2`) may contain breaking
+changes and lists them in [CHANGELOG.md](./CHANGELOG.md) with a migration note; patch releases
+never change public types or behaviour. Pin `~0.2.0` if you want patches only.
+
+## Obtaining a token programmatically
 
 The device-code flow used by `gitterm login` is exposed for integrations. Pass the
 server URL of the instance you want to log into:
@@ -752,6 +688,170 @@ await saveConfig({
 
 Device-code logins produce the same revocable `gt_...` API token as the dashboard;
 they appear in **Settings → Account → API tokens** and can be revoked there.
+
+## Direct provider mode
+
+Direct mode runs an agent using your cloud-provider account without a Gitterm server. It intentionally omits managed billing, proxying, policy, durable run history, and automatic cleanup; your application owns workspace state and lifecycle.
+
+All built-in compute providers use the same provisioning plan and workspace/run API:
+
+| Provider | Direct prerequisite                                            | Persistent pause | Keep-alive |
+| -------- | -------------------------------------------------------------- | ---------------- | ---------- |
+| E2B      | OpenCode-compatible template                                   | Yes              | Yes        |
+| Daytona  | Public Gitterm OpenCode server image by default                | Yes              | Yes        |
+| Vercel   | Vercel Sandbox project                                         | Yes              | Yes        |
+| Ascii    | Box API key                                                    | Yes              | Yes        |
+| exe.dev  | Lifecycle token, or an existing VM with `ls,ssh,share,ssh-key` | Yes              | No         |
+| Railway  | Project/environment and public service domains                 | With a volume    | No         |
+
+AWS remains available through `createGittermClient()` and the Gitterm control plane; it is intentionally not exposed in direct mode.
+
+Cloudflare remains available through the Gitterm control plane. Direct Cloudflare support is deferred until the OpenCode v2 Workerd runtime is stable.
+
+```ts
+import { createDirectGittermClient } from "@gitterm/sdk/direct";
+
+const direct = createDirectGittermClient({
+  provider: {
+    type: "e2b",
+    apiKey: process.env.E2B_API_KEY!,
+    size: "standard",
+  },
+});
+
+let workspace = await direct.workspaces.create({
+  repo: "https://github.com/acme/project",
+  lifecycle: "ephemeral",
+  models: {
+    providers: { anthropic: { source: "apiKey", apiKey: process.env.ANTHROPIC_API_KEY! } },
+  },
+});
+
+try {
+  const run = await direct.runs.create({ workspace, prompt: "Review the open pull request" });
+  const completed = await direct.runs.result(run);
+  console.log(completed.finalText);
+} finally {
+  workspace = await direct.workspaces.terminate(workspace);
+}
+```
+
+`DirectWorkspace` and `DirectRun` are JSON-serializable. A direct run carries its workspace runtime
+access, so `get`, `watch`, `events`, `wait`, `result`, `respond`, `messages`, and `cancel` take just
+the run, exactly as in managed mode. Persist the complete run to reattach after a process restart;
+continue a completed run with `context: { type: "continue", run: completed }`. After resuming a
+workspace, update a persisted run's `workspace` with the returned workspace before reattaching.
+Direct mode does not provide managed durable run storage or submission idempotency.
+Serialized workspaces/runs contain runtime credentials: encrypt them and never send them to an
+untrusted UI. Custom providers can implement `DirectProviderAdapter`; inspect `client.provider.capabilities`.
+
+Both modes default to OpenCode **v1** and share v1/v2 run, permission, question, and SSE adapters.
+For direct v2, supply a compatible provider image/template and `opencode: { api: "v2" }` at workspace
+creation. The flag chooses the protocol; it does not install or upgrade the runtime. Direct mode
+does not accept saved/dashboard credential sources or `inherit: "defaults"`.
+
+Every adapter receives the same normalized plan: repository/ref and optional Git credentials, agent files, model credentials, environment, setup commands, serve command, and port. Provider-specific configuration only describes how to allocate and expose compute.
+
+Direct setup has explicit phases. `beforeAgent` blocks workspace creation, while
+`afterAgent` runs in the background and can be observed with `setupStatus()` or
+`waitForSetup()`:
+
+```ts
+const workspace = await direct.workspaces.create({
+  repo: "https://github.com/acme/project",
+  setup: {
+    beforeAgent: ["npm install"],
+    afterAgent: ["npm run generate"],
+  },
+  secretFiles: [
+    {
+      path: "~/.config/gcloud/service-account.json",
+      content: process.env.GCP_SERVICE_ACCOUNT_JSON!,
+      mode: 0o600,
+    },
+  ],
+});
+
+await direct.workspaces.waitForSetup(workspace);
+```
+
+To attach to an existing exe.dev VM without giving Gitterm ownership of that VM, pass
+`exedev: { existingVmName: "acme-agent-machine" }` to `workspaces.create()`. Terminating
+that workspace stops only its tracked agent process and does not remove the VM.
+
+Trusted integration context can be appended to the generated global `AGENTS.md` without changing the model system prompt:
+
+```ts
+await direct.workspaces.create({
+  repo: "https://github.com/acme/project",
+  additionalAgentInstructions:
+    "You are running as a Slack bot. Keep responses concise and suitable for a thread.",
+});
+```
+
+### Provider authentication
+
+Direct **v2** workspaces can start OpenCode provider authentication without shell access. This
+connection-management API is v2-only; v1 supports inline API keys/OAuth bundles at creation and
+`auth.setCredential()`. Discover a headless/device-code method for remote authentication:
+
+```ts
+const openai = await direct.auth.get(workspace, "openai");
+const method = openai.methods.find(
+  (item) => item.type === "oauth" && item.id === "chatgpt-headless",
+);
+if (!method || method.type !== "oauth") throw new Error("OpenAI device OAuth is unavailable");
+
+const attempt = await direct.auth.connectOAuth({
+  workspace,
+  integrationId: "openai",
+  methodId: method.id,
+  label: "Slack bot",
+});
+
+// Present these through your application UI.
+console.log(attempt.url, attempt.instructions);
+
+if (attempt.mode === "auto") {
+  await direct.auth.wait(attempt, workspace);
+} else {
+  await direct.auth.complete(attempt, workspace, await getCodeFromUser());
+}
+```
+
+OAuth started this way is stored and refreshed by OpenCode inside the workspace. Reusing a persistent workspace avoids repeated authentication; terminating an ephemeral workspace also destroys its credential store. OpenCode does not export OAuth tokens from this flow.
+
+Applications that own OAuth separately can keep the token bundle in encrypted storage and inject it into every new workspace instead:
+
+```ts
+const credential = await credentialStore.get(slackInstallationId);
+const workspace = await direct.workspaces.create({
+  lifecycle: "ephemeral",
+  models: {
+    providers: {
+      openai: {
+        source: "oauth",
+        refreshToken: credential.refreshToken,
+        accessToken: credential.accessToken,
+        expiresAt: credential.expiresAt,
+        accountId: credential.accountId,
+      },
+    },
+  },
+});
+
+// v1 credentials can also be added or rotated on an existing runtime.
+// On v2, setCredential supports API keys; use connectOAuth for OAuth rotation.
+await direct.auth.setCredential(workspace, {
+  source: "oauth",
+  providerName: "openai",
+  refreshToken: credential.refreshToken,
+  accessToken: credential.accessToken,
+  expiresAt: credential.expiresAt,
+});
+```
+
+In this mode the application owns encryption, tenant scoping, refresh, and persistence. OpenCode may refresh its workspace-local copy; the direct SDK does not copy rotated tokens back into application storage. Use the Gitterm control plane when those credential-management responsibilities should be managed centrally.
 
 ## License
 

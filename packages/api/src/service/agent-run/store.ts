@@ -2,7 +2,7 @@ import { and, db, eq, inArray } from "@gitterm/db";
 import { agentRun, type AgentRun } from "@gitterm/db/schema/agent-run";
 import { RUN_LIFECYCLE_EVENTS } from "../../events/run-lifecycle";
 import { publicRun } from "./public";
-import { ACTIVE_RUN_STATUSES } from "./runtime";
+import { ACTIVE_RUN_STATUSES } from "@gitterm/agent-runtime";
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -89,6 +89,7 @@
     "@cloudflare/sandbox": "^0.12.1",
     "@cloudflare/workers-types": "^4.20260107.1",
     "@daytonaio/sdk": "^0.207.0",
+    "@gitterm/agent-runtime": "workspace:*",
     "@gitterm/auth": "workspace:*",
     "@gitterm/db": "workspace:*",
     "@gitterm/env": "workspace:*",

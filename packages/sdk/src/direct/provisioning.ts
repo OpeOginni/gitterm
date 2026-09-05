@@ -6,6 +6,7 @@ import type {
   DirectWorkspaceCreateInput,
   DirectWorkspaceRuntime,
 } from "./types.js";
+import { GittermError } from "../errors.js";
 
 export const DIRECT_OPENCODE_PORT = 4096;
 export const DIRECT_OPENCODE_COMMAND = `opencode serve --hostname 0.0.0.0 --port ${DIRECT_OPENCODE_PORT}`;
@@ -24,8 +25,9 @@ export function resolveDirectImage(image?: string): string {
 }
 
 export function directModelAuth(credential: DirectModelCredential) {
-  if (credential.type === "oauth") {
-    if (!credential.refreshToken.trim()) throw new Error("OAuth refreshToken is required");
+  if (credential.source === "oauth") {
+    if (typeof credential.refreshToken !== "string" || !credential.refreshToken.trim())
+      throw new GittermError("MODEL_CREDENTIAL_INVALID", "OAuth refreshToken is required");
     if (
       credential.expiresAt != null &&
       (!Number.isFinite(credential.expiresAt) || credential.expiresAt < 0)
@@ -41,7 +43,16 @@ export function directModelAuth(credential: DirectModelCredential) {
       ...(credential.enterpriseUrl ? { enterpriseUrl: credential.enterpriseUrl } : {}),
     };
   }
-  if (!credential.apiKey.trim()) throw new Error("Model credential apiKey is required");
+  if (
+    credential.source !== "apiKey" ||
+    typeof credential.apiKey !== "string" ||
+    !credential.apiKey.trim()
+  ) {
+    throw new GittermError(
+      "MODEL_CREDENTIAL_INVALID",
+      "Inline model credential apiKey is required",
+    );
+  }
   return {
     type: "api" as const,
     key: credential.apiKey,
@@ -123,8 +134,18 @@ export function buildDirectProvisioningPlan(
     }
   }
   const credentials = new Map<string, ReturnType<typeof directModelAuth>>();
-  for (const credential of input.modelCredentials ?? []) {
-    const providerName = credential.providerName.trim();
+  if (input.models?.default && !/^[^/]+\/.+$/.test(input.models.default)) {
+    throw new GittermError("BAD_REQUEST", "Model must use provider/model format");
+  }
+  if (input.models?.inherit && input.models.inherit !== "none") {
+    throw new GittermError(
+      "MODEL_CREDENTIAL_INVALID",
+      "Direct mode cannot inherit dashboard credentials",
+    );
+  }
+  for (const [key, source] of Object.entries(input.models?.providers ?? {})) {
+    const credential = { ...source, providerName: key } as DirectModelCredential;
+    const providerName = key.trim();
     if (!providerName) throw new Error("Model credential providerName is required");
     if (credentials.has(providerName)) {
       throw new Error(`Duplicate model credential: ${providerName}`);
@@ -147,6 +168,7 @@ export function buildDirectProvisioningPlan(
   const config = {
     $schema: "https://opencode.ai/config.json",
     ...input.opencode?.config,
+    ...(input.models?.default ? { model: input.models.default } : {}),
     username: "Gitterm direct",
     permission: {
       external_directory: "allow",

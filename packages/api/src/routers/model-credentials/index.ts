@@ -25,6 +25,7 @@ export const modelCredentialsRouter = router({
       providers: providers.map((p) => ({
         id: p.id,
         name: p.name,
+        logicalProviderKey: p.logicalProviderKey,
         displayName: p.displayName,
         authType: p.authType,
         plugin: p.plugin,

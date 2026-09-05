@@ -93,6 +93,8 @@ describe("createDirectGittermClient", () => {
       const request = new Request(input, init);
       const path = new URL(request.url).pathname;
       if (path === "/session/status") return Response.json({});
+      if (path === "/session/session-1") return Response.json({ id: "session-1" });
+      if (path === "/permission" || path === "/question") return Response.json([]);
       if (path === "/session/session-1/message") return Response.json([]);
       throw new Error(`Unexpected request: ${request.method} ${path}`);
     }) as typeof fetch;
@@ -104,16 +106,21 @@ describe("createDirectGittermClient", () => {
       const run: DirectRun = {
         id: "run-1",
         workspaceId: workspace.id,
+        workspace,
+        pendingInputs: [],
+        context: { type: "isolated" },
+        createdAt: new Date().toISOString(),
+        completedAt: null,
         sessionId: "session-1",
         messageId: "message-1",
         title: "Run",
         status: "running",
         error: null,
         finalText: null,
-        submittedAt: new Date(Date.now() - 30_000).toISOString(),
+        submittedAt: new Date().toISOString(),
       };
 
-      expect(await client.runs.get(run, workspace)).toMatchObject({
+      expect(await client.runs.get(run)).toMatchObject({
         status: "running",
         error: null,
       });
@@ -127,20 +134,24 @@ describe("createDirectGittermClient", () => {
     globalThis.fetch = (async (input, init) => {
       const request = new Request(input, init);
       const path = new URL(request.url).pathname;
+      if (path === "/session/session-1") return Response.json({ id: "session-1" });
+      if (path === "/permission" || path === "/question") return Response.json([]);
       if (path === "/session/status") {
         return Response.json({ "session-1": { type: "busy" } });
       }
       if (path === "/session/session-1/message") {
         return Response.json([
+          { info: { id: "message-1", role: "user", time: { created: Date.now() } }, parts: [] },
           {
             info: {
               id: "assistant-1",
               role: "assistant",
               parentID: "message-1",
-              time: { completed: Date.now() },
+              time: { created: Date.now(), completed: Date.now() },
             },
             parts: [{ type: "text", text: "done", ignored: false }],
           },
+          { info: { id: "message-2", role: "user", time: { created: Date.now() } }, parts: [] },
         ]);
       }
       throw new Error(`Unexpected request: ${request.method} ${path}`);
@@ -153,6 +164,11 @@ describe("createDirectGittermClient", () => {
       const run: DirectRun = {
         id: "run-1",
         workspaceId: workspace.id,
+        workspace,
+        pendingInputs: [],
+        context: { type: "isolated" },
+        createdAt: new Date().toISOString(),
+        completedAt: null,
         sessionId: "session-1",
         messageId: "message-1",
         title: "Run",
@@ -162,11 +178,11 @@ describe("createDirectGittermClient", () => {
         submittedAt: new Date().toISOString(),
       };
 
-      expect(await client.runs.get(run, workspace)).toMatchObject({
+      expect(await client.runs.get(run)).toMatchObject({
         status: "completed",
         finalText: "done",
       });
-      expect(await client.runs.cancel(run, workspace)).toBe(false);
+      expect(await client.runs.cancel(run)).toEqual({ cancelled: false });
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -248,7 +264,7 @@ describe("createDirectGittermClient", () => {
       workspace.runtime.password = "secret";
 
       await client.auth.setCredential(workspace, {
-        type: "oauth",
+        source: "oauth",
         providerName: "openai",
         refreshToken: "refresh-token",
         accessToken: "access-token",
@@ -256,6 +272,7 @@ describe("createDirectGittermClient", () => {
         accountId: "account-1",
       });
 
+      workspace.opencodeApi = "v2";
       const integration = await client.auth.get(workspace, "openai");
       expect(integration.methods[0]).toMatchObject({ id: "chatgpt-headless", type: "oauth" });
 

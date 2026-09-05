@@ -134,7 +134,9 @@ import {
 } from "../../service/workspace-setup";
 import { resolveCustomWorkspaceImage } from "../../service/workspace-image";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
-import { DEFAULT_OPENCODE_API } from "../../service/agent-run/runtime";
+import { DEFAULT_OPENCODE_API } from "@gitterm/agent-runtime";
+import { workspaceModelsSchema } from "@gitterm/schema/workspace-models";
+import { getWorkspaceModelAccess } from "../../service/workspace-model-access";
 import { userCanAccessWorkspace } from "./share";
 
 function shellQuote(value: string): string {
@@ -195,22 +197,6 @@ function normalizeRepoUrl(url: string): string {
   return trimmed.replace(/\.git\/?$/i, "");
 }
 
-/**
- * One model credential selection per provider. `apiKey` supplies an inline key
- * (never stored); `label` picks a dashboard credential by name; neither picks
- * that provider's dashboard default.
- */
-const modelCredentialSelectionSchema = z
-  .object({
-    providerName: z.string().trim().min(1).max(100),
-    apiKey: z.string().min(1).max(10_000).optional(),
-    label: z.string().trim().min(1).max(100).optional(),
-  })
-  .refine(
-    (entry) => !(entry.apiKey !== undefined && entry.label !== undefined),
-    "Pass either apiKey (inline) or label (dashboard credential), not both",
-  );
-
 export const repositoryCredentialsSchema = z.object({
   username: z.string().trim().min(1).max(255).optional(),
   token: z.string().min(1).max(10_000),
@@ -249,7 +235,7 @@ export const workspaceMetadataSchema = z
     `At most ${MAX_WORKSPACE_METADATA_KEYS} metadata keys`,
   );
 
-const workspaceCreateBaseSchema = z.object({
+const workspaceCreateBaseSchema = z.strictObject({
   name: z.string().optional(),
   idempotencyKey: z.string().trim().min(1).max(255).optional(),
   /** Caller-owned tags, returned on the workspace and filterable in listWorkspaces. */
@@ -296,7 +282,7 @@ const workspaceCreateBaseSchema = z.object({
   repositoryCredentials: repositoryCredentialsSchema.optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
   /** Per-provider selection: inline apiKey, dashboard credential by label, or dashboard default. */
-  modelCredentials: z.array(modelCredentialSelectionSchema).max(20).optional(),
+  models: workspaceModelsSchema.optional(),
   /** Injected into this workspace only; never stored as dashboard environment settings. */
   environmentVariables: z
     .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(20_000))
@@ -2402,7 +2388,7 @@ export const workspaceRouter = router({
         const credentials = await workspaceCreateLogger.step("fetch-model-credentials", () =>
           resolveWorkspaceProviderCredentials({
             userId,
-            modelCredentials: input.modelCredentials,
+            models: input.models,
           }),
         );
         const awsRuntimeInstructions =
@@ -2432,7 +2418,12 @@ export const workspaceRouter = router({
           serverPassword,
           credentials,
           additionalAgentInstructions: additionalAgentInstructions || undefined,
-          opencode: input.opencode,
+          opencode: input.models?.default
+            ? {
+                ...input.opencode,
+                config: { ...input.opencode?.config, model: input.models.default },
+              }
+            : input.opencode,
         });
         agentProvisioning.files.push(
           ...(input.secretFiles ?? []).map((file) => ({
@@ -2832,6 +2823,10 @@ export const workspaceRouter = router({
         });
       }
     }),
+
+  getModelAccess: accountProcedure("workspace:read")
+    .input(z.object({ workspaceId: z.uuid() }))
+    .query(({ input, ctx }) => getWorkspaceModelAccess(input.workspaceId, ctx.session.user.id)),
 
   getSetupStatus: accountProcedure("workspace:read")
     .input(z.object({ workspaceId: z.uuid() }))

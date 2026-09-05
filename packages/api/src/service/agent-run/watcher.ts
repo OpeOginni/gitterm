@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, db, eq, inArray } from "@gitterm/db";
+import { and, db, eq, inArray, sql } from "@gitterm/db";
 import { agentRun } from "@gitterm/db/schema/agent-run";
 import { RUN_LIFECYCLE_EVENTS } from "../../events/run-lifecycle";
 import { recordWorkspaceActivity } from "../workspace-activity";
@@ -18,7 +18,7 @@ import {
   isTerminalRunStatus,
   type OpencodeRuntime,
   type RuntimeSignal,
-} from "./runtime";
+} from "@gitterm/agent-runtime";
 import {
   loadRun,
   publishRun,
@@ -71,14 +71,14 @@ function log(level: "info" | "warn", message: string, context: Record<string, un
 
 /** For when no live watcher can re-read the session. */
 async function dropAnsweredInput(runId: string, requestId: string): Promise<void> {
-  const row = await loadRun(runId);
-  if (!row || row.status !== "awaiting_input") return;
-  const remaining = row.pendingInputs.filter((request) => request.id !== requestId);
+  // Compute from the locked row in UPDATE, not a stale read: parallel replies
+  // must not restore one another's already-answered requests.
+  const remaining = sql`coalesce((select jsonb_agg(item) from jsonb_array_elements(${agentRun.pendingInputs}) item where item->>'id' <> ${requestId}), '[]'::jsonb)`;
   const [updated] = await db
     .update(agentRun)
     .set({
       pendingInputs: remaining,
-      status: remaining.length > 0 ? "awaiting_input" : "running",
+      status: sql`case when jsonb_array_length(${remaining}) > 0 then 'awaiting_input'::agent_run_status else 'running'::agent_run_status end`,
       updatedAt: new Date(),
     })
     .where(and(eq(agentRun.id, runId), eq(agentRun.status, "awaiting_input")))
@@ -151,6 +151,7 @@ class WorkspaceWatcher implements RunWatcherHandle {
     const tracked = this.tracked.get(runId);
     if (tracked && this.connected) {
       await this.refresh(tracked);
+      await dropAnsweredInput(runId, requestId);
       return;
     }
     await dropAnsweredInput(runId, requestId);
@@ -249,16 +250,17 @@ class WorkspaceWatcher implements RunWatcherHandle {
       tracked.dirty = true;
       return tracked.refreshing;
     }
-    tracked.refreshing = this.doRefresh(tracked)
+    tracked.refreshing = (async () => {
+      do {
+        tracked.dirty = false;
+        await this.doRefresh(tracked);
+      } while (tracked.dirty && this.tracked.has(tracked.id));
+    })()
       .catch((error) => {
         log("warn", "refresh failed", { workspaceId: this.workspaceId, runId: tracked.id, error });
       })
       .finally(() => {
         tracked.refreshing = null;
-        if (tracked.dirty && this.tracked.has(tracked.id)) {
-          tracked.dirty = false;
-          void this.refresh(tracked);
-        }
       });
     return tracked.refreshing;
   }

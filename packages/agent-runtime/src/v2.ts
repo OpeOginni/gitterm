@@ -2,7 +2,7 @@ import type {
   AgentRunInputRequest,
   AgentRunMessagePart,
   AgentRunMessageSnapshot,
-} from "@gitterm/db/schema/agent-run";
+} from "./contract";
 import {
   asRecord,
   asString,
@@ -95,6 +95,9 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
       ]);
 
       const runMessages = selectRunMessages(messages, messageId);
+      const userIndex = messages.findIndex((message) => message.id === messageId);
+      const superseded =
+        userIndex >= 0 && messages.slice(userIndex + 1).some((message) => message.type === "user");
       const assistant = runMessages.findLast((message) => message.type === "assistant");
       const assistantTime = asRecord(assistant?.time);
       const assistantError = asRecord(assistant?.error);
@@ -102,6 +105,7 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
 
       return {
         sessionExists: true,
+        superseded,
         busy: sessionId in asRecord(active.data),
         retry: Boolean(assistant?.retry) && assistantTime.completed == null,
         messages: runMessages.map(normalizeMessage),
@@ -116,10 +120,12 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
               }
             : null,
         },
-        pendingInputs: [
-          ...(permissions.data ?? []).map(asRecord).map(permissionRequest),
-          ...(forms.data ?? []).map(asRecord).map(formRequest),
-        ],
+        pendingInputs: superseded
+          ? []
+          : [
+              ...(permissions.data ?? []).map(asRecord).map(permissionRequest),
+              ...(forms.data ?? []).map(asRecord).map(formRequest),
+            ],
       };
     },
 
@@ -262,7 +268,7 @@ export function permissionRequest(raw: Record<string, unknown>): AgentRunInputRe
   return {
     id: asString(raw.id) ?? "",
     kind: "permission",
-    createdAt: new Date().toISOString(),
+    createdAt: toIso(asRecord(raw.time).created),
     toolCallId: asString(asRecord(raw.source).id),
     permission: action,
     patterns,
@@ -278,7 +284,7 @@ export function formRequest(raw: Record<string, unknown>): AgentRunInputRequest 
   return {
     id: asString(raw.id) ?? "",
     kind: "question",
-    createdAt: new Date().toISOString(),
+    createdAt: toIso(asRecord(raw.time).created),
     toolCallId: asString(tool.id) ?? asString(tool.callID),
     questions: fields.map((field, index) => {
       const key = asString(field.key) ?? `q${index}`;

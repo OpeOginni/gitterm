@@ -67,9 +67,13 @@ if (modelApiKey && !model) {
     "GITTERM_MODEL_API_KEY is only used together with GITTERM_MODEL; using dashboard credentials instead.",
   );
 }
-const modelCredentials =
+const models =
   model && modelApiKey
-    ? [{ providerName: model.slice(0, model.indexOf("/")), apiKey: modelApiKey }]
+    ? {
+        providers: {
+          [model.slice(0, model.indexOf("/"))]: { source: "apiKey" as const, apiKey: modelApiKey },
+        },
+      }
     : undefined;
 
 const r2 = {
@@ -247,7 +251,7 @@ async function reviewRevision({
       baseCommit: commit,
       persistent: false,
       provider,
-      modelCredentials,
+      models,
       environmentVariables: {
         R2_ACCOUNT_ID: r2.accountId,
         R2_ACCESS_KEY_ID: r2.accessKeyId,
@@ -273,7 +277,7 @@ async function reviewRevision({
     workspace = created.workspace;
 
     const run = await client.runs.create({
-      workspaceId: workspace.id,
+      workspace,
       idempotencyKey: `external-pr-review-run-${reviewId}-${label}`,
       title: `PR #${pullRequest.number} ${label} visual review`,
       model,
@@ -281,7 +285,7 @@ async function reviewRevision({
       setupTimeoutMs: Math.min(runTimeoutMs, 600_000),
       prompt: buildPrompt({ repository, pullRequest, label, instructions }),
     });
-    const completed = await client.runs.wait(workspace.id, run.id, { timeoutMs: runTimeoutMs });
+    const completed = await client.runs.result(run, { timeoutMs: runTimeoutMs });
     if (completed.status !== "completed") {
       throw new Error(
         `Agent run finished with ${completed.status}: ${completed.error ?? "no error reported"}`,

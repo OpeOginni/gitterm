@@ -1,7 +1,7 @@
-import type { agentRunStatusEnum } from "@gitterm/db/schema/agent-run";
+import type { AgentRunStatus } from "./contract";
 import type { RuntimeSnapshot } from "./types";
 
-export type AgentRunStatus = (typeof agentRunStatusEnum.enumValues)[number];
+export type { AgentRunStatus } from "./contract";
 
 export const ACTIVE_RUN_STATUSES = ["pending", "running", "retrying", "awaiting_input"] as const;
 export const TERMINAL_RUN_STATUSES = ["completed", "failed", "cancelled"] as const;
@@ -31,9 +31,11 @@ export function deriveRunState(
     return { status: "cancelled", errorMessage: assistantError.message };
   }
   if (assistantError) return { status: "failed", errorMessage: assistantError.message };
-  if (snapshot.pendingInputs.length > 0) return { status: "awaiting_input", errorMessage: null };
-  if (snapshot.retry) return { status: "retrying", errorMessage: null };
-  if (snapshot.busy) return { status: "running", errorMessage: null };
+  if (!snapshot.superseded) {
+    if (snapshot.pendingInputs.length > 0) return { status: "awaiting_input", errorMessage: null };
+    if (snapshot.retry) return { status: "retrying", errorMessage: null };
+    if (snapshot.busy) return { status: "running", errorMessage: null };
+  }
   if (!snapshot.assistant.exists) {
     if (context.sessionError) return { status: "failed", errorMessage: context.sessionError };
     const now = context.now ?? Date.now();

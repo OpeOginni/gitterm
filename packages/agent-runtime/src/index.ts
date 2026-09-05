@@ -1,4 +1,4 @@
-import type { OpencodeApi } from "@gitterm/db/schema/workspace";
+import type { OpencodeApi } from "./contract";
 import { createV1Runtime } from "./v1";
 import { createV2Runtime } from "./v2";
 import type { OpencodeRuntime, RuntimeTarget } from "./types";
