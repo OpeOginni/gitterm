@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
+import { questionAnswers } from "@gitterm/agent-runtime/replies";
+import { RuntimeHttpError } from "@gitterm/agent-runtime/http";
 import { and, db, desc, eq, inArray, sql } from "@gitterm/db";
 import { agentRun, type AgentRun, type AgentRunInputRequest } from "@gitterm/db/schema/agent-run";
 import { model, userModelCredential } from "@gitterm/db/schema/model-credentials";
@@ -13,7 +15,7 @@ import {
   parseModelRef,
   type OpencodeRuntime,
   type PermissionReply,
-} from "./runtime";
+} from "@gitterm/agent-runtime";
 import { loadRun, settleRun, sleep } from "./store";
 import {
   getOwnedRun,
@@ -24,6 +26,7 @@ import {
   type RunWorkspace,
 } from "./target";
 import { ensureWorkspaceWatcher, stoppedWorkspaceMessage, untrackRun } from "./watcher";
+import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-error";
 
 export { publicRun, type PublicAgentRun } from "./public";
 export { startRunWatcherSweep } from "./watcher";
@@ -46,8 +49,23 @@ type RunCreateInput = {
 
 export type RunReply =
   | { type: "permission"; response: PermissionReply }
-  | { type: "question"; answers: string[][] }
+  | { type: "question"; answers: Record<string, string[]> }
   | { type: "question"; reject: true };
+
+/** OpenCode wants answers in question order; the public API keys them by question `key`. */
+function positionalAnswers(
+  request: Extract<AgentRunInputRequest, { kind: "question" }>,
+  answers: Record<string, string[]>,
+): string[][] {
+  try {
+    return questionAnswers(request, answers);
+  } catch (error) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: error instanceof Error ? error.message : "Invalid question answers",
+    });
+  }
+}
 
 function requestHash(input: RunCreateInput): string {
   return createHash("sha256")
@@ -75,10 +93,11 @@ async function waitForWorkspaceRunning(workspaceId: string, userId: string, time
     if (record.status === "running") return record;
     if (record.status !== "pending") throw notRunningError(record.status);
     if (Date.now() >= deadline) {
-      throw new TRPCError({
-        code: "TIMEOUT",
-        message: `WORKSPACE_START_TIMEOUT: workspace remained pending for ${Math.round(timeoutMs / 1000)}s`,
-      });
+      throw new WorkspaceLifecycleTRPCError(
+        "WORKSPACE_START_TIMEOUT",
+        `workspace remained pending for ${Math.round(timeoutMs / 1000)}s`,
+        "TIMEOUT",
+      );
     }
     await sleep(2_000);
   }
@@ -128,7 +147,7 @@ async function validateModelCredential(
 
   throw new TRPCError({
     code: "BAD_REQUEST",
-    message: `MODEL_CREDENTIAL_REQUIRED: Model "${selectedModel}" requires a credential for provider "${provider}". Recreate the workspace with a modelCredentials entry for that provider (a dashboard credential by label, or an inline apiKey).`,
+    message: `MODEL_CREDENTIAL_REQUIRED: Model "${selectedModel}" requires a credential for provider "${provider}". Recreate the workspace with models.providers["${provider}"] set to a saved source by label, a default source, or an inline apiKey source.`,
   });
 }
 
@@ -196,10 +215,10 @@ async function waitForSetup(workspaceId: string, userId: string, timeoutMs: numb
   while (true) {
     const record = await getRunWorkspace(workspaceId, userId);
     if (record.status !== "running") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `WORKSPACE_NOT_RUNNING: workspace became ${record.status} during setup`,
-      });
+      throw new WorkspaceLifecycleTRPCError(
+        "WORKSPACE_NOT_RUNNING",
+        `workspace became ${record.status} during setup`,
+      );
     }
     const setup = await getWorkspaceSetupStatus(workspaceId, record.setupRequired);
     if (setup.status === "not_requested" || setup.status === "succeeded") return;
@@ -460,13 +479,16 @@ export async function respondToAgentRun(
 ) {
   const { run } = await getOwnedRun(input.workspaceId, input.runId, userId);
   if (run.status !== "awaiting_input" || !run.nativeSessionId) {
-    throw new TRPCError({ code: "CONFLICT", message: "Run is not waiting for input" });
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "INPUT_NOT_PENDING: Run is not waiting for input",
+    });
   }
   const request = run.pendingInputs.find((candidate) => candidate.id === input.requestId);
   if (!request) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "Input request not found or already answered",
+      message: "INPUT_NOT_PENDING: Input request not found or already answered",
     });
   }
   if (request.kind !== input.reply.type) {
@@ -477,11 +499,27 @@ export async function respondToAgentRun(
   }
 
   const runtime = getRuntime(await getRuntimeTarget(input.workspaceId, userId));
-  if (request.kind === "permission" && input.reply.type === "permission") {
-    await runtime.replyPermission(run.nativeSessionId, request.id, input.reply.response);
-  } else if (request.kind === "question" && input.reply.type === "question") {
-    if ("reject" in input.reply) await runtime.rejectQuestion(run.nativeSessionId, request.id);
-    else await runtime.replyQuestion(run.nativeSessionId, request, input.reply.answers);
+  try {
+    if (request.kind === "permission" && input.reply.type === "permission") {
+      await runtime.replyPermission(run.nativeSessionId, request.id, input.reply.response);
+    } else if (request.kind === "question" && input.reply.type === "question") {
+      if ("reject" in input.reply) await runtime.rejectQuestion(run.nativeSessionId, request.id);
+      else {
+        await runtime.replyQuestion(
+          run.nativeSessionId,
+          request,
+          positionalAnswers(request, input.reply.answers),
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof RuntimeHttpError && error.status === 404) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "INPUT_NOT_PENDING: Input request was resolved by another responder",
+      });
+    }
+    throw error;
   }
 
   const watcher = await ensureWorkspaceWatcher(input.workspaceId);

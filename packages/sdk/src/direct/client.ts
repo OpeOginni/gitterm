@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { createOpencodeClient, type SessionStatus } from "@opencode-ai/sdk";
+import { createOpencodeClient } from "@opencode-ai/sdk";
+import { directError, directRunOperations, directRuntime } from "./runs.js";
+import { aborted, terminal } from "../runs.js";
+import { GittermError } from "../errors.js";
+import { createRuntimeHttp, RuntimeHttpError } from "@gitterm/agent-runtime/http";
 import {
   createOpencodeClient as createOpencodeV2Client,
   type IntegrationAttemptStatus,
@@ -26,8 +30,6 @@ import type {
   DirectModelCredential,
   DirectRun,
   DirectRunCreateInput,
-  DirectRunMessage,
-  DirectRunWaitOptions,
   DirectWorkspace,
   DirectWorkspaceCreateInput,
   DirectWorkspaceSetupStatus,
@@ -38,6 +40,8 @@ const SETUP_DIR = ".gitterm/setup";
 
 export type DirectGittermClientOptions = {
   provider: DirectProviderAdapter | DirectProviderConfig;
+  /** Used for OpenCode runtime requests (provider adapters own their own transports). */
+  fetch?: typeof fetch;
 };
 
 function resolveProvider(provider: DirectGittermClientOptions["provider"]): DirectProviderAdapter {
@@ -58,11 +62,12 @@ function resolveProvider(provider: DirectGittermClientOptions["provider"]): Dire
   }
 }
 
-function runtimeClient(workspace: DirectWorkspace) {
+function runtimeClient(workspace: DirectWorkspace, fetchImpl?: typeof fetch) {
   const authorization = workspace.runtime.password
     ? `Basic ${Buffer.from(`opencode:${workspace.runtime.password}`).toString("base64")}`
     : undefined;
   return createOpencodeClient({
+    fetch: fetchImpl,
     baseUrl: workspace.runtime.url,
     directory: workspace.runtime.directory,
     headers: {
@@ -72,11 +77,17 @@ function runtimeClient(workspace: DirectWorkspace) {
   });
 }
 
-function authClient(workspace: DirectWorkspace) {
+function createAuthClient(workspace: DirectWorkspace, fetchImpl?: typeof fetch) {
+  if (workspace.opencodeApi !== "v2")
+    throw new GittermError(
+      "BAD_REQUEST",
+      "Runtime OAuth connection management requires OpenCode v2; use inline credentials or a managed workspace with v1",
+    );
   const authorization = workspace.runtime.password
     ? `Basic ${Buffer.from(`opencode:${workspace.runtime.password}`).toString("base64")}`
     : undefined;
   return createOpencodeV2Client({
+    fetch: fetchImpl,
     baseUrl: workspace.runtime.url,
     directory: workspace.runtime.directory,
     headers: {
@@ -109,18 +120,6 @@ function authStatus(status: IntegrationAttemptStatus): DirectAuthAttemptStatus {
   return { status: status.status, ...common };
 }
 
-function mapStatus(
-  status: SessionStatus | undefined,
-  errorName?: string,
-  assistantCompleted = true,
-): DirectRun["status"] {
-  if (errorName === "MessageAbortedError") return "cancelled";
-  if (errorName) return "failed";
-  if (assistantCompleted) return "completed";
-  if (status?.type === "retry") return "retrying";
-  return "running";
-}
-
 function pollTiming(
   wait: { timeoutMs?: number; pollIntervalMs?: number },
   fallbackTimeoutMs: number,
@@ -134,15 +133,6 @@ function pollTiming(
     throw new Error("pollIntervalMs must be a finite, non-negative number");
   }
   return { timeoutMs, pollIntervalMs };
-}
-
-function modelParts(model?: string) {
-  if (!model) return undefined;
-  const separator = model.indexOf("/");
-  if (separator <= 0 || separator === model.length - 1) {
-    throw new Error('model must use the "provider/model" format');
-  }
-  return { providerID: model.slice(0, separator), modelID: model.slice(separator + 1) };
 }
 
 function validateEnvironmentVariables(values: Record<string, string>): Record<string, string> {
@@ -184,17 +174,23 @@ function setupRunner(commands: string[]): string {
 
 export function createDirectGittermClient(options: DirectGittermClientOptions) {
   const provider = resolveProvider(options.provider);
+  const authClient = (workspace: DirectWorkspace) => createAuthClient(workspace, options.fetch);
+  const http = (workspace: DirectWorkspace) =>
+    createRuntimeHttp({
+      url: workspace.runtime.url,
+      directory: workspace.runtime.directory,
+      password: workspace.runtime.password ?? null,
+      api: workspace.opencodeApi,
+      headers: workspace.runtime.headers,
+      fetch: options.fetch,
+    });
 
   function assertWorkspace(workspace: DirectWorkspace) {
     if (workspace.provider !== provider.name) {
-      throw new Error(`Workspace belongs to ${workspace.provider}, not ${provider.name}`);
-    }
-  }
-
-  function assertRunWorkspace(run: DirectRun, workspace: DirectWorkspace) {
-    assertWorkspace(workspace);
-    if (run.workspaceId !== workspace.id) {
-      throw new Error(`Run belongs to workspace ${run.workspaceId}, not ${workspace.id}`);
+      throw new GittermError(
+        "BAD_REQUEST",
+        `Workspace belongs to ${workspace.provider}, not ${provider.name}`,
+      );
     }
   }
 
@@ -219,63 +215,35 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
     return authStatus(result.data.data);
   }
 
-  async function getRun(run: DirectRun, workspace: DirectWorkspace) {
-    assertRunWorkspace(run, workspace);
-    const client = runtimeClient(workspace);
-    const [statuses, messages] = await Promise.all([
-      client.session.status({ query: { directory: workspace.runtime.directory } }),
-      client.session.messages({
-        path: { id: run.sessionId },
-        query: { directory: workspace.runtime.directory },
-      }),
-    ]);
-    if (statuses.error || !statuses.data) throw new Error(errorMessage(statuses.error));
-    if (messages.error || !messages.data) throw new Error(errorMessage(messages.error));
-    const related = messages.data.filter(
-      (message) =>
-        message.info.id === run.messageId ||
-        (message.info.role === "assistant" && message.info.parentID === run.messageId),
-    );
-    const assistant = related.findLast((message) => message.info.role === "assistant");
-    const assistantError = assistant?.info.role === "assistant" ? assistant.info.error : undefined;
-    const assistantCompleted =
-      assistant?.info.role === "assistant" && assistant.info.time.completed != null;
-    const finalText = assistant?.parts
-      .filter((part) => part.type === "text" && !part.ignored)
-      .map((part) => (part.type === "text" ? part.text : ""))
-      .join("\n")
-      .trim();
-    const sessionStatus = statuses.data[run.sessionId];
-    const status = assistant
-      ? mapStatus(sessionStatus, assistantError?.name, Boolean(assistantCompleted))
-      : mapStatus(sessionStatus, undefined, false);
-    return {
-      ...run,
-      status,
-      error: assistantError ? errorMessage(assistantError) : null,
-      finalText: finalText || null,
-    } satisfies DirectRun;
-  }
-
   async function startPty(workspace: DirectWorkspace, command: string, title: string) {
-    const result = await authClient(workspace).pty.create({
-      command: "bash",
-      args: ["-lc", command],
-      cwd: workspace.runtime.directory,
-      directory: workspace.runtime.directory,
-      title,
-    });
-    if (result.error || !result.data) throw new Error(errorMessage(result.error));
-    return result.data;
+    const result = await http(workspace).json(
+      workspace.opencodeApi === "v2"
+        ? "/api/pty"
+        : `/pty?directory=${encodeURIComponent(workspace.runtime.directory)}`,
+      {
+        method: "POST",
+        json: { command: "bash", args: ["-lc", command], cwd: workspace.runtime.directory, title },
+      },
+    );
+    return result;
   }
 
   async function setupFile(workspace: DirectWorkspace, name: string): Promise<string | null> {
-    const result = await authClient(workspace).file.read({
-      directory: workspace.runtime.directory,
-      path: `${SETUP_DIR}/${name}`,
-    });
-    if (result.error || !result.data || result.data.type !== "text") return null;
-    return result.data.content.trim();
+    try {
+      if (workspace.opencodeApi === "v2") {
+        return (
+          await (await http(workspace).send(`/api/fs/read/${SETUP_DIR}/${name}`)).text()
+        ).trim();
+      }
+      const result = await runtimeClient(workspace, options.fetch).file.read({
+        query: { directory: workspace.runtime.directory, path: `${SETUP_DIR}/${name}` },
+      });
+      if (result.error || !result.data || result.data.type !== "text") return null;
+      return result.data.content.trim();
+    } catch (error) {
+      if (error instanceof RuntimeHttpError && error.status === 404) return null;
+      throw directError(error);
+    }
   }
 
   async function getSetupStatus(workspace: DirectWorkspace): Promise<DirectWorkspaceSetupStatus> {
@@ -329,7 +297,20 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         if (!providerName) {
           throw new Error("Model credential providerName is required");
         }
-        const result = await runtimeClient(workspace).auth.set({
+        if (workspace.opencodeApi === "v2") {
+          if (credential.source !== "apiKey")
+            throw new GittermError(
+              "BAD_REQUEST",
+              "Use connectOAuth() for v2 credential rotation, or inject an OAuth bundle when creating the workspace",
+            );
+          directModelAuth(credential);
+          await http(workspace).send(
+            `/api/integration/${encodeURIComponent(providerName)}/connect/key`,
+            { method: "POST", json: { key: credential.apiKey } },
+          );
+          return;
+        }
+        const result = await runtimeClient(workspace, options.fetch).auth.set({
           path: { id: providerName },
           query: { directory: workspace.runtime.directory },
           body: directModelAuth(credential),
@@ -444,6 +425,8 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
     },
     workspaces: {
       async create(input: DirectWorkspaceCreateInput = {}): Promise<DirectWorkspace> {
+        if (input.opencode?.api && !["v1", "v2"].includes(input.opencode.api))
+          throw new GittermError("BAD_REQUEST", "opencode.api must be v1 or v2");
         const lifecycle = input.lifecycle ?? provider.capabilities.recommendedLifecycle;
         if (lifecycle === "persistent" && provider.capabilities.persistence === "unsupported") {
           throw new Error(`${provider.name} does not support persistent direct workspaces`);
@@ -460,6 +443,7 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
           status: "running",
           lifecycle,
           runtime: created.runtime,
+          opencodeApi: input.opencode?.api ?? "v1",
           setup: provisioning.setup.afterAgent.length
             ? "after_agent"
             : provisioning.setup.beforeAgent.length
@@ -538,98 +522,78 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
       },
     },
     runs: {
+      ...directRunOperations(assertWorkspace, options.fetch),
       async create(input: DirectRunCreateInput): Promise<DirectRun> {
         assertWorkspace(input.workspace);
-        const client = runtimeClient(input.workspace);
-        let sessionId = input.sessionId;
+        aborted(input.signal);
+        if (input.workspace.status !== "running")
+          throw new GittermError(
+            "WORKSPACE_NOT_RUNNING",
+            "Resume the workspace before creating a run",
+          );
+        if (!input.prompt.trim()) throw new GittermError("BAD_REQUEST", "Prompt is required");
+        if (input.model && !/^[^/]+\/.+$/.test(input.model))
+          throw new GittermError("BAD_REQUEST", "Model must use provider/model format");
+        if (input.waitForSetup) {
+          const deadline = Date.now() + (input.setupTimeoutMs ?? 10 * 60_000);
+          while (true) {
+            aborted(input.signal);
+            const status = await getSetupStatus(input.workspace);
+            if (status.status === "succeeded" || status.status === "not_requested") break;
+            if (status.status === "failed")
+              throw new GittermError("BAD_REQUEST", `Workspace setup failed: ${status.log ?? ""}`);
+            if (Date.now() >= deadline)
+              throw new GittermError("TIMEOUT", "Workspace setup timed out");
+            await new Promise((resolve) => setTimeout(resolve, 1_000));
+          }
+        }
+        const runtime = directRuntime(input.workspace, options.fetch);
+        const previous = input.context?.type === "continue" ? input.context.run : undefined;
+        if (
+          previous &&
+          (previous.workspaceId !== input.workspace.id || !terminal(previous.status))
+        ) {
+          throw new GittermError("CONFLICT", "Continue a terminal run from the same workspace");
+        }
+        let sessionId = previous?.sessionId;
         let title = input.title ?? "Agent run";
-        if (!sessionId) {
-          const created = await client.session.create({
-            body: input.title ? { title: input.title } : undefined,
-            query: { directory: input.workspace.runtime.directory },
-          });
-          if (created.error || !created.data) throw new Error(errorMessage(created.error));
-          sessionId = created.data.id;
-          title = created.data.title;
-        }
+        const now = new Date().toISOString();
         const messageId = `msg_${randomUUID().replaceAll("-", "")}`;
-        const prompted = await client.session.promptAsync({
-          path: { id: sessionId },
-          query: { directory: input.workspace.runtime.directory },
-          body: {
-            messageID: messageId,
-            parts: [{ type: "text", text: input.prompt }],
+        try {
+          aborted(input.signal);
+          if (!sessionId) {
+            const session = await runtime.createSession(input);
+            sessionId = session.id;
+            title = session.title;
+          }
+          aborted(input.signal);
+          await runtime.prompt({
+            sessionId,
+            messageId,
+            prompt: input.prompt,
             agent: input.agent,
-            model: modelParts(input.model),
-          },
-        });
-        if (prompted.error) throw new Error(errorMessage(prompted.error));
-        return {
-          id: randomUUID(),
-          workspaceId: input.workspace.id,
-          sessionId,
-          messageId,
-          title,
-          status: "running",
-          error: null,
-          finalText: null,
-          submittedAt: new Date().toISOString(),
-        };
-      },
-      get: getRun,
-      async wait(
-        run: DirectRun,
-        workspace: DirectWorkspace,
-        wait: DirectRunWaitOptions = {},
-      ): Promise<DirectRun> {
-        const { timeoutMs, pollIntervalMs } = pollTiming(wait, 10 * 60_000);
-        const deadline = Date.now() + timeoutMs;
-        let current = run;
-        while (Date.now() < deadline) {
-          current = await getRun(current, workspace);
-          if (!["running", "retrying"].includes(current.status)) return current;
-          const remaining = deadline - Date.now();
-          if (remaining <= 0) break;
-          await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, remaining)));
+            model: input.model,
+          });
+          return {
+            id: randomUUID(),
+            workspaceId: input.workspace.id,
+            workspace: input.workspace,
+            sessionId,
+            messageId,
+            title,
+            status: "running",
+            error: null,
+            finalText: null,
+            pendingInputs: [],
+            context: previous ? { type: "continued", runId: previous.id } : { type: "isolated" },
+            createdAt: now,
+            submittedAt: now,
+            completedAt: null,
+          };
+        } catch (error) {
+          if (sessionId && !previous) await runtime.deleteSession(sessionId).catch(() => {});
+          throw directError(error);
         }
-        throw new Error(`Agent run timed out after ${timeoutMs}ms`);
-      },
-      async messages(run: DirectRun, workspace: DirectWorkspace): Promise<DirectRunMessage[]> {
-        assertRunWorkspace(run, workspace);
-        const result = await runtimeClient(workspace).session.messages({
-          path: { id: run.sessionId },
-          query: { directory: workspace.runtime.directory },
-        });
-        if (result.error || !result.data) throw new Error(errorMessage(result.error));
-        return result.data
-          .filter(
-            (message) =>
-              message.info.id === run.messageId ||
-              (message.info.role === "assistant" && message.info.parentID === run.messageId),
-          )
-          .map((message) => ({
-            id: message.info.id,
-            role: message.info.role,
-            text: message.parts
-              .filter((part) => part.type === "text" && !part.ignored)
-              .map((part) => (part.type === "text" ? part.text : ""))
-              .join("\n")
-              .trim(),
-            error:
-              message.info.role === "assistant" && message.info.error
-                ? errorMessage(message.info.error)
-                : null,
-          }));
-      },
-      async cancel(run: DirectRun, workspace: DirectWorkspace): Promise<boolean> {
-        const current = await getRun(run, workspace);
-        if (!["running", "retrying"].includes(current.status)) return false;
-        const result = await runtimeClient(workspace).session.abort({
-          path: { id: run.sessionId },
-          query: { directory: workspace.runtime.directory },
-        });
-        if (result.error) throw new Error(errorMessage(result.error));
-        return result.data === true;
       },
     },
   };

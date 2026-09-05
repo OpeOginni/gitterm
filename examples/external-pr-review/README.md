@@ -4,6 +4,7 @@ Create a disposable before/after review for a public GitHub pull request without
 
 ```sh
 bun install
+bun run --cwd ../../packages/sdk build
 export GITTERM_API_TOKEN=gt_...
 export R2_ACCOUNT_ID=...
 export R2_ACCESS_KEY_ID=...
@@ -15,6 +16,9 @@ export TARGET_REPOSITORY=anomalyco/opencode
 export TARGET_PR=123
 bun record-external-pr.ts
 ```
+
+This in-repository example uses the local SDK build. When copying it outside the repository,
+replace the workspace dependency with `@gitterm/sdk@^0.2.0` after that version is published.
 
 The SDK uses `https://api.gitterm.dev` by default. Set `GITTERM_SERVER_URL` to override it.
 

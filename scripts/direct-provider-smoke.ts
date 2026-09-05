@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import {
   createDirectGittermClient,
   type DirectGittermClient,
-  type DirectModelCredential,
+  type DirectWorkspaceCreateInput,
   type DirectProviderConfig,
   type DirectRun,
   type DirectWorkspace,
@@ -37,7 +37,7 @@ type SmokeSettings = {
   baseCommit?: string;
   repositoryCredentials?: { username?: string; token: string };
   model: string;
-  modelCredentials: DirectModelCredential[];
+  models: DirectWorkspaceCreateInput["models"];
   timeoutMs: number;
   runTimeoutMs: number;
 };
@@ -173,9 +173,9 @@ function smokeSettings(): SmokeSettings {
       ? { token: repoToken, ...(repoUsername ? { username: repoUsername } : {}) }
       : undefined,
     model,
-    modelCredentials: modelApiKey
-      ? [{ providerName: model.slice(0, separator), apiKey: modelApiKey }]
-      : [],
+    models: modelApiKey
+      ? { providers: { [model.slice(0, separator)]: { source: "apiKey", apiKey: modelApiKey } } }
+      : undefined,
     timeoutMs,
     runTimeoutMs,
   };
@@ -266,7 +266,7 @@ async function runProvider(
         checkoutRef: settings.checkoutRef,
         baseCommit: settings.baseCommit,
         repositoryCredentials: settings.repositoryCredentials,
-        modelCredentials: settings.modelCredentials,
+        models: settings.models,
         environmentVariables: {
           GITTERM_DIRECT_E2E_MARKER: marker,
           GITTERM_DIRECT_E2E_REPO: settings.repo,
@@ -326,14 +326,14 @@ async function runProvider(
       }),
     );
     activeRun = await step(result.steps, "wait for agent run", () =>
-      client.runs.wait(activeRun!, workspace!, { timeoutMs: settings.runTimeoutMs }),
+      client.runs.result(activeRun!, { timeoutMs: settings.runTimeoutMs }),
     );
     if (activeRun.status !== "completed") {
       throw new Error(`Agent run finished with ${activeRun.status}: ${activeRun.error ?? ""}`);
     }
 
     const messages = await step(result.steps, "read agent messages", () =>
-      client.runs.messages(activeRun!, workspace!),
+      client.runs.messages(activeRun!),
     );
     if (
       !activeRun.finalText?.includes(marker) ||
@@ -389,7 +389,7 @@ async function runProvider(
     result.error = errorMessage(error);
   } finally {
     if (activeRun && workspace && ["running", "retrying"].includes(activeRun.status)) {
-      await client.runs.cancel(activeRun, workspace).catch(() => false);
+      await client.runs.cancel(activeRun).catch(() => ({ cancelled: false }));
     }
     if (workspace && !terminated) {
       try {

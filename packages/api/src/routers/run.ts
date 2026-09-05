@@ -1,6 +1,7 @@
 import { on } from "node:events";
 import { TRPCError } from "@trpc/server";
 import z from "zod";
+import { runReplySchema } from "@gitterm/schema/agent-run";
 import { accountProcedure, router } from "../index";
 import { RUN_LIFECYCLE_EVENTS, type RunEvent } from "../events/run-lifecycle";
 import {
@@ -11,19 +12,9 @@ import {
   listAgentRuns,
   respondToAgentRun,
 } from "../service/agent-run";
-import { isTerminalRunStatus } from "../service/agent-run/runtime";
+import { isTerminalRunStatus } from "@gitterm/agent-runtime";
 
 const runTargetSchema = z.object({ workspaceId: z.uuid(), runId: z.uuid() });
-
-const runReplySchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("permission"), response: z.enum(["once", "always", "reject"]) }),
-  z.object({
-    type: z.literal("question"),
-    /** One entry per question, each the selected option labels (or a custom answer). */
-    answers: z.array(z.array(z.string().max(10_000)).max(50)).max(50),
-  }),
-  z.object({ type: z.literal("question"), reject: z.literal(true) }),
-]);
 
 async function translateAgentError<T>(operation: () => Promise<T>): Promise<T> {
   try {

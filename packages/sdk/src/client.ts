@@ -27,6 +27,7 @@ import type {
   CloudProvider,
   RunRef,
   RunWaitOptions,
+  RunWatchOptions,
   WaitOptions,
   Workspace,
   WorkspaceCreateInput,
@@ -45,6 +46,14 @@ import type {
   ModelProviderInfo,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl } from "./transport.js";
+import { runHelpers } from "./runs.js";
+import type {
+  AgentRunEvent,
+  AgentRunResult,
+  RunResultOptions,
+  ModelInfo,
+  WorkspaceModelAccess,
+} from "./types.js";
 
 export type GittermClientOptions = {
   serverUrl?: string;
@@ -127,25 +136,31 @@ export type GittermClient = {
     terminate(workspace: WorkspaceRef): Promise<WorkspaceTerminateResult>;
     create(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
     setupStatus(workspace: WorkspaceRef): Promise<WorkspaceSetupStatus>;
+    /** Credential-source metadata and known models; never wakes the runtime. */
+    models(workspace: WorkspaceRef): Promise<WorkspaceModelAccess>;
     waitForSetup(workspace: WorkspaceRef, options?: WaitOptions): Promise<WorkspaceSetupStatus>;
   };
   runs: {
     create(input: AgentRunCreateInput): Promise<AgentRun>;
     list(workspace: WorkspaceRef, options?: AgentRunListOptions): Promise<AgentRunListResult>;
     get(run: RunRef): Promise<AgentRun>;
-    get(workspaceId: string, runId: string): Promise<AgentRun>;
     messages(run: RunRef): Promise<AgentRunMessage[]>;
-    messages(workspaceId: string, runId: string): Promise<AgentRunMessage[]>;
     cancel(run: RunRef): Promise<{ cancelled: boolean }>;
-    cancel(workspaceId: string, runId: string): Promise<{ cancelled: boolean }>;
     /** Answer the permission prompt or question a run is `awaiting_input` on. */
     respond(run: RunRef, input: { requestId: string; reply: AgentRunReply }): Promise<AgentRun>;
     /**
-     * Resolve once the run needs attention: terminal, or `awaiting_input`
-     * unless `until: "terminal"`. Push-based; no polling.
+     * Every lifecycle state of the run, starting with its current one, until a
+     * terminal state is yielded. Push-based (server-sent events); no polling.
+     * Answer `awaiting_input` states with `runs.respond()` while iterating.
+     */
+    watch(run: RunRef, options?: RunWatchOptions): AsyncIterable<AgentRun>;
+    /**
+     * Resolve with the first state that needs attention: terminal, or
+     * `awaiting_input` unless `until: "terminal"`. A thin helper over `watch()`.
      */
     wait(run: RunRef, options?: RunWaitOptions): Promise<AgentRun>;
-    wait(workspaceId: string, runId: string, options?: RunWaitOptions): Promise<AgentRun>;
+    events(run: RunRef, options?: RunWatchOptions): AsyncIterable<AgentRunEvent>;
+    result(run: RunRef, options?: RunResultOptions): Promise<AgentRunResult>;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
@@ -161,6 +176,7 @@ export type GittermClient = {
     list(): Promise<ModelCredential[]>;
     listProviders(): Promise<ModelProviderInfo[]>;
   };
+  models: { list(options?: { provider?: string }): Promise<ModelInfo[]> };
 };
 
 function envValue(name: string): string | undefined {
@@ -204,15 +220,8 @@ function workspaceIdOf(ref: WorkspaceRef): string {
   return typeof ref === "string" ? ref : ref.id;
 }
 
-function runTargetOf(refOrWorkspaceId: RunRef | string, runId?: string) {
-  if (typeof refOrWorkspaceId === "string") {
-    if (!runId) throw new GittermError("BAD_REQUEST", "runId is required");
-    return { workspaceId: refOrWorkspaceId, runId };
-  }
-  return {
-    workspaceId: refOrWorkspaceId.workspaceId,
-    runId: "runId" in refOrWorkspaceId ? refOrWorkspaceId.runId : refOrWorkspaceId.id,
-  };
+function runTargetOf(ref: RunRef) {
+  return { workspaceId: ref.workspaceId, runId: ref.id };
 }
 
 function throwIfAborted(signal: AbortSignal | undefined, what: string): void {
@@ -307,6 +316,8 @@ function mapTrpcCode(code: string | undefined): GittermErrorCode {
       return "BAD_REQUEST";
     case "CONFLICT":
       return "CONFLICT";
+    case "TIMEOUT":
+      return "TIMEOUT";
     default:
       return "SERVER_ERROR";
   }
@@ -319,44 +330,57 @@ function credentialErrorCode(message: string): CredentialErrorCode | undefined {
   return match?.[1] as CredentialErrorCode | undefined;
 }
 
+function toGittermError(serverUrl: string, error: unknown): GittermError {
+  if (error instanceof GittermError) return error;
+
+  if (error instanceof TRPCClientError) {
+    const data = error.data as { code?: string; workspaceLifecycleCode?: unknown } | undefined;
+    const trpcCode = data?.code;
+    // No error envelope means the request never produced a tRPC response
+    // (connection refused, DNS failure, non-tRPC proxy error, ...).
+    if (!error.data) {
+      return new GittermError("NETWORK", `Could not reach the GitTerm server at ${serverUrl}`, {
+        cause: error,
+      });
+    }
+    const code = mapTrpcCode(trpcCode);
+    const structuredLifecycleCode = WORKSPACE_LIFECYCLE_ERROR_CODES.find(
+      (candidate) => candidate === data?.workspaceLifecycleCode,
+    );
+    if (structuredLifecycleCode) {
+      return new WorkspaceLifecycleError(structuredLifecycleCode, error.message, { cause: error });
+    }
+    if (error.message.startsWith("INPUT_NOT_PENDING:"))
+      return new GittermError("INPUT_NOT_PENDING", error.message, { cause: error });
+    const credentialCode = credentialErrorCode(error.message);
+    if (credentialCode) return new GittermError(credentialCode, error.message, { cause: error });
+    const lifecycleCode = WORKSPACE_LIFECYCLE_ERROR_CODES.find((candidate) =>
+      error.message.startsWith(`${candidate}:`),
+    );
+    if (lifecycleCode) {
+      return new WorkspaceLifecycleError(lifecycleCode, error.message, { cause: error });
+    }
+    return new GittermError(
+      code,
+      code === "UNAUTHORIZED"
+        ? `Authentication failed: ${error.message}. Check that the API token is valid and has not expired.`
+        : error.message,
+      { cause: error },
+    );
+  }
+
+  return new GittermError(
+    "NETWORK",
+    error instanceof Error ? error.message : "Network request failed",
+    { cause: error },
+  );
+}
+
 async function runWithServer<T>(serverUrl: string, operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
-    if (error instanceof GittermError) throw error;
-
-    if (error instanceof TRPCClientError) {
-      const trpcCode = (error.data as { code?: string } | undefined)?.code;
-      // No error envelope means the request never produced a tRPC response
-      // (connection refused, DNS failure, non-tRPC proxy error, ...).
-      if (!error.data) {
-        throw new GittermError("NETWORK", `Could not reach the GitTerm server at ${serverUrl}`, {
-          cause: error,
-        });
-      }
-      const code = mapTrpcCode(trpcCode);
-      const credentialCode = credentialErrorCode(error.message);
-      if (credentialCode) throw new GittermError(credentialCode, error.message, { cause: error });
-      const lifecycleCode = WORKSPACE_LIFECYCLE_ERROR_CODES.find((candidate) =>
-        error.message.includes(candidate),
-      );
-      if (lifecycleCode) {
-        throw new WorkspaceLifecycleError(lifecycleCode, error.message, { cause: error });
-      }
-      throw new GittermError(
-        code,
-        code === "UNAUTHORIZED"
-          ? `Authentication failed: ${error.message}. Check that the API token is valid and has not expired.`
-          : error.message,
-        { cause: error },
-      );
-    }
-
-    throw new GittermError(
-      "NETWORK",
-      error instanceof Error ? error.message : "Network request failed",
-      { cause: error },
-    );
+    throw toGittermError(serverUrl, error);
   }
 }
 
@@ -364,59 +388,68 @@ type RunLifecycleEvent =
   | { type: "snapshot"; run: AgentRun }
   | { type: "run.updated"; run: AgentRun };
 
-function settlesWait(status: AgentRun["status"], until: RunWaitOptions["until"]): boolean {
-  if (status === "completed" || status === "failed" || status === "cancelled") return true;
-  return status === "awaiting_input" && until !== "terminal";
+type RunTarget = { workspaceId: string; runId: string };
+type Trpc = ReturnType<typeof createTRPCClient<AppRouter>>;
+
+function isTerminalRun(status: AgentRun["status"]): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
 }
 
-/** Resolves with the first lifecycle state that settles the wait. */
-function waitForRun(
-  trpc: ReturnType<typeof createTRPCClient<AppRouter>>,
-  target: { workspaceId: string; runId: string },
-  options?: RunWaitOptions,
-): Promise<AgentRun> {
-  const timeoutMs = options?.timeoutMs ?? 30 * 60_000;
-  const what = `waiting for run ${target.runId}`;
+/** Yields each lifecycle state from the subscription until the run is terminal. */
+async function* watchRun(
+  trpc: Trpc,
+  serverUrl: string,
+  target: RunTarget,
+  options?: RunWatchOptions,
+): AsyncGenerator<AgentRun> {
+  const what = `watching run ${target.runId}`;
+  throwIfAborted(options?.signal, what);
 
-  return new Promise<AgentRun>((resolve, reject) => {
-    throwIfAborted(options?.signal, what);
-    let last: AgentRun | undefined;
-    let subscription: { unsubscribe(): void } | undefined;
-    // Settle before tearing down so a callback fired by unsubscribe() is a no-op.
-    const finish = (settle: () => void) => {
-      clearTimeout(timer);
-      options?.signal?.removeEventListener("abort", onAbort);
-      settle();
-      subscription?.unsubscribe();
-    };
-    const onAbort = () =>
-      finish(() => reject(new GittermError("ABORTED", `Aborted while ${what}`)));
-    const timer = setTimeout(
-      () => finish(() => reject(new GittermError("NETWORK", `Timed out ${what}`))),
-      timeoutMs,
-    );
-    options?.signal?.addEventListener("abort", onAbort, { once: true });
+  type Item = { run: AgentRun } | { error: unknown } | { done: true };
+  const queue: Item[] = [];
+  let wake: (() => void) | undefined;
+  const push = (item: Item) => {
+    queue.push(item);
+    wake?.();
+    wake = undefined;
+  };
+  const onAbort = () => push({ error: new GittermError("ABORTED", `Aborted while ${what}`) });
+  options?.signal?.addEventListener("abort", onAbort, { once: true });
 
-    subscription = trpc.run.lifecycle.subscribe(target, {
-      onData: (event) => {
-        last = (event as RunLifecycleEvent).run;
-        if (settlesWait(last.status, options?.until)) {
-          const run = last;
-          finish(() => resolve(run));
-        }
-      },
-      onError: (error) => finish(() => reject(error)),
-      onComplete: () =>
-        finish(() => {
-          if (last && settlesWait(last.status, options?.until)) resolve(last);
-          else {
-            reject(
-              new GittermError("NETWORK", `Run ${target.runId} event stream ended unexpectedly`),
-            );
-          }
-        }),
-    });
+  let last: AgentRun | undefined;
+  const subscription = trpc.run.lifecycle.subscribe(target, {
+    onData: (event) => {
+      last = (event as RunLifecycleEvent).run;
+      push({ run: last });
+    },
+    onError: (error) => push({ error }),
+    onComplete: () =>
+      push(
+        last && isTerminalRun(last.status)
+          ? { done: true }
+          : {
+              error: new GittermError(
+                "NETWORK",
+                `Run ${target.runId} event stream ended unexpectedly`,
+              ),
+            },
+      ),
   });
+
+  try {
+    while (true) {
+      throwIfAborted(options?.signal, what);
+      if (queue.length === 0) await new Promise<void>((resolve) => (wake = resolve));
+      const item = queue.shift()!;
+      if ("done" in item) return;
+      if ("error" in item) throw toGittermError(serverUrl, item.error);
+      yield item.run;
+      if (isTerminalRun(item.run.status)) return;
+    }
+  } finally {
+    options?.signal?.removeEventListener("abort", onAbort);
+    subscription.unsubscribe();
+  }
 }
 
 export function createGittermClient(options: GittermClientOptions = {}): GittermClient {
@@ -446,6 +479,13 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
   });
 
   const run = <T>(operation: () => Promise<T>) => runWithServer(credentials.serverUrl, operation);
+  const watch = (ref: RunRef, watchOptions?: RunWatchOptions) =>
+    watchRun(trpc, credentials.serverUrl, runTargetOf(ref), watchOptions);
+  const respond = (ref: RunRef, input: { requestId: string; reply: AgentRunReply }) =>
+    run(
+      async (): Promise<AgentRun> =>
+        trpc.run.respond.mutate({ ...runTargetOf(ref), ...input }) as Promise<AgentRun>,
+    );
 
   const normalizeCreateResult = (result: {
     workspace: RawWorkspace;
@@ -501,7 +541,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
       if (Date.now() >= deadline) {
         const log = result.log?.trim();
         throw new GittermError(
-          "NETWORK",
+          "TIMEOUT",
           `Timed out waiting for workspace ${workspaceId} setup (last status: ${result.status})${log ? `\n${log}` : ""}`,
         );
       }
@@ -595,6 +635,8 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           };
         }),
       create: createWorkspace,
+      models: (ref) =>
+        run(() => trpc.workspace.getModelAccess.query({ workspaceId: workspaceIdOf(ref) })),
       setupStatus: (ref: WorkspaceRef) =>
         run(async () => trpc.workspace.getSetupStatus.query({ workspaceId: workspaceIdOf(ref) })),
       waitForSetup: (ref: WorkspaceRef, waitOptions?: WaitOptions) =>
@@ -603,7 +645,15 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
     runs: {
       create: (input: AgentRunCreateInput) =>
         run(async (): Promise<AgentRun> => {
-          const { signal, ...request } = input;
+          const { signal, workspace, ...rest } = input;
+          const request = {
+            ...rest,
+            workspaceId: workspaceIdOf(workspace),
+            context:
+              rest.context?.type === "continue"
+                ? { type: "continue" as const, runId: rest.context.run.id }
+                : rest.context,
+          };
           // Setup can legitimately take longer than one HTTP request should be
           // held open, so poll it from here and let the server do a final check.
           if (request.waitForSetup) {
@@ -626,42 +676,21 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
               ...listOptions,
             }) as Promise<AgentRunListResult>,
         ),
-      get: (refOrWorkspaceId: RunRef | string, runId?: string) =>
-        run(async (): Promise<AgentRun> => {
-          const target = runTargetOf(refOrWorkspaceId, runId);
-          return trpc.run.get.query(target) as Promise<AgentRun>;
-        }),
-      messages: (refOrWorkspaceId: RunRef | string, runId?: string) =>
+      get: (ref: RunRef) =>
+        run(
+          async (): Promise<AgentRun> => trpc.run.get.query(runTargetOf(ref)) as Promise<AgentRun>,
+        ),
+      messages: (ref: RunRef) =>
         run(async (): Promise<AgentRunMessage[]> => {
-          const target = runTargetOf(refOrWorkspaceId, runId);
-          const messages = (await trpc.run.messages.query(target)) as Array<
+          const messages = (await trpc.run.messages.query(runTargetOf(ref))) as Array<
             Omit<AgentRunMessage, "parts"> & { parts?: AgentRunMessage["parts"] }
           >;
           return messages.map((message) => ({ ...message, parts: message.parts ?? [] }));
         }),
-      cancel: (refOrWorkspaceId: RunRef | string, runId?: string) =>
-        run(async () => trpc.run.cancel.mutate(runTargetOf(refOrWorkspaceId, runId))),
-      respond: (ref: RunRef, input: { requestId: string; reply: AgentRunReply }) =>
-        run(
-          async (): Promise<AgentRun> =>
-            trpc.run.respond.mutate({ ...runTargetOf(ref), ...input }) as Promise<AgentRun>,
-        ),
-      wait: (
-        refOrWorkspaceId: RunRef | string,
-        runIdOrOptions?: string | RunWaitOptions,
-        maybeOptions?: RunWaitOptions,
-      ) =>
-        run(async (): Promise<AgentRun> => {
-          const target =
-            typeof refOrWorkspaceId === "string"
-              ? runTargetOf(refOrWorkspaceId, runIdOrOptions as string | undefined)
-              : runTargetOf(refOrWorkspaceId);
-          const waitOptions =
-            typeof refOrWorkspaceId === "string"
-              ? maybeOptions
-              : (runIdOrOptions as RunWaitOptions | undefined);
-          return waitForRun(trpc, target, waitOptions);
-        }),
+      cancel: (ref: RunRef) => run(async () => trpc.run.cancel.mutate(runTargetOf(ref))),
+      respond,
+      watch,
+      ...runHelpers({ watch, respond }),
     },
     catalog: {
       agentTypes: (input?: { serverOnly?: boolean }): Promise<AgentType[]> =>
@@ -682,6 +711,21 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
       workspaceOptions: (): Promise<WorkspaceCatalog> =>
         run(async () => trpc.workspace.getWorkspaceCatalog.query()),
     },
+    models: {
+      list: (listOptions) =>
+        run(async () => {
+          const result = await trpc.modelCredentials.listModels.query();
+          return result.models
+            .map((model) => ({
+              id: model.modelId,
+              name: model.displayName,
+              provider: model.modelId.slice(0, model.modelId.indexOf("/")),
+              isFree: model.isFree,
+              isRecommended: model.isRecommended,
+            }))
+            .filter((model) => !listOptions?.provider || model.provider === listOptions.provider);
+        }),
+    },
     credentials: {
       list: () =>
         run(async (): Promise<ModelCredential[]> => {
@@ -700,6 +744,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           return result.providers.map((provider) => ({
             id: provider.id,
             name: provider.name,
+            logicalProviderKey: provider.logicalProviderKey,
             displayName: provider.displayName,
             authType: provider.authType,
             isRecommended: provider.isRecommended,

@@ -21,6 +21,7 @@ import {
 import { updateWorkspaceRoutingAndInvalidate } from "../../service/workspace-mutations";
 import { getProviderByCloudProviderId } from "../../providers";
 import { getWorkspacePortUrl, getWorkspaceUrl } from "../../utils/routing";
+import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-error";
 
 const workspacePortSchema = z.number().int().min(1).max(65535);
 const PORT_DOMAIN_TIMEOUT_MS = 15_000;
@@ -127,7 +128,7 @@ export const workspaceOperationsRouter = router({
       }
       const ws = await getAuthenticatedWorkspace(workspaceAuth.workspaceId, workspaceAuth.userId);
       if (ws.status !== "running") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace must be running" });
+        throw new WorkspaceLifecycleTRPCError("WORKSPACE_NOT_RUNNING", "Workspace must be running");
       }
       const [provider] = await db
         .select()

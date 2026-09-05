@@ -20,15 +20,22 @@ export function authorizationHeader(password: string | null): Record<string, str
     : {};
 }
 
-export function runtimeUrl(target: Pick<RuntimeTarget, "url">, path: string): string {
-  return `${target.url.replace(/\/$/, "")}${path}`;
+export function runtimeUrl(
+  target: Pick<RuntimeTarget, "url"> & Partial<Pick<RuntimeTarget, "api" | "directory">>,
+  path: string,
+): string {
+  const url = new URL(`${target.url.replace(/\/$/, "")}${path}`);
+  if (target.api === "v2" && target.directory && !url.searchParams.has("location")) {
+    url.searchParams.set("location", JSON.stringify({ directory: target.directory }));
+  }
+  return url.toString();
 }
 
 export function createRuntimeHttp(target: RuntimeTarget) {
-  const headers = authorizationHeader(target.password);
+  const headers = { ...target.headers, ...authorizationHeader(target.password) };
   async function send(path: string, init: RequestInit & { json?: unknown } = {}) {
     const { json, ...rest } = init;
-    const response = await fetch(runtimeUrl(target, path), {
+    const response = await (target.fetch ?? fetch)(runtimeUrl(target, path), {
       ...rest,
       headers: {
         accept: "application/json",
@@ -37,7 +44,11 @@ export function createRuntimeHttp(target: RuntimeTarget) {
         ...(rest.headers as Record<string, string> | undefined),
       },
       body: json === undefined ? rest.body : JSON.stringify(json),
-      signal: rest.signal ?? AbortSignal.timeout(15_000),
+      signal:
+        rest.signal ??
+        (target.signal
+          ? AbortSignal.any([target.signal, AbortSignal.timeout(15_000)])
+          : AbortSignal.timeout(15_000)),
     });
     if (!response.ok) {
       const body = await response.text().catch(() => "");
@@ -71,9 +82,9 @@ type ServerSentEvent = { event: string | null; data: string };
 /** Yields a synthetic `open` event first; ends on server close, throws on failure or abort. */
 export async function* readServerSentEvents(
   url: string,
-  init: { headers?: Record<string, string>; signal: AbortSignal },
+  init: { headers?: Record<string, string>; signal: AbortSignal; fetch?: typeof fetch },
 ): AsyncGenerator<ServerSentEvent, void, undefined> {
-  const response = await fetch(url, {
+  const response = await (init.fetch ?? fetch)(url, {
     headers: { accept: "text/event-stream", ...init.headers },
     signal: init.signal,
   });
@@ -81,14 +92,18 @@ export async function* readServerSentEvents(
     await response.body?.cancel().catch(() => undefined);
     throw new RuntimeHttpError(response.status, "", null);
   }
-  yield { event: "open", data: "" };
-
   const reader = response.body.getReader();
+  const onAbort = () => {
+    void reader.cancel().catch(() => {});
+  };
+  init.signal.addEventListener("abort", onAbort, { once: true });
   const decoder = new TextDecoder();
   let buffer = "";
   let data: string[] = [];
   let event: string | null = null;
   try {
+    init.signal.throwIfAborted();
+    yield { event: "open", data: "" };
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -114,7 +129,9 @@ export async function* readServerSentEvents(
         else if (field === "event") event = fieldValue;
       }
     }
+    init.signal.throwIfAborted();
   } finally {
+    init.signal.removeEventListener("abort", onAbort);
     await reader.cancel().catch(() => undefined);
   }
 }
@@ -126,8 +143,9 @@ export async function* signalStream(
   signal: AbortSignal,
 ): AsyncGenerator<RuntimeSignal, void, undefined> {
   const stream = readServerSentEvents(runtimeUrl(target, path), {
-    headers: authorizationHeader(target.password),
+    headers: { ...target.headers, ...authorizationHeader(target.password) },
     signal,
+    fetch: target.fetch,
   });
   for await (const item of stream) {
     if (item.event === "open") {

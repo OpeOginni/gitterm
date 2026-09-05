@@ -52,8 +52,8 @@ export type Workspace = {
 /** A workspace id, or any object carrying one (e.g. a `Workspace`). */
 export type WorkspaceRef = string | { id: string };
 
-/** A run id pair, or any object carrying one (e.g. an `AgentRun`). */
-export type RunRef = { workspaceId: string; id: string } | { workspaceId: string; runId: string };
+/** An `AgentRun`, or any object carrying its `workspaceId` and `id`. */
+export type RunRef = { workspaceId: string; id: string };
 
 /** `v1` = OpenCode 1.x (`/event`, `/session/*`); `v2` = OpenCode 2 (`/api/*`), experimental until 2.0 ships. */
 export type OpencodeApi = "v1" | "v2";
@@ -196,12 +196,8 @@ export type WorkspaceCreateInput = {
   /** Defaults from the selected provider. */
   persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
-  /**
-   * One entry per provider. Omit entirely to inject the dashboard defaults.
-   * Naming any dashboard credential (an entry without `apiKey`) turns off the
-   * implicit defaults, so list every provider the workspace needs.
-   */
-  modelCredentials?: WorkspaceModelCredentialInput[];
+  /** Omit to use dashboard defaults. An explicit block inherits nothing unless requested. */
+  models?: WorkspaceModelsInput;
   /** Ephemeral environment variables injected into this workspace only. */
   environmentVariables?: Record<string, string>;
   /**
@@ -254,42 +250,55 @@ export type AgentRunStatus =
   | "failed"
   | "cancelled";
 
-/** A prompt the agent is blocked on. `permission` = OpenCode tool approval; `question` = the agent's `question` tool. */
-export type AgentRunInputRequest =
-  | {
-      id: string;
-      kind: "permission";
-      createdAt: string;
-      toolCallId: string | null;
-      /** Permission action, e.g. "bash" or "edit". */
-      permission: string;
-      /** What the action applies to, e.g. the shell command or file paths. */
-      patterns: string[];
-      /** Patterns OpenCode remembers when answered with "always". */
-      always: string[];
-      title: string;
-    }
-  | {
-      id: string;
-      kind: "question";
-      createdAt: string;
-      toolCallId: string | null;
-      questions: Array<{
-        key: string;
-        header: string;
-        question: string;
-        options: Array<{ label: string; description: string; value?: string }>;
-        /** More than one option may be selected. */
-        multiple: boolean;
-        /** A free-text answer outside `options` is accepted. */
-        custom: boolean;
-      }>;
-    };
+/** OpenCode asked to run a tool your `permission` config does not pre-approve. */
+export type AgentPermissionRequest = {
+  id: string;
+  kind: "permission";
+  createdAt: string | null;
+  toolCallId: string | null;
+  /** Permission action, e.g. "bash" or "edit". */
+  permission: string;
+  /** What the action applies to, e.g. the shell command or file paths. */
+  patterns: string[];
+  /** Patterns OpenCode remembers when answered with "always". */
+  always: string[];
+  title: string;
+};
+
+/** One choice to show the user. Answer with the `label`. */
+export type AgentQuestionOption = { label: string; description: string };
+
+export type AgentQuestion = {
+  /** Identifies this question in `AgentRunReply.answers`. Unique within a request. */
+  key: string;
+  header: string;
+  question: string;
+  options: AgentQuestionOption[];
+  /** More than one option may be selected. */
+  multiple: boolean;
+  /** A free-text answer outside `options` is accepted. */
+  custom: boolean;
+};
+
+/** The agent called OpenCode's `question` tool. Answer every question in one reply. */
+export type AgentQuestionRequest = {
+  id: string;
+  kind: "question";
+  createdAt: string | null;
+  toolCallId: string | null;
+  questions: AgentQuestion[];
+};
+
+/** A prompt the agent is blocked on. */
+export type AgentRunInputRequest = AgentPermissionRequest | AgentQuestionRequest;
 
 export type AgentRunReply =
   | { type: "permission"; response: "once" | "always" | "reject" }
-  /** One entry per question, each the selected option labels (or a custom answer when allowed). */
-  | { type: "question"; answers: string[][] }
+  /**
+   * Keyed by `AgentQuestion.key`, each the selected option labels (or a single
+   * custom answer when the question allows one). Every question needs a key.
+   */
+  | { type: "question"; answers: Record<string, string[]> }
   | { type: "question"; reject: true };
 
 export type AgentRun = {
@@ -299,7 +308,11 @@ export type AgentRun = {
   status: AgentRunStatus;
   error: string | null;
   finalText: string | null;
-  /** Non-empty exactly while `status` is `awaiting_input`. */
+  /**
+   * Non-empty exactly while `status` is `awaiting_input`. Usually one request;
+   * several when the agent issued parallel tool calls that each need approval.
+   * Answer each with `runs.respond()`; the run resumes once none remain.
+   */
   pendingInputs: AgentRunInputRequest[];
   context: { type: "isolated" } | { type: "continued"; runId: string };
   createdAt: string;
@@ -322,7 +335,7 @@ export type AgentRunListResult = {
 };
 
 export type AgentRunCreateInput = {
-  workspaceId: string;
+  workspace: WorkspaceRef;
   /**
    * Stable key used to return the same run when a request is retried.
    * Defaults to a random UUID, which gives no retry protection; pass your own
@@ -335,7 +348,7 @@ export type AgentRunCreateInput = {
   /** OpenCode model in provider/model format. */
   model?: string;
   /** Start with fresh context (default), or continue a terminal run's context. */
-  context?: { type: "isolated" } | { type: "continue"; runId: string };
+  context?: { type: "isolated" } | { type: "continue"; run: RunRef };
   /**
    * Wait for the `afterAgent` setup phase to succeed before submitting the
    * prompt. Fails the call with the setup log if that phase failed.
@@ -369,17 +382,43 @@ export type AgentRunMessagePart =
       completedAt: string | null;
     };
 
-export type RunWaitOptions = {
-  /** Default 30 minutes. */
-  timeoutMs?: number;
-  /** Abort the wait early; the promise rejects with code `ABORTED`. */
+export type RunWatchOptions = {
+  /** Stop the stream early; the iterator throws with code `ABORTED`. */
   signal?: AbortSignal;
+};
+
+export type RunWaitOptions = RunWatchOptions & {
+  /** Default 30 minutes. When it elapses the promise rejects with code `TIMEOUT`. */
+  timeoutMs?: number;
   /**
    * `input-or-terminal` (default) also returns when the run is `awaiting_input`
    * so the caller can answer with `runs.respond()`; `terminal` keeps waiting.
    */
   until?: "input-or-terminal" | "terminal";
 };
+
+export type AgentRunResult<T extends AgentRun = AgentRun> = T & { status: "completed" };
+
+export type RunResultOptions = RunWatchOptions & {
+  /** Total deadline, including time spent in human-input handlers. Default 30 minutes. */
+  timeoutMs?: number;
+  onPermission?: (
+    request: AgentPermissionRequest,
+    options: { signal: AbortSignal },
+  ) => AgentRunReplyPermission | Promise<AgentRunReplyPermission>;
+  onQuestion?: (
+    request: AgentQuestionRequest,
+    options: { signal: AbortSignal },
+  ) => AgentRunReplyQuestion | Promise<AgentRunReplyQuestion>;
+};
+export type AgentRunReplyPermission = "once" | "always" | "reject";
+export type AgentRunReplyQuestion = { answers: Record<string, string[]> } | { reject: true };
+
+export type AgentRunEvent<T extends AgentRun = AgentRun> =
+  | { type: "run.status"; run: T }
+  | { type: "input.required"; run: T; request: AgentRunInputRequest }
+  | { type: "input.resolved"; run: T; requestId: string }
+  | { type: "run.completed" | "run.failed" | "run.cancelled"; run: T };
 
 export type AgentRunMessage = {
   id: string;
@@ -415,27 +454,48 @@ export type WorkspaceSetupStatus = {
 export type ModelProviderInfo = {
   id: string;
   name: string;
+  /** Use this key in models.providers and provider/model references. */
+  logicalProviderKey: string;
   displayName: string;
   authType: string;
   isRecommended: boolean;
 };
 
-/**
- * Selects the credential for one provider on workspaces.create().
- * `providerName` comes from credentials.listProviders(), e.g. "anthropic" or
- * "openai"; unknown providers throw MODEL_CREDENTIAL_INVALID.
- *
- * - `{ providerName, apiKey }` — inline key for this workspace only, never
- *   stored. Overrides any dashboard credential for the same provider.
- *   OAuth-only providers throw MODEL_CREDENTIAL_INVALID.
- * - `{ providerName, label }` — the dashboard credential with that label.
- *   Unknown labels throw MODEL_CREDENTIAL_UNAVAILABLE listing the labels
- *   that exist.
- * - `{ providerName }` — that provider's dashboard default credential.
- */
-export type WorkspaceModelCredentialInput =
-  | { providerName: string; apiKey: string; label?: never }
-  | { providerName: string; label?: string; apiKey?: never };
+export type ModelInfo = {
+  /** Full provider/model identifier accepted by runs.create(). */
+  id: string;
+  name: string;
+  provider: string;
+  isFree: boolean;
+  isRecommended: boolean;
+};
+
+/** Control-plane configuration, not a live authentication check. */
+export type WorkspaceModelAccess = {
+  providers: Array<{
+    provider: string;
+    source: "saved" | "apiKey";
+    label: string | null;
+    active: boolean;
+  }>;
+  /** Known catalog models whose provider is configured, plus free models. */
+  models: ModelInfo[];
+};
+
+/** Explicit credential intent. Saved sources use dashboard labels, never credential IDs. */
+export type ModelCredentialSource =
+  | { source: "saved"; label: string }
+  | { source: "default" }
+  | { source: "apiKey"; apiKey: string };
+
+export type WorkspaceModelsInput = {
+  /** Workspace default, overridden by runs.create({ model }). */
+  default?: string;
+  /** Default for an explicit block is none. */
+  inherit?: "defaults" | "none";
+  /** Keys are model provider names (e.g. openai for API keys AND ChatGPT subscriptions). */
+  providers?: Record<string, ModelCredentialSource>;
+};
 
 /** Safe dashboard credential metadata. Secret material is never returned by the SDK. */
 export type ModelCredential = {
@@ -445,7 +505,7 @@ export type ModelCredential = {
   providerDisplayName: string;
   logicalProviderKey: string;
   authType: string;
-  /** Unique per provider; use it in `modelCredentials: [{ providerName, label }]`. */
+  /** Select with models.providers[logicalProviderKey] = { source: "saved", label }. */
   label: string;
   keyHash: string;
   isActive: boolean;

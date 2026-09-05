@@ -1,3 +1,5 @@
+import type { AgentRun } from "./types.js";
+
 export type GittermErrorCode =
   | "NOT_LOGGED_IN"
   | "UNAUTHORIZED"
@@ -8,6 +10,11 @@ export type GittermErrorCode =
   | "SERVER_ERROR"
   | "NETWORK"
   | "ABORTED"
+  | "TIMEOUT"
+  | "INPUT_NOT_PENDING"
+  | "INPUT_REQUIRED"
+  | "RUN_FAILED"
+  | "RUN_CANCELLED"
   | CredentialErrorCode
   | WorkspaceLifecycleErrorCode;
 
@@ -54,5 +61,22 @@ export class WorkspaceLifecycleError extends GittermError {
   ) {
     super(code, message, options);
     this.name = "WorkspaceLifecycleError";
+  }
+}
+
+/** result() could not produce a successful result. The run remains inspectable. */
+export class AgentRunError<T extends AgentRun = AgentRun> extends GittermError {
+  constructor(
+    readonly run: T,
+    code: "INPUT_REQUIRED" | "RUN_FAILED" | "RUN_CANCELLED",
+  ) {
+    super(
+      code,
+      run.error ??
+        (code === "INPUT_REQUIRED"
+          ? "The agent needs input; supply a handler or use runs.respond()"
+          : `Agent run ${run.status}`),
+    );
+    this.name = "AgentRunError";
   }
 }

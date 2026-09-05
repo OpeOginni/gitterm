@@ -142,7 +142,13 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const selectedModelCredentials = credentialGroups.flatMap((group) =>
     group.credentials
       .filter((credential) => credential.id === credentialSelections[group.key])
-      .map((credential) => ({ providerName: credential.providerName, label: credential.label })),
+      .map(
+        (credential) =>
+          [
+            credential.logicalProviderKey,
+            { source: "saved" as const, label: credential.label },
+          ] as const,
+      ),
   );
 
   // AWS providers are region-scoped: multiple cloud_provider rows share
@@ -385,7 +391,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
-      modelCredentials: selectedModelCredentials,
+      models: { inherit: "none", providers: Object.fromEntries(selectedModelCredentials) },
     });
   };
 

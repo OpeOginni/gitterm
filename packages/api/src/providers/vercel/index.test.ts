@@ -8,7 +8,10 @@ describe("Vercel environment", () => {
         environmentVariables: {
           AGENT_FILES_BASE64: "large-manifest",
           WORKSPACE_TOOLING_MANIFEST_BASE64: "large-tooling-manifest",
+          WORKSPACE_BEFORE_AGENT_COMMAND_BASE64: "x".repeat(8_000),
+          WORKSPACE_SETUP_COMMAND_BASE64: "y".repeat(8_000),
           WORKSPACE_API_URL: "https://api.example.com",
+          WORKSPACE_SETUP_AUTH_TOKEN: "setup-token",
           CUSTOM_VALUE: "preserved",
         },
       },
@@ -17,9 +20,11 @@ describe("Vercel environment", () => {
 
     expect(environment).toEqual({
       WORKSPACE_API_URL: "https://api.example.com",
+      WORKSPACE_SETUP_AUTH_TOKEN: "setup-token",
       CUSTOM_VALUE: "preserved",
       OPENCODE_SERVER_PASSWORD: "password",
     });
+    expect(Buffer.byteLength(JSON.stringify(environment))).toBeLessThan(4096);
   });
 
   test("submits post-start setup with the agent server", async () => {

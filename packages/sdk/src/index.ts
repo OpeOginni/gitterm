@@ -10,7 +10,7 @@ export {
 export type { CliConfig } from "./config.js";
 export { loginWithDeviceCode } from "./device-login.js";
 export type { DeviceCodeInfo, LoginWithDeviceCodeOptions } from "./device-login.js";
-export { GittermError, WorkspaceLifecycleError } from "./errors.js";
+export { AgentRunError, GittermError, WorkspaceLifecycleError } from "./errors.js";
 export {
   createGittermWorkspaceClient,
   getWorkspaceEnvironment,
@@ -26,6 +26,10 @@ export type {
   WorkspaceLifecycleErrorCode,
 } from "./errors.js";
 export type {
+  AgentPermissionRequest,
+  AgentQuestion,
+  AgentQuestionOption,
+  AgentQuestionRequest,
   AgentRun,
   AgentRunCreateInput,
   AgentRunInputRequest,
@@ -33,7 +37,14 @@ export type {
   AgentRunMessagePart,
   AgentRunReply,
   AgentRunStatus,
+  AgentRunEvent,
+  AgentRunResult,
+  AgentRunReplyPermission,
+  AgentRunReplyQuestion,
+  RunResultOptions,
+  RunRef,
   RunWaitOptions,
+  RunWatchOptions,
   OpencodeApi,
   AgentType,
   AgentKey,
@@ -55,7 +66,10 @@ export type {
   WorkspaceSetupStatus,
   ModelCredential,
   ModelProviderInfo,
-  WorkspaceModelCredentialInput,
+  ModelInfo,
+  ModelCredentialSource,
+  WorkspaceModelsInput,
+  WorkspaceModelAccess,
   WorkspacePauseResult,
   WorkspaceTerminateResult,
   WorkspaceProviderSelection,

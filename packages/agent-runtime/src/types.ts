@@ -1,11 +1,13 @@
-import type { AgentRunInputRequest, AgentRunMessageSnapshot } from "@gitterm/db/schema/agent-run";
-import type { OpencodeApi } from "@gitterm/db/schema/workspace";
+import type { AgentRunInputRequest, AgentRunMessageSnapshot, OpencodeApi } from "./contract";
 
 export type RuntimeTarget = {
   url: string;
   directory: string;
   password: string | null;
   api: OpencodeApi;
+  headers?: Record<string, string>;
+  fetch?: typeof fetch;
+  signal?: AbortSignal;
 };
 
 /** Signals carry no content; the watcher re-reads a snapshot, so a missed event can't corrupt state. */
@@ -22,6 +24,8 @@ export type RuntimeSnapshot = {
   sessionExists: boolean;
   /** The agent loop is still working on this session. */
   busy: boolean;
+  /** A later user prompt owns the session now; ignore its busy/input state. */
+  superseded?: boolean;
   /** OpenCode is backing off before retrying the model provider. */
   retry: boolean;
   messages: AgentRunMessageSnapshot[];
