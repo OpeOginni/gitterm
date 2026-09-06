@@ -68,10 +68,24 @@ describe("v1 runtime events", () => {
           { label: "Approach B", description: "Proceed with approach B" },
         ],
         multiple: false,
-        custom: false,
+        custom: true,
       },
     ]);
     expect(signal.request.toolCallId).toBe("call_380f1729ebe743de9267ca8c");
+  });
+
+  test.each([
+    { name: "omitted", flags: {}, expected: true },
+    { name: "false", flags: { custom: false }, expected: false },
+    { name: "true", flags: { custom: true }, expected: true },
+  ])("custom $name maps to $expected", ({ flags, expected }) => {
+    const request = questionRequest({
+      id: "que_1",
+      questions: [{ question: "What should we do?", options: [], ...flags }],
+    });
+    if (request.kind !== "question") throw new Error();
+    expect(request.questions[0]?.custom).toBe(expected);
+    expect(request.questions[0]?.multiple).toBe(false);
   });
 
   test("replies and rejections resolve the request by id", () => {

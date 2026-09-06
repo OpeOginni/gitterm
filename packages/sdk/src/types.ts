@@ -276,7 +276,10 @@ export type AgentQuestion = {
   options: AgentQuestionOption[];
   /** More than one option may be selected. */
   multiple: boolean;
-  /** A free-text answer outside `options` is accepted. */
+  /**
+   * A free-text answer outside `options` is accepted.
+   * Defaults to true, matching OpenCode; false only when the agent sets it.
+   */
   custom: boolean;
 };
 

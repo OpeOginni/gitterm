@@ -150,6 +150,20 @@ describe("v2 runtime events", () => {
     ]);
   });
 
+  test.each([
+    { name: "omitted", flags: {}, expected: true },
+    { name: "false", flags: { custom: false }, expected: false },
+    { name: "true", flags: { custom: true }, expected: true },
+  ])("custom $name maps to $expected", ({ flags, expected }) => {
+    const request = formRequest({
+      id: "frm_1",
+      fields: [{ key: "q0", title: "What should we do?", type: "string", options: [], ...flags }],
+    });
+    if (request.kind !== "question") throw new Error();
+    expect(request.questions[0]?.custom).toBe(expected);
+    expect(request.questions[0]?.multiple).toBe(false);
+  });
+
   test("option values that differ from labels are kept so replies submit the value", () => {
     const request = formRequest({
       id: "frm_1",

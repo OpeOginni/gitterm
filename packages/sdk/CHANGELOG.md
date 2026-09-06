@@ -4,6 +4,13 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.2.1
+
+### Fixed
+
+- Questions without an explicit `custom` flag now accept free-text answers, matching OpenCode's
+  default. Previously such questions could not be answered at all.
+
 ## 0.2.0
 
 ### Breaking

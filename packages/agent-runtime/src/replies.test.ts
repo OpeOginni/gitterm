@@ -33,6 +33,28 @@ test("keyed answers are validated before any runtime submission", () => {
     expect(() => questionAnswers(request, answers)).toThrow();
   }
 });
+test("questions without options accept free-text answers when custom is true", () => {
+  const openEnded: QuestionInputRequest = {
+    ...request,
+    questions: [{ ...request.questions[0]!, options: [], custom: true }],
+  };
+  expect(questionAnswers(openEnded, { env: ["Use the staging environment"] })).toEqual([
+    ["Use the staging environment"],
+  ]);
+});
+
+test("questions without options or custom answers fail before answer validation", () => {
+  const malformed: QuestionInputRequest = {
+    ...request,
+    questions: [{ ...request.questions[0]!, options: [], custom: false }],
+  };
+  for (const answers of [["Use the staging environment"], []]) {
+    expect(() => questionAnswers(malformed, { env: answers })).toThrow(
+      'Question "env" has no options and does not accept custom answers',
+    );
+  }
+});
+
 test("requests do not acquire fresh timestamps on each snapshot", () => {
   expect(permissionRequest({ id: "per" }).createdAt).toBeNull();
   expect(questionRequest({ id: "que" }).createdAt).toBeNull();

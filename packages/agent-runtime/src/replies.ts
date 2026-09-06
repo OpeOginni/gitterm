@@ -13,6 +13,11 @@ export function questionAnswers(
     throw new Error(`Answers must cover exactly the question keys ${JSON.stringify(keys)}`);
   }
   return request.questions.map((question) => {
+    if (!question.options.length && !question.custom) {
+      throw new Error(
+        `Question "${question.key}" has no options and does not accept custom answers`,
+      );
+    }
     const selected = answers[question.key]!;
     if (
       !Array.isArray(selected) ||

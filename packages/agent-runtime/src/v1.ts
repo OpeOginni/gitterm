@@ -240,7 +240,7 @@ export function questionRequest(raw: Record<string, unknown>): AgentRunInputRequ
         }),
       ),
       multiple: question.multiple === true,
-      custom: question.custom === true,
+      custom: question.custom !== false,
     })),
   };
 }

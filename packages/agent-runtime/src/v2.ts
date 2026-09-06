@@ -302,7 +302,7 @@ export function formRequest(raw: Record<string, unknown>): AgentRunInputRequest 
           };
         }),
         multiple: field.type === "multiselect",
-        custom: field.custom === true,
+        custom: field.custom !== false,
       };
     }),
   };

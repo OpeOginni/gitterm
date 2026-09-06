@@ -517,6 +517,8 @@ remain. The exported types are `AgentPermissionRequest`, `AgentQuestionRequest`,
   **labels** keyed by question `key`, or one free-text string when `custom` is true:
   `{ type: "question", answers: { [question.key]: string[] } }`. Every question needs an entry.
   Or dismiss all of them with `{ type: "question", reject: true }`.
+  `custom` defaults to true, matching OpenCode; false only when the agent sets it.
+  Questions with `options: []` accept free-text answers when `custom` is true.
 
 The quick start above shows a complete relay. Rejecting a permission or dismissing a question
 ends the turn: OpenCode records a failed tool call and the run finishes. A run left
