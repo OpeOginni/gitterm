@@ -272,8 +272,14 @@ export function GitHubRepositoryBranchField({
                   onRepoUrlChange(event.target.value);
                   if (integration) setIsRepoListOpen(true);
                 }}
-                onFocus={() => {
+                onClick={() => {
                   if (integration) setIsRepoListOpen(true);
+                }}
+                onKeyDown={(event) => {
+                  if (integration && event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setIsRepoListOpen(true);
+                  }
                 }}
                 disabled={disabled}
                 autoComplete="off"
