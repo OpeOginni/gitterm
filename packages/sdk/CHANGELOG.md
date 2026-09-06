@@ -4,6 +4,13 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.2.2
+
+### Fixed
+
+- Question options are normalised at the runtime boundary: a copied 'Type your own answer' entry becomes `custom: true`, duplicates and blank labels are dropped.
+  Hosted users need the API redeployed for this to take effect.
+
 ## 0.2.1
 
 ### Fixed

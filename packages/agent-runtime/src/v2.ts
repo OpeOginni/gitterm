@@ -3,6 +3,7 @@ import type {
   AgentRunMessagePart,
   AgentRunMessageSnapshot,
 } from "./contract";
+import { normalizeQuestion } from "./normalize";
 import {
   asRecord,
   asString,
@@ -288,7 +289,7 @@ export function formRequest(raw: Record<string, unknown>): AgentRunInputRequest 
     toolCallId: asString(tool.id) ?? asString(tool.callID),
     questions: fields.map((field, index) => {
       const key = asString(field.key) ?? `q${index}`;
-      return {
+      return normalizeQuestion({
         key,
         header: asString(field.title) ?? key,
         question: asString(field.description) ?? asString(field.title) ?? key,
@@ -303,7 +304,7 @@ export function formRequest(raw: Record<string, unknown>): AgentRunInputRequest 
         }),
         multiple: field.type === "multiselect",
         custom: field.custom !== false,
-      };
+      });
     }),
   };
 }

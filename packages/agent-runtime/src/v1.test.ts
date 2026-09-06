@@ -74,6 +74,29 @@ describe("v1 runtime events", () => {
     expect(signal.request.toolCallId).toBe("call_380f1729ebe743de9267ca8c");
   });
 
+  test("question mapping normalises copied custom slots and options", () => {
+    const request = questionRequest({
+      id: "que_1",
+      questions: [
+        {
+          question: "Which approach?",
+          custom: false,
+          options: [
+            { label: " First ", description: " First approach " },
+            { label: "First", description: "Duplicate" },
+            { label: " ", description: "Blank" },
+            { label: "Type your own answer", description: "Other" },
+          ],
+        },
+      ],
+    });
+    if (request.kind !== "question") throw new Error();
+    expect(request.questions[0]?.options).toEqual([
+      { label: "First", description: "First approach" },
+    ]);
+    expect(request.questions[0]?.custom).toBe(true);
+  });
+
   test.each([
     { name: "omitted", flags: {}, expected: true },
     { name: "false", flags: { custom: false }, expected: false },

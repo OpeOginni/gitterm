@@ -5,6 +5,7 @@
     "buildCommand": "turbo build --filter=server",
     "watchPatterns": [
       "apps/server/**/*",
+      "packages/agent-runtime/**/*",
       "packages/api/**/*",
       "packages/auth/**/*",
       "packages/config/**/*",

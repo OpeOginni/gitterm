@@ -150,6 +150,31 @@ describe("v2 runtime events", () => {
     ]);
   });
 
+  test("form mapping normalises copied custom slots and options", () => {
+    const request = formRequest({
+      id: "frm_1",
+      fields: [
+        {
+          key: "approach",
+          title: "Which approach?",
+          type: "select",
+          custom: false,
+          options: [
+            { label: " First ", description: " First approach ", value: "first" },
+            { label: "First", description: "Duplicate", value: "second" },
+            { label: " ", description: "Blank" },
+            { label: "Type your own answer...", description: "Other" },
+          ],
+        },
+      ],
+    });
+    if (request.kind !== "question") throw new Error();
+    expect(request.questions[0]?.options).toEqual([
+      { label: "First", description: "First approach", value: "first" },
+    ]);
+    expect(request.questions[0]?.custom).toBe(true);
+  });
+
   test.each([
     { name: "omitted", flags: {}, expected: true },
     { name: "false", flags: { custom: false }, expected: false },

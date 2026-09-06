@@ -1,4 +1,5 @@
 import type { AgentRunInputRequest, AgentRunMessageSnapshot } from "./contract";
+import { normalizeQuestion } from "./normalize";
 import {
   createWorkspaceOpencodeClient,
   findLastOpencodeRunAssistant,
@@ -229,19 +230,21 @@ export function questionRequest(raw: Record<string, unknown>): AgentRunInputRequ
     kind: "question",
     createdAt: null,
     toolCallId: asString(tool.callID),
-    questions: questions.map((question, index) => ({
-      key: `q${index}`,
-      header: asString(question.header) ?? `Question ${index + 1}`,
-      question: asString(question.question) ?? "",
-      options: (Array.isArray(question.options) ? question.options.map(asRecord) : []).map(
-        (option) => ({
-          label: asString(option.label) ?? "",
-          description: asString(option.description) ?? "",
-        }),
-      ),
-      multiple: question.multiple === true,
-      custom: question.custom !== false,
-    })),
+    questions: questions.map((question, index) =>
+      normalizeQuestion({
+        key: `q${index}`,
+        header: asString(question.header) ?? `Question ${index + 1}`,
+        question: asString(question.question) ?? "",
+        options: (Array.isArray(question.options) ? question.options.map(asRecord) : []).map(
+          (option) => ({
+            label: asString(option.label) ?? "",
+            description: asString(option.description) ?? "",
+          }),
+        ),
+        multiple: question.multiple === true,
+        custom: question.custom !== false,
+      }),
+    ),
   };
 }
 

@@ -520,6 +520,10 @@ remain. The exported types are `AgentPermissionRequest`, `AgentQuestionRequest`,
   `custom` defaults to true, matching OpenCode; false only when the agent sets it.
   Questions with `options: []` accept free-text answers when `custom` is true.
 
+Question options are normalised at the runtime boundary: labels and descriptions are trimmed,
+OpenCode's copied "Type your own answer" entry is removed and enables `custom: true`, and
+duplicate and blank labels are dropped. Hosted users need the API redeployed for this to take effect.
+
 The quick start above shows a complete relay. Rejecting a permission or dismissing a question
 ends the turn: OpenCode records a failed tool call and the run finishes. A run left
 `awaiting_input` does not keep its workspace awake; if nobody answers before the workspace's

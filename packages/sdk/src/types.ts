@@ -268,6 +268,7 @@ export type AgentPermissionRequest = {
 /** One choice to show the user. Answer with the `label`. */
 export type AgentQuestionOption = { label: string; description: string };
 
+/** Options are normalised: OpenCode's own type-your-own entry, duplicates and blank labels never appear. */
 export type AgentQuestion = {
   /** Identifies this question in `AgentRunReply.answers`. Unique within a request. */
   key: string;
