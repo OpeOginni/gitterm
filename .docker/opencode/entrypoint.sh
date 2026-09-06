@@ -102,14 +102,25 @@ else
 fi
 
 ########################################
+# REPOSITORY TRUST (also needed when resuming on EFS)
+########################################
+REPO_DIR_NAME="${REPO_NAME:-$(basename "${REPO_URL:-workspace}" .git)}"
+if [ -f .repo_name ]; then REPO_DIR_NAME="$(cat .repo_name)"; fi
+case "$REPO_DIR_NAME" in
+    ''|.|..|*/*) echo "Invalid workspace repository directory" >&2; exit 1 ;;
+esac
+# EFS access points enforce UID 1000, which can differ from the container user.
+# Trust only this workspace's repository, never all repositories.
+git config --global --get-all safe.directory | grep -Fxq "/workspace/$REPO_DIR_NAME" ||
+    git config --global --add safe.directory "/workspace/$REPO_DIR_NAME"
+
+########################################
 # FIRST-TIME SETUP
 ########################################
 if [ ! -f ".initialized" ]; then
     echo "First-time workspace setup..."
 
     if [ ! -z "$REPO_URL" ]; then
-        REPO_DIR_NAME="${REPO_NAME:-$(basename "$REPO_URL" .git)}"
-
         if [ -n "$REPO_BRANCH" ]; then
             echo "Cloning repo: $REPO_URL (branch: $REPO_BRANCH) into $REPO_DIR_NAME"
         else
@@ -119,7 +130,14 @@ if [ ! -f ".initialized" ]; then
         # Prefer named checkout ref, then branch, for the initial clone.
         CLONE_REF="${REPO_CHECKOUT_REF:-$REPO_BRANCH}"
 
-        if [ -n "$CLONE_REF" ]; then
+        if [ -d "$REPO_DIR_NAME/.git" ]; then
+            if [ "$(git -C "$REPO_DIR_NAME" remote get-url origin)" != "$REPO_URL" ]; then
+                echo "Existing repository has a different origin; refusing to overwrite it." >&2
+                exit 1
+            fi
+            git -C "$REPO_DIR_NAME" rev-parse --verify HEAD >/dev/null
+            echo "Reusing repository from an earlier setup attempt."
+        elif [ -n "$CLONE_REF" ]; then
             git clone --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
         else
             git clone "$REPO_URL" "$REPO_DIR_NAME"
