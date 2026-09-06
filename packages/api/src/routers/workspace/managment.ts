@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { getAwsAccessProfiles, resolveAwsWorkspaceRole } from "../../providers/aws/access-profiles";
 import z from "zod";
 import {
   accountProcedure,
@@ -331,6 +332,7 @@ const legacyWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
   regionId: z.string().optional(),
   machineProfileId: z.uuid().optional(),
   machineOptions: z.record(z.string(), z.unknown()).optional(),
+  awsAccessProfileId: z.uuid().optional(),
   persistent: z.boolean(),
 });
 
@@ -479,6 +481,8 @@ async function resolveWorkspaceCreateIntent(
     cloudProviderId: selectedProvider.id,
     regionId: selectedRegion?.id,
     machineProfileId: selectedMachine?.id,
+    awsAccessProfileId:
+      providerSelection?.type === "aws" ? providerSelection.accessProfile : undefined,
     machineOptions:
       requestedMachine?.type === "custom"
         ? parseProviderMachineOptions(
@@ -702,6 +706,16 @@ export const workspaceRouter = router({
 
             return {
               ...provider,
+              awsAccessProfiles:
+                provider.providerKey === "aws" && provider.providerConfigId
+                  ? getAwsAccessProfiles(
+                      (
+                        await getProviderConfigService().getProviderConfigById(
+                          provider.providerConfigId,
+                        )
+                      )?.config ?? {},
+                    )
+                  : [],
               regions,
               machineProfiles: provider.machineProfiles.map((profile) => ({
                 id: profile.id,
@@ -779,6 +793,25 @@ export const workspaceRouter = router({
       eligibleDefaultProviders.find((provider) => provider.preferredDefault) ??
       eligibleDefaultProviders[0];
 
+    const awsProfiles = new Map(
+      await Promise.all(
+        providers
+          .filter((provider) => provider.providerKey === "aws" && provider.providerConfigId)
+          .map(
+            async (provider) =>
+              [
+                provider.id,
+                getAwsAccessProfiles(
+                  (
+                    await getProviderConfigService().getProviderConfigById(
+                      provider.providerConfigId!,
+                    )
+                  )?.config ?? {},
+                ),
+              ] as const,
+          ),
+      ),
+    );
     const catalogProviders = providers.flatMap((provider) => {
       const parsedKey = providerKeySchema.safeParse(provider.providerKey);
       if (
@@ -808,6 +841,7 @@ export const workspaceRouter = router({
           id: provider.id,
           type: parsedKey.data,
           name: provider.name,
+          accessProfiles: awsProfiles.get(provider.id) ?? [],
           isDefault: provider.id === effectiveDefaultProvider?.id,
           persistence: provider.supportsPersistence
             ? provider.autoPersistent
@@ -1798,6 +1832,27 @@ export const workspaceRouter = router({
           }
         }
 
+        let awsTaskRoleArn: string | undefined;
+        if (input.awsAccessProfileId && providerKey !== "aws") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "AWS access profiles can only be used with AWS providers",
+          });
+        }
+        if (providerKey === "aws") {
+          try {
+            awsTaskRoleArn = resolveAwsWorkspaceRole(
+              selectedProviderConfig?.config ?? {},
+              input.awsAccessProfileId,
+            );
+          } catch (error) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: error instanceof Error ? error.message : "Invalid AWS access profile",
+            });
+          }
+        }
+
         // Determine if this is a local workspace
         const isLocal = providerKey === "local";
 
@@ -2396,10 +2451,7 @@ export const workspaceRouter = router({
             ? buildAwsRuntimeInstructions({
                 region: regionRecord.externalRegionIdentifier,
                 location: regionRecord.location,
-                taskRoleArn:
-                  typeof selectedProviderConfig?.config.taskRoleArn === "string"
-                    ? selectedProviderConfig.config.taskRoleArn
-                    : undefined,
+                taskRoleArn: awsTaskRoleArn,
               })
             : undefined;
         const additionalAgentInstructions = [
@@ -2622,6 +2674,7 @@ export const workspaceRouter = router({
                   userId,
                   imageId: providerImageId,
                   imageProviderMetadata,
+                  awsTaskRoleArn,
                   subdomain,
                   repositoryUrl: input.repo,
                   repositoryBranch: input.branch,
@@ -2637,6 +2690,7 @@ export const workspaceRouter = router({
                   userId,
                   imageId: providerImageId,
                   imageProviderMetadata,
+                  awsTaskRoleArn,
                   subdomain,
                   repositoryUrl: input.repo,
                   repositoryBranch: input.branch,

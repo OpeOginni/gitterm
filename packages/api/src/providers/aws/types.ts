@@ -1,3 +1,5 @@
+import type { AwsAccessProfile } from "@gitterm/schema";
+
 export interface AwsConfig {
   accessKeyId: string;
   secretAccessKey: string;
@@ -10,6 +12,7 @@ export interface AwsConfig {
   albBaseUrl: string;
   taskExecutionRoleArn: string;
   taskRoleArn: string;
+  accessProfiles?: AwsAccessProfile[];
   assignPublicIp?: boolean;
   publicSshEnabled?: boolean;
   efsFileSystemId?: string;

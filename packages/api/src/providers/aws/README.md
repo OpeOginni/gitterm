@@ -8,14 +8,15 @@ The recommended path is simple setup. You only provide credentials and a region,
 
 Open the admin panel and set these values:
 
-| Field               | Required | Notes                         |
-| ------------------- | -------- | ----------------------------- |
-| `Access Key ID`     | Yes      | Control-plane IAM credentials |
-| `Secret Access Key` | Yes      | Control-plane IAM credentials |
-| `Default Region`    | Yes      | Defaults to `us-east-1`       |
-| `Allow Public SSH`  | No       | Enable public SSH on tasks    |
+| Field               | Required | Notes                                                  |
+| ------------------- | -------- | ------------------------------------------------------ |
+| `Access Key ID`     | Yes      | Control-plane IAM credentials                          |
+| `Secret Access Key` | Yes      | Control-plane IAM credentials                          |
+| `Default Region`    | Yes      | Defaults to `us-east-1`                                |
+| `Allow Public SSH`  | No       | Enable public SSH on tasks                             |
+| `Task role`         | Yes      | Create a new role by name, or use an existing role ARN |
 
-GitTerm then creates a CloudFormation stack named `gitterm-<region>` with the ECS cluster, ALB and listener, security groups, task roles, CloudWatch log group, and EFS filesystem, and saves the resolved values back into the provider config.
+GitTerm then creates a CloudFormation stack named `gitterm-<region>` with the ECS cluster, ALB and listener, security groups, task execution role, CloudWatch log group, and EFS filesystem. The task role is created/reused separately. Resolved values are saved back into the provider config.
 
 Requirements:
 
@@ -25,6 +26,111 @@ Requirements:
 If you would rather wire up the cluster, networking, IAM roles, and ALB yourself, manual setup is also supported. See the field list under [Provider Config Fields](#provider-config-fields) and [Required AWS Resources For Manual Setup](#required-aws-resources-for-manual-setup).
 
 AWS uses ECS task state, so it does not need an inbound webhook.
+
+### Custom task roles
+
+Select a task-role mode in the provider's admin configuration and choose **Provision** or **Apply**:
+
+- **Create new role:** enter a name (up to 64 letters, numbers, or `_+=,.@-` characters).
+  The initial suggestion is `gitterm-task-<region>`. GitTerm creates ECS trust and the read-only
+  `gitterm-runtime-context-introspection` policy. Existing names are rejected, not silently reused.
+- **Use existing role:** enter its full IAM ARN, including its path. GitTerm checks that the role
+  belongs to the provider's AWS account and explicitly trusts `ecs-tasks.amazonaws.com`.
+  It does **not** modify trust or permissions. Trust conditions still require admin review.
+
+No policy JSON is entered into GitTerm. Use the AWS Console link to attach application permissions
+or manage the role using your infrastructure tooling. GitTerm does not grant S3, Lambda, Bedrock,
+or IAM write access by default.
+
+- Add the custom role's exact ARN to **both** `GitTermRoleManagement` and `GitTermPassRole` in the
+  control-plane policy samples. Keep the task execution role entry. Do not broaden either to all roles.
+- IAM roles are account-global: use different names if regions need different permissions.
+- New workspaces without an explicit access profile use the provider's default role. Existing task
+  definitions and resumed workspaces retain their original role; create a new workspace to change identity.
+- Generated `AGENTS.md` uses the selected workspace role's ARN and actual name, not a hardcoded demo identity.
+  This is useful runtime guidance, not an authorization boundary: IAM enforces permissions.
+- The task role is managed outside CloudFormation and is retained on Reset/Delete, including its
+  attached policies. Changing roles does not delete the previous role.
+
+Legacy admin API callers can still submit `taskRoleName` or omit role selection: names are resolved
+using the previous create-or-reuse behavior, but existing roles are no longer modified. New clients
+should send `taskRole: { mode: "create", name }` or `taskRole: { mode: "existing", arn }`.
+
+### Access profiles: administrator-managed, available to all users
+
+After configuring an AWS provider, its **AWS access profiles** section lets an admin:
+
+1. Give a profile a display name and intended-capabilities description.
+2. Create a minimal task role or import an existing ARN using the modes above.
+3. Select **Add for all users**. No per-user or team access controls are applied.
+4. Review the role-check result, open the role in AWS, and attach the permissions needed.
+5. Use **Check permissions** to repeat the read-only checks after making changes in AWS.
+
+All users who can use the provider can select any of its profiles. Only add roles whose permissions
+you intend to share with those users. Profiles are provider-scoped, not arbitrary user-supplied ARNs.
+They do not isolate resources between workspaces that use the same role.
+
+On workspace creation, developers see **AWS access** with the provider default and every added
+profile. The server resolves the selected profile ID against that provider's saved list and uses
+the same ARN for ECS and the generated agent instructions. Changing region/provider resets an
+inapplicable selection to the default. Removed/unknown profile IDs are rejected by the API.
+
+Removing a profile only prevents new selections: it does not delete IAM roles, change existing
+workspaces, or revoke temporary credentials. Emergency revocation must be handled explicitly in AWS
+and/or by terminating affected workspaces. Profiles are stored in existing provider config metadata;
+no database migration is required. Reset and normal provider updates preserve the list.
+
+The SDK catalog exposes profile IDs through `client.catalog.workspaceOptions()`:
+
+```ts
+await client.workspaces.create({
+  repo: "https://github.com/example/demo",
+  provider: {
+    type: "aws",
+    providerId: "<provider UUID>",
+    accessProfile: "<profile UUID from the catalog>",
+  },
+});
+```
+
+The dashboard/legacy create endpoint uses `awsAccessProfileId` for the same selection.
+
+### Read-only capability discovery baseline
+
+The recommended baseline contains exactly six IAM reads:
+
+| Actions                                     | Scope                                     | Purpose                                                      |
+| ------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------ |
+| `iam:GetRole`                               | This task role                            | Identity metadata, trust, and permissions-boundary reference |
+| `iam:ListRolePolicies`, `iam:GetRolePolicy` | This task role                            | Discover inline policies and read their documents            |
+| `iam:ListAttachedRolePolicies`              | This task role                            | Discover attached managed policies                           |
+| `iam:GetPolicy`, `iam:GetPolicyVersion`     | Account-owned and AWS-managed policy ARNs | Read managed policy versions and boundary documents          |
+
+These reads are not needed merely to run a GitTerm workspace, but enable the agent to explain its
+potential capabilities. `sts:GetCallerIdentity` needs no explicit IAM Allow. The baseline contains
+no application access, role switching, or permission-editing actions. Managed-policy documents can
+be read across the account, not only those attached to this role; inline policies on other roles
+are not included. The task execution role remains separate (image pulls and log delivery).
+
+Role checks validate account/ARN/ECS trust and attempt IAM simulation of the discovery baseline:
+
+- **Allowed in simulation:** the tested actions/resources are allowed by the simulator.
+- **Baseline not fully allowed:** one or more tests were denied, incomplete, or required missing context.
+  Narrow grants to particular policy ARNs may still permit useful discovery.
+- **Not verified:** simulation failed or was unavailable, or a new role has only just been created.
+
+Missing/unverified discovery is a warning, not a blocker or an automatic grant on imported roles.
+The UI provides the recommended policy for review in AWS. The control-plane samples include
+`iam:SimulatePrincipalPolicy` on the allowed role ARNs; update deployed policies to enable the checks.
+The task role itself does not need simulation permission. Simulation is advisory: SCPs, explicit
+denies, resource policies, trust conditions, permissions boundaries and runtime context can restrict
+effective access. The checks do not certify control-plane PassRole or application permissions.
+
+Agent instructions explain how to inspect the policies, summarize capabilities with resource scopes
+and conditions, and request the smallest additional action/resource permission if needed. If discovery
+fails, the agent must say its access is unknown rather than claim the application action is forbidden.
+Granting new permissions remains the user's/admin's choice; the agent must not broaden its own access
+without explicit authorization.
 
 ## Implementation Notes
 
@@ -108,11 +214,13 @@ The stack creates:
 - one ALB security group
 - one workspace security group
 - one EFS security group
-- one ECS task execution role named `gitterm-task-execution`
-- one ECS task role named `gitterm-task`
+- one ECS task execution role named `gitterm-task-execution-<region>`
 - one CloudWatch log group at `/gitterm/workspaces`
 - one EFS filesystem
 - one EFS mount target per selected subnet
+
+Before applying the stack, setup creates/reuses the selected task role outside CloudFormation
+and passes its ARN as `ExistingTaskRoleArn`.
 
 Simple setup then saves the resolved values back into the GitTerm provider config and:
 
@@ -146,6 +254,7 @@ Current fields:
 - `albBaseUrl`
 - `taskExecutionRoleArn`
 - `taskRoleArn`
+- `accessProfiles` optional; structured non-secret entries managed by the access-profile interface
 - `assignPublicIp` optional
 - `efsFileSystemId` optional
 - `logGroupName` optional
@@ -339,12 +448,12 @@ In the current AWS implementation, pause is effectively stop.
 Flow:
 
 1. `workspace/managment.ts` loads the workspace and provider.
-2. GitTerm attempts to revoke editor access first, but AWS currently has no editor-access implementation.
-3. GitTerm calls `AwsProvider.stopWorkspace(...)`.
+2. GitTerm attempts to revoke editor access first; AWS native SSH ends when the task stops.
+3. GitTerm calls `AwsProvider.pauseWorkspace(...)`.
 4. The AWS provider sends `UpdateService` to ECS with `desiredCount=0`.
 5. GitTerm closes the usage session.
-6. GitTerm updates the workspace row to `status=stopped`.
-7. GitTerm emits the stopped status event.
+6. GitTerm updates the workspace row to `status=paused`.
+7. GitTerm emits the paused status event.
 
 What does not get deleted on stop:
 
@@ -361,10 +470,10 @@ Only the running task is scaled down. This makes restart faster because the serv
 Flow:
 
 1. `workspace/managment.ts` checks quota and verifies the workspace is currently stopped.
-2. GitTerm calls `AwsProvider.restartWorkspace(...)`.
+2. GitTerm calls `AwsProvider.resumeWorkspace(...)`.
 3. The AWS provider sends `UpdateService` to ECS with `desiredCount=1`.
 4. ECS starts a new Fargate task for the existing service.
-5. The AWS provider waits for the existing target group to become healthy again.
+5. The AWS provider waits for the main target group to become healthy and re-registers existing exposed ports against the new task IP.
 6. GitTerm updates the workspace row to `status=running` because AWS restart settlement is immediate.
 7. GitTerm emits the running status event.
 
@@ -433,7 +542,12 @@ When an admin deletes AWS shared infrastructure:
 4. GitTerm refuses to continue if any terminated workspaces still have unresolved external cleanup.
 5. GitTerm calls `deleteAwsProviderInfrastructure(...)`.
 6. `setup.ts` deletes the CloudFormation stack and waits for completion.
-7. GitTerm disables the provider config and the cloud provider in its own database.
+7. Delete removes the provider and saved config. Reset uses `preserveProvider=true`, retaining
+   the provider, region, profiles and encrypted credentials and disabling the config until
+   bootstrap succeeds. If rebuilding fails, use Apply to retry.
+
+Reset/Delete removes the shared EFS filesystem and its data. Neither deletes the standalone task role.
+AWS lookup failures (including AccessDenied) are surfaced, not treated as a missing/deleted stack.
 
 ## Required AWS Resources For Manual Setup
 
@@ -503,7 +617,7 @@ Important notes about that sample policy:
 - it is intentionally all-region by default so one GitTerm control-plane user can manage multiple AWS region-scoped providers
 - replace `<ACCOUNT_ID>` before attaching it
 - CloudFormation is scoped to `arn:aws:cloudformation:*:<ACCOUNT_ID>:stack/gitterm-*/*`, which allows GitTerm to create one regional stack per AWS provider such as `gitterm-eu-central-1` or `gitterm-us-east-1`
-- IAM role permissions are scoped to `gitterm-task-*` and `gitterm-task-execution-*` because the current simple-setup flow creates region-scoped roles like `gitterm-task-eu-central-1` and `gitterm-task-execution-eu-central-1`
+- IAM role permissions cover the default `gitterm-task-*` and `gitterm-task-execution-*` names; add a custom task role's exact ARN to both role-management and PassRole statements when using one
 
 If you want to pin the sample policy to a single region later, tighten these places:
 
@@ -516,32 +630,60 @@ If you want a concrete locked example instead of editing the wildcard sample you
 
 - `packages/api/src/providers/aws/iam-user-policy.eu-central-1.json`
 
-Sample runtime policies for a restricted demo environment live here:
-
-- `packages/api/src/providers/aws/demo-task-role-policy.json`
-- `packages/api/src/providers/aws/demo-lambda-execution-role-policy.json`
-- `packages/api/src/providers/aws/demo-lambda-execution-role-trust-policy.json`
-
-Use them like this:
-
-- keep `iam-user-policy.json` attached to the GitTerm control-plane IAM user only
-- attach `demo-task-role-policy.json` to the ECS task role used as `taskRoleArn`
-- attach `demo-lambda-execution-role-policy.json` to pre-created Lambda execution roles such as `gtdemo-lambda-exec-basic`
-- use `demo-lambda-execution-role-trust-policy.json` as the trust relationship for those Lambda execution roles
-
-The demo task-role policy is intentionally scoped for a dedicated demo environment:
-
-- Bedrock access is limited to the model ARNs you list
-- S3 access is limited to buckets named `gtdemo-*`
-- Lambda read, invoke, update-code, delete, and version actions are limited to functions named `gtdemo-*`
-- Lambda create and update-configuration are limited by region, so use this in a dedicated demo account or further narrow it for your environment
+Keep `iam-user-policy.json` attached to the GitTerm control-plane IAM user only.
+Attach a separate, least-privilege runtime policy to the ECS task role configured as
+`taskRoleArn`, allowing only the actions and resources your workspaces need.
+GitTerm does not attach application permissions automatically.
 
 ## Important Current Limitations
 
-- AWS editor SSH access is not implemented.
+- Native editor SSH is supported when editor access, public task IPs, and SSH ingress are enabled.
 - Simple setup currently expects a default VPC and public subnets.
 - Simple setup creates an HTTP ALB listener, not HTTPS.
+- The internet-facing ALB uses predictable routing headers, not origin authentication. Do not treat
+  these headers as secrets or expose sensitive unauthenticated apps through this setup.
+- Users select only administrator-added access profiles; there is currently no per-user/team restriction on those profiles.
+- Only persistent workspaces retain `/workspace` data across task replacement. EFS access-point
+  deletion does not erase its directory; shared-stack deletion removes the filesystem.
+- Exposed-port IPs refresh on GitTerm resume; unexpected ECS task replacement still needs reconciliation.
 - Termination is user-visible immediately in GitTerm, but AWS resource cleanup is asynchronous in the background.
+- Some cleanup failures are currently swallowed and sweep counters can overstate successful deletion.
+  Inspect AWS resources before claiming complete cleanup; ALB/EFS can keep incurring charges after tasks stop.
+- Stack deletion currently retries `DELETE_FAILED` using CloudFormation force-delete, which can retain
+  failed resources. Check for retained resources before rebuilding or declaring cleanup complete.
+
+## Presentation preflight
+
+Local tests use mocked AWS APIs; they do **not** certify account permissions, networking, images,
+Bedrock model access, or live provisioning. Before presenting:
+
+1. Provision/Apply in a dedicated demo account. Confirm the role ARN and attach only the permissions
+   needed for the demo. For custom names, update both control-plane IAM statements described above.
+2. Use a current GitTerm container image and a persistent workspace if demonstrating pause/resume.
+   Wait for setup completion (`aws --version` should work); AWS CLI installation is an after-agent setup command.
+3. Inside the workspace, run `aws sts get-caller-identity` and confirm the expected assumed role;
+   verify `$AWS_REGION` and the role in `~/.config/opencode/AGENTS.md`. Do not display credential endpoints or keys.
+4. Run a bounded task such as creating a demo-prefixed S3 object or deploying a small Lambda,
+   checking the actual AWS result rather than just the agent's response.
+5. Start an HTTP app, open its port with `gitterm ports open 3000 --name demo`, and visit the preview.
+   Pause/resume; confirm a persistent marker file and the preview still work (restart the app if needed).
+6. If showing editor access, test native SSH after resume too: the task public IP can change.
+7. Terminate the workspace, inspect cleanup, and delete demo-created S3/Lambda resources separately.
+   Do not Reset shared infrastructure with data you want to preserve.
+
+The existing managed-provider smoke harness supports AWS (not the direct-provider harness):
+
+```sh
+# Set GITTERM_SERVER_URL, GITTERM_API_TOKEN and GITTERM_E2E_REPO in scripts/.env.
+# Optionally set GITTERM_E2E_MODEL and model credentials for your configured agent.
+# This creates billable resources and runs an agent; it terminates its test workspace.
+bun run test:providers --provider aws
+```
+
+Recommended follow-ups: authenticated HTTPS/private ALB origin access, read-only AWS readiness
+diagnostics (trust/PassRole, image access, networking, quotas), ECS stopped-task reason reporting,
+truthful retryable cleanup, automatic port reconciliation on task replacement, and per-user/team
+eligibility for access profiles. Prioritize origin security before multi-user production use.
 
 ## Example Config Values
 

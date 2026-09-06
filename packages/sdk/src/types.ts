@@ -134,7 +134,10 @@ type E2bResources = { templateId?: string; sshTemplateId?: string };
 
 export type WorkspaceProviderSelection =
   | { type: "railway"; providerId?: string; region?: string }
-  | ({ type: "aws"; region?: string } & Omit<ProviderSelectionBase, "machine"> & {
+  | ({ type: "aws"; region?: string; accessProfile?: string } & Omit<
+      ProviderSelectionBase,
+      "machine"
+    > & {
         machine?: FlexibleMachine<AwsResources>;
       })
   | ({ type: "daytona" } & Omit<ProviderSelectionBase, "machine"> & {
@@ -534,6 +537,7 @@ export type AgentType = {
 export type CloudProvider = {
   id: string;
   name: string;
+  awsAccessProfiles?: Array<{ id: string; name: string; description: string; roleArn: string }>;
   providerKey: ProviderKey | string;
   regions?: Array<{
     id: string;
@@ -559,6 +563,7 @@ export type WorkspaceCatalog = {
     persistence: "required" | "optional" | "unsupported";
     regionSelection: "none" | "user" | "admin";
     regions: Array<{ id: string; key: string; name: string; location: string }>;
+    accessProfiles?: Array<{ id: string; name: string; description: string; roleArn: string }>;
     machines: Array<{
       id: string;
       key: string;

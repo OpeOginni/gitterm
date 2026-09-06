@@ -340,8 +340,8 @@ export class AwsProvider implements ComputeProvider {
    *
    * Multiple cloud_provider rows can share providerKey = "aws", one per
    * configured region. We look for the row whose attached region matches
-   * `region`. If `region` is not supplied or no match is found, fall back to
-   * any enabled AWS provider config.
+   * `region`. A fallback config must match the requested region: never use
+   * another region's credentials or infrastructure during lifecycle/cleanup.
    */
   async getConfig(region?: string): Promise<AwsConfig> {
     if (region) {
@@ -359,8 +359,16 @@ export class AwsProvider implements ComputeProvider {
           matched.providerConfigId,
         );
         if (configRecord && configRecord.isEnabled) {
+          if (configRecord.config.defaultRegion !== region) {
+            throw new Error(
+              `AWS provider configuration does not match requested region ${region}.`,
+            );
+          }
           return normalizeAwsConfig(configRecord.config);
         }
+      }
+      if (matched) {
+        throw new Error(`AWS provider for ${region} is not configured or its config is disabled.`);
       }
     }
 
@@ -371,7 +379,13 @@ export class AwsProvider implements ComputeProvider {
       throw new Error("AWS provider is not configured. Please configure it in the admin panel.");
     }
 
-    return normalizeAwsConfig(config);
+    const normalized = normalizeAwsConfig(config);
+    if (region && normalized.defaultRegion !== region) {
+      throw new Error(
+        `AWS provider for ${region} is not configured. Refusing to use ${normalized.defaultRegion} infrastructure.`,
+      );
+    }
+    return normalized;
   }
 
   private async createClients(region?: string) {
@@ -456,16 +470,29 @@ export class AwsProvider implements ComputeProvider {
     };
   }
 
+  private async listListenerRules(listenerArn: string, region?: string): Promise<Rule[]> {
+    const { elbv2 } = await this.createClients(region);
+    const rules: Rule[] = [];
+    let marker: string | undefined;
+    do {
+      const response = await elbv2.send(
+        new DescribeRulesCommand({ ListenerArn: listenerArn, Marker: marker }),
+      );
+      rules.push(...(response.Rules ?? []));
+      marker = response.NextMarker;
+    } while (marker);
+    return rules;
+  }
+
   private async findRuleByRoutingValue(
     listenerArn: string,
     routingValue: string,
     region?: string,
   ): Promise<Rule | null> {
-    const { elbv2 } = await this.createClients(region);
-    const response = await elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+    const rules = await this.listListenerRules(listenerArn, region);
 
     return (
-      response.Rules?.find((rule) =>
+      rules.find((rule) =>
         rule.Conditions?.some(
           (condition) =>
             condition.Field === "http-header" &&
@@ -478,10 +505,9 @@ export class AwsProvider implements ComputeProvider {
   }
 
   private async allocateRulePriority(listenerArn: string, region?: string): Promise<number> {
-    const { elbv2 } = await this.createClients(region);
-    const response = await elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+    const rules = await this.listListenerRules(listenerArn, region);
     const priorities = new Set(
-      (response.Rules ?? [])
+      rules
         .map((rule) => Number(rule.Priority))
         .filter((priority) => Number.isInteger(priority) && priority >= 1),
     );
@@ -825,7 +851,7 @@ export class AwsProvider implements ComputeProvider {
         networkMode: "awsvpc",
         requiresCompatibilities: ["FARGATE"],
         executionRoleArn: providerConfig.taskExecutionRoleArn,
-        taskRoleArn: providerConfig.taskRoleArn,
+        taskRoleArn: config.awsTaskRoleArn ?? providerConfig.taskRoleArn,
         runtimePlatform: metadata.architecture
           ? {
               operatingSystemFamily: "LINUX",
@@ -1152,7 +1178,7 @@ export class AwsProvider implements ComputeProvider {
         records: {
           serviceArn: serviceArn,
         },
-        error: serviceArn ? "missing-service-arn" : undefined,
+        error: serviceArn ? undefined : "missing-service-arn",
       });
 
       if (!serviceArn || !listenerRuleArn || !taskDefinitionArn) {
@@ -1299,6 +1325,34 @@ export class AwsProvider implements ComputeProvider {
       }),
     );
     await this.waitForTargetGroupHealthy(handle.targetGroupArn, targetRegion);
+    // Extra ports are registered manually, unlike the ECS-managed main target group.
+    // Scaling back up gives the task a new IP, so refresh every existing port route.
+    const { config } = await this.createClients(targetRegion);
+    const rules = await this.listListenerRules(config.albListenerArn, targetRegion);
+    let taskIp: string | undefined;
+    for (const rule of rules) {
+      const targetGroupArn = getRuleTargetGroupArn(rule);
+      if (!targetGroupArn || targetGroupArn === handle.targetGroupArn) continue;
+      const values =
+        rule.Conditions?.filter(
+          (condition) =>
+            condition.Field === "http-header" &&
+            condition.HttpHeaderConfig?.HttpHeaderName?.toLowerCase() ===
+              AWS_ROUTING_HEADER.toLowerCase(),
+        ).flatMap((condition) => condition.HttpHeaderConfig?.Values ?? []) ?? [];
+      for (const value of values) {
+        const port = Number(value.split("-")[0]);
+        if (
+          !Number.isInteger(port) ||
+          port < 1 ||
+          port > 65535 ||
+          value !== buildExposedPortHost(handle.workspaceId, port)
+        )
+          continue;
+        taskIp ??= await this.resolveTaskIp(handle, targetRegion);
+        await this.refreshTargetGroupRegistration(targetGroupArn, taskIp, port, targetRegion);
+      }
+    }
   }
 
   async terminateWorkspace(externalServiceId: string, externalVolumeId?: string): Promise<void> {
@@ -1620,16 +1674,14 @@ export class AwsProvider implements ComputeProvider {
       taskDefinitionsDeregistered += 1;
     }
 
-    const rulesResponse = await elbv2
-      .send(new DescribeRulesCommand({ ListenerArn: config.albListenerArn }))
-      .catch((error) => {
-        if (isMissingAwsInfrastructureError(error)) {
-          return null;
-        }
+    const rules = await this.listListenerRules(config.albListenerArn, region).catch((error) => {
+      if (isMissingAwsInfrastructureError(error)) {
+        return null;
+      }
 
-        throw error;
-      });
-    if (!rulesResponse) {
+      throw error;
+    });
+    if (!rules) {
       return {
         servicesDeleted,
         taskDefinitionsDeregistered,
@@ -1638,7 +1690,7 @@ export class AwsProvider implements ComputeProvider {
         accessPointsDeleted,
       };
     }
-    const taggedRuleArns = (rulesResponse.Rules ?? [])
+    const taggedRuleArns = rules
       .filter((rule) => !rule.IsDefault && rule.RuleArn)
       .map((rule) => rule.RuleArn as string);
 

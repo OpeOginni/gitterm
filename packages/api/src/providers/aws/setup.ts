@@ -14,6 +14,10 @@ import {
 } from "@aws-sdk/client-iam";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import type { AwsConfig } from "./types";
+import { resolveAwsTaskRoleName } from "./task-role";
+import { prepareAwsTaskRole, buildRoleDiscoveryPolicy } from "./iam";
+import type { awsRoleSelectionSchema } from "@gitterm/schema";
+import type { z } from "zod";
 
 const STACK_NAME_PREFIX = "gitterm";
 const STACK_POLL_INTERVAL_MS = 5000;
@@ -24,6 +28,8 @@ export interface AwsBootstrapInput {
   secretAccessKey: string;
   defaultRegion: string;
   publicSshEnabled?: boolean;
+  taskRoleName?: string;
+  taskRole?: z.infer<typeof awsRoleSelectionSchema>;
 }
 
 export interface AwsBootstrapSummary {
@@ -43,6 +49,7 @@ export interface AwsBootstrapSummary {
 }
 
 export interface AwsBootstrapResult {
+  roleCheck?: import("./iam").AwsRoleCheck;
   config: AwsConfig;
   summary: AwsBootstrapSummary;
 }
@@ -62,10 +69,6 @@ function normalizeAwsNamePart(value: string): string {
 
 function buildStackName(region: string): string {
   return `${STACK_NAME_PREFIX}-${normalizeAwsNamePart(region)}`;
-}
-
-function buildTaskRoleName(region: string): string {
-  return `gitterm-task-${normalizeAwsNamePart(region)}`;
 }
 
 function buildTemplate(subnetCount: number): string {
@@ -357,18 +360,16 @@ async function findExistingIamRoleArn(
     const response = await iam.send(new GetRoleCommand({ RoleName: roleName }));
     return response.Role?.Arn;
   } catch (error) {
-    if (error instanceof Error && error.name === "NoSuchEntityException") {
+    if (error instanceof Error && ["NoSuchEntity", "NoSuchEntityException"].includes(error.name)) {
       return undefined;
     }
     throw error;
   }
 }
 
-async function ensureTaskRoleArn(iam: IAMClient, region: string): Promise<string> {
-  const roleName = buildTaskRoleName(region);
+async function ensureTaskRoleArn(iam: IAMClient, roleName: string): Promise<string> {
   const existingArn = await findExistingIamRoleArn(iam, roleName);
   if (existingArn) {
-    await ensureTaskRoleIntrospectionPolicy(iam, roleName);
     return existingArn;
   }
 
@@ -397,36 +398,40 @@ async function ensureTaskRoleArn(iam: IAMClient, region: string): Promise<string
     throw new Error(`Created ${roleName} role but AWS did not return its ARN.`);
   }
 
-  await ensureTaskRoleIntrospectionPolicy(iam, roleName);
+  await ensureTaskRoleIntrospectionPolicy(iam, roleName, arn);
 
   return arn;
 }
 
-async function ensureTaskRoleIntrospectionPolicy(iam: IAMClient, roleName: string): Promise<void> {
+async function ensureTaskRoleIntrospectionPolicy(
+  iam: IAMClient,
+  roleName: string,
+  roleArn: string,
+): Promise<void> {
   await iam.send(
     new PutRolePolicyCommand({
       RoleName: roleName,
       PolicyName: "gitterm-runtime-context-introspection",
-      PolicyDocument: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: [
-              "sts:GetCallerIdentity",
-              "iam:GetRole",
-              "iam:GetRolePolicy",
-              "iam:ListRolePolicies",
-              "iam:ListAttachedRolePolicies",
-              "iam:GetPolicy",
-              "iam:GetPolicyVersion",
-            ],
-            Resource: "*",
-          },
-        ],
-      }),
+      PolicyDocument: JSON.stringify(buildRoleDiscoveryPolicy(roleArn)),
     }),
   );
+}
+
+async function describeStack(cf: CloudFormationClient, stackName: string) {
+  try {
+    const response = await cf.send(new DescribeStacksCommand({ StackName: stackName }));
+    return response.Stacks?.[0];
+  } catch (error) {
+    // AccessDenied, expired credentials and network failures are not proof of deletion.
+    if (
+      error instanceof Error &&
+      error.name === "ValidationError" &&
+      /Stack .* does not exist/i.test(error.message)
+    ) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 async function waitForStackDeletion(cf: CloudFormationClient, stackName: string): Promise<void> {
@@ -434,10 +439,7 @@ async function waitForStackDeletion(cf: CloudFormationClient, stackName: string)
   let forceDeleteRequested = false;
 
   while (Date.now() < deadline) {
-    const stack = await cf
-      .send(new DescribeStacksCommand({ StackName: stackName }))
-      .then((response) => response.Stacks?.[0])
-      .catch(() => null);
+    const stack = await describeStack(cf, stackName);
 
     if (!stack || stack.StackStatus === "DELETE_COMPLETE") {
       return;
@@ -473,10 +475,7 @@ async function createOrUpdateStack(
   templateBody: string,
   parameters: Array<{ ParameterKey: string; ParameterValue: string }>,
 ): Promise<void> {
-  const existing = await cf
-    .send(new DescribeStacksCommand({ StackName: stackName }))
-    .then((response) => response.Stacks?.[0])
-    .catch(() => null);
+  const existing = await describeStack(cf, stackName);
 
   if (existing && existing.StackStatus !== "DELETE_COMPLETE") {
     if (existing.StackStatus === "ROLLBACK_COMPLETE" || existing.StackStatus === "CREATE_FAILED") {
@@ -591,6 +590,7 @@ function requireOutput(outputs: Record<string, string>, key: string): string {
 }
 
 export async function bootstrapAwsProvider(input: AwsBootstrapInput): Promise<AwsBootstrapResult> {
+  const roleName = resolveAwsTaskRoleName(input.defaultRegion, input.taskRoleName);
   const credentials = {
     accessKeyId: input.accessKeyId,
     secretAccessKey: input.secretAccessKey,
@@ -610,7 +610,8 @@ export async function bootstrapAwsProvider(input: AwsBootstrapInput): Promise<Aw
 
   const vpcId = await findDefaultVpc(ec2);
   const subnetIds = await findPublicSubnetIds(ec2, vpcId);
-  const ensuredTaskRoleArn = await ensureTaskRoleArn(iam, region);
+  const roleCheck = input.taskRole ? await prepareAwsTaskRole(input, input.taskRole) : undefined;
+  const ensuredTaskRoleArn = roleCheck?.roleArn ?? (await ensureTaskRoleArn(iam, roleName));
 
   const stackName = buildStackName(region);
   const templateBody = buildTemplate(subnetIds.length);
@@ -638,6 +639,7 @@ export async function bootstrapAwsProvider(input: AwsBootstrapInput): Promise<Aw
   const efsFileSystemId = requireOutput(outputs, "EfsFileSystemId");
 
   return {
+    ...(roleCheck ? { roleCheck } : {}),
     config: {
       accessKeyId: input.accessKeyId,
       secretAccessKey: input.secretAccessKey,
@@ -684,10 +686,7 @@ export async function deleteAwsProviderInfrastructure(
   const cf = new CloudFormationClient({ region, credentials });
   const stackName = buildStackName(region);
 
-  const existing = await cf
-    .send(new DescribeStacksCommand({ StackName: stackName }))
-    .then((response) => response.Stacks?.[0])
-    .catch(() => null);
+  const existing = await describeStack(cf, stackName);
 
   if (!existing || existing.StackStatus === "DELETE_COMPLETE") {
     return { deleted: false, stackName };

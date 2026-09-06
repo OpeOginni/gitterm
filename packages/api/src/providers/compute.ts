@@ -235,6 +235,8 @@ export interface WorkspaceProvisioningSpec {
 }
 
 export interface WorkspaceConfig {
+  /** Server-resolved role from the selected provider's approved access profiles. */
+  awsTaskRoleArn?: string;
   workspaceId: string;
   userId: string;
   imageId: string;

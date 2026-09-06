@@ -47,6 +47,13 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { strToU8, zipSync } from "fflate";
+import { awsRoleSelectionSchema, awsAccessProfileSchema } from "@gitterm/schema";
+import {
+  AwsAccessProfiles,
+  AwsRoleInput,
+  AwsRoleCheckResult,
+  type AwsRoleSelection,
+} from "../_components/aws-access-profiles";
 
 interface ProviderConfigField {
   fieldName: string;
@@ -132,6 +139,10 @@ export default function ProviderSettingsPage() {
   const [configName, setConfigName] = useState("");
   const [configEnabled, setConfigEnabled] = useState(true);
   const [awsSetupSummary, setAwsSetupSummary] = useState<AwsSetupSummary | null>(null);
+  const [awsRoleOverride, setAwsRoleOverride] = useState<AwsRoleSelection | null>(null);
+  const [awsRoleCheck, setAwsRoleCheck] = useState<Awaited<
+    ReturnType<typeof trpcClient.admin.aws.checkAccessRole.mutate>
+  > | null>(null);
   const [awsActionDialog, setAwsActionDialog] = useState<"delete" | "reset" | null>(null);
   const [isResettingAwsInfrastructure, setIsResettingAwsInfrastructure] = useState(false);
   const [newRegion, setNewRegion] = useState({
@@ -315,9 +326,13 @@ export default function ProviderSettingsPage() {
       secretAccessKey: string;
       defaultRegion: string;
       publicSshEnabled?: boolean;
+      taskRoleName?: string;
+      taskRole?: AwsRoleSelection;
     }) => trpcClient.admin.aws.bootstrap.mutate(params),
     onSuccess: (data) => {
       applyAwsBootstrapState(data);
+      setAwsRoleOverride(null);
+      setAwsRoleCheck(data.roleCheck ?? null);
       toast.success("AWS infrastructure provisioned and saved");
     },
     onError: (error) => toast.error(error.message),
@@ -845,12 +860,19 @@ export default function ProviderSettingsPage() {
   const awsAccessKeyId = String(configForm.accessKeyId ?? "").trim();
   const awsSecretAccessKey = String(configForm.secretAccessKey ?? "").trim();
   const awsDefaultRegion = String(configForm.defaultRegion ?? "").trim();
+  const awsRoleSelection: AwsRoleSelection =
+    awsRoleOverride ??
+    (configForm.taskRoleArn
+      ? { mode: "existing", arn: String(configForm.taskRoleArn) }
+      : { mode: "create", name: `gitterm-task-${awsDefaultRegion}` });
+  const isAwsTaskRoleNameValid = awsRoleSelectionSchema.safeParse(awsRoleSelection).success;
   const awsPublicSshEnabled = configForm.publicSshEnabled !== false;
   const hasSavedAwsCredentials = isAwsProvider && !!provider?.providerConfig;
   const hasEnteredAwsCredentials = awsAccessKeyId.length > 0 && awsSecretAccessKey.length > 0;
   const canRunAwsSimpleSetup =
     !!provider?.id &&
     awsDefaultRegion.length > 0 &&
+    isAwsTaskRoleNameValid &&
     (hasEnteredAwsCredentials || hasSavedAwsCredentials);
 
   const hasExistingAwsSetup = isAwsProvider && !!configForm.clusterArn;
@@ -876,6 +898,7 @@ export default function ProviderSettingsPage() {
       secretAccessKey: awsSecretAccessKey,
       defaultRegion: awsDefaultRegion,
       publicSshEnabled: awsPublicSshEnabled,
+      taskRole: awsRoleSelection,
     });
   };
 
@@ -913,6 +936,7 @@ export default function ProviderSettingsPage() {
     try {
       await trpcClient.admin.aws.deleteInfrastructure.mutate({
         providerId: provider.id,
+        preserveProvider: true,
       });
       const bootstrapResult = await trpcClient.admin.aws.bootstrap.mutate({
         providerId: provider.id,
@@ -921,15 +945,19 @@ export default function ProviderSettingsPage() {
         secretAccessKey: awsSecretAccessKey,
         defaultRegion: awsDefaultRegion,
         publicSshEnabled: awsPublicSshEnabled,
+        taskRole: awsRoleSelection,
       });
 
       applyAwsBootstrapState(bootstrapResult);
+      setAwsRoleOverride(null);
+      setAwsRoleCheck(bootstrapResult.roleCheck ?? null);
       toast.success(`AWS infrastructure reset (${bootstrapResult.summary.stackName})`);
       setAwsActionDialog(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to reset AWS infrastructure");
     } finally {
       setIsResettingAwsInfrastructure(false);
+      queryClient.invalidateQueries({ queryKey: ["admin", "provider", providerId] });
     }
   };
 
@@ -1344,19 +1372,20 @@ export default function ProviderSettingsPage() {
                     <DialogDescription>
                       {awsActionDialog === "reset"
                         ? "GitTerm will delete the shared stack, then provision it again using the saved region and encrypted credentials."
-                        : "The shared AWS stack will be removed. Saved credentials and region stay encrypted in GitTerm for a future rebuild."}
+                        : "The shared AWS stack, provider record, and saved credentials will be removed. The task role is retained in IAM."}
                     </DialogDescription>
                   </DialogHeader>
 
                   <ul className="overflow-hidden rounded-lg border border-border divide-y divide-border/70">
                     {[
                       "All AWS workspaces for this provider must already be deleted.",
+                      "Shared EFS data and CloudWatch logs will be deleted. The IAM task role is retained.",
                       awsActionDialog === "reset"
                         ? "Saved access keys remain encrypted and will be reused for the rebuild."
-                        : "Saved access keys remain encrypted and are not removed.",
+                        : "Saved credentials are removed from GitTerm; the IAM access keys themselves are not revoked.",
                       awsActionDialog === "reset"
                         ? "Provider returns to service as soon as the new stack finishes provisioning."
-                        : "Provider stays inactive until you provision or repair infrastructure again.",
+                        : "Add the AWS region again if you want to rebuild this provider.",
                     ].map((line, index) => (
                       <li
                         key={index}
@@ -1499,6 +1528,28 @@ export default function ProviderSettingsPage() {
                 </div>
               )}
 
+              {isAwsProvider && (
+                <div className="mt-4 max-w-xl space-y-2">
+                  <AwsRoleInput
+                    id="aws-default-role"
+                    value={awsRoleSelection}
+                    onChange={setAwsRoleOverride}
+                    disabled={isBootstrappingAws || isAwsActionPending}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Provision/Apply sets the default for new workspaces. Existing workspaces retain
+                    their original role.
+                  </p>
+                  {!isAwsTaskRoleNameValid && (
+                    <p className="text-xs text-destructive">
+                      Enter a valid IAM role ARN or a new role name (up to 64 letters, numbers, or
+                      _+=,.@- characters).
+                    </p>
+                  )}
+                  {awsRoleCheck && <AwsRoleCheckResult check={awsRoleCheck} />}
+                </div>
+              )}
+
               {resolvedProviderTypeId && selectedProviderFields && (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   {selectedProviderFields
@@ -1512,6 +1563,18 @@ export default function ProviderSettingsPage() {
                 </div>
               )}
             </div>
+
+            {isAwsProvider && provider?.providerConfig && providerId && (
+              <AwsAccessProfiles
+                key={providerId}
+                providerId={providerId}
+                profiles={awsAccessProfileSchema
+                  .array()
+                  .parse(provider.providerConfig.config.accessProfiles ?? [])}
+                defaultRoleArn={String(provider.providerConfig.config.taskRoleArn ?? "")}
+                disabled={isBootstrappingAws || isAwsActionPending}
+              />
+            )}
 
             <div className="rounded-2xl border border-border bg-card p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
