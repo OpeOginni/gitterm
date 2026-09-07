@@ -289,6 +289,7 @@ export function GitHubRepositoryBranchField({
 
           {/* searchable repo dropdown (integration mode only) */}
           <PopoverContent
+            portalContainer={repoFieldRef.current}
             align="start"
             sideOffset={4}
             collisionPadding={8}
@@ -432,6 +433,7 @@ export function GitHubRepositoryBranchField({
               </PopoverTrigger>
 
               <PopoverContent
+                portalContainer={repoFieldRef.current}
                 align="start"
                 sideOffset={4}
                 collisionPadding={8}
