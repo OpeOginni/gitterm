@@ -1,3 +1,7 @@
+# OpenCode server image with the AWS CLI preinstalled, for workspaces that use AWS
+# access profiles. Not seeded: build and push it, then register it in Admin -> Images
+# (or pass it as a bring-your-own image) and assign it to the AWS provider.
+# Installing the CLI at workspace start instead costs ~100s of the startup budget.
 FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -10,6 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     npm \
     openssh-server \
     && rm -rf /var/lib/apt/lists/*
+
+RUN case "$(uname -m)" in aarch64|arm64) aws_arch=aarch64 ;; *) aws_arch=x86_64 ;; esac \
+    && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${aws_arch}.zip" -o /tmp/awscliv2.zip \
+    && unzip -q /tmp/awscliv2.zip -d /tmp \
+    && /tmp/aws/install --install-dir /usr/local/aws-cli --bin-dir /usr/local/bin \
+    && rm -rf /tmp/aws /tmp/awscliv2.zip \
+    && aws --version
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.

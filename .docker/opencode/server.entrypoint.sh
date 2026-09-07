@@ -152,19 +152,7 @@ elif [ ! -z "$GITHUB_APP_TOKEN" ]; then
     # Disable interactive credential helper
     git config --global credential.helper ''
 
-    # The helper reads a runtime-only token file so the token never enters this script.
-    cat > "$GIT_CREDENTIAL_HELPER" <<'CRED_HELPER'
-#!/bin/sh
-if [ "$1" = "get" ]; then
-    echo "protocol=https"
-    echo "host=github.com"
-    echo "username=x-access-token"
-    echo "password=$(cat /run/gitterm/github-token 2>/dev/null)"
-fi
-CRED_HELPER
-
-    chmod 700 "$GIT_CREDENTIAL_HELPER"
-    git config --global credential.helper "$GIT_CREDENTIAL_HELPER"
+    git config --global credential.helper /usr/local/bin/gitterm-git-credential
     export GIT_TERMINAL_PROMPT=0
 
     echo "✓ Git configured with GitHub App token"
@@ -172,6 +160,19 @@ CRED_HELPER
 else
     echo "⚠ No GitHub App token available - git operations will be limited"
 fi
+
+########################################
+# STARTUP TIMING
+########################################
+# One line per stage so slow startups can be attributed (clone vs checkout vs
+# setup) instead of guessed at from the three-minute readiness budget.
+GITTERM_SETUP_STARTED=$(date +%s)
+GITTERM_STAGE_STARTED=$GITTERM_SETUP_STARTED
+gitterm_stage_done() {
+    GITTERM_STAGE_NOW=$(date +%s)
+    echo "[gitterm-startup] stage=$1 durationSeconds=$((GITTERM_STAGE_NOW - GITTERM_STAGE_STARTED))"
+    GITTERM_STAGE_STARTED=$GITTERM_STAGE_NOW
+}
 
 ########################################
 # REPOSITORY TRUST (also needed when resuming on EFS)
@@ -209,11 +210,18 @@ if [ ! -f ".initialized" ]; then
             fi
             git -C "$REPO_DIR_NAME" rev-parse --verify HEAD >/dev/null
             echo "Reusing repository from an earlier setup attempt."
+        elif [ "${GITTERM_GIT_FULL_HISTORY:-false}" = "true" ]; then
+            if [ -n "$CLONE_REF" ]; then
+                git clone --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
+            else
+                git clone "$REPO_URL" "$REPO_DIR_NAME"
+            fi
         elif [ -n "$CLONE_REF" ]; then
-            git clone --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
+            git clone --depth 1 --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
         else
-            git clone "$REPO_URL" "$REPO_DIR_NAME"
+            git clone --depth 1 --single-branch "$REPO_URL" "$REPO_DIR_NAME"
         fi
+        gitterm_stage_done clone
 
         # Pin to exact base commit when provided (detached HEAD).
         if [ -n "$REPO_BASE_COMMIT" ]; then
@@ -222,6 +230,7 @@ if [ ! -f ".initialized" ]; then
             git -C "$REPO_DIR_NAME" cat-file -e "${REPO_BASE_COMMIT}^{commit}"
             git -C "$REPO_DIR_NAME" checkout --detach "$REPO_BASE_COMMIT"
             test "$(git -C "$REPO_DIR_NAME" rev-parse HEAD)" = "$REPO_BASE_COMMIT"
+            gitterm_stage_done checkout
         fi
 
         echo "$REPO_OWNER" > .repo_owner
@@ -258,16 +267,19 @@ for (const file of files) {
 NODE
         rm -f "$RUNTIME_DIR/agent-files.json"
         unset AGENT_FILES_BASE64
+        gitterm_stage_done agent-files
     fi
 
     if [ -n "$WORKSPACE_BEFORE_AGENT_COMMAND_BASE64" ]; then
         GITTERM_WORKSPACE_SETUP_STRICT=1 /usr/local/bin/gitterm-workspace-setup "/workspace/$(cat .repo_name)" before-agent
+        gitterm_stage_done before-agent-setup
     fi
 
     if [ "$GITTERM_DIRECT_PROVIDER" = "railway" ] && [ -n "$WORKSPACE_SETUP_COMMAND_BASE64" ]; then
         GITTERM_WORKSPACE_SETUP_STRICT=1 /usr/local/bin/gitterm-workspace-setup "/workspace/$(cat .repo_name)"
     fi
 
+    echo "[gitterm-startup] stage=first-time-setup durationSeconds=$(( $(date +%s) - GITTERM_SETUP_STARTED ))"
     touch .initialized
 fi
 
