@@ -86,6 +86,7 @@ const SERVICE_DEPLOYMENT_STATUS_QUERY = `
           node {
             id
             status
+            deploymentStopped
           }
         }
       }
@@ -95,7 +96,11 @@ const SERVICE_DEPLOYMENT_STATUS_QUERY = `
 
 type ServiceDeploymentStatusResult = {
   service: {
-    deployments: { edges: Array<{ node: { id: string; status: DeploymentStatus } }> };
+    deployments: {
+      edges: Array<{
+        node: { id: string; status: DeploymentStatus; deploymentStopped: boolean };
+      }>;
+    };
   } | null;
 };
 

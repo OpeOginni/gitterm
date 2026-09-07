@@ -28,11 +28,12 @@ const ROUTING_MODE = env.ROUTING_MODE;
 export function railwayDeploymentStatus(
   status: DeploymentStatus | undefined,
   deploymentId?: string,
+  deploymentStopped = false,
 ): WorkspaceStatusResult {
   const deployment = deploymentId ? { externalRunningDeploymentId: deploymentId } : {};
   switch (status) {
     case DeploymentStatus.Success:
-      return { status: "running", ...deployment };
+      return { status: deploymentStopped ? "paused" : "running", ...deployment };
     case DeploymentStatus.Sleeping:
     case DeploymentStatus.Crashed:
     case DeploymentStatus.Failed:
@@ -487,7 +488,11 @@ export class RailwayProvider implements ComputeProvider {
     }
 
     const deployment = result.service.deployments.edges[0]?.node;
-    return railwayDeploymentStatus(deployment?.status, deployment?.id);
+    return railwayDeploymentStatus(
+      deployment?.status,
+      deployment?.id,
+      deployment?.deploymentStopped,
+    );
   }
 
   async createOrGetExposedPortDomain(

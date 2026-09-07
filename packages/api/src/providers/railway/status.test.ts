@@ -21,6 +21,13 @@ describe("Railway deployment status", () => {
     });
   });
 
+  test("maps a stopped successful deployment to paused", () => {
+    expect(railwayDeploymentStatus(DeploymentStatus.Success, "deployment-1", true)).toEqual({
+      status: "paused",
+      externalRunningDeploymentId: "deployment-1",
+    });
+  });
+
   test("resolves the latest deployment when pause receives no stored ID", async () => {
     const provider = new RailwayProvider();
     const stopped: string[] = [];
@@ -28,7 +35,15 @@ describe("Railway deployment status", () => {
       ServiceDeploymentStatus: async () => ({
         service: {
           deployments: {
-            edges: [{ node: { id: "deployment-1", status: DeploymentStatus.Success } }],
+            edges: [
+              {
+                node: {
+                  id: "deployment-1",
+                  status: DeploymentStatus.Success,
+                  deploymentStopped: false,
+                },
+              },
+            ],
           },
         },
       }),
