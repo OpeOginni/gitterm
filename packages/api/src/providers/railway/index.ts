@@ -27,20 +27,22 @@ const ROUTING_MODE = env.ROUTING_MODE;
 
 export function railwayDeploymentStatus(
   status: DeploymentStatus | undefined,
+  deploymentId?: string,
 ): WorkspaceStatusResult {
+  const deployment = deploymentId ? { externalRunningDeploymentId: deploymentId } : {};
   switch (status) {
     case DeploymentStatus.Success:
-      return { status: "running" };
+      return { status: "running", ...deployment };
     case DeploymentStatus.Sleeping:
     case DeploymentStatus.Crashed:
     case DeploymentStatus.Failed:
     case DeploymentStatus.Skipped:
-      return { status: "paused" };
+      return { status: "paused", ...deployment };
     case DeploymentStatus.Removed:
     case DeploymentStatus.Removing:
-      return { status: "terminated" };
+      return { status: "terminated", ...deployment };
     default:
-      return { status: "pending" };
+      return { status: "pending", ...deployment };
   }
 }
 
@@ -97,6 +99,21 @@ export class RailwayProvider implements ComputeProvider {
       );
     }
     return railway;
+  }
+
+  private async resolveDeploymentId(
+    railway: RailwayClient,
+    externalServiceId: string,
+    deploymentId?: string,
+  ): Promise<string> {
+    if (deploymentId) return deploymentId;
+
+    const result = await railway.ServiceDeploymentStatus({ id: externalServiceId });
+    const latestDeploymentId = result.service?.deployments.edges[0]?.node.id;
+    if (!latestDeploymentId) {
+      throw new Error(`No Railway deployment found for service ${externalServiceId}`);
+    }
+    return latestDeploymentId;
   }
 
   async createWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
@@ -397,7 +414,7 @@ export class RailwayProvider implements ComputeProvider {
   }
 
   async pauseWorkspace(
-    _externalId: string,
+    externalId: string,
     _regionIdentifier: string,
     externalRunningDeploymentId?: string,
   ): Promise<void> {
@@ -409,18 +426,20 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error("Railway environment ID is not configured");
     }
 
-    if (!externalRunningDeploymentId) {
-      throw new Error("No running deployment found");
-    }
+    const deploymentId = await this.resolveDeploymentId(
+      railway,
+      externalId,
+      externalRunningDeploymentId,
+    );
 
-    await railway.DeploymentStop({ id: externalRunningDeploymentId }).catch((error) => {
+    await railway.DeploymentStop({ id: deploymentId }).catch((error) => {
       console.error("Railway API Error (DeploymentStop):", error);
       throw new Error(`Railway API Error (DeploymentStop): ${error.message}`);
     });
   }
 
   async resumeWorkspace(
-    _externalId: string,
+    externalId: string,
     _regionIdentifier: string,
     externalRunningDeploymentId?: string,
   ): Promise<void> {
@@ -432,11 +451,13 @@ export class RailwayProvider implements ComputeProvider {
       throw new Error("Railway environment ID is not configured");
     }
 
-    if (!externalRunningDeploymentId) {
-      throw new Error("No running deployment found");
-    }
+    const deploymentId = await this.resolveDeploymentId(
+      railway,
+      externalId,
+      externalRunningDeploymentId,
+    );
 
-    await railway.DeploymentRedeploy({ id: externalRunningDeploymentId }).catch((error) => {
+    await railway.DeploymentRedeploy({ id: deploymentId }).catch((error) => {
       console.error("Railway API Error (DeploymentRedeploy):", error);
       throw new Error(`Railway API Error (DeploymentRedeploy): ${error.message}`);
     });
@@ -465,7 +486,8 @@ export class RailwayProvider implements ComputeProvider {
       return { status: "terminated" };
     }
 
-    return railwayDeploymentStatus(result.service.deployments.edges[0]?.node.status);
+    const deployment = result.service.deployments.edges[0]?.node;
+    return railwayDeploymentStatus(deployment?.status, deployment?.id);
   }
 
   async createOrGetExposedPortDomain(

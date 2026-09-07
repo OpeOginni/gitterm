@@ -290,6 +290,8 @@ export interface PersistentWorkspaceInfo extends WorkspaceInfo {
 export interface WorkspaceStatusResult {
   status: WorkspaceStatus;
   lastActiveAt?: Date;
+  /** Provider deployment currently backing the workspace, when applicable. */
+  externalRunningDeploymentId?: string;
 }
 
 export interface ComputeProvider {

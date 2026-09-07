@@ -566,12 +566,15 @@ export const internalRouter = router({
           and(
             eq(workspace.cloudProviderId, railwayProvider.id),
             eq(workspace.externalInstanceId, serviceId),
-            eq(workspace.status, "pending"),
+            or(
+              eq(workspace.status, "pending"),
+              and(eq(workspace.status, "running"), isNull(workspace.externalRunningDeploymentId)),
+            ),
           ),
           {
             status: "running",
             updatedAt: new Date(input.timestamp),
-            externalRunningDeploymentId: input.resource.deployment?.id,
+            externalRunningDeploymentId: input.resource.deployment?.id ?? input.details?.id,
           },
         );
 

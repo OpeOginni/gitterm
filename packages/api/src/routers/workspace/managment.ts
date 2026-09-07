@@ -2887,7 +2887,15 @@ export const workspaceRouter = router({
                 eq(workspace.id, workspaceRecord.id),
                 or(eq(workspace.status, "paused"), eq(workspace.status, "pending")),
               ),
-              { status: "running", pausedAt: null, lastActiveAt: now, updatedAt: now },
+              {
+                status: "running",
+                pausedAt: null,
+                lastActiveAt: now,
+                updatedAt: now,
+                ...(live.externalRunningDeploymentId
+                  ? { externalRunningDeploymentId: live.externalRunningDeploymentId }
+                  : {}),
+              },
             );
             if (reconciled) {
               WORKSPACE_EVENTS.emitStatus({
@@ -2993,7 +3001,9 @@ export const workspaceRouter = router({
         const live = await statusProvider.getStatus(workspaceRecord.externalInstanceId);
         const shouldUpdate =
           (workspaceRecord.status === "pending" || workspaceRecord.status === "running") &&
-          live.status !== workspaceRecord.status;
+          (live.status !== workspaceRecord.status ||
+            (live.externalRunningDeploymentId !== undefined &&
+              live.externalRunningDeploymentId !== workspaceRecord.externalRunningDeploymentId));
         if (!shouldUpdate) return;
 
         const now = new Date();
@@ -3002,6 +3012,9 @@ export const workspaceRouter = router({
           {
             status: live.status,
             updatedAt: now,
+            ...(live.externalRunningDeploymentId
+              ? { externalRunningDeploymentId: live.externalRunningDeploymentId }
+              : {}),
             ...(live.status === "paused" ? { pausedAt: now } : {}),
             ...(live.status === "terminated" ? { terminatedAt: now } : {}),
           },
