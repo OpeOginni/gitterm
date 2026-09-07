@@ -9,31 +9,13 @@ import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import { awsRoleSelectionSchema, awsTaskRoleArnSchema } from "@gitterm/schema";
 import type { z } from "zod";
 
-export const ROLE_DISCOVERY_ACTIONS = [
-  "iam:GetRole",
-  "iam:ListRolePolicies",
-  "iam:GetRolePolicy",
-  "iam:ListAttachedRolePolicies",
-];
-export const POLICY_DISCOVERY_ACTIONS = ["iam:GetPolicy", "iam:GetPolicyVersion"];
+import {
+  buildRoleDiscoveryPolicy,
+  POLICY_DISCOVERY_ACTIONS,
+  ROLE_DISCOVERY_ACTIONS,
+} from "./task-role-policy";
 
-export function buildRoleDiscoveryPolicy(roleArn: string) {
-  const [, partition, , , accountId] = roleArn.split(":");
-  return {
-    Version: "2012-10-17",
-    Statement: [
-      { Effect: "Allow", Action: ROLE_DISCOVERY_ACTIONS, Resource: roleArn },
-      {
-        Effect: "Allow",
-        Action: POLICY_DISCOVERY_ACTIONS,
-        Resource: [
-          `arn:${partition}:iam::${accountId}:policy/*`,
-          `arn:${partition}:iam::aws:policy/*`,
-        ],
-      },
-    ],
-  };
-}
+export { buildRoleDiscoveryPolicy, POLICY_DISCOVERY_ACTIONS, ROLE_DISCOVERY_ACTIONS };
 
 export function parseTrustPolicy(document: string): { Statement?: any[] | any } {
   try {

@@ -1,7 +1,7 @@
 import type { ComputeProvider } from "./compute";
 import { asciiProvider } from "./ascii";
 import { exeDevProvider } from "./exedev";
-import { awsProvider } from "./aws";
+import { awsProvider, AwsProvider } from "./aws";
 import { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 import { daytonaProvider } from "./daytona";
 import { e2bProvider } from "./e2b";
@@ -79,6 +79,8 @@ export function isProviderImplemented(name: string): boolean {
  */
 export async function getProviderByCloudProviderId(
   cloudProviderKey: string,
+  providerId?: string,
 ): Promise<ComputeProvider> {
+  if (cloudProviderKey === "aws" && providerId) return new AwsProvider(providerId);
   return getProvider(cloudProviderKey);
 }

@@ -253,6 +253,24 @@ function buildTemplate(subnetCount: number): string {
           ManagedPolicyArns: [
             "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
           ],
+          Policies: [
+            {
+              PolicyName: "gitterm-runtime-secrets",
+              PolicyDocument: {
+                Version: "2012-10-17",
+                Statement: [
+                  {
+                    Effect: "Allow",
+                    Action: "secretsmanager:GetSecretValue",
+                    Resource: {
+                      "Fn::Sub":
+                        "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:gitterm/workspaces/*",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
         },
       },
 

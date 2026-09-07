@@ -2,6 +2,22 @@
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "GitTermListRuntimeSecrets",
+      "Effect": "Allow",
+      "Action": "secretsmanager:ListSecrets",
+      "Resource": "*"
+    },
+    {
+      "Sid": "GitTermRuntimeSecrets",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:TagResource",
+        "secretsmanager:DeleteSecret"
+      ],
+      "Resource": "arn:aws:secretsmanager:*:<ACCOUNT_ID>:secret:gitterm/workspaces/*"
+    },
+    {
       "Sid": "GitTermCloudFormation",
       "Effect": "Allow",
       "Action": [
@@ -73,19 +89,49 @@
         "iam:GetRole",
         "iam:SimulatePrincipalPolicy",
         "iam:TagRole",
-        "iam:AttachRolePolicy",
-        "iam:DetachRolePolicy",
         "iam:ListAttachedRolePolicies",
         "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:UpdateAssumeRolePolicy",
         "iam:GetRolePolicy",
-        "iam:ListRolePolicies",
-        "iam:GetPolicy",
-        "iam:GetPolicyVersion"
+        "iam:ListRolePolicies"
       ],
       "Resource": [
         "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-execution-*",
         "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-*"
       ]
+    },
+    {
+      "Sid": "GitTermExecutionRolePolicy",
+      "Effect": "Allow",
+      "Action": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/gitterm-task-execution-*",
+      "Condition": {
+        "ArnEquals": {
+          "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+        }
+      }
+    },
+    {
+      "Sid": "GitTermReadManagedPolicies",
+      "Effect": "Allow",
+      "Action": ["iam:GetPolicy", "iam:GetPolicyVersion"],
+      "Resource": ["arn:aws:iam::<ACCOUNT_ID>:policy/*", "arn:aws:iam::aws:policy/*"]
+    },
+    {
+      "Sid": "GitTermServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": [
+            "ecs.amazonaws.com",
+            "elasticloadbalancing.amazonaws.com",
+            "elasticfilesystem.amazonaws.com"
+          ]
+        }
+      }
     },
     {
       "Sid": "GitTermWorkspaceLifecycle",

@@ -3,6 +3,7 @@ import { ECSClient } from "@aws-sdk/client-ecs";
 import { ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
 import { EFSClient } from "@aws-sdk/client-efs";
 import { EC2Client } from "@aws-sdk/client-ec2";
+import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { AwsProvider, type AwsConfig } from ".";
 import type { WorkspaceConfig } from "../compute";
 
@@ -40,6 +41,19 @@ beforeEach(() => {
   provider = new AwsProvider();
   spyOn(provider, "getConfig").mockResolvedValue(config);
   commands = [];
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(async () => new Response("ok", { status: 200 }), { preconnect: () => {} }),
+  );
+  spyOn(SecretsManagerClient.prototype, "send").mockImplementation(async (command: any) => {
+    commands.push(command);
+    if (command.constructor.name === "CreateSecretCommand")
+      return {
+        ARN: "arn:aws:secretsmanager:eu-central-1:123456789012:secret:gitterm/workspaces/workspace-id-abcdef",
+      };
+    if (command.constructor.name === "ListSecretsCommand") return { SecretList: [] };
+    if (command.constructor.name === "DeleteSecretCommand") return {};
+    throw new Error(`Unexpected secret command ${command.constructor.name}`);
+  });
   service = { status: "ACTIVE", desiredCount: 1, runningCount: 1 };
   spyOn(ECSClient.prototype, "send").mockImplementation(async (command: any) => {
     commands.push(command);
@@ -119,6 +133,157 @@ const commandInput = (name: string) =>
   commands.find((command) => command.constructor.name === name)?.input;
 
 describe("AWS workspace lifecycle", () => {
+  test("persists its handle before readiness and rejects an auth challenge", async () => {
+    const onProvisioned = mock(async () => {});
+    const future = Date.now() + 180001;
+    spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async () => {
+          expect(onProvisioned).toHaveBeenCalledTimes(1);
+          spyOn(Date, "now").mockReturnValue(future);
+          return new Response("unauthorized", { status: 401 });
+        },
+        { preconnect: () => {} },
+      ),
+    );
+    await expect(
+      provider.createWorkspace({
+        workspaceId: "test",
+        userId: "user",
+        imageId: "image",
+        subdomain: "test",
+        onProvisioned,
+      }),
+    ).rejects.toThrow("three-minute");
+    expect(commandInput("DeleteServiceCommand").force).toBe(true);
+    expect(commandInput("DeleteSecretCommand").RecoveryWindowInDays).toBe(7);
+  });
+
+  test("captures ECS diagnostics before reporting a readiness timeout", async () => {
+    service.events = [{ message: "target failed health checks", createdAt: new Date() }];
+    try {
+      await (provider as any).waitForTargetGroupHealthy(
+        "target",
+        config.defaultRegion,
+        Date.now() - 1,
+        "service",
+      );
+      throw new Error("Expected timeout");
+    } catch (error) {
+      expect((error as any).diagnostics.events[0].message).toBe("target failed health checks");
+      expect((error as any).diagnostics.tasks).toHaveLength(1);
+    }
+  });
+
+  test("orphan sweep keeps going after a failed deletion and reports it", async () => {
+    const old = new Date(Date.now() - 60 * 60_000).toISOString();
+    const tags = (workspaceId: string) => [
+      { key: "ManagedBy", value: "gitterm" },
+      { key: "WorkspaceId", value: workspaceId },
+      { key: "CreatedAt", value: old },
+    ];
+    spyOn(ECSClient.prototype, "send").mockImplementation(async (command: any) => {
+      switch (command.constructor.name) {
+        case "ListServicesCommand":
+          return { serviceArns: ["arn:ecs/gitterm-broken", "arn:ecs/gitterm-orphan"] };
+        case "ListTagsForResourceCommand":
+          return { tags: tags(command.input.resourceArn.split("gitterm-")[1]) };
+        case "DescribeServicesCommand":
+          return {
+            services: [{ taskDefinition: "arn:ecs:task-definition/gitterm-workspace-x:1" }],
+          };
+        case "DeleteServiceCommand":
+          if (command.input.service === "arn:ecs/gitterm-broken") throw new Error("AccessDenied");
+          return {};
+        case "DeregisterTaskDefinitionCommand":
+          return {};
+        case "ListTaskDefinitionsCommand":
+          return { taskDefinitionArns: [] };
+        default:
+          throw new Error(`Unexpected ECS command ${command.constructor.name}`);
+      }
+    });
+    spyOn(ElasticLoadBalancingV2Client.prototype, "send").mockImplementation(
+      async (command: any) => {
+        if (command.constructor.name === "DescribeRulesCommand") return { Rules: [] };
+        if (command.constructor.name === "DescribeTargetGroupsCommand") return { TargetGroups: [] };
+        throw new Error(`Unexpected ALB command ${command.constructor.name}`);
+      },
+    );
+    spyOn(EFSClient.prototype, "send").mockImplementation(async () => ({ AccessPoints: [] }));
+
+    const result = await provider.sweepOrphanedResources(["active"], config.defaultRegion);
+
+    expect(result.servicesDeleted).toBe(1);
+    expect(result.taskDefinitionsDeregistered).toBe(1);
+    expect(result.failures).toEqual([
+      { resource: "arn:ecs/gitterm-broken", reason: expect.stringContaining("AccessDenied") },
+    ]);
+  });
+
+  test("a task that cannot start fails fast with the ECS reason", async () => {
+    const stoppedReason =
+      "ResourceInitializationError: unable to pull secrets or registry auth: User: arn:aws:sts::123456789012:assumed-role/gitterm-task-execution-eu-central-1/abc is not authorized to perform: secretsmanager:GetSecretValue on resource: x";
+    spyOn(ElasticLoadBalancingV2Client.prototype, "send").mockImplementation(async () => ({
+      TargetHealthDescriptions: [],
+    }));
+    spyOn(ECSClient.prototype, "send").mockImplementation(async (command: any) => {
+      if (command.constructor.name === "ListTasksCommand")
+        return { taskArns: command.input.desiredStatus === "STOPPED" ? ["task"] : [] };
+      if (command.constructor.name === "DescribeTasksCommand")
+        return { tasks: [{ taskArn: "task", stopCode: "TaskFailedToStart", stoppedReason }] };
+      throw new Error(`Unexpected ECS command ${command.constructor.name}`);
+    });
+    const started = Date.now();
+    await expect(
+      (provider as any).waitForTargetGroupHealthy(
+        "target",
+        config.defaultRegion,
+        Date.now() + 60_000,
+        "arn:ecs/gitterm-workspace-id",
+      ),
+    ).rejects.toMatchObject({
+      name: "AwsPermissionError",
+      action: "secretsmanager:GetSecretValue",
+      message: expect.stringContaining("for gitterm-task-execution-eu-central-1"),
+    });
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  test("a denied AWS action surfaces as an actionable permission error", async () => {
+    spyOn(SecretsManagerClient.prototype, "send").mockImplementation(async () => {
+      throw Object.assign(
+        new Error(
+          "User: arn:aws:iam::123456789012:user/gitterm is not authorized to perform: secretsmanager:CreateSecret on resource: gitterm/workspaces/workspace-id",
+        ),
+        { name: "AccessDeniedException" },
+      );
+    });
+    const attempt = provider.createWorkspace({
+      workspaceId: handle.workspaceId,
+      userId: "user",
+      imageId: "registry/image:latest",
+      subdomain: "demo",
+      regionIdentifier: config.defaultRegion,
+      environmentVariables: { WORKSPACE_AUTH_TOKEN: "token" } as any,
+    });
+    await expect(attempt).rejects.toMatchObject({
+      name: "AwsPermissionError",
+      action: "secretsmanager:CreateSecret",
+    });
+    await expect(attempt).rejects.toThrow("Re-apply the generated deployment policy");
+    expect(commandInput("DeleteTargetGroupCommand")).toBeDefined();
+  });
+
+  test("termination does not hide AWS deletion failures", async () => {
+    spyOn(ECSClient.prototype, "send").mockImplementation(async () => {
+      throw new Error("AccessDenied");
+    });
+    await expect(provider.terminateWorkspace(JSON.stringify(handle))).rejects.toThrow(
+      "AccessDenied",
+    );
+  });
+
   test.each([false, true])(
     "provisions current container payload (persistent=%s)",
     async (persistent) => {
@@ -147,14 +312,18 @@ describe("AWS workspace lifecycle", () => {
       expect(task.cpu).toBe("1024");
       expect(task.memory).toBe("2048");
       expect(task.runtimePlatform.cpuArchitecture).toBe("ARM64");
-      expect(task.containerDefinitions[0].environment).toContainEqual({
+      expect(task.containerDefinitions[0].environment).toBeUndefined();
+      expect(task.containerDefinitions[0].secrets).toContainEqual({
         name: "AGENT_FILES_BASE64",
-        value: "encoded-files",
+        valueFrom:
+          "arn:aws:secretsmanager:eu-central-1:123456789012:secret:gitterm/workspaces/workspace-id-abcdef:AGENT_FILES_BASE64::",
       });
-      expect(task.containerDefinitions[0].environment).toContainEqual({
-        name: "WORKSPACE_BEFORE_AGENT_COMMAND_BASE64",
-        value: "setup",
-      });
+      expect(JSON.stringify(task)).not.toContain("encoded-files");
+      expect(JSON.parse(commandInput("CreateSecretCommand").SecretString).AGENT_FILES_BASE64).toBe(
+        "encoded-files",
+      );
+      expect(commandInput("CreateServiceCommand").healthCheckGracePeriodSeconds).toBe(180);
+      expect(commandInput("CreateTargetGroupCommand").HealthCheckIntervalSeconds).toBe(5);
       expect(task.containerDefinitions[0].portMappings).toContainEqual({
         containerPort: 22,
         protocol: "tcp",

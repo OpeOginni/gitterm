@@ -7,7 +7,7 @@ import { bootstrapAwsProvider, deleteAwsProviderInfrastructure } from "./setup";
 import { resolveAwsTaskRoleName } from "./task-role";
 
 const input = { accessKeyId: "test", secretAccessKey: "test", defaultRegion: "eu-central-1" };
-const roleArn = "arn:aws:iam::123456789012:role/demo/PresentationRole";
+const roleArn = "arn:aws:iam::123456789012:role/demo/gitterm-task-presentation";
 const outputs = {
   ClusterArn: "cluster",
   AlbDnsName: "alb.example.com",
@@ -71,8 +71,8 @@ afterEach(() => mock.restore());
 describe("AWS setup", () => {
   test("validates names without silently renaming a custom role", () => {
     expect(resolveAwsTaskRoleName(input.defaultRegion)).toBe("gitterm-task-eu-central-1");
-    expect(resolveAwsTaskRoleName(input.defaultRegion, "  Demo+=,.@_-123  ")).toBe(
-      "Demo+=,.@_-123",
+    expect(resolveAwsTaskRoleName(input.defaultRegion, "  gitterm-task-Demo+=,.@_-123  ")).toBe(
+      "gitterm-task-Demo+=,.@_-123",
     );
     for (const invalid of [roleArn, "path/role", "spaces inside", "x".repeat(65)]) {
       expect(() => resolveAwsTaskRoleName(input.defaultRegion, invalid)).toThrow();
@@ -80,12 +80,15 @@ describe("AWS setup", () => {
   });
 
   test("reuses a custom role and passes its actual ARN through CloudFormation and config", async () => {
-    const result = await bootstrapAwsProvider({ ...input, taskRoleName: " PresentationRole " });
+    const result = await bootstrapAwsProvider({
+      ...input,
+      taskRoleName: " gitterm-task-presentation ",
+    });
     expect(result.config.taskRoleArn).toBe(roleArn);
     const iamCalls = (IAMClient.prototype.send as any).mock.calls.map(
       ([command]: any[]) => command,
     );
-    expect(iamCalls[0].input.RoleName).toBe("PresentationRole");
+    expect(iamCalls[0].input.RoleName).toBe("gitterm-task-presentation");
     expect(iamCalls.some((command: any) => command.constructor.name === "CreateRoleCommand")).toBe(
       false,
     );
@@ -108,7 +111,7 @@ describe("AWS setup", () => {
       spyOn(IAMClient.prototype, "send").mockImplementation(async (command: any) => {
         if (command.constructor.name === "GetRoleCommand") throw awsError(name);
         if (command.constructor.name === "CreateRoleCommand") {
-          expect(command.input.RoleName).toBe("DemoRole");
+          expect(command.input.RoleName).toBe("gitterm-task-demo");
           expect(
             JSON.parse(command.input.AssumeRolePolicyDocument).Statement[0].Principal.Service,
           ).toBe("ecs-tasks.amazonaws.com");
@@ -116,7 +119,7 @@ describe("AWS setup", () => {
         }
         return {};
       });
-      await bootstrapAwsProvider({ ...input, taskRoleName: "DemoRole" });
+      await bootstrapAwsProvider({ ...input, taskRoleName: "gitterm-task-demo" });
     },
   );
 

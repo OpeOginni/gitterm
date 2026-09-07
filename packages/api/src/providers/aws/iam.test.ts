@@ -10,7 +10,7 @@ import {
   POLICY_DISCOVERY_ACTIONS,
 } from "./iam";
 
-const roleArn = "arn:aws:iam::123456789012:role/team/WorkspaceRole";
+const roleArn = "arn:aws:iam::123456789012:role/team/gitterm-task-workspace";
 const config = { accessKeyId: "test", secretAccessKey: "test", defaultRegion: "eu-central-1" };
 const trust = {
   Version: "2012-10-17",
@@ -98,7 +98,7 @@ describe("AWS task-role capability discovery", () => {
     const result = await prepareAwsTaskRole(config, { mode: "existing", arn: roleArn });
     expect(result.discovery).toBe("available");
     expect(result.warnings.join(" ")).toContain("not proof of effective access");
-    expect(calls[0].input.RoleName).toBe("WorkspaceRole");
+    expect(calls[0].input.RoleName).toBe("gitterm-task-workspace");
     expect(calls.map((command) => command.constructor.name)).toEqual([
       "GetRoleCommand",
       "SimulatePrincipalPolicyCommand",
@@ -179,7 +179,10 @@ describe("AWS task-role capability discovery", () => {
   });
 
   test("creation adds only trust and discovery; never reuses an existing name", async () => {
-    const result = await prepareAwsTaskRole(config, { mode: "create", name: "WorkspaceRole" });
+    const result = await prepareAwsTaskRole(config, {
+      mode: "create",
+      name: "gitterm-task-workspace",
+    });
     expect(calls.map((command) => command.constructor.name)).toEqual([
       "CreateRoleCommand",
       "PutRolePolicyCommand",
@@ -191,7 +194,7 @@ describe("AWS task-role capability discovery", () => {
       throw new Error("EntityAlreadyExists");
     });
     await expect(
-      prepareAwsTaskRole(config, { mode: "create", name: "WorkspaceRole" }),
+      prepareAwsTaskRole(config, { mode: "create", name: "gitterm-task-workspace" }),
     ).rejects.toThrow("EntityAlreadyExists");
   });
 
@@ -201,7 +204,7 @@ describe("AWS task-role capability discovery", () => {
       throw new Error("AccessDenied");
     });
     await expect(
-      prepareAwsTaskRole(config, { mode: "create", name: "WorkspaceRole" }),
+      prepareAwsTaskRole(config, { mode: "create", name: "gitterm-task-workspace" }),
     ).rejects.toThrow(`Role ${roleArn} was created`);
   });
 });

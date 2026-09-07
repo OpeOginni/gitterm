@@ -2,7 +2,6 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and, ne } from "@gitterm/db";
 import { cloudProvider, machineProfile, region } from "@gitterm/db/schema/cloud";
-import { workspaceSetupCommandDefault } from "@gitterm/db/schema/workspace-setup";
 import { providerConfig, providerType } from "@gitterm/db/schema/provider-config";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { adminProcedure, router } from "../..";
@@ -11,10 +10,10 @@ import { bootstrapAwsProvider, deleteAwsProviderInfrastructure } from "../../pro
 import { awsTaskRoleNameSchema } from "../../providers/aws/task-role";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { getProviderConfigService } from "../../service/config/provider-config";
-import { AWS_CLI_SETUP_COMMAND } from "../../service/workspace-setup";
 import { awsRoleSelectionSchema } from "@gitterm/schema";
 import { prepareAwsTaskRole, inspectAwsTaskRole } from "../../providers/aws/iam";
 import { getAwsAccessProfiles } from "../../providers/aws/access-profiles";
+import { buildAwsDeploymentPolicy } from "../../providers/aws/deployment-policy";
 
 const AWS_REGION_METADATA: Record<string, { name: string; location: string; flag: string }> = {
   "us-east-1": {
@@ -162,6 +161,35 @@ async function loadAwsProfileConfig(providerId: string) {
 }
 
 export const awsRouter = router({
+  deploymentPolicy: adminProcedure
+    .input(
+      z.object({
+        accountId: z.string().regex(/^\d{12}$/),
+        region: z
+          .string()
+          .refine((value) => value in AWS_REGION_METADATA, "Select a supported AWS region"),
+        role: awsRoleSelectionSchema,
+      }),
+    )
+    .query(({ input }) => {
+      const roleArn =
+        input.role.mode === "existing"
+          ? input.role.arn
+          : `arn:aws:iam::${input.accountId}:role/${input.role.name || `gitterm-task-${input.region}`}`;
+      if (!roleArn.startsWith(`arn:aws:iam::${input.accountId}:role/`)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The task role must belong to this AWS account.",
+        });
+      }
+      return {
+        policy: JSON.stringify(
+          buildAwsDeploymentPolicy(input.accountId, input.region, roleArn, input.role.mode),
+          null,
+          2,
+        ),
+      };
+    }),
   addAccessProfile: adminProcedure
     .input(
       z.object({
@@ -342,12 +370,6 @@ export const awsRouter = router({
         isEnabled: true,
         createdAt: new Date(),
         updatedAt: new Date(),
-      });
-
-      await db.insert(workspaceSetupCommandDefault).values({
-        cloudProviderId: created.id,
-        agentTypeId: null,
-        commands: [AWS_CLI_SETUP_COMMAND],
       });
 
       await db.insert(machineProfile).values({

@@ -8,5 +8,6 @@
     "composite": true,
     "jsx": "react-jsx",
     "lib": ["ESNext", "DOM"]
-  }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "src/**/*.json"]
 }

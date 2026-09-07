@@ -25,9 +25,56 @@ Requirements:
 
 If you would rather wire up the cluster, networking, IAM roles, and ALB yourself, manual setup is also supported. See the field list under [Provider Config Fields](#provider-config-fields) and [Required AWS Resources For Manual Setup](#required-aws-resources-for-manual-setup).
 
+### Control-plane credentials and deployment policy
+
+In the AWS provider form, open **Setup & IAM policy**, enter your 12-digit AWS account ID,
+and copy or download the generated JSON. The generator uses `iam-user-policy.json` as its
+source and scopes regional operations to the provider region, CloudFormation to its exact
+stack name, and role management/PassRole to the execution role and selected task role.
+Changing the region or task role requires updating the attached policy.
+
+**After upgrading GitTerm, regenerate and re-apply this policy, then re-run AWS setup.** New
+releases can require new permissions; for example, workspace environment now lives in Secrets
+Manager, so the IAM user needs the `GitTermRuntimeSecrets` statements and the CloudFormation
+stack must grant the execution role `secretsmanager:GetSecretValue`. A missing permission fails
+workspace creation with an "AWS denied <action>" error that names the denied action.
+
+1. Create a dedicated IAM user without console access. Never use root credentials.
+2. Create a customer-managed IAM policy from the generated JSON and attach it to that user.
+3. Create an access key for an application outside AWS and enter its ID and secret in GitTerm.
+4. Ensure a default VPC has public subnets in at least two availability zones, then provision.
+
+These are control-plane credentials, not workspace credentials. Keep them out of workspaces
+and repositories, rotate them regularly, and restrict access to the provider administration UI.
+Workspaces receive temporary credentials through their ECS task role instead.
+
+The policy covers provisioning, updates, deletion, and ongoing workspace management. It
+allows creation of the ECS, load-balancing, and EFS service-linked roles for fresh accounts.
+Managed policy attachment is limited to the standard ECS execution policy; application
+permissions should be managed separately by an administrator in AWS.
+
+This is a deployment baseline, not a certified least-privilege policy. Some regional resource
+operations use wildcard resources, managed-policy reads are account-wide, and inline IAM
+policy writes on the selected roles are powerful. Use a dedicated AWS account where possible;
+review permissions boundaries and organization policies with your AWS administrator.
+Local tests validate policy generation, not successful deployment in a live AWS account.
+
 AWS uses ECS task state, so it does not need an inbound webhook.
 
 ### Custom task roles
+
+Newly created or imported workspace roles must be named `gitterm-task-<suffix>` (64 characters
+maximum including the prefix). IAM paths on imported roles are supported. The
+`gitterm-task-execution-` namespace is reserved and rejected for workspace role selections.
+The UI supplies the fixed prefix when creating a role. The same validation applies to access
+profile registration and legacy task-role-name inputs.
+
+Existing stored roles and running workspaces are not renamed or migrated automatically.
+Execution roles keep their deployed names to avoid CloudFormation replacement. When selecting
+a different role, use the new namespace. Generated policies continue to use exact role ARNs
+rather than granting blanket access to every prefixed role. For imported task roles they grant
+only inspection and PassRole, not creation, editing or deletion. Update the control-plane policy
+when adding another access profile's role; the prefix alone does not grant permission to use it.
 
 Select a task-role mode in the provider's admin configuration and choose **Provision** or **Apply**:
 
@@ -38,9 +85,12 @@ Select a task-role mode in the provider's admin configuration and choose **Provi
   belongs to the provider's AWS account and explicitly trusts `ecs-tasks.amazonaws.com`.
   It does **not** modify trust or permissions. Trust conditions still require admin review.
 
-No policy JSON is entered into GitTerm. Use the AWS Console link to attach application permissions
-or manage the role using your infrastructure tooling. GitTerm does not grant S3, Lambda, Bedrock,
-or IAM write access by default.
+No policy JSON is entered into GitTerm. **View role permissions** (next to each task-role input and
+on every permission check) opens a dialog with the read-only baseline policy for the selected role
+and optional add-ons, currently Amazon Bedrock model invocation, that can be toggled on before
+copying the JSON into IAM. The builders live in `task-role-policy.ts` and are shared with the UI.
+Attach further application permissions (S3, Lambda, databases) in IAM or with your infrastructure
+tooling. GitTerm does not grant S3, Lambda, Bedrock, or IAM write access by default.
 
 - Add the custom role's exact ARN to **both** `GitTermRoleManagement` and `GitTermPassRole` in the
   control-plane policy samples. Keep the task execution role entry. Do not broaden either to all roles.
@@ -94,6 +144,22 @@ await client.workspaces.create({
 ```
 
 The dashboard/legacy create endpoint uses `awsAccessProfileId` for the same selection.
+
+### AWS CLI in workspaces
+
+The default server images do not include the AWS CLI, and GitTerm no longer installs it at workspace
+start: that download ran as a blocking before-agent step and consumed ~100 seconds of the three-minute
+startup budget. Workspaces that need the CLI use a dedicated image instead:
+
+1. Build and push `.docker/Opencode.Server.AWS.Dockerfile` (the `opencode-server-aws` entry in the
+   agent image workflow publishes it as `gitterm-opencode-server-aws`).
+2. Register it in **Admin → Images** for the OpenCode agent with `aws` provider metadata only
+   (`cpu`, `memory`, `containerPort: 7681`, `healthCheckPath: "/"`). Several images may exist per
+   agent; on each provider the image that supports the fewest providers wins, so this AWS-only image
+   takes precedence over the general server image on AWS and nowhere else. Bring-your-own images
+   passed at workspace creation still override the catalog.
+
+Do not add the CLI installer as a provider setup default; anything in that list blocks readiness.
 
 ### Read-only capability discovery baseline
 
@@ -524,11 +590,21 @@ The sweep does two things:
 
 The sweep can remove orphaned:
 
+- Secrets Manager runtime secrets
 - ECS services
 - ECS task definitions
 - ALB listener rules
 - ALB target groups
 - EFS access points
+
+A resource is only treated as orphaned when it carries GitTerm tags, its `WorkspaceId` is absent from
+the provider's non-terminated workspaces, and its `CreatedAt` tag is older than the ten-minute orphan
+grace period. Workspaces are inserted as `pending` before any AWS call, so in-flight provisioning is
+never mistaken for an orphan. Expired provisioning leases are moved to `terminated` first so their
+resources are retried through `terminateWorkspace(...)`.
+
+One failed deletion does not abort the sweep and is not counted as a deletion; it is reported in
+`cleanupFailures` and retried next pass.
 
 This is the safety net that keeps leaked AWS resources from accumulating.
 
@@ -602,6 +678,7 @@ The control-plane credentials configured in GitTerm must be able to manage:
 - ALB target groups and listener rules
 - EFS access points when persistence is enabled
 - EC2 describe calls for VPC, subnet, and ENI lookup
+- Secrets Manager secrets under `gitterm/workspaces/*` (create, tag, delete, list)
 - CloudFormation for simple setup
 - `iam:PassRole` for the configured task execution and task roles
 
@@ -647,8 +724,9 @@ GitTerm does not attach application permissions automatically.
   deletion does not erase its directory; shared-stack deletion removes the filesystem.
 - Exposed-port IPs refresh on GitTerm resume; unexpected ECS task replacement still needs reconciliation.
 - Termination is user-visible immediately in GitTerm, but AWS resource cleanup is asynchronous in the background.
-- Some cleanup failures are currently swallowed and sweep counters can overstate successful deletion.
-  Inspect AWS resources before claiming complete cleanup; ALB/EFS can keep incurring charges after tasks stop.
+- Sweep counters only count confirmed deletions. Failed deletions are returned as `cleanupFailures`
+  (resource identifier plus reason), logged, and retried on the next sweep. ALB/EFS can keep incurring
+  charges until those retries succeed.
 - Stack deletion currently retries `DELETE_FAILED` using CloudFormation force-delete, which can retain
   failed resources. Check for retained resources before rebuilding or declaring cleanup complete.
 
@@ -659,8 +737,8 @@ Bedrock model access, or live provisioning. Before presenting:
 
 1. Provision/Apply in a dedicated demo account. Confirm the role ARN and attach only the permissions
    needed for the demo. For custom names, update both control-plane IAM statements described above.
-2. Use a current GitTerm container image and a persistent workspace if demonstrating pause/resume.
-   Wait for setup completion (`aws --version` should work); AWS CLI installation is an after-agent setup command.
+2. Use the AWS CLI image (see "AWS CLI in workspaces") and a persistent workspace if demonstrating
+   pause/resume. `aws --version` should work as soon as the workspace opens.
 3. Inside the workspace, run `aws sts get-caller-identity` and confirm the expected assumed role;
    verify `$AWS_REGION` and the role in `~/.config/opencode/AGENTS.md`. Do not display credential endpoints or keys.
 4. Run a bounded task such as creating a demo-prefixed S3 object or deploying a small Lambda,

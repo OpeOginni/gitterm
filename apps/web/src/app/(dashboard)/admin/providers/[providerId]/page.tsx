@@ -48,6 +48,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { strToU8, zipSync } from "fflate";
 import { awsRoleSelectionSchema, awsAccessProfileSchema } from "@gitterm/schema";
+import { AwsSetupGuide } from "../_components/aws-setup-guide";
 import {
   AwsAccessProfiles,
   AwsRoleInput,
@@ -811,8 +812,8 @@ export default function ProviderSettingsPage() {
           <Input
             id={field.fieldName}
             value={pinnedRegion?.externalRegionIdentifier ?? value}
-            readOnly
-            className="cursor-default"
+            disabled
+            className="disabled:cursor-not-allowed disabled:opacity-60"
           />
           {pinnedRegion && (
             <p className="text-xs text-muted-foreground">
@@ -860,6 +861,9 @@ export default function ProviderSettingsPage() {
   const awsAccessKeyId = String(configForm.accessKeyId ?? "").trim();
   const awsSecretAccessKey = String(configForm.secretAccessKey ?? "").trim();
   const awsDefaultRegion = String(configForm.defaultRegion ?? "").trim();
+  const awsAccountId = /^arn:aws:iam::(\d{12}):/.exec(
+    String(provider?.providerConfig?.config.taskRoleArn ?? ""),
+  )?.[1];
   const awsRoleSelection: AwsRoleSelection =
     awsRoleOverride ??
     (configForm.taskRoleArn
@@ -1508,6 +1512,8 @@ export default function ProviderSettingsPage() {
                 </div>
               )}
 
+              {isAwsProvider && <AwsSetupGuide region={awsDefaultRegion} role={awsRoleSelection} />}
+
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="config-name">Configuration Name</Label>
@@ -1535,10 +1541,10 @@ export default function ProviderSettingsPage() {
                     value={awsRoleSelection}
                     onChange={setAwsRoleOverride}
                     disabled={isBootstrappingAws || isAwsActionPending}
+                    accountId={awsAccountId}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Provision/Apply sets the default for new workspaces. Existing workspaces retain
-                    their original role.
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Applied on provision/apply · New workspaces only. Existing roles stay unchanged.
                   </p>
                   {!isAwsTaskRoleNameValid && (
                     <p className="text-xs text-destructive">

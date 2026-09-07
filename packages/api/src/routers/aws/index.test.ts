@@ -14,7 +14,7 @@ const savedConfig = {
   accessKeyId: "test",
   secretAccessKey: "test",
   defaultRegion: "eu-central-1",
-  taskRoleArn: "arn:aws:iam::123456789012:role/team/PresentationRole",
+  taskRoleArn: "arn:aws:iam::123456789012:role/team/gitterm-task-presentation",
 };
 const caller = () => awsRouter.createCaller({ session: { user: { role: "admin" } } } as any);
 let deleted: unknown[];
@@ -84,7 +84,7 @@ test("failed AWS deletion does not remove database records", async () => {
   expect(updated).toEqual([]);
 });
 
-test.each([undefined, "CustomRole", ""])(
+test.each([undefined, "gitterm-task-custom", ""])(
   "bootstrap preserves or explicitly replaces the role (%s)",
   async (taskRoleName) => {
     const bootstrap = spyOn(setup, "bootstrapAwsProvider").mockRejectedValue(
@@ -93,7 +93,9 @@ test.each([undefined, "CustomRole", ""])(
     await expect(caller().bootstrap({ providerId, taskRoleName })).rejects.toThrow(
       "stop before provisioning",
     );
-    expect(bootstrap.mock.calls[0]?.[0].taskRoleName).toBe(taskRoleName ?? "PresentationRole");
+    expect(bootstrap.mock.calls[0]?.[0].taskRoleName).toBe(
+      taskRoleName ?? "gitterm-task-presentation",
+    );
     expect(bootstrap.mock.calls[0]?.[0].defaultRegion).toBe("eu-central-1");
   },
 );
@@ -107,9 +109,9 @@ test("invalid task role names are rejected before provisioning", async () => {
 test("non-admin sessions cannot bootstrap AWS roles", async () => {
   const bootstrap = spyOn(setup, "bootstrapAwsProvider");
   const userCaller = awsRouter.createCaller({ session: { user: { role: "user" } } } as any);
-  await expect(userCaller.bootstrap({ providerId, taskRoleName: "CustomRole" })).rejects.toThrow(
-    "Admin access required",
-  );
+  await expect(
+    userCaller.bootstrap({ providerId, taskRoleName: "gitterm-task-custom" }),
+  ).rejects.toThrow("Admin access required");
   expect(bootstrap).not.toHaveBeenCalled();
 });
 

@@ -235,6 +235,8 @@ export interface WorkspaceProvisioningSpec {
 }
 
 export interface WorkspaceConfig {
+  /** Persist provider handles before readiness so failed attempts remain recoverable. */
+  onProvisioned?: (info: WorkspaceInfo) => Promise<void>;
   /** Server-resolved role from the selected provider's approved access profiles. */
   awsTaskRoleArn?: string;
   workspaceId: string;

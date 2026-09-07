@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { AwsPermissionError, AwsWorkspaceStartupError } from "../../providers/aws/lifecycle";
 import { getAwsAccessProfiles, resolveAwsWorkspaceRole } from "../../providers/aws/access-profiles";
 import z from "zod";
 import {
@@ -29,6 +30,7 @@ import {
   getProviderByCloudProviderId,
   isProviderImplemented,
   type PersistentWorkspaceInfo,
+  type WorkspaceInfo,
 } from "../../providers";
 import {
   BeforeAgentSetupError,
@@ -109,12 +111,11 @@ import {
 import {
   buildProjectPathHint,
   normalizeProvidersshAccessSupport,
-  pickWorkspaceImage,
   WORKSPACE_PROFILES,
   type WorkspaceProfile,
 } from "../../providers/ssh-access";
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
-import { imageSupportsProvider } from "../../providers/image-compat";
+import { imageSupportsProvider, pickImageForProvider } from "../../providers/image-compat";
 import { RAILWAY_RUNTIME_PORT } from "../../providers/railway";
 import { applyMachineProfile } from "../../providers/machine-profile";
 import type { CloudProviderType, ImageProviderMetadata } from "@gitterm/db/schema/cloud";
@@ -1099,7 +1100,7 @@ export const workspaceRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Cloud provider not found" });
       }
 
-      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey, provider.id);
 
       if (!computeProvider.execCommand) {
         throw new TRPCError({
@@ -1196,7 +1197,10 @@ export const workspaceRouter = router({
       }
 
       try {
-        const computeProvider = await getProviderByCloudProviderId(providerRecord.providerKey);
+        const computeProvider = await getProviderByCloudProviderId(
+          providerRecord.providerKey,
+          providerRecord.id,
+        );
         const access = await computeProvider.getWorkspaceSSHAccess({
           workspaceId: workspaceRecord.id,
           userId,
@@ -2097,10 +2101,7 @@ export const workspaceRouter = router({
           });
         }
 
-        const compatibleImageRecords = imageRecords.filter((img) =>
-          imageSupportsProvider(providerKey, img.providerMetadata as ImageProviderMetadata | null),
-        );
-        const imageRecord = pickWorkspaceImage(compatibleImageRecords, workspaceProfile);
+        const imageRecord = pickImageForProvider(imageRecords, providerKey);
 
         if (!imageRecord) {
           throw new TRPCError({
@@ -2607,7 +2608,10 @@ export const workspaceRouter = router({
         }
 
         // Get compute provider
-        const computeProvider = await getProviderByCloudProviderId(providerKey);
+        const computeProvider = await getProviderByCloudProviderId(
+          providerKey,
+          input.cloudProviderId,
+        );
         let imageProviderMetadata = applyMachineProfile(
           imageRecord.providerMetadata,
           providerKey,
@@ -2664,12 +2668,48 @@ export const workspaceRouter = router({
         const initialWorkspaceStatus =
           cloudProviderRecord.creationSettlement === "immediate" ? "running" : "pending";
 
+        // Reserve AWS identity before any remote resources exist. Reconciliation must
+        // see in-flight workspaces, and retries must not create a second attempt.
+        if (providerKey === "aws") {
+          await db.insert(workspace).values({
+            id: workspaceId,
+            externalInstanceId: "",
+            userId,
+            imageId: imageRecord.id,
+            cloudProviderId: input.cloudProviderId,
+            regionId: regionRecord?.id,
+            gitIntegrationId: input.gitIntegrationId ?? null,
+            repositoryUrl: input.repo ?? null,
+            domain,
+            subdomain,
+            status: "pending",
+            metadata: {
+              awsProvisioningLeaseExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+            },
+            startedAt: new Date(),
+            updatedAt: new Date(),
+            persistent: effectivePersistent,
+            idempotencyKey: input.idempotencyKey ?? null,
+          });
+        }
+
+        const onProvisioned =
+          providerKey === "aws"
+            ? async (info: WorkspaceInfo) => {
+                await db
+                  .update(workspace)
+                  .set({ externalInstanceId: info.externalServiceId, updatedAt: new Date() })
+                  .where(eq(workspace.id, workspaceId));
+              }
+            : undefined;
+
         // Create workspace via compute provider
         const workspaceInfo = await workspaceCreateLogger.step(
           `provision-workspace provider=${providerKey} persistent=${effectivePersistent}`,
           () =>
             effectivePersistent
               ? computeProvider.createPersistentWorkspace({
+                  onProvisioned,
                   workspaceId,
                   userId,
                   imageId: providerImageId,
@@ -2686,6 +2726,7 @@ export const workspaceRouter = router({
                   persistent: effectivePersistent,
                 })
               : computeProvider.createWorkspace({
+                  onProvisioned,
                   workspaceId,
                   userId,
                   imageId: providerImageId,
@@ -2709,55 +2750,60 @@ export const workspaceRouter = router({
         }
 
         // Save workspace to database
-        const [newWorkspace] = await db
-          .insert(workspace)
-          .values({
-            id: workspaceId,
-            externalInstanceId: workspaceInfo.externalServiceId,
-            userId,
-            imageId: imageRecord.id,
-            cloudProviderId: input.cloudProviderId,
-            machineProfileId: selectedMachineProfile?.id ?? null,
-            launchProfileId: null,
-            gitIntegrationId: input.gitIntegrationId ?? null,
-            // Persist resolved defaults too, so later runs validate the exact injected credentials.
-            modelCredentialIds: credentials
-              .map((credential) => credential.credentialId)
-              .filter((id): id is string => id !== null),
-            inlineModelProviders: credentials
-              .filter((credential) => credential.credentialId === null)
-              .map((credential) => credential.logicalProviderKey),
-            setupRequired: setupRequested,
-            persistent: effectivePersistent,
-            regionId: regionRecord?.id,
-            repositoryUrl: input.repo ?? null,
-            repositoryBranch: input.branch ?? null,
-            repositoryBaseCommit: resolvedBaseCommit,
-            repositoryCheckoutRef: resolvedCheckoutRef,
-            domain,
-            subdomain,
-            serverOnly: agentTypeRecord.serverOnly,
-            workspaceProfile,
-            editorAccessEnabled,
-            editorTarget: null,
-            sshConnection: null,
-            serverPassword: encryptedServerPassword ?? null,
-            upstreamUrl: workspaceInfo.upstreamUrl,
-            status: initialWorkspaceStatus,
-            hostingType: isLocal ? "local" : "cloud",
-            name: input.name || subdomain,
-            metadata: input.metadata ?? {},
-            opencodeApi: input.opencode?.api ?? DEFAULT_OPENCODE_API,
-            customImage,
-            autoTerminateAt: input.autoTerminateAfterMs
-              ? new Date(Date.now() + input.autoTerminateAfterMs)
-              : null,
-            idempotencyKey: input.idempotencyKey ?? null,
-            startedAt: new Date(workspaceInfo.serviceCreatedAt),
-            lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),
-            updatedAt: new Date(workspaceInfo.serviceCreatedAt),
-          })
-          .returning();
+        const workspaceValues = {
+          id: workspaceId,
+          externalInstanceId: workspaceInfo.externalServiceId,
+          userId,
+          imageId: imageRecord.id,
+          cloudProviderId: input.cloudProviderId,
+          machineProfileId: selectedMachineProfile?.id ?? null,
+          launchProfileId: null,
+          gitIntegrationId: input.gitIntegrationId ?? null,
+          // Persist resolved defaults too, so later runs validate the exact injected credentials.
+          modelCredentialIds: credentials
+            .map((credential) => credential.credentialId)
+            .filter((id): id is string => id !== null),
+          inlineModelProviders: credentials
+            .filter((credential) => credential.credentialId === null)
+            .map((credential) => credential.logicalProviderKey),
+          setupRequired: setupRequested,
+          persistent: effectivePersistent,
+          regionId: regionRecord?.id,
+          repositoryUrl: input.repo ?? null,
+          repositoryBranch: input.branch ?? null,
+          repositoryBaseCommit: resolvedBaseCommit,
+          repositoryCheckoutRef: resolvedCheckoutRef,
+          domain,
+          subdomain,
+          serverOnly: agentTypeRecord.serverOnly,
+          workspaceProfile,
+          editorAccessEnabled,
+          editorTarget: null,
+          sshConnection: null,
+          serverPassword: encryptedServerPassword ?? null,
+          upstreamUrl: workspaceInfo.upstreamUrl,
+          status: initialWorkspaceStatus,
+          hostingType: isLocal ? "local" : "cloud",
+          name: input.name || subdomain,
+          metadata: input.metadata ?? {},
+          opencodeApi: input.opencode?.api ?? DEFAULT_OPENCODE_API,
+          customImage,
+          autoTerminateAt: input.autoTerminateAfterMs
+            ? new Date(Date.now() + input.autoTerminateAfterMs)
+            : null,
+          idempotencyKey: input.idempotencyKey ?? null,
+          startedAt: new Date(workspaceInfo.serviceCreatedAt),
+          lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),
+          updatedAt: new Date(workspaceInfo.serviceCreatedAt),
+        } satisfies typeof workspace.$inferInsert;
+        const [newWorkspace] =
+          providerKey === "aws"
+            ? await db
+                .update(workspace)
+                .set(workspaceValues)
+                .where(eq(workspace.id, workspaceId))
+                .returning()
+            : await db.insert(workspace).values(workspaceValues).returning();
 
         if (!newWorkspace) {
           throw new TRPCError({
@@ -2864,7 +2910,40 @@ export const workspaceRouter = router({
           workspaceId,
           providerKey: selectedProviderKey,
           errorName: error instanceof Error ? error.name : "UnknownError",
+          error: error instanceof Error ? error.message : String(error),
+          cause:
+            error instanceof Error && error.cause instanceof Error
+              ? error.cause.message
+              : undefined,
         });
+        if (selectedProviderKey === "aws") {
+          // Keep the cause on the row so the reference ID in the client error resolves to something.
+          await db
+            .update(workspace)
+            .set({
+              status: "terminated",
+              updatedAt: new Date(),
+              metadata:
+                error instanceof AwsWorkspaceStartupError
+                  ? { awsStartupDiagnostics: JSON.stringify(error.diagnostics) }
+                  : {
+                      awsProvisioningError: error instanceof Error ? error.message : String(error),
+                    },
+            })
+            .where(eq(workspace.id, workspaceId));
+        }
+        if (error instanceof AwsWorkspaceStartupError) {
+          throw new TRPCError({
+            code: error.diagnostics.stage === "task-start" ? "INTERNAL_SERVER_ERROR" : "TIMEOUT",
+            message: `${error.message} Reference: ${workspaceId}`,
+          });
+        }
+        if (error instanceof AwsPermissionError) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `${error.message} Reference: ${workspaceId}`,
+          });
+        }
         // Throw a user-friendly error to the client
         if (error instanceof TRPCError) throw error;
         if (error instanceof BeforeAgentSetupError) {
@@ -2930,7 +3009,10 @@ export const workspaceRouter = router({
         (workspaceRecord.status === "paused" || workspaceRecord.status === "pending")
       ) {
         try {
-          const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+          const computeProvider = await getProviderByCloudProviderId(
+            provider.providerKey,
+            provider.id,
+          );
           const live = await computeProvider.getStatus(workspaceRecord.externalInstanceId);
           if (live.status === "running") {
             const now = new Date();
@@ -3045,7 +3127,7 @@ export const workspaceRouter = router({
         .where(eq(cloudProvider.id, existingWorkspace.cloudProviderId));
       const statusProvider =
         runtimeProvider && existingWorkspace.externalInstanceId
-          ? await getProviderByCloudProviderId(runtimeProvider.providerKey)
+          ? await getProviderByCloudProviderId(runtimeProvider.providerKey, runtimeProvider.id)
           : null;
 
       const reconcileProviderStatus = async () => {
@@ -3150,7 +3232,10 @@ export const workspaceRouter = router({
               .where(eq(region.id, existingWorkspace.regionId));
           }
 
-          const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+          const computeProvider = await getProviderByCloudProviderId(
+            provider.providerKey,
+            provider.id,
+          );
           let resumeResult: void | { upstreamUrl?: string };
           try {
             resumeResult = await computeProvider.resumeWorkspace(
@@ -3356,7 +3441,10 @@ export const workspaceRouter = router({
         }
 
         // Get compute provider and stop the workspace
-        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+        const computeProvider = await getProviderByCloudProviderId(
+          provider.providerKey,
+          provider.id,
+        );
         await finalizeWorkspaceAgentRuns(input.workspaceId, userId);
         if (existingWorkspace.sshConnection) {
           await computeProvider
@@ -3489,7 +3577,10 @@ export const workspaceRouter = router({
         }
 
         // Get compute provider and restart the workspace
-        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+        const computeProvider = await getProviderByCloudProviderId(
+          provider.providerKey,
+          provider.id,
+        );
         const resumeResult = await computeProvider.resumeWorkspace(
           existingWorkspace.externalInstanceId,
           workspaceRegion?.externalRegionIdentifier,
@@ -3582,15 +3673,18 @@ export const workspaceRouter = router({
       }
 
       // Get compute provider and terminate the workspace
-      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey, provider.id);
       await finalizeWorkspaceAgentRuns(input.workspaceId, userId);
       const terminateInBackground = provider.providerKey === "aws";
+      // A workspace that failed during provisioning has no volume row and may have no
+      // provider handle yet; there is nothing remote to tear down in that case.
       const externalVolumeId = fetchedWorkspace.persistent
-        ? fetchedWorkspace.volume.externalVolumeId
+        ? fetchedWorkspace.volume?.externalVolumeId
         : undefined;
       const terminatedAt = new Date();
 
       const runTerminationCleanup = async () => {
+        if (!fetchedWorkspace.externalInstanceId) return;
         if (fetchedWorkspace.sshConnection) {
           await computeProvider
             .revokeWorkspaceSSHAccess({
@@ -3646,7 +3740,7 @@ export const workspaceRouter = router({
       await deleteAllWorkspaceRouteAccess(input.workspaceId);
 
       // Delete volume record
-      if (fetchedWorkspace.persistent) {
+      if (fetchedWorkspace.volume) {
         await db.delete(volume).where(eq(volume.id, fetchedWorkspace.volume.id));
       }
 
@@ -3716,7 +3810,7 @@ export const workspaceRouter = router({
         });
       }
 
-      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey, provider.id);
 
       const { domain, externalPortDomainId, upstreamAccess } =
         await computeProvider.createOrGetExposedPortDomain(
@@ -3790,7 +3884,10 @@ export const workspaceRouter = router({
           });
         }
 
-        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+        const computeProvider = await getProviderByCloudProviderId(
+          provider.providerKey,
+          provider.id,
+        );
         await computeProvider.removeExposedPortDomain(externalPortDomainId);
       }
 

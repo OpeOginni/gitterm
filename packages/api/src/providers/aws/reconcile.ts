@@ -1,17 +1,20 @@
 import { and, db, eq, inArray, ne } from "@gitterm/db";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
-import { awsProvider } from ".";
+import { AwsProvider, type AwsCleanupFailure } from ".";
 import { updateWorkspaceRoutingAndInvalidate } from "../../service/workspace-mutations";
 
 export interface AwsSweepResult {
   retriedWorkspaces: number;
+  runtimeSecretsDeleted: number;
   servicesDeleted: number;
   taskDefinitionsDeregistered: number;
   rulesDeleted: number;
   targetGroupsDeleted: number;
   accessPointsDeleted: number;
   unresolvedCleanupCount: number;
+  /** Orphaned resources whose deletion failed this pass; the next sweep retries them. */
+  cleanupFailures: AwsCleanupFailure[];
 }
 
 export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
@@ -27,21 +30,43 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
   if (awsCloudProviders.length === 0) {
     return {
       retriedWorkspaces: 0,
+      runtimeSecretsDeleted: 0,
       servicesDeleted: 0,
       taskDefinitionsDeregistered: 0,
       rulesDeleted: 0,
       targetGroupsDeleted: 0,
       accessPointsDeleted: 0,
       unresolvedCleanupCount: 0,
+      cleanupFailures: [],
     };
   }
 
   const awsProviderIds = awsCloudProviders.map((p) => p.id);
 
+  const pending = await db.query.workspace.findMany({
+    where: and(inArray(workspace.cloudProviderId, awsProviderIds), eq(workspace.status, "pending")),
+  });
+  for (const attempt of pending) {
+    const lease = attempt.metadata?.awsProvisioningLeaseExpiresAt;
+    if (lease && Date.parse(lease) < Date.now()) {
+      await db
+        .update(workspace)
+        .set({ status: "terminated", updatedAt: new Date() })
+        .where(
+          and(
+            eq(workspace.id, attempt.id),
+            eq(workspace.status, "pending"),
+            eq(workspace.updatedAt, attempt.updatedAt),
+          ),
+        );
+    }
+  }
+
   const terminatedAwsWorkspaces = await db
     .select({
       id: workspace.id,
       externalInstanceId: workspace.externalInstanceId,
+      cloudProviderId: workspace.cloudProviderId,
     })
     .from(workspace)
     .where(
@@ -55,7 +80,9 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
   let retriedWorkspaces = 0;
   for (const terminatedWorkspace of terminatedAwsWorkspaces) {
     try {
-      await awsProvider.terminateWorkspace(terminatedWorkspace.externalInstanceId);
+      await new AwsProvider(terminatedWorkspace.cloudProviderId).terminateWorkspace(
+        terminatedWorkspace.externalInstanceId,
+      );
       await updateWorkspaceRoutingAndInvalidate(terminatedWorkspace.id, {
         externalInstanceId: "",
         externalRunningDeploymentId: null,
@@ -72,11 +99,13 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
     }
   }
 
+  let runtimeSecretsDeleted = 0;
   let servicesDeleted = 0;
   let taskDefinitionsDeregistered = 0;
   let rulesDeleted = 0;
   let targetGroupsDeleted = 0;
   let accessPointsDeleted = 0;
+  const cleanupFailures: AwsCleanupFailure[] = [];
 
   for (const provider of awsCloudProviders) {
     if (!provider.providerConfigId) {
@@ -97,16 +126,18 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
       .where(and(eq(workspace.cloudProviderId, provider.id), ne(workspace.status, "terminated")));
 
     try {
-      const providerSweepResult = await awsProvider.sweepOrphanedResources(
+      const providerSweepResult = await new AwsProvider(provider.id).sweepOrphanedResources(
         activeProviderWorkspaces.map((ws) => ws.id),
         pinnedRegion.externalRegionIdentifier,
       );
 
+      runtimeSecretsDeleted += providerSweepResult.runtimeSecretsDeleted;
       servicesDeleted += providerSweepResult.servicesDeleted;
       taskDefinitionsDeregistered += providerSweepResult.taskDefinitionsDeregistered;
       rulesDeleted += providerSweepResult.rulesDeleted;
       targetGroupsDeleted += providerSweepResult.targetGroupsDeleted;
       accessPointsDeleted += providerSweepResult.accessPointsDeleted;
+      cleanupFailures.push(...providerSweepResult.failures);
     } catch (error) {
       console.error(
         `[aws-reconcile] Failed to sweep orphaned resources for provider ${provider.id} (${pinnedRegion.externalRegionIdentifier}):`,
@@ -127,10 +158,12 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
   return {
     retriedWorkspaces,
     unresolvedCleanupCount,
+    runtimeSecretsDeleted,
     servicesDeleted,
     taskDefinitionsDeregistered,
     rulesDeleted,
     targetGroupsDeleted,
     accessPointsDeleted,
+    cleanupFailures,
   };
 }
