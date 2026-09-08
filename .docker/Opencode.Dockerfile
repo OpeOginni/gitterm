@@ -67,6 +67,25 @@ RUN apt-get update && \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Install the official GitHub CLI release directly.
+RUN GH_VERSION="$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^" ]+)".*/\1/')" && \
+    curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
+      -o /tmp/gh.tar.gz && \
+    tar -xzf /tmp/gh.tar.gz -C /tmp && \
+    install -m 0755 "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh && \
+    rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_VERSION}_linux_amd64"
+
+# Install the AWS SAM CLI. This image currently builds for linux/amd64 because
+# the ttyd artifact copied above is x86_64.
+ARG AWS_SAM_CLI_VERSION=latest
+RUN curl -fsSL "https://github.com/aws/aws-sam-cli/releases/${AWS_SAM_CLI_VERSION}/download/aws-sam-cli-linux-x86_64.zip" \
+      -o /tmp/aws-sam-cli.zip && \
+    unzip -q /tmp/aws-sam-cli.zip -d /tmp/aws-sam-cli && \
+    /tmp/aws-sam-cli/install --update -i /usr/local/aws-sam-cli -b /usr/local/bin && \
+    rm -rf /tmp/aws-sam-cli /tmp/aws-sam-cli.zip && \
+    gh --version && \
+    sam --version
+
 # Copy the built ttyd binary from builder stage
 COPY --from=builder /usr/local/bin/ttyd /usr/bin/ttyd
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libwebsockets*.so* /usr/lib/x86_64-linux-gnu/
