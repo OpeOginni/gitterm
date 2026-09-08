@@ -214,16 +214,19 @@ installation token exported into the agent's long-running environment. Explicit
 `GH_TOKEN` or `GITHUB_TOKEN` environment variables override this CLI authentication;
 they do not change the credentials used by Git. Managed credentials are for `github.com`.
 
-The generated `AGENTS.md` tells agents that the user may have supplied GitHub credentials
-or connected an integration, and that they can use that authentication for `gh` when available.
+The generated `AGENTS.md` tells agents that `$HOME/.gitterm/bin/gh` indicates GitTerm
+authentication was provisioned. Agents install the real CLI separately when needed, keep
+the GitTerm launcher first on `PATH`, and use the normal `gh` command. `$GH_TOKEN` is
+intentionally not exported globally, and agents are instructed not to pipe it into
+`gh auth login`.
 CLI installation is left to the image or the agent as needed for the task; there is no SDK
 installation option. The guidance explains checking `gh --version` and installing the CLI
 if needed. The launcher discovers the
 actual binary on each invocation, including installations made after startup.
 It lives in `~/.gitterm/bin`, which GitTerm adds to the agent's PATH and standard shell
-profiles. Install the actual CLI elsewhere on PATH so it does not overwrite the launcher.
-Custom launchers that replace PATH should retain `~/.gitterm/bin`. Node.js and Git are
-required by the authentication runtime.
+profiles. Install the actual CLI elsewhere and keep `~/.gitterm/bin` first on PATH so it
+does not overwrite or bypass the launcher. Node.js and Git are required by the
+authentication runtime.
 
 Available commands depend on the token's repository access and permissions. Installation
 tokens act as the GitHub App bot; user-scoped commands may require user authentication.

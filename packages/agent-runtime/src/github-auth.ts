@@ -1,10 +1,13 @@
 /** Shared by managed provisioning and the standalone SDK; no provider dependencies. */
 export const GITHUB_AUTH_PATH = 'export PATH="$HOME/.gitterm/bin:$PATH"';
 
-export const GITHUB_CLI_INSTRUCTIONS = `The user may have provided GitHub credentials or connected a GitHub integration for this workspace. When provided, GitTerm makes that authentication available to Git and the GitHub CLI (gh); use gh directly with the existing authentication.
-Do not assume credentials are present or have permission for every operation. Try the repository operation needed for the task; if authentication or permissions are unavailable, explain what access is needed to the user.
-The image may or may not include gh. If you need it for the task, check gh --version and install the official CLI if it is missing, using the image's package manager or a user-local binary directory on PATH.
-Keep ~/.gitterm/bin on PATH and install the actual CLI outside that directory when GitTerm's authentication launcher is present. The launcher uses the supplied credentials and renews integration tokens, so there is no need to copy tokens or run gh auth login for that authentication.`;
+export const GITHUB_CLI_INSTRUCTIONS = `GitHub CLI authentication:
+- The user may have supplied repository credentials or selected a GitHub integration for this workspace. GitTerm authentication is configured only when $HOME/.gitterm/bin/gh exists. Check for that executable, but never read or print files under $HOME/.gitterm/github.
+- The image may not include the real GitHub CLI. Run gh --version. If the GitTerm launcher says the CLI is missing, install the official gh binary using the image's package manager or in another directory.
+- Keep $HOME/.gitterm/bin first on PATH after installation. For a downloaded CLI, use: export PATH="$HOME/.gitterm/bin:/path/to/installed/gh/bin:$PATH". Never prepend the real CLI ahead of $HOME/.gitterm/bin and never overwrite $HOME/.gitterm/bin/gh.
+- With the launcher first, use the normal gh command (for example, gh pr create). The launcher supplies the user-provided token or a fresh integration token only to that operation.
+- Never run gh auth login, pipe $GH_TOKEN, copy tokens, or use gh auth status for this workspace authentication. $GH_TOKEN is intentionally not exported to the agent shell.
+- If $HOME/.gitterm/bin/gh is absent, tell the user that this workspace has no GitTerm-provided GitHub credentials. If an authenticated operation is denied, report the denied operation and ask for repository access or the required GitHub App/token permission.`;
 
 /** Remains a single executable command when a provider prefixes it with exec/nohup. */
 export function githubAuthCommand(command: string): string {

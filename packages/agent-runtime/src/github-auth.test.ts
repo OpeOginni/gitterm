@@ -195,6 +195,24 @@ test("CLI installed later is discovered and its exit status and arguments are pr
   expect(JSON.parse(result.stdout).args.at(-1)).toBe("spaces ' and $symbols");
 });
 
+test("normal gh remains authenticated when the launcher stays first after installation", async () => {
+  const f = fixture();
+  await f.run(["setup"]);
+  f.install();
+  const launcher = join(f.home, ".gitterm/bin/gh");
+  const child = Bun.spawn([launcher, "pr", "create", "--fill"], {
+    cwd: f.home,
+    env: f.env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(JSON.parse(await new Response(child.stdout).text())).toEqual({
+    token: "initial-token",
+    args: ["pr", "create", "--fill"],
+  });
+  expect(await child.exited).toBe(0);
+});
+
 test("explicit gh credentials are respected and managed credentials stay on github.com", async () => {
   const f = fixture();
   await f.run(["setup"]);
