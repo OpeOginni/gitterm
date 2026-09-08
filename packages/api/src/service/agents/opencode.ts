@@ -89,6 +89,7 @@ export function buildAwsRuntimeInstructions(input: {
 - Compute: AWS ECS in \`${input.region}\`${location ? ` (${location})` : ""}. AWS commands default to this region.
 - Identity: temporary ECS task-role credentials${role ? ` for \`${role}\`` : ""}; never print, copy, or replace them with static keys.
 - Permission discovery:${roleName ? ` inspect attached and inline policies for role \`${roleName}\` with the AWS IAM CLI before making AWS changes;` : " inspect the current task role's attached and inline policies before making AWS changes;"} read only policy documents relevant to the task. Do not assume administrator access.
+- Resource planning: treat policy resource ARNs, conditions, and referenced permissions boundaries as authoritative constraints. Derive concrete names from their allowed patterns when the user has not supplied a name, and choose resources and service roles that satisfy those patterns. Inspect a referenced boundary before defining a role's permissions. A permitted action is not a requirement to use that service or grant it to a workload.
 - If access is denied, report the exact action and resource and ask for that permission instead of retrying, changing regions, or bypassing the role.`;
 }
 
