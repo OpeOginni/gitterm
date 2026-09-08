@@ -3,6 +3,7 @@ import {
   buildDirectGittermInstructions,
   buildDirectProvisioningPlan,
   DIRECT_OPENCODE_SERVER_IMAGE,
+  DIRECT_GITTERM_INSTRUCTIONS,
   cloneRepositoryScript,
   railwayContainerEnvironment,
   resolveDirectImage,
@@ -10,6 +11,24 @@ import {
 } from "./provisioning";
 
 describe("direct provisioning plan", () => {
+  test("GitHub inline credentials remain available to Git and gh after clone", () => {
+    const plan = buildDirectProvisioningPlan({
+      id: "workspace-1",
+      lifecycle: "ephemeral",
+      password: "password",
+      repo: "https://github.com/acme/project",
+      repositoryCredentials: { token: "caller-token" },
+      setup: { beforeAgent: ["gh pr list"] },
+    });
+    const file = plan.agent.files.find((entry) => entry.path.endsWith("github/config.json"))!;
+    expect(JSON.parse(Buffer.from(file.contentBase64, "base64").toString())).toMatchObject({
+      token: "caller-token",
+      renewable: false,
+    });
+    expect(plan.setup.beforeAgent.at(-1)).toBe("gh pr list");
+    expect(plan.agent.command).toContain(".gitterm/bin");
+    expect(JSON.stringify(plan.agent.environmentVariables)).not.toContain("caller-token");
+  });
   test("normalizes one plan for native and container providers", () => {
     const plan = buildDirectProvisioningPlan({
       id: "workspace-1",
@@ -125,9 +144,7 @@ describe("direct provisioning plan", () => {
     expect(Buffer.from(instructions!.contentBase64, "base64").toString()).toBe(
       buildDirectGittermInstructions("You are operating as a Slack bot.\nUse concise replies."),
     );
-    expect(buildDirectGittermInstructions("  ")).toBe(
-      "You are running in a direct Gitterm workspace. Follow the user's instructions and verify outcomes before reporting success.",
-    );
+    expect(buildDirectGittermInstructions("  ")).toBe(DIRECT_GITTERM_INSTRUCTIONS);
     expect(() => buildDirectGittermInstructions("x".repeat(50_001))).toThrow(
       "additionalAgentInstructions is too large",
     );

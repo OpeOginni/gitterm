@@ -194,6 +194,41 @@ as pull and push. Without inline credentials, `gitIntegrationId` continues to us
 dashboard integration. Omitting `models` likewise continues to
 use dashboard-managed model credentials.
 
+#### GitHub CLI authentication
+
+For GitHub repositories, GitTerm configures both Git and `gh` from the same workspace
+credentials. Agents can run commands such as `gh pr list` or `gh pr create` without
+running `gh auth login`:
+
+- `repositoryCredentials.token` takes precedence over `gitIntegrationId`. The supplied
+  token is retained in a permission-restricted file on the workspace machine and is
+  not automatically renewed. This also works with the standalone SDK's direct providers.
+- `gitIntegrationId` uses the GitHub App installation token. Git and `gh` share a
+  cached token and refresh it through GitTerm before expiry. Concurrent commands share
+  the refresh, and a failed refresh stops the command rather than using an expired token.
+- Without repository credentials or an integration, GitTerm leaves CLI authentication
+  to the environment or the CLI's existing configuration.
+
+GitTerm supplies `GH_TOKEN` only to the invoked CLI process, so there is no stale
+installation token exported into the agent's long-running environment. Explicit
+`GH_TOKEN` or `GITHUB_TOKEN` environment variables override this CLI authentication;
+they do not change the credentials used by Git. Managed credentials are for `github.com`.
+
+The generated `AGENTS.md` tells agents that the user may have supplied GitHub credentials
+or connected an integration, and that they can use that authentication for `gh` when available.
+CLI installation is left to the image or the agent as needed for the task; there is no SDK
+installation option. The guidance explains checking `gh --version` and installing the CLI
+if needed. The launcher discovers the
+actual binary on each invocation, including installations made after startup.
+It lives in `~/.gitterm/bin`, which GitTerm adds to the agent's PATH and standard shell
+profiles. Install the actual CLI elsewhere on PATH so it does not overwrite the launcher.
+Custom launchers that replace PATH should retain `~/.gitterm/bin`. Node.js and Git are
+required by the authentication runtime.
+
+Available commands depend on the token's repository access and permissions. Installation
+tokens act as the GitHub App bot; user-scoped commands may require user authentication.
+Updating an integration's token does not grant permissions absent from its installation.
+
 GitTerm does not save inline PATs in its application database. Inline PATs must be delivered to the
 selected compute provider and retained on the workspace machine for runtime Git operations, so
 provider infrastructure and processes running in that workspace may be able to access them. Prefer

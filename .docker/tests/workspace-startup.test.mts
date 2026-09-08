@@ -173,6 +173,19 @@ test("workspace images install the shared GitHub credential helper", () => {
   }
 });
 
+test("workspace images leave GitHub CLI installation to the agent", () => {
+  for (const file of [
+    "Opencode.Server.AWS.Dockerfile",
+    "Opencode.Server.Dockerfile",
+    "T3Code.Server.Dockerfile",
+    "Opencode.Dockerfile",
+  ]) {
+    const dockerfile = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+    expect(dockerfile).not.toContain("/usr/local/bin/gh");
+    expect(dockerfile).not.toMatch(/apt-get install[^;]*\bgh\b/s);
+  }
+});
+
 test("blocking setup phase reports its duration and propagates the exit code", () => {
   const dir = join(root, "runner");
   mkdirSync(dir);

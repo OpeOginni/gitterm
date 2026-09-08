@@ -2559,6 +2559,7 @@ export const workspaceRouter = router({
                 baseCommit: resolvedBaseCommit ?? undefined,
                 checkoutRef: resolvedCheckoutRef ?? undefined,
                 name: repoInfo?.repo,
+                authExpiresAt: githubAppTokenExpiry,
                 ...resolveRepositoryProvisioningAuth(input.repositoryCredentials, {
                   username: githubUsername,
                   token: githubAppToken,

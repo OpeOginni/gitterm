@@ -245,4 +245,8 @@ if [ -n "$WORKSPACE_SETUP_COMMAND_BASE64" ]; then
     nohup /usr/local/bin/gitterm-workspace-setup "/workspace/$REPO_NAME" >/dev/null 2>&1 &
 fi
 
+export PATH="$HOME/.gitterm/bin:$PATH"
+if [ -f "$HOME/.gitterm/github/runtime.cjs" ]; then
+    node "$HOME/.gitterm/github/runtime.cjs" setup
+fi
 exec "$@"

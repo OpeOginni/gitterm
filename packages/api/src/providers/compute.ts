@@ -145,6 +145,8 @@ export interface WorkspaceRepoProvisioning {
   authUsername?: string;
   /** Git basic-auth password / GitHub App token. */
   authToken?: string;
+  /** Expiry of the initial installation token; inline tokens are not renewed. */
+  authExpiresAt?: string;
   /** Caller-supplied auth that overrides the dashboard integration for this workspace. */
   inlineAuth?: boolean;
 }

@@ -194,7 +194,9 @@ export type WorkspaceCreateInput = {
   /** Provider intent. Defaults to the user's or deployment's preferred provider. */
   provider?: WorkspaceProviderSelection;
   /** Inline Git credentials for repository validation, cloning, and runtime pull/push. */
+  /** Runtime Git/gh authentication. Takes precedence over gitIntegrationId; not auto-renewed. */
   repositoryCredentials?: { username?: string; token: string };
+  /** Dashboard GitHub App integration; runtime Git/gh credentials are renewed automatically. */
   gitIntegrationId?: string;
   /** Defaults from the selected provider. */
   persistent?: boolean;

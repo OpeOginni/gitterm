@@ -319,4 +319,8 @@ fi
     done
 ) &
 
+export PATH="$HOME/.gitterm/bin:$PATH"
+if [ -f "$HOME/.gitterm/github/runtime.cjs" ]; then
+    node "$HOME/.gitterm/github/runtime.cjs" setup
+fi
 exec "$@"

@@ -1,4 +1,5 @@
 import type { AgentProvisioning } from "../../providers/compute";
+import { GITHUB_CLI_INSTRUCTIONS } from "@gitterm/agent-runtime/github-auth";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 
 export const OPENCODE_CONFIG_PATH = "~/.config/opencode/opencode.json";
@@ -70,6 +71,8 @@ The gitterm CLI can inspect and operate only this workspace:
 
 Follow the user's instructions for branches, commits, pull requests, ports, uploads, and cleanup.
 Do not assume a requested product outcome succeeded only because an agent run completed.
+
+${GITHUB_CLI_INSTRUCTIONS}
 `;
 
 export function buildGittermInstructions(additional?: string): string {
