@@ -145,11 +145,11 @@ await client.workspaces.create({
 
 The dashboard/legacy create endpoint uses `awsAccessProfileId` for the same selection.
 
-### AWS CLI in workspaces
+### AWS tooling in workspaces
 
-The default server images do not include the AWS CLI, and GitTerm no longer installs it at workspace
-start: that download ran as a blocking before-agent step and consumed ~100 seconds of the three-minute
-startup budget. Workspaces that need the CLI use a dedicated image instead:
+The default server images do not include the AWS CLI, AWS SAM CLI, or GitHub CLI, and GitTerm does
+not install them at workspace start: those downloads would consume the three-minute startup budget.
+Workspaces that need these tools use a dedicated image instead:
 
 1. Build and push `.docker/Opencode.Server.AWS.Dockerfile` (the `opencode-server-aws` entry in the
    agent image workflow publishes it as `gitterm-opencode-server-aws`).

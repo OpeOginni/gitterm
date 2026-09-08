@@ -1,7 +1,7 @@
-# OpenCode server image with the AWS CLI preinstalled, for workspaces that use AWS
-# access profiles. Not seeded: build and push it, then register it in Admin -> Images
-# (or pass it as a bring-your-own image) and assign it to the AWS provider.
-# Installing the CLI at workspace start instead costs ~100s of the startup budget.
+# OpenCode server image with the AWS, AWS SAM, and GitHub CLIs preinstalled for
+# workspaces that use AWS access profiles. Register it in Admin -> Images with
+# AWS-only provider metadata so it is selected instead of the general image.
+# Installing these tools at workspace start would consume the startup budget.
 FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -21,6 +21,25 @@ RUN case "$(uname -m)" in aarch64|arm64) aws_arch=aarch64 ;; *) aws_arch=x86_64 
     && /tmp/aws/install --install-dir /usr/local/aws-cli --bin-dir /usr/local/bin \
     && rm -rf /tmp/aws /tmp/awscliv2.zip \
     && aws --version
+
+# Install the official GitHub CLI release directly.
+RUN case "$(uname -m)" in aarch64|arm64) gh_arch=arm64 ;; *) gh_arch=amd64 ;; esac \
+    && GH_VERSION="$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^" ]+)".*/\1/')" \
+    && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${gh_arch}.tar.gz" -o /tmp/gh.tar.gz \
+    && tar -xzf /tmp/gh.tar.gz -C /tmp \
+    && install -m 0755 "/tmp/gh_${GH_VERSION}_linux_${gh_arch}/bin/gh" /usr/local/bin/gh \
+    && rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_VERSION}_linux_${gh_arch}" \
+    && gh --version
+
+# Install the AWS SAM CLI. Keep the version configurable so image rebuilds can
+# be pinned when an upstream release needs to be held back.
+ARG AWS_SAM_CLI_VERSION=latest
+RUN case "$(uname -m)" in aarch64|arm64) sam_arch=arm64 ;; *) sam_arch=x86_64 ;; esac \
+    && curl -fsSL "https://github.com/aws/aws-sam-cli/releases/${AWS_SAM_CLI_VERSION}/download/aws-sam-cli-linux-${sam_arch}.zip" -o /tmp/aws-sam-cli.zip \
+    && unzip -q /tmp/aws-sam-cli.zip -d /tmp/aws-sam-cli \
+    && /tmp/aws-sam-cli/install --update -i /usr/local/aws-sam-cli -b /usr/local/bin \
+    && rm -rf /tmp/aws-sam-cli /tmp/aws-sam-cli.zip \
+    && sam --version
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
