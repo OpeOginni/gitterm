@@ -1,4 +1,4 @@
-import { db, eq, and } from "@gitterm/db";
+import { db, eq, and, sql } from "@gitterm/db";
 import { getEncryptionService } from "../encryption";
 import { providerType, providerConfig } from "@gitterm/db/schema/provider-config";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
@@ -155,6 +155,7 @@ class ProviderConfigService {
   async updateProviderConfig(
     id: string,
     updates: Partial<Omit<ProviderConfigInput, "providerTypeId">>,
+    expectedUpdatedAt?: Date,
   ): Promise<DecryptedProviderConfig> {
     const existing = await db.query.providerConfig.findFirst({
       where: eq(providerConfig.id, id),
@@ -200,10 +201,19 @@ class ProviderConfigService {
         ...(updates.priority !== undefined && { priority: updates.priority }),
         updatedAt: new Date(),
       })
-      .where(eq(providerConfig.id, id))
+      .where(
+        expectedUpdatedAt
+          ? and(
+              eq(providerConfig.id, id),
+              sql`date_trunc('milliseconds', ${providerConfig.updatedAt}) = ${expectedUpdatedAt.toISOString()}::timestamp`,
+            )
+          : eq(providerConfig.id, id),
+      )
       .returning();
 
     if (!updated) {
+      if (expectedUpdatedAt)
+        throw new Error("Provider configuration changed. Reload and retry your change.");
       throw new Error("Issue with updating config");
     }
 
@@ -272,6 +282,9 @@ class ProviderConfigService {
       }
     }
 
+    for (const fieldName of definition.metadataFields ?? []) {
+      if (config[fieldName] !== undefined) metadata[fieldName] = config[fieldName];
+    }
     return { encrypted, metadata };
   }
 

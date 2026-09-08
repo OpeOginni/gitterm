@@ -145,6 +145,8 @@ export interface WorkspaceRepoProvisioning {
   authUsername?: string;
   /** Git basic-auth password / GitHub App token. */
   authToken?: string;
+  /** Expiry of the initial installation token; inline tokens are not renewed. */
+  authExpiresAt?: string;
   /** Caller-supplied auth that overrides the dashboard integration for this workspace. */
   inlineAuth?: boolean;
 }
@@ -235,6 +237,10 @@ export interface WorkspaceProvisioningSpec {
 }
 
 export interface WorkspaceConfig {
+  /** Persist provider handles before readiness so failed attempts remain recoverable. */
+  onProvisioned?: (info: WorkspaceInfo) => Promise<void>;
+  /** Server-resolved role from the selected provider's approved access profiles. */
+  awsTaskRoleArn?: string;
   workspaceId: string;
   userId: string;
   imageId: string;

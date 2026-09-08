@@ -2,15 +2,18 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and, ne } from "@gitterm/db";
 import { cloudProvider, machineProfile, region } from "@gitterm/db/schema/cloud";
-import { workspaceSetupCommandDefault } from "@gitterm/db/schema/workspace-setup";
 import { providerConfig, providerType } from "@gitterm/db/schema/provider-config";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { adminProcedure, router } from "../..";
 import { normalizeAwsConfig } from "../../providers/aws";
 import { bootstrapAwsProvider, deleteAwsProviderInfrastructure } from "../../providers/aws/setup";
+import { awsTaskRoleNameSchema } from "../../providers/aws/task-role";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { getProviderConfigService } from "../../service/config/provider-config";
-import { AWS_CLI_SETUP_COMMAND } from "../../service/workspace-setup";
+import { awsRoleSelectionSchema } from "@gitterm/schema";
+import { prepareAwsTaskRole, inspectAwsTaskRole } from "../../providers/aws/iam";
+import { getAwsAccessProfiles } from "../../providers/aws/access-profiles";
+import { buildAwsDeploymentPolicy } from "../../providers/aws/deployment-policy";
 
 const AWS_REGION_METADATA: Record<string, { name: string; location: string; flag: string }> = {
   "us-east-1": {
@@ -105,10 +108,13 @@ const bootstrapAwsProviderSchema = z.object({
   secretAccessKey: z.string().optional(),
   defaultRegion: z.string().optional(),
   publicSshEnabled: z.boolean().optional(),
+  taskRoleName: awsTaskRoleNameSchema.optional(),
+  taskRole: awsRoleSelectionSchema.optional(),
 });
 
 const deleteAwsInfrastructureSchema = z.object({
   providerId: z.uuid(),
+  preserveProvider: z.boolean().default(false),
 });
 
 function resolveAwsSetupInput(input: {
@@ -116,11 +122,13 @@ function resolveAwsSetupInput(input: {
   secretAccessKey?: unknown;
   defaultRegion?: unknown;
   publicSshEnabled?: unknown;
+  taskRoleName?: string;
 }): {
   accessKeyId: string;
   secretAccessKey: string;
   defaultRegion: string;
   publicSshEnabled: boolean;
+  taskRoleName?: string;
 } {
   const config = normalizeAwsConfig(input as Record<string, any>);
   return {
@@ -128,6 +136,7 @@ function resolveAwsSetupInput(input: {
     secretAccessKey: config.secretAccessKey,
     defaultRegion: config.defaultRegion,
     publicSshEnabled: input.publicSshEnabled === undefined ? true : input.publicSshEnabled === true,
+    taskRoleName: input.taskRoleName,
   };
 }
 
@@ -136,7 +145,128 @@ function preferSubmittedValue(submitted: unknown, existing: unknown): unknown {
   return submittedValue || existing;
 }
 
+async function loadAwsProfileConfig(providerId: string) {
+  const provider = await db.query.cloudProvider.findFirst({
+    where: eq(cloudProvider.id, providerId),
+  });
+  if (provider?.providerKey !== "aws" || !provider.providerConfigId)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Configure this AWS provider before adding access profiles",
+    });
+  const service = getProviderConfigService();
+  const config = await service.getProviderConfigById(provider.providerConfigId);
+  if (!config) throw new TRPCError({ code: "NOT_FOUND", message: "AWS config not found" });
+  return { config, service };
+}
+
 export const awsRouter = router({
+  deploymentPolicy: adminProcedure
+    .input(
+      z.object({
+        accountId: z.string().regex(/^\d{12}$/),
+        region: z
+          .string()
+          .refine((value) => value in AWS_REGION_METADATA, "Select a supported AWS region"),
+        role: awsRoleSelectionSchema,
+      }),
+    )
+    .query(({ input }) => {
+      const roleArn =
+        input.role.mode === "existing"
+          ? input.role.arn
+          : `arn:aws:iam::${input.accountId}:role/${input.role.name || `gitterm-task-${input.region}`}`;
+      if (!roleArn.startsWith(`arn:aws:iam::${input.accountId}:role/`)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The task role must belong to this AWS account.",
+        });
+      }
+      return {
+        policy: JSON.stringify(
+          buildAwsDeploymentPolicy(input.accountId, input.region, roleArn, input.role.mode),
+          null,
+          2,
+        ),
+      };
+    }),
+  addAccessProfile: adminProcedure
+    .input(
+      z.object({
+        providerId: z.uuid(),
+        name: z.string().trim().min(1).max(80),
+        description: z.string().trim().max(500).default(""),
+        role: awsRoleSelectionSchema,
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const { config, service } = await loadAwsProfileConfig(input.providerId);
+      const profiles = getAwsAccessProfiles(config.config);
+      if (profiles.length >= 50)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Maximum 50 AWS access profiles per provider",
+        });
+      if (profiles.some((profile) => profile.name.toLowerCase() === input.name.toLowerCase()))
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "An access profile with this name already exists",
+        });
+      const check = await prepareAwsTaskRole(normalizeAwsConfig(config.config), input.role);
+      const profile = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        description: input.description,
+        roleArn: check.roleArn,
+      };
+      try {
+        await service.updateProviderConfig(
+          config.id,
+          { config: { accessProfiles: [...profiles, profile] } },
+          config.updatedAt,
+        );
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Could not save access profile. Role ${check.roleArn} remains in AWS; retry using its ARN.`,
+          cause: error,
+        });
+      }
+      return { profile, check };
+    }),
+
+  checkAccessRole: adminProcedure
+    .input(z.object({ providerId: z.uuid(), profileId: z.uuid().optional() }))
+    .mutation(async ({ input }) => {
+      const { config } = await loadAwsProfileConfig(input.providerId);
+      const profile = input.profileId
+        ? getAwsAccessProfiles(config.config).find((entry) => entry.id === input.profileId)
+        : undefined;
+      if (input.profileId && !profile)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Access profile not found" });
+      return inspectAwsTaskRole(
+        normalizeAwsConfig(config.config),
+        profile?.roleArn ?? String(config.config.taskRoleArn),
+      );
+    }),
+
+  removeAccessProfile: adminProcedure
+    .input(z.object({ providerId: z.uuid(), profileId: z.uuid() }))
+    .mutation(async ({ input }) => {
+      const { config, service } = await loadAwsProfileConfig(input.providerId);
+      await service.updateProviderConfig(
+        config.id,
+        {
+          config: {
+            accessProfiles: getAwsAccessProfiles(config.config).filter(
+              (profile) => profile.id !== input.profileId,
+            ),
+          },
+        },
+        config.updatedAt,
+      );
+      return { success: true };
+    }),
   listSupportedRegions: adminProcedure.query(async () => {
     const existing = await db.query.cloudProvider.findMany({
       where: eq(cloudProvider.providerKey, "aws"),
@@ -242,12 +372,6 @@ export const awsRouter = router({
         updatedAt: new Date(),
       });
 
-      await db.insert(workspaceSetupCommandDefault).values({
-        cloudProviderId: created.id,
-        agentTypeId: null,
-        commands: [AWS_CLI_SETUP_COMMAND],
-      });
-
       await db.insert(machineProfile).values({
         cloudProviderId: created.id,
         key: "standard",
@@ -318,7 +442,13 @@ export const awsRouter = router({
         ),
         defaultRegion: preferSubmittedValue(pinnedRegionIdentifier, input.defaultRegion),
         publicSshEnabled: input.publicSshEnabled ?? existingConfig?.config.publicSshEnabled ?? true,
+        taskRoleName:
+          input.taskRoleName ??
+          (typeof existingConfig?.config.taskRoleArn === "string"
+            ? existingConfig.config.taskRoleArn.split("/").at(-1)
+            : undefined),
       });
+      setupInput = { ...setupInput, taskRole: input.taskRole };
     } catch (error) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -387,6 +517,7 @@ export const awsRouter = router({
       "albListenerArn",
       "securityGroupIds",
       "efsFileSystemId",
+      "taskRoleArn",
     ];
 
     for (const field of fieldsToVerify) {
@@ -451,6 +582,7 @@ export const awsRouter = router({
       providerConfigId: savedConfig.id,
       config: persistedConfigForDisplay.config,
       summary: bootstrapResult.summary,
+      roleCheck: bootstrapResult.roleCheck,
     };
   }),
 
@@ -538,15 +670,24 @@ export const awsRouter = router({
       const deleteResult = await deleteAwsProviderInfrastructure(setupInput);
 
       await db.transaction(async (tx) => {
-        await tx.delete(cloudProvider).where(eq(cloudProvider.id, provider.id));
-        await tx.delete(providerConfig).where(eq(providerConfig.id, provider.providerConfigId!));
+        if (input.preserveProvider) {
+          // Reset must keep the provider ID, region, machine profiles and encrypted credentials.
+          // Disable the config until bootstrap succeeds so a failed reset cannot launch tasks.
+          await tx
+            .update(providerConfig)
+            .set({ isEnabled: false, updatedAt: new Date() })
+            .where(eq(providerConfig.id, provider.providerConfigId!));
+        } else {
+          await tx.delete(cloudProvider).where(eq(cloudProvider.id, provider.id));
+          await tx.delete(providerConfig).where(eq(providerConfig.id, provider.providerConfigId!));
+        }
       });
 
       return {
         success: true,
         deleted: deleteResult.deleted,
         stackName: deleteResult.stackName,
-        deletedProviderId: provider.id,
+        deletedProviderId: input.preserveProvider ? null : provider.id,
       };
     }),
 });

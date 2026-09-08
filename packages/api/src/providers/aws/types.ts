@@ -1,3 +1,5 @@
+import type { AwsAccessProfile } from "@gitterm/schema";
+
 export interface AwsConfig {
   accessKeyId: string;
   secretAccessKey: string;
@@ -10,6 +12,7 @@ export interface AwsConfig {
   albBaseUrl: string;
   taskExecutionRoleArn: string;
   taskRoleArn: string;
+  accessProfiles?: AwsAccessProfile[];
   assignPublicIp?: boolean;
   publicSshEnabled?: boolean;
   efsFileSystemId?: string;
@@ -17,6 +20,8 @@ export interface AwsConfig {
 }
 
 export interface AwsExternalServiceId {
+  providerId?: string;
+  runtimeSecretArn?: string;
   workspaceId: string;
   region: string;
   clusterArn: string;
@@ -33,4 +38,20 @@ export interface AwsExternalPortDomainId {
   listenerRuleArn: string;
   targetGroupArn: string;
   workspaceHost: string;
+}
+
+/** A resource the orphan sweep tried to delete and could not; the next sweep retries it. */
+export interface AwsCleanupFailure {
+  resource: string;
+  reason: string;
+}
+
+export interface AwsOrphanSweepResult {
+  runtimeSecretsDeleted: number;
+  servicesDeleted: number;
+  taskDefinitionsDeregistered: number;
+  rulesDeleted: number;
+  targetGroupsDeleted: number;
+  accessPointsDeleted: number;
+  failures: AwsCleanupFailure[];
 }

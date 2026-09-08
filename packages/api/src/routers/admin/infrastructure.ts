@@ -30,6 +30,7 @@ import { providerType } from "@gitterm/db/schema/provider-config";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { workspaceSetupCommandDefault } from "@gitterm/db/schema/workspace-setup";
 import { workspaceSetupCommandsSchema } from "@gitterm/schema";
+import { getSupportedImageProviders } from "../../providers/image-compat";
 
 // ============================================================================
 // Input Schemas
@@ -758,7 +759,10 @@ export const infrastructureRouter = router({
       },
       orderBy: (i, { asc, desc }) => [desc(i.isEnabled), asc(i.name)],
     });
-    return images;
+    return images.map((runtimeImage) => ({
+      ...runtimeImage,
+      supportedProviders: getSupportedImageProviders(runtimeImage.providerMetadata),
+    }));
   }),
 
   getImage: adminProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
@@ -784,16 +788,6 @@ export const infrastructureRouter = router({
 
     if (!type) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Agent type not found" });
-    }
-
-    const existingImage = await db.query.image.findFirst({
-      where: eq(image.agentTypeId, input.agentTypeId),
-    });
-    if (existingImage) {
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: `Agent "${type.name}" already has the runtime image "${existingImage.name}"`,
-      });
     }
 
     const [newImage] = await db
@@ -833,17 +827,6 @@ export const infrastructureRouter = router({
       throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
     }
 
-    const targetAgentTypeId = updates.agentTypeId ?? existingImage.agentTypeId;
-    const imageForTargetAgent = await db.query.image.findFirst({
-      where: and(eq(image.agentTypeId, targetAgentTypeId), sql`${image.id} <> ${id}`),
-    });
-    if (imageForTargetAgent) {
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: "The selected agent already has a runtime image",
-      });
-    }
-
     const [updated] = await db
       .update(image)
       .set({
@@ -877,11 +860,18 @@ export const infrastructureRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
         }
 
+        // An agent type is only unavailable once none of its images are enabled.
         if (!input.isEnabled) {
-          await tx
-            .update(agentType)
-            .set({ isEnabled: false, updatedAt: new Date() })
-            .where(eq(agentType.id, updated.agentTypeId));
+          const stillEnabled = await tx.query.image.findFirst({
+            where: and(eq(image.agentTypeId, updated.agentTypeId), eq(image.isEnabled, true)),
+            columns: { id: true },
+          });
+          if (!stillEnabled) {
+            await tx
+              .update(agentType)
+              .set({ isEnabled: false, updatedAt: new Date() })
+              .where(eq(agentType.id, updated.agentTypeId));
+          }
         }
 
         return updated;

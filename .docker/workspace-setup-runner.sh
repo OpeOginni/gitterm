@@ -26,11 +26,22 @@ if ! printf '%s' "$encoded_command" | base64 -d > "$command_file" 2>/dev/null; t
 fi
 
 chmod 700 "$command_file"
-sleep "${WORKSPACE_SETUP_DELAY_SECONDS:-2}"
+# Only the detached after-agent phase needs to yield to the agent process first;
+# the blocking before-agent phase runs on the startup critical path.
+if [ "$phase" != "before-agent" ]; then
+  sleep "${WORKSPACE_SETUP_DELAY_SECONDS:-2}"
+fi
 if [ "$strict" = "1" ]; then
+  # Blocking phase: the time spent here delays readiness, so report it.
+  setup_started=$(date +%s)
+  echo "[gitterm-startup] $phase setup started"
   cd "$repo_dir" || exit 1
   sh "$command_file"
-else
-  cd "$repo_dir" || exit 0
-  sh "$command_file" || true
+  setup_code=$?
+  echo "[gitterm-startup] $phase setup finished exitCode=$setup_code durationSeconds=$(( $(date +%s) - setup_started ))"
+  exit "$setup_code"
 fi
+# Non-strict phases detach themselves; only the launch is observable here.
+cd "$repo_dir" || exit 0
+echo "[gitterm-startup] $phase setup launched"
+sh "$command_file" || true
