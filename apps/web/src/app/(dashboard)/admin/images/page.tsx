@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -35,37 +36,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
 
-const DEFAULT_PROVIDER_METADATA = `{
-  "aws": {
-    "cpu": 2048,
-    "memory": 4096,
-    "containerPort": 7681,
-    "healthCheckPath": "/"
-  },
-  "e2b": {
-    "templateId": "",
-    "sshTemplateId": ""
-  },
-  "daytona": {
-    "image": "",
-    "resources": { "cpu": 2, "memory": 4 },
-    "editorResources": { "cpu": 4, "memory": 8 }
-  },
-  "vercel": {
-    "image": "my-vcr-repository:latest",
-    "vcpus": 2
-  },
-  "ascii": {
-    "size": "default"
-  },
-  "exedev": {
-    "image": "exeuntu",
-    "cpu": 2,
-    "memory": "8GB",
-    "disk": "25GB"
-  }
-}`;
-
 const PROVIDER_LABELS: Record<string, string> = {
   aws: "AWS",
   e2b: "E2B",
@@ -74,23 +44,171 @@ const PROVIDER_LABELS: Record<string, string> = {
   vercel: "Vercel",
   ascii: "Ascii",
   exedev: "exe.dev",
+  railway: "Railway",
 };
 
-function getSupportedProviders(metadata: unknown): string[] {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return [];
-  const providerMetadata = metadata as Record<string, any>;
-  const supported = [
-    providerMetadata.aws ? "aws" : null,
-    providerMetadata.e2b?.templateId ? "e2b" : null,
-    providerMetadata.daytona?.image ? "daytona" : null,
-    providerMetadata.cloudflare?.startCommand && providerMetadata.cloudflare?.port
-      ? "cloudflare"
-      : null,
-    providerMetadata.vercel?.image || providerMetadata.vercel?.runtime ? "vercel" : null,
-    providerMetadata.ascii ? "ascii" : null,
-    providerMetadata.exedev ? "exedev" : null,
-  ].filter((provider): provider is string => provider !== null);
-  return supported.map((provider) => PROVIDER_LABELS[provider] ?? provider);
+const PROVIDER_DEFINITIONS = [
+  {
+    key: "aws",
+    label: "AWS",
+    description: "ECS task sizing and health checks.",
+    initial: { cpu: 2048, memory: 4096, containerPort: 7681, healthCheckPath: "/" },
+  },
+  {
+    key: "e2b",
+    label: "E2B",
+    description: "Template IDs built for this agent.",
+    initial: { templateId: "", sshTemplateId: "" },
+  },
+  {
+    key: "daytona",
+    label: "Daytona",
+    description: "Container image and workspace resources.",
+    initial: {
+      image: "",
+      resources: { cpu: 2, memory: 4 },
+      editorResources: { cpu: 4, memory: 8 },
+    },
+  },
+  {
+    key: "cloudflare",
+    label: "Cloudflare",
+    description: "Agent start command and listening port.",
+    initial: { startCommand: "", port: 7681, setupCommands: [] },
+  },
+  {
+    key: "vercel",
+    label: "Vercel",
+    description: "Registry image or managed runtime configuration.",
+    initial: { image: "", vcpus: 2 },
+  },
+  {
+    key: "ascii",
+    label: "Ascii",
+    description: "Box size and agent installation commands.",
+    initial: { size: "default", setupCommands: [] },
+  },
+  {
+    key: "exedev",
+    label: "exe.dev",
+    description: "Base image and machine sizing.",
+    initial: { image: "exeuntu", cpu: 2, memory: "8GB", disk: "25GB" },
+  },
+  {
+    key: "railway",
+    label: "Railway",
+    description: "Use this image directly on Railway.",
+    initial: {},
+  },
+] as const;
+
+type ProviderKey = (typeof PROVIDER_DEFINITIONS)[number]["key"];
+type ProviderDrafts = Partial<Record<ProviderKey, string>>;
+
+const providerKeySet = new Set<string>(PROVIDER_DEFINITIONS.map((provider) => provider.key));
+
+function metadataToDrafts(metadata: Record<string, unknown>): ProviderDrafts {
+  return Object.fromEntries(
+    PROVIDER_DEFINITIONS.filter((provider) => provider.key in metadata).map((provider) => [
+      provider.key,
+      JSON.stringify(metadata[provider.key], null, 2),
+    ]),
+  );
+}
+
+function extraMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(metadata).filter(([key]) => !providerKeySet.has(key)));
+}
+
+function parseProviderDrafts(
+  drafts: ProviderDrafts,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const metadata = { ...extra };
+  for (const provider of PROVIDER_DEFINITIONS) {
+    const draft = drafts[provider.key];
+    if (draft === undefined) continue;
+    try {
+      const parsed = JSON.parse(draft);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+      metadata[provider.key] = parsed;
+    } catch {
+      throw new Error(`${provider.label} metadata must be a JSON object`);
+    }
+  }
+  return metadata;
+}
+
+function ProviderMetadataEditor({
+  idPrefix,
+  drafts,
+  onChange,
+}: {
+  idPrefix: string;
+  drafts: ProviderDrafts;
+  onChange: (drafts: ProviderDrafts) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label>Provider availability</Label>
+        <p className="mt-1 text-xs leading-relaxed text-fg-4">
+          Enable only the providers that should use this image. Provider-specific images take
+          precedence over general images.
+        </p>
+      </div>
+      <div className="space-y-2">
+        {PROVIDER_DEFINITIONS.map((provider) => {
+          const enabled = drafts[provider.key] !== undefined;
+          return (
+            <div
+              key={provider.key}
+              className={`rounded-xl border px-3 py-3 transition-colors ${
+                enabled ? "border-amber-400/25 bg-amber-400/[0.035]" : "border-border/70"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label htmlFor={`${idPrefix}-${provider.key}`}>{provider.label}</Label>
+                  <p className="mt-0.5 text-xs text-fg-4">{provider.description}</p>
+                </div>
+                <Switch
+                  id={`${idPrefix}-${provider.key}`}
+                  checked={enabled}
+                  onCheckedChange={(checked) => {
+                    const next = { ...drafts };
+                    if (checked) next[provider.key] = JSON.stringify(provider.initial, null, 2);
+                    else delete next[provider.key];
+                    onChange(next);
+                  }}
+                  aria-label={`${enabled ? "Disable" : "Enable"} ${provider.label}`}
+                />
+              </div>
+              {enabled ? (
+                <div className="mt-3 border-t border-border/60 pt-3">
+                  <Label
+                    htmlFor={`${idPrefix}-${provider.key}-metadata`}
+                    className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
+                  >
+                    {provider.label} metadata
+                  </Label>
+                  <Textarea
+                    id={`${idPrefix}-${provider.key}-metadata`}
+                    value={drafts[provider.key]}
+                    onChange={(event) =>
+                      onChange({ ...drafts, [provider.key]: event.target.value })
+                    }
+                    className="mt-2 min-h-28 resize-y font-mono text-xs"
+                    spellCheck={false}
+                  />
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export default function ImagesPage() {
@@ -102,7 +220,8 @@ export default function ImagesPage() {
   const [editingImage, setEditingImage] = useState<{
     id: string;
     name: string;
-    providerMetadataJson: string;
+    providerDrafts: ProviderDrafts;
+    extraMetadata: Record<string, unknown>;
   } | null>(null);
 
   useEffect(() => {
@@ -122,7 +241,7 @@ export default function ImagesPage() {
     name: "",
     imageId: "",
     agentTypeId: "",
-    providerMetadataJson: DEFAULT_PROVIDER_METADATA,
+    providerDrafts: {} as ProviderDrafts,
   });
 
   const { data: images, isLoading } = useQuery({
@@ -134,8 +253,6 @@ export default function ImagesPage() {
     queryKey: ["admin", "agentTypes"],
     queryFn: () => trpcClient.admin.infrastructure.listAgentTypes.query(),
   });
-  const assignedAgentTypeIds = new Set(images?.map((image) => image.agentTypeId));
-  const availableAgentTypes = agentTypes?.filter((agent) => !assignedAgentTypeIds.has(agent.id));
 
   const createImage = useMutation({
     mutationFn: (params: {
@@ -151,7 +268,7 @@ export default function ImagesPage() {
         name: "",
         imageId: "",
         agentTypeId: "",
-        providerMetadataJson: DEFAULT_PROVIDER_METADATA,
+        providerDrafts: {},
       });
       toast.success("Image created");
     },
@@ -159,26 +276,22 @@ export default function ImagesPage() {
   });
 
   const handleCreateImage = () => {
-    let providerMetadata: Record<string, unknown>;
-
     try {
-      const parsed = JSON.parse(newImage.providerMetadataJson || "{}");
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        toast.error("Provider metadata must be a JSON object");
+      const providerMetadata = parseProviderDrafts(newImage.providerDrafts);
+      if (Object.keys(providerMetadata).length === 0) {
+        toast.error("Enable at least one provider");
         return;
       }
-      providerMetadata = parsed;
-    } catch {
-      toast.error("Provider metadata contains invalid JSON");
+      createImage.mutate({
+        name: newImage.name,
+        imageId: newImage.imageId,
+        agentTypeId: newImage.agentTypeId,
+        providerMetadata,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Provider metadata is invalid");
       return;
     }
-
-    createImage.mutate({
-      name: newImage.name,
-      imageId: newImage.imageId,
-      agentTypeId: newImage.agentTypeId,
-      providerMetadata,
-    });
   };
 
   const toggleImage = useMutation({
@@ -207,18 +320,17 @@ export default function ImagesPage() {
     if (!editingImage) return;
 
     try {
-      const providerMetadata = JSON.parse(editingImage.providerMetadataJson || "{}");
-      if (
-        !providerMetadata ||
-        typeof providerMetadata !== "object" ||
-        Array.isArray(providerMetadata)
-      ) {
-        toast.error("Provider metadata must be a JSON object");
+      const providerMetadata = parseProviderDrafts(
+        editingImage.providerDrafts,
+        editingImage.extraMetadata,
+      );
+      if (Object.keys(editingImage.providerDrafts).length === 0) {
+        toast.error("Enable at least one provider");
         return;
       }
       updateImage.mutate({ id: editingImage.id, providerMetadata });
-    } catch {
-      toast.error("Provider metadata contains invalid JSON");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Provider metadata is invalid");
     }
   };
 
@@ -248,7 +360,7 @@ export default function ImagesPage() {
     <DashboardShell>
       <DashboardHeader
         heading="Runtime Images"
-        text="Manage the single canonical image connected to each workspace agent."
+        text="Manage the runtime images for each workspace agent. When several images support a provider, the most provider-specific image runs there."
       >
         <div className="flex gap-2">
           <Button asChild variant="outline">
@@ -262,14 +374,14 @@ export default function ImagesPage() {
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button
-                disabled={(availableAgentTypes?.length ?? 0) === 0}
+                disabled={(agentTypes?.length ?? 0) === 0}
                 className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Image
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Add Container Image</DialogTitle>
                 <DialogDescription>Register a new Docker image for workspaces.</DialogDescription>
@@ -306,7 +418,7 @@ export default function ImagesPage() {
                       <SelectValue placeholder="Select an agent type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableAgentTypes?.map((agent) => (
+                      {agentTypes?.map((agent) => (
                         <SelectItem key={agent.id} value={agent.id}>
                           {agent.name}
                         </SelectItem>
@@ -314,22 +426,13 @@ export default function ImagesPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="providerMetadata">Provider Metadata</Label>
-                  <textarea
-                    id="providerMetadata"
-                    value={newImage.providerMetadataJson}
-                    onChange={(e) =>
-                      setNewImage({ ...newImage, providerMetadataJson: e.target.value })
-                    }
-                    className="min-h-52 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground shadow-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    spellCheck={false}
-                  />
-                  <p className="text-xs text-fg-4">
-                    Optional provider-specific config such as AWS resources, E2B templates, or
-                    Daytona image/resources.
-                  </p>
-                </div>
+                <ProviderMetadataEditor
+                  idPrefix="create-provider"
+                  drafts={newImage.providerDrafts}
+                  onChange={(providerDrafts) =>
+                    setNewImage((current) => ({ ...current, providerDrafts }))
+                  }
+                />
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
@@ -366,7 +469,9 @@ export default function ImagesPage() {
                 image.name === "gitterm-opencode" ||
                 image.name === "gitterm-opencode-server" ||
                 image.name === "gitterm-t3code-server";
-              const supportedProviders = getSupportedProviders(image.providerMetadata);
+              const supportedProviders = image.supportedProviders.map(
+                (provider) => PROVIDER_LABELS[provider] ?? provider,
+              );
 
               return (
                 <div
@@ -433,11 +538,8 @@ export default function ImagesPage() {
                           setEditingImage({
                             id: image.id,
                             name: image.name,
-                            providerMetadataJson: JSON.stringify(
-                              image.providerMetadata ?? {},
-                              null,
-                              2,
-                            ),
+                            providerDrafts: metadataToDrafts(image.providerMetadata ?? {}),
+                            extraMetadata: extraMetadata(image.providerMetadata ?? {}),
                           })
                         }
                         aria-label={`Edit provider metadata for ${image.name}`}
@@ -477,25 +579,21 @@ export default function ImagesPage() {
       </div>
 
       <Dialog open={!!editingImage} onOpenChange={(open) => !open && setEditingImage(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Provider Metadata</DialogTitle>
             <DialogDescription>
-              Configure the provider runtimes and images used by {editingImage?.name}.
+              Configure where {editingImage?.name} can run. Saving replaces its complete provider
+              mapping.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-4">
-            <Label htmlFor="edit-provider-metadata">Provider Metadata</Label>
-            <textarea
-              id="edit-provider-metadata"
-              value={editingImage?.providerMetadataJson ?? ""}
-              onChange={(event) =>
-                setEditingImage((current) =>
-                  current ? { ...current, providerMetadataJson: event.target.value } : current,
-                )
+          <div className="py-4">
+            <ProviderMetadataEditor
+              idPrefix="edit-provider"
+              drafts={editingImage?.providerDrafts ?? {}}
+              onChange={(providerDrafts) =>
+                setEditingImage((current) => (current ? { ...current, providerDrafts } : current))
               }
-              className="min-h-80 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              spellCheck={false}
             />
           </div>
           <DialogFooter>

@@ -16,6 +16,7 @@ describe("createGittermClient", () => {
 const awsSelection: WorkspaceProviderSelection = {
   type: "aws",
   region: "us-east-1",
+  accessProfile: "33333333-3333-4333-8333-333333333333",
   machine: { type: "profile", key: "rendering" },
 };
 
@@ -30,6 +31,9 @@ const invalidE2bMachine: WorkspaceProviderSelection = {
 
 test("provider selections retain their discriminated fields", () => {
   expect(awsSelection.type === "aws" && awsSelection.region).toBe("us-east-1");
+  expect(awsSelection.type === "aws" && awsSelection.accessProfile).toBe(
+    "33333333-3333-4333-8333-333333333333",
+  );
   expect(invalidE2bSelection.type).toBe("e2b");
   expect(invalidE2bMachine.type).toBe("e2b");
 });

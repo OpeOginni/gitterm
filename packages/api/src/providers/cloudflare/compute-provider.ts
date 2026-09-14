@@ -1,4 +1,5 @@
 import env from "@gitterm/env/server";
+import { githubAuthCommand, hasGithubAuth } from "@gitterm/agent-runtime/github-auth";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import type {
   ComputeProvider,
@@ -210,7 +211,9 @@ export class CloudflareComputeProvider implements ComputeProvider {
       serverPassword: spec?.agent.usesServerPassword ? spec?.serverPassword : undefined,
       environmentVariables,
       workspaceProfile: spec?.workspaceProfile,
-      startCommand: runtime.startCommand,
+      startCommand: hasGithubAuth(spec?.repo)
+        ? githubAuthCommand(runtime.startCommand)
+        : runtime.startCommand,
       port: runtime.port,
       setupCommands: runtime.setupCommands,
       beforeAgentCommand: spec?.beforeAgentCommand,

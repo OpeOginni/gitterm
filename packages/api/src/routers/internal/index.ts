@@ -281,7 +281,7 @@ export const internalRouter = router({
       }
 
       // Pause via provider
-      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey, provider.id);
       await finalizeWorkspaceAgentRuns(input.workspaceId, ws.userId);
       await computeProvider.pauseWorkspace(
         ws.externalInstanceId,
@@ -380,7 +380,7 @@ export const internalRouter = router({
             .where(and(eq(volume.workspaceId, ws.id), eq(volume.userId, ws.userId)))
         : [];
 
-      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey, provider.id);
       await finalizeWorkspaceAgentRuns(input.workspaceId, ws.userId);
 
       for (const exposedPort of Object.values(ws.exposedPorts ?? {})) {

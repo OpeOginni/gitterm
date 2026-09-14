@@ -105,6 +105,7 @@ export const workspaceProviderSelectionSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("aws"),
+      accessProfile: z.uuid().optional(),
       ...providerSelectionBase,
       region: z.string().min(1).optional(),
     })

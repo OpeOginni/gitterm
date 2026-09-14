@@ -1,4 +1,5 @@
 import z from "zod";
+import { issueWorkspaceGitCredential } from "../../service/workspace-git-credential";
 import {
   workspaceAgentAuthProcedure,
   workspaceAuthProcedure,
@@ -74,6 +75,22 @@ async function getAuthenticatedWorkspace(workspaceId: string, userId: string) {
  */
 
 export const workspaceOperationsRouter = router({
+  gitCredential: workspaceAuthProcedure.mutation(async ({ ctx }) => {
+    if (!workspaceJWT.hasScope(ctx.workspaceAuth, "workspace:read"))
+      throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient workspace scope" });
+    const ws = await getAuthenticatedWorkspace(
+      ctx.workspaceAuth.workspaceId,
+      ctx.workspaceAuth.userId,
+    );
+    try {
+      return await issueWorkspaceGitCredential(ws);
+    } catch {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "GitHub integration unavailable; reconnect the workspace's GitHub account",
+      });
+    }
+  }),
   getSelf: workspaceAuthProcedure.query(async ({ ctx }) => {
     const { workspaceAuth } = ctx;
     if (!workspaceJWT.hasScope(workspaceAuth, "workspace:read")) {
@@ -138,7 +155,7 @@ export const workspaceOperationsRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Cloud provider not found" });
       }
 
-      const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey, provider.id);
       const exposed = await withPortDomainTimeout(
         computeProvider.createOrGetExposedPortDomain(ws.externalInstanceId, input.port),
       );
@@ -190,7 +207,10 @@ export const workspaceOperationsRouter = router({
             message: "Cloud provider not found",
           });
         }
-        const computeProvider = await getProviderByCloudProviderId(provider.providerKey);
+        const computeProvider = await getProviderByCloudProviderId(
+          provider.providerKey,
+          provider.id,
+        );
         await computeProvider.removeExposedPortDomain(exposed.externalPortDomainId);
       }
 

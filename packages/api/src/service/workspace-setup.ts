@@ -20,21 +20,6 @@ export function buildGitExcludeCommand(paths: string[]): string | undefined {
   return `if [ -d .git/info ]; then for p in ${entries}; do grep -qxF "$p" .git/info/exclude 2>/dev/null || printf '%s\\n' "$p" >> .git/info/exclude; done; fi`;
 }
 
-export const AWS_CLI_SETUP_COMMAND = `if ! command -v aws >/dev/null 2>&1; then
-  tmp_dir=$(mktemp -d)
-  aws_install_dir="$HOME/.gitterm/aws-cli"
-  aws_bin_dir="$HOME/.bun/bin"
-  case "$(uname -m)" in
-    aarch64|arm64) aws_arch=aarch64 ;;
-    *) aws_arch=x86_64 ;;
-  esac
-  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$aws_arch.zip" -o "$tmp_dir/awscliv2.zip"
-  unzip -q "$tmp_dir/awscliv2.zip" -d "$tmp_dir"
-  mkdir -p "$aws_install_dir" "$aws_bin_dir"
-  "$tmp_dir/aws/install" --install-dir "$aws_install_dir" --bin-dir "$aws_bin_dir" --update
-  rm -rf "$tmp_dir"
-fi`;
-
 export async function resolveWorkspaceSetupCommands(input: {
   cloudProviderId: string;
   agentTypeId: string;

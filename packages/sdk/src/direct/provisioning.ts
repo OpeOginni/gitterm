@@ -7,6 +7,11 @@ import type {
   DirectWorkspaceRuntime,
 } from "./types.js";
 import { GittermError } from "../errors.js";
+import {
+  githubAuthProvisioning,
+  githubAuthCommand,
+  GITHUB_CLI_INSTRUCTIONS,
+} from "@gitterm/agent-runtime/github-auth";
 
 export const DIRECT_OPENCODE_PORT = 4096;
 export const DIRECT_OPENCODE_COMMAND = `opencode serve --hostname 0.0.0.0 --port ${DIRECT_OPENCODE_PORT}`;
@@ -16,8 +21,7 @@ export const DIRECT_E2B_TEMPLATES = {
   large: "gitterm-opencode-server-lg",
 } as const;
 
-export const DIRECT_GITTERM_INSTRUCTIONS =
-  "You are running in a direct Gitterm workspace. Follow the user's instructions and verify outcomes before reporting success.";
+export const DIRECT_GITTERM_INSTRUCTIONS = `You are running in a direct Gitterm workspace. Follow the user's instructions and verify outcomes before reporting success.\n\n${GITHUB_CLI_INSTRUCTIONS}`;
 const MAX_ADDITIONAL_AGENT_INSTRUCTIONS = 50_000;
 
 export function resolveDirectImage(image?: string): string {
@@ -176,7 +180,18 @@ export function buildDirectProvisioningPlan(
     },
     ...(plugins.length ? { plugin: plugins } : {}),
   };
+  const github = githubAuthProvisioning(
+    input.repo
+      ? {
+          url: input.repo,
+          authToken: input.repositoryCredentials?.token,
+          authUsername: input.repositoryCredentials?.username,
+          inlineAuth: true,
+        }
+      : undefined,
+  );
   const files: DirectAgentFile[] = [
+    ...(github?.files ?? []),
     {
       path: "~/.local/share/opencode/auth.json",
       contentBase64: base64(JSON.stringify(Object.fromEntries(credentials))),
@@ -223,11 +238,11 @@ export function buildDirectProvisioningPlan(
         ...environmentVariables,
         OPENCODE_SERVER_PASSWORD: input.password,
       },
-      command: DIRECT_OPENCODE_COMMAND,
+      command: github ? githubAuthCommand(DIRECT_OPENCODE_COMMAND) : DIRECT_OPENCODE_COMMAND,
       port: DIRECT_OPENCODE_PORT,
     },
     setup: {
-      beforeAgent: input.setup?.beforeAgent ?? [],
+      beforeAgent: [...(github ? [github.setup] : []), ...(input.setup?.beforeAgent ?? [])],
       afterAgent: input.setup?.afterAgent ?? [],
     },
   };

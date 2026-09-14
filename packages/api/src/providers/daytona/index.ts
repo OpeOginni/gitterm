@@ -438,7 +438,7 @@ export class DaytonaProvider implements ComputeProvider {
             if (dir) await this.executeCommand(sandbox, `mkdir -p ${dir}`, true);
             await this.executeCommand(
               sandbox,
-              `echo "${file.contentBase64}" | base64 -d > ${file.path}`,
+              `umask 077; echo "${file.contentBase64}" | base64 -d > ${file.path}${file.mode ? ` && chmod ${file.mode.toString(8)} ${file.path}` : ""}`,
               true,
             );
             continue;

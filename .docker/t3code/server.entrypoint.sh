@@ -126,19 +126,7 @@ elif [ ! -z "$GITHUB_APP_TOKEN" ]; then
     # Disable interactive credential helper
     git config --global credential.helper ''
 
-    # The helper reads a runtime-only token file so the token never enters this script.
-    cat > "$GIT_CREDENTIAL_HELPER" <<'CRED_HELPER'
-#!/bin/sh
-if [ "$1" = "get" ]; then
-    echo "protocol=https"
-    echo "host=github.com"
-    echo "username=x-access-token"
-    echo "password=$(cat /run/gitterm/github-token 2>/dev/null)"
-fi
-CRED_HELPER
-
-    chmod 700 "$GIT_CREDENTIAL_HELPER"
-    git config --global credential.helper "$GIT_CREDENTIAL_HELPER"
+    git config --global credential.helper /usr/local/bin/gitterm-git-credential
     export GIT_TERMINAL_PROMPT=0
 
     echo "✓ Git configured with GitHub App token"
@@ -148,14 +136,38 @@ else
 fi
 
 ########################################
+# STARTUP TIMING
+########################################
+# One line per stage so slow startups can be attributed (clone vs checkout vs
+# setup) instead of guessed at from the three-minute readiness budget.
+GITTERM_SETUP_STARTED=$(date +%s)
+GITTERM_STAGE_STARTED=$GITTERM_SETUP_STARTED
+gitterm_stage_done() {
+    GITTERM_STAGE_NOW=$(date +%s)
+    echo "[gitterm-startup] stage=$1 durationSeconds=$((GITTERM_STAGE_NOW - GITTERM_STAGE_STARTED))"
+    GITTERM_STAGE_STARTED=$GITTERM_STAGE_NOW
+}
+
+########################################
+# REPOSITORY TRUST (also needed when resuming on EFS)
+########################################
+REPO_DIR_NAME="${REPO_NAME:-$(basename "${REPO_URL:-workspace}" .git)}"
+if [ -f .repo_name ]; then REPO_DIR_NAME="$(cat .repo_name)"; fi
+case "$REPO_DIR_NAME" in
+    ''|.|..|*/*) echo "Invalid workspace repository directory" >&2; exit 1 ;;
+esac
+# EFS access points enforce UID 1000, which can differ from the container user.
+# Trust only this workspace's repository, never all repositories.
+git config --global --get-all safe.directory | grep -Fxq "/workspace/$REPO_DIR_NAME" ||
+    git config --global --add safe.directory "/workspace/$REPO_DIR_NAME"
+
+########################################
 # FIRST-TIME SETUP
 ########################################
 if [ ! -f ".initialized" ]; then
     echo "First-time workspace setup..."
 
     if [ ! -z "$REPO_URL" ]; then
-        REPO_DIR_NAME="${REPO_NAME:-$(basename "$REPO_URL" .git)}"
-
         if [ -n "$REPO_BRANCH" ]; then
             echo "Cloning repo: $REPO_URL (branch: $REPO_BRANCH) into $REPO_DIR_NAME"
         else
@@ -165,11 +177,25 @@ if [ ! -f ".initialized" ]; then
         # Prefer named checkout ref, then branch, for the initial clone.
         CLONE_REF="${REPO_CHECKOUT_REF:-$REPO_BRANCH}"
 
-        if [ -n "$CLONE_REF" ]; then
-            git clone --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
+        if [ -d "$REPO_DIR_NAME/.git" ]; then
+            if [ "$(git -C "$REPO_DIR_NAME" remote get-url origin)" != "$REPO_URL" ]; then
+                echo "Existing repository has a different origin; refusing to overwrite it." >&2
+                exit 1
+            fi
+            git -C "$REPO_DIR_NAME" rev-parse --verify HEAD >/dev/null
+            echo "Reusing repository from an earlier setup attempt."
+        elif [ "${GITTERM_GIT_FULL_HISTORY:-false}" = "true" ]; then
+            if [ -n "$CLONE_REF" ]; then
+                git clone --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
+            else
+                git clone "$REPO_URL" "$REPO_DIR_NAME"
+            fi
+        elif [ -n "$CLONE_REF" ]; then
+            git clone --depth 1 --branch "$CLONE_REF" --single-branch "$REPO_URL" "$REPO_DIR_NAME"
         else
-            git clone "$REPO_URL" "$REPO_DIR_NAME"
+            git clone --depth 1 --single-branch "$REPO_URL" "$REPO_DIR_NAME"
         fi
+        gitterm_stage_done clone
 
         # Pin to exact base commit when provided (detached HEAD).
         if [ -n "$REPO_BASE_COMMIT" ]; then
@@ -178,6 +204,7 @@ if [ ! -f ".initialized" ]; then
             git -C "$REPO_DIR_NAME" cat-file -e "${REPO_BASE_COMMIT}^{commit}"
             git -C "$REPO_DIR_NAME" checkout --detach "$REPO_BASE_COMMIT"
             test "$(git -C "$REPO_DIR_NAME" rev-parse HEAD)" = "$REPO_BASE_COMMIT"
+            gitterm_stage_done checkout
         fi
 
         echo "$REPO_OWNER" > .repo_owner
@@ -212,11 +239,14 @@ for (const file of files) {
 NODE
         rm -f "$RUNTIME_DIR/agent-files.json"
         unset AGENT_FILES_BASE64
+        gitterm_stage_done agent-files
     fi
 
     if [ -n "$WORKSPACE_BEFORE_AGENT_COMMAND_BASE64" ]; then
         GITTERM_WORKSPACE_SETUP_STRICT=1 /usr/local/bin/gitterm-workspace-setup "/workspace/$(cat .repo_name)" before-agent
+        gitterm_stage_done before-agent-setup
     fi
+    echo "[gitterm-startup] stage=first-time-setup durationSeconds=$(( $(date +%s) - GITTERM_SETUP_STARTED ))"
     touch .initialized
 fi
 
@@ -289,4 +319,8 @@ fi
     done
 ) &
 
+export PATH="$HOME/.gitterm/bin:$PATH"
+if [ -f "$HOME/.gitterm/github/runtime.cjs" ]; then
+    node "$HOME/.gitterm/github/runtime.cjs" setup
+fi
 exec "$@"

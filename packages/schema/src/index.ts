@@ -4,3 +4,4 @@ export * from "./heartbeat";
 export * from "./provider-registry";
 export * from "./workspace-catalog";
 export * from "./workspace-setup";
+export * from "./aws-access";

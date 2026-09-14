@@ -12,6 +12,7 @@
  *    `resolveProvisioningSpec` in `providers/provisioning-spec.ts`).
  */
 
+import { githubAuthProvisioning, githubAuthCommand } from "@gitterm/agent-runtime/github-auth";
 import {
   RESERVED_WORKSPACE_ENV_KEYS,
   type AgentFile,
@@ -61,15 +62,25 @@ export interface BuildWorkspaceProvisioningSpecParams {
 export function buildWorkspaceProvisioningSpec(
   params: BuildWorkspaceProvisioningSpecParams,
 ): WorkspaceProvisioningSpec {
+  const github = githubAuthProvisioning(params.repo ?? undefined);
   return {
-    agent: params.agent,
+    agent: github
+      ? {
+          ...params.agent,
+          files: [...params.agent.files, ...github.files],
+          serve: params.agent.serve
+            ? { ...params.agent.serve, command: githubAuthCommand(params.agent.serve.command) }
+            : undefined,
+        }
+      : params.agent,
     repo: params.repo ?? undefined,
     serverPassword: params.serverPassword,
     sshPublicKey: params.sshPublicKey,
     workspaceProfile: params.workspaceProfile,
     editorAccessEnabled: params.editorAccessEnabled,
     setupCommand: params.setupCommand,
-    beforeAgentCommand: params.beforeAgentCommand,
+    beforeAgentCommand:
+      [github?.setup, params.beforeAgentCommand].filter(Boolean).join("\n") || undefined,
   };
 }
 

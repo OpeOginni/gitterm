@@ -367,8 +367,11 @@ export function AwsProviderSection({ awsProviders }: AwsProviderSectionProps) {
                         type="button"
                         disabled={isDisabled}
                         onClick={() => {
+                          const previousRegion = supportedRegions?.find(
+                            (candidate) => candidate.identifier === selectedRegion,
+                          );
                           setSelectedRegion(region.identifier);
-                          if (!label) {
+                          if (!label.trim() || label === `AWS ${previousRegion?.name}`) {
                             setLabel(`AWS ${region.name}`);
                           }
                         }}

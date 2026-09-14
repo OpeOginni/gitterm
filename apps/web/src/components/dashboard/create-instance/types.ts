@@ -37,6 +37,7 @@ export interface CloudProvider {
   supportsPersistence?: boolean;
   regions?: Region[];
   machineProfiles?: MachineProfile[];
+  awsAccessProfiles?: Array<{ id: string; name: string; description: string; roleArn: string }>;
   sshAccessSupport?: sshAccessSupport;
 }
 

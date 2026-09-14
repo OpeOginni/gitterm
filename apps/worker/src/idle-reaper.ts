@@ -164,8 +164,13 @@ async function main() {
     try {
       const sweepResult = await internalClient.internal.sweepAwsResourcesInternal.mutate();
       console.log(
-        `[idle-reaper] AWS orphan cleanup complete (retried workspaces: ${sweepResult.retriedWorkspaces}, services: ${sweepResult.servicesDeleted}, task definitions: ${sweepResult.taskDefinitionsDeregistered}, rules: ${sweepResult.rulesDeleted}, target groups: ${sweepResult.targetGroupsDeleted}, access points: ${sweepResult.accessPointsDeleted})`,
+        `[idle-reaper] AWS orphan cleanup complete (retried workspaces: ${sweepResult.retriedWorkspaces}, secrets: ${sweepResult.runtimeSecretsDeleted}, services: ${sweepResult.servicesDeleted}, task definitions: ${sweepResult.taskDefinitionsDeregistered}, rules: ${sweepResult.rulesDeleted}, target groups: ${sweepResult.targetGroupsDeleted}, access points: ${sweepResult.accessPointsDeleted}, failed deletions: ${sweepResult.cleanupFailures.length}, unresolved workspaces: ${sweepResult.unresolvedCleanupCount})`,
       );
+      for (const failure of sweepResult.cleanupFailures) {
+        console.error(
+          `[idle-reaper] AWS cleanup failed for ${failure.resource}: ${failure.reason}`,
+        );
+      }
     } catch (error) {
       console.error("[idle-reaper] AWS orphan cleanup failed:", error);
     }

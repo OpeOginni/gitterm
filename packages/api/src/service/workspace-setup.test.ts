@@ -2,18 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  AWS_CLI_SETUP_COMMAND,
-  buildWorkspaceSetupCommand,
-  withWorkspaceSetupPort,
-} from "./workspace-setup";
-
-test("AWS CLI setup persists the install across container replacements", () => {
-  expect(AWS_CLI_SETUP_COMMAND).toContain('--install-dir "$aws_install_dir"');
-  expect(AWS_CLI_SETUP_COMMAND).toContain('--bin-dir "$aws_bin_dir"');
-  expect(AWS_CLI_SETUP_COMMAND).toContain("$HOME/.gitterm/aws-cli");
-  expect(AWS_CLI_SETUP_COMMAND).toContain("$HOME/.bun/bin");
-});
+import { buildWorkspaceSetupCommand, withWorkspaceSetupPort } from "./workspace-setup";
 
 describe("buildWorkspaceSetupCommand", () => {
   test("returns undefined without commands", () => {

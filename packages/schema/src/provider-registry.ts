@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { awsAccessProfileSchema } from "./aws-access";
 
 export const providerCategoryEnum = z.enum(["compute", "sandbox", "both"]);
 export const fieldTypeEnum = z.enum(["text", "password", "number", "select", "url", "boolean"]);
@@ -26,6 +27,8 @@ export interface ProviderDefinition {
   category: z.infer<typeof providerCategoryEnum>;
   configSchema: z.ZodSchema;
   fields: ProviderConfigField[];
+  /** Non-secret structured fields managed by dedicated admin interfaces. */
+  metadataFields?: string[];
 }
 
 export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
@@ -106,6 +109,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
 
   aws: {
     name: "aws",
+    metadataFields: ["accessProfiles"],
     displayName: "AWS",
     category: "compute",
     configSchema: z.object({
@@ -120,6 +124,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       albBaseUrl: z.url("Must be a valid URL"),
       taskExecutionRoleArn: z.string().min(1, "Task execution role ARN is required"),
       taskRoleArn: z.string().min(1, "Task role ARN is required"),
+      accessProfiles: z.array(awsAccessProfileSchema).max(50).optional(),
       assignPublicIp: z.boolean().optional(),
       publicSshEnabled: z.boolean().optional(),
       efsFileSystemId: z.string().optional(),

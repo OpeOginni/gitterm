@@ -61,6 +61,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [userCloudProviderId, setUserCloudProviderId] = useState<string | null>(null);
   const [userRegionId, setUserRegionId] = useState<string | null>(null);
   const [userMachineProfileId, setUserMachineProfileId] = useState<string | null>(null);
+  const [awsProfileSelection, setAwsProfileSelection] = useState<{
+    providerId: string;
+    id: string;
+  } | null>(null);
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string | null>(null);
   const [persistent, setPersistent] = useState(true);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
@@ -218,6 +222,12 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   }, [isAwsGroup, awsProviders, nonAwsProviders, selectedCloudGroupKey, userCloudProviderId]);
 
   const selectedCloudProviderId = selectedCloudProvider?.id ?? "";
+  const awsAccessProfiles = selectedCloudProvider?.awsAccessProfiles ?? [];
+  const selectedAwsProfileId =
+    awsProfileSelection?.providerId === selectedCloudProviderId &&
+    awsAccessProfiles.some((profile) => profile.id === awsProfileSelection.id)
+      ? awsProfileSelection.id
+      : undefined;
   const availableMachineProfiles = selectedCloudProvider?.machineProfiles ?? [];
   const selectedMachineProfileId =
     (userMachineProfileId &&
@@ -387,6 +397,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       cloudProviderId: resolvedCloudProviderId,
       regionId: resolvedRegionId,
       machineProfileId: selectedMachineProfileId,
+      awsAccessProfileId: isAwsGroup ? selectedAwsProfileId : undefined,
       gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
@@ -621,6 +632,43 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               ) : null}
             </div>
           </div>
+
+          {isAwsGroup && (
+            <div className="col-span-2 grid gap-1.5">
+              <Label
+                htmlFor="aws-access-profile"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                AWS access
+              </Label>
+              <Select
+                value={selectedAwsProfileId ?? "default"}
+                onValueChange={(id) =>
+                  setAwsProfileSelection(
+                    id === "default" ? null : { providerId: selectedCloudProviderId, id },
+                  )
+                }
+              >
+                <SelectTrigger id="aws-access-profile" className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Provider default role</SelectItem>
+                  {awsAccessProfiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {awsAccessProfiles.find((profile) => profile.id === selectedAwsProfileId)
+                  ?.description ||
+                  "Use an administrator-added task role with temporary AWS credentials. All listed roles are available to all users."}{" "}
+                The selected role stays with this workspace after pause/resume.
+              </p>
+            </div>
+          )}
 
           {availableMachineProfiles.length > 1 && (
             <div className="col-span-2 grid gap-1.5">

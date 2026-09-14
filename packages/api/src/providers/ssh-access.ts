@@ -89,16 +89,6 @@ export function isEditorReadyImageName(name: string, imageId?: string): boolean 
   );
 }
 
-export function pickWorkspaceImage<
-  T extends {
-    name: string;
-    imageId: string;
-    providerMetadata?: { isDefault?: boolean } | null;
-  },
->(images: T[], _profile: WorkspaceProfile): T | undefined {
-  return images[0];
-}
-
 export function buildHostAlias(subdomain: string): string {
   return `gitterm-${subdomain}`;
 }

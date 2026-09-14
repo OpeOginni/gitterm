@@ -38,7 +38,8 @@ ENV HOME=/workspace \
 
 COPY ./opencode/server.entrypoint.sh /entrypoint.sh
 COPY ./workspace-setup-runner.sh /usr/local/bin/gitterm-workspace-setup
-RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup
+COPY ./git-credential-github.mjs /usr/local/bin/gitterm-git-credential
+RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup /usr/local/bin/gitterm-git-credential
 
 ENV PORT=7681
 EXPOSE 22

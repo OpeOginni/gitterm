@@ -110,6 +110,7 @@ export type DirectWorkspaceCreateInput = {
   branch?: string;
   baseCommit?: string;
   checkoutRef?: string;
+  /** Git credentials; also configure runtime Git/gh authentication for github.com. Not auto-renewed. */
   repositoryCredentials?: { username?: string; token: string };
   lifecycle?: DirectWorkspaceLifecycle;
   environmentVariables?: Record<string, string>;

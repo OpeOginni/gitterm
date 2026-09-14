@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildWorkspaceEnv } from "./workspace-env";
+import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "./workspace-env";
 import type { WorkspaceProvisioningSpec } from "../providers/compute";
 
 const spec: WorkspaceProvisioningSpec = {
@@ -27,6 +27,27 @@ function runtime(provider: string) {
 }
 
 describe("managed clone credentials", () => {
+  test.each([true, false])(
+    "provisions shared runtime credentials (inline=%s) before user setup",
+    (inlineAuth) => {
+      const provision = buildWorkspaceProvisioningSpec({
+        ...spec,
+        agent: { ...spec.agent, serve: { command: "opencode serve", port: 4096 } },
+        repo: { ...spec.repo!, inlineAuth, authExpiresAt: "2026-09-09T00:00:00Z" },
+        beforeAgentCommand: "gh pr list",
+      });
+      const file = provision.agent.files.find((entry) =>
+        entry.path.endsWith("github/config.json"),
+      )!;
+      const credential = JSON.parse(Buffer.from(file.contentBase64, "base64").toString());
+      expect(credential.renewable).toBe(!inlineAuth);
+      expect(credential.expiresAt).toBe("2026-09-09T00:00:00Z");
+      expect(provision.beforeAgentCommand).toEndWith("gh pr list");
+      expect(provision.beforeAgentCommand).not.toContain("inline-pat");
+      expect(provision.agent.serve?.command).toContain(".gitterm/bin");
+      expect(spec.agent.files).toEqual([]);
+    },
+  );
   test.each(["railway", "aws"])("passes inline auth to %s entrypoints", (provider) => {
     const env = buildWorkspaceEnv(spec, runtime(provider));
     expect(env.GITTERM_REPOSITORY_USERNAME).toBe("x-access-token");

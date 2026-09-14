@@ -111,6 +111,10 @@ export class GittermSandbox extends Sandbox<Env> {
       const persisted = payload.repo?.inlineAuth
         ? {
             ...payload,
+            // The inline token is retained only on the workspace filesystem.
+            agentFiles: payload.agentFiles?.filter(
+              (file) => file.path !== "~/.gitterm/github/config.json",
+            ),
             repo: {
               ...payload.repo,
               authUsername: undefined,

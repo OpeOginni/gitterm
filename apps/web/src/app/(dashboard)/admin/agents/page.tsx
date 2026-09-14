@@ -36,6 +36,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
 
+const PROVIDER_LABELS: Record<string, string> = {
+  aws: "AWS",
+  e2b: "E2B",
+  daytona: "Daytona",
+  cloudflare: "Cloudflare",
+  vercel: "Vercel",
+  ascii: "Ascii",
+  exedev: "exe.dev",
+  railway: "Railway",
+};
+
 export default function AgentTypesPage() {
   const router = useRouter();
   const { data: session, isPending: isSessionPending } = authClient.useSession();
@@ -275,7 +286,8 @@ export default function AgentTypesPage() {
         ) : (
           <div className="space-y-2">
             {agentTypes?.map((agent) => {
-              const runtimeImage = images?.find((image) => image.agentTypeId === agent.id);
+              const runtimeImages = images?.filter((image) => image.agentTypeId === agent.id) ?? [];
+              const hasEnabledRuntimeImage = runtimeImages.some((image) => image.isEnabled);
               const isSeeded = ["opencode-ttyd", "opencode", "t3code"].includes(agent.key);
 
               return (
@@ -323,36 +335,67 @@ export default function AgentTypesPage() {
                       </div>
 
                       <div
-                        className={`flex flex-col gap-3 rounded-xl border px-3 py-3 sm:flex-row sm:items-center sm:justify-between ${
-                          runtimeImage
+                        className={`rounded-xl border px-3 py-3 ${
+                          runtimeImages.length > 0
                             ? "border-border/70 bg-foreground/[0.015]"
                             : "border-amber-500/20 bg-amber-500/[0.04]"
                         }`}
                       >
-                        <div className="flex min-w-0 items-center gap-3">
+                        <div className="mb-2 flex items-center gap-2">
                           <Container
-                            className={`h-4 w-4 shrink-0 ${runtimeImage ? "text-muted-foreground" : "text-amber-400"}`}
+                            className={`h-4 w-4 shrink-0 ${runtimeImages.length > 0 ? "text-muted-foreground" : "text-amber-400"}`}
                           />
-                          {runtimeImage ? (
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-medium text-foreground/85">
-                                  {runtimeImage.name}
-                                </span>
-                                {!runtimeImage.isEnabled ? (
+                          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Runtime images{" "}
+                            {runtimeImages.length > 0 ? `· ${runtimeImages.length}` : ""}
+                          </span>
+                        </div>
+                        {runtimeImages.length > 0 ? (
+                          <div className="divide-y divide-border/60">
+                            {runtimeImages.map((runtimeImage) => {
+                              const providers = runtimeImage.supportedProviders.map(
+                                (provider) => PROVIDER_LABELS[provider] ?? provider,
+                              );
+                              const scope =
+                                providers.length === 1
+                                  ? `${providers[0]} only`
+                                  : providers.join(" · ") || "Local only";
+
+                              return (
+                                <div
+                                  key={runtimeImage.id}
+                                  className="flex min-w-0 flex-col gap-1 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-sm font-medium text-foreground/85">
+                                        {runtimeImage.name}
+                                      </span>
+                                      {!runtimeImage.isEnabled ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="border-foreground/[0.08] text-[10px] text-muted-foreground"
+                                        >
+                                          Disabled
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                    <code className="block truncate font-mono text-[11px] text-muted-foreground">
+                                      {runtimeImage.imageId}
+                                    </code>
+                                  </div>
                                   <Badge
                                     variant="outline"
-                                    className="border-foreground/[0.08] text-[10px] text-muted-foreground"
+                                    className="w-fit shrink-0 border-amber-400/20 bg-amber-400/[0.04] text-[10px] text-amber-200/80"
                                   >
-                                    Image disabled
+                                    {scope}
                                   </Badge>
-                                ) : null}
-                              </div>
-                              <code className="block truncate font-mono text-[11px] text-muted-foreground">
-                                {runtimeImage.imageId}
-                              </code>
-                            </div>
-                          ) : (
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="ml-6">
                             <div>
                               <p className="text-sm font-medium text-amber-300">
                                 Runtime image missing
@@ -361,15 +404,15 @@ export default function AgentTypesPage() {
                                 Connect an image before enabling this agent.
                               </p>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     <div className="flex shrink-0 items-center justify-end gap-2 sm:self-center">
                       <Switch
                         checked={agent.isEnabled}
-                        disabled={!runtimeImage && !agent.isEnabled}
+                        disabled={!hasEnabledRuntimeImage && !agent.isEnabled}
                         onCheckedChange={(checked) =>
                           toggleAgentType.mutate({ id: agent.id, isEnabled: checked })
                         }

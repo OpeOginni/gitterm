@@ -134,7 +134,10 @@ type E2bResources = { templateId?: string; sshTemplateId?: string };
 
 export type WorkspaceProviderSelection =
   | { type: "railway"; providerId?: string; region?: string }
-  | ({ type: "aws"; region?: string } & Omit<ProviderSelectionBase, "machine"> & {
+  | ({ type: "aws"; region?: string; accessProfile?: string } & Omit<
+      ProviderSelectionBase,
+      "machine"
+    > & {
         machine?: FlexibleMachine<AwsResources>;
       })
   | ({ type: "daytona" } & Omit<ProviderSelectionBase, "machine"> & {
@@ -191,7 +194,9 @@ export type WorkspaceCreateInput = {
   /** Provider intent. Defaults to the user's or deployment's preferred provider. */
   provider?: WorkspaceProviderSelection;
   /** Inline Git credentials for repository validation, cloning, and runtime pull/push. */
+  /** Runtime Git/gh authentication. Takes precedence over gitIntegrationId; not auto-renewed. */
   repositoryCredentials?: { username?: string; token: string };
+  /** Dashboard GitHub App integration; runtime Git/gh credentials are renewed automatically. */
   gitIntegrationId?: string;
   /** Defaults from the selected provider. */
   persistent?: boolean;
@@ -534,6 +539,7 @@ export type AgentType = {
 export type CloudProvider = {
   id: string;
   name: string;
+  awsAccessProfiles?: Array<{ id: string; name: string; description: string; roleArn: string }>;
   providerKey: ProviderKey | string;
   regions?: Array<{
     id: string;
@@ -559,6 +565,7 @@ export type WorkspaceCatalog = {
     persistence: "required" | "optional" | "unsupported";
     regionSelection: "none" | "user" | "admin";
     regions: Array<{ id: string; key: string; name: string; location: string }>;
+    accessProfiles?: Array<{ id: string; name: string; description: string; roleArn: string }>;
     machines: Array<{
       id: string;
       key: string;

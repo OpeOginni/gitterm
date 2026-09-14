@@ -3,7 +3,6 @@ import { questionAnswers } from "@gitterm/agent-runtime/replies";
 import { RuntimeHttpError } from "@gitterm/agent-runtime/http";
 import { and, db, desc, eq, inArray, sql } from "@gitterm/db";
 import { agentRun, type AgentRun, type AgentRunInputRequest } from "@gitterm/db/schema/agent-run";
-import { model, userModelCredential } from "@gitterm/db/schema/model-credentials";
 import { TRPCError } from "@trpc/server";
 import { getWorkspaceSetupStatus } from "../workspace-setup";
 import { publicRun } from "./public";
@@ -23,7 +22,6 @@ import {
   getRuntimeTarget,
   notRunningError,
   runtimeTargetFor,
-  type RunWorkspace,
 } from "./target";
 import { ensureWorkspaceWatcher, stoppedWorkspaceMessage, untrackRun } from "./watcher";
 import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-error";
@@ -103,52 +101,16 @@ async function waitForWorkspaceRunning(workspaceId: string, userId: string, time
   }
 }
 
-async function validateModelCredential(
-  workspaceRecord: RunWorkspace,
-  userId: string,
-  selectedModel: string | undefined,
-) {
+export function validateModelReference(selectedModel: string | undefined) {
   if (!selectedModel) return;
-  let provider: string;
   try {
-    provider = parseModelRef(selectedModel)!.providerID;
+    parseModelRef(selectedModel);
   } catch {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: 'MODEL_CREDENTIAL_REQUIRED: model must use the "provider/model" format',
+      message: 'Model must use the "provider/model" format',
     });
   }
-
-  const [registeredModel] = await db
-    .select({ isFree: model.isFree })
-    .from(model)
-    .where(eq(model.modelId, selectedModel))
-    .limit(1);
-  if (registeredModel?.isFree) return;
-
-  // OpenCode's own free catalog changes often; let it decide about auth.
-  if (provider === "opencode") return;
-  if (workspaceRecord.inlineModelProviders.includes(provider)) return;
-
-  const credentialIds = workspaceRecord.modelCredentialIds;
-  if (credentialIds.length > 0) {
-    const credentials = await db
-      .select({ logicalProviderKey: userModelCredential.logicalProviderKey })
-      .from(userModelCredential)
-      .where(
-        and(
-          eq(userModelCredential.userId, userId),
-          eq(userModelCredential.isActive, true),
-          inArray(userModelCredential.id, credentialIds),
-        ),
-      );
-    if (credentials.some((credential) => credential.logicalProviderKey === provider)) return;
-  }
-
-  throw new TRPCError({
-    code: "BAD_REQUEST",
-    message: `MODEL_CREDENTIAL_REQUIRED: Model "${selectedModel}" requires a credential for provider "${provider}". Recreate the workspace with models.providers["${provider}"] set to a saved source by label, a default source, or an inline apiKey source.`,
-  });
 }
 
 /** The proxy answers 502/503/504 while the agent server is still booting. */
@@ -289,7 +251,10 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
     input.startTimeoutMs ?? 120_000,
   );
   const target = await runtimeTargetFor(workspaceRecord);
-  await validateModelCredential(workspaceRecord, userId, input.model);
+  // Provider authentication is intentionally delegated to OpenCode. Besides
+  // saved/API-key credentials, providers may use ambient runtime identities
+  // such as AWS ECS task roles or other workload credential chains.
+  validateModelReference(input.model);
   if (input.waitForSetup) {
     await waitForSetup(input.workspaceId, userId, input.setupTimeoutMs ?? 10 * 60_000);
   }
