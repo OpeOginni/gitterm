@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { PROVIDER_DEFINITIONS, PROVIDER_KEYS } from "@gitterm/schema";
 import { getAvailableProviderNames, getProvider } from ".";
+import { PROVIDER_SECURITY_CAPABILITIES } from "./security-capabilities";
 
 const REQUIRED_METHODS = [
   "createWorkspace",
@@ -21,6 +22,7 @@ describe("compute provider conformance", () => {
 
     expect(getAvailableProviderNames().toSorted()).toEqual(expected);
     expect(Object.keys(PROVIDER_DEFINITIONS).toSorted()).toEqual(expected);
+    expect(Object.keys(PROVIDER_SECURITY_CAPABILITIES).toSorted()).toEqual(expected);
   });
 
   for (const providerKey of PROVIDER_KEYS) {
@@ -31,6 +33,7 @@ describe("compute provider conformance", () => {
       for (const method of REQUIRED_METHODS) {
         expect(typeof provider[method]).toBe("function");
       }
+      expect(PROVIDER_SECURITY_CAPABILITIES[providerKey].runtimeOnlySecretFiles).toBe(true);
     });
   }
 });

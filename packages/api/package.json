@@ -41,6 +41,10 @@
     "./service/encryption": {
       "default": "./src/service/encryption.ts"
     },
+    "./service/credential-audit": {
+      "types": "./src/service/credential-audit.ts",
+      "default": "./src/service/credential-audit.ts"
+    },
     "./service/auth/cli/device-code": {
       "types": "./src/service/auth/cli/device-code.ts",
       "default": "./src/service/auth/cli/device-code.ts"
@@ -52,6 +56,10 @@
     "./service/auth/workspace-jwt": {
       "types": "./src/service/auth/workspace-jwt.ts",
       "default": "./src/service/auth/workspace-jwt.ts"
+    },
+    "./service/workload-identity/google": {
+      "types": "./src/service/workload-identity/google.ts",
+      "default": "./src/service/workload-identity/google.ts"
     },
     "./service/*": {
       "default": "./src/service/*/index.ts"

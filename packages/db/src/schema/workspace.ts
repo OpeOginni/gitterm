@@ -20,7 +20,7 @@ import {
   region,
 } from "./cloud";
 import { relations } from "drizzle-orm";
-import { gitIntegration } from "./integrations";
+import { gitIntegration, googleCloudIntegration } from "./integrations";
 
 /** Which OpenCode HTTP API generation the workspace's agent server speaks. */
 export const opencodeApiEnum = pgEnum("opencode_api", ["v1", "v2"] as const);
@@ -77,6 +77,10 @@ export const workspace = pgTable(
     gitIntegrationId: uuid("git_integration_id").references(() => gitIntegration.id, {
       onDelete: "set null",
     }),
+    googleCloudIntegrationId: uuid("google_cloud_integration_id").references(
+      () => googleCloudIntegration.id,
+      { onDelete: "set null" },
+    ),
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
@@ -105,6 +109,8 @@ export const workspace = pgTable(
     subdomain: text("subdomain"), // The workspace URL identifier (UUID format)
     upstreamUrl: text("upstream_url"), // URL to proxy requests to (cloud container or tunnel endpoint)
     status: workspaceStatusEnum("status").notNull(),
+    /** Increment to revoke every workspace-issued bearer token immediately. */
+    authVersion: integer("auth_version").notNull().default(1),
     persistent: boolean("persistent").notNull().default(false),
     serverOnly: boolean("server_only").notNull().default(false),
     workspaceProfile: workspaceProfileEnum("workspace_profile").notNull().default("standard"),
@@ -116,7 +122,7 @@ export const workspace = pgTable(
     setupRequired: boolean("setup_required").notNull().default(false),
     /**
      * v1 = the legacy `/event` + `/session/*` API served by OpenCode 1.x images.
-     * v2 = the `/api/*` API of OpenCode 2 (experimental until 2.0 ships).
+     * v2 = the `/api/*` API of OpenCode 2. Application code selects this for new workspaces.
      */
     opencodeApi: opencodeApiEnum("opencode_api").notNull().default("v1"),
 

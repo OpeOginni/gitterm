@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { GitHubConnection } from "@/components/dashboard/github-connection";
+import { GoogleCloudConnection } from "@/components/dashboard/google-cloud-connection";
 import { IntegrationCallbackHandler } from "@/components/dashboard/integrations/integration-callback-handler";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GitBranch, Lock } from "lucide-react";
@@ -137,6 +138,11 @@ export default async function IntegrationsPage() {
           <Suspense fallback={<GitHubConnectionSkeleton />}>
             <GitHubConnection />
           </Suspense>
+        </section>
+
+        <section className="space-y-4">
+          <SectionEyebrow>Cloud identity</SectionEyebrow>
+          <GoogleCloudConnection />
         </section>
 
         <section className="space-y-4">

@@ -23,14 +23,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG T3_VERSION=latest
 ARG CLAUDE_CODE_VERSION=latest
 ARG CODEX_VERSION=latest
-ARG OPENCODE_VERSION=latest
+ARG OPENCODE_VERSION=2
 ARG T3_INSTALL_CACHE_BUST=manual
 RUN echo "t3 install cache bust: ${T3_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
     && npm install -g "t3@${T3_VERSION}" --prefer-online --no-audit --fund=false \
     && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" --no-audit --fund=false \
     && npm install -g "@openai/codex@${CODEX_VERSION}" --no-audit --fund=false \
-    && npm install -g "opencode-ai@${OPENCODE_VERSION}" --no-audit --fund=false \
+    && npm install -g "@opencode/cli@${OPENCODE_VERSION}" --no-audit --fund=false \
     && npm install -g "@gitterm/cli@latest" --no-audit --fund=false \
     && echo "installed t3: $(t3 --version 2>/dev/null || echo unknown)"
 
@@ -58,7 +58,8 @@ ENV HOME=/workspace \
 COPY ./t3code/server.entrypoint.sh /entrypoint.sh
 COPY ./workspace-setup-runner.sh /usr/local/bin/gitterm-workspace-setup
 COPY ./git-credential-github.mjs /usr/local/bin/gitterm-git-credential
-RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup /usr/local/bin/gitterm-git-credential
+COPY ./runtime-bootstrap.mjs /usr/local/bin/gitterm-runtime-bootstrap
+RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup /usr/local/bin/gitterm-git-credential /usr/local/bin/gitterm-runtime-bootstrap
 
 ENV PORT=7681
 EXPOSE 22

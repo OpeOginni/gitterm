@@ -23,10 +23,12 @@ Create a workspace, run a prompt, and get the final result:
 import { createGittermClient } from "@gitterm/sdk";
 
 const client = createGittermClient({ token: process.env.GITTERM_API_TOKEN });
+const [github] = await client.integrations.github.list();
+if (!github) throw new Error("Connect GitHub in the Gitterm dashboard first");
 
 const { workspace } = await client.workspaces.create({
   repo: "https://github.com/acme/product",
-  repositoryCredentials: { token: process.env.GITHUB_TOKEN! },
+  gitIntegrationId: github.id,
   autoTerminateAfterMs: 2 * 60 * 60 * 1000,
 });
 
@@ -42,6 +44,22 @@ try {
   await client.workspaces.terminate(workspace);
 }
 ```
+
+Connected cloud identities are discoverable without returning credentials:
+
+```ts
+const [github] = await client.integrations.github.list();
+const [googleCloud] = await client.integrations.googleCloud.list();
+
+await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  gitIntegrationId: github.id,
+  googleCloudIntegrationId: googleCloud.id,
+});
+```
+
+GitHub tokens and Google workload credentials are issued inside the workspace; the SDK caller does
+not receive or forward them.
 
 `result()` returns only on successful completion. If the agent asks something and no handler is
 registered, it throws `AgentRunError` with code `INPUT_REQUIRED` and the current `error.run`.
@@ -664,11 +682,10 @@ would otherwise change them for other runs on the same runtime.
 
 ## OpenCode API versions
 
-Managed workspaces continue to run `opencode-ai@latest` (`opencodeApi: "v1"`). OpenCode 2
-changes the server API; callers testing it must supply their own compatible image and create the
-workspace with `opencode: { api: "v2" }`. Runs, questions, permissions, and events behave the
-same from the SDK's point of view; the flag only tells GitTerm which protocol to speak to the
-workspace. `v2` is experimental until OpenCode 2 ships.
+Managed workspaces run OpenCode V2 from `@opencode/cli@2` and use `opencodeApi: "v2"`. V2 stores
+credentials in SQLite; GitTerm writes a short-lived `auth.json` seed, initializes V2's database,
+imports and verifies each credential in SQLite, then deletes the seed. Runs, questions, permissions,
+and events use GitTerm's V2 runtime adapter.
 
 ## Errors
 

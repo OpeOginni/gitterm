@@ -179,6 +179,46 @@ function eventClient(frames: unknown[][], seen: string[] = []) {
   return createGittermClient({ token: "gt_test", fetch: fetchStub });
 }
 
+test("integration discovery maps GitHub and Google identities", async () => {
+  const fetchStub = (async (input: RequestInfo | URL) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("listUserInstallations")) {
+      return trpcOk({
+        installations: [
+          {
+            git_integration: {
+              id: "github-id",
+              providerAccountLogin: "culinu-bot",
+              connectedAt: "2026-09-14T00:00:00.000Z",
+            },
+            github_app_installation: {
+              accountType: "Organization",
+              repositorySelection: "selected",
+              suspended: false,
+            },
+          },
+        ],
+      });
+    }
+    return trpcOk([
+      {
+        id: "google-id",
+        name: "Culinu dev",
+        projectId: "kuechenzauber-dev",
+        workloadIdentityProvider: "projects/1/locations/global/workloadIdentityPools/p/providers/g",
+        serviceAccountEmail: "agent@kuechenzauber-dev.iam.gserviceaccount.com",
+        connectedAt: "2026-09-14T00:00:00.000Z",
+      },
+    ]);
+  }) as unknown as typeof fetch;
+  const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
+
+  const github = await client.integrations.github.list();
+  const google = await client.integrations.googleCloud.list();
+  expect(github[0]).toMatchObject({ id: "github-id", accountLogin: "culinu-bot" });
+  expect(google[0]).toMatchObject({ id: "google-id", projectId: "kuechenzauber-dev" });
+});
+
 test("run helpers accept the run object instead of an id pair", async () => {
   const seen: string[] = [];
   const client = eventClient(

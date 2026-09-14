@@ -55,7 +55,7 @@ export type WorkspaceRef = string | { id: string };
 /** An `AgentRun`, or any object carrying its `workspaceId` and `id`. */
 export type RunRef = { workspaceId: string; id: string };
 
-/** `v1` = OpenCode 1.x (`/event`, `/session/*`); `v2` = OpenCode 2 (`/api/*`), experimental until 2.0 ships. */
+/** `v1` = OpenCode 1.x (`/event`, `/session/*`); `v2` = OpenCode 2 (`/api/*`) and the default. */
 export type OpencodeApi = "v1" | "v2";
 
 export type WaitOptions = {
@@ -198,6 +198,8 @@ export type WorkspaceCreateInput = {
   repositoryCredentials?: { username?: string; token: string };
   /** Dashboard GitHub App integration; runtime Git/gh credentials are renewed automatically. */
   gitIntegrationId?: string;
+  /** Google Workload Identity Federation integration; injects keyless ADC/gcloud auth. */
+  googleCloudIntegrationId?: string;
   /** Defaults from the selected provider. */
   persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
@@ -227,11 +229,28 @@ export type WorkspaceCreateInput = {
      */
     config?: Record<string, unknown>;
     /**
-     * OpenCode API generation served by the image. Defaults to `v1`. Use `v2`
-     * with an image built on OpenCode 2 (`@opencode-ai/cli`); experimental.
+     * OpenCode API generation served by the image. Defaults to `v2`.
      */
     api?: OpencodeApi;
   };
+};
+
+export type GitHubIntegration = {
+  id: string;
+  accountLogin: string;
+  accountType: string;
+  repositorySelection: string;
+  suspended: boolean;
+  connectedAt: string;
+};
+
+export type GoogleCloudIntegration = {
+  id: string;
+  name: string;
+  projectId: string;
+  workloadIdentityProvider: string;
+  serviceAccountEmail: string;
+  connectedAt: string;
 };
 
 export type WorkspaceRestartResult = { status: WorkspaceStatus };

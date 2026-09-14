@@ -1,7 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type {
   AgentRun,
   AgentRunInputRequest,
@@ -25,9 +22,9 @@ const settings = {
 const options = smokeOptions([], {});
 
 describe("managed runtime smoke options", () => {
-  test("defaults to every managed provider and both generations", () => {
+  test("defaults to every managed provider on V2", () => {
     expect(options.providers).toEqual([...PROVIDERS]);
-    expect(options.apis).toEqual(["v1", "v2"]);
+    expect(options.apis).toEqual(["v2"]);
   });
 
   test("supports individual versions, comma-separated providers, and boolean flags", () => {
@@ -75,48 +72,7 @@ test("each workspace selects the matching adapter and setup, with automatic expi
     expect(input.opencode?.config?.permission).toEqual({ bash: "ask" });
   }
   expect(beforeAgent("v1")).not.toContain("npm install");
-  expect(beforeAgent("v2")).toContain("@opencode-ai/cli@beta");
-});
-
-test("beta setup redirects opencode without overwriting its symlink target; preserves args", () => {
-  const directory = mkdtempSync(join(tmpdir(), "gitterm-smoke-setup-test-"));
-  try {
-    const bin = join(directory, "bin");
-    mkdirSync(bin);
-    const original = join(bin, "original");
-    const contents = '#!/bin/sh\nprintf "1.2.3\\n"\n';
-    writeFileSync(original, contents, { mode: 0o755 });
-    symlinkSync(original, join(bin, "opencode"));
-    // Fake npm so this exercises the setup shell without installing packages.
-    writeFileSync(
-      join(bin, "npm"),
-      `#!/bin/sh
-set -eu
-test "$1" = install
-test "$2" = --prefix
-test "$4" = @opencode-ai/cli@beta
-mkdir -p "$3/node_modules/.bin"
-printf '#!/bin/sh\nprintf "%%s\\n" "beta-test" "$@"\n' > "$3/node_modules/.bin/opencode2"
-chmod 755 "$3/node_modules/.bin/opencode2"
-`,
-      { mode: 0o755 },
-    );
-    const env = { ...process.env, HOME: directory, PATH: `${bin}:${process.env.PATH}` };
-    const v1 = Bun.spawnSync(["bash", "-c", beforeAgent("v1")], { env });
-    expect(v1.exitCode).toBe(0);
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const result = Bun.spawnSync(["bash", "-c", beforeAgent("v2")], { env });
-      expect(result.stderr.toString()).toBe("");
-      expect(result.exitCode).toBe(0);
-    }
-    expect(readFileSync(original, "utf8")).toBe(contents);
-    expect(readFileSync(join(bin, "opencode.gitterm-smoke-v1"), "utf8")).toBe(contents);
-    const result = Bun.spawnSync([join(bin, "opencode"), "serve", "argument with spaces"], { env });
-    expect(result.stdout.toString()).toBe("beta-test\nserve\nargument with spaces\n");
-    expect(Bun.spawnSync(["bash", "-c", beforeAgent("v1")], { env }).exitCode).not.toBe(0);
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
+  expect(beforeAgent("v2")).not.toContain("npm install");
 });
 
 function mockClient(api: OpencodeApi, setupFails = false, cleanupFails = false) {

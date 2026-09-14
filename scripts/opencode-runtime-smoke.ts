@@ -2,9 +2,8 @@
 /**
  * Managed OpenCode runtime smoke matrix (creates billable cloud workspaces).
  *
- *   bun run scripts/opencode-runtime-smoke.ts                         # all providers × v1/v2
- *   bun run scripts/opencode-runtime-smoke.ts --provider e2b --api v1
- *   bun run scripts/opencode-runtime-smoke.ts --provider e2b,daytona --api both
+ *   bun run scripts/opencode-runtime-smoke.ts                         # all providers on V2
+ *   bun run scripts/opencode-runtime-smoke.ts --provider e2b
  *   bun run scripts/opencode-runtime-smoke.ts --all --api v2 --dry-run
  *
  * Loads scripts/.env, like provider-smoke.ts. Requires GITTERM_SERVER_URL,
@@ -12,7 +11,7 @@
  * managed server, not here. Unavailable providers fail rather than silently skip.
  * Uses opencode/big-pickle; override with --model or GITTERM_E2E_MODEL.
  * GITTERM_MODEL_API_KEY optionally supplies an inline model credential.
- * V2 installs @opencode-ai/cli@beta in beforeAgent; V1 uses the image's binary.
+ * Canonical images and provider templates install @opencode/cli@2.
  * Every matrix entry gets its own workspace, terminated even on test failure.
  */
 import { join } from "node:path";
@@ -64,7 +63,7 @@ export function smokeOptions(argv: string[], env: NodeJS.ProcessEnv = process.en
   ) {
     throw new Error(`Unknown providers: ${selection}. Choose ${PROVIDERS.join(", ")} or all.`);
   }
-  const api = values.api ?? "both";
+  const api = values.api ?? "v2";
   const apis: OpencodeApi[] =
     api === "both" || api === "all"
       ? ["v1", "v2"]
@@ -88,36 +87,12 @@ export function smokeOptions(argv: string[], env: NodeJS.ProcessEnv = process.en
 
 /** Only runs inside a newly created, disposable managed workspace. */
 export function beforeAgent(api: OpencodeApi): string {
-  if (api === "v1")
-    return [
-      "set -eu",
-      'version="$(opencode --version)"',
-      'case "$version" in 1.*) ;; *) echo "Expected OpenCode 1, got $version" >&2; exit 1 ;; esac',
-      'printf "OpenCode v1: %s\\n" "$version"',
-    ].join("\n");
-
+  const major = api === "v2" ? "2" : "1";
   return [
     "set -eu",
-    'prefix="$HOME/.gitterm-runtime-smoke-v2"',
-    'mkdir -p "$prefix"',
-    'npm install --prefix "$prefix" @opencode-ai/cli@beta --no-audit --fund=false',
-    'binary="$prefix/node_modules/.bin/opencode2"',
-    'test -x "$binary"',
-    'version="$("$binary" --version)"',
-    // Provider serve commands (including container CMDs) still use opencode.
-    // Replace the launcher, NOT its symlink target, and retain the original.
-    'launcher="$(command -v opencode)"',
-    'case "$launcher" in /*) ;; *) echo "Expected an absolute opencode launcher path" >&2; exit 1 ;; esac',
-    "install_launcher() {",
-    '  if [ ! -e "${launcher}.gitterm-smoke-v1" ] && [ ! -L "${launcher}.gitterm-smoke-v1" ]; then',
-    '    "$@" mv "$launcher" "${launcher}.gitterm-smoke-v1"',
-    "  fi",
-    '  "$@" install -m 755 "$prefix/launcher" "$launcher"',
-    "}",
-    `printf '#!/bin/sh\nexec "%s" "$@"\n' "$binary" > "$prefix/launcher"`,
-    'if [ -w "$(dirname "$launcher")" ]; then install_launcher; else install_launcher sudo -n; fi',
-    'test "$(opencode --version)" = "$version"',
-    'printf "OpenCode v2 (@opencode-ai/cli@beta): %s\\n" "$version"',
+    'version="$(opencode --version)"',
+    `case "$version" in ${major}.*) ;; *) echo "Expected OpenCode ${major}, got $version" >&2; exit 1 ;; esac`,
+    `printf "OpenCode ${api}: %s\\n" "$version"`,
   ].join("\n");
 }
 
@@ -358,7 +333,7 @@ async function main() {
 Usage: bun run scripts/opencode-runtime-smoke.ts [options]
   --provider <name,...|all>  Default: all managed providers
   --all                      Select all managed providers
-  --api <v1|v2|both>          Default: both (also accepts 1, 2)
+  --api <v1|v2|both>          Default: v2 (also accepts 1, 2)
   --model <provider/model>   Default: GITTERM_E2E_MODEL or opencode/big-pickle
   --dry-run                  Print the matrix without provisioning or credentials
   --verbose                  Log managed run events

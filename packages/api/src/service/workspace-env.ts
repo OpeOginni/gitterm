@@ -88,6 +88,8 @@ export interface BuildWorkspaceEnvRuntimeParams {
   githubUsername?: string;
   githubAppToken?: string;
   githubAppTokenExpiry?: string;
+  googleApplicationCredentials?: string;
+  googleProjectId?: string;
   toolingManifestBase64: string;
   repoOwner?: string;
   workspaceId: string;
@@ -124,6 +126,11 @@ export function buildWorkspaceEnv(
     USER_GITHUB_USERNAME: runtime.githubUsername,
     GITHUB_APP_TOKEN: runtime.githubAppToken,
     GITHUB_APP_TOKEN_EXPIRY: runtime.githubAppTokenExpiry,
+    GOOGLE_APPLICATION_CREDENTIALS: runtime.googleApplicationCredentials,
+    CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: runtime.googleApplicationCredentials,
+    GOOGLE_CLOUD_PROJECT: runtime.googleProjectId,
+    CLOUDSDK_CORE_PROJECT: runtime.googleProjectId,
+    GITTERM_REMOTE_BOOTSTRAP: undefined,
     GITTERM_REPOSITORY_USERNAME: containerCloneCredential
       ? (spec.repo?.authUsername ?? "x-access-token")
       : undefined,

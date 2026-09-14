@@ -17,10 +17,14 @@ on:
         description: "Also build T3Code Docker image"
         type: boolean
         default: true
-      opencode_version:
-        description: "OpenCode version pin (latest or semver)"
+      agent_image_tag:
+        description: "Docker tag for agent images (use a test tag on PR branches)"
         type: string
         default: "latest"
+      opencode_version:
+        description: "OpenCode V2 version (major/latest or exact semver)"
+        type: string
+        default: "major"
       t3_version:
         description: "T3 version pin (latest or semver)"
         type: string
@@ -91,6 +95,28 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Resolve and validate OpenCode V2
+        if: ${{ env.skip != 'true' && (matrix.agent == 'opencode' || matrix.agent == 't3') }}
+        shell: bash
+        env:
+          REQUESTED_OPENCODE_VERSION: ${{ inputs.opencode_version }}
+        run: |
+          set -euo pipefail
+          PACKAGE=@opencode/cli
+          MAJOR=2
+          REQUESTED="${REQUESTED_OPENCODE_VERSION:-$MAJOR}"
+          if [ "$REQUESTED" = "$MAJOR" ] || [ "$REQUESTED" = "major" ] || [ "$REQUESTED" = "latest" ]; then
+            RESOLVED=$(npm view "$PACKAGE" dist-tags.latest)
+          else
+            RESOLVED=$(npm view "$PACKAGE@$REQUESTED" version)
+          fi
+          case "$RESOLVED" in
+            "$MAJOR".*) ;;
+            *) echo "Refusing non-V2 OpenCode version: $RESOLVED" >&2; exit 1 ;;
+          esac
+          echo "Building $PACKAGE $RESOLVED"
+          echo "RESOLVED_OPENCODE_VERSION=$RESOLVED" >> "$GITHUB_ENV"
+
       - name: Build and push
         if: ${{ env.skip != 'true' }}
         uses: docker/build-push-action@v6
@@ -101,9 +127,9 @@ jobs:
           push: true
           pull: true
           no-cache: true
-          tags: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}:${{ matrix.tag }}
+          tags: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}:${{ matrix.agent == 'cf' && matrix.tag || inputs.agent_image_tag }}
           build-args: |
-            OPENCODE_VERSION=${{ inputs.opencode_version }}
+            OPENCODE_VERSION=${{ env.RESOLVED_OPENCODE_VERSION || '2' }}
             OPENCODE_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
             T3_VERSION=${{ inputs.t3_version }}
             T3_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}

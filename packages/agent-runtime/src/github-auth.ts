@@ -36,7 +36,6 @@ export function githubAuthProvisioning(repo?: GithubAuthRepository) {
     return undefined;
   }
   const config = {
-    token: repo.authToken,
     username: repo.authUsername ?? "x-access-token",
     renewable: !repo.inlineAuth,
     expiresAt: repo.authExpiresAt,
@@ -53,6 +52,17 @@ export function githubAuthProvisioning(repo?: GithubAuthRepository) {
         contentBase64: Buffer.from(JSON.stringify(config)).toString("base64"),
         mode: 0o600 as const,
       },
+      {
+        path: "/run/gitterm/github/credential.json",
+        contentBase64: Buffer.from(
+          JSON.stringify({
+            token: repo.authToken,
+            username: repo.authUsername ?? "x-access-token",
+            expiresAt: repo.authExpiresAt,
+          }),
+        ).toString("base64"),
+        mode: 0o600 as const,
+      },
     ],
     setup: `node "$HOME/.gitterm/github/runtime.cjs" setup || exit $?\n${GITHUB_AUTH_PATH}`,
   };
@@ -67,9 +77,11 @@ const os = require("node:os");
 const cp = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const directory = path.join(os.homedir(), ".gitterm/github");
+const runtimeDirectory = path.join(process.env.GITTERM_RUNTIME_DIR || "/run/gitterm", "github");
 const bin = path.join(os.homedir(), ".gitterm/bin");
 const configFile = path.join(directory, "config.json");
-const cacheFile = path.join(directory, "cache.json");
+const credentialFile = path.join(runtimeDirectory, "credential.json");
+const cacheFile = path.join(runtimeDirectory, "cache.json");
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const valid = (value) => typeof value === "string" && value.length > 0 && !/[\r\n\0]/.test(value);
 const fresh = (value) => valid(value?.token) && Date.parse(value.expiresAt) > Date.now() + 300000;
@@ -87,17 +99,18 @@ function atomicWrite(file, value) {
 
 async function credential() {
   const config = read(configFile);
+  const initial = read(credentialFile);
   if (!config.renewable) {
-    if (!valid(config.token) || !valid(config.username)) throw new Error("invalid credential");
-    return config;
+    if (!valid(initial.token) || !valid(initial.username)) throw new Error("invalid credential");
+    return initial;
   }
   const cached = () => {
     try { const value = read(cacheFile); if (fresh(value)) return value; } catch {}
-    if (fresh(config)) return config;
+    if (fresh(initial)) return initial;
   };
   let value = cached();
   if (value) return value;
-  const lock = path.join(directory, "refresh.lock");
+  const lock = path.join(runtimeDirectory, "refresh.lock");
   const deadline = Date.now() + 15000;
   while (true) {
     try { fs.mkdirSync(lock, { mode: 0o700 }); break; }
@@ -116,7 +129,7 @@ async function credential() {
     value = cached();
     if (value) return value;
     const url = process.env.WORKSPACE_API_URL;
-    const auth = process.env.WORKSPACE_AUTH_TOKEN;
+    const auth = process.env.WORKSPACE_AGENT_AUTH_TOKEN;
     if (!url || !auth) throw new Error("refresh unavailable");
     const response = await fetch(url.replace(/\/$/, "") + "/workspaceOps.gitCredential", {
       method: "POST",
@@ -137,8 +150,11 @@ async function credential() {
 
 function setup() {
   fs.mkdirSync(bin, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(runtimeDirectory, { recursive: true, mode: 0o700 });
   fs.chmodSync(directory, 0o700);
+  fs.chmodSync(runtimeDirectory, 0o700);
   fs.chmodSync(configFile, 0o600);
+  fs.chmodSync(credentialFile, 0o600);
   for (const [name, mode] of [["gh", "gh"], ["git-credential-gitterm", "credential"]]) {
     const file = path.join(bin, name);
     fs.writeFileSync(file, '#!/bin/sh\nexec node "$HOME/.gitterm/github/runtime.cjs" ' + mode + ' "$@"\n', { mode: 0o700 });

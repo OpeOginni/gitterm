@@ -20,6 +20,31 @@ export function buildGitExcludeCommand(paths: string[]): string | undefined {
   return `if [ -d .git/info ]; then for p in ${entries}; do grep -qxF "$p" .git/info/exclude 2>/dev/null || printf '%s\\n' "$p" >> .git/info/exclude; done; fi`;
 }
 
+/**
+ * Link caller-supplied secret files into the repository from ephemeral runtime
+ * storage. The secret bytes never live on a persistent workspace volume; only
+ * the symlink does.
+ */
+export function buildRuntimeSecretFileLinkCommand(
+  workspaceId: string,
+  paths: string[],
+): string | undefined {
+  if (paths.length === 0) return undefined;
+  const runtimeRoot = `/run/gitterm/secrets/${workspaceId}`;
+  const commands = paths.map((secretPath) => {
+    const source = `${runtimeRoot}/${secretPath}`;
+    const parent = secretPath.includes("/")
+      ? secretPath.slice(0, secretPath.lastIndexOf("/"))
+      : ".";
+    return `mkdir -p ${shellQuote(parent)} && rm -f ${shellQuote(secretPath)} && ln -s ${shellQuote(source)} ${shellQuote(secretPath)}`;
+  });
+  return `chmod 700 ${shellQuote(runtimeRoot)} && ${commands.join(" && ")}`;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
 export async function resolveWorkspaceSetupCommands(input: {
   cloudProviderId: string;
   agentTypeId: string;

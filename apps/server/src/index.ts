@@ -9,8 +9,15 @@ import { getGitHubAppService } from "@gitterm/api/service/github";
 import { workspaceJWT } from "@gitterm/api/service/auth/workspace-jwt";
 import { startRunWatcherSweep } from "@gitterm/api/service/agent-run";
 import { updateLastActive, hasRemainingQuota } from "@gitterm/api/utils/metering";
-import { db, eq } from "@gitterm/db";
+import { and, db, eq } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
+import { googleCloudIntegration } from "@gitterm/db/schema/integrations";
+import {
+  issueGoogleSubjectToken,
+  workloadIdentityDiscovery,
+  workloadIdentityJwks,
+} from "@gitterm/api/service/workload-identity/google";
+import { recordCredentialAudit } from "@gitterm/api/service/credential-audit";
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -163,6 +170,10 @@ app.post("/api/internal/workspace-heartbeat", async (c) => {
     return c.json({ success: false, error: "workspace_ownership_mismatch" }, 403);
   }
 
+  if (existingWorkspace.authVersion !== payload.authVersion) {
+    return c.json({ success: false, error: "workspace_identity_revoked" }, 401);
+  }
+
   if (existingWorkspace.status !== "running" && existingWorkspace.status !== "pending") {
     return c.json({ success: true, action: "shutdown", reason: "workspace_inactive" });
   }
@@ -176,6 +187,84 @@ app.post("/api/internal/workspace-heartbeat", async (c) => {
   await updateLastActive(workspaceId);
 
   return c.json({ success: true, action: "continue", reason: null });
+});
+
+app.get("/api/workload-identity/.well-known/openid-configuration", (c) => {
+  try {
+    return c.json(workloadIdentityDiscovery(), 200, { "Cache-Control": "public, max-age=300" });
+  } catch {
+    return c.json({ error: "workload_identity_unavailable" }, 503);
+  }
+});
+
+app.get("/api/workload-identity/jwks", (c) => {
+  try {
+    return c.json(workloadIdentityJwks(), 200, { "Cache-Control": "public, max-age=300" });
+  } catch {
+    return c.json({ error: "workload_identity_unavailable" }, 503);
+  }
+});
+
+app.get("/api/workload-identity/google/subject-token", async (c) => {
+  const authHeader = c.req.header("Authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  let payload;
+  try {
+    payload = workspaceJWT.verifyToken(token, "agent");
+  } catch {
+    return c.json({ error: "invalid_workspace_identity" }, 401);
+  }
+  if (!workspaceJWT.hasScope(payload, "agent:credential")) {
+    return c.json({ error: "insufficient_scope" }, 403);
+  }
+
+  const [record] = await db
+    .select({
+      workspaceId: workspace.id,
+      userId: workspace.userId,
+      status: workspace.status,
+      authVersion: workspace.authVersion,
+      integrationId: googleCloudIntegration.id,
+      projectId: googleCloudIntegration.projectId,
+      workloadIdentityProvider: googleCloudIntegration.workloadIdentityProvider,
+      serviceAccountEmail: googleCloudIntegration.serviceAccountEmail,
+    })
+    .from(workspace)
+    .innerJoin(
+      googleCloudIntegration,
+      eq(workspace.googleCloudIntegrationId, googleCloudIntegration.id),
+    )
+    .where(
+      and(
+        eq(workspace.id, payload.workspaceId),
+        eq(workspace.userId, payload.userId),
+        eq(googleCloudIntegration.active, true),
+      ),
+    );
+  if (!record || record.status !== "running" || record.authVersion !== payload.authVersion) {
+    return c.json({ error: "workspace_identity_unavailable" }, 403);
+  }
+
+  const subjectToken = issueGoogleSubjectToken(
+    {
+      workspaceId: record.workspaceId,
+      userId: record.userId,
+      integrationId: record.integrationId,
+    },
+    { ...record, id: record.integrationId },
+  );
+  await recordCredentialAudit({
+    workspaceId: record.workspaceId,
+    userId: record.userId,
+    credentialKind: "google",
+    integrationId: record.integrationId,
+    action: "issued",
+    expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    metadata: { projectId: record.projectId },
+  });
+  return c.json({ subject_token: subjectToken, expires_in: 300 }, 200, {
+    "Cache-Control": "no-store",
+  });
 });
 
 app.use(

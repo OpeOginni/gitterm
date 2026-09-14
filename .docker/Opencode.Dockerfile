@@ -59,6 +59,7 @@ RUN apt-get update && \
     unzip \
     nodejs \
     npm \
+    sqlite3 \
     netcat-traditional \
     libjson-c5 \
     libssl3 \
@@ -86,12 +87,12 @@ RUN ldconfig
 
 # Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
-ARG OPENCODE_VERSION=latest
+ARG OPENCODE_VERSION=2
 ARG OPENCODE_INSTALL_CACHE_BUST=manual
 RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
-    && echo "npm latest opencode-ai: $(npm view opencode-ai@${OPENCODE_VERSION} version)" \
-    && npm install -g "opencode-ai@${OPENCODE_VERSION}" "@gitterm/cli@latest" --prefer-online --no-audit --fund=false \
+    && echo "installing @opencode/cli@${OPENCODE_VERSION}" \
+    && npm install -g "@opencode/cli@${OPENCODE_VERSION}" "@gitterm/cli@latest" --prefer-online --no-audit --fund=false \
     && echo "installed opencode: $(opencode --version)"
 
 # Set up working directory
@@ -116,7 +117,8 @@ ENV HOME=/workspace \
 COPY ./opencode/entrypoint.sh /entrypoint.sh
 COPY ./workspace-setup-runner.sh /usr/local/bin/gitterm-workspace-setup
 COPY ./git-credential-github.mjs /usr/local/bin/gitterm-git-credential
-RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup /usr/local/bin/gitterm-git-credential
+COPY ./runtime-bootstrap.mjs /usr/local/bin/gitterm-runtime-bootstrap
+RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup /usr/local/bin/gitterm-git-credential /usr/local/bin/gitterm-runtime-bootstrap
 
 # Expose the ttyd port
 ENV PORT=7681

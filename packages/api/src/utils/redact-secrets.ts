@@ -23,3 +23,20 @@ export function redactSecrets(value: unknown, secrets: readonly string[]): unkno
   }
   return value;
 }
+
+/** Defense-in-depth for logs where the complete secret set is no longer available. */
+export function redactSensitiveText(value: string, secrets: readonly string[] = []): string {
+  return redactText(value, secrets)
+    .replace(
+      /-----BEGIN [^-\r\n]*PRIVATE KEY-----[\s\S]*?-----END [^-\r\n]*PRIVATE KEY-----/g,
+      "[REDACTED PRIVATE KEY]",
+    )
+    .replace(
+      /\b((?:[A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|CREDENTIAL)[A-Z0-9_]*)\s*[=:]\s*)([^\s,;]+)/gi,
+      "$1[REDACTED]",
+    )
+    .replace(
+      /\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|ya29\.[A-Za-z0-9._-]+|AIza[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b/g,
+      REDACTED,
+    );
+}

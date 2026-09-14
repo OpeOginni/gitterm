@@ -23,6 +23,9 @@ import { updateWorkspaceRoutingAndInvalidate } from "../../service/workspace-mut
 import { getProviderByCloudProviderId } from "../../providers";
 import { getWorkspacePortUrl, getWorkspaceUrl } from "../../utils/routing";
 import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-error";
+import { readWorkspaceRuntimeBundle } from "../../service/workspace-runtime-bundle";
+import { recordCredentialAudit } from "../../service/credential-audit";
+import { redactSensitiveText } from "../../utils/redact-secrets";
 
 const workspacePortSchema = z.number().int().min(1).max(65535);
 const PORT_DOMAIN_TIMEOUT_MS = 15_000;
@@ -75,15 +78,44 @@ async function getAuthenticatedWorkspace(workspaceId: string, userId: string) {
  */
 
 export const workspaceOperationsRouter = router({
-  gitCredential: workspaceAuthProcedure.mutation(async ({ ctx }) => {
-    if (!workspaceJWT.hasScope(ctx.workspaceAuth, "workspace:read"))
+  runtimeBundle: workspaceAgentAuthProcedure.query(async ({ ctx }) => {
+    if (!workspaceJWT.hasScope(ctx.workspaceAuth, "agent:bootstrap")) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient workspace scope" });
+    }
+    try {
+      const environment = await readWorkspaceRuntimeBundle({
+        workspaceId: ctx.workspaceAuth.workspaceId,
+        userId: ctx.workspaceAuth.userId,
+      });
+      await recordCredentialAudit({
+        workspaceId: ctx.workspaceAuth.workspaceId,
+        userId: ctx.workspaceAuth.userId,
+        credentialKind: "runtime_bundle",
+        action: "read",
+      });
+      return { environment };
+    } catch {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Runtime bundle unavailable" });
+    }
+  }),
+  gitCredential: workspaceAgentAuthProcedure.mutation(async ({ ctx }) => {
+    if (!workspaceJWT.hasScope(ctx.workspaceAuth, "agent:credential"))
       throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient workspace scope" });
     const ws = await getAuthenticatedWorkspace(
       ctx.workspaceAuth.workspaceId,
       ctx.workspaceAuth.userId,
     );
     try {
-      return await issueWorkspaceGitCredential(ws);
+      const credential = await issueWorkspaceGitCredential(ws);
+      await recordCredentialAudit({
+        workspaceId: ws.id,
+        userId: ws.userId,
+        credentialKind: "github",
+        integrationId: ws.gitIntegrationId,
+        action: "issued",
+        expiresAt: credential.expiresAt,
+      });
+      return credential;
     } catch {
       throw new TRPCError({
         code: "FORBIDDEN",
@@ -327,12 +359,13 @@ export const workspaceOperationsRouter = router({
             .replaceAll("\0", "")
             .slice(-50_000)
         : null;
+      const redactedLog = log ? redactSensitiveText(log) : null;
       const next = {
         status: input.status,
         exitCode: input.exitCode,
         startedAt: input.startedAt ? new Date(input.startedAt) : setup.startedAt,
         finishedAt: input.finishedAt ? new Date(input.finishedAt) : null,
-        log,
+        log: redactedLog,
         updatedAt: new Date(),
       } as const;
       const allowedStatuses =

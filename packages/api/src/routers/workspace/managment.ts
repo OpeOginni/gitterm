@@ -47,7 +47,11 @@ import {
   resolveGitHubBranchHeadWithToken,
 } from "../../service/github";
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
-import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
+import {
+  githubAppInstallation,
+  gitIntegration,
+  googleCloudIntegration,
+} from "@gitterm/db/schema/integrations";
 import { sendWorkspaceCreatedNotification } from "../../utils/discord";
 import {
   generateAndEncryptPassword,
@@ -129,6 +133,7 @@ import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
 import {
   buildGitExcludeCommand,
+  buildRuntimeSecretFileLinkCommand,
   buildWorkspaceSetupCommand,
   getWorkspaceSetupStatus,
   resolveWorkspaceSetupCommands,
@@ -136,10 +141,35 @@ import {
 } from "../../service/workspace-setup";
 import { resolveCustomWorkspaceImage } from "../../service/workspace-image";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
-import { DEFAULT_OPENCODE_API } from "@gitterm/agent-runtime";
+import { DEFAULT_OPENCODE_API, OPENCODE_V2_IMPORT_CREDENTIALS } from "@gitterm/agent-runtime";
 import { workspaceModelsSchema } from "@gitterm/schema/workspace-models";
 import { getWorkspaceModelAccess } from "../../service/workspace-model-access";
+import {
+  maskWorkspaceEnvironment,
+  openWorkspaceEnvironment,
+  sealWorkspaceEnvironment,
+} from "../../service/workspace-environment-secrets";
 import { userCanAccessWorkspace } from "./share";
+import { redactSensitiveText } from "../../utils/redact-secrets";
+import {
+  workspaceCredentialAudit,
+  workspaceRuntimeBundle,
+} from "@gitterm/db/schema/credential-security";
+import {
+  buildGoogleExternalAccountConfig,
+  GOOGLE_ADC_PATH,
+  workloadIdentityIssuer,
+} from "../../service/workload-identity/google";
+import {
+  railwayBootstrapEnvironment,
+  storeWorkspaceRuntimeBundle,
+} from "../../service/workspace-runtime-bundle";
+
+function readWorkspaceEnvironmentRow(row: {
+  environmentVariables: unknown;
+}): Record<string, string> {
+  return openWorkspaceEnvironment(row.environmentVariables);
+}
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
@@ -281,6 +311,7 @@ const workspaceCreateBaseSchema = z.strictObject({
     ])
     .optional(),
   gitIntegrationId: z.string().optional(),
+  googleCloudIntegrationId: z.string().uuid().optional(),
   repositoryCredentials: repositoryCredentialsSchema.optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
   /** Per-provider selection: inline apiKey, dashboard credential by label, or dashboard default. */
@@ -320,7 +351,7 @@ const workspaceCreateBaseSchema = z.strictObject({
         .optional(),
       /**
        * OpenCode HTTP API generation the image serves. "v2" is the OpenCode 2
-       * `/api/*` API and needs an image built with `@opencode-ai/cli` (experimental).
+       * `/api/*` API and needs an image built with `@opencode/cli` (experimental).
        */
       api: z.enum(["v1", "v2"]).optional(),
     })
@@ -517,7 +548,7 @@ async function getConfiguredDefaultRegionIdentifier(
 }
 
 export const workspaceRouter = router({
-  listUserInstallations: protectedProcedure.query(async ({ ctx }) => {
+  listUserInstallations: accountProcedure("workspace:read").query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
 
     if (!userId) {
@@ -534,7 +565,13 @@ export const workspaceRouter = router({
         githubAppInstallation,
         eq(gitIntegration.providerInstallationId, githubAppInstallation.installationId),
       )
-      .where(eq(gitIntegration.userId, userId));
+      .where(
+        and(
+          eq(gitIntegration.userId, userId),
+          eq(githubAppInstallation.userId, userId),
+          eq(gitIntegration.active, true),
+        ),
+      );
 
     return {
       success: true,
@@ -1274,7 +1311,7 @@ export const workspaceRouter = router({
           const [updatedVars] = await db
             .update(workspaceEnvironmentVariables)
             .set({
-              environmentVariables: input.environmentVariables,
+              environmentVariables: sealWorkspaceEnvironment(input.environmentVariables),
               updatedAt: new Date(),
             })
             .where(eq(workspaceEnvironmentVariables.id, existingVars[0]!.id))
@@ -1283,7 +1320,12 @@ export const workspaceRouter = router({
           return {
             success: true,
             message: "Environment variables updated successfully",
-            environmentVariables: updatedVars,
+            environmentVariables: updatedVars
+              ? {
+                  ...updatedVars,
+                  environmentVariables: maskWorkspaceEnvironment(updatedVars.environmentVariables),
+                }
+              : updatedVars,
           };
         } else {
           // Create new environment variables
@@ -1292,14 +1334,19 @@ export const workspaceRouter = router({
             .values({
               userId,
               agentTypeId: input.agentTypeId,
-              environmentVariables: input.environmentVariables,
+              environmentVariables: sealWorkspaceEnvironment(input.environmentVariables),
             })
             .returning();
 
           return {
             success: true,
             message: "Environment variables created successfully",
-            environmentVariables: newVars,
+            environmentVariables: newVars
+              ? {
+                  ...newVars,
+                  environmentVariables: maskWorkspaceEnvironment(newVars.environmentVariables),
+                }
+              : newVars,
           };
         }
       } catch (error) {
@@ -1345,10 +1392,14 @@ export const workspaceRouter = router({
             message: "Environment variables not found for this agent type",
           });
         }
+        const opened = readWorkspaceEnvironmentRow(vars[0]!);
 
         return {
           success: true,
-          environmentVariables: vars[0]!,
+          environmentVariables: {
+            ...vars[0]!,
+            environmentVariables: maskWorkspaceEnvironment(opened),
+          },
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -1376,10 +1427,14 @@ export const workspaceRouter = router({
         .select()
         .from(workspaceEnvironmentVariables)
         .where(eq(workspaceEnvironmentVariables.userId, userId));
+      const opened = vars.map((entry) => readWorkspaceEnvironmentRow(entry));
 
       return {
         success: true,
-        environmentVariables: vars,
+        environmentVariables: vars.map((entry, index) => ({
+          ...entry,
+          environmentVariables: maskWorkspaceEnvironment(opened[index]),
+        })),
       };
     } catch (error) {
       throw new TRPCError({
@@ -1481,14 +1536,14 @@ export const workspaceRouter = router({
         }
 
         const updatedEnvVars = {
-          ...(vars[0]!.environmentVariables as Record<string, string>),
+          ...openWorkspaceEnvironment(vars[0]!.environmentVariables),
           [input.key]: input.value,
         };
 
         const [updated] = await db
           .update(workspaceEnvironmentVariables)
           .set({
-            environmentVariables: updatedEnvVars,
+            environmentVariables: sealWorkspaceEnvironment(updatedEnvVars),
             updatedAt: new Date(),
           })
           .where(eq(workspaceEnvironmentVariables.id, vars[0]!.id))
@@ -1497,7 +1552,12 @@ export const workspaceRouter = router({
         return {
           success: true,
           message: "Environment variable updated successfully",
-          environmentVariables: updated,
+          environmentVariables: updated
+            ? {
+                ...updated,
+                environmentVariables: maskWorkspaceEnvironment(updated.environmentVariables),
+              }
+            : updated,
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -1668,10 +1728,18 @@ export const workspaceRouter = router({
       const userId = ctx.session.user.id;
       const workspaceId = randomUUID();
       const inlineRepositoryToken = rawInput.repositoryCredentials?.token;
+      const requestSecrets = [
+        inlineRepositoryToken,
+        ...Object.values(rawInput.environmentVariables ?? {}),
+        ...(rawInput.secretFiles ?? []).map((file) => file.content),
+        ...Object.values(rawInput.models?.providers ?? {}).flatMap((source) =>
+          source.source === "apiKey" ? [source.apiKey] : [],
+        ),
+      ].filter((value): value is string => Boolean(value));
       const workspaceCreateLogger = createProvisionLogger(
         "workspace-router",
         workspaceId,
-        inlineRepositoryToken ? [inlineRepositoryToken] : [],
+        requestSecrets,
       );
 
       if (!userId) {
@@ -1759,6 +1827,7 @@ export const workspaceRouter = router({
 
       let selectedProviderName = "unknown provider";
       let selectedProviderKey = "unknown";
+      let workspaceReservedBeforeProvision = false;
       try {
         // Get cloud provider info first to determine if local
         const [cloudProviderRecord] = await db
@@ -2137,6 +2206,27 @@ export const workspaceRouter = router({
               eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId),
             ),
           );
+        const savedWorkspaceEnvironment = userWorkspaceEnvironmentVariables
+          ? readWorkspaceEnvironmentRow(userWorkspaceEnvironmentVariables)
+          : undefined;
+        if (savedWorkspaceEnvironment) {
+          workspaceCreateLogger.addSecrets(Object.values(savedWorkspaceEnvironment));
+        }
+        const selectedGoogleCloudIntegration = input.googleCloudIntegrationId
+          ? await db.query.googleCloudIntegration.findFirst({
+              where: and(
+                eq(googleCloudIntegration.id, input.googleCloudIntegrationId),
+                eq(googleCloudIntegration.userId, userId),
+                eq(googleCloudIntegration.active, true),
+              ),
+            })
+          : undefined;
+        if (input.googleCloudIntegrationId && !selectedGoogleCloudIntegration) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Google Cloud integration not found",
+          });
+        }
 
         // Get GitHub username from user.name (set during OAuth)
         const [userRecord] = await db.select().from(user).where(eq(user.id, userId));
@@ -2280,6 +2370,7 @@ export const workspaceRouter = router({
               );
               githubAppToken = tokenData.token;
               githubAppTokenExpiry = tokenData.expiresAt;
+              workspaceCreateLogger.addSecrets([githubAppToken]);
             } catch (error) {
               console.error("Failed to generate GitHub App token:", error);
               // Continue without token - user can still use workspace without git operations
@@ -2400,7 +2491,7 @@ export const workspaceRouter = router({
         const workspaceAgentAuthToken = workspaceJWT.generateToken(
           workspaceId,
           userId,
-          ["agent:credential", "agent:heartbeat"],
+          ["agent:bootstrap", "agent:credential", "agent:heartbeat"],
           "agent",
         );
         const workspaceSetupAuthToken = workspaceJWT.generateToken(
@@ -2409,6 +2500,11 @@ export const workspaceRouter = router({
           ["setup:write"],
           "setup",
         );
+        workspaceCreateLogger.addSecrets([
+          workspaceAuthToken,
+          workspaceAgentAuthToken,
+          workspaceSetupAuthToken,
+        ]);
 
         // API endpoint for workspace operations
         const WORKSPACE_API_URL =
@@ -2439,6 +2535,7 @@ export const workspaceRouter = router({
           const passwordData = generateAndEncryptPassword();
           serverPassword = passwordData.password;
           encryptedServerPassword = passwordData.encryptedPassword;
+          workspaceCreateLogger.addSecrets([serverPassword]);
         }
 
         const credentials = await workspaceCreateLogger.step("fetch-model-credentials", () =>
@@ -2446,6 +2543,15 @@ export const workspaceRouter = router({
             userId,
             models: input.models,
           }),
+        );
+        workspaceCreateLogger.addSecrets(
+          credentials.flatMap(({ credential }) =>
+            credential.type === "api_key"
+              ? [credential.apiKey]
+              : [credential.refresh, credential.access].filter((value): value is string =>
+                  Boolean(value),
+                ),
+          ),
         );
         const awsRuntimeInstructions =
           providerKey === "aws" && regionRecord
@@ -2478,30 +2584,55 @@ export const workspaceRouter = router({
               }
             : input.opencode,
         });
+        if (selectedGoogleCloudIntegration) {
+          const externalAccount = buildGoogleExternalAccountConfig({
+            integration: selectedGoogleCloudIntegration,
+            subjectTokenUrl: `${workloadIdentityIssuer()}/google/subject-token`,
+            workspaceAgentAuthToken,
+          });
+          agentProvisioning.files.push({
+            path: GOOGLE_ADC_PATH,
+            contentBase64: Buffer.from(JSON.stringify(externalAccount)).toString("base64"),
+            mode: 0o400,
+          });
+        }
+        const runtimeSecretRoot = `/run/gitterm/secrets/${workspaceId}`;
         agentProvisioning.files.push(
           ...(input.secretFiles ?? []).map((file) => ({
-            path: file.path,
+            path: `${runtimeSecretRoot}/${file.path}`,
             contentBase64: Buffer.from(file.content).toString("base64"),
             mode: Number.parseInt(file.mode ?? "0600", 8) as 0o400 | 0o600,
-            relativeToRepo: true,
+            relativeToRepo: false,
           })),
         );
 
-        // Secret files live under the repository; exclude them from git before the
-        // agent can `git add -A` them. Runs as the first blocking before-agent step.
+        // Secret bytes live under /run; only a git-excluded symlink is placed in
+        // the repository before the agent starts.
         const secretFileExcludeCommand = buildGitExcludeCommand(
           (input.secretFiles ?? []).map((file) => file.path),
         );
-        const beforeAgentCommands = [
+        const secretFileLinkCommand = buildRuntimeSecretFileLinkCommand(
+          workspaceId,
+          (input.secretFiles ?? []).map((file) => file.path),
+        );
+        const requestedBeforeAgentCommands = [
           ...(secretFileExcludeCommand ? [secretFileExcludeCommand] : []),
+          ...(secretFileLinkCommand ? [secretFileLinkCommand] : []),
           ...(await resolveWorkspaceSetupCommands({
             cloudProviderId: input.cloudProviderId,
             agentTypeId: input.agentTypeId,
             requestedCommands: input.setup?.beforeAgent,
           })),
         ];
+        const beforeAgentCommands = [
+          ...((input.opencode?.api ?? DEFAULT_OPENCODE_API) === "v2"
+            ? [OPENCODE_V2_IMPORT_CREDENTIALS]
+            : []),
+          ...requestedBeforeAgentCommands,
+        ];
         const afterAgentCommands = input.setup?.afterAgent ?? [];
-        const setupRequested = beforeAgentCommands.length > 0 || afterAgentCommands.length > 0;
+        const setupRequested =
+          requestedBeforeAgentCommands.length > 0 || afterAgentCommands.length > 0;
         const setupExecutionId = setupRequested ? randomUUID() : undefined;
         // The setup script's readiness probe must target the port the runtime
         // actually listens on. SDK providers launch serve.command themselves,
@@ -2580,12 +2711,9 @@ export const workspaceRouter = router({
         // Serialize the spec + runtime vars into the env handed to the compute
         // provider. User-defined vars are merged here, with reserved system keys
         // stripped so they cannot clobber WORKSPACE_AUTH_TOKEN and friends.
-        const workspaceUserEnv = userWorkspaceEnvironmentVariables
+        const workspaceUserEnv = savedWorkspaceEnvironment
           ? {
-              ...(userWorkspaceEnvironmentVariables.environmentVariables as Record<
-                string,
-                string | undefined
-              >),
+              ...savedWorkspaceEnvironment,
               ...input.environmentVariables,
             }
           : input.environmentVariables;
@@ -2593,6 +2721,10 @@ export const workspaceRouter = router({
           githubUsername,
           githubAppToken,
           githubAppTokenExpiry,
+          googleApplicationCredentials: selectedGoogleCloudIntegration
+            ? GOOGLE_ADC_PATH
+            : undefined,
+          googleProjectId: selectedGoogleCloudIntegration?.projectId,
           toolingManifestBase64: WORKSPACE_TOOLING_MANIFEST_BASE64,
           repoOwner: repoInfo?.owner,
           workspaceId,
@@ -2669,30 +2801,40 @@ export const workspaceRouter = router({
         const initialWorkspaceStatus =
           cloudProviderRecord.creationSettlement === "immediate" ? "running" : "pending";
 
-        // Reserve AWS identity before any remote resources exist. Reconciliation must
-        // see in-flight workspaces, and retries must not create a second attempt.
-        if (providerKey === "aws") {
-          await db.insert(workspace).values({
-            id: workspaceId,
-            externalInstanceId: "",
-            userId,
-            imageId: imageRecord.id,
-            cloudProviderId: input.cloudProviderId,
-            regionId: regionRecord?.id,
-            gitIntegrationId: input.gitIntegrationId ?? null,
-            repositoryUrl: input.repo ?? null,
-            domain,
-            subdomain,
-            status: "pending",
-            metadata: {
-              awsProvisioningLeaseExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
-            },
-            startedAt: new Date(),
-            updatedAt: new Date(),
-            persistent: effectivePersistent,
-            idempotencyKey: input.idempotencyKey ?? null,
-          });
+        // Providers that call back during boot need their identity and encrypted
+        // runtime bundle reserved before any remote resources exist.
+        workspaceReservedBeforeProvision = true;
+        await db.insert(workspace).values({
+          id: workspaceId,
+          externalInstanceId: "",
+          userId,
+          imageId: imageRecord.id,
+          cloudProviderId: input.cloudProviderId,
+          regionId: regionRecord?.id,
+          gitIntegrationId: input.gitIntegrationId ?? null,
+          googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
+          repositoryUrl: input.repo ?? null,
+          domain,
+          subdomain,
+          status: "pending",
+          metadata:
+            providerKey === "aws"
+              ? {
+                  awsProvisioningLeaseExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+                }
+              : {},
+          startedAt: new Date(),
+          updatedAt: new Date(),
+          persistent: effectivePersistent,
+          idempotencyKey: input.idempotencyKey ?? null,
+        });
+        if (providerKey === "railway") {
+          await storeWorkspaceRuntimeBundle(workspaceId, DEFAULT_DOCKER_ENV_VARS);
         }
+        const providerEnvironment =
+          providerKey === "railway"
+            ? railwayBootstrapEnvironment(DEFAULT_DOCKER_ENV_VARS)
+            : DEFAULT_DOCKER_ENV_VARS;
 
         const onProvisioned =
           providerKey === "aws"
@@ -2722,7 +2864,7 @@ export const workspaceRouter = router({
                   repositoryBaseCommit: resolvedBaseCommit ?? undefined,
                   repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
                   regionIdentifier: regionRecord?.externalRegionIdentifier,
-                  environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                  environmentVariables: providerEnvironment,
                   provisioningSpec,
                   persistent: effectivePersistent,
                 })
@@ -2739,7 +2881,7 @@ export const workspaceRouter = router({
                   repositoryBaseCommit: resolvedBaseCommit ?? undefined,
                   repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
                   regionIdentifier: regionRecord?.externalRegionIdentifier,
-                  environmentVariables: DEFAULT_DOCKER_ENV_VARS,
+                  environmentVariables: providerEnvironment,
                   provisioningSpec,
                 }),
         );
@@ -2760,6 +2902,7 @@ export const workspaceRouter = router({
           machineProfileId: selectedMachineProfile?.id ?? null,
           launchProfileId: null,
           gitIntegrationId: input.gitIntegrationId ?? null,
+          googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
           // Persist resolved defaults too, so later runs validate the exact injected credentials.
           modelCredentialIds: credentials
             .map((credential) => credential.credentialId)
@@ -2797,14 +2940,11 @@ export const workspaceRouter = router({
           lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),
           updatedAt: new Date(workspaceInfo.serviceCreatedAt),
         } satisfies typeof workspace.$inferInsert;
-        const [newWorkspace] =
-          providerKey === "aws"
-            ? await db
-                .update(workspace)
-                .set(workspaceValues)
-                .where(eq(workspace.id, workspaceId))
-                .returning()
-            : await db.insert(workspace).values(workspaceValues).returning();
+        const [newWorkspace] = await db
+          .update(workspace)
+          .set(workspaceValues)
+          .where(eq(workspace.id, workspaceId))
+          .returning();
 
         if (!newWorkspace) {
           throw new TRPCError({
@@ -2907,31 +3047,45 @@ export const workspaceRouter = router({
           runtime,
         };
       } catch (error) {
-        console.error("createWorkspace failed", {
-          workspaceId,
-          providerKey: selectedProviderKey,
-          errorName: error instanceof Error ? error.name : "UnknownError",
-          error: error instanceof Error ? error.message : String(error),
-          cause:
-            error instanceof Error && error.cause instanceof Error
-              ? error.cause.message
-              : undefined,
-        });
-        if (selectedProviderKey === "aws") {
+        console.error(
+          "createWorkspace failed",
+          workspaceCreateLogger.redact({
+            workspaceId,
+            providerKey: selectedProviderKey,
+            errorName: error instanceof Error ? error.name : "UnknownError",
+            error: error instanceof Error ? error.message : String(error),
+            cause:
+              error instanceof Error && error.cause instanceof Error
+                ? error.cause.message
+                : undefined,
+          }),
+        );
+        if (workspaceReservedBeforeProvision) {
+          const safeProvisioningError = redactSensitiveText(
+            workspaceCreateLogger.redact(error instanceof Error ? error.message : String(error)),
+          );
           // Keep the cause on the row so the reference ID in the client error resolves to something.
           await db
             .update(workspace)
             .set({
               status: "terminated",
+              authVersion: sql`${workspace.authVersion} + 1`,
               updatedAt: new Date(),
               metadata:
-                error instanceof AwsWorkspaceStartupError
-                  ? { awsStartupDiagnostics: JSON.stringify(error.diagnostics) }
+                selectedProviderKey === "aws" && error instanceof AwsWorkspaceStartupError
+                  ? {
+                      awsStartupDiagnostics: redactSensitiveText(
+                        JSON.stringify(workspaceCreateLogger.redact(error.diagnostics)),
+                      ),
+                    }
                   : {
-                      awsProvisioningError: error instanceof Error ? error.message : String(error),
+                      provisioningError: safeProvisioningError,
                     },
             })
             .where(eq(workspace.id, workspaceId));
+          await db
+            .delete(workspaceRuntimeBundle)
+            .where(eq(workspaceRuntimeBundle.workspaceId, workspaceId));
         }
         if (error instanceof AwsWorkspaceStartupError) {
           throw new TRPCError({
@@ -2948,7 +3102,11 @@ export const workspaceRouter = router({
         // Throw a user-friendly error to the client
         if (error instanceof TRPCError) throw error;
         if (error instanceof BeforeAgentSetupError) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+          const safeError = workspaceCreateLogger.redact(error);
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: redactSensitiveText(safeError.message),
+          });
         }
 
         throw new TRPCError({
@@ -2961,6 +3119,30 @@ export const workspaceRouter = router({
   getModelAccess: accountProcedure("workspace:read")
     .input(z.object({ workspaceId: z.uuid() }))
     .query(({ input, ctx }) => getWorkspaceModelAccess(input.workspaceId, ctx.session.user.id)),
+
+  listCredentialAudit: accountProcedure("workspace:read")
+    .input(z.object({ workspaceId: z.uuid(), limit: z.number().int().min(1).max(100).default(50) }))
+    .query(async ({ input, ctx }) => {
+      const owned = await db.query.workspace.findFirst({
+        columns: { id: true },
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, ctx.session.user.id)),
+      });
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      return db
+        .select({
+          id: workspaceCredentialAudit.id,
+          credentialKind: workspaceCredentialAudit.credentialKind,
+          integrationId: workspaceCredentialAudit.integrationId,
+          action: workspaceCredentialAudit.action,
+          expiresAt: workspaceCredentialAudit.expiresAt,
+          metadata: workspaceCredentialAudit.metadata,
+          createdAt: workspaceCredentialAudit.createdAt,
+        })
+        .from(workspaceCredentialAudit)
+        .where(eq(workspaceCredentialAudit.workspaceId, input.workspaceId))
+        .orderBy(desc(workspaceCredentialAudit.createdAt))
+        .limit(input.limit);
+    }),
 
   getSetupStatus: accountProcedure("workspace:read")
     .input(z.object({ workspaceId: z.uuid() }))
@@ -3582,11 +3764,26 @@ export const workspaceRouter = router({
           provider.providerKey,
           provider.id,
         );
-        const resumeResult = await computeProvider.resumeWorkspace(
-          existingWorkspace.externalInstanceId,
-          workspaceRegion?.externalRegionIdentifier,
-          existingWorkspace.externalRunningDeploymentId ?? undefined,
+        await updateWorkspaceByIdAndInvalidate(
+          input.workspaceId,
+          { status: "pending", updatedAt: new Date() },
+          existingWorkspace.subdomain,
         );
+        let resumeResult: void | { upstreamUrl?: string };
+        try {
+          resumeResult = await computeProvider.resumeWorkspace(
+            existingWorkspace.externalInstanceId,
+            workspaceRegion?.externalRegionIdentifier,
+            existingWorkspace.externalRunningDeploymentId ?? undefined,
+          );
+        } catch (error) {
+          await updateWorkspaceByIdAndInvalidate(
+            input.workspaceId,
+            { status: "paused", updatedAt: new Date() },
+            existingWorkspace.subdomain,
+          );
+          throw error;
+        }
         await relaunchWorkspaceSetup(computeProvider, existingWorkspace, provider.providerKey);
 
         const restartWorkspaceStatus =
@@ -3730,6 +3927,7 @@ export const workspaceRouter = router({
         input.workspaceId,
         {
           status: "terminated",
+          authVersion: fetchedWorkspace.authVersion + 1,
           pausedAt: terminatedAt,
           terminatedAt,
           exposedPorts: null,
@@ -3739,6 +3937,9 @@ export const workspaceRouter = router({
       );
 
       await deleteAllWorkspaceRouteAccess(input.workspaceId);
+      await db
+        .delete(workspaceRuntimeBundle)
+        .where(eq(workspaceRuntimeBundle.workspaceId, input.workspaceId));
 
       // Delete volume record
       if (fetchedWorkspace.volume) {

@@ -20,7 +20,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { GitHub } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
-import { getWorkspaceProjectPath, getWorkspaceUrl } from "@/lib/utils";
+import { getAttachCommand, getWorkspaceProjectPath, getWorkspaceUrl } from "@/lib/utils";
 import { track, AnalyticsEvent } from "@/lib/analytics";
 import { toast } from "sonner";
 import {
@@ -361,10 +361,13 @@ function ResultCard({
   // Anon sandboxes always run on E2B; OpenCode expands ~/ to the sandbox home.
   const projectPath = useMemo(() => getWorkspaceProjectPath("e2b", repo.trim()), [repo]);
   const attachCommand = useMemo(
-    () => `opencode attach ${url} -p ${result.serverPassword}`,
-    [url, result.serverPassword],
+    () => getAttachCommand(result.subdomain, "opencode", result.serverPassword),
+    [result.subdomain, result.serverPassword],
   );
-  const attachDisplay = useMemo(() => `opencode attach ${url} -p ••••`, [url]);
+  const attachDisplay = useMemo(
+    () => getAttachCommand(result.subdomain, "opencode", "••••"),
+    [result.subdomain],
+  );
   const [now, setNow] = useState(() => Date.now());
   const [showPassword, setShowPassword] = useState(false);
 

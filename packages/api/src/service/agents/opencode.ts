@@ -23,8 +23,10 @@ export function buildOpencodeAuthJson(credentials: UserProviderCredential[]): st
         type: cred.credential.type === "api_key" ? "api" : "oauth",
         key: cred.credential.type === "api_key" ? cred.credential.apiKey : undefined,
         refresh: cred.credential.type === "oauth" ? cred.credential.refresh : undefined,
-        access: cred.credential.type === "oauth" ? cred.credential.access : undefined,
-        expires: cred.credential.type === "oauth" ? cred.credential.expires : undefined,
+        // V2's OAuth credential schema requires both fields. Empty/zero
+        // represents an access token that must be refreshed immediately.
+        access: cred.credential.type === "oauth" ? (cred.credential.access ?? "") : undefined,
+        expires: cred.credential.type === "oauth" ? (cred.credential.expires ?? 0) : undefined,
         accountId: cred.credential.type === "oauth" ? cred.credential.accountId : undefined,
       },
     ] as const;

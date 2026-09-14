@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "./workspace-env";
+import { railwayBootstrapEnvironment } from "./workspace-runtime-bundle";
 import type { WorkspaceProvisioningSpec } from "../providers/compute";
 
 const spec: WorkspaceProvisioningSpec = {
@@ -62,4 +63,37 @@ describe("managed clone credentials", () => {
       expect(JSON.stringify(env)).not.toContain("inline-pat");
     },
   );
+});
+
+test("Google integration identity variables cannot be overridden by user env", () => {
+  const env = buildWorkspaceEnv(spec, {
+    ...runtime("railway"),
+    googleApplicationCredentials: "/run/gitterm/google/adc.json",
+    googleProjectId: "trusted-project",
+    userEnv: {
+      GOOGLE_APPLICATION_CREDENTIALS: "/workspace/stolen.json",
+      GOOGLE_CLOUD_PROJECT: "other-project",
+    },
+  });
+  expect(env.GOOGLE_APPLICATION_CREDENTIALS).toBe("/run/gitterm/google/adc.json");
+  expect(env.CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE).toBe("/run/gitterm/google/adc.json");
+  expect(env.GOOGLE_CLOUD_PROJECT).toBe("trusted-project");
+  expect(env.CLOUDSDK_CORE_PROJECT).toBe("trusted-project");
+});
+
+test("Railway receives only a revocable bootstrap capability", () => {
+  const full = buildWorkspaceEnv(spec, {
+    ...runtime("railway"),
+    userEnv: { DATABASE_URL: "postgres://secret" },
+  });
+  const bootstrap = railwayBootstrapEnvironment(full);
+  expect(bootstrap).toEqual({
+    GITTERM_REMOTE_BOOTSTRAP: "1",
+    WORKSPACE_ID: "workspace-id",
+    WORKSPACE_API_URL: "https://api.example.com",
+    WORKSPACE_AGENT_AUTH_TOKEN: "agent-auth",
+    WORKSPACE_PROVIDER: "railway",
+  });
+  expect(JSON.stringify(bootstrap)).not.toContain("postgres://secret");
+  expect(JSON.stringify(bootstrap)).not.toContain("inline-pat");
 });

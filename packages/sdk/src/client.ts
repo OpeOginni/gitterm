@@ -44,6 +44,8 @@ import type {
   WorkspaceSetupStatus,
   ModelCredential,
   ModelProviderInfo,
+  GitHubIntegration,
+  GoogleCloudIntegration,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl } from "./transport.js";
 import { runHelpers } from "./runs.js";
@@ -175,6 +177,10 @@ export type GittermClient = {
   credentials: {
     list(): Promise<ModelCredential[]>;
     listProviders(): Promise<ModelProviderInfo[]>;
+  };
+  integrations: {
+    github: { list(): Promise<GitHubIntegration[]> };
+    googleCloud: { list(): Promise<GoogleCloudIntegration[]> };
   };
   models: { list(options?: { provider?: string }): Promise<ModelInfo[]> };
 };
@@ -725,6 +731,36 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
             }))
             .filter((model) => !listOptions?.provider || model.provider === listOptions.provider);
         }),
+    },
+    integrations: {
+      github: {
+        list: () =>
+          run(async (): Promise<GitHubIntegration[]> => {
+            const result = await trpc.workspace.listUserInstallations.query();
+            return result.installations.map(({ git_integration, github_app_installation }) => ({
+              id: git_integration.id,
+              accountLogin: git_integration.providerAccountLogin,
+              accountType: github_app_installation.accountType,
+              repositorySelection: github_app_installation.repositorySelection,
+              suspended: github_app_installation.suspended,
+              connectedAt: toIso(git_integration.connectedAt)!,
+            }));
+          }),
+      },
+      googleCloud: {
+        list: () =>
+          run(async (): Promise<GoogleCloudIntegration[]> => {
+            const result = await trpc.googleCloud.list.query();
+            return result.map((integration) => ({
+              id: integration.id,
+              name: integration.name,
+              projectId: integration.projectId,
+              workloadIdentityProvider: integration.workloadIdentityProvider,
+              serviceAccountEmail: integration.serviceAccountEmail,
+              connectedAt: toIso(integration.connectedAt)!,
+            }));
+          }),
+      },
     },
     credentials: {
       list: () =>

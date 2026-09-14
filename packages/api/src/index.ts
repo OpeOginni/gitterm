@@ -3,8 +3,9 @@ import type { Context } from "./context";
 import { workspaceJWT } from "./service/auth/workspace-jwt";
 import env from "@gitterm/env/server";
 import { verifyApiToken } from "./service/auth/api-token";
-import { db, eq } from "@gitterm/db";
+import { and, db, eq } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
+import { workspace } from "@gitterm/db/schema/workspace";
 import type { ApiTokenScope } from "@gitterm/schema";
 import type { WorkspaceTokenPurpose } from "./service/auth/workspace-jwt";
 import { WorkspaceLifecycleTRPCError } from "./utils/workspace-lifecycle-error";
@@ -246,7 +247,7 @@ export const cloudflareWebhookProcedure = t.procedure.use(({ ctx, next }) => {
  * - Workspace auth: Bearer token in Authorization header
  */
 const workspaceProcedure = (purpose: WorkspaceTokenPurpose) =>
-  t.procedure.use(({ ctx, next }) => {
+  t.procedure.use(async ({ ctx, next }) => {
     const token = ctx.bearerToken;
 
     if (!token) {
@@ -268,6 +269,13 @@ const workspaceProcedure = (purpose: WorkspaceTokenPurpose) =>
 
     try {
       const payload = workspaceJWT.verifyToken(token, purpose);
+      const record = await db.query.workspace.findFirst({
+        columns: { status: true, authVersion: true },
+        where: and(eq(workspace.id, payload.workspaceId), eq(workspace.userId, payload.userId)),
+      });
+      if (!record || record.status === "terminated" || record.authVersion !== payload.authVersion) {
+        throw new Error("Workspace identity has been revoked");
+      }
 
       return next({
         ctx: {
