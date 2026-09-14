@@ -30,12 +30,7 @@ test("imports API and OAuth seeds into SQLite before deleting auth.json", () => 
     join(bin, "opencode"),
     `#!/bin/sh
 test "$1 $2 $3" = "auth list --standalone"
-python3 - "$HOME/.local/share/opencode/opencode.db" <<'PY'
-import sqlite3
-import sys
-with sqlite3.connect(sys.argv[1]) as database:
-    database.execute("CREATE TABLE credential (id TEXT PRIMARY KEY, integration_id TEXT, label TEXT NOT NULL, value TEXT NOT NULL, active INTEGER, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL)")
-PY
+sqlite3 "$HOME/.local/share/opencode/opencode.db" 'CREATE TABLE credential (id TEXT PRIMARY KEY, integration_id TEXT, label TEXT NOT NULL, value TEXT NOT NULL, active INTEGER, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL)'
 `,
   );
   chmodSync(join(bin, "opencode"), 0o755);
@@ -53,18 +48,24 @@ PY
   expect(existsSync(auth)).toBe(false);
 
   const result = Bun.spawnSync([
-    "python3",
-    "-c",
-    "import json,sqlite3,sys; database=sqlite3.connect(sys.argv[1]); print(json.dumps(database.execute('SELECT integration_id,label,value,active FROM credential ORDER BY integration_id').fetchall()))",
+    "sqlite3",
+    "-json",
     database,
+    "SELECT integration_id,label,value,active FROM credential ORDER BY integration_id",
   ]);
   expect(JSON.parse(result.stdout.toString())).toEqual([
-    ["anthropic", "API key", '{"type":"key","key":"api-key"}', 1],
-    [
-      "openai",
-      "OAuth",
-      '{"type":"oauth","methodID":"chatgpt-browser","refresh":"refresh","access":"","expires":0}',
-      1,
-    ],
+    {
+      integration_id: "anthropic",
+      label: "API key",
+      value: '{"type":"key","key":"api-key"}',
+      active: 1,
+    },
+    {
+      integration_id: "openai",
+      label: "OAuth",
+      value:
+        '{"type":"oauth","methodID":"chatgpt-browser","refresh":"refresh","access":"","expires":0,"metadata":{}}',
+      active: 1,
+    },
   ]);
 });

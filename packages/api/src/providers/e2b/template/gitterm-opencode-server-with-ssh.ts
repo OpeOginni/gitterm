@@ -4,7 +4,7 @@ import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
 export function createOpencodeServerWithSSHTemplate(opencodeVersion: string): TemplateClass {
   return Template()
     .fromNodeImage("20-bookworm-slim")
-    .aptInstall(["git", "bash", "curl", "ca-certificates", "python3", "openssh-server"], {
+    .aptInstall(["git", "bash", "curl", "ca-certificates", "sqlite3", "openssh-server"], {
       noInstallRecommends: true,
     })
     .runCmd(

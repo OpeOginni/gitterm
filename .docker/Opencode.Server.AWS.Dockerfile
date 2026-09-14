@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     nodejs \
     npm \
-    python3 \
+    sqlite3 \
     openssh-server \
     && rm -rf /var/lib/apt/lists/*
 

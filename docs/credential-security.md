@@ -80,7 +80,7 @@ Railway's brokered bootstrap requires a matching canonical image:
 1. Apply migration `0028_smart_radioactive_man`.
 2. Configure encryption and workload-identity signing keys.
 3. Build and publish all canonical agent images from this revision; verify they contain
-   `/usr/local/bin/gitterm-runtime-bootstrap`, OpenCode V2, and Python 3 for the one-time SQLite
+   `/usr/local/bin/gitterm-runtime-bootstrap`, OpenCode V2, and the SQLite CLI for the one-time
    credential import.
 4. Update image catalog entries to those images.
 5. Deploy the API/server.

@@ -59,7 +59,7 @@ RUN apt-get update && \
     unzip \
     nodejs \
     npm \
-    python3 \
+    sqlite3 \
     netcat-traditional \
     libjson-c5 \
     libssl3 \

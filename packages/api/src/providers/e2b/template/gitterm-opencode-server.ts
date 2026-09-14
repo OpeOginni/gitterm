@@ -4,7 +4,7 @@ import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
 export function createOpencodeServerTemplate(opencodeVersion: string): TemplateClass {
   return Template()
     .fromNodeImage("20-bookworm-slim")
-    .aptInstall(["git", "bash", "curl", "ca-certificates", "python3"], {
+    .aptInstall(["git", "bash", "curl", "ca-certificates", "sqlite3"], {
       noInstallRecommends: true,
     })
     .runCmd(GITTERM_CLI_CACHE_BUST)
