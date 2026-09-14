@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, Cloud, Copy, KeyRound, Loader2, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import Image from "next/image";
+import { Check, Copy, KeyRound, Loader2, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,9 +87,13 @@ export function GoogleCloudConnection() {
     <section className="space-y-5">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex size-8 items-center justify-center rounded-lg border border-sky-400/20 bg-sky-400/10">
-            <Cloud className="size-4 text-sky-300" />
-          </div>
+          <Image
+            src="/google-cloud.svg"
+            alt=""
+            width={28}
+            height={28}
+            className="size-7 shrink-0"
+          />
           <div>
             <div className="flex items-center gap-2.5">
               <h2 className="text-base font-semibold tracking-tight text-fg">Google Cloud</h2>
@@ -229,7 +234,7 @@ export function GoogleCloudConnection() {
         </div>
       ) : (
         <div className="flex flex-col items-center px-6 py-10 text-center">
-          <Cloud className="size-8 text-fg-4" />
+          <Image src="/google-cloud.svg" alt="" width={32} height={32} className="size-8" />
           <p className="mt-4 text-sm font-semibold text-fg">No Google Cloud identities</p>
           <p className="mt-1 max-w-md text-[13px] leading-relaxed text-fg-3">
             Connect a narrowly scoped service account without downloading or storing a JSON key.
