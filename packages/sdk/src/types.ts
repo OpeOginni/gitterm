@@ -55,7 +55,7 @@ export type WorkspaceRef = string | { id: string };
 /** An `AgentRun`, or any object carrying its `workspaceId` and `id`. */
 export type RunRef = { workspaceId: string; id: string };
 
-/** `v1` = OpenCode 1.x (`/event`, `/session/*`); `v2` = OpenCode 2 (`/api/*`), experimental until 2.0 ships. */
+/** `v1` = OpenCode 1.x (`/event`, `/session/*`); `v2` = OpenCode 2 (`/api/*`) and the default. */
 export type OpencodeApi = "v1" | "v2";
 
 export type WaitOptions = {
@@ -229,8 +229,7 @@ export type WorkspaceCreateInput = {
      */
     config?: Record<string, unknown>;
     /**
-     * OpenCode API generation served by the image. Defaults to `v1`. Use `v2`
-     * with an image built on OpenCode 2 (`@opencode/cli`); experimental.
+     * OpenCode API generation served by the image. Defaults to `v2`.
      */
     api?: OpencodeApi;
   };

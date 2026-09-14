@@ -122,7 +122,7 @@ export const workspace = pgTable(
     setupRequired: boolean("setup_required").notNull().default(false),
     /**
      * v1 = the legacy `/event` + `/session/*` API served by OpenCode 1.x images.
-     * v2 = the `/api/*` API of OpenCode 2 (experimental until 2.0 ships).
+     * v2 = the `/api/*` API of OpenCode 2. Application code selects this for new workspaces.
      */
     opencodeApi: opencodeApiEnum("opencode_api").notNull().default("v1"),
 

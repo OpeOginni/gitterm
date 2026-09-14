@@ -23,14 +23,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG T3_VERSION=latest
 ARG CLAUDE_CODE_VERSION=latest
 ARG CODEX_VERSION=latest
-ARG OPENCODE_VERSION=1
+ARG OPENCODE_VERSION=2
 ARG T3_INSTALL_CACHE_BUST=manual
 RUN echo "t3 install cache bust: ${T3_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
     && npm install -g "t3@${T3_VERSION}" --prefer-online --no-audit --fund=false \
     && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" --no-audit --fund=false \
     && npm install -g "@openai/codex@${CODEX_VERSION}" --no-audit --fund=false \
-    && npm install -g "opencode-ai@${OPENCODE_VERSION}" --no-audit --fund=false \
+    && npm install -g "@opencode/cli@${OPENCODE_VERSION}" --no-audit --fund=false \
     && npm install -g "@gitterm/cli@latest" --no-audit --fund=false \
     && echo "installed t3: $(t3 --version 2>/dev/null || echo unknown)"
 

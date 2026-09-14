@@ -81,7 +81,7 @@ function createAuthClient(workspace: DirectWorkspace, fetchImpl?: typeof fetch) 
   if (workspace.opencodeApi !== "v2")
     throw new GittermError(
       "BAD_REQUEST",
-      "Runtime OAuth connection management requires OpenCode v2; use inline credentials or a managed workspace with v1",
+      "Runtime OAuth connection management requires OpenCode v2",
     );
   const authorization = workspace.runtime.password
     ? `Basic ${Buffer.from(`opencode:${workspace.runtime.password}`).toString("base64")}`

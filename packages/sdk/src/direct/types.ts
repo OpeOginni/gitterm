@@ -130,7 +130,7 @@ export type DirectWorkspaceCreateInput = {
   /** Trusted integration context appended to the generated global AGENTS.md. */
   additionalAgentInstructions?: string;
   opencode?: {
-    /** Defaults to v1. v2 requires a compatible provider image/template. */
+    /** Defaults to v2. */
     api?: OpencodeApi;
     config?: Record<string, unknown>;
     plugins?: string[];

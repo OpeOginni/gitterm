@@ -6,12 +6,13 @@
 set -euo pipefail
 
 NS="${DOCKERHUB_NAMESPACE:-opeoginni}"
-OPENCODE_VERSION="${OPENCODE_VERSION:-1}"
+OPENCODE_VERSION="${OPENCODE_VERSION:-2}"
 T3_VERSION="${T3_VERSION:-latest}"
 CACHE_BUST="${OPENCODE_INSTALL_CACHE_BUST:-$(date +%s)}"
 CF_TAG="${CF_SANDBOX_TAG:-0.12.1}"
 PLATFORM="${DOCKER_PLATFORM:-linux/amd64}"
 PUSH="${PUSH:-1}"
+AGENT_IMAGE_TAG="${AGENT_IMAGE_TAG:-latest}"
 
 name="${1:-}"
 if [[ -z "$name" ]]; then
@@ -35,17 +36,23 @@ build_push() {
 
 case "$name" in
   opencode)
-    build_push .docker/Opencode.Dockerfile .docker gitterm-opencode latest \
+    build_push .docker/Opencode.Dockerfile .docker gitterm-opencode "$AGENT_IMAGE_TAG" \
       --build-arg "OPENCODE_VERSION=${OPENCODE_VERSION}" \
       --build-arg "OPENCODE_INSTALL_CACHE_BUST=${CACHE_BUST}"
     ;;
   opencode-server)
-    build_push .docker/Opencode.Server.Dockerfile .docker gitterm-opencode-server latest \
+    build_push .docker/Opencode.Server.Dockerfile .docker gitterm-opencode-server "$AGENT_IMAGE_TAG" \
+      --build-arg "OPENCODE_VERSION=${OPENCODE_VERSION}" \
+      --build-arg "OPENCODE_INSTALL_CACHE_BUST=${CACHE_BUST}"
+    ;;
+  opencode-aws-server)
+    build_push .docker/Opencode.Server.AWS.Dockerfile .docker gitterm-opencode-server-aws "$AGENT_IMAGE_TAG" \
       --build-arg "OPENCODE_VERSION=${OPENCODE_VERSION}" \
       --build-arg "OPENCODE_INSTALL_CACHE_BUST=${CACHE_BUST}"
     ;;
   t3code-server)
-    build_push .docker/T3Code.Server.Dockerfile .docker gitterm-t3code-server latest \
+    build_push .docker/T3Code.Server.Dockerfile .docker gitterm-t3code-server "$AGENT_IMAGE_TAG" \
+      --build-arg "OPENCODE_VERSION=${OPENCODE_VERSION}" \
       --build-arg "T3_VERSION=${T3_VERSION}" \
       --build-arg "T3_INSTALL_CACHE_BUST=${CACHE_BUST}"
     ;;

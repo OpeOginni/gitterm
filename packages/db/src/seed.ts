@@ -272,11 +272,11 @@ const seedImages = [
       },
       vercel: {
         runtime: "node22" as const,
-        setupCommands: ["npm install -g opencode-ai @gitterm/cli --no-audit --fund=false"],
+        setupCommands: ["npm install -g @opencode/cli@2 @gitterm/cli --no-audit --fund=false"],
         vcpus: 2,
       },
       ascii: {
-        setupCommands: ["npm install -g opencode-ai @gitterm/cli --no-audit --fund=false"],
+        setupCommands: ["npm install -g @opencode/cli@2 @gitterm/cli --no-audit --fund=false"],
       },
     },
   },
@@ -325,13 +325,13 @@ const seedImages = [
       vercel: {
         runtime: "node22" as const,
         setupCommands: [
-          "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai @gitterm/cli --no-audit --fund=false",
+          "npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 @gitterm/cli --no-audit --fund=false",
         ],
         vcpus: 2,
       },
       ascii: {
         setupCommands: [
-          "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai @gitterm/cli --no-audit --fund=false",
+          "npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 @gitterm/cli --no-audit --fund=false",
         ],
       },
     },

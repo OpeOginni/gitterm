@@ -682,13 +682,10 @@ would otherwise change them for other runs on the same runtime.
 
 ## OpenCode API versions
 
-Managed workspaces run the latest published `opencode-ai@1` (`opencodeApi: "v1"`). OpenCode 2
-changes the server API; callers testing it must supply their own compatible image and create the
-workspace with `opencode: { api: "v2" }`. Runs, questions, permissions, and events behave the
-same from the SDK's point of view; the flag only tells GitTerm which protocol to speak to the
-workspace. V2 stores credentials in SQLite, but imports GitTerm's generated V1 `auth.json` during
-the first database migration of a fresh workspace. V2 remains experimental in GitTerm until its
-server API and plugin integration pass the provider smoke suite.
+Managed workspaces run OpenCode V2 from `@opencode/cli@2` and use `opencodeApi: "v2"`. V2 stores
+credentials in SQLite; GitTerm writes a short-lived `auth.json` seed, initializes V2's database,
+imports and verifies each credential in SQLite, then deletes the seed. Runs, questions, permissions,
+and events use GitTerm's V2 runtime adapter.
 
 ## Errors
 

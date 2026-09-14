@@ -12,6 +12,7 @@ import {
   githubAuthCommand,
   GITHUB_CLI_INSTRUCTIONS,
 } from "@gitterm/agent-runtime/github-auth";
+import { OPENCODE_V2_IMPORT_CREDENTIALS } from "@gitterm/agent-runtime";
 
 export const DIRECT_OPENCODE_PORT = 4096;
 export const DIRECT_OPENCODE_COMMAND = `opencode serve --hostname 0.0.0.0 --port ${DIRECT_OPENCODE_PORT}`;
@@ -242,7 +243,11 @@ export function buildDirectProvisioningPlan(
       port: DIRECT_OPENCODE_PORT,
     },
     setup: {
-      beforeAgent: [...(github ? [github.setup] : []), ...(input.setup?.beforeAgent ?? [])],
+      beforeAgent: [
+        ...((input.opencode?.api ?? "v2") === "v2" ? [OPENCODE_V2_IMPORT_CREDENTIALS] : []),
+        ...(github ? [github.setup] : []),
+        ...(input.setup?.beforeAgent ?? []),
+      ],
       afterAgent: input.setup?.afterAgent ?? [],
     },
   };

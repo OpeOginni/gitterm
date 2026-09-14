@@ -141,7 +141,7 @@ import {
 } from "../../service/workspace-setup";
 import { resolveCustomWorkspaceImage } from "../../service/workspace-image";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
-import { DEFAULT_OPENCODE_API } from "@gitterm/agent-runtime";
+import { DEFAULT_OPENCODE_API, OPENCODE_V2_IMPORT_CREDENTIALS } from "@gitterm/agent-runtime";
 import { workspaceModelsSchema } from "@gitterm/schema/workspace-models";
 import { getWorkspaceModelAccess } from "../../service/workspace-model-access";
 import {
@@ -2615,7 +2615,7 @@ export const workspaceRouter = router({
           workspaceId,
           (input.secretFiles ?? []).map((file) => file.path),
         );
-        const beforeAgentCommands = [
+        const requestedBeforeAgentCommands = [
           ...(secretFileExcludeCommand ? [secretFileExcludeCommand] : []),
           ...(secretFileLinkCommand ? [secretFileLinkCommand] : []),
           ...(await resolveWorkspaceSetupCommands({
@@ -2624,8 +2624,15 @@ export const workspaceRouter = router({
             requestedCommands: input.setup?.beforeAgent,
           })),
         ];
+        const beforeAgentCommands = [
+          ...((input.opencode?.api ?? DEFAULT_OPENCODE_API) === "v2"
+            ? [OPENCODE_V2_IMPORT_CREDENTIALS]
+            : []),
+          ...requestedBeforeAgentCommands,
+        ];
         const afterAgentCommands = input.setup?.afterAgent ?? [];
-        const setupRequested = beforeAgentCommands.length > 0 || afterAgentCommands.length > 0;
+        const setupRequested =
+          requestedBeforeAgentCommands.length > 0 || afterAgentCommands.length > 0;
         const setupExecutionId = setupRequested ? randomUUID() : undefined;
         // The setup script's readiness probe must target the port the runtime
         // actually listens on. SDK providers launch serve.command themselves,

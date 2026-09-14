@@ -24,7 +24,7 @@ import {
   type RuntimeTarget,
 } from "./types";
 
-/** OpenCode 2 (`/api/*`, `{ id, type, data }` events, questions as forms). Verified on beta-19059. */
+/** OpenCode 2 (`/api/*`, `{ id, type, data }` events, questions as forms). Verified on 2.0.3. */
 function session(sessionId: string): string {
   return `/api/session/${encodeURIComponent(sessionId)}`;
 }

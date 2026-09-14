@@ -20,10 +20,21 @@ describe("direct provisioning plan", () => {
       repositoryCredentials: { token: "caller-token" },
       setup: { beforeAgent: ["gh pr list"] },
     });
-    const file = plan.agent.files.find((entry) => entry.path.endsWith("github/config.json"))!;
-    expect(JSON.parse(Buffer.from(file.contentBase64, "base64").toString())).toMatchObject({
-      token: "caller-token",
+    const configFile = plan.agent.files.find((entry) => entry.path.endsWith("github/config.json"))!;
+    const credentialFile = plan.agent.files.find(
+      (entry) => entry.path === "/run/gitterm/github/credential.json",
+    )!;
+    const config = Buffer.from(configFile.contentBase64, "base64").toString();
+    expect(JSON.parse(config)).toMatchObject({
+      username: "x-access-token",
       renewable: false,
+    });
+    expect(config).not.toContain("caller-token");
+    expect(
+      JSON.parse(Buffer.from(credentialFile.contentBase64, "base64").toString()),
+    ).toMatchObject({
+      token: "caller-token",
+      username: "x-access-token",
     });
     expect(plan.setup.beforeAgent.at(-1)).toBe("gh pr list");
     expect(plan.agent.command).toContain(".gitterm/bin");
