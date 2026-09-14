@@ -46,6 +46,9 @@ const baseSchema = z
     // Internal
     INTERNAL_API_KEY: optional,
     DEVICE_CODE_VERIFICATION_URI: optional,
+    WORKLOAD_IDENTITY_ISSUER: optional,
+    WORKLOAD_IDENTITY_PRIVATE_KEY: optional,
+    WORKLOAD_IDENTITY_KEY_ID: z.string().optional().default("gitterm-workload-identity-v1"),
 
     // GitHub App OAuth
     GITHUB_APP_CLIENT_ID: optional,
@@ -73,6 +76,9 @@ const baseSchema = z
 
     // Encryption (for storing API keys/credentials)
     ENCRYPTION_MASTER_KEY: optional, // 32-byte key in hex (64 chars) for AES-256-GCM
+    ENCRYPTION_MASTER_KEY_ID: z.string().optional().default("primary"),
+    /** JSON object of key-id to 64-character hex key, used to decrypt during rotation. */
+    ENCRYPTION_MASTER_KEYS: optional,
 
     // Routing
     ROUTING_MODE: routingMode,

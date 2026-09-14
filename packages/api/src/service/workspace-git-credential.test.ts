@@ -5,10 +5,21 @@ import { issueWorkspaceGitCredential } from "./workspace-git-credential";
 
 afterEach(() => mock.restore());
 const ws = {
+  id: "workspace",
   userId: "owner",
   gitIntegrationId: "integration",
   repositoryUrl: "https://github.com/team/project",
+  status: "running" as const,
 };
+
+test("paused and terminated workspaces cannot mint credentials", async () => {
+  await expect(issueWorkspaceGitCredential({ ...ws, status: "paused" })).rejects.toThrow(
+    "not running",
+  );
+  await expect(issueWorkspaceGitCredential({ ...ws, status: "terminated" })).rejects.toThrow(
+    "not running",
+  );
+});
 
 test("refresh is scoped to the workspace's repository and installation", async () => {
   spyOn(db.query.gitIntegration, "findFirst").mockImplementation((async () => ({

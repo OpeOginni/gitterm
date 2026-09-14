@@ -116,6 +116,16 @@ GitHub App setup:
 - Webhook via proxy: `https://<your-base-domain>/listener/trpc/github.handleInstallationWebhook`
 - Webhook via listener: `https://<listener-base-url>/trpc/github.handleInstallationWebhook`
 
+## Google Cloud Integration
+
+Google Cloud Workload Identity Federation gives workspaces keyless `gcloud` and ADC access through
+short-lived GitTerm identity assertions. Configure the server's workload-identity signing key, then
+connect a narrowly scoped service account from the Integrations dashboard. See
+[`docs/google-workload-identity.md`](docs/google-workload-identity.md) for setup and IAM guidance.
+
+The complete storage, broker, rotation, audit, and provider threat model is documented in
+[`docs/credential-security.md`](docs/credential-security.md).
+
 ## Development
 
 See `CONTRIBUTING.md` for local setup and service URLs.

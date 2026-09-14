@@ -3,6 +3,13 @@ set -e
 
 WORKSPACE="/workspace"
 RUNTIME_DIR="/run/gitterm"
+
+if [ "$GITTERM_REMOTE_BOOTSTRAP" = "1" ]; then
+    BOOTSTRAP_EXPORTS=$(/usr/local/bin/gitterm-runtime-bootstrap) || exit $?
+    eval "$BOOTSTRAP_EXPORTS"
+    unset BOOTSTRAP_EXPORTS GITTERM_REMOTE_BOOTSTRAP
+fi
+
 GIT_CREDENTIAL_HELPER="$RUNTIME_DIR/git-credential-helper.sh"
 GIT_TOKEN_FILE="$RUNTIME_DIR/github-token"
 REPOSITORY_TOKEN_FILE="$RUNTIME_DIR/repository-token"

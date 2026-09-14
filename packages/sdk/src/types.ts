@@ -198,6 +198,8 @@ export type WorkspaceCreateInput = {
   repositoryCredentials?: { username?: string; token: string };
   /** Dashboard GitHub App integration; runtime Git/gh credentials are renewed automatically. */
   gitIntegrationId?: string;
+  /** Google Workload Identity Federation integration; injects keyless ADC/gcloud auth. */
+  googleCloudIntegrationId?: string;
   /** Defaults from the selected provider. */
   persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
@@ -228,10 +230,28 @@ export type WorkspaceCreateInput = {
     config?: Record<string, unknown>;
     /**
      * OpenCode API generation served by the image. Defaults to `v1`. Use `v2`
-     * with an image built on OpenCode 2 (`@opencode-ai/cli`); experimental.
+     * with an image built on OpenCode 2 (`@opencode/cli`); experimental.
      */
     api?: OpencodeApi;
   };
+};
+
+export type GitHubIntegration = {
+  id: string;
+  accountLogin: string;
+  accountType: string;
+  repositorySelection: string;
+  suspended: boolean;
+  connectedAt: string;
+};
+
+export type GoogleCloudIntegration = {
+  id: string;
+  name: string;
+  projectId: string;
+  workloadIdentityProvider: string;
+  serviceAccountEmail: string;
+  connectedAt: string;
 };
 
 export type WorkspaceRestartResult = { status: WorkspaceStatus };

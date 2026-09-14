@@ -21,8 +21,11 @@ function fixture(renewable = false, expiresAt?: string) {
     inlineAuth: !renewable,
     authExpiresAt: expiresAt,
   })!;
+  const runtime = join(home, "run/gitterm");
   for (const file of provision.files) {
-    const target = file.path.replace("~", home);
+    const target = file.path.startsWith("/run/gitterm/")
+      ? file.path.replace("/run/gitterm", runtime)
+      : file.path.replace("~", home);
     mkdirSync(join(target, ".."), { recursive: true });
     writeFileSync(target, Buffer.from(file.contentBase64, "base64"), { mode: file.mode });
   }
@@ -38,12 +41,13 @@ function fixture(renewable = false, expiresAt?: string) {
     GITHUB_TOKEN: "",
     GH_HOST: "",
     GH_REPO: "",
+    GITTERM_RUNTIME_DIR: runtime,
     WORKSPACE_API_URL: "",
-    WORKSPACE_AUTH_TOKEN: "",
+    WORKSPACE_AGENT_AUTH_TOKEN: "",
   };
-  const runtime = join(home, ".gitterm/github/runtime.cjs");
+  const runtimeScript = join(home, ".gitterm/github/runtime.cjs");
   async function run(args: string[], input = "", overrides: Record<string, string> = {}) {
-    const child = Bun.spawn([Bun.which("node")!, runtime, ...args], {
+    const child = Bun.spawn([Bun.which("node")!, runtimeScript, ...args], {
       cwd: home,
       env: { ...env, ...overrides },
       stdin: new Blob([input]),
@@ -67,7 +71,7 @@ process.exitCode = Number(process.env.FAKE_GH_EXIT || 0);
       { mode: 0o700 },
     );
   }
-  return { home, env, run, install, provision };
+  return { home, env, run, install, provision, runtime };
 }
 
 test("PAT authenticates gh and Git without exposing it in profiles or command arguments", async () => {
@@ -104,6 +108,9 @@ test("PAT authenticates gh and Git without exposing it in profiles or command ar
   );
   expect(readFileSync(join(f.home, ".gitconfig"), "utf8")).toContain("user-owned-helper");
   expect(statSync(join(f.home, ".gitterm/github/config.json")).mode & 0o777).toBe(0o600);
+  expect(readFileSync(join(f.home, ".gitterm/github/config.json"), "utf8")).not.toContain(
+    "initial-token",
+  );
   expect(statSync(join(f.home, ".gitterm/github")).mode & 0o777).toBe(0o700);
   expect((await f.run(["setup"])).code).toBe(0);
   expect(readFileSync(join(f.home, ".profile"), "utf8").match(/gitterm-github-cli/g)).toHaveLength(
@@ -135,7 +142,7 @@ test("installation tokens refresh once across concurrent CLI and Git processes",
   });
   servers.push(server);
   f.env.WORKSPACE_API_URL = server.url.toString();
-  f.env.WORKSPACE_AUTH_TOKEN = "workspace-jwt";
+  f.env.WORKSPACE_AGENT_AUTH_TOKEN = "workspace-jwt";
   await f.run(["setup"]);
   f.install();
   const results = await Promise.all([
@@ -150,7 +157,7 @@ test("installation tokens refresh once across concurrent CLI and Git processes",
   expect(requests).toBe(1);
   expect((await f.run(["gh", "pr", "list"])).stdout).toContain("refreshed-token");
   expect(requests).toBe(1);
-  expect(statSync(join(f.home, ".gitterm/github/cache.json")).mode & 0o777).toBe(0o600);
+  expect(statSync(join(f.runtime, "github/cache.json")).mode & 0o777).toBe(0o600);
 });
 
 test("fresh installation token needs no refresh endpoint", async () => {
@@ -170,7 +177,7 @@ test("failed refresh fails closed without invoking gh or printing credentials", 
   });
   servers.push(server);
   f.env.WORKSPACE_API_URL = server.url.toString();
-  f.env.WORKSPACE_AUTH_TOKEN = "workspace-secret";
+  f.env.WORKSPACE_AGENT_AUTH_TOKEN = "workspace-secret";
   await f.run(["setup"]);
   f.install();
   const result = await f.run(["gh", "pr", "list"]);

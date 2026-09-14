@@ -1,194 +1,214 @@
-import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from "node:crypto";
 import env from "@gitterm/env/server";
 
 const ALGORITHM = "aes-256-gcm";
 const NONCE_LENGTH = 12;
 const TAG_LENGTH = 16;
+const DEFAULT_KEY = "0".repeat(64);
+const FORMAT_PREFIX = "v2:";
+const DEFAULT_AAD = "gitterm:credential:v2";
 
-// Default key for development - MUST be overridden in production
-const DEFAULT_KEY = "0".repeat(64); // 32 bytes in hex
+type Envelope = {
+  nonce: string;
+  ciphertext: string;
+  tag: string;
+  keyNonce: string;
+  encryptedKey: string;
+  keyTag: string;
+};
 
-/**
- * Encryption Service for securing API keys and OAuth tokens at rest.
- *
- * Uses AES-256-GCM for authenticated encryption.
- * Format: nonce (12 bytes) || ciphertext || auth_tag (16 bytes)
- * Output is base64 encoded for storage in text columns.
- */
+function parseKey(value: string, name: string): Buffer {
+  if (!/^[a-fA-F0-9]{64}$/.test(value)) {
+    throw new Error(`${name} must be 32 bytes (64 hex characters)`);
+  }
+  return Buffer.from(value, "hex");
+}
+
+function configuredKeyring(masterKeyHex?: string): { activeId: string; keys: Map<string, Buffer> } {
+  const activeId = masterKeyHex ? "explicit" : env.ENCRYPTION_MASTER_KEY_ID;
+  const activeValue = masterKeyHex || env.ENCRYPTION_MASTER_KEY || DEFAULT_KEY;
+  if (activeValue === DEFAULT_KEY && env.NODE_ENV === "production") {
+    throw new Error("ENCRYPTION_MASTER_KEY is required in production");
+  }
+  const keys = new Map<string, Buffer>([
+    [activeId, parseKey(activeValue, "ENCRYPTION_MASTER_KEY")],
+  ]);
+  if (!masterKeyHex && env.ENCRYPTION_MASTER_KEYS) {
+    let previous: unknown;
+    try {
+      previous = JSON.parse(env.ENCRYPTION_MASTER_KEYS);
+    } catch {
+      throw new Error("ENCRYPTION_MASTER_KEYS must be a JSON object");
+    }
+    if (!previous || typeof previous !== "object" || Array.isArray(previous)) {
+      throw new Error("ENCRYPTION_MASTER_KEYS must be a JSON object");
+    }
+    for (const [id, value] of Object.entries(previous)) {
+      if (!id || typeof value !== "string") throw new Error("Invalid ENCRYPTION_MASTER_KEYS entry");
+      if (!keys.has(id)) keys.set(id, parseKey(value, `ENCRYPTION_MASTER_KEYS.${id}`));
+    }
+  }
+  return { activeId, keys };
+}
+
+function encryptAes(plaintext: Buffer, key: Buffer, aad: string) {
+  const nonce = randomBytes(NONCE_LENGTH);
+  const cipher = createCipheriv(ALGORITHM, key, nonce);
+  cipher.setAAD(Buffer.from(aad));
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  return { nonce, ciphertext, tag: cipher.getAuthTag() };
+}
+
+function decryptAes(
+  encrypted: { nonce: Buffer; ciphertext: Buffer; tag: Buffer },
+  key: Buffer,
+  aad: string,
+): Buffer {
+  const decipher = createDecipheriv(ALGORITHM, key, encrypted.nonce);
+  decipher.setAAD(Buffer.from(aad));
+  decipher.setAuthTag(encrypted.tag);
+  return Buffer.concat([decipher.update(encrypted.ciphertext), decipher.final()]);
+}
+
+/** Versioned envelope encryption with a random data key per value. */
 export class EncryptionService {
-  private masterKey: Buffer;
+  private readonly activeId: string;
+  private readonly keys: Map<string, Buffer>;
 
   constructor(masterKeyHex?: string) {
-    const keyHex = masterKeyHex || env.ENCRYPTION_MASTER_KEY || DEFAULT_KEY;
-
-    if (keyHex === DEFAULT_KEY && env.NODE_ENV === "production") {
-      console.warn(
-        "WARNING: Using default encryption key in production. Set ENCRYPTION_MASTER_KEY environment variable.",
-      );
-    }
-
-    this.masterKey = Buffer.from(keyHex, "hex");
-
-    if (this.masterKey.length !== 32) {
-      throw new Error("ENCRYPTION_MASTER_KEY must be 32 bytes (64 hex characters)");
-    }
+    const keyring = configuredKeyring(masterKeyHex);
+    this.activeId = keyring.activeId;
+    this.keys = keyring.keys;
   }
 
-  /**
-   * Encrypt plaintext and return base64 encoded ciphertext.
-   *
-   * @param plaintext - The string to encrypt (e.g., API key or JSON tokens)
-   * @returns Base64 encoded encrypted data
-   */
-  encrypt(plaintext: string): string {
-    const nonce = randomBytes(NONCE_LENGTH);
-    const cipher = createCipheriv(ALGORITHM, this.masterKey, nonce);
-
-    const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-
-    const tag = cipher.getAuthTag();
-
-    // Combine: nonce || ciphertext || tag
-    const combined = Buffer.concat([nonce, encrypted, tag]);
-
-    return combined.toString("base64");
+  needsRewrap(value: string): boolean {
+    if (!value.startsWith(FORMAT_PREFIX)) return true;
+    const separator = value.indexOf(":", FORMAT_PREFIX.length);
+    return separator === -1 || value.slice(FORMAT_PREFIX.length, separator) !== this.activeId;
   }
 
-  /**
-   * Decrypt base64 encoded ciphertext and return plaintext.
-   *
-   * @param ciphertext - Base64 encoded encrypted data
-   * @returns Decrypted plaintext string
-   * @throws Error if decryption fails (wrong key, tampered data, etc.)
-   */
-  decrypt(ciphertext: string): string {
-    const combined = Buffer.from(ciphertext, "base64");
+  encrypt(plaintext: string, aad = DEFAULT_AAD): string {
+    const masterKey = this.keys.get(this.activeId)!;
+    const dataKey = randomBytes(32);
+    const value = encryptAes(Buffer.from(plaintext, "utf8"), dataKey, aad);
+    const wrappedKey = encryptAes(dataKey, masterKey, `gitterm:keywrap:${this.activeId}`);
+    const envelope: Envelope = {
+      nonce: value.nonce.toString("base64"),
+      ciphertext: value.ciphertext.toString("base64"),
+      tag: value.tag.toString("base64"),
+      keyNonce: wrappedKey.nonce.toString("base64"),
+      encryptedKey: wrappedKey.ciphertext.toString("base64"),
+      keyTag: wrappedKey.tag.toString("base64"),
+    };
+    return `${FORMAT_PREFIX}${this.activeId}:${Buffer.from(JSON.stringify(envelope)).toString("base64")}`;
+  }
 
-    if (combined.length < NONCE_LENGTH + TAG_LENGTH) {
-      throw new Error("Invalid ciphertext: too short");
-    }
-
-    const nonce = combined.subarray(0, NONCE_LENGTH);
-    const tag = combined.subarray(-TAG_LENGTH);
-    const encrypted = combined.subarray(NONCE_LENGTH, -TAG_LENGTH);
-
-    const decipher = createDecipheriv(ALGORITHM, this.masterKey, nonce);
-    decipher.setAuthTag(tag);
-
+  decrypt(value: string, aad = DEFAULT_AAD): string {
+    if (!value.startsWith(FORMAT_PREFIX)) return this.decryptLegacy(value);
+    const separator = value.indexOf(":", FORMAT_PREFIX.length);
+    if (separator === -1) throw new Error("Invalid encrypted value");
+    const keyId = value.slice(FORMAT_PREFIX.length, separator);
+    const masterKey = this.keys.get(keyId);
+    if (!masterKey) throw new Error(`Encryption key ${keyId} is unavailable`);
     try {
-      const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-      return decrypted.toString("utf8");
-    } catch {
-      throw new Error("Decryption failed: invalid key or tampered data");
+      const envelope = JSON.parse(
+        Buffer.from(value.slice(separator + 1), "base64").toString("utf8"),
+      ) as Envelope;
+      const dataKey = decryptAes(
+        {
+          nonce: Buffer.from(envelope.keyNonce, "base64"),
+          ciphertext: Buffer.from(envelope.encryptedKey, "base64"),
+          tag: Buffer.from(envelope.keyTag, "base64"),
+        },
+        masterKey,
+        `gitterm:keywrap:${keyId}`,
+      );
+      return decryptAes(
+        {
+          nonce: Buffer.from(envelope.nonce, "base64"),
+          ciphertext: Buffer.from(envelope.ciphertext, "base64"),
+          tag: Buffer.from(envelope.tag, "base64"),
+        },
+        dataKey,
+        aad,
+      ).toString("utf8");
+    } catch (error) {
+      throw new Error("Decryption failed: invalid key, context, or tampered data", {
+        cause: error,
+      });
     }
   }
 
-  /**
-   * Generate a hash prefix for audit logging.
-   * Returns first 16 characters of SHA-256 hash.
-   *
-   * @param value - The value to hash (e.g., API key)
-   * @returns First 16 chars of hex-encoded SHA-256 hash
-   */
+  private decryptLegacy(value: string): string {
+    const combined = Buffer.from(value, "base64");
+    if (combined.length < NONCE_LENGTH + TAG_LENGTH)
+      throw new Error("Invalid ciphertext: too short");
+    const encrypted = {
+      nonce: combined.subarray(0, NONCE_LENGTH),
+      ciphertext: combined.subarray(NONCE_LENGTH, -TAG_LENGTH),
+      tag: combined.subarray(-TAG_LENGTH),
+    };
+    for (const key of this.keys.values()) {
+      try {
+        const decipher = createDecipheriv(ALGORITHM, key, encrypted.nonce);
+        decipher.setAuthTag(encrypted.tag);
+        return Buffer.concat([decipher.update(encrypted.ciphertext), decipher.final()]).toString(
+          "utf8",
+        );
+      } catch {}
+    }
+    throw new Error("Decryption failed: invalid key or tampered data");
+  }
+
   hashForAudit(value: string): string {
     return createHash("sha256").update(value).digest("hex").slice(0, 16);
   }
 
-  /**
-   * Encrypt a credential object (API key or OAuth tokens).
-   *
-   * @param credential - Object containing apiKey or OAuth tokens
-   * @returns Base64 encoded encrypted JSON
-   */
   encryptCredential(credential: ApiKeyCredential | OAuthCredential): string {
     return this.encrypt(JSON.stringify(credential));
   }
 
-  /**
-   * Decrypt a credential object.
-   *
-   * @param encryptedCredential - Base64 encoded encrypted JSON
-   * @returns Decrypted credential object
-   */
   decryptCredential(encryptedCredential: string): ApiKeyCredential | OAuthCredential {
-    const json = this.decrypt(encryptedCredential);
-    return JSON.parse(json);
+    return JSON.parse(this.decrypt(encryptedCredential));
   }
 
-  /**
-   * Encrypt a credential for transmission to a sandbox.
-   * Uses a separate session key for the sandbox.
-   *
-   * @param credential - The decrypted credential
-   * @param sessionKey - 32-byte session key for this sandbox run
-   * @returns Base64 encoded encrypted payload
-   */
   encryptForSandbox(credential: ApiKeyCredential | OAuthCredential, sessionKey: Buffer): string {
-    if (sessionKey.length !== 32) {
-      throw new Error("Session key must be 32 bytes");
-    }
-
+    if (sessionKey.length !== 32) throw new Error("Session key must be 32 bytes");
     const nonce = randomBytes(NONCE_LENGTH);
     const cipher = createCipheriv(ALGORITHM, sessionKey, nonce);
-
-    const plaintext = JSON.stringify(credential);
-    const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-    const tag = cipher.getAuthTag();
-
-    const combined = Buffer.concat([nonce, encrypted, tag]);
-    return combined.toString("base64");
+    const ciphertext = Buffer.concat([
+      cipher.update(JSON.stringify(credential), "utf8"),
+      cipher.final(),
+    ]);
+    return Buffer.concat([nonce, ciphertext, cipher.getAuthTag()]).toString("base64");
   }
 
-  /**
-   * Generate a random session key for sandbox encryption.
-   *
-   * @returns 32-byte random key
-   */
   static generateSessionKey(): Buffer {
     return randomBytes(32);
   }
 
-  /**
-   * Generate a random encryption master key.
-   * Use this to generate a new ENCRYPTION_MASTER_KEY value.
-   *
-   * @returns 64-character hex string (32 bytes)
-   */
   static generateMasterKey(): string {
     return randomBytes(32).toString("hex");
   }
 }
 
-/**
- * API Key credential format
- */
 export interface ApiKeyCredential {
   type: "api_key";
   apiKey: string;
 }
 
-/**
- * OAuth credential format (for GitHub Copilot, OpenAI Codex, etc.)
- */
 export interface OAuthCredential {
   type: "oauth";
-  refresh: string; // Long-lived refresh token (GitHub OAuth token)
-  access?: string; // Short-lived access token (Copilot API token)
-  expires?: number; // Expiry timestamp in milliseconds
-  enterpriseUrl?: string; // For GitHub Enterprise
-  accountId?: string; // For OpenAI Codex (ChatGPT account ID for organization subscriptions)
+  refresh: string;
+  access?: string;
+  expires?: number;
+  enterpriseUrl?: string;
+  accountId?: string;
 }
 
-// Singleton instance
 let encryptionService: EncryptionService | null = null;
-
-/**
- * Get the singleton encryption service instance.
- */
 export function getEncryptionService(): EncryptionService {
-  if (!encryptionService) {
-    encryptionService = new EncryptionService();
-  }
+  encryptionService ??= new EncryptionService();
   return encryptionService;
 }
 

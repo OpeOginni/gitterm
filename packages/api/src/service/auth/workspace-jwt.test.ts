@@ -6,6 +6,7 @@ const payload = (scope: string[]): WorkspaceTokenPayload => ({
   userId: "user",
   scope,
   purpose: "workspace",
+  authVersion: 1,
   iss: "gitterm",
   aud: "gitterm-workspace-api",
   jti: "token-id",

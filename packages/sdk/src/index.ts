@@ -73,4 +73,6 @@ export type {
   WorkspacePauseResult,
   WorkspaceTerminateResult,
   WorkspaceProviderSelection,
+  GitHubIntegration,
+  GoogleCloudIntegration,
 } from "./types.js";

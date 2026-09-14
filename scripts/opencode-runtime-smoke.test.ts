@@ -75,7 +75,7 @@ test("each workspace selects the matching adapter and setup, with automatic expi
     expect(input.opencode?.config?.permission).toEqual({ bash: "ask" });
   }
   expect(beforeAgent("v1")).not.toContain("npm install");
-  expect(beforeAgent("v2")).toContain("@opencode-ai/cli@beta");
+  expect(beforeAgent("v2")).toContain("@opencode/cli@2");
 });
 
 test("beta setup redirects opencode without overwriting its symlink target; preserves args", () => {
@@ -94,7 +94,7 @@ test("beta setup redirects opencode without overwriting its symlink target; pres
 set -eu
 test "$1" = install
 test "$2" = --prefix
-test "$4" = @opencode-ai/cli@beta
+test "$4" = @opencode/cli@2
 mkdir -p "$3/node_modules/.bin"
 printf '#!/bin/sh\nprintf "%%s\\n" "beta-test" "$@"\n' > "$3/node_modules/.bin/opencode2"
 chmod 755 "$3/node_modules/.bin/opencode2"

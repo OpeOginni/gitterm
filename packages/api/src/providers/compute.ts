@@ -40,6 +40,12 @@ export interface SystemWorkspaceEnv {
   USER_GITHUB_USERNAME?: string;
   GITHUB_APP_TOKEN?: string;
   GITHUB_APP_TOKEN_EXPIRY?: string;
+  GOOGLE_APPLICATION_CREDENTIALS?: string;
+  CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE?: string;
+  GOOGLE_CLOUD_PROJECT?: string;
+  CLOUDSDK_CORE_PROJECT?: string;
+  /** Fetch encrypted runtime material from GitTerm before the entrypoint continues. */
+  GITTERM_REMOTE_BOOTSTRAP?: string;
   /** Inline repository credential consumed by container entrypoints. */
   GITTERM_REPOSITORY_USERNAME?: string;
   GITTERM_REPOSITORY_TOKEN?: string;
@@ -79,6 +85,11 @@ export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "USER_GITHUB_USERNAME",
   "GITHUB_APP_TOKEN",
   "GITHUB_APP_TOKEN_EXPIRY",
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
+  "GOOGLE_CLOUD_PROJECT",
+  "CLOUDSDK_CORE_PROJECT",
+  "GITTERM_REMOTE_BOOTSTRAP",
   "GITTERM_REPOSITORY_USERNAME",
   "GITTERM_REPOSITORY_TOKEN",
   "WORKSPACE_TOOLING_MANIFEST_BASE64",
@@ -127,6 +138,8 @@ export const RESERVED_WORKSPACE_ENV_KEYS: ReadonlySet<string> = new Set(SYSTEM_W
  * keys by the env builder).
  */
 export type WorkspaceEnvironmentVariables = SystemWorkspaceEnv & Record<string, string | undefined>;
+export type WorkspaceEnvironmentTransport = Partial<SystemWorkspaceEnv> &
+  Record<string, string | undefined>;
 
 /**
  * Repository to clone into a workspace, with optional git basic-auth.
@@ -258,7 +271,7 @@ export interface WorkspaceConfig {
    * it through to the Docker entrypoint, and it carries runtime vars (e.g.
    * WORKSPACE_AUTH_TOKEN) for the in-workspace process.
    */
-  environmentVariables?: WorkspaceEnvironmentVariables;
+  environmentVariables?: WorkspaceEnvironmentTransport;
   /**
    * Structured provisioning instructions. Preferred by SDK providers. When
    * absent (legacy callers), providers derive it from `environmentVariables`.

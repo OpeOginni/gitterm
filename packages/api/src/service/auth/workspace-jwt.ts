@@ -22,6 +22,7 @@ export interface WorkspaceTokenPayload {
   userId: string;
   scope: string[];
   purpose: WorkspaceTokenPurpose;
+  authVersion: number;
   iss: string;
   aud: string | string[];
   jti: string;
@@ -43,14 +44,19 @@ export class WorkspaceJWTService {
     userId: string,
     scopes: string[],
     purpose: WorkspaceTokenPurpose,
+    authVersion = 1,
   ): string {
-    return jwt.sign({ workspaceId, userId, scope: scopes, purpose }, WORKSPACE_JWT_SECRET, {
-      algorithm: "HS256",
-      issuer: WORKSPACE_TOKEN_ISSUER,
-      audience: WORKSPACE_TOKEN_AUDIENCE,
-      jwtid: randomUUID(),
-      expiresIn: WORKSPACE_TOKEN_LIFETIME,
-    });
+    return jwt.sign(
+      { workspaceId, userId, scope: scopes, purpose, authVersion },
+      WORKSPACE_JWT_SECRET,
+      {
+        algorithm: "HS256",
+        issuer: WORKSPACE_TOKEN_ISSUER,
+        audience: WORKSPACE_TOKEN_AUDIENCE,
+        jwtid: randomUUID(),
+        expiresIn: WORKSPACE_TOKEN_LIFETIME,
+      },
+    );
   }
 
   /**
@@ -76,6 +82,8 @@ export class WorkspaceJWTService {
         !Array.isArray(decoded.scope) ||
         !decoded.scope.every((scope) => typeof scope === "string") ||
         !["workspace", "agent", "setup"].includes(decoded.purpose) ||
+        !Number.isInteger(decoded.authVersion) ||
+        decoded.authVersion < 1 ||
         typeof decoded.jti !== "string" ||
         !decoded.jti ||
         typeof decoded.iat !== "number" ||

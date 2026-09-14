@@ -12,7 +12,7 @@
  * managed server, not here. Unavailable providers fail rather than silently skip.
  * Uses opencode/big-pickle; override with --model or GITTERM_E2E_MODEL.
  * GITTERM_MODEL_API_KEY optionally supplies an inline model credential.
- * V2 installs @opencode-ai/cli@beta in beforeAgent; V1 uses the image's binary.
+ * V2 installs @opencode/cli@2 in beforeAgent; V1 uses the image's binary.
  * Every matrix entry gets its own workspace, terminated even on test failure.
  */
 import { join } from "node:path";
@@ -100,7 +100,7 @@ export function beforeAgent(api: OpencodeApi): string {
     "set -eu",
     'prefix="$HOME/.gitterm-runtime-smoke-v2"',
     'mkdir -p "$prefix"',
-    'npm install --prefix "$prefix" @opencode-ai/cli@beta --no-audit --fund=false',
+    'npm install --prefix "$prefix" @opencode/cli@2 --no-audit --fund=false',
     'binary="$prefix/node_modules/.bin/opencode2"',
     'test -x "$binary"',
     'version="$("$binary" --version)"',
@@ -117,7 +117,7 @@ export function beforeAgent(api: OpencodeApi): string {
     `printf '#!/bin/sh\nexec "%s" "$@"\n' "$binary" > "$prefix/launcher"`,
     'if [ -w "$(dirname "$launcher")" ]; then install_launcher; else install_launcher sudo -n; fi',
     'test "$(opencode --version)" = "$version"',
-    'printf "OpenCode v2 (@opencode-ai/cli@beta): %s\\n" "$version"',
+    'printf "OpenCode v2 (@opencode/cli@2): %s\\n" "$version"',
   ].join("\n");
 }
 

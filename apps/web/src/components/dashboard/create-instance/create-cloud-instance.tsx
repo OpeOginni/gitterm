@@ -66,6 +66,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     id: string;
   } | null>(null);
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string | null>(null);
+  const [googleCloudIntegrationId, setGoogleCloudIntegrationId] = useState("none");
   const [persistent, setPersistent] = useState(true);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
 
@@ -82,6 +83,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   });
   const { data: installationsData } = useQuery({
     ...trpc.workspace.listUserInstallations.queryOptions(),
+    staleTime: STALE_TIME,
+  });
+  const { data: googleCloudIntegrations = [] } = useQuery({
+    ...trpc.googleCloud.list.queryOptions(),
     staleTime: STALE_TIME,
   });
   const { data: defaultProviderData } = useQuery({
@@ -399,6 +404,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       machineProfileId: selectedMachineProfileId,
       awsAccessProfileId: isAwsGroup ? selectedAwsProfileId : undefined,
       gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
+      googleCloudIntegrationId:
+        googleCloudIntegrationId === "none" ? undefined : googleCloudIntegrationId,
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
@@ -487,6 +494,43 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               </span>
             )}
           </p>
+        </div>
+
+        {/* ── 3d. Google Cloud workload identity ── */}
+        <div className="grid gap-1.5">
+          <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            Google Cloud Identity
+            <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          </Label>
+          <div className="flex items-center gap-2">
+            <Select
+              value={googleCloudIntegrationId}
+              onValueChange={setGoogleCloudIntegrationId}
+              disabled={googleCloudIntegrations.length === 0}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue
+                  placeholder={
+                    googleCloudIntegrations.length ? "Select service account" : "No integrations"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {googleCloudIntegrations.map((integration) => (
+                  <SelectItem key={integration.id} value={integration.id}>
+                    {integration.name} · {integration.projectId}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <HelpHint label="How is Google Cloud authenticated?">
+              GitTerm exchanges a five-minute workspace identity through Google Workload Identity
+              Federation. No service-account JSON key is stored.
+            </HelpHint>
+          </div>
         </div>
 
         {/* ── 3. Agent + Cloud (+ Region) ── */}

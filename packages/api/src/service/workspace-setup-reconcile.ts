@@ -9,6 +9,7 @@ import { decryptWorkspacePassword } from "../utils/workspace-password";
 import { createWorkspaceOpencodeClient } from "@gitterm/agent-runtime/opencode";
 import { getProviderConfigService } from "./config/provider-config";
 import { resolveProjectDirectory } from "./workspace-runtime";
+import { redactSensitiveText } from "../utils/redact-secrets";
 
 /**
  * Pull-based fallback for the `afterAgent` setup phase.
@@ -95,7 +96,7 @@ function toMarkers(files: {
     exitCode: Number.isInteger(exitCodeRaw) ? exitCodeRaw : null,
     startedAt: parseIsoDate(files.startedAt?.trim()),
     finishedAt: parseIsoDate(files.finishedAt?.trim()),
-    log: files.log ? files.log.replaceAll("\0", "").slice(-50_000) : null,
+    log: files.log ? redactSensitiveText(files.log.replaceAll("\0", "").slice(-50_000)) : null,
   };
 }
 

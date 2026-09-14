@@ -23,10 +23,12 @@ Create a workspace, run a prompt, and get the final result:
 import { createGittermClient } from "@gitterm/sdk";
 
 const client = createGittermClient({ token: process.env.GITTERM_API_TOKEN });
+const [github] = await client.integrations.github.list();
+if (!github) throw new Error("Connect GitHub in the Gitterm dashboard first");
 
 const { workspace } = await client.workspaces.create({
   repo: "https://github.com/acme/product",
-  repositoryCredentials: { token: process.env.GITHUB_TOKEN! },
+  gitIntegrationId: github.id,
   autoTerminateAfterMs: 2 * 60 * 60 * 1000,
 });
 
@@ -42,6 +44,22 @@ try {
   await client.workspaces.terminate(workspace);
 }
 ```
+
+Connected cloud identities are discoverable without returning credentials:
+
+```ts
+const [github] = await client.integrations.github.list();
+const [googleCloud] = await client.integrations.googleCloud.list();
+
+await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  gitIntegrationId: github.id,
+  googleCloudIntegrationId: googleCloud.id,
+});
+```
+
+GitHub tokens and Google workload credentials are issued inside the workspace; the SDK caller does
+not receive or forward them.
 
 `result()` returns only on successful completion. If the agent asks something and no handler is
 registered, it throws `AgentRunError` with code `INPUT_REQUIRED` and the current `error.run`.
@@ -664,11 +682,13 @@ would otherwise change them for other runs on the same runtime.
 
 ## OpenCode API versions
 
-Managed workspaces continue to run `opencode-ai@latest` (`opencodeApi: "v1"`). OpenCode 2
+Managed workspaces run the latest published `opencode-ai@1` (`opencodeApi: "v1"`). OpenCode 2
 changes the server API; callers testing it must supply their own compatible image and create the
 workspace with `opencode: { api: "v2" }`. Runs, questions, permissions, and events behave the
 same from the SDK's point of view; the flag only tells GitTerm which protocol to speak to the
-workspace. `v2` is experimental until OpenCode 2 ships.
+workspace. V2 stores credentials in SQLite, but imports GitTerm's generated V1 `auth.json` during
+the first database migration of a fresh workspace. V2 remains experimental in GitTerm until its
+server API and plugin integration pass the provider smoke suite.
 
 ## Errors
 

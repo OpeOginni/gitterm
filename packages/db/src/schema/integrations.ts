@@ -5,6 +5,21 @@ import { relations } from "drizzle-orm";
 // Enum for git providers (extensible for GitLab, Bitbucket, etc.)
 export const gitProviderEnum = pgEnum("git_provider", ["github", "gitlab", "bitbucket"] as const);
 
+/** Secretless Google Cloud identity configured through Workload Identity Federation. */
+export const googleCloudIntegration = pgTable("google_cloud_integration", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  projectId: text("project_id").notNull(),
+  workloadIdentityProvider: text("workload_identity_provider").notNull(),
+  serviceAccountEmail: text("service_account_email").notNull(),
+  active: boolean("active").notNull().default(true),
+  connectedAt: timestamp("connected_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // GitHub App installations - tracks which users have installed the GitHub App
 export const githubAppInstallation = pgTable("github_app_installation", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -123,3 +138,5 @@ export type NewGitIntegration = typeof gitIntegration.$inferInsert;
 export type WorkspaceGitConfig = typeof workspaceGitConfig.$inferSelect;
 export type NewWorkspaceGitConfig = typeof workspaceGitConfig.$inferInsert;
 export type GitProvider = (typeof gitProviderEnum.enumValues)[number];
+export type GoogleCloudIntegration = typeof googleCloudIntegration.$inferSelect;
+export type NewGoogleCloudIntegration = typeof googleCloudIntegration.$inferInsert;

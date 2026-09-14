@@ -15,7 +15,7 @@ const tokenFile = "/run/gitterm/github-token";
     const response = await fetch(`${process.env.WORKSPACE_API_URL}/workspaceOps.gitCredential`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.WORKSPACE_AUTH_TOKEN}`,
+        Authorization: `Bearer ${process.env.WORKSPACE_AGENT_AUTH_TOKEN}`,
         "Content-Type": "application/json",
       },
       body: "{}",

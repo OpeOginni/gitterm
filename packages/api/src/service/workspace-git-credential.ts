@@ -3,10 +3,13 @@ import { gitIntegration } from "@gitterm/db/schema/integrations";
 import { getGitHubAppService, parseGitHubRepoUrl } from "./github";
 
 export async function issueWorkspaceGitCredential(ws: {
+  id: string;
   userId: string;
   gitIntegrationId: string | null;
   repositoryUrl: string | null;
+  status: "pending" | "running" | "paused" | "terminated";
 }) {
+  if (ws.status !== "running") throw new Error("Workspace is not running");
   const repo = ws.repositoryUrl ? parseGitHubRepoUrl(ws.repositoryUrl) : null;
   if (!repo || !ws.gitIntegrationId)
     throw new Error("Workspace has no refreshable GitHub integration");
