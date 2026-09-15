@@ -47,6 +47,8 @@ const DEFAULT_AGENT_SERVE = {
 } as const;
 const DAYTONA_WORKSPACE_DIR = "/workspace";
 const DAYTONA_CREATE_TIMEOUT_SECONDS = 210;
+const DAYTONA_OPENCODE_V1_SETUP =
+  "npm uninstall -g @opencode/cli >/dev/null 2>&1 || true; npm install -g opencode-ai@1 --no-audit --fund=false";
 const SSH_ACCESS_TTL_MINUTES = 120;
 const SSH_ACCESS_REUSE_BUFFER_MS = 5 * 60 * 1000;
 
@@ -352,8 +354,17 @@ export class DaytonaProvider implements ComputeProvider {
     const daytona = await this.createClient(targetRegion);
     const repoName = spec?.repo?.name;
     const repoDir = getRepoDir(repoName);
+    const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
 
-    const image = Image.base(imageRef).entrypoint(["sleep", "infinity"]);
+    // Daytona snapshots declarative images by their definition. A mutable
+    // `:latest` base can therefore keep serving an older OpenCode binary after
+    // the registry image is rebuilt. Give V1 workspaces an explicit install
+    // layer so the snapshot definition and runtime major are deterministic.
+    const image = (
+      serve.command.trim().startsWith("opencode ")
+        ? Image.base(imageRef).runCommands(DAYTONA_OPENCODE_V1_SETUP)
+        : Image.base(imageRef)
+    ).entrypoint(["sleep", "infinity"]);
 
     const sandbox = await provisionLogger.step(
       `create-sandbox image=${imageRef} cpu=${resources.cpu} mem=${resources.memory}`,
@@ -466,8 +477,6 @@ export class DaytonaProvider implements ComputeProvider {
         }
       });
     }
-
-    const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
 
     const accessCredential = await provisionLogger.step("capture-access-credential", () =>
       this.captureAccessCredential(sandbox, spec, repoName),
