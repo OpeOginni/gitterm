@@ -450,7 +450,10 @@ Three things have to be true before a prompt can be delivered, and the SDK handl
 The shortest correct sequence is therefore:
 
 ```ts
-const { workspace } = await client.workspaces.create({ repo, setup: { afterAgent: ["npm ci"] } });
+const { workspace } = await client.workspaces.create({
+  repo,
+  setup: { afterAgent: ["npm ci"] },
+});
 const run = await client.runs.create({
   workspace,
   idempotencyKey: `review-${sha}`,
@@ -682,10 +685,10 @@ would otherwise change them for other runs on the same runtime.
 
 ## OpenCode API versions
 
-Managed workspaces run OpenCode V2 from `@opencode/cli@2` and use `opencodeApi: "v2"`. V2 stores
-credentials in SQLite; GitTerm writes a short-lived `auth.json` seed, initializes V2's database,
-imports and verifies each credential in SQLite, then deletes the seed. Runs, questions, permissions,
-and events use GitTerm's V2 runtime adapter.
+Managed workspaces default to OpenCode V1 from `opencode-ai` and use `opencodeApi: "v1"`.
+Credentials are written to OpenCode's `auth.json` before the runtime starts. Runs, questions,
+permissions, and events use GitTerm's V1 runtime adapter. V2 remains selectable only for explicitly
+compatible images.
 
 ## Errors
 
@@ -784,12 +787,17 @@ let workspace = await direct.workspaces.create({
   repo: "https://github.com/acme/project",
   lifecycle: "ephemeral",
   models: {
-    providers: { anthropic: { source: "apiKey", apiKey: process.env.ANTHROPIC_API_KEY! } },
+    providers: {
+      anthropic: { source: "apiKey", apiKey: process.env.ANTHROPIC_API_KEY! },
+    },
   },
 });
 
 try {
-  const run = await direct.runs.create({ workspace, prompt: "Review the open pull request" });
+  const run = await direct.runs.create({
+    workspace,
+    prompt: "Review the open pull request",
+  });
   const completed = await direct.runs.result(run);
   console.log(completed.finalText);
 } finally {

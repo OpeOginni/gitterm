@@ -43,7 +43,7 @@ export function getWorkspaceOpenPortUrl(subdomain: string, port: number): string
 }
 
 /**
- * Construct the command for connecting a local client to a workspace server.
+ * Construct the command for attaching a local client to a workspace server.
  */
 export function getAttachCommand(
   subdomain: string,
@@ -51,20 +51,17 @@ export function getAttachCommand(
   password?: string | null,
 ): string {
   const url = getWorkspaceUrl(subdomain);
-  const passwordEnvironment = password
-    ? `OPENCODE_SERVER_PASSWORD='${password.replaceAll("'", `'"'"'`)}' `
-    : "";
+  const passwordFlag = password ? ` --password '${password.replaceAll("'", `'"'"'`)}'` : "";
 
   // TODO: Better agent name detection
   if (agentName.toLocaleLowerCase().includes("opencode")) {
-    return `${passwordEnvironment}opencode --server ${url}`;
+    return `opencode attach ${url}${passwordFlag}`;
   }
   if (agentName.toLocaleLowerCase().includes("shuvcode")) {
-    const passwordFlag = password ? ` --password '${password.replaceAll("'", `'"'"'`)}'` : "";
     return `shuvcode attach ${url}${passwordFlag}`;
   }
 
-  return `${passwordEnvironment}opencode --server ${url}`;
+  return `opencode attach ${url}${passwordFlag}`;
 }
 
 export function isT3Agent(agentName: string): boolean {

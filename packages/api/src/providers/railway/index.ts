@@ -105,12 +105,13 @@ export class RailwayProvider implements ComputeProvider {
   private async resolveDeploymentId(
     railway: RailwayClient,
     externalServiceId: string,
+    environmentId: string,
     deploymentId?: string,
   ): Promise<string> {
     if (deploymentId) return deploymentId;
 
-    const result = await railway.ServiceDeploymentStatus({ id: externalServiceId });
-    const latestDeploymentId = result.service?.deployments.edges[0]?.node.id;
+    const result = await railway.ServiceDeploymentStatus({ id: externalServiceId, environmentId });
+    const latestDeploymentId = result.deployments.edges[0]?.node.id;
     if (!latestDeploymentId) {
       throw new Error(`No Railway deployment found for service ${externalServiceId}`);
     }
@@ -430,6 +431,7 @@ export class RailwayProvider implements ComputeProvider {
     const deploymentId = await this.resolveDeploymentId(
       railway,
       externalId,
+      environmentId,
       externalRunningDeploymentId,
     );
 
@@ -455,6 +457,7 @@ export class RailwayProvider implements ComputeProvider {
     const deploymentId = await this.resolveDeploymentId(
       railway,
       externalId,
+      environmentId,
       externalRunningDeploymentId,
     );
 
@@ -480,14 +483,18 @@ export class RailwayProvider implements ComputeProvider {
   }
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
+    const { environmentId } = await this.getConfig();
+    if (!environmentId) {
+      throw new Error("Railway environment ID is not configured");
+    }
     const railway = await this.getClient();
-    const result = await railway.ServiceDeploymentStatus({ id: externalId });
+    const result = await railway.ServiceDeploymentStatus({ id: externalId, environmentId });
 
     if (!result.service) {
       return { status: "terminated" };
     }
 
-    const deployment = result.service.deployments.edges[0]?.node;
+    const deployment = result.deployments.edges[0]?.node;
     return railwayDeploymentStatus(
       deployment?.status,
       deployment?.id,

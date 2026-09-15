@@ -146,7 +146,7 @@ function providerConfig(provider: ProviderKey, timeoutMs: number): DirectProvide
 
 function smokeSettings(): SmokeSettings {
   const repo = requiredEnv("GITTERM_E2E_REPO");
-  const model = optionalEnv("GITTERM_E2E_MODEL") ?? "opencode/big-pickle";
+  const model = optionalEnv("GITTERM_E2E_MODEL") ?? "opencode/gpt-5.6-luna";
   const separator = model.indexOf("/");
   if (separator <= 0 || separator === model.length - 1) {
     throw new Error('GITTERM_E2E_MODEL must use the "provider/model" format');

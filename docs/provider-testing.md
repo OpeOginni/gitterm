@@ -49,12 +49,14 @@ Optional settings:
 
 ```bash
 export GITTERM_E2E_AGENT=opencode
-export GITTERM_E2E_MODEL=opencode/big-pickle
+export GITTERM_E2E_MODEL=opencode/gpt-5.6-luna
 export GITTERM_E2E_TIMEOUT_MS=240000
 export GITTERM_E2E_RUN_TIMEOUT_MS=1800000
 ```
 
 Providers run sequentially to limit cost. Every workspace receives a unique idempotency key and is terminated in a `finally` block after a normal test failure. The summary reports cleanup failures separately so leaked resources are visible.
+
+The hosted smoke runner requires an active saved OpenCode Zen API key and an active saved API-key credential for at least one other model provider. It writes them to OpenCode V1's `auth.json` before the workspace server starts and runs `opencode auth list` after setup to verify them through OpenCode itself. No public fallback key is used. The command output lists provider names and credential types, never secret values.
 
 `--all` is local-only. It includes every implemented provider, including providers that are not available in GitTerm's hosted product. Do not set `CI` when running it locally.
 
@@ -64,7 +66,7 @@ The direct smoke runner uses the current SDK source and real provider resources,
 
 ```bash
 export GITTERM_E2E_REPO=https://github.com/octocat/Hello-World
-export GITTERM_E2E_MODEL=opencode/big-pickle
+export GITTERM_E2E_MODEL=opencode/gpt-5.6-luna
 
 bun run test:providers:direct --provider e2b
 bun run test:providers:direct --provider railway,daytona

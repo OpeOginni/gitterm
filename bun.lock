@@ -365,7 +365,7 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@asciidev/box-sdk": "^0.0.34",
         "@daytonaio/sdk": "^0.207.0",

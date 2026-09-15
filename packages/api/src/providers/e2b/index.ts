@@ -264,12 +264,28 @@ export class E2BProvider implements ComputeProvider {
             : path.startsWith("~/")
               ? `"$HOME"/${shellQuote(path.slice(2))}`
               : shellQuote(path);
-      if (dir)
-        await this.runCommand(sandbox, `mkdir -p ${quotePath(dir)}`, `mkdir dir for ${file.path}`);
+      const runtimeFile =
+        !file.relativeToRepo && (target === "/run/gitterm" || target.startsWith("/run/gitterm/"));
+      const commandOptions = runtimeFile ? { user: "root" } : undefined;
+      if (dir) {
+        const createDirectory = runtimeFile
+          ? `mkdir -p ${quotePath(dir)} && chown ${SSH_USER}:${SSH_USER} ${quotePath(dir)} && chmod 700 ${quotePath(dir)}`
+          : `mkdir -p ${quotePath(dir)}`;
+        await this.runCommand(
+          sandbox,
+          createDirectory,
+          `mkdir dir for ${file.path}`,
+          commandOptions,
+        );
+      }
+      const setRuntimeOwner = runtimeFile
+        ? ` && chown ${SSH_USER}:${SSH_USER} ${quotePath(target)}`
+        : "";
       await this.runCommand(
         sandbox,
-        `printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${quotePath(target)}${file.mode ? ` && chmod ${file.mode.toString(8)} ${quotePath(target)}` : ""}`,
+        `printf %s ${shellQuote(file.contentBase64)} | base64 -d > ${quotePath(target)}${setRuntimeOwner}${file.mode ? ` && chmod ${file.mode.toString(8)} ${quotePath(target)}` : ""}`,
         `write agent file ${file.path}`,
+        commandOptions,
       );
     }
   }

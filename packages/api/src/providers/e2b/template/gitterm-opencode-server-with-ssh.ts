@@ -4,7 +4,7 @@ import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
 export function createOpencodeServerWithSSHTemplate(opencodeVersion: string): TemplateClass {
   return Template()
     .fromNodeImage("20-bookworm-slim")
-    .aptInstall(["git", "bash", "curl", "ca-certificates", "sqlite3", "openssh-server"], {
+    .aptInstall(["git", "bash", "curl", "ca-certificates", "openssh-server"], {
       noInstallRecommends: true,
     })
     .runCmd(
@@ -13,7 +13,7 @@ export function createOpencodeServerWithSSHTemplate(opencodeVersion: string): Te
     )
     .runCmd("mkdir -p /run/sshd && ssh-keygen -A", { user: "root" })
     .runCmd(GITTERM_CLI_CACHE_BUST)
-    .npmInstall([`@opencode/cli@${opencodeVersion}`, "@gitterm/cli@latest"], { g: true })
+    .npmInstall([`opencode-ai@${opencodeVersion}`, "@gitterm/cli@latest"], { g: true })
     .setStartCmd(
       "sudo /usr/sbin/sshd && /usr/local/bin/websocat -b --exit-on-eof ws-l:0.0.0.0:8081 tcp:127.0.0.1:22",
       waitForPort(8081),

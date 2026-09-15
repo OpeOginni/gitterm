@@ -31,9 +31,12 @@ describe("Railway deployment status", () => {
   test("resolves the latest deployment when pause receives no stored ID", async () => {
     const provider = new RailwayProvider();
     const stopped: string[] = [];
+    const statusRequests: Array<{ id: string; environmentId: string }> = [];
     const railway = {
-      ServiceDeploymentStatus: async () => ({
-        service: {
+      ServiceDeploymentStatus: async (input: { id: string; environmentId: string }) => {
+        statusRequests.push(input);
+        return {
+          service: { id: "service-1" },
           deployments: {
             edges: [
               {
@@ -45,8 +48,8 @@ describe("Railway deployment status", () => {
               },
             ],
           },
-        },
-      }),
+        };
+      },
       DeploymentStop: async ({ id }: { id: string }) => {
         stopped.push(id);
         return { deploymentStop: true };
@@ -62,6 +65,7 @@ describe("Railway deployment status", () => {
 
     try {
       await provider.pauseWorkspace("service-1", "region-1");
+      expect(statusRequests).toEqual([{ id: "service-1", environmentId: "environment-1" }]);
       expect(stopped).toEqual(["deployment-1"]);
     } finally {
       config.mockRestore();

@@ -6,9 +6,7 @@
 FROM docker.io/cloudflare/sandbox:0.12.1
 
 # OpenCode is the agent runtime users interact with inside the workspace.
-RUN apt-get update && apt-get install -y --no-install-recommends sqlite3 \
-    && rm -rf /var/lib/apt/lists/*
-RUN npm install -g @opencode/cli@2
+RUN npm install -g opencode-ai
 
 # OpenCode server listens here; the worker proxies workspace traffic to it.
 EXPOSE 4096

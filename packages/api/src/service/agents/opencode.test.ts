@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { buildOpencodeAuthJson } from "./opencode";
 
-test("generated credentials satisfy the V2 SQLite seed contract", () => {
+test("generates OpenCode V1 auth.json", () => {
   const auth = JSON.parse(
     buildOpencodeAuthJson([
       {
@@ -23,8 +23,6 @@ test("generated credentials satisfy the V2 SQLite seed contract", () => {
     openai: {
       type: "oauth",
       refresh: "refresh-token",
-      access: "",
-      expires: 0,
     },
     anthropic: { type: "api", key: "api-key-value" },
   });

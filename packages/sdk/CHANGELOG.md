@@ -4,6 +4,13 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.4.0
+
+### Breaking
+
+- Restored OpenCode V1 as the default for managed and direct workspace operations.
+- Restored V1 `auth.json` credential provisioning and `opencode attach` connection commands.
+
 ## 0.2.2
 
 ### Fixed

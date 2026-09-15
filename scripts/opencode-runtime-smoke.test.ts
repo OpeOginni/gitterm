@@ -22,9 +22,9 @@ const settings = {
 const options = smokeOptions([], {});
 
 describe("managed runtime smoke options", () => {
-  test("defaults to every managed provider on V2", () => {
+  test("defaults to every managed provider on V1", () => {
     expect(options.providers).toEqual([...PROVIDERS]);
-    expect(options.apis).toEqual(["v2"]);
+    expect(options.apis).toEqual(["v1"]);
   });
 
   test("supports individual versions, comma-separated providers, and boolean flags", () => {

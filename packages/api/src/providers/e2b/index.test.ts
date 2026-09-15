@@ -68,3 +68,33 @@ test("E2B writes home-relative agent config/auth to HOME, not a literal tilde di
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("E2B provisions runtime-only agent files as root and returns ownership to the agent", async () => {
+  const { E2BProvider } = await import(".");
+  const commands: Array<{ command: string; options?: { user?: string } }> = [];
+  const sandbox = {
+    commands: {
+      async run(command: string, options?: { user?: string }) {
+        commands.push({ command, options });
+      },
+    },
+    async kill() {},
+  };
+  const files: AgentFile[] = [
+    {
+      path: "/run/gitterm/github/credential.json",
+      contentBase64: Buffer.from('{"token":"secret"}').toString("base64"),
+      mode: 0o600,
+    },
+  ];
+
+  await (new E2BProvider() as any).writeAgentFiles(sandbox, { agent: { files } }, "/repo");
+
+  expect(commands).toHaveLength(2);
+  expect(commands.every(({ options }) => options?.user === "root")).toBe(true);
+  expect(commands[0]!.command).toContain("mkdir -p '/run/gitterm/github'");
+  expect(commands[0]!.command).toContain("chown user:user '/run/gitterm/github'");
+  expect(commands[0]!.command).toContain("chmod 700 '/run/gitterm/github'");
+  expect(commands[1]!.command).toContain("chown user:user '/run/gitterm/github/credential.json'");
+  expect(commands[1]!.command).toContain("chmod 600 '/run/gitterm/github/credential.json'");
+});

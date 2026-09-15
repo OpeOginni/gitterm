@@ -79,15 +79,16 @@ function createRequester(url: string, token?: string) {
 // ============================================================================
 
 const SERVICE_DEPLOYMENT_STATUS_QUERY = `
-  query ServiceDeploymentStatus($id: String!) {
+  query ServiceDeploymentStatus($id: String!, $environmentId: String!) {
     service(id: $id) {
-      deployments(first: 1) {
-        edges {
-          node {
-            id
-            status
-            deploymentStopped
-          }
+      id
+    }
+    deployments(first: 1, input: { serviceId: $id, environmentId: $environmentId }) {
+      edges {
+        node {
+          id
+          status
+          deploymentStopped
         }
       }
     }
@@ -95,17 +96,19 @@ const SERVICE_DEPLOYMENT_STATUS_QUERY = `
 `;
 
 type ServiceDeploymentStatusResult = {
-  service: {
-    deployments: {
-      edges: Array<{
-        node: { id: string; status: DeploymentStatus; deploymentStopped: boolean };
-      }>;
-    };
-  } | null;
+  service: { id: string } | null;
+  deployments: {
+    edges: Array<{
+      node: { id: string; status: DeploymentStatus; deploymentStopped: boolean };
+    }>;
+  };
 };
 
 export type RailwayClient = ReturnType<typeof getSdk> & {
-  ServiceDeploymentStatus(variables: { id: string }): Promise<ServiceDeploymentStatusResult>;
+  ServiceDeploymentStatus(variables: {
+    id: string;
+    environmentId: string;
+  }): Promise<ServiceDeploymentStatusResult>;
 };
 
 export async function createRailwayClient(): Promise<RailwayClient | null> {

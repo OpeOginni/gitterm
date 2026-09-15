@@ -127,7 +127,7 @@ export function createAsciiDirectProvider(
         });
         await runCommand(handle.boxId, `mkdir -p ${shellQuote(directory)}`);
         for (const command of config.runtimeSetupCommands ?? [
-          "npm install -g @opencode/cli@2 --no-audit --fund=false",
+          "npm install -g opencode-ai --no-audit --fund=false",
         ]) {
           await runCommand(handle.boxId, command, undefined, 600);
         }

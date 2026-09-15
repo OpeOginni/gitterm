@@ -9,9 +9,9 @@
  * Loads scripts/.env, like provider-smoke.ts. Requires GITTERM_SERVER_URL,
  * GITTERM_API_TOKEN, and GITTERM_E2E_REPO. Provider credentials live on the
  * managed server, not here. Unavailable providers fail rather than silently skip.
- * Uses opencode/big-pickle; override with --model or GITTERM_E2E_MODEL.
+ * Uses opencode/gpt-5.6-luna; override with --model or GITTERM_E2E_MODEL.
  * GITTERM_MODEL_API_KEY optionally supplies an inline model credential.
- * Canonical images and provider templates install @opencode/cli@2.
+ * Canonical images and provider templates install OpenCode V1 from opencode-ai.
  * Every matrix entry gets its own workspace, terminated even on test failure.
  */
 import { join } from "node:path";
@@ -63,7 +63,7 @@ export function smokeOptions(argv: string[], env: NodeJS.ProcessEnv = process.en
   ) {
     throw new Error(`Unknown providers: ${selection}. Choose ${PROVIDERS.join(", ")} or all.`);
   }
-  const api = values.api ?? "v2";
+  const api = values.api ?? "v1";
   const apis: OpencodeApi[] =
     api === "both" || api === "all"
       ? ["v1", "v2"]
@@ -73,7 +73,7 @@ export function smokeOptions(argv: string[], env: NodeJS.ProcessEnv = process.en
           ? ["v2"]
           : [];
   if (!apis.length) throw new Error("--api must be v1, v2, or both");
-  const model = values.model ?? env.GITTERM_E2E_MODEL ?? "opencode/big-pickle";
+  const model = values.model ?? env.GITTERM_E2E_MODEL ?? "opencode/gpt-5.6-luna";
   if (!/^[^/]+\/.+$/.test(model)) throw new Error("--model must use provider/model format");
   return {
     providers: providers as ProviderKey[],
@@ -333,8 +333,8 @@ async function main() {
 Usage: bun run scripts/opencode-runtime-smoke.ts [options]
   --provider <name,...|all>  Default: all managed providers
   --all                      Select all managed providers
-  --api <v1|v2|both>          Default: v2 (also accepts 1, 2)
-  --model <provider/model>   Default: GITTERM_E2E_MODEL or opencode/big-pickle
+  --api <v1|v2|both>          Default: v1 (also accepts 1, 2)
+  --model <provider/model>   Default: GITTERM_E2E_MODEL or opencode/gpt-5.6-luna
   --dry-run                  Print the matrix without provisioning or credentials
   --verbose                  Log managed run events
 Requires GITTERM_SERVER_URL, GITTERM_API_TOKEN, GITTERM_E2E_REPO in scripts/.env.
@@ -354,9 +354,7 @@ GITTERM_E2E_REPO_USERNAME, GITTERM_E2E_TIMEOUT_MS, GITTERM_E2E_RUN_TIMEOUT_MS.`)
     token: requiredEnv("GITTERM_API_TOKEN"),
   });
   const modelProvider = options.model.slice(0, options.model.indexOf("/"));
-  const modelApiKey =
-    process.env.GITTERM_MODEL_API_KEY?.trim() ||
-    (options.model === "opencode/big-pickle" ? "public" : undefined);
+  const modelApiKey = process.env.GITTERM_MODEL_API_KEY?.trim();
   const repoToken = process.env.GITTERM_E2E_REPO_TOKEN?.trim();
   const username = process.env.GITTERM_E2E_REPO_USERNAME?.trim();
   if (username && !repoToken)

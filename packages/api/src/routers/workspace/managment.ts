@@ -141,7 +141,7 @@ import {
 } from "../../service/workspace-setup";
 import { resolveCustomWorkspaceImage } from "../../service/workspace-image";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
-import { DEFAULT_OPENCODE_API, OPENCODE_V2_IMPORT_CREDENTIALS } from "@gitterm/agent-runtime";
+import { DEFAULT_OPENCODE_API } from "@gitterm/agent-runtime";
 import { workspaceModelsSchema } from "@gitterm/schema/workspace-models";
 import { getWorkspaceModelAccess } from "../../service/workspace-model-access";
 import {
@@ -351,7 +351,7 @@ const workspaceCreateBaseSchema = z.strictObject({
         .optional(),
       /**
        * OpenCode HTTP API generation the image serves. "v2" is the OpenCode 2
-       * `/api/*` API and needs an image built with `@opencode/cli` (experimental).
+       * `/api/*` API and needs an explicitly compatible OpenCode V2 image.
        */
       api: z.enum(["v1", "v2"]).optional(),
     })
@@ -2624,12 +2624,7 @@ export const workspaceRouter = router({
             requestedCommands: input.setup?.beforeAgent,
           })),
         ];
-        const beforeAgentCommands = [
-          ...((input.opencode?.api ?? DEFAULT_OPENCODE_API) === "v2"
-            ? [OPENCODE_V2_IMPORT_CREDENTIALS]
-            : []),
-          ...requestedBeforeAgentCommands,
-        ];
+        const beforeAgentCommands = requestedBeforeAgentCommands;
         const afterAgentCommands = input.setup?.afterAgent ?? [];
         const setupRequested =
           requestedBeforeAgentCommands.length > 0 || afterAgentCommands.length > 0;

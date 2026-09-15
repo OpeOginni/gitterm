@@ -26,6 +26,7 @@ const HOSTED_PROVIDERS = [
   "vercel",
 ] as const satisfies readonly ProviderKey[];
 const MAX_ENSURE_RUNNING_TIMEOUT_MS = 360_000;
+const DEFAULT_MODEL = "opencode/gpt-5.6-luna";
 
 type StepResult = {
   name: string;
@@ -93,6 +94,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? (error.stack ?? error.message) : String(error);
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
 async function step<T>(
   results: StepResult[],
   name: string,
@@ -153,11 +158,10 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
   const token = requiredEnv("GITTERM_API_TOKEN");
   const repo = requiredEnv("GITTERM_E2E_REPO");
   const agent = process.env.GITTERM_E2E_AGENT?.trim() || "opencode";
-  const model = process.env.GITTERM_E2E_MODEL?.trim() || "opencode/big-pickle";
-  const models =
-    model === "opencode/big-pickle"
-      ? { providers: { opencode: { source: "apiKey" as const, apiKey: "public" } } }
-      : undefined;
+  const model = process.env.GITTERM_E2E_MODEL?.trim() || DEFAULT_MODEL;
+  if (agent !== "opencode") {
+    throw new Error("Provider smoke credential verification requires GITTERM_E2E_AGENT=opencode");
+  }
   // Overall per-step budget; must exceed the setup wrapper's 300s readiness
   // probe so probe failures can report before the smoke gives up.
   const timeoutMs = Number(process.env.GITTERM_E2E_TIMEOUT_MS ?? MAX_ENSURE_RUNNING_TIMEOUT_MS);
@@ -184,6 +188,49 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
   console.log(`\n${provider}`);
   try {
     await step(result.steps, "authenticate SDK", () => client.auth.status());
+    const savedCredentials = await step(
+      result.steps,
+      "select saved model credentials",
+      async () => {
+        const credentials = await client.credentials.list();
+        const active = credentials.filter((credential) => credential.isActive);
+        const opencode = active.find((credential) => credential.logicalProviderKey === "opencode");
+        if (!opencode) {
+          throw new Error(
+            "Provider smoke requires an active saved OpenCode Zen credential for opencode/gpt-5.6-luna",
+          );
+        }
+        const secondProvider = active.find(
+          (credential) =>
+            credential.logicalProviderKey !== "opencode" && credential.authType === "api_key",
+        );
+        if (!secondProvider) {
+          throw new Error(
+            "Provider smoke requires an active saved API-key credential for at least one additional model provider",
+          );
+        }
+        const selected = [opencode, secondProvider];
+        console.log(
+          `  model credentials: ${selected.map((credential) => credential.providerDisplayName).join(", ")}`,
+        );
+        return selected;
+      },
+    );
+    const selectedModelProviders = Object.fromEntries(
+      savedCredentials.map((credential) => [
+        credential.logicalProviderKey,
+        { source: "saved" as const, label: credential.label },
+      ]),
+    );
+    const models = {
+      providers: selectedModelProviders,
+    };
+    const authListAssertions = savedCredentials
+      .map((credential) => {
+        const runtimeName = credential.providerDisplayName;
+        return `printf '%s\\n' "$auth_list" | grep -F -- ${shellQuote(runtimeName)} >/dev/null || { echo ${shellQuote(`missing OpenCode credential: ${runtimeName}`)}; exit 1; }`;
+      })
+      .join("\n");
     const catalogProvider = await step(result.steps, "validate catalog", async () => {
       const catalog = await client.catalog.workspaceOptions();
       const configuredProvider = catalog.providers.find((entry) => entry.type === provider);
@@ -228,6 +275,11 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
                   'curl -sS -m 10 -o /dev/null -w "api http %{http_code}\\n" "$WORKSPACE_API_URL" || echo "api unreachable"',
                   'echo "=== marker: workspace info ($(date -u +%H:%M:%SZ))"',
                   `workspace_ready=0; for attempt in $(seq 1 60); do workspace_info=$(timeout 30 gitterm workspace info --json); printf "%s\\n" "$workspace_info"; if printf "%s\\n" "$workspace_info" | grep -Eq '"status":[[:space:]]*"running"'; then workspace_ready=1; break; fi; sleep 2; done; [ "$workspace_ready" -eq 1 ] || { echo "workspace did not reach running status"; exit 1; }`,
+                  'echo "=== marker: opencode auth list ($(date -u +%H:%M:%SZ))"',
+                  "opencode --version",
+                  "auth_list=$(opencode auth list 2>&1)",
+                  'printf "%s\\n" "$auth_list"',
+                  authListAssertions,
                   'echo "=== marker: ports list ($(date -u +%H:%M:%SZ))"',
                   "timeout 30 gitterm ports list --json",
                   'echo "=== marker: ports open ($(date -u +%H:%M:%SZ))"',
@@ -242,6 +294,11 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
                   'env | grep -E "^WORKSPACE_(API_URL|SETUP_PORT)=" || echo "missing workspace env"',
                   'echo "=== marker: plain setup ($(date -u +%H:%M:%SZ))"',
                   "git rev-parse --short HEAD",
+                  'echo "=== marker: opencode auth list ($(date -u +%H:%M:%SZ))"',
+                  "opencode --version",
+                  "auth_list=$(opencode auth list 2>&1)",
+                  'printf "%s\\n" "$auth_list"',
+                  authListAssertions,
                   'echo "=== marker: done ($(date -u +%H:%M:%SZ))"',
                 ]
             ).join("\n"),
@@ -253,7 +310,9 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
     result.workspaceId = workspaceId;
 
     const running = await step(result.steps, "wait for running workspace", () =>
-      client.workspaces.ensureRunning(workspaceId!, { timeoutMs: ensureRunningTimeoutMs }),
+      client.workspaces.ensureRunning(workspaceId!, {
+        timeoutMs: ensureRunningTimeoutMs,
+      }),
     );
     if (running.workspace.status !== "running") {
       throw new Error(`Expected running workspace, received ${running.workspace.status}`);
@@ -291,8 +350,14 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
       client.runs.wait(agentRun, { timeoutMs: runTimeoutMs }),
     );
     if (completedRun.status !== "completed") {
+      const messages = await client.runs
+        .messages(agentRun)
+        .catch((error) => [{ error: error instanceof Error ? error.message : String(error) }]);
       throw new Error(
-        `Agent run finished with ${completedRun.status}: ${completedRun.error ?? ""}`,
+        `Agent run finished with ${completedRun.status} for ${model}: ${JSON.stringify({
+          error: completedRun.error,
+          messages,
+        })}`,
       );
     }
     if (!completedRun.finalText?.includes("GITTERM_E2E_OK")) {
@@ -318,7 +383,9 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
       runCli(["workspace", "restart", workspaceId!]),
     );
     await step(result.steps, "verify restarted workspace", () =>
-      client.workspaces.ensureRunning(workspaceId!, { timeoutMs: ensureRunningTimeoutMs }),
+      client.workspaces.ensureRunning(workspaceId!, {
+        timeoutMs: ensureRunningTimeoutMs,
+      }),
     );
     await step(result.steps, "terminate with account CLI", () =>
       runCli(["workspace", "terminate", workspaceId!, "--yes"]),
