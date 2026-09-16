@@ -26,12 +26,12 @@ async function main() {
       cpuCount: 4,
       memoryMB: 8192,
     },
-    // Larger variant, selectable per workspace via e2b machine options.
+    // Higher-CPU variant, capped at the account's maximum supported memory.
     {
       name: "gitterm-opencode-server-lg",
       template: createOpencodeServerTemplate(opencodeVersion),
       cpuCount: 8,
-      memoryMB: 16384,
+      memoryMB: 8192,
     },
     {
       name: "gitterm-opencode-server-with-ssh",
