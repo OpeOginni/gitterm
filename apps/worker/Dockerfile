@@ -19,6 +19,8 @@ FROM oven/bun:1.3-slim AS runner
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+
 # Copy built worker output only
 COPY --from=builder /app/apps/worker/dist ./dist
 

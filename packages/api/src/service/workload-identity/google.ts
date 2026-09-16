@@ -44,6 +44,16 @@ export function workloadIdentitySignerConfig(): WorkloadIdentitySignerConfig {
   };
 }
 
+/** Whether this deployment can issue Google workload identity assertions. */
+export function isWorkloadIdentityAvailable(): boolean {
+  try {
+    workloadIdentitySignerConfig();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function workloadIdentityIssuer(): string {
   return workloadIdentitySignerConfig().issuer;
 }

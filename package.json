@@ -4,9 +4,7 @@
   "workspaces": {
     "packages": [
       "apps/*",
-      "packages/*",
-      "examples/slack-agent-bot",
-      "examples/external-pr-review"
+      "packages/*"
     ],
     "catalog": {
       "hono": "^4.12.25",
@@ -70,7 +68,7 @@
     "publish:opencode-plugin": "bun run build:opencode-plugin && npm publish ./packages/opencode-plugin --access public",
     "publish:npm": "bun run publish:sdk && bun run publish:cli && bun run publish:opencode-plugin",
     "e2b:template-build": "turbo -F @gitterm/api e2b:build",
-    "opencode-upgrade": "gh workflow run build-agent-images.yml",
+    "opencode-upgrade": "gh workflow run publish-workspace-runtime-images.yml",
     "security:rewrap": "bun run packages/api/src/scripts/rewrap-encryption.ts",
     "security:rewrap:dev": "bun --env-file=apps/server/.env.development.local run packages/api/src/scripts/rewrap-encryption.ts",
     "security:rewrap:prod": "bun --env-file=apps/server/.env run packages/api/src/scripts/rewrap-encryption.ts"

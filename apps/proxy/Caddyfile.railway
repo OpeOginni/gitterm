@@ -3,11 +3,6 @@
 	auto_https off
 	admin off
 
-	# Enable debug logging to see what's happening
-	log {
-		level DEBUG
-	}
-
 	# Server options
 	servers {
 		protocols h1 h2
@@ -55,12 +50,6 @@
 		file_server
 	}
 
-	# Debug endpoint - shows env var values (remove in production)
-	handle /debug {
-		header Content-Type application/json
-		respond `{"WEB_URL":"{$WEB_URL}","SERVER_URL":"{$SERVER_URL}","LISTENER_URL":"{$LISTENER_URL}"}` 200
-	}
-
 	# ============================================
 	# tRPC: /api/trpc/* -> SERVER_URL/trpc/*
 	# Strip /api prefix, keep /trpc
@@ -104,7 +93,7 @@
 		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization X-GitTerm-Ascii-Token X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
 
 			header_up Host {host}
 			header_up X-Internal-Key {$INTERNAL_API_KEY}
@@ -119,6 +108,9 @@
 		# Cloud workspaces: strip /ws/{subdomain} prefix and proxy to container
 		@cloud_workspace header X-Hosting-Type cloud
 		route @cloud_workspace {
+			@ascii_private header X-GitTerm-Ascii-Token *
+			uri @ascii_private query _token {header.X-GitTerm-Ascii-Token}
+
 			# Strip /ws/{subdomain} prefix: /ws/abc123/foo -> /foo, /ws/abc123 -> /
 			uri path_regexp "^/ws/[^/]+(/.*)$" "$1"
 			uri path_regexp "^/ws/[^/]+/?$" "/"
@@ -198,7 +190,7 @@
 		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization e2b-traffic-access-token x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization X-GitTerm-Ascii-Token X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
 
 			header_up Host {host}
 			header_up X-Requested-Port {http.regexp.portsub.1}
@@ -219,6 +211,9 @@
 			header X-Container-Protocol https
 		}
 		route @cloud_workspace {
+			@ascii_private header X-GitTerm-Ascii-Token *
+			uri @ascii_private query _token {header.X-GitTerm-Ascii-Token}
+
 			handle @cloud_workspace_https {
 				reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
 					header_up Host {header.X-Container-Host}

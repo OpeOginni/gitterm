@@ -250,8 +250,8 @@ const seedImages = [
     providerMetadata: {
       railway: {},
       e2b: {
-        templateId: "r9xlzvdbcoocvbncrds9",
-        sshTemplateId: "nxiezl38gnw32ufyloc0",
+        templateId: "gitterm-opencode-server",
+        sshTemplateId: "gitterm-opencode-server-with-ssh",
       },
       daytona: {
         image: "opeoginni/gitterm-opencode-server:latest",
@@ -297,9 +297,9 @@ const seedImages = [
     agentTypeName: "T3Code",
     providerMetadata: {
       railway: {},
-      // Built by E2B template job in Build Agent Images workflow (alias gitterm-t3code-server).
+      // Built by the E2B template job in Publish Workspace Runtime Images.
       e2b: {
-        templateId: "gfu36xk02swjo0s9turi",
+        templateId: "gitterm-t3code-server",
       },
       daytona: {
         image: "opeoginni/gitterm-t3code-server:latest",
@@ -350,7 +350,7 @@ const seedMachineProfiles: Array<{
     providerName: "E2B",
     key: "standard",
     name: "Standard",
-    description: "Default E2B template resources.",
+    description: "4 vCPU and 8 GB memory.",
     providerOptions: {},
     isDefault: true,
   },
@@ -358,7 +358,7 @@ const seedMachineProfiles: Array<{
     providerName: "E2B",
     key: "large",
     name: "Large",
-    description: "4 vCPU and 8 GB memory.",
+    description: "8 vCPU and 16 GB memory.",
     providerOptions: { templateId: "gitterm-opencode-server-lg" },
     isDefault: false,
   },

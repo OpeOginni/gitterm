@@ -1,4 +1,4 @@
-name: Build Agent Images
+name: Publish Workspace Runtime Images
 
 # Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, E2B_API_KEY
 

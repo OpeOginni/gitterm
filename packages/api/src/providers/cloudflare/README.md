@@ -76,7 +76,7 @@ full agent image refresh:
 
 ```bash
 bun run docker:agent cf-sandbox   # local build + push (or use GH Actions)
-bun run opencode-upgrade          # triggers Build Agent Images workflow
+bun run opencode-upgrade          # triggers Publish Workspace Runtime Images workflow
 ```
 
 Keep the image tag in sync with the `@cloudflare/sandbox` npm version.

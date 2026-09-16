@@ -23,7 +23,7 @@ Railway: https://<tunnel-domain>/listener/trpc/railway.handleWebhook
 E2B:     https://<tunnel-domain>/listener/trpc/e2b.handleWebhook
 ```
 
-Before testing scoped CLI commands, publish the current `@gitterm/cli`, rebuild the Docker and E2B agent images with the `Build Agent Images` workflow, and reseed the server database so provider metadata references the current images and setup commands.
+Before testing scoped CLI commands, publish the current `@gitterm/cli`, rebuild the Docker and E2B workspace images with the `Publish Workspace Runtime Images` workflow, and reseed the server database so provider metadata references the current images and setup commands.
 
 The go-to local smoke test for the hosted providers is:
 

@@ -19,6 +19,9 @@ FROM oven/bun:1.3-slim AS runner
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+ENV PORT=8080
+
 # Copy built listener output only
 COPY --from=builder /app/apps/listener/dist ./dist
 

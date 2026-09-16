@@ -89,6 +89,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     ...trpc.googleCloud.list.queryOptions(),
     staleTime: STALE_TIME,
   });
+  const { data: googleCloudAvailability } = useQuery({
+    ...trpc.googleCloud.availability.queryOptions(),
+    staleTime: STALE_TIME,
+  });
+  const isGoogleCloudAvailable = googleCloudAvailability?.available === true;
   const { data: defaultProviderData } = useQuery({
     ...trpc.user.getDefaultCloudProvider.queryOptions(),
     staleTime: STALE_TIME,
@@ -508,12 +513,16 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             <Select
               value={googleCloudIntegrationId}
               onValueChange={setGoogleCloudIntegrationId}
-              disabled={googleCloudIntegrations.length === 0}
+              disabled={!isGoogleCloudAvailable || googleCloudIntegrations.length === 0}
             >
               <SelectTrigger className="h-9">
                 <SelectValue
                   placeholder={
-                    googleCloudIntegrations.length ? "Select service account" : "No integrations"
+                    !isGoogleCloudAvailable
+                      ? "Unavailable on this deployment"
+                      : googleCloudIntegrations.length
+                        ? "Select service account"
+                        : "No integrations"
                   }
                 />
               </SelectTrigger>

@@ -23,27 +23,27 @@ async function main() {
     {
       name: "gitterm-opencode-server",
       template: createOpencodeServerTemplate(opencodeVersion),
-      cpuCount: 2,
-      memoryMB: 2048,
+      cpuCount: 4,
+      memoryMB: 8192,
     },
     // Larger variant, selectable per workspace via e2b machine options.
     {
       name: "gitterm-opencode-server-lg",
       template: createOpencodeServerTemplate(opencodeVersion),
-      cpuCount: 4,
-      memoryMB: 8192,
+      cpuCount: 8,
+      memoryMB: 16384,
     },
     {
       name: "gitterm-opencode-server-with-ssh",
       template: createOpencodeServerWithSSHTemplate(opencodeVersion),
       cpuCount: 4,
-      memoryMB: 4096,
+      memoryMB: 8192,
     },
     {
       name: "gitterm-t3code-server",
       template: createT3CodeServerTemplate(t3Version, opencodeVersion),
-      cpuCount: 2,
-      memoryMB: 2048,
+      cpuCount: 4,
+      memoryMB: 8192,
     },
   ];
 

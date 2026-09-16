@@ -6,6 +6,7 @@ import { accountProcedure, protectedProcedure, router } from "../index";
 import {
   googleAudience,
   googlePrincipalSet,
+  isWorkloadIdentityAvailable,
   workloadIdentityIssuer,
 } from "../service/workload-identity/google";
 
@@ -49,7 +50,13 @@ function publicIntegration(integration: typeof googleCloudIntegration.$inferSele
 }
 
 export const googleCloudRouter = router({
+  availability: accountProcedure("workspace:read").query(() => ({
+    available: isWorkloadIdentityAvailable(),
+  })),
+
   list: accountProcedure("workspace:read").query(async ({ ctx }) => {
+    if (!isWorkloadIdentityAvailable()) return [];
+
     const integrations = await db
       .select()
       .from(googleCloudIntegration)

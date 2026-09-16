@@ -19,6 +19,9 @@ FROM oven/bun:1.3-slim AS runner
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+ENV PORT=8080
+
 # Copy root package files and node_modules
 COPY --from=builder /app/package.json /app/bun.lock ./
 COPY --from=builder /app/node_modules ./node_modules

@@ -54,6 +54,10 @@ export function GoogleCloudConnection() {
     isLoading,
     error,
   } = useQuery(trpc.googleCloud.list.queryOptions());
+  const { data: availability, isLoading: isLoadingAvailability } = useQuery(
+    trpc.googleCloud.availability.queryOptions(),
+  );
+  const isAvailable = availability?.available === true;
   const createIntegration = useMutation(trpc.googleCloud.create.mutationOptions());
   const removeIntegration = useMutation(trpc.googleCloud.remove.mutationOptions());
 
@@ -112,6 +116,7 @@ export function GoogleCloudConnection() {
           type="button"
           size="sm"
           onClick={() => setAdding((value) => !value)}
+          disabled={!isAvailable || isLoadingAvailability}
           className="h-9 gap-1.5 px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]"
         >
           {adding ? <X className="size-3.5" /> : <Plus className="size-3.5" />}
@@ -119,7 +124,7 @@ export function GoogleCloudConnection() {
         </Button>
       </header>
 
-      {adding ? (
+      {adding && isAvailable ? (
         <form
           onSubmit={submit}
           className="rounded-xl border border-sky-400/20 bg-sky-400/[0.035] p-5"
@@ -176,13 +181,14 @@ export function GoogleCloudConnection() {
         </form>
       ) : null}
 
-      {isLoading ? (
+      {isLoading || isLoadingAvailability ? (
         <div className="flex justify-center py-10">
           <Loader2 className="size-5 animate-spin text-fg-4" />
         </div>
-      ) : error ? (
+      ) : !isAvailable || error ? (
         <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-200">
-          Google workload identity is not configured on this GitTerm deployment.
+          Google workload identity is disabled because this deployment has no issuer or signing key
+          configured.
         </div>
       ) : integrations.length ? (
         <div className="grid gap-4">
