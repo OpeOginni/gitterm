@@ -117,7 +117,7 @@
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
     "@vercel/sandbox": "^3.2.1",
-    "discord.js": "^14.25.1",
+    "discord.js": "^14.27.0",
     "dotenv": "^17.3.1",
     "drizzle-orm": "catalog:",
     "e2b": "^2.46.1",
