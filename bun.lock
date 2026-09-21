@@ -164,9 +164,6 @@
     "packages/agent-runtime": {
       "name": "@gitterm/agent-runtime",
       "version": "0.0.0",
-      "dependencies": {
-        "@opencode-ai/sdk": "^1.18.25",
-      },
       "devDependencies": {
         "@gitterm/config": "workspace:*",
         "typescript": "catalog:",
@@ -345,7 +342,7 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@asciidev/box-sdk": "^0.0.34",
         "@daytonaio/sdk": "^0.207.0",
