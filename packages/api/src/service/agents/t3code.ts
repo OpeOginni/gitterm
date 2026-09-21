@@ -31,7 +31,8 @@ function findCredential(
   credentials: UserProviderCredential[],
   providerName: string,
 ): UserProviderCredential | undefined {
-  return credentials.find((cred) => cred.providerName === providerName);
+  const matches = credentials.filter((cred) => cred.providerName === providerName);
+  return matches.find((cred) => cred.isDefault) ?? matches[0];
 }
 
 export function buildClaudeCredentialsJson(oauth: {

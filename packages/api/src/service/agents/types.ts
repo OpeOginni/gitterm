@@ -6,6 +6,10 @@ export interface UserProviderCredential {
   credentialId: string | null;
   providerName: string;
   logicalProviderKey: string;
+  /** Dashboard label; several accounts per provider are distinguished by it. */
+  label: string;
+  /** The account the agent should select for this provider. */
+  isDefault: boolean;
   credential: ApiKeyCredential | OAuthCredential;
 }
 

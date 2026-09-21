@@ -12,7 +12,11 @@ import {
   githubAuthCommand,
   GITHUB_CLI_INSTRUCTIONS,
 } from "@gitterm/agent-runtime/github-auth";
-import { opencodeCredentialFiles } from "@gitterm/agent-runtime/opencode-credentials";
+import {
+  OPENCODE_CREDENTIAL_LABEL,
+  opencodeCredentialFiles,
+  type OpencodeCredentialEntry,
+} from "@gitterm/agent-runtime/opencode-credentials";
 
 export const DIRECT_OPENCODE_PORT = 4096;
 export const DIRECT_OPENCODE_COMMAND = `opencode serve --hostname 0.0.0.0 --port ${DIRECT_OPENCODE_PORT}`;
@@ -138,7 +142,7 @@ export function buildDirectProvisioningPlan(
       throw new Error(`${repositoryOnly.join(", ")} require repo`);
     }
   }
-  const credentials = new Map<string, ReturnType<typeof directModelAuth>>();
+  const credentials = new Map<string, OpencodeCredentialEntry>();
   if (input.models?.default && !/^[^/]+\/.+$/.test(input.models.default)) {
     throw new GittermError("BAD_REQUEST", "Model must use provider/model format");
   }
@@ -158,7 +162,12 @@ export function buildDirectProvisioningPlan(
     if (credentials.has(providerName)) {
       throw new Error(`Duplicate model credential: ${providerName}`);
     }
-    credentials.set(providerName, directModelAuth(credential));
+    credentials.set(providerName, {
+      integration: providerName,
+      label: credential.label?.trim() || OPENCODE_CREDENTIAL_LABEL,
+      active: true,
+      value: directModelAuth(credential),
+    });
   }
   const configuredPlugins = Array.isArray(input.opencode?.config?.plugin)
     ? input.opencode.config.plugin.filter((plugin): plugin is string => typeof plugin === "string")
@@ -196,7 +205,7 @@ export function buildDirectProvisioningPlan(
   );
   const files: DirectAgentFile[] = [
     ...(github?.files ?? []),
-    ...opencodeCredentialFiles(Object.fromEntries(credentials)),
+    ...opencodeCredentialFiles([...credentials.values()]),
     {
       path: "~/.config/opencode/opencode.json",
       contentBase64: base64(JSON.stringify(config)),

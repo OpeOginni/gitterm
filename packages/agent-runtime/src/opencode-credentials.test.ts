@@ -3,19 +3,32 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  OPENCODE_CREDENTIAL_LABEL,
   OPENCODE_CREDENTIALS_PATH,
   OPENCODE_CREDENTIALS_PLUGIN_PATH,
   opencodeCredentialFiles,
-  type OpencodeAuthEntry,
+  type OpencodeCredentialEntry,
 } from "./opencode-credentials";
 
-const auth: Record<string, OpencodeAuthEntry> = {
-  anthropic: { type: "api", key: "sk-ant" },
-  "github-copilot": { type: "oauth", refresh: "gh-refresh", access: "gh-access", expires: 1 },
-  "openai/": { type: "oauth", refresh: "oa-refresh", accountId: "acct" },
-  unknown: { type: "api", key: "nope" },
-};
+const auth: OpencodeCredentialEntry[] = [
+  {
+    integration: "anthropic",
+    label: "work",
+    active: true,
+    value: { type: "api", key: "sk-ant-work" },
+  },
+  { integration: "anthropic", label: "personal", value: { type: "api", key: "sk-ant-home" } },
+  {
+    integration: "github-copilot",
+    label: "GitHub",
+    value: { type: "oauth", refresh: "gh-refresh", access: "gh-access", expires: 1 },
+  },
+  {
+    integration: "openai/",
+    label: "ChatGPT",
+    value: { type: "oauth", refresh: "oa-refresh", accountId: "acct" },
+  },
+  { integration: "unknown", label: "x", value: { type: "api", key: "nope" } },
+];
 
 test("ships the credentials JSON plus the importer plugin", () => {
   const files = opencodeCredentialFiles(auth);
@@ -35,7 +48,7 @@ afterEach(() => {
 });
 
 /** Writes the files into a fake home and loads the plugin exactly as OpenCode would. */
-async function loadPlugin(entries: Record<string, OpencodeAuthEntry>) {
+async function loadPlugin(entries: OpencodeCredentialEntry[]) {
   const home = mkdtempSync(join(tmpdir(), "gitterm-opencode-credentials-"));
   homes.push(home);
   process.env.HOME = home;
@@ -150,7 +163,7 @@ function fakeContext(input: {
   return { ctx, stored, state };
 }
 
-test("plugin imports API keys and OAuth tokens through the integration API", async () => {
+test("plugin imports every account with its label and creates the active one last", async () => {
   const plugin = await loadPlugin(auth);
   const { ctx, stored } = fakeContext({
     integrations: {
@@ -167,14 +180,11 @@ test("plugin imports API keys and OAuth tokens through the integration API", asy
   expect(plugin.id).toBe("gitterm-credentials");
   await plugin.setup(ctx);
   expect(stored).toEqual([
-    {
-      integrationID: "anthropic",
-      label: OPENCODE_CREDENTIAL_LABEL,
-      value: { type: "key", key: "sk-ant" },
-    },
+    { integrationID: "anthropic", label: "personal", value: { type: "key", key: "sk-ant-home" } },
+    { integrationID: "anthropic", label: "work", value: { type: "key", key: "sk-ant-work" } },
     {
       integrationID: "github-copilot",
-      label: OPENCODE_CREDENTIAL_LABEL,
+      label: "GitHub",
       value: {
         type: "oauth",
         methodID: "device",
@@ -185,7 +195,7 @@ test("plugin imports API keys and OAuth tokens through the integration API", asy
     },
     {
       integrationID: "openai",
-      label: OPENCODE_CREDENTIAL_LABEL,
+      label: "ChatGPT",
       value: {
         type: "oauth",
         methodID: "chatgpt-browser",
@@ -198,24 +208,27 @@ test("plugin imports API keys and OAuth tokens through the integration API", asy
   ]);
 });
 
-test("plugin skips integrations that already hold a Gitterm credential", async () => {
-  const plugin = await loadPlugin({ anthropic: { type: "api", key: "sk-ant" } });
+test("plugin skips accounts whose label already exists on the integration", async () => {
+  const plugin = await loadPlugin([
+    { integration: "anthropic", label: "work", value: { type: "api", key: "sk-ant-work" } },
+    { integration: "anthropic", label: "new", value: { type: "api", key: "sk-ant-new" } },
+  ]);
   const { ctx, stored } = fakeContext({
     integrations: {
       anthropic: {
         methods: [{ type: "key" }],
-        connections: [
-          { type: "credential", id: "cred_existing", label: OPENCODE_CREDENTIAL_LABEL },
-        ],
+        connections: [{ type: "credential", id: "cred_existing", label: "work" }],
       },
     },
   });
   await plugin.setup(ctx);
-  expect(stored).toEqual([]);
+  expect(stored).toEqual([
+    { integrationID: "anthropic", label: "new", value: { type: "key", key: "sk-ant-new" } },
+  ]);
 });
 
 test("plugin tolerates a missing credentials file", async () => {
-  const plugin = await loadPlugin({});
+  const plugin = await loadPlugin([]);
   rmSync(join(process.env.HOME!, OPENCODE_CREDENTIALS_PATH.slice(2)));
   const { ctx, stored } = fakeContext({ integrations: {} });
   await plugin.setup(ctx);

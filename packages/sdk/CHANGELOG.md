@@ -12,7 +12,10 @@ behaviour you could have relied on.
   `opencode.api` on workspace creation inputs are removed; every workspace speaks the OpenCode 2
   `/api/*` API and images/templates must ship `@opencode/cli`.
 - Model credentials are provisioned through `~/.gitterm/opencode/credentials.json` plus the
-  `gitterm-credentials` OpenCode plugin instead of `auth.json`.
+  `gitterm-credentials` OpenCode plugin instead of `auth.json`. When `models` is omitted or
+  `inherit: "defaults"`, every saved account of the user travels with the workspace (not only the
+  defaults), labelled as in the dashboard; the dashboard default is the active account.
+- Direct inline credentials accept an optional `label` shown in OpenCode.
 - `direct.auth.setCredential()` accepts API keys only; use `connectOAuth()` for OAuth.
 - Attach with `OPENCODE_PASSWORD=<password> opencode --server <url>`; `opencode attach` no longer exists.
 

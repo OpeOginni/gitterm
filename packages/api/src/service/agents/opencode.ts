@@ -3,6 +3,7 @@ import { GITHUB_CLI_INSTRUCTIONS } from "@gitterm/agent-runtime/github-auth";
 import {
   opencodeCredentialFiles,
   type OpencodeAuthEntry,
+  type OpencodeCredentialEntry,
 } from "@gitterm/agent-runtime/opencode-credentials";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 
@@ -16,28 +17,53 @@ function toBase64(value: string): string {
   return Buffer.from(value).toString("base64");
 }
 
-/** Keyed by OpenCode provider ID; imported into OpenCode by the credentials plugin. */
-export function buildOpencodeAuth(
-  credentials: UserProviderCredential[],
-): Record<string, OpencodeAuthEntry> {
-  return Object.fromEntries(
-    credentials.map((cred): [string, OpencodeAuthEntry] => [
-      cred.providerName === "openai-oauth" ? "openai" : cred.providerName,
-      cred.credential.type === "api_key"
-        ? { type: "api", key: cred.credential.apiKey }
-        : {
-            type: "oauth",
-            refresh: cred.credential.refresh,
-            access: cred.credential.access,
-            expires: cred.credential.expires,
-            accountId: cred.credential.accountId,
-          },
-    ]),
-  );
+/** Both OpenAI authentication methods share the `openai` OpenCode provider. */
+function opencodeIntegration(cred: UserProviderCredential): string {
+  return cred.providerName === "openai-oauth" ? "openai" : cred.providerName;
 }
 
+function opencodeAuthEntry(cred: UserProviderCredential): OpencodeAuthEntry {
+  return cred.credential.type === "api_key"
+    ? { type: "api", key: cred.credential.apiKey }
+    : {
+        type: "oauth",
+        refresh: cred.credential.refresh,
+        access: cred.credential.access,
+        expires: cred.credential.expires,
+        accountId: cred.credential.accountId,
+      };
+}
+
+/** Every account, labelled as in the dashboard; imported into OpenCode by the credentials plugin. */
+export function buildOpencodeCredentials(
+  credentials: UserProviderCredential[],
+): OpencodeCredentialEntry[] {
+  const labels = new Set<string>();
+  return credentials.map((cred) => {
+    const integration = opencodeIntegration(cred);
+    // Distinct dashboard providers can map onto one OpenCode integration with equal labels.
+    const label = labels.has(`${integration}\0${cred.label}`)
+      ? `${cred.label} (${cred.providerName})`
+      : cred.label;
+    labels.add(`${integration}\0${label}`);
+    return {
+      integration,
+      label,
+      ...(cred.isDefault ? { active: true } : {}),
+      value: opencodeAuthEntry(cred),
+    };
+  });
+}
+
+/** OpenCode 1.x auth.json: one account per provider, preferring the default. */
 export function buildOpencodeAuthJson(credentials: UserProviderCredential[]): string {
-  return JSON.stringify(buildOpencodeAuth(credentials));
+  return JSON.stringify(
+    Object.fromEntries(
+      [...credentials]
+        .sort((a, b) => Number(a.isDefault) - Number(b.isDefault))
+        .map((cred) => [opencodeIntegration(cred), opencodeAuthEntry(cred)]),
+    ),
+  );
 }
 
 export function buildOpencodeConfigJson(
@@ -138,7 +164,7 @@ export const opencodeProvisioner: AgentProvisioner = {
           path: OPENCODE_TUI_CONFIG_PATH,
           contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
         },
-        ...opencodeCredentialFiles(buildOpencodeAuth(ctx.credentials)),
+        ...opencodeCredentialFiles(buildOpencodeCredentials(ctx.credentials)),
         {
           path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,
           contentBase64: toBase64(buildGittermInstructions(ctx.additionalAgentInstructions)),

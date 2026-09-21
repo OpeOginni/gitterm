@@ -3,6 +3,7 @@ import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-cre
 import type { WorkspaceModelsInput } from "@gitterm/schema/workspace-models";
 import { TRPCError } from "@trpc/server";
 import { getEncryptionService } from "../encryption";
+import { OPENCODE_CREDENTIAL_LABEL } from "@gitterm/agent-runtime/opencode-credentials";
 import type { UserProviderCredential } from "./types";
 import { selectWorkspaceCredentials } from "./credential-selection";
 
@@ -47,12 +48,19 @@ export async function resolveWorkspaceProviderCredentials(options: {
               credentialId: null,
               providerName: selection.provider.name,
               logicalProviderKey: selection.provider.logicalProviderKey,
+              label: OPENCODE_CREDENTIAL_LABEL,
+              isDefault: true,
               credential: { type: "api_key", apiKey: selection.apiKey },
             }
           : {
               credentialId: selection.credential.id,
               providerName: selection.credential.providerName,
               logicalProviderKey: selection.credential.logicalProviderKey,
+              label: selection.credential.label,
+              // A pinned selection is the only account for its provider, so it is the active one.
+              isDefault:
+                selection.credential.isDefault ||
+                selection.credential.logicalProviderKey in (options.models?.providers ?? {}),
               credential: getEncryptionService().decryptCredential(
                 selection.credential.encryptedCredential,
               ),

@@ -11,8 +11,10 @@ const saved = [
   { id: "api", logicalProviderKey: "openai", label: "work", isDefault: false },
   { id: "other", logicalProviderKey: "anthropic", label: "personal", isDefault: true },
 ];
-test("omitted models inherits defaults, explicit models inherits nothing", () => {
-  expect(selectWorkspaceCredentials(undefined, providers, saved)).toHaveLength(2);
+test("omitted models inherits every saved account, explicit models inherits nothing", () => {
+  expect(selectWorkspaceCredentials(undefined, providers, saved)).toEqual(
+    saved.map((credential) => ({ source: "saved", credential })),
+  );
   expect(selectWorkspaceCredentials({}, providers, saved)).toEqual([]);
   expect(selectWorkspaceCredentials({ inherit: "none" }, providers, saved)).toEqual([]);
 });

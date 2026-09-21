@@ -670,10 +670,11 @@ its current dashboard metadata.
 
 Rules and errors:
 
-- Omitting `models` uses dashboard defaults. An explicit `models` block defaults to
+- Omitting `models` ships every saved dashboard account, labelled as in the dashboard, with each
+  provider's default as the active OpenCode account. An explicit `models` block defaults to
   `inherit: "none"`; `models: {}` injects no dashboard credentials.
-- Use `inherit: "defaults"` to inherit every unlisted provider's dashboard default. Explicit
-  sources override only their own provider. Each provider map key selects exactly one source.
+- Use `inherit: "defaults"` to ship every unlisted provider's saved accounts the same way. Explicit
+  sources override only their own provider and ship exactly one account for it.
 - Unknown providers or inline keys for OAuth-only providers throw `MODEL_CREDENTIAL_INVALID`.
   A missing or ambiguous label throws `MODEL_CREDENTIAL_UNAVAILABLE`.
 - A run that requests a credential-backed `provider/model` not available in its workspace throws
@@ -691,10 +692,12 @@ questions, permissions, and events use GitTerm's OpenCode 2 runtime adapter. Att
 
 OpenCode 2 keeps credentials in its SQLite store and has no headless import, so workspaces receive
 `~/.gitterm/opencode/credentials.json` and a local OpenCode plugin at
-`~/.config/opencode/plugins/gitterm-credentials.js`. The plugin imports each entry through OpenCode's
-integration API on first load, labels them `Gitterm`, and skips integrations that already hold a
-`Gitterm` credential, so restarts are idempotent. OAuth entries are stored with OpenCode's built-in
-method IDs and refreshed by OpenCode itself.
+`~/.config/opencode/plugins/gitterm-credentials.js`. The plugin imports each account through OpenCode's
+integration API on first load under its dashboard label (inline keys use `Gitterm`), so a provider can
+carry several accounts and `opencode auth switch` works inside the workspace. The dashboard default is
+the account OpenCode selects. Accounts whose label already exists on the integration are skipped, so
+restarts are idempotent. OAuth entries are stored with OpenCode's built-in method IDs and refreshed by
+OpenCode itself.
 
 ## Errors
 

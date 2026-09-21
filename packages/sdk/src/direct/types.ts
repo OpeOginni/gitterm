@@ -20,6 +20,8 @@ export type DirectProviderCapabilities = {
 
 export type DirectApiModelCredential = {
   providerName: string;
+  /** Account label shown in OpenCode. Defaults to "Gitterm". */
+  label?: string;
   source: "apiKey";
   apiKey: string;
   metadata?: Record<string, string>;
@@ -27,6 +29,8 @@ export type DirectApiModelCredential = {
 
 export type DirectOAuthModelCredential = {
   providerName: string;
+  /** Account label shown in OpenCode. Defaults to "Gitterm". */
+  label?: string;
   source: "oauth";
   refreshToken: string;
   /** May be omitted when OpenCode should refresh immediately. */

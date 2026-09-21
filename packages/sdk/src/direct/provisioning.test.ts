@@ -87,7 +87,7 @@ describe("direct provisioning plan", () => {
       password: "password",
       models: {
         providers: {
-          anthropic: { source: "apiKey", apiKey: "model-key" },
+          anthropic: { source: "apiKey", apiKey: "model-key", label: "work" },
           "github-copilot": { source: "oauth", refreshToken: "refresh" },
         },
       },
@@ -99,10 +99,20 @@ describe("direct provisioning plan", () => {
       (file) => file.path === "~/.gitterm/opencode/credentials.json",
     )!;
     expect(credentials.mode).toBe(0o600);
-    expect(JSON.parse(Buffer.from(credentials.contentBase64, "base64").toString())).toEqual({
-      anthropic: { type: "api", key: "model-key" },
-      "github-copilot": { type: "oauth", refresh: "refresh", access: "", expires: 0 },
-    });
+    expect(JSON.parse(Buffer.from(credentials.contentBase64, "base64").toString())).toEqual([
+      {
+        integration: "anthropic",
+        label: "work",
+        active: true,
+        value: { type: "api", key: "model-key" },
+      },
+      {
+        integration: "github-copilot",
+        label: "Gitterm",
+        active: true,
+        value: { type: "oauth", refresh: "refresh", access: "", expires: 0 },
+      },
+    ]);
   });
 
   test("rejects path traversal and duplicate credentials", () => {
@@ -206,7 +216,7 @@ describe("direct provisioning plan", () => {
     });
     const auth = JSON.parse(Buffer.from(plan.agent.files[0]!.contentBase64, "base64").toString());
 
-    expect(auth.openai).toEqual({
+    expect(auth[0].value).toEqual({
       type: "oauth",
       refresh: "refresh-token",
       access: "access-token",
