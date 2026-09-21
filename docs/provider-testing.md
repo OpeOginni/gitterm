@@ -56,7 +56,7 @@ export GITTERM_E2E_RUN_TIMEOUT_MS=1800000
 
 Providers run sequentially to limit cost. Every workspace receives a unique idempotency key and is terminated in a `finally` block after a normal test failure. The summary reports cleanup failures separately so leaked resources are visible.
 
-The hosted smoke runner requires an active saved OpenCode Zen API key and an active saved API-key credential for at least one other model provider. It writes them to OpenCode V1's `auth.json` before the workspace server starts and runs `opencode auth list` after setup to verify them through OpenCode itself. No public fallback key is used. The command output lists provider names and credential types, never secret values.
+The hosted smoke runner requires an active saved OpenCode Zen API key and an active saved API-key credential for at least one other model provider. It ships them to the workspace as `~/.gitterm/opencode/credentials.json`, which the `gitterm-credentials` OpenCode plugin imports when the server starts, and runs `opencode auth list` after setup to verify them through OpenCode itself. No public fallback key is used. The command output lists provider names and credential types, never secret values.
 
 `--all` is local-only. It includes every implemented provider, including providers that are not available in GitTerm's hosted product. Do not set `CI` when running it locally.
 

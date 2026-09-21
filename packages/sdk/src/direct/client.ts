@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { createOpencodeClient } from "@opencode-ai/sdk";
 import { directError, directRunOperations, directRuntime } from "./runs.js";
 import { aborted, terminal } from "../runs.js";
 import { GittermError } from "../errors.js";
@@ -62,27 +61,7 @@ function resolveProvider(provider: DirectGittermClientOptions["provider"]): Dire
   }
 }
 
-function runtimeClient(workspace: DirectWorkspace, fetchImpl?: typeof fetch) {
-  const authorization = workspace.runtime.password
-    ? `Basic ${Buffer.from(`opencode:${workspace.runtime.password}`).toString("base64")}`
-    : undefined;
-  return createOpencodeClient({
-    fetch: fetchImpl,
-    baseUrl: workspace.runtime.url,
-    directory: workspace.runtime.directory,
-    headers: {
-      ...workspace.runtime.headers,
-      ...(authorization ? { Authorization: authorization } : {}),
-    },
-  });
-}
-
 function createAuthClient(workspace: DirectWorkspace, fetchImpl?: typeof fetch) {
-  if (workspace.opencodeApi !== "v2")
-    throw new GittermError(
-      "BAD_REQUEST",
-      "Runtime OAuth connection management requires OpenCode v2",
-    );
   const authorization = workspace.runtime.password
     ? `Basic ${Buffer.from(`opencode:${workspace.runtime.password}`).toString("base64")}`
     : undefined;
@@ -180,7 +159,6 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
       url: workspace.runtime.url,
       directory: workspace.runtime.directory,
       password: workspace.runtime.password ?? null,
-      api: workspace.opencodeApi,
       headers: workspace.runtime.headers,
       fetch: options.fetch,
     });
@@ -216,30 +194,17 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
   }
 
   async function startPty(workspace: DirectWorkspace, command: string, title: string) {
-    const result = await http(workspace).json(
-      workspace.opencodeApi === "v2"
-        ? "/api/pty"
-        : `/pty?directory=${encodeURIComponent(workspace.runtime.directory)}`,
-      {
-        method: "POST",
-        json: { command: "bash", args: ["-lc", command], cwd: workspace.runtime.directory, title },
-      },
-    );
-    return result;
+    return http(workspace).json("/api/pty", {
+      method: "POST",
+      json: { command: "bash", args: ["-lc", command], cwd: workspace.runtime.directory, title },
+    });
   }
 
   async function setupFile(workspace: DirectWorkspace, name: string): Promise<string | null> {
     try {
-      if (workspace.opencodeApi === "v2") {
-        return (
-          await (await http(workspace).send(`/api/fs/read/${SETUP_DIR}/${name}`)).text()
-        ).trim();
-      }
-      const result = await runtimeClient(workspace, options.fetch).file.read({
-        query: { directory: workspace.runtime.directory, path: `${SETUP_DIR}/${name}` },
-      });
-      if (result.error || !result.data || result.data.type !== "text") return null;
-      return result.data.content.trim();
+      return (
+        await (await http(workspace).send(`/api/fs/read/${SETUP_DIR}/${name}`)).text()
+      ).trim();
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.status === 404) return null;
       throw directError(error);
@@ -297,25 +262,16 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         if (!providerName) {
           throw new Error("Model credential providerName is required");
         }
-        if (workspace.opencodeApi === "v2") {
-          if (credential.source !== "apiKey")
-            throw new GittermError(
-              "BAD_REQUEST",
-              "Use connectOAuth() for v2 credential rotation, or inject an OAuth bundle when creating the workspace",
-            );
-          directModelAuth(credential);
-          await http(workspace).send(
-            `/api/integration/${encodeURIComponent(providerName)}/connect/key`,
-            { method: "POST", json: { key: credential.apiKey } },
+        if (credential.source !== "apiKey")
+          throw new GittermError(
+            "BAD_REQUEST",
+            "Use connectOAuth() for OAuth credential rotation, or inject an OAuth bundle when creating the workspace",
           );
-          return;
-        }
-        const result = await runtimeClient(workspace, options.fetch).auth.set({
-          path: { id: providerName },
-          query: { directory: workspace.runtime.directory },
-          body: directModelAuth(credential),
-        });
-        if (result.error) throw new Error(errorMessage(result.error));
+        directModelAuth(credential);
+        await http(workspace).send(
+          `/api/integration/${encodeURIComponent(providerName)}/connect/key`,
+          { method: "POST", json: { key: credential.apiKey } },
+        );
       },
       async list(workspace: DirectWorkspace): Promise<DirectAuthIntegration[]> {
         assertWorkspace(workspace);
@@ -425,8 +381,6 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
     },
     workspaces: {
       async create(input: DirectWorkspaceCreateInput = {}): Promise<DirectWorkspace> {
-        if (input.opencode?.api && !["v1", "v2"].includes(input.opencode.api))
-          throw new GittermError("BAD_REQUEST", "opencode.api must be v1 or v2");
         const lifecycle = input.lifecycle ?? provider.capabilities.recommendedLifecycle;
         if (lifecycle === "persistent" && provider.capabilities.persistence === "unsupported") {
           throw new Error(`${provider.name} does not support persistent direct workspaces`);
@@ -443,7 +397,6 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
           status: "running",
           lifecycle,
           runtime: created.runtime,
-          opencodeApi: input.opencode?.api ?? "v1",
           setup: provisioning.setup.afterAgent.length
             ? "after_agent"
             : provisioning.setup.beforeAgent.length

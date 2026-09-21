@@ -10,9 +10,6 @@
   "scripts": {
     "check-types": "tsc --noEmit"
   },
-  "dependencies": {
-    "@opencode-ai/sdk": "^1.18.25"
-  },
   "devDependencies": {
     "@gitterm/config": "workspace:*",
     "typescript": "catalog:"

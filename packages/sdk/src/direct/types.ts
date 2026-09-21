@@ -1,4 +1,4 @@
-import type { AgentRun, AgentRunMessage, OpencodeApi, RunWaitOptions } from "../types.js";
+import type { AgentRun, AgentRunMessage, RunWaitOptions } from "../types.js";
 
 export type DirectWorkspaceLifecycle = "ephemeral" | "persistent";
 export type DirectWorkspaceStatus =
@@ -130,8 +130,6 @@ export type DirectWorkspaceCreateInput = {
   /** Trusted integration context appended to the generated global AGENTS.md. */
   additionalAgentInstructions?: string;
   opencode?: {
-    /** Defaults to v1. v2 requires a compatible provider image/template. */
-    api?: OpencodeApi;
     config?: Record<string, unknown>;
     plugins?: string[];
     skills?: Array<{ name: string; content: string }>;
@@ -152,7 +150,6 @@ export type DirectWorkspace = {
   status: DirectWorkspaceStatus;
   lifecycle: DirectWorkspaceLifecycle;
   runtime: DirectWorkspaceRuntime;
-  opencodeApi: OpencodeApi;
   setup: "not_requested" | "before_agent_complete" | "after_agent";
   createdAt: string;
 };

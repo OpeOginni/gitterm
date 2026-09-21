@@ -10,7 +10,7 @@ describe("imageSupportsProvider", () => {
     expect(imageSupportsProvider("ascii", { ascii: {} })).toBe(false);
     expect(
       imageSupportsProvider("ascii", {
-        ascii: { setupCommands: ["npm install -g opencode-ai"] },
+        ascii: { setupCommands: ["npm install -g @opencode/cli@2"] },
       }),
     ).toBe(true);
   });

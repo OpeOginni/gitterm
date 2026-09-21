@@ -41,7 +41,7 @@ async function main() {
     },
     {
       name: "gitterm-t3code-server",
-      template: createT3CodeServerTemplate(t3Version, opencodeVersion),
+      template: createT3CodeServerTemplate(t3Version),
       cpuCount: 4,
       memoryMB: 8192,
     },

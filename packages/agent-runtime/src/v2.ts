@@ -46,8 +46,6 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
   }
 
   return {
-    api: "v2",
-
     async createSession(input) {
       const modelRef = parseModelRef(input.model);
       const created = await http.json<{ data: { id: string; title?: string | null } }>(

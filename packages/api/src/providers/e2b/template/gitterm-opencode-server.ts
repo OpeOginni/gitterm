@@ -1,4 +1,5 @@
 import { Template, waitForTimeout, type TemplateClass } from "e2b";
+import { OPENCODE_PACKAGE } from "../../opencode-version";
 import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
 
 export function createOpencodeServerTemplate(opencodeVersion: string): TemplateClass {
@@ -8,6 +9,6 @@ export function createOpencodeServerTemplate(opencodeVersion: string): TemplateC
       noInstallRecommends: true,
     })
     .runCmd(GITTERM_CLI_CACHE_BUST)
-    .npmInstall([`opencode-ai@${opencodeVersion}`, "@gitterm/cli@latest"], { g: true })
+    .npmInstall([`${OPENCODE_PACKAGE}@${opencodeVersion}`, "@gitterm/cli@latest"], { g: true })
     .setStartCmd("sleep infinity", waitForTimeout(1_000));
 }

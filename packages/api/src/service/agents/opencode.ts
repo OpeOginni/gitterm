@@ -1,10 +1,13 @@
 import type { AgentProvisioning } from "../../providers/compute";
 import { GITHUB_CLI_INSTRUCTIONS } from "@gitterm/agent-runtime/github-auth";
+import {
+  opencodeCredentialFiles,
+  type OpencodeAuthEntry,
+} from "@gitterm/agent-runtime/opencode-credentials";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 
 export const OPENCODE_CONFIG_PATH = "~/.config/opencode/opencode.json";
 export const OPENCODE_TUI_CONFIG_PATH = "~/.config/opencode/tui.json";
-export const OPENCODE_AUTH_PATH = "~/.local/share/opencode/auth.json";
 export const OPENCODE_GITTERM_INSTRUCTIONS_PATH = "~/.config/opencode/AGENTS.md";
 
 const OPENCODE_SERVE_PORT = 4096;
@@ -13,24 +16,28 @@ function toBase64(value: string): string {
   return Buffer.from(value).toString("base64");
 }
 
+/** Keyed by OpenCode provider ID; imported into OpenCode by the credentials plugin. */
+export function buildOpencodeAuth(
+  credentials: UserProviderCredential[],
+): Record<string, OpencodeAuthEntry> {
+  return Object.fromEntries(
+    credentials.map((cred): [string, OpencodeAuthEntry] => [
+      cred.providerName === "openai-oauth" ? "openai" : cred.providerName,
+      cred.credential.type === "api_key"
+        ? { type: "api", key: cred.credential.apiKey }
+        : {
+            type: "oauth",
+            refresh: cred.credential.refresh,
+            access: cred.credential.access,
+            expires: cred.credential.expires,
+            accountId: cred.credential.accountId,
+          },
+    ]),
+  );
+}
+
 export function buildOpencodeAuthJson(credentials: UserProviderCredential[]): string {
-  const entries = credentials.map((cred) => {
-    const providerName = cred.providerName === "openai-oauth" ? "openai" : cred.providerName;
-
-    return [
-      providerName,
-      {
-        type: cred.credential.type === "api_key" ? "api" : "oauth",
-        key: cred.credential.type === "api_key" ? cred.credential.apiKey : undefined,
-        refresh: cred.credential.type === "oauth" ? cred.credential.refresh : undefined,
-        access: cred.credential.type === "oauth" ? cred.credential.access : undefined,
-        expires: cred.credential.type === "oauth" ? cred.credential.expires : undefined,
-        accountId: cred.credential.type === "oauth" ? cred.credential.accountId : undefined,
-      },
-    ] as const;
-  });
-
-  return JSON.stringify(Object.fromEntries(entries));
+  return JSON.stringify(buildOpencodeAuth(credentials));
 }
 
 export function buildOpencodeConfigJson(
@@ -131,10 +138,7 @@ export const opencodeProvisioner: AgentProvisioner = {
           path: OPENCODE_TUI_CONFIG_PATH,
           contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
         },
-        {
-          path: OPENCODE_AUTH_PATH,
-          contentBase64: toBase64(buildOpencodeAuthJson(ctx.credentials)),
-        },
+        ...opencodeCredentialFiles(buildOpencodeAuth(ctx.credentials)),
         {
           path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,
           contentBase64: toBase64(buildGittermInstructions(ctx.additionalAgentInstructions)),

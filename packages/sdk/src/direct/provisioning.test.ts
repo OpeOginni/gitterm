@@ -65,7 +65,8 @@ describe("direct provisioning plan", () => {
       CUSTOM_VALUE: "custom",
       OPENCODE_SERVER_PASSWORD: "password",
     });
-    expect(plan.agent.files).toHaveLength(4);
+    expect(plan.agent.files).toHaveLength(5);
+    expect(plan.agent.files[0]).toMatchObject({ path: "~/.gitterm/opencode/credentials.json" });
     expect(plan.agent.files.at(-1)).toMatchObject({ path: "~/.secrets/token", mode: 0o400 });
     expect(setupCommandScript(plan.setup.beforeAgent)).toContain("bun install");
     expect(plan.setup.afterAgent).toEqual(["bun test"]);
@@ -76,6 +77,31 @@ describe("direct provisioning plan", () => {
       GITTERM_GIT_TOKEN: "repo-token",
       GITTERM_DIRECT_PROVIDER: "railway",
       OPENCODE_SERVER_PASSWORD: "password",
+    });
+  });
+
+  test("workspaces receive the credentials file and importer plugin", () => {
+    const plan = buildDirectProvisioningPlan({
+      id: "workspace-1",
+      lifecycle: "ephemeral",
+      password: "password",
+      models: {
+        providers: {
+          anthropic: { source: "apiKey", apiKey: "model-key" },
+          "github-copilot": { source: "oauth", refreshToken: "refresh" },
+        },
+      },
+    });
+    const paths = plan.agent.files.map((file) => file.path);
+    expect(paths).not.toContain("~/.local/share/opencode/auth.json");
+    expect(paths).toContain("~/.config/opencode/plugins/gitterm-credentials.js");
+    const credentials = plan.agent.files.find(
+      (file) => file.path === "~/.gitterm/opencode/credentials.json",
+    )!;
+    expect(credentials.mode).toBe(0o600);
+    expect(JSON.parse(Buffer.from(credentials.contentBase64, "base64").toString())).toEqual({
+      anthropic: { type: "api", key: "model-key" },
+      "github-copilot": { type: "oauth", refresh: "refresh", access: "", expires: 0 },
     });
   });
 

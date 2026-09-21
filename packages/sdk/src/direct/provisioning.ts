@@ -12,6 +12,7 @@ import {
   githubAuthCommand,
   GITHUB_CLI_INSTRUCTIONS,
 } from "@gitterm/agent-runtime/github-auth";
+import { opencodeCredentialFiles } from "@gitterm/agent-runtime/opencode-credentials";
 
 export const DIRECT_OPENCODE_PORT = 4096;
 export const DIRECT_OPENCODE_COMMAND = `opencode serve --hostname 0.0.0.0 --port ${DIRECT_OPENCODE_PORT}`;
@@ -195,10 +196,7 @@ export function buildDirectProvisioningPlan(
   );
   const files: DirectAgentFile[] = [
     ...(github?.files ?? []),
-    {
-      path: "~/.local/share/opencode/auth.json",
-      contentBase64: base64(JSON.stringify(Object.fromEntries(credentials))),
-    },
+    ...opencodeCredentialFiles(Object.fromEntries(credentials)),
     {
       path: "~/.config/opencode/opencode.json",
       contentBase64: base64(JSON.stringify(config)),

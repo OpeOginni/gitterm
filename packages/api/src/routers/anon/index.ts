@@ -12,7 +12,7 @@ import { e2bProvider } from "../../providers";
 import type { WorkspaceEnvironmentVariables } from "../../providers";
 import { workspaceJWT } from "../../service/auth/workspace-jwt";
 import { encodeAgentFiles } from "../../service/workspace-env";
-import { OPENCODE_AUTH_PATH, OPENCODE_CONFIG_PATH } from "../../service/agents/opencode";
+import { OPENCODE_CONFIG_PATH } from "../../service/agents/opencode";
 import { checkPublicGitHubRepository, parseGitHubRepoUrl } from "../../service/github";
 import { getWorkspaceDomain } from "../../utils/routing";
 import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooling";
@@ -344,10 +344,6 @@ export const anonRouter = router({
               path: OPENCODE_CONFIG_PATH,
               contentBase64: Buffer.from(JSON.stringify(opencodeConfig)).toString("base64"),
             },
-            {
-              path: OPENCODE_AUTH_PATH,
-              contentBase64: Buffer.from(JSON.stringify({})).toString("base64"),
-            },
           ]),
           // Read by `opencode serve` itself to enforce basic auth.
           OPENCODE_SERVER_PASSWORD: serverPassword,
@@ -401,7 +397,6 @@ export const anonRouter = router({
             editorTarget: null,
             sshConnection: null,
             serverPassword: encryptWorkspacePassword(serverPassword),
-            opencodeApi: "v1",
             upstreamUrl: workspaceInfo.upstreamUrl,
             status: "running",
             hostingType: "cloud",

@@ -683,12 +683,18 @@ Rules and errors:
 for that run. Credentials remain workspace-scoped: changing credentials for one concurrent run
 would otherwise change them for other runs on the same runtime.
 
-## OpenCode API versions
+## OpenCode runtime
 
-Managed workspaces default to OpenCode V1 from `opencode-ai` and use `opencodeApi: "v1"`.
-Credentials are written to OpenCode's `auth.json` before the runtime starts. Runs, questions,
-permissions, and events use GitTerm's V1 runtime adapter. V2 remains selectable only for explicitly
-compatible images.
+Every workspace runs OpenCode 2 (the `@opencode/cli` npm package) and its `/api/*` HTTP API. Runs,
+questions, permissions, and events use GitTerm's OpenCode 2 runtime adapter. Attach a local TUI with
+`OPENCODE_PASSWORD=<password> opencode --server <workspace url>`.
+
+OpenCode 2 keeps credentials in its SQLite store and has no headless import, so workspaces receive
+`~/.gitterm/opencode/credentials.json` and a local OpenCode plugin at
+`~/.config/opencode/plugins/gitterm-credentials.js`. The plugin imports each entry through OpenCode's
+integration API on first load, labels them `Gitterm`, and skips integrations that already hold a
+`Gitterm` credential, so restarts are idempotent. OAuth entries are stored with OpenCode's built-in
+method IDs and refreshed by OpenCode itself.
 
 ## Errors
 
@@ -814,10 +820,9 @@ Direct mode does not provide managed durable run storage or submission idempoten
 Serialized workspaces/runs contain runtime credentials: encrypt them and never send them to an
 untrusted UI. Custom providers can implement `DirectProviderAdapter`; inspect `client.provider.capabilities`.
 
-Both modes default to OpenCode **v1** and share v1/v2 run, permission, question, and SSE adapters.
-For direct v2, supply a compatible provider image/template and `opencode: { api: "v2" }` at workspace
-creation. The flag chooses the protocol; it does not install or upgrade the runtime. Direct mode
-does not accept saved/dashboard credential sources or `inherit: "defaults"`.
+Both modes run OpenCode 2 and share its run, permission, question, and SSE adapters. Provider
+images/templates must ship OpenCode 2 (`@opencode/cli`). Direct mode does not accept saved/dashboard
+credential sources or `inherit: "defaults"`.
 
 Every adapter receives the same normalized plan: repository/ref and optional Git credentials, agent files, model credentials, environment, setup commands, serve command, and port. Provider-specific configuration only describes how to allocate and expose compute.
 
@@ -860,9 +865,9 @@ await direct.workspaces.create({
 
 ### Provider authentication
 
-Direct **v2** workspaces can start OpenCode provider authentication without shell access. This
-connection-management API is v2-only; v1 supports inline API keys/OAuth bundles at creation and
-`auth.setCredential()`. Discover a headless/device-code method for remote authentication:
+Direct workspaces can start OpenCode provider authentication without shell access. Inline API
+keys/OAuth bundles are still accepted at creation. Discover a headless/device-code method for remote
+authentication:
 
 ```ts
 const openai = await direct.auth.get(workspace, "openai");
@@ -909,14 +914,11 @@ const workspace = await direct.workspaces.create({
   },
 });
 
-// v1 credentials can also be added or rotated on an existing runtime.
-// On v2, setCredential supports API keys; use connectOAuth for OAuth rotation.
+// API keys can also be added or rotated on an existing runtime; use connectOAuth for OAuth rotation.
 await direct.auth.setCredential(workspace, {
-  source: "oauth",
+  source: "apiKey",
   providerName: "openai",
-  refreshToken: credential.refreshToken,
-  accessToken: credential.accessToken,
-  expiresAt: credential.expiresAt,
+  apiKey: credential.apiKey,
 });
 ```
 

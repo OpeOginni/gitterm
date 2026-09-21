@@ -1,5 +1,4 @@
 /** Provider-independent runtime data. No control-plane or database dependencies. */
-export type OpencodeApi = "v1" | "v2";
 export type AgentRunStatus =
   | "pending"
   | "running"

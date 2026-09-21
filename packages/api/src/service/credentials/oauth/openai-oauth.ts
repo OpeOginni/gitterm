@@ -2,11 +2,11 @@
  * OpenAI OAuth token utilities
  *
  * Implements the ChatGPT device authorization and token refresh flows.
- * Users authenticate via the OpenCode CLI and paste their auth.json tokens.
+ * Users authenticate with ChatGPT and paste their OAuth tokens.
  *
  * Flow:
- * 1. User runs `opencode` CLI and authenticates with OpenAI
- * 2. User copies tokens from ~/.local/share/opencode/auth.json
+ * 1. User authenticates with OpenAI (for example through the OpenCode CLI)
+ * 2. User copies the refresh/access tokens from their local credential store
  * 3. User pastes tokens into GitTerm dashboard
  * 4. GitTerm stores and refreshes tokens as needed
  */

@@ -95,7 +95,6 @@ type RawWorkspace = {
     agentType?: { id: string; name: string; description: string | null } | null;
   } | null;
   metadata?: Record<string, string> | null;
-  opencodeApi?: Workspace["opencodeApi"] | null;
   autoTerminateAt?: Date | string | null;
   customImage?: string | null;
   startedAt: Date | string | null;
@@ -281,7 +280,6 @@ function normalizeWorkspace(workspace: RawWorkspace | null | undefined): Workspa
         }
       : null,
     metadata: workspace.metadata ?? {},
-    opencodeApi: workspace.opencodeApi ?? "v1",
     autoTerminateAt: toIso(workspace.autoTerminateAt),
     customImage: workspace.customImage ?? null,
     startedAt: toIso(workspace.startedAt),

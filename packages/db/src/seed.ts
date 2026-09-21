@@ -272,11 +272,11 @@ const seedImages = [
       },
       vercel: {
         runtime: "node22" as const,
-        setupCommands: ["npm install -g opencode-ai @gitterm/cli --no-audit --fund=false"],
+        setupCommands: ["npm install -g @opencode/cli@2 @gitterm/cli --no-audit --fund=false"],
         vcpus: 2,
       },
       ascii: {
-        setupCommands: ["npm install -g opencode-ai @gitterm/cli --no-audit --fund=false"],
+        setupCommands: ["npm install -g @opencode/cli@2 @gitterm/cli --no-audit --fund=false"],
       },
     },
   },

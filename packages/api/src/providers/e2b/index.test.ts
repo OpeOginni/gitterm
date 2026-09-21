@@ -19,7 +19,7 @@ test("E2B writes home-relative agent config/auth to HOME, not a literal tilde di
         mode: 0o600,
       },
       {
-        path: "~/.local/share/opencode/auth.json",
+        path: "~/.gitterm/opencode/credentials.json",
         contentBase64: Buffer.from('{"opencode":{"type":"api","key":"public"}}').toString("base64"),
         mode: 0o600,
       },

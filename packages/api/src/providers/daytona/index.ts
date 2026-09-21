@@ -47,8 +47,8 @@ const DEFAULT_AGENT_SERVE = {
 } as const;
 const DAYTONA_WORKSPACE_DIR = "/workspace";
 const DAYTONA_CREATE_TIMEOUT_SECONDS = 210;
-const DAYTONA_OPENCODE_V1_SETUP =
-  "npm uninstall -g @opencode/cli >/dev/null 2>&1 || true; npm install -g opencode-ai@1 --no-audit --fund=false";
+const DAYTONA_OPENCODE_SETUP =
+  "npm uninstall -g opencode-ai >/dev/null 2>&1 || true; npm install -g @opencode/cli@2 --no-audit --fund=false";
 const SSH_ACCESS_TTL_MINUTES = 120;
 const SSH_ACCESS_REUSE_BUFFER_MS = 5 * 60 * 1000;
 
@@ -358,11 +358,11 @@ export class DaytonaProvider implements ComputeProvider {
 
     // Daytona snapshots declarative images by their definition. A mutable
     // `:latest` base can therefore keep serving an older OpenCode binary after
-    // the registry image is rebuilt. Give V1 workspaces an explicit install
+    // the registry image is rebuilt. Give OpenCode workspaces an explicit install
     // layer so the snapshot definition and runtime major are deterministic.
     const image = (
       serve.command.trim().startsWith("opencode ")
-        ? Image.base(imageRef).runCommands(DAYTONA_OPENCODE_V1_SETUP)
+        ? Image.base(imageRef).runCommands(DAYTONA_OPENCODE_SETUP)
         : Image.base(imageRef)
     ).entrypoint(["sleep", "infinity"]);
 

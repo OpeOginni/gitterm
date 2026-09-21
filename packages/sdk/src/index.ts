@@ -45,7 +45,6 @@ export type {
   RunRef,
   RunWaitOptions,
   RunWatchOptions,
-  OpencodeApi,
   AgentType,
   AgentKey,
   AuthStatus,
