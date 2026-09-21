@@ -44,11 +44,13 @@ export function selectWorkspaceCredentials<T extends SavedCredential>(
     }
     result.push({ source: "saved", credential: matches[0]! });
   }
-  // Omitting models keeps dashboard behavior; an explicit models block is least-privilege.
+  // Omitting models keeps dashboard behavior: every saved account travels with the
+  // workspace (OpenCode holds several per provider) and the dashboard default is the
+  // one OpenCode selects. An explicit models block is least-privilege.
   if (!models || models.inherit === "defaults") {
     const overridden = new Set(entries.map(([key]) => key));
     for (const credential of saved) {
-      if (credential.isDefault && !overridden.has(credential.logicalProviderKey)) {
+      if (!overridden.has(credential.logicalProviderKey)) {
         result.push({ source: "saved", credential });
       }
     }

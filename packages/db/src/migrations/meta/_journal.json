@@ -204,6 +204,13 @@
       "when": 1789387022125,
       "tag": "0028_smart_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790018954863,
+      "tag": "0029_opencode_v2_default",
+      "breakpoints": true
     }
   ]
 }

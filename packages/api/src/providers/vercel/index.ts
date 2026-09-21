@@ -36,6 +36,17 @@ const REPO_NAME_TAG = "gitterm_repo";
 const AGENT_COMMAND_TAG = "gitterm_command";
 const AGENT_PORT_TAG = "gitterm_port";
 const POST_START_SCRIPT = "/tmp/gitterm-agent-post-start.sh";
+const ENSURE_OPENCODE_2 = `version="$(opencode --version 2>/dev/null || true)"
+case "$version" in
+  2.*|v2.*|*" v2."*) exit 0 ;;
+esac
+npm uninstall -g opencode-ai >/dev/null 2>&1 || true
+npm install -g @opencode/cli@2 --no-audit --fund=false
+version="$(opencode --version)"
+case "$version" in
+  2.*|v2.*|*" v2."*) ;;
+  *) echo "Expected OpenCode 2 after install, got $version" >&2; exit 1 ;;
+esac`;
 const CONTAINER_PROVISIONING_ENV_KEYS = new Set([
   "AGENT_FILES_BASE64",
   "GITHUB_APP_TOKEN",
@@ -170,9 +181,21 @@ export class VercelProvider implements ComputeProvider {
     }
   }
 
-  private async setupAgent(sandbox: VercelSandbox, commands: string[] | undefined): Promise<void> {
+  private async setupAgent(
+    sandbox: VercelSandbox,
+    commands: string[] | undefined,
+    ensureOpencode2: boolean,
+  ): Promise<void> {
     for (const command of commands ?? []) {
       await sandbox.runCommand({ cmd: "bash", args: ["-lc", command] });
+    }
+    if (ensureOpencode2) {
+      const result = await sandbox.runCommand({ cmd: "bash", args: ["-lc", ENSURE_OPENCODE_2] });
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `Vercel OpenCode 2 setup failed: ${(await result.stderr()).trim() || "no diagnostic output"}`,
+        );
+      }
     }
   }
 
@@ -265,7 +288,13 @@ export class VercelProvider implements ComputeProvider {
       await logger.step("create-workspace-directory", () =>
         sandbox.runCommand("mkdir", ["-p", repoDir]),
       );
-      await logger.step("setup-agent", () => this.setupAgent(sandbox, metadata.setupCommands));
+      await logger.step("setup-agent", () =>
+        this.setupAgent(
+          sandbox,
+          metadata.setupCommands,
+          serve.command.trim().startsWith("opencode "),
+        ),
+      );
       if (spec?.repo) {
         const repo = spec.repo;
         const repositoryUrl = repo.url.endsWith(".git") ? repo.url : `${repo.url}.git`;

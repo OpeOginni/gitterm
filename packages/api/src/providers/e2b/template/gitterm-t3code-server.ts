@@ -6,10 +6,7 @@ import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
  * node 22 (t3 engines), build tools for node-pty, and the agent CLIs T3 drives.
  * The agent itself is started at provision time (see e2b/index.ts startAgentServer).
  */
-export function createT3CodeServerTemplate(
-  t3Version: string,
-  opencodeVersion: string,
-): TemplateClass {
+export function createT3CodeServerTemplate(t3Version: string): TemplateClass {
   return (
     Template()
       .fromNodeImage("22-bookworm-slim")
@@ -23,7 +20,8 @@ export function createT3CodeServerTemplate(
           `t3@${t3Version}`,
           "@anthropic-ai/claude-code@latest",
           "@openai/codex@latest",
-          `opencode-ai@${opencodeVersion}`,
+          // T3 drives the OpenCode 1.x CLI itself; unrelated to the OpenCode 2 workspace runtime.
+          "opencode-ai@1",
           "@gitterm/cli@latest",
         ],
         { g: true },

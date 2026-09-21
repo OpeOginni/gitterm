@@ -43,7 +43,8 @@ export function getWorkspaceOpenPortUrl(subdomain: string, port: number): string
 }
 
 /**
- * Construct the command for attaching a local client to a workspace server.
+ * Construct the command for attaching a local OpenCode 2 TUI to a workspace server.
+ * The CLI reads the basic-auth password from OPENCODE_PASSWORD; `--server` has no password flag.
  */
 export function getAttachCommand(
   subdomain: string,
@@ -51,17 +52,14 @@ export function getAttachCommand(
   password?: string | null,
 ): string {
   const url = getWorkspaceUrl(subdomain);
-  const passwordFlag = password ? ` --password '${password.replaceAll("'", `'"'"'`)}'` : "";
+  const passwordEnv = password ? `OPENCODE_PASSWORD='${password.replaceAll("'", `'"'"'`)}' ` : "";
 
   // TODO: Better agent name detection
-  if (agentName.toLocaleLowerCase().includes("opencode")) {
-    return `opencode attach ${url}${passwordFlag}`;
-  }
   if (agentName.toLocaleLowerCase().includes("shuvcode")) {
-    return `shuvcode attach ${url}${passwordFlag}`;
+    return `${passwordEnv}shuvcode --server ${url}`;
   }
 
-  return `opencode attach ${url}${passwordFlag}`;
+  return `${passwordEnv}opencode --server ${url}`;
 }
 
 export function isT3Agent(agentName: string): boolean {

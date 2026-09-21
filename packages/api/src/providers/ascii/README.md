@@ -18,7 +18,7 @@ Each agent image enabled for Ascii needs `providerMetadata.ascii`:
 {
   "ascii": {
     "size": "default",
-    "setupCommands": ["npm install -g opencode-ai --no-audit --fund=false"]
+    "setupCommands": ["npm install -g @opencode/cli@2 --no-audit --fund=false"]
   }
 }
 ```

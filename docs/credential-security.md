@@ -80,8 +80,9 @@ Railway's brokered bootstrap requires a matching canonical image:
 1. Apply migration `0028_smart_radioactive_man`.
 2. Configure encryption and workload-identity signing keys.
 3. Build and publish all canonical agent images from this revision; verify they contain
-   `/usr/local/bin/gitterm-runtime-bootstrap` and OpenCode V1. Model credentials are provisioned
-   through OpenCode's `auth.json` before startup.
+   `/usr/local/bin/gitterm-runtime-bootstrap` and OpenCode 2 (`@opencode/cli`). Model credentials
+   are provisioned through `~/.gitterm/opencode/credentials.json`, imported into OpenCode's
+   credential store by the `gitterm-credentials` plugin at startup.
 4. Update image catalog entries to those images.
 5. Deploy the API/server.
 6. Create a Railway smoke workspace and confirm Railway variables contain

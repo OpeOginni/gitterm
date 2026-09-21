@@ -272,11 +272,11 @@ const seedImages = [
       },
       vercel: {
         runtime: "node22" as const,
-        setupCommands: ["npm install -g opencode-ai @gitterm/cli --no-audit --fund=false"],
+        setupCommands: ["npm install -g @opencode/cli@2 @gitterm/cli --no-audit --fund=false"],
         vcpus: 2,
       },
       ascii: {
-        setupCommands: ["npm install -g opencode-ai @gitterm/cli --no-audit --fund=false"],
+        setupCommands: ["npm install -g @opencode/cli@2 @gitterm/cli --no-audit --fund=false"],
       },
     },
   },
@@ -476,6 +476,15 @@ const seedModelProviders = [
     oauthConfig: null,
     isRecommended: true,
   },
+  // Separate OpenCode provider ID (`opencode-go`, zen/go/v1); a Zen key does not select Go models.
+  {
+    name: "opencode-go",
+    displayName: "OpenCode Go",
+    authType: "api_key",
+    plugin: null,
+    oauthConfig: null,
+    isRecommended: true,
+  },
   {
     name: "github-copilot",
     displayName: "GitHub Copilot",
@@ -642,6 +651,44 @@ const availableModels = [
     name: "glm-4.7",
     displayName: "GLM 4.7",
     modelId: "zai-coding-plan/glm-4.7",
+  },
+  // OpenCode Go models
+  {
+    providerName: "opencode-go",
+    name: "kimi-k3",
+    displayName: "Kimi K3",
+    modelId: "opencode-go/kimi-k3",
+    isRecommended: true,
+  },
+  {
+    providerName: "opencode-go",
+    name: "glm-5.3",
+    displayName: "GLM-5.3",
+    modelId: "opencode-go/glm-5.3",
+  },
+  {
+    providerName: "opencode-go",
+    name: "qwen3.8-max",
+    displayName: "Qwen3.8 Max",
+    modelId: "opencode-go/qwen3.8-max",
+  },
+  {
+    providerName: "opencode-go",
+    name: "deepseek-v4-pro",
+    displayName: "DeepSeek V4 Pro",
+    modelId: "opencode-go/deepseek-v4-pro",
+  },
+  {
+    providerName: "opencode-go",
+    name: "minimax-m3",
+    displayName: "MiniMax-M3",
+    modelId: "opencode-go/minimax-m3",
+  },
+  {
+    providerName: "opencode-go",
+    name: "grok-4.6",
+    displayName: "Grok 4.6",
+    modelId: "opencode-go/grok-4.6",
   },
 ];
 

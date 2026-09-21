@@ -6,7 +6,7 @@ import { getProviderByCloudProviderId } from "../providers";
 import type { DaytonaConfig } from "../providers/daytona/types";
 import { getWorkspaceUrl } from "../utils/routing";
 import { decryptWorkspacePassword } from "../utils/workspace-password";
-import { createWorkspaceOpencodeClient } from "@gitterm/agent-runtime/opencode";
+import { createRuntimeHttp, RuntimeHttpError } from "@gitterm/agent-runtime/http";
 import { getProviderConfigService } from "./config/provider-config";
 import { resolveProjectDirectory } from "./workspace-runtime";
 import { redactSensitiveText } from "../utils/redact-secrets";
@@ -180,14 +180,15 @@ async function readMarkersViaOpencode(input: {
   directory: string;
   password: string | null;
 }): Promise<SetupMarkers | null> {
-  const client = createWorkspaceOpencodeClient(input);
+  const http = createRuntimeHttp(input);
   const readFile = async (name: string): Promise<string | null> => {
     // Same relative form the direct SDK uses for its own setup status reads.
-    const response = await client.file.read({
-      query: { directory: input.directory, path: `${SETUP_RELATIVE_DIR}/${name}` },
-    });
-    if (response.error || !response.data || response.data.type !== "text") return null;
-    return response.data.content;
+    try {
+      return await (await http.send(`/api/fs/read/${SETUP_RELATIVE_DIR}/${name}`)).text();
+    } catch (error) {
+      if (error instanceof RuntimeHttpError && error.status === 404) return null;
+      throw error;
+    }
   };
 
   const state = await withTimeout(readFile("state"), "setup reconcile read");

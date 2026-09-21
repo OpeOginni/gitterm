@@ -2,16 +2,16 @@
 /**
  * Managed OpenCode runtime smoke matrix (creates billable cloud workspaces).
  *
- *   bun run scripts/opencode-runtime-smoke.ts                         # all providers on V2
+ *   bun run scripts/opencode-runtime-smoke.ts                         # all providers
  *   bun run scripts/opencode-runtime-smoke.ts --provider e2b
- *   bun run scripts/opencode-runtime-smoke.ts --all --api v2 --dry-run
+ *   bun run scripts/opencode-runtime-smoke.ts --all --dry-run
  *
  * Loads scripts/.env, like provider-smoke.ts. Requires GITTERM_SERVER_URL,
  * GITTERM_API_TOKEN, and GITTERM_E2E_REPO. Provider credentials live on the
  * managed server, not here. Unavailable providers fail rather than silently skip.
  * Uses opencode/gpt-5.6-luna; override with --model or GITTERM_E2E_MODEL.
  * GITTERM_MODEL_API_KEY optionally supplies an inline model credential.
- * Canonical images and provider templates install OpenCode V1 from opencode-ai.
+ * Canonical images and provider templates install OpenCode 2 from @opencode/cli.
  * Every matrix entry gets its own workspace, terminated even on test failure.
  */
 import { join } from "node:path";
@@ -22,7 +22,6 @@ import {
   type AgentRun,
   type AgentRunReply,
   type GittermClient,
-  type OpencodeApi,
   type ProviderKey,
   type WorkspaceCreateInput,
 } from "../packages/sdk/src/index.ts";
@@ -45,7 +44,6 @@ export function smokeOptions(argv: string[], env: NodeJS.ProcessEnv = process.en
     options: {
       provider: { type: "string" },
       all: { type: "boolean" },
-      api: { type: "string" },
       model: { type: "string" },
       verbose: { type: "boolean" },
       "dry-run": { type: "boolean" },
@@ -63,21 +61,10 @@ export function smokeOptions(argv: string[], env: NodeJS.ProcessEnv = process.en
   ) {
     throw new Error(`Unknown providers: ${selection}. Choose ${PROVIDERS.join(", ")} or all.`);
   }
-  const api = values.api ?? "v1";
-  const apis: OpencodeApi[] =
-    api === "both" || api === "all"
-      ? ["v1", "v2"]
-      : api === "v1" || api === "1"
-        ? ["v1"]
-        : api === "v2" || api === "2"
-          ? ["v2"]
-          : [];
-  if (!apis.length) throw new Error("--api must be v1, v2, or both");
   const model = values.model ?? env.GITTERM_E2E_MODEL ?? "opencode/gpt-5.6-luna";
   if (!/^[^/]+\/.+$/.test(model)) throw new Error("--model must use provider/model format");
   return {
     providers: providers as ProviderKey[],
-    apis,
     model,
     verbose: values.verbose ?? false,
     dryRun: values["dry-run"] ?? false,
@@ -86,13 +73,12 @@ export function smokeOptions(argv: string[], env: NodeJS.ProcessEnv = process.en
 }
 
 /** Only runs inside a newly created, disposable managed workspace. */
-export function beforeAgent(api: OpencodeApi): string {
-  const major = api === "v2" ? "2" : "1";
+export function beforeAgent(): string {
   return [
     "set -eu",
     'version="$(opencode --version)"',
-    `case "$version" in ${major}.*) ;; *) echo "Expected OpenCode ${major}, got $version" >&2; exit 1 ;; esac`,
-    `printf "OpenCode ${api}: %s\\n" "$version"`,
+    'case "$version" in 2.*|v2.*|*" v2."*) ;; *) echo "Expected OpenCode 2, got $version" >&2; exit 1 ;; esac',
+    'printf "OpenCode: %s\\n" "$version"',
   ].join("\n");
 }
 
@@ -107,7 +93,6 @@ type Settings = {
 };
 type Result = {
   provider: ProviderKey;
-  api: OpencodeApi;
   workspaceId?: string;
   durationMs: number;
   cleanup: "not-needed" | "terminated" | "failed";
@@ -134,7 +119,6 @@ function errorMessage(error: unknown): string {
 
 export function workspaceInput(
   provider: ProviderKey,
-  api: OpencodeApi,
   options: Options,
   settings: Settings,
   id: string,
@@ -148,21 +132,20 @@ export function workspaceInput(
     agent: "opencode",
     provider: { type: provider },
     models: settings.models,
-    metadata: { smoke: "opencode-runtime", api },
+    metadata: { smoke: "opencode-runtime" },
     // Cost guardrail if the runner is interrupted before its finally block.
     autoTerminateAfterMs: Math.max(
       60_000,
       settings.setupTimeoutMs + 2 * settings.runTimeoutMs + 300_000,
     ),
     opencode: {
-      api,
-      // V2 supports this legacy permission configuration too.
+      // OpenCode 2 supports this legacy permission configuration too.
       config: { model: options.model, permission: { bash: "ask" } },
     },
     setup: {
-      beforeAgent: [beforeAgent(api)],
-      // Makes setup completion observable, including the selected binary version.
-      afterAgent: [`set -eu\nprintf 'smoke-api=${api} version='\nopencode --version`],
+      beforeAgent: [beforeAgent()],
+      // Makes setup completion observable, including the installed binary version.
+      afterAgent: ["set -eu\nprintf 'smoke-version='\nopencode --version"],
     },
   };
 }
@@ -170,7 +153,6 @@ export function workspaceInput(
 async function scenario(
   client: GittermClient,
   workspaceId: string,
-  api: OpencodeApi,
   name: "permission" | "question",
   options: Options,
   settings: Settings,
@@ -184,11 +166,11 @@ async function scenario(
   try {
     run = await client.runs.create({
       workspace: workspaceId,
-      title: `Runtime smoke ${api}: ${name}`,
+      title: `Runtime smoke: ${name}`,
       model: options.model,
       prompt:
         name === "permission"
-          ? `Run the shell command \`echo ${marker}\` using the ${api === "v1" ? "bash" : "shell"} tool and report its output. Do not ask me anything else.`
+          ? `Run the shell command \`echo ${marker}\` using the shell tool and report its output. Do not ask me anything else.`
           : "Use the question tool to ask one question: whether to proceed with approach A or approach B. Wait for my answer, then reply with exactly: chosen=<selected option label>.",
       waitForSetup: true,
       setupTimeoutMs: settings.setupTimeoutMs,
@@ -249,7 +231,7 @@ async function scenario(
     const tools = messages
       .flatMap((message) => message.parts)
       .filter((part) => part.type === "tool");
-    const tool = name === "question" ? "question" : api === "v1" ? "bash" : "shell";
+    const tool = name === "question" ? "question" : "shell";
     if (!tools.some((part) => part.tool === tool && part.status === "completed")) {
       throw new Error(`${name}: no completed ${tool} tool in messages`);
     }
@@ -266,50 +248,43 @@ async function scenario(
 export async function runPair(
   client: GittermClient,
   provider: ProviderKey,
-  api: OpencodeApi,
   options: Options,
   settings: Settings,
   available: Set<ProviderKey>,
 ): Promise<Result> {
   const started = performance.now();
-  const result: Result = { provider, api, durationMs: 0, cleanup: "not-needed" };
-  const id = `runtime-smoke-${provider}-${api}-${crypto.randomUUID().slice(0, 8)}`;
-  console.log(`\n[${provider}/${api}]`);
+  const result: Result = { provider, durationMs: 0, cleanup: "not-needed" };
+  const id = `runtime-smoke-${provider}-${crypto.randomUUID().slice(0, 8)}`;
+  console.log(`\n[${provider}]`);
   try {
     if (!available.has(provider))
       throw new Error(`${provider} is unavailable or does not support managed OpenCode servers`);
-    const created = await client.workspaces.create(
-      workspaceInput(provider, api, options, settings, id),
-    );
+    const created = await client.workspaces.create(workspaceInput(provider, options, settings, id));
     result.workspaceId = created.workspace.id;
     console.log(`  workspace: ${result.workspaceId}`);
     const running = await client.workspaces.ensureRunning(result.workspaceId, {
       timeoutMs: Math.min(settings.setupTimeoutMs, 240_000),
     });
-    if (
-      running.workspace.status !== "running" ||
-      running.runtime.providerKey !== provider ||
-      running.workspace.opencodeApi !== api
-    ) {
-      throw new Error(`Workspace did not select running ${provider}/${api}`);
+    if (running.workspace.status !== "running" || running.runtime.providerKey !== provider) {
+      throw new Error(`Workspace did not select running ${provider}`);
     }
     const setup = await client.workspaces.waitForSetup(result.workspaceId, {
       timeoutMs: settings.setupTimeoutMs,
     });
-    if (setup.status !== "succeeded" || !setup.log?.includes(`smoke-api=${api} version=`)) {
-      throw new Error(`Setup did not verify ${api}: ${setup.status}\n${setup.log ?? ""}`);
+    if (setup.status !== "succeeded" || !setup.log?.includes("smoke-version=")) {
+      throw new Error(`Setup did not verify OpenCode: ${setup.status}\n${setup.log ?? ""}`);
     }
     console.log(
       `  ${setup.log
         .trim()
         .split("\n")
-        .find((line) => line.includes("smoke-api="))}`,
+        .find((line) => line.includes("smoke-version="))}`,
     );
-    await scenario(client, result.workspaceId, api, "permission", options, settings);
-    await scenario(client, result.workspaceId, api, "question", options, settings);
+    await scenario(client, result.workspaceId, "permission", options, settings);
+    await scenario(client, result.workspaceId, "question", options, settings);
   } catch (error) {
     result.error = errorMessage(error);
-    console.error(`  FAIL [${provider}/${api}]: ${result.error}`);
+    console.error(`  FAIL [${provider}]: ${result.error}`);
   } finally {
     if (result.workspaceId) {
       try {
@@ -333,7 +308,6 @@ async function main() {
 Usage: bun run scripts/opencode-runtime-smoke.ts [options]
   --provider <name,...|all>  Default: all managed providers
   --all                      Select all managed providers
-  --api <v1|v2|both>          Default: v1 (also accepts 1, 2)
   --model <provider/model>   Default: GITTERM_E2E_MODEL or opencode/gpt-5.6-luna
   --dry-run                  Print the matrix without provisioning or credentials
   --verbose                  Log managed run events
@@ -342,11 +316,9 @@ Optional: GITTERM_MODEL_API_KEY, GITTERM_E2E_BRANCH, GITTERM_E2E_REPO_TOKEN,
 GITTERM_E2E_REPO_USERNAME, GITTERM_E2E_TIMEOUT_MS, GITTERM_E2E_RUN_TIMEOUT_MS.`);
     return;
   }
-  const matrix = options.providers.flatMap((provider) =>
-    options.apis.map((api) => ({ provider, api })),
-  );
+  const matrix = options.providers;
   console.log(
-    `Managed runtime matrix (${matrix.length} workspaces, sequential): ${matrix.map(({ provider, api }) => `${provider}/${api}`).join(", ")}`,
+    `Managed runtime matrix (${matrix.length} workspaces, sequential): ${matrix.join(", ")}`,
   );
   if (options.dryRun) return;
   const client = createGittermClient({
@@ -377,12 +349,12 @@ GITTERM_E2E_REPO_USERNAME, GITTERM_E2E_TIMEOUT_MS, GITTERM_E2E_RUN_TIMEOUT_MS.`)
       .map((provider) => provider.type),
   );
   const results: Result[] = [];
-  for (const { provider, api } of matrix)
-    results.push(await runPair(client, provider, api, options, settings, available));
+  for (const provider of matrix)
+    results.push(await runPair(client, provider, options, settings, available));
   console.log("\nManaged OpenCode runtime smoke summary");
   for (const result of results) {
     console.log(
-      `${result.error ? "FAIL" : "PASS"} ${result.provider}/${result.api} (${(result.durationMs / 1000).toFixed(1)}s, cleanup: ${result.cleanup}, workspace: ${result.workspaceId ?? "not created"})`,
+      `${result.error ? "FAIL" : "PASS"} ${result.provider} (${(result.durationMs / 1000).toFixed(1)}s, cleanup: ${result.cleanup}, workspace: ${result.workspaceId ?? "not created"})`,
     );
     if (result.error) console.error(result.error);
   }

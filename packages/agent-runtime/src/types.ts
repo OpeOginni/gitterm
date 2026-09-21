@@ -1,10 +1,9 @@
-import type { AgentRunInputRequest, AgentRunMessageSnapshot, OpencodeApi } from "./contract";
+import type { AgentRunInputRequest, AgentRunMessageSnapshot } from "./contract";
 
 export type RuntimeTarget = {
   url: string;
   directory: string;
   password: string | null;
-  api: OpencodeApi;
   headers?: Record<string, string>;
   fetch?: typeof fetch;
   signal?: AbortSignal;
@@ -43,7 +42,6 @@ export type QuestionInputRequest = Extract<AgentRunInputRequest, { kind: "questi
 export type PermissionReply = "once" | "always" | "reject";
 
 export interface OpencodeRuntime {
-  readonly api: OpencodeApi;
   createSession(input: {
     title?: string;
     agent?: string;

@@ -92,10 +92,11 @@ describe("createDirectGittermClient", () => {
     globalThis.fetch = (async (input, init) => {
       const request = new Request(input, init);
       const path = new URL(request.url).pathname;
-      if (path === "/session/status") return Response.json({});
-      if (path === "/session/session-1") return Response.json({ id: "session-1" });
-      if (path === "/permission" || path === "/question") return Response.json([]);
-      if (path === "/session/session-1/message") return Response.json([]);
+      if (path === "/api/session/active") return Response.json({ data: {} });
+      if (path === "/api/session/session-1") return Response.json({ data: { id: "session-1" } });
+      if (path.endsWith("/permission") || path.endsWith("/form"))
+        return Response.json({ data: [] });
+      if (path === "/api/session/session-1/message") return Response.json({ data: [] });
       throw new Error(`Unexpected request: ${request.method} ${path}`);
     }) as typeof fetch;
 
@@ -134,25 +135,25 @@ describe("createDirectGittermClient", () => {
     globalThis.fetch = (async (input, init) => {
       const request = new Request(input, init);
       const path = new URL(request.url).pathname;
-      if (path === "/session/session-1") return Response.json({ id: "session-1" });
-      if (path === "/permission" || path === "/question") return Response.json([]);
-      if (path === "/session/status") {
-        return Response.json({ "session-1": { type: "busy" } });
+      if (path === "/api/session/session-1") return Response.json({ data: { id: "session-1" } });
+      if (path.endsWith("/permission") || path.endsWith("/form"))
+        return Response.json({ data: [] });
+      if (path === "/api/session/active") {
+        return Response.json({ data: { "session-1": {} } });
       }
-      if (path === "/session/session-1/message") {
-        return Response.json([
-          { info: { id: "message-1", role: "user", time: { created: Date.now() } }, parts: [] },
-          {
-            info: {
+      if (path === "/api/session/session-1/message") {
+        return Response.json({
+          data: [
+            { id: "message-1", type: "user", time: { created: Date.now() }, text: "hi" },
+            {
               id: "assistant-1",
-              role: "assistant",
-              parentID: "message-1",
+              type: "assistant",
               time: { created: Date.now(), completed: Date.now() },
+              content: [{ type: "text", text: "done" }],
             },
-            parts: [{ type: "text", text: "done", ignored: false }],
-          },
-          { info: { id: "message-2", role: "user", time: { created: Date.now() } }, parts: [] },
-        ]);
+            { id: "message-2", type: "user", time: { created: Date.now() }, text: "again" },
+          ],
+        });
       }
       throw new Error(`Unexpected request: ${request.method} ${path}`);
     }) as typeof fetch;
@@ -205,15 +206,9 @@ describe("createDirectGittermClient", () => {
         project: { id: "project", directory: "/workspace" },
       };
 
-      if (request.method === "PUT" && url.pathname === "/auth/openai") {
-        expect(await request.json()).toEqual({
-          type: "oauth",
-          refresh: "refresh-token",
-          access: "access-token",
-          expires: 123_000,
-          accountId: "account-1",
-        });
-        return Response.json(true);
+      if (request.method === "POST" && url.pathname === "/api/integration/openai/connect/key") {
+        expect(await request.json()).toEqual({ key: "sk-rotated" });
+        return Response.json({ location, data: undefined });
       }
 
       if (request.method === "GET" && url.pathname === "/api/integration/openai") {
@@ -263,16 +258,19 @@ describe("createDirectGittermClient", () => {
       const workspace = await client.workspaces.create({ lifecycle: "persistent" });
       workspace.runtime.password = "secret";
 
+      await expect(
+        client.auth.setCredential(workspace, {
+          source: "oauth",
+          providerName: "openai",
+          refreshToken: "refresh-token",
+        }),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
       await client.auth.setCredential(workspace, {
-        source: "oauth",
+        source: "apiKey",
         providerName: "openai",
-        refreshToken: "refresh-token",
-        accessToken: "access-token",
-        expiresAt: 123_000,
-        accountId: "account-1",
+        apiKey: "sk-rotated",
       });
 
-      workspace.opencodeApi = "v2";
       const integration = await client.auth.get(workspace, "openai");
       expect(integration.methods[0]).toMatchObject({ id: "chatgpt-headless", type: "oauth" });
 
@@ -309,32 +307,30 @@ describe("createDirectGittermClient", () => {
     globalThis.fetch = (async (input, init) => {
       const request = new Request(input, init);
       const url = new URL(request.url);
-      if (request.method === "POST" && url.pathname === "/pty") {
+      if (request.method === "POST" && url.pathname === "/api/pty") {
         const body = (await request.json()) as { title: string };
         expect(body.title).toBe("Gitterm setup");
         return Response.json({
-          id: "pty-1",
-          title: body.title,
-          command: "bash",
-          args: [],
-          cwd: "/workspace",
-          status: "running",
-          pid: 1,
+          data: {
+            id: "pty-1",
+            title: body.title,
+            command: "bash",
+            args: [],
+            cwd: "/workspace",
+            status: "running",
+            pid: 1,
+          },
         });
       }
-      if (request.method === "GET" && url.pathname === "/file/content") {
-        const path = url.searchParams.get("path")!;
+      if (request.method === "GET" && url.pathname.startsWith("/api/fs/read/")) {
+        const path = url.pathname;
         if (path.endsWith("state")) {
           statusReads += 1;
-          return Response.json({
-            type: "text",
-            content: statusReads === 1 ? "running" : "succeeded",
-          });
+          return new Response(statusReads === 1 ? "running" : "succeeded");
         }
-        if (path.endsWith("exit-code")) {
-          return Response.json({ type: "text", content: "0" });
-        }
-        return Response.json({ type: "text", content: files.get(path) ?? "" });
+        if (path.endsWith("exit-code")) return new Response("0");
+        const content = files.get(path);
+        return content === undefined ? new Response("", { status: 404 }) : new Response(content);
       }
       throw new Error(`Unexpected request: ${request.method} ${url.pathname}`);
     }) as typeof fetch;

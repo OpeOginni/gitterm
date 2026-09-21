@@ -104,7 +104,7 @@ export function createVercelDirectProvider(
       try {
         await run(sandbox, `mkdir -p ${shellQuote(handle.directory)}`);
         for (const command of config.runtimeSetupCommands ??
-          (config.image ? [] : ["npm install -g opencode-ai --no-audit --fund=false"])) {
+          (config.image ? [] : ["npm install -g @opencode/cli@2 --no-audit --fund=false"])) {
           await run(sandbox, command);
         }
         if (plan.repository) {

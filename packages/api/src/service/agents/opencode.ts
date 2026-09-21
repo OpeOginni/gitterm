@@ -1,10 +1,14 @@
 import type { AgentProvisioning } from "../../providers/compute";
 import { GITHUB_CLI_INSTRUCTIONS } from "@gitterm/agent-runtime/github-auth";
+import {
+  opencodeCredentialFiles,
+  type OpencodeAuthEntry,
+  type OpencodeCredentialEntry,
+} from "@gitterm/agent-runtime/opencode-credentials";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 
 export const OPENCODE_CONFIG_PATH = "~/.config/opencode/opencode.json";
 export const OPENCODE_TUI_CONFIG_PATH = "~/.config/opencode/tui.json";
-export const OPENCODE_AUTH_PATH = "~/.local/share/opencode/auth.json";
 export const OPENCODE_GITTERM_INSTRUCTIONS_PATH = "~/.config/opencode/AGENTS.md";
 
 const OPENCODE_SERVE_PORT = 4096;
@@ -13,24 +17,53 @@ function toBase64(value: string): string {
   return Buffer.from(value).toString("base64");
 }
 
-export function buildOpencodeAuthJson(credentials: UserProviderCredential[]): string {
-  const entries = credentials.map((cred) => {
-    const providerName = cred.providerName === "openai-oauth" ? "openai" : cred.providerName;
+/** Both OpenAI authentication methods share the `openai` OpenCode provider. */
+function opencodeIntegration(cred: UserProviderCredential): string {
+  return cred.providerName === "openai-oauth" ? "openai" : cred.providerName;
+}
 
-    return [
-      providerName,
-      {
-        type: cred.credential.type === "api_key" ? "api" : "oauth",
-        key: cred.credential.type === "api_key" ? cred.credential.apiKey : undefined,
-        refresh: cred.credential.type === "oauth" ? cred.credential.refresh : undefined,
-        access: cred.credential.type === "oauth" ? cred.credential.access : undefined,
-        expires: cred.credential.type === "oauth" ? cred.credential.expires : undefined,
-        accountId: cred.credential.type === "oauth" ? cred.credential.accountId : undefined,
-      },
-    ] as const;
+function opencodeAuthEntry(cred: UserProviderCredential): OpencodeAuthEntry {
+  return cred.credential.type === "api_key"
+    ? { type: "api", key: cred.credential.apiKey }
+    : {
+        type: "oauth",
+        refresh: cred.credential.refresh,
+        access: cred.credential.access,
+        expires: cred.credential.expires,
+        accountId: cred.credential.accountId,
+      };
+}
+
+/** Every account, labelled as in the dashboard; imported into OpenCode by the credentials plugin. */
+export function buildOpencodeCredentials(
+  credentials: UserProviderCredential[],
+): OpencodeCredentialEntry[] {
+  const labels = new Set<string>();
+  return credentials.map((cred) => {
+    const integration = opencodeIntegration(cred);
+    // Distinct dashboard providers can map onto one OpenCode integration with equal labels.
+    const label = labels.has(`${integration}\0${cred.label}`)
+      ? `${cred.label} (${cred.providerName})`
+      : cred.label;
+    labels.add(`${integration}\0${label}`);
+    return {
+      integration,
+      label,
+      ...(cred.isDefault ? { active: true } : {}),
+      value: opencodeAuthEntry(cred),
+    };
   });
+}
 
-  return JSON.stringify(Object.fromEntries(entries));
+/** OpenCode 1.x auth.json: one account per provider, preferring the default. */
+export function buildOpencodeAuthJson(credentials: UserProviderCredential[]): string {
+  return JSON.stringify(
+    Object.fromEntries(
+      [...credentials]
+        .sort((a, b) => Number(a.isDefault) - Number(b.isDefault))
+        .map((cred) => [opencodeIntegration(cred), opencodeAuthEntry(cred)]),
+    ),
+  );
 }
 
 export function buildOpencodeConfigJson(
@@ -131,10 +164,7 @@ export const opencodeProvisioner: AgentProvisioner = {
           path: OPENCODE_TUI_CONFIG_PATH,
           contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
         },
-        {
-          path: OPENCODE_AUTH_PATH,
-          contentBase64: toBase64(buildOpencodeAuthJson(ctx.credentials)),
-        },
+        ...opencodeCredentialFiles(buildOpencodeCredentials(ctx.credentials)),
         {
           path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,
           contentBase64: toBase64(buildGittermInstructions(ctx.additionalAgentInstructions)),

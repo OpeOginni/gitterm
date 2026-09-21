@@ -22,9 +22,9 @@ on:
         type: string
         default: "latest"
       opencode_version:
-        description: "OpenCode V1 version (1 for latest 1.x, or exact 1.x semver)"
+        description: "OpenCode 2 version of @opencode/cli (2 for latest 2.x, or exact 2.x semver)"
         type: string
-        default: "1"
+        default: "2"
       t3_version:
         description: "T3 version pin (latest or semver)"
         type: string
@@ -95,25 +95,25 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Resolve and validate OpenCode V1
-        if: ${{ env.skip != 'true' && (matrix.agent == 'opencode' || matrix.agent == 't3') }}
+      - name: Resolve and validate OpenCode 2
+        if: ${{ env.skip != 'true' && matrix.agent == 'opencode' }}
         shell: bash
         env:
           REQUESTED_OPENCODE_VERSION: ${{ inputs.opencode_version }}
         run: |
           set -euo pipefail
-          REQUESTED="${REQUESTED_OPENCODE_VERSION:-1}"
-          if [ "$REQUESTED" = "1" ] || [ "$REQUESTED" = "latest" ]; then
-            RESOLVED=$(npm view opencode-ai dist-tags.latest)
+          REQUESTED="${REQUESTED_OPENCODE_VERSION:-2}"
+          if [ "$REQUESTED" = "2" ] || [ "$REQUESTED" = "latest" ]; then
+            RESOLVED=$(npm view @opencode/cli dist-tags.latest)
           else
-            RESOLVED=$(npm view "opencode-ai@$REQUESTED" version)
+            RESOLVED=$(npm view "@opencode/cli@$REQUESTED" version)
           fi
           case "$RESOLVED" in
-            1.*) ;;
-            *) echo "Refusing to build non-V1 OpenCode version: $RESOLVED" >&2; exit 1 ;;
+            2.*) ;;
+            *) echo "Refusing to build non-OpenCode-2 version: $RESOLVED" >&2; exit 1 ;;
           esac
-          echo "Building OpenCode V1 $RESOLVED"
-          echo "OPENCODE_V1_VERSION=$RESOLVED" >> "$GITHUB_ENV"
+          echo "Building OpenCode $RESOLVED"
+          echo "OPENCODE_V2_VERSION=$RESOLVED" >> "$GITHUB_ENV"
 
       - name: Build and push
         if: ${{ env.skip != 'true' }}
@@ -127,7 +127,7 @@ jobs:
           no-cache: true
           tags: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}:${{ matrix.agent == 'cf' && matrix.tag || inputs.agent_image_tag }}
           build-args: |
-            OPENCODE_VERSION=${{ env.OPENCODE_V1_VERSION || '1' }}
+            OPENCODE_VERSION=${{ env.OPENCODE_V2_VERSION || '2' }}
             OPENCODE_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
             T3_VERSION=${{ inputs.t3_version }}
             T3_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}

@@ -21,11 +21,11 @@ export function authorizationHeader(password: string | null): Record<string, str
 }
 
 export function runtimeUrl(
-  target: Pick<RuntimeTarget, "url"> & Partial<Pick<RuntimeTarget, "api" | "directory">>,
+  target: Pick<RuntimeTarget, "url"> & Partial<Pick<RuntimeTarget, "directory">>,
   path: string,
 ): string {
   const url = new URL(`${target.url.replace(/\/$/, "")}${path}`);
-  if (target.api === "v2" && target.directory && !url.searchParams.has("location")) {
+  if (target.directory && !url.searchParams.has("location")) {
     url.searchParams.set("location", JSON.stringify({ directory: target.directory }));
   }
   return url.toString();

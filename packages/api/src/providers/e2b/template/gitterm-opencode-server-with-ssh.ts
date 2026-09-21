@@ -1,4 +1,5 @@
 import { Template, waitForPort, type TemplateClass } from "e2b";
+import { OPENCODE_PACKAGE } from "../../opencode-version";
 import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
 
 export function createOpencodeServerWithSSHTemplate(opencodeVersion: string): TemplateClass {
@@ -13,7 +14,7 @@ export function createOpencodeServerWithSSHTemplate(opencodeVersion: string): Te
     )
     .runCmd("mkdir -p /run/sshd && ssh-keygen -A", { user: "root" })
     .runCmd(GITTERM_CLI_CACHE_BUST)
-    .npmInstall([`opencode-ai@${opencodeVersion}`, "@gitterm/cli@latest"], { g: true })
+    .npmInstall([`${OPENCODE_PACKAGE}@${opencodeVersion}`, "@gitterm/cli@latest"], { g: true })
     .setStartCmd(
       "sudo /usr/sbin/sshd && /usr/local/bin/websocat -b --exit-on-eof ws-l:0.0.0.0:8081 tcp:127.0.0.1:22",
       waitForPort(8081),

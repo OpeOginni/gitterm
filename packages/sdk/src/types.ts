@@ -36,8 +36,6 @@ export type Workspace = {
   image: { id: string; name: string; imageId: string } | null;
   /** Caller-owned tags supplied at create time. */
   metadata: Record<string, string>;
-  /** OpenCode HTTP API generation the workspace's agent server speaks. */
-  opencodeApi: OpencodeApi;
   /** When set, the workspace is terminated at this time regardless of activity. */
   autoTerminateAt: string | null;
   /** The caller-supplied image or E2B template this workspace runs, if any. */
@@ -54,9 +52,6 @@ export type WorkspaceRef = string | { id: string };
 
 /** An `AgentRun`, or any object carrying its `workspaceId` and `id`. */
 export type RunRef = { workspaceId: string; id: string };
-
-/** `v1` = OpenCode 1.x (`/event`, `/session/*`) and the default; `v2` = OpenCode 2 (`/api/*`). */
-export type OpencodeApi = "v1" | "v2";
 
 export type WaitOptions = {
   timeoutMs?: number;
@@ -228,11 +223,6 @@ export type WorkspaceCreateInput = {
      * webfetch: "allow" } } disables tool approval prompts in headless runs.
      */
     config?: Record<string, unknown>;
-    /**
-     * OpenCode API generation served by the image. Defaults to `v1`. Use `v2`
-     * only with an explicitly compatible image.
-     */
-    api?: OpencodeApi;
   };
 };
 

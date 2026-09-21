@@ -11,14 +11,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
-# Install OpenCode AI globally (IMPORTANT: keep global installs OUTSIDE /workspace)
+# Install OpenCode 2 globally (IMPORTANT: keep global installs OUTSIDE /workspace)
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
-ARG OPENCODE_VERSION=latest
+# OpenCode 2 ships as @opencode/cli; the opencode-ai package stays on 1.x.
+ARG OPENCODE_VERSION=2
 ARG OPENCODE_INSTALL_CACHE_BUST=manual
 RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
-    && echo "npm latest opencode-ai: $(npm view opencode-ai@${OPENCODE_VERSION} version)" \
-    && npm install -g "opencode-ai@${OPENCODE_VERSION}" "@gitterm/cli@latest" --prefer-online --no-audit --fund=false \
+    && echo "npm @opencode/cli: $(npm view @opencode/cli@${OPENCODE_VERSION} version)" \
+    && npm install -g "@opencode/cli@${OPENCODE_VERSION}" "@gitterm/cli@latest" --prefer-online --no-audit --fund=false \
     && echo "installed opencode: $(opencode --version)"
 
 WORKDIR /workspace

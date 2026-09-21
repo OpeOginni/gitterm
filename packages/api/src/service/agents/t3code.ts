@@ -4,7 +4,6 @@ import {
   buildOpencodeConfigJson,
   buildOpencodeTuiConfigJson,
   buildGittermInstructions,
-  OPENCODE_AUTH_PATH,
   OPENCODE_CONFIG_PATH,
   OPENCODE_GITTERM_INSTRUCTIONS_PATH,
   OPENCODE_TUI_CONFIG_PATH,
@@ -16,6 +15,8 @@ const CLAUDE_CREDENTIALS_PATH = "~/.claude/.credentials.json";
 const CLAUDE_SETTINGS_PATH = "~/.claude/settings.json";
 const CODEX_AUTH_PATH = "~/.codex/auth.json";
 const CODEX_CONFIG_PATH = "~/.codex/config.json";
+/** T3 drives its own OpenCode 1.x CLI, which still reads credentials from auth.json. */
+const T3_OPENCODE_AUTH_PATH = "~/.local/share/opencode/auth.json";
 const CLAUDE_OAUTH_SCOPES = ["user:inference", "user:profile"];
 
 export const T3_PAIRING_CREATE_COMMAND =
@@ -30,7 +31,8 @@ function findCredential(
   credentials: UserProviderCredential[],
   providerName: string,
 ): UserProviderCredential | undefined {
-  return credentials.find((cred) => cred.providerName === providerName);
+  const matches = credentials.filter((cred) => cred.providerName === providerName);
+  return matches.find((cred) => cred.isDefault) ?? matches[0];
 }
 
 export function buildClaudeCredentialsJson(oauth: {
@@ -101,7 +103,7 @@ export const t3codeProvisioner: AgentProvisioner = {
     }
 
     files.push({
-      path: OPENCODE_AUTH_PATH,
+      path: T3_OPENCODE_AUTH_PATH,
       contentBase64: toBase64(buildOpencodeAuthJson(ctx.credentials)),
     });
     files.push({

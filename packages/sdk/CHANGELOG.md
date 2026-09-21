@@ -4,6 +4,21 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.5.0
+
+### Breaking
+
+- OpenCode 2 only. `Workspace.opencodeApi`, `DirectWorkspace.opencodeApi`, the `OpencodeApi` type, and
+  `opencode.api` on workspace creation inputs are removed; every workspace speaks the OpenCode 2
+  `/api/*` API and images/templates must ship `@opencode/cli`.
+- Model credentials are provisioned through `~/.gitterm/opencode/credentials.json` plus the
+  `gitterm-credentials` OpenCode plugin instead of `auth.json`. When `models` is omitted or
+  `inherit: "defaults"`, every saved account of the user travels with the workspace (not only the
+  defaults), labelled as in the dashboard; the dashboard default is the active account.
+- Direct inline credentials accept an optional `label` shown in OpenCode.
+- `direct.auth.setCredential()` accepts API keys only; use `connectOAuth()` for OAuth.
+- Attach with `OPENCODE_PASSWORD=<password> opencode --server <url>`; `opencode attach` no longer exists.
+
 ## 0.4.0
 
 ### Breaking

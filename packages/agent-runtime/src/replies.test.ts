@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { questionAnswers } from "./replies";
-import { permissionRequest, questionRequest } from "./v1";
-import { formRequest } from "./v2";
+import { formRequest, permissionRequest } from "./v2";
 import type { QuestionInputRequest } from "./types";
 
 const request: QuestionInputRequest = {
@@ -57,6 +56,5 @@ test("questions without options or custom answers fail before answer validation"
 
 test("requests do not acquire fresh timestamps on each snapshot", () => {
   expect(permissionRequest({ id: "per" }).createdAt).toBeNull();
-  expect(questionRequest({ id: "que" }).createdAt).toBeNull();
   expect(formRequest({ id: "form" }).createdAt).toBeNull();
 });

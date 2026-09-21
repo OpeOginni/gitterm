@@ -17,7 +17,6 @@ export function directRuntime(
     directory: workspace.runtime.directory,
     password: workspace.runtime.password ?? null,
     headers: workspace.runtime.headers,
-    api: workspace.opencodeApi,
     fetch: fetchImpl,
     signal,
   });
