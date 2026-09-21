@@ -27,6 +27,27 @@ describe("Vercel environment", () => {
     expect(Buffer.byteLength(JSON.stringify(environment))).toBeLessThan(4096);
   });
 
+  test("repairs stale Vercel metadata that installs OpenCode 1", async () => {
+    const { VercelProvider } = await import(".");
+    const commands: Record<string, unknown>[] = [];
+    const sandbox = {
+      runCommand: async (input: Record<string, unknown>) => {
+        commands.push(input);
+        return { exitCode: 0, stderr: async () => "" };
+      },
+    };
+
+    await (new VercelProvider() as any).setupAgent(sandbox, ["npm install -g opencode-ai"], true);
+
+    expect(commands).toHaveLength(2);
+    expect(commands[0]).toEqual({
+      cmd: "bash",
+      args: ["-lc", "npm install -g opencode-ai"],
+    });
+    expect(commands[1]).toMatchObject({ cmd: "bash" });
+    expect((commands[1]!.args as string[])[1]).toContain("@opencode/cli@2");
+  });
+
   test("submits post-start setup with the agent server", async () => {
     const { VercelProvider } = await import(".");
     const commands: Record<string, unknown>[] = [];

@@ -98,6 +98,15 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
+function opencodeIntegrationName(credential: {
+  providerName: string;
+  providerDisplayName: string;
+}) {
+  // The dashboard calls this provider "OpenCode Zen", while OpenCode 2's
+  // built-in integration (and `opencode auth list`) calls it "OpenCode".
+  return credential.providerName === "opencode" ? "OpenCode" : credential.providerDisplayName;
+}
+
 async function step<T>(
   results: StepResult[],
   name: string,
@@ -227,7 +236,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
     };
     const authListAssertions = savedCredentials
       .map((credential) => {
-        const runtimeName = credential.providerDisplayName;
+        const runtimeName = opencodeIntegrationName(credential);
         return `printf '%s\\n' "$auth_list" | grep -F -- ${shellQuote(runtimeName)} >/dev/null || { echo ${shellQuote(`missing OpenCode credential: ${runtimeName}`)}; exit 1; }`;
       })
       .join("\n");
@@ -276,7 +285,9 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
                   'echo "=== marker: workspace info ($(date -u +%H:%M:%SZ))"',
                   `workspace_ready=0; for attempt in $(seq 1 60); do workspace_info=$(timeout 30 gitterm workspace info --json); printf "%s\\n" "$workspace_info"; if printf "%s\\n" "$workspace_info" | grep -Eq '"status":[[:space:]]*"running"'; then workspace_ready=1; break; fi; sleep 2; done; [ "$workspace_ready" -eq 1 ] || { echo "workspace did not reach running status"; exit 1; }`,
                   'echo "=== marker: opencode auth list ($(date -u +%H:%M:%SZ))"',
-                  "opencode --version",
+                  'opencode_version="$(opencode --version)"',
+                  'printf "%s\\n" "$opencode_version"',
+                  'case "$opencode_version" in 2.*|v2.*|*" v2."*) ;; *) echo "expected OpenCode 2, got $opencode_version"; exit 1 ;; esac',
                   "auth_list=$(opencode auth list 2>&1)",
                   'printf "%s\\n" "$auth_list"',
                   authListAssertions,
@@ -295,7 +306,9 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
                   'echo "=== marker: plain setup ($(date -u +%H:%M:%SZ))"',
                   "git rev-parse --short HEAD",
                   'echo "=== marker: opencode auth list ($(date -u +%H:%M:%SZ))"',
-                  "opencode --version",
+                  'opencode_version="$(opencode --version)"',
+                  'printf "%s\\n" "$opencode_version"',
+                  'case "$opencode_version" in 2.*|v2.*|*" v2."*) ;; *) echo "expected OpenCode 2, got $opencode_version"; exit 1 ;; esac',
                   "auth_list=$(opencode auth list 2>&1)",
                   'printf "%s\\n" "$auth_list"',
                   authListAssertions,

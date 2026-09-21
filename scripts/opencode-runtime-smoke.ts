@@ -77,7 +77,7 @@ export function beforeAgent(): string {
   return [
     "set -eu",
     'version="$(opencode --version)"',
-    'case "$version" in 2.*) ;; *) echo "Expected OpenCode 2, got $version" >&2; exit 1 ;; esac',
+    'case "$version" in 2.*|v2.*|*" v2."*) ;; *) echo "Expected OpenCode 2, got $version" >&2; exit 1 ;; esac',
     'printf "OpenCode: %s\\n" "$version"',
   ].join("\n");
 }
