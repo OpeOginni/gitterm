@@ -53,6 +53,10 @@ Only enable it if the Daytona org backing the API key is actually Tier 3+.
   skip scoped-CLI features instead of failing.
 - Agent runs still work: the server talks _into_ the sandbox via the preview
   URL (ingress is not restricted).
+- OpenCode workspaces with ChatGPT, OpenCode console, or SuperGrok subscriptions
+  cannot be created on Tier 1/2. Those accounts keep their rotating refresh
+  tokens in GitTerm, so OpenCode needs API access after its initial access token
+  expires. Use Tier 3+ or a different compute provider for these subscriptions.
 
 ## Known symptoms of a tier mismatch
 
