@@ -1,7 +1,7 @@
 /**
  * GitTerm Cloudflare compute sandbox worker.
  *
- * This worker backs *normal* opencode workspaces (not the agent loop) running
+ * This worker backs opencode workspaces running
  * on Cloudflare Sandboxes. A Cloudflare Sandbox is a Durable-Object-backed
  * Linux container. Container filesystem state is lost whenever the container
  * sleeps or is destroyed, but the Durable Object's storage survives. We exploit

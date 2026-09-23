@@ -110,8 +110,13 @@ images. When those credentials are present, the CLI switches to a restricted com
 gitterm workspace info
 gitterm ports list
 gitterm ports open 3000 --name app
+gitterm ports open 8080 --name api --public
+gitterm ports visibility 3000 public
 gitterm ports close 3000
 ```
+
+Ports are private by default: only your signed-in GitTerm browser session can reach the URL.
+Public ports can be reached by anyone with the URL, which is what APIs and webhooks need.
 
 No account commands are exposed in this mode. The workspace cannot list or operate on
 other workspaces and cannot create a workspace. The CLI does not fall back to a saved user

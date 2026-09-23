@@ -4,6 +4,22 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## Unreleased
+
+### Breaking
+
+- Removed `client.models.list()` and the `ModelInfo` type. GitTerm no longer keeps a model catalog;
+  pass OpenCode `provider/model` IDs directly.
+- `client.workspaces.models(workspace)` returns only `providers`; the `models` field is removed.
+
+### Added
+
+- Workspace ports have a `visibility` of `"private"` (default; only the owner's signed-in GitTerm
+  browser session) or `"public"` (anyone with the URL, for APIs and webhooks).
+  `workspace.ports.open(port, { visibility })` sets it on open, and
+  `workspace.ports.setVisibility(port, visibility)` changes it later. `WorkspacePort.visibility` is
+  returned from `list()`, `open()`, and `self.get()`.
+
 ## 0.5.0
 
 ### Breaking

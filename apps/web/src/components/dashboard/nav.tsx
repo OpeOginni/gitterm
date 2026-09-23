@@ -25,7 +25,6 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
-import { ShareIcon } from "@/components/icons/share";
 import { Skeleton } from "../ui/skeleton";
 import { PlanBadge } from "./billing-section";
 import type { Route } from "next";
@@ -34,8 +33,6 @@ type UserPlan = "free" | "starter" | "pro";
 
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
-  // { href: "/dashboard/loops", label: "Agent Loops", icon: Repeat },
-  { href: "/dashboard/shared", label: "Shared", icon: ShareIcon },
   { href: "/dashboard/integrations", label: "Integrations", icon: Link2 },
 ];
 

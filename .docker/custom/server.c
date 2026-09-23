@@ -604,8 +604,6 @@ int main(int argc, char **argv) {
   }
   vhost = _vhost;
 
-  setup_workspace_heartbeat(server->loop);
-
   int port = lws_get_vhost_listen_port(vhost);
   lwsl_notice(" Listening on port: %d\n", port);
 
@@ -631,8 +629,6 @@ int main(int argc, char **argv) {
 #undef sig_count
 
   lws_context_destroy(context);
-
-  cleanup_workspace_heartbeat();
 
   // cleanup
   server_free(server);

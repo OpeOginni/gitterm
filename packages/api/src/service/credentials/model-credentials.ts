@@ -8,11 +8,9 @@
 import { db, eq, and } from "@gitterm/db";
 import {
   modelProvider,
-  model,
   userModelCredential,
   modelCredentialAudit,
   type ModelProvider,
-  type Model,
 } from "@gitterm/db/schema/model-credentials";
 import {
   getEncryptionService,
@@ -69,19 +67,6 @@ export interface DecryptedCredential {
   plugin: string | null;
 }
 
-export type CredentialForRun =
-  | {
-      type: "api_key";
-      apiKey: string;
-    }
-  | {
-      type: "oauth";
-      providerName: string;
-      refresh: string;
-      access: string;
-      expires: number;
-    };
-
 /**
  * Model Credentials Service
  */
@@ -119,42 +104,6 @@ export class ModelCredentialsService {
   async getProviderById(id: string): Promise<ModelProvider | undefined> {
     return db.query.modelProvider.findFirst({
       where: eq(modelProvider.id, id),
-    });
-  }
-
-  // ==================== Model Operations ====================
-
-  /**
-   * Get all enabled models for a provider
-   */
-  async listModelsForProvider(providerId: string): Promise<Model[]> {
-    return db.query.model.findMany({
-      where: and(eq(model.providerId, providerId), eq(model.isEnabled, true)),
-      orderBy: (t, { asc }) => [asc(t.displayName)],
-    });
-  }
-
-  /**
-   * Get all enabled models with their providers
-   */
-  async listAllModels(): Promise<(Model & { provider: ModelProvider })[]> {
-    const models = await db.query.model.findMany({
-      where: eq(model.isEnabled, true),
-      with: {
-        provider: true,
-      },
-      orderBy: (t, { asc }) => [asc(t.displayName)],
-    });
-
-    return models.filter((m) => m.provider.isEnabled);
-  }
-
-  /**
-   * Get a model by ID
-   */
-  async getModelById(id: string): Promise<Model | undefined> {
-    return db.query.model.findFirst({
-      where: eq(model.id, id),
     });
   }
 
@@ -377,45 +326,6 @@ export class ModelCredentialsService {
   }
 
   /**
-   * Get a user's credential for a specific provider
-   */
-  async getUserCredentialForProvider(
-    userId: string,
-    providerName: string,
-  ): Promise<DecryptedCredential | null> {
-    const provider = await this.getProviderByName(providerName);
-    if (!provider) {
-      return null;
-    }
-
-    const cred = await db.query.userModelCredential.findFirst({
-      where: and(
-        eq(userModelCredential.userId, userId),
-        eq(userModelCredential.providerId, provider.id),
-        eq(userModelCredential.isActive, true),
-      ),
-      with: {
-        provider: true,
-      },
-    });
-
-    if (!cred) {
-      return null;
-    }
-
-    const credential = this.encryption.decryptCredential(cred.encryptedCredential);
-
-    return {
-      id: cred.id,
-      providerId: cred.providerId,
-      providerName: cred.provider.name,
-      authType: cred.provider.authType,
-      credential,
-      plugin: cred.provider.plugin,
-    };
-  }
-
-  /**
    * Revoke (soft delete) a credential
    */
   async revokeCredential(credentialId: string, userId: string): Promise<void> {
@@ -496,43 +406,6 @@ export class ModelCredentialsService {
         .set({ isDefault: true, updatedAt: new Date() })
         .where(eq(userModelCredential.id, replacement.id));
     }
-  }
-
-  /**
-   * Rotate an API key
-   */
-  async rotateApiKey(credentialId: string, userId: string, newApiKey: string): Promise<void> {
-    const cred = await db.query.userModelCredential.findFirst({
-      where: and(eq(userModelCredential.id, credentialId), eq(userModelCredential.userId, userId)),
-      with: { provider: true },
-    });
-
-    if (!cred) {
-      throw new Error("Credential not found");
-    }
-
-    if (cred.provider.authType !== "api_key") {
-      throw new Error("Can only rotate API key credentials");
-    }
-
-    const credential: ApiKeyCredential = {
-      type: "api_key",
-      apiKey: newApiKey,
-    };
-
-    const encryptedCredential = this.encryption.encryptCredential(credential);
-    const keyHash = this.encryption.hashForAudit(newApiKey);
-
-    await db
-      .update(userModelCredential)
-      .set({
-        encryptedCredential,
-        keyHash,
-        updatedAt: new Date(),
-      })
-      .where(eq(userModelCredential.id, credentialId));
-
-    await this.logAudit(credentialId, userId, "rotated", keyHash);
   }
 
   // ==================== OAuth Token Refresh ====================
@@ -626,92 +499,6 @@ export class ModelCredentialsService {
 
     throw new Error(
       `OAuth refresh not supported for provider: ${decrypted.providerName} (plugin: ${decrypted.plugin})`,
-    );
-  }
-
-  // ==================== Runtime Credential Access ====================
-
-  /**
-   * Get credential ready for use in a run.
-   * Handles OAuth token refresh automatically.
-   * Returns the full credential info needed by the sandbox.
-   */
-  async getCredentialForRun(
-    credentialId: string,
-    userId: string,
-    context?: { loopId?: string; runId?: string; workspaceId?: string },
-  ): Promise<CredentialForRun> {
-    const decrypted = await this.getCredential(credentialId, userId);
-
-    if (!decrypted) {
-      throw new Error("Credential not found");
-    }
-
-    // Update last used
-    await db
-      .update(userModelCredential)
-      .set({ lastUsedAt: new Date() })
-      .where(eq(userModelCredential.id, credentialId));
-
-    // Log usage
-    await this.logAudit(credentialId, userId, "used", undefined, context);
-
-    if (decrypted.credential.type === "api_key") {
-      return {
-        type: "api_key",
-        apiKey: decrypted.credential.apiKey,
-      };
-    }
-
-    // OAuth - need to ensure we have a fresh access token
-    // Re-fetch the credential after refresh to get updated tokens
-    await this.refreshOAuthTokenIfNeeded(credentialId, userId);
-    const refreshedCred = await this.getCredential(credentialId, userId);
-
-    if (!refreshedCred || refreshedCred.credential.type !== "oauth") {
-      throw new Error("Failed to get refreshed OAuth credential");
-    }
-
-    const oauthCred = refreshedCred.credential as OAuthCredential;
-
-    return {
-      type: "oauth",
-      providerName: decrypted.providerName,
-      refresh: oauthCred.refresh,
-      access: oauthCred.access || "",
-      expires: oauthCred.expires || 0,
-    };
-  }
-
-  /**
-   * Create an encrypted payload for passing to a sandbox.
-   */
-  async createEncryptedPayloadForSandbox(
-    credentialId: string,
-    userId: string,
-    sessionKey: Buffer,
-  ): Promise<string> {
-    const credForRun = await this.getCredentialForRun(credentialId, userId);
-
-    if (credForRun.type === "api_key") {
-      return this.encryption.encryptForSandbox(
-        {
-          type: "api_key",
-          apiKey: credForRun.apiKey,
-        },
-        sessionKey,
-      );
-    }
-
-    // OAuth credential
-    return this.encryption.encryptForSandbox(
-      {
-        type: "oauth",
-        refresh: credForRun.refresh,
-        access: credForRun.access,
-        expires: credForRun.expires,
-      } as OAuthCredential,
-      sessionKey,
     );
   }
 

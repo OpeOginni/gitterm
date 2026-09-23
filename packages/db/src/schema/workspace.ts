@@ -10,6 +10,7 @@ import {
   boolean,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { ExposedPort } from "@gitterm/schema/workspace-ports";
 import { user } from "./auth";
 import {
   agentType,
@@ -137,17 +138,7 @@ export const workspace = pgTable(
     /** Caller-supplied public image (registry reference or E2B template) used instead of the catalog image. */
     customImage: text("custom_image"),
     reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
-    exposedPorts: jsonb("exposed_ports").$type<
-      Record<
-        string,
-        {
-          port: number;
-          name?: string;
-          upstreamUrl?: string;
-          externalPortDomainId?: string;
-        }
-      >
-    >(),
+    exposedPorts: jsonb("exposed_ports").$type<Record<string, ExposedPort>>(),
     serverPassword: text("server_password"),
     startedAt: timestamp("started_at").notNull(),
     pausedAt: timestamp("paused_at"),

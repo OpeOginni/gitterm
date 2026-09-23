@@ -8,7 +8,6 @@ import { DeviceCodeService } from "@gitterm/api/service/auth/cli/device-code";
 import { getGitHubAppService } from "@gitterm/api/service/github";
 import { workspaceJWT } from "@gitterm/api/service/auth/workspace-jwt";
 import { startRunWatcherSweep } from "@gitterm/api/service/agent-run";
-import { updateLastActive, hasRemainingQuota } from "@gitterm/api/utils/metering";
 import { and, db, eq } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { googleCloudIntegration } from "@gitterm/db/schema/integrations";
@@ -126,67 +125,6 @@ app.post("/api/device/token", async (c) => {
     tokenType: "Bearer",
     expiresInSeconds: result.expiresInSeconds,
   });
-});
-
-app.post("/api/internal/workspace-heartbeat", async (c) => {
-  const authHeader = c.req.header("Authorization") || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-
-  if (!token) {
-    return c.json({ success: false, error: "missing_token" }, 401);
-  }
-
-  let payload;
-  try {
-    payload = workspaceJWT.verifyToken(token, "agent");
-  } catch (error) {
-    return c.json(
-      { success: false, error: error instanceof Error ? error.message : "invalid_token" },
-      401,
-    );
-  }
-
-  if (!workspaceJWT.hasScope(payload, "agent:heartbeat")) {
-    return c.json({ success: false, error: "insufficient_scope" }, 403);
-  }
-
-  const body = (await c.req.json().catch(() => ({}))) as { workspaceId?: string };
-  const workspaceId = body.workspaceId || payload.workspaceId;
-
-  if (workspaceId !== payload.workspaceId) {
-    return c.json({ success: false, error: "workspace_mismatch" }, 403);
-  }
-
-  const [existingWorkspace] = await db
-    .select()
-    .from(workspace)
-    .where(eq(workspace.id, workspaceId));
-
-  if (!existingWorkspace) {
-    return c.json({ success: false, error: "workspace_not_found" }, 404);
-  }
-
-  if (existingWorkspace.userId !== payload.userId) {
-    return c.json({ success: false, error: "workspace_ownership_mismatch" }, 403);
-  }
-
-  if (existingWorkspace.authVersion !== payload.authVersion) {
-    return c.json({ success: false, error: "workspace_identity_revoked" }, 401);
-  }
-
-  if (existingWorkspace.status !== "running" && existingWorkspace.status !== "pending") {
-    return c.json({ success: true, action: "shutdown", reason: "workspace_inactive" });
-  }
-
-  const hasQuota = await hasRemainingQuota(existingWorkspace.userId);
-
-  if (!hasQuota) {
-    return c.json({ success: true, action: "shutdown", reason: "quota_exhausted" });
-  }
-
-  await updateLastActive(workspaceId);
-
-  return c.json({ success: true, action: "continue", reason: null });
 });
 
 app.get("/api/workload-identity/.well-known/openid-configuration", (c) => {

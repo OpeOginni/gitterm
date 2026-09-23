@@ -69,18 +69,17 @@ export const authClient: AppAuthClient = (isBillingEnabled
 /**
  * Checkout slug types
  */
-type CheckoutSlug = "starter" | "pro" | "run_pack_50" | "run_pack_100";
+type CheckoutSlug = "starter" | "pro";
 
 /**
- * Initiate checkout for a subscription plan or run pack
+ * Initiate checkout for a subscription plan
  * Redirects to Polar checkout page
  *
- * @param slug - Product slug ("starter", "pro", "run_pack_50", "run_pack_100")
+ * @param slug - Product slug ("starter", "pro")
  *
  * @example
  * await initiateCheckout("starter");
  * await initiateCheckout("pro");
- * await initiateCheckout("run_pack_50");
  */
 export async function initiateCheckout(slug: CheckoutSlug) {
   if (!isBillingEnabled) {
@@ -88,7 +87,7 @@ export async function initiateCheckout(slug: CheckoutSlug) {
     return;
   }
 
-  // Store the selected plan/pack in sessionStorage so the success page can display it
+  // Store the selected plan in sessionStorage so the success page can display it
   // This is needed because the webhook may not have updated the user's plan yet
   if (typeof window !== "undefined") {
     sessionStorage.setItem("checkout_plan", slug.replace("_", " "));

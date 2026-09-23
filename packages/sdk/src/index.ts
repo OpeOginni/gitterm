@@ -18,6 +18,7 @@ export {
   type WorkspaceClientOptions,
   type WorkspaceEnvironment,
   type WorkspacePort,
+  type WorkspacePortVisibility,
   type WorkspaceSelf,
 } from "./workspace-client.js";
 export type {
@@ -65,7 +66,6 @@ export type {
   WorkspaceSetupStatus,
   ModelCredential,
   ModelProviderInfo,
-  ModelInfo,
   ModelCredentialSource,
   WorkspaceModelsInput,
   WorkspaceModelAccess,

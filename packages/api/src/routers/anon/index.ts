@@ -298,10 +298,12 @@ export const anonRouter = router({
           ["workspace:read"],
           "workspace",
         );
+        // Anon sandboxes need no agent capabilities; the env contract still
+        // requires an agent identity.
         const workspaceAgentAuthToken = workspaceJWT.generateToken(
           workspaceId,
           anonUser.id,
-          ["agent:heartbeat"],
+          [],
           "agent",
         );
         const workspaceSetupAuthToken = workspaceJWT.generateToken(

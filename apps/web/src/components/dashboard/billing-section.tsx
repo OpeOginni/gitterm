@@ -58,13 +58,6 @@ const QUOTAS: QuotaRow[] = [
     pro: "480 min / day",
   },
   {
-    label: "Agent runs",
-    icon: Sparkles,
-    free: "10 / mo",
-    starter: "75 / mo",
-    pro: "250 / mo",
-  },
-  {
     label: "Workspaces",
     icon: Server,
     free: "2 max",

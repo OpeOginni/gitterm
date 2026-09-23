@@ -3,11 +3,7 @@ import { protectedProcedure, router } from "../../index";
 import { GitHubAPIError, getGitHubAppService } from "../../service/github";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and } from "@gitterm/db";
-import {
-  githubAppInstallation,
-  workspaceGitConfig,
-  gitIntegration,
-} from "@gitterm/db/schema/integrations";
+import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { logger } from "../../utils/logger";
 
 export const githubRouter = router({
@@ -64,72 +60,6 @@ export const githubRouter = router({
       });
     }
   }),
-
-  /**
-   * Handle GitHub App installation callback
-   * Called after user installs the GitHub App
-   */
-  handleInstallation: protectedProcedure
-    .input(
-      z.object({
-        installationId: z.string(),
-        setupAction: z.enum(["install", "update"]),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const userId = ctx.session.user.id;
-
-      try {
-        logger.info("Handling GitHub App installation", {
-          userId,
-          action: "handle_installation",
-        });
-
-        // Get installation details from GitHub using SDK
-        const installationData = await getGitHubAppService().getInstallationDetails(
-          input.installationId,
-        );
-
-        // Store installation in database
-        const installation = await getGitHubAppService().storeInstallation({
-          userId,
-          installationId: input.installationId,
-          accountId: installationData.account.id.toString(),
-          accountLogin: installationData.account.login,
-          accountType: installationData.account.type,
-          repositorySelection: installationData.repositorySelection,
-        });
-
-        logger.info("GitHub App installation handled successfully", {
-          userId,
-          action: "installation_success",
-        });
-
-        return {
-          success: true,
-          message: "GitHub App connected successfully",
-          installation: {
-            accountLogin: installation.accountLogin,
-            repositorySelection: installation.repositorySelection,
-          },
-        };
-      } catch (error) {
-        logger.error(
-          "Failed to handle GitHub App installation",
-          {
-            userId,
-            action: "handle_installation",
-          },
-          error as Error,
-        );
-
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to connect GitHub App",
-          cause: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }),
 
   /**
    * Disconnect GitHub App
@@ -424,125 +354,6 @@ export const githubRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to list branches",
-          cause: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }),
-
-  /**
-   * Search files in a repository
-   */
-  searchFiles: protectedProcedure
-    .input(
-      z.object({
-        installationId: z.string(),
-        owner: z.string(),
-        repo: z.string(),
-        query: z.string(),
-        ref: z.string().optional(),
-        extensions: z.array(z.string()).optional(),
-      }),
-    )
-    .query(async ({ input, ctx }) => {
-      const userId = ctx.session.user.id;
-
-      try {
-        // Verify the installation belongs to the user
-        const [gitIntegrationRecord] = await db
-          .select()
-          .from(gitIntegration)
-          .where(
-            and(
-              eq(gitIntegration.userId, userId),
-              eq(gitIntegration.providerInstallationId, input.installationId),
-            ),
-          );
-
-        if (!gitIntegrationRecord) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "GitHub installation not found",
-          });
-        }
-
-        const files = await getGitHubAppService().searchFiles(
-          input.installationId,
-          input.owner,
-          input.repo,
-          input.query,
-          input.ref,
-          input.extensions,
-        );
-
-        return { files };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-
-        logger.error(
-          "Failed to search files",
-          {
-            userId,
-            action: "search_files",
-          },
-          error as Error,
-        );
-
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to search files",
-          cause: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }),
-
-  /**
-   * Get workspace git configuration
-   */
-  getWorkspaceGitConfig: protectedProcedure
-    .input(z.object({ workspaceId: z.uuid() }))
-    .query(async ({ input, ctx }) => {
-      const userId = ctx.session.user.id;
-
-      try {
-        const [config] = await db
-          .select()
-          .from(workspaceGitConfig)
-          .where(eq(workspaceGitConfig.workspaceId, input.workspaceId));
-
-        if (!config || config.userId !== userId) {
-          return {
-            hasGitConfig: false,
-            config: null,
-          };
-        }
-
-        return {
-          hasGitConfig: true,
-          config: {
-            provider: config.provider,
-            repositoryOwner: config.repositoryOwner,
-            repositoryName: config.repositoryName,
-            isFork: config.isFork,
-            originalOwner: config.originalOwner,
-            originalRepo: config.originalRepo,
-            defaultBranch: config.defaultBranch,
-            currentBranch: config.currentBranch,
-          },
-        };
-      } catch (error) {
-        logger.error(
-          "Failed to get workspace git configuration",
-          {
-            userId,
-            workspaceId: input.workspaceId,
-            action: "get_workspace_config",
-          },
-          error as Error,
-        );
-
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to get workspace git configuration",
           cause: error instanceof Error ? error.message : "Unknown error",
         });
       }

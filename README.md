@@ -64,7 +64,12 @@ https://{port}-{workspace-subdomain}.your-domain.com
 
 Use path routing when you do not control wildcard DNS. Use subdomain routing for apps that rely on relative asset paths.
 
-Open a port on a running workspace to get a live, shareable URL like `https://{port}-{workspace-subdomain}.your-domain.com`. This is handy for previewing a dev server or sharing a running app while an agent works on it.
+Open a port on a running workspace to get a live URL like `https://{port}-{workspace-subdomain}.your-domain.com`. Each port is either:
+
+- **Private** (default): only the workspace owner's browser, signed in to GitTerm, can reach it. Good for previewing a dev server while an agent works on it.
+- **Public**: anyone with the URL can reach it, with no GitTerm login. Use this for APIs, webhook receivers, and demos.
+
+You can switch a port between private and public from the dashboard, with `gitterm ports visibility <port> <private|public>`, or with the SDK. GitTerm's own session cookies are stripped before requests reach workspace apps.
 
 ## Providers
 

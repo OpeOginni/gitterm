@@ -160,8 +160,7 @@ client.catalog.cloudProviders();
 client.catalog.workspaceOptions();
 client.credentials.list();             // dashboard credential metadata, never secrets
 client.credentials.listProviders();
-client.models.list({ provider: "openai" }); // discover provider/model IDs
-client.workspaces.models(workspace);  // resolved sources + known models; no secrets or runtime wake-up
+client.workspaces.models(workspace);  // resolved credential sources; no secrets or runtime wake-up
 ```
 
 Every poll-based wait (`ensureRunning`, `waitForSetup`, and `runs.create` with `waitForSetup`)
@@ -266,7 +265,13 @@ import { createGittermWorkspaceClient } from "@gitterm/sdk";
 const workspace = createGittermWorkspaceClient();
 const self = await workspace.self.get();
 const preview = await workspace.ports.open(3000, { name: "app" });
+const api = await workspace.ports.open(8080, { name: "api", visibility: "public" });
 ```
+
+Ports are `private` by default: only the workspace owner's signed-in GitTerm browser session can
+reach the URL. Make a port `public` when it needs to be reachable without a GitTerm login, for
+example an API or webhook receiver. Use `workspace.ports.setVisibility(port, visibility)` to change
+it later.
 
 The workspace client never reads the CLI's saved account login and has no create, list,
 pause, restart, or terminate operations.
@@ -660,10 +665,10 @@ selection fails explicitly; give them distinct dashboard labels. Discovery requi
 **Inline credentials** use `{ source: "apiKey", apiKey }` for this workspace only. A missing or
 blank key fails validation; it never falls back to a saved credential. Keys are injected into
 the sandbox, not saved in the dashboard. `credentials.listProviders()` includes each authentication
-integration's `logicalProviderKey`. `models.list({ provider: "openai" })` discovers model IDs.
-Managed OAuth credentials must be connected through the dashboard.
+integration's `logicalProviderKey`. Managed OAuth credentials must be connected through the
+dashboard.
 
-`workspaces.models(workspace)` shows which sources were configured and the matching catalog models.
+`workspaces.models(workspace)` shows which credential sources were configured.
 It reads control-plane metadata only: it does not verify a key with the model provider, discover
 custom runtime models, or resume a paused workspace. A saved credential's label/active status is
 its current dashboard metadata.

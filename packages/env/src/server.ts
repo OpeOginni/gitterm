@@ -65,11 +65,6 @@ const baseSchema = z
     POLAR_ENVIRONMENT: polarEnvironment,
     POLAR_STARTER_PRODUCT_ID: optional,
     POLAR_PRO_PRODUCT_ID: optional,
-    POLAR_RUN_PACK_50_PRODUCT_ID: optional,
-    POLAR_RUN_PACK_100_PRODUCT_ID: optional,
-
-    // Listener (for internal callbacks)
-    LISTENER_URL: optional,
 
     // Tunnel
     WORKSPACE_JWT_SECRET: optional,

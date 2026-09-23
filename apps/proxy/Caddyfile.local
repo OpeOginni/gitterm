@@ -107,7 +107,10 @@
 					header_up X-Real-IP {remote_ip}
 					header_up X-Forwarded-For {remote_ip}
 					header_up User-Agent {header.User-Agent}
-					header_up Cookie {header.Cookie}
+					# Never hand GitTerm session/anon cookies to workspace apps (public ports
+					# can be visited by any signed-in user). App cookies still pass through.
+					header_up Cookie "(?:^|;\s*)(?:__Secure-|__Host-)?(?:better-auth\.[^=;\s]+|gitterm_anon)=[^;]*" ""
+					header_up Cookie "^;\s*" ""
 
 					# Modify CSP header to allow data URIs for WebAssembly
 					header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"
@@ -133,7 +136,10 @@
 					header_up X-Real-IP {remote_ip}
 					header_up X-Forwarded-For {remote_ip}
 					header_up User-Agent {header.User-Agent}
-					header_up Cookie {header.Cookie}
+					# Never hand GitTerm session/anon cookies to workspace apps (public ports
+					# can be visited by any signed-in user). App cookies still pass through.
+					header_up Cookie "(?:^|;\s*)(?:__Secure-|__Host-)?(?:better-auth\.[^=;\s]+|gitterm_anon)=[^;]*" ""
+					header_up Cookie "^;\s*" ""
 
 					# Modify CSP header to allow data URIs for WebAssembly
 					header_down Content-Security-Policy "default-src 'self'; connect-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:;"

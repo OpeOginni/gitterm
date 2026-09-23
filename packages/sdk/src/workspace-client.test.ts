@@ -75,4 +75,29 @@ describe("getWorkspaceEnvironment", () => {
 
     expect(requestedUrl).toStartWith("https://api.example.com/trpc/");
   });
+
+  test("sets port visibility through the workspace-scoped API", async () => {
+    let requestedUrl = "";
+    let requestBody = "";
+    const client = createGittermWorkspaceClient({
+      workspaceId: "workspace",
+      serverUrl: "https://api.example.com",
+      token: "token",
+      fetch: (async (input, init) => {
+        requestedUrl = String(input);
+        requestBody = String(init?.body ?? "");
+        const data = { port: 3000, name: null, visibility: "public", url: null };
+        return new Response(JSON.stringify([{ result: { data } }]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }) as typeof fetch,
+    });
+
+    const port = await client.ports.setVisibility(3000, "public");
+
+    expect(requestedUrl).toContain("workspaceOps.setPortVisibility");
+    expect(JSON.parse(requestBody)).toEqual({ "0": { port: 3000, visibility: "public" } });
+    expect(port.visibility).toBe("public");
+  });
 });

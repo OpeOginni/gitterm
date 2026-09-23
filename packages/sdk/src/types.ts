@@ -480,15 +480,6 @@ export type ModelProviderInfo = {
   isRecommended: boolean;
 };
 
-export type ModelInfo = {
-  /** Full provider/model identifier accepted by runs.create(). */
-  id: string;
-  name: string;
-  provider: string;
-  isFree: boolean;
-  isRecommended: boolean;
-};
-
 /** Control-plane configuration, not a live authentication check. */
 export type WorkspaceModelAccess = {
   providers: Array<{
@@ -497,8 +488,6 @@ export type WorkspaceModelAccess = {
     label: string | null;
     active: boolean;
   }>;
-  /** Known catalog models whose provider is configured, plus free models. */
-  models: ModelInfo[];
 };
 
 /** Explicit credential intent. Saved sources use dashboard labels, never credential IDs. */

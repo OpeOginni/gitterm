@@ -19,7 +19,7 @@ import {
 } from "../../service/proxy-cache";
 import { recordWorkspaceActivity } from "../../service/workspace-activity";
 import { extractWorkspaceSubdomain } from "../../utils/routing";
-import { userCanAccessWorkspace } from "../workspace/share";
+import { getPortVisibility } from "@gitterm/schema/workspace-ports";
 
 const DEBUG_PROXY_RESOLVE = process.env.DEBUG_PROXY_RESOLVE === "true";
 
@@ -406,9 +406,12 @@ export const proxyResolverRouter = async (c: Context) => {
     }
 
     let portUpstream: string | null = null;
+    let isPublicPort = false;
     let upstreamAccessHeaders: Record<string, string> | null = null;
     if (extractedPort) {
-      portUpstream = ws.exposedPorts?.[extractedPort]?.upstreamUrl ?? null;
+      const exposedPort = ws.exposedPorts?.[extractedPort];
+      portUpstream = exposedPort?.upstreamUrl ?? null;
+      isPublicPort = getPortVisibility(exposedPort) === "public";
       if (!portUpstream) {
         debugProxyResolve(
           "[PROXY-RESOLVE] Port upstream URL not found for extracted port:",
@@ -525,17 +528,35 @@ export const proxyResolverRouter = async (c: Context) => {
       );
     }
 
-    // Validate access to user-owned browser terminal workspaces and exposed ports.
+    // Public ports are reachable by anyone with the URL, so APIs and webhooks
+    // work without a GitTerm session.
+    if (isPublicPort && portUpstream) {
+      const portUrl = new URL(portUpstream);
+      const port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
+      await recordWorkspaceActivity(ws.id);
+
+      return c.text(
+        "OK",
+        200,
+        buildProxyResolveHeaders(
+          {
+            "X-Upstream-URL": portUrl.toString(),
+            "X-Container-Host": portUrl.hostname,
+            "X-Container-Port": port,
+            "X-Container-Protocol": portUrl.protocol.replace(":", ""),
+            "X-Hosting-Type": ws.hostingType,
+          },
+          upstreamAccessHeaders,
+        ),
+      );
+    }
+
+    // Private workspace routes and ports are only reachable by the owner's session.
     const session = await auth.api.getSession({
       headers: c.req.raw.headers,
     });
 
-    if (!session) {
-      return htmlError(c, "unavailable", 403);
-    }
-
-    const canAccess = await userCanAccessWorkspace(ws.id, session.user.id);
-    if (!canAccess) {
+    if (!session || session.user.id !== ws.userId) {
       return htmlError(c, "unavailable", 403);
     }
 

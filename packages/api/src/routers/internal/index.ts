@@ -8,7 +8,6 @@ import {
   volume,
 } from "@gitterm/db/schema/workspace";
 import { githubAppInstallation } from "@gitterm/db/schema/integrations";
-import { agentLoop, agentLoopRun } from "@gitterm/db/schema/agent-loop";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
@@ -23,28 +22,19 @@ import {
   type UserPlan,
 } from "../../config/features";
 import { isPausedWorkspacePastRetention } from "../../utils/workspace-retention";
-import { auth } from "@gitterm/auth";
 import { getGitHubAppService } from "../../service/github";
 import { logger } from "../../utils/logger";
 import { railwayWebhookSchema } from "../railway/webhook";
-import { agentLoopWebhookSchema } from "../agent-loop/webhook";
-import { getAgentLoopService } from "../../service/agent-loop";
-import { deductRunFromQuota, refundRunToQuota } from "../../service/quotas/run-quota";
-import { getModelConfig, getCredentialForRun } from "../../service/agent-loop/helpers";
 import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { daytonaWebhookSchema, verifyDaytonaWebhookSignature } from "../daytona/webhook";
 import type { DaytonaConfig } from "../../providers/daytona/types";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
-import { userCanAccessWorkspace } from "../workspace/share";
 import {
   updateWorkspaceByIdAndInvalidate,
   updateWorkspaceStatusAndInvalidate,
 } from "../../service/workspace-mutations";
-import {
-  filterIdleWorkspacesByRedisActivityWith,
-  recordWorkspaceActivity,
-} from "../../service/workspace-activity";
+import { filterIdleWorkspacesByRedisActivityWith } from "../../service/workspace-activity";
 import type { E2BConfig } from "../../providers/e2b";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { ANON_WORKSPACE_TTL_SECONDS } from "../../service/anon/anon-lifetime";
@@ -56,57 +46,6 @@ import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
  * All procedures require X-Internal-Key header with valid INTERNAL_API_KEY
  */
 export const internalRouter = router({
-  // Validate session from cookie (for proxy)
-  validateSession: internalProcedure
-    .input(
-      z.object({
-        cookie: z.string().optional(),
-      }),
-    )
-    .query(async ({ input }) => {
-      const headers = new Headers();
-      if (input.cookie) {
-        headers.set("cookie", input.cookie);
-      }
-
-      const session = await auth.api.getSession({ headers });
-
-      return {
-        userId: session?.user?.id ?? null,
-        valid: !!session?.user?.id,
-      };
-    }),
-
-  // Get workspace by subdomain (for proxy)
-  getWorkspaceBySubdomain: internalProcedure
-    .input(z.object({ subdomain: z.string() }))
-    .query(async ({ input }) => {
-      const [ws] = await db
-        .select()
-        .from(workspace)
-        .where(eq(workspace.subdomain, input.subdomain))
-        .limit(1);
-
-      if (!ws) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Workspace not found",
-        });
-      }
-
-      return ws;
-    }),
-
-  // Update workspace heartbeat (for proxy)
-  updateHeartbeat: internalProcedure
-    .input(z.object({ workspaceId: z.string() }))
-    .mutation(async ({ input }) => {
-      const now = new Date();
-      await recordWorkspaceActivity(input.workspaceId, now);
-
-      return { success: true, updatedAt: now };
-    }),
-
   // Get idle workspaces (for worker)
   getIdleWorkspaces: internalProcedure.query(async () => {
     const globalIdleTimeoutMinutes = await getConfiguredIdleTimeout();
@@ -943,8 +882,7 @@ export const internalRouter = router({
         });
       }
 
-      const canAccess = await userCanAccessWorkspace(input.workspaceId, input.userId);
-      if (!canAccess) {
+      if (ws.userId !== input.userId) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "You are not authorized to access this workspace",
@@ -1062,353 +1000,6 @@ export const internalRouter = router({
         success: true,
         action: input.action,
       };
-    }),
-
-  // ============================================================================
-  // AGENT LOOP CALLBACK
-  // Called by Cloudflare worker when a sandbox run completes or fails
-  // ============================================================================
-
-  /**
-   * Process agent loop run callback from Cloudflare worker
-   * Updates run status, loop counters, and triggers next run if automated
-   */
-  processAgentLoopCallback: internalProcedure
-    .input(agentLoopWebhookSchema)
-    .mutation(async ({ input }) => {
-      try {
-        console.log("Processing agent loop callback", {
-          action: "agent_loop_callback",
-          input: input,
-        });
-
-        // Get the run with its loop
-        const run = await db.query.agentLoopRun.findFirst({
-          where: eq(agentLoopRun.id, input.runId),
-          with: {
-            loop: true,
-          },
-        });
-
-        if (!run) {
-          logger.warn("Agent loop callback: run not found", {
-            action: "agent_loop_callback_not_found",
-            runId: input.runId,
-          });
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Run not found",
-          });
-        }
-
-        // Check if run is in a state that can be updated
-        if (run.status !== "running" && run.status !== "pending") {
-          logger.warn("Agent loop callback: run already completed", {
-            action: "agent_loop_callback_already_done",
-            runId: input.runId,
-            status: run.status,
-          });
-          return {
-            success: true,
-            message: "Run already completed, callback ignored",
-          };
-        }
-
-        const loop = run.loop;
-        const now = new Date();
-        const durationSeconds = Math.round((now.getTime() - run.startedAt.getTime()) / 1000);
-
-        if (input.success) {
-          // Update run as completed
-          await db
-            .update(agentLoopRun)
-            .set({
-              status: "completed",
-              completedAt: now,
-              durationSeconds,
-              sandboxId: input.sandboxId,
-              commitSha: input.commitSha,
-              commitMessage: input.commitMessage,
-            })
-            .where(eq(agentLoopRun.id, input.runId));
-
-          if (input.isListComplete) {
-            await db
-              .update(agentLoop)
-              .set({
-                status: "completed" as const,
-                successfulRuns: sql`${agentLoop.successfulRuns} + 1`,
-                // Use GREATEST to ensure we don't decrease totalRuns if a later run already exists
-                lastRunId: input.runId,
-                lastRunAt: now,
-                updatedAt: now,
-              })
-              .where(eq(agentLoop.id, loop.id));
-
-            return {
-              success: true,
-              message: "Run completed, loop is complete",
-            };
-          }
-
-          // Update loop counters
-
-          // Check if this is the last iteration
-          // Use run.runNumber instead of loop.totalRuns to handle restart scenarios correctly
-          const isLastIteration = run.runNumber >= loop.maxRuns;
-
-          await db
-            .update(agentLoop)
-            .set({
-              successfulRuns: sql`${agentLoop.successfulRuns} + 1`,
-              lastRunId: input.runId,
-              lastRunAt: now,
-              updatedAt: now,
-              // Mark loop as completed if agent says so
-              ...(isLastIteration ? { status: "completed" as const } : {}),
-            })
-            .where(eq(agentLoop.id, loop.id));
-
-          logger.info("Agent loop run completed successfully", {
-            action: "agent_loop_run_complete",
-            loopId: loop.id,
-            runId: input.runId,
-            runNumber: run.runNumber,
-            commitSha: input.commitSha,
-            durationSeconds,
-          });
-
-          // Trigger next run if automation is enabled and not complete
-          if (loop.automationEnabled && !isLastIteration) {
-            // Create next pending run with the same AI config as the completed run
-            const nextRunNumber = run.runNumber + 1; // Next run after the completing one
-            const [newRun] = await db
-              .insert(agentLoopRun)
-              .values({
-                loopId: loop.id,
-                runNumber: nextRunNumber,
-                status: "pending",
-                triggerType: "automated",
-                modelProviderId: run.modelProviderId,
-                modelId: run.modelId,
-              })
-              .returning();
-
-            if (!newRun) {
-              logger.error("Failed to create next automated run", {
-                action: "automated_run_creation_failed",
-                loopId: loop.id,
-                runNumber: nextRunNumber,
-              });
-
-              return {
-                success: false,
-                message: "Failed to create next automated run",
-              };
-            }
-
-            // Deduct run from user quota and record event
-            // For automated runs, we halt on exhaustion instead of throwing
-            const quotaResult = await deductRunFromQuota(loop.userId, loop.id, newRun.id, {
-              haltOnExhaustion: true,
-              allowMissingQuota: false,
-            });
-
-            // If quota deduction failed or run should be halted, mark it and return
-            if (!quotaResult.success) {
-              if (quotaResult.halted) {
-                await db
-                  .update(agentLoopRun)
-                  .set({
-                    status: "halted",
-                    completedAt: new Date(),
-                    errorMessage:
-                      quotaResult.errorMessage || "Run halted due to quota/payment issue",
-                  })
-                  .where(eq(agentLoopRun.id, newRun.id));
-
-                logger.warn("Automated run halted due to quota issue", {
-                  action: "automated_run_halted",
-                  userId: loop.userId,
-                  loopId: loop.id,
-                  runId: newRun.id,
-                });
-
-                return {
-                  success: false,
-                  message: quotaResult.errorMessage || "Run halted due to quota/payment issue",
-                };
-              }
-              // If not halted but failed, throw (shouldn't happen with haltOnExhaustion=true)
-              throw new TRPCError({
-                code: "INTERNAL_SERVER_ERROR",
-                message: quotaResult.errorMessage || "Failed to deduct quota",
-              });
-            }
-
-            // Get model config and credential
-            let providerRecord, modelRecord, credential;
-            try {
-              const modelConfig = await getModelConfig({
-                modelProviderId: run.modelProviderId,
-                modelId: run.modelId,
-              });
-              providerRecord = modelConfig.providerRecord;
-              modelRecord = modelConfig.modelRecord;
-
-              // Check if credential is required for automated runs
-              if (!modelRecord.isFree && !loop.credentialId) {
-                logger.error("No credential configured for automated run", {
-                  action: "credential_missing",
-                  loopId: loop.id,
-                });
-
-                // Mark the run as failed so it doesn't stay pending forever
-                await db
-                  .update(agentLoopRun)
-                  .set({
-                    status: "failed",
-                    completedAt: new Date(),
-                    errorMessage:
-                      "No API key configured for this loop. Please update the loop settings or recreate it.",
-                  })
-                  .where(eq(agentLoopRun.id, newRun.id));
-
-                return {
-                  success: false,
-                  message: "No credential configured for automated run",
-                };
-              }
-
-              credential = await getCredentialForRun(
-                loop.userId,
-                loop.id,
-                newRun.id,
-                loop,
-                providerRecord,
-                modelRecord,
-              );
-            } catch (error) {
-              logger.error("Failed to get model config or credential", {
-                action: "model_config_failed",
-                loopId: loop.id,
-                runId: newRun.id,
-                error: error instanceof Error ? error.message : "Unknown error",
-              });
-
-              return {
-                success: false,
-                message:
-                  error instanceof TRPCError ? error.message : "Failed to get model configuration",
-              };
-            }
-
-            const service = getAgentLoopService();
-            const startResult = await service.startRunAsync({
-              loopId: loop.id,
-              runId: newRun.id,
-              provider: providerRecord.name,
-              modelId: modelRecord.modelId,
-              credential,
-              prompt: loop.prompt || undefined,
-            });
-
-            if (!startResult.success) {
-              // Refund quota since run failed to start
-              try {
-                await refundRunToQuota(loop.userId, loop.id, newRun.id);
-              } catch (error) {
-                logger.error("Failed to refund quota after automated run start failure", {
-                  action: "automated_run_refund_failed",
-                  userId: loop.userId,
-                  loopId: loop.id,
-                  runId: newRun.id,
-                  error: error instanceof Error ? error.message : "Unknown error",
-                });
-              }
-
-              throw new TRPCError({
-                code: "INTERNAL_SERVER_ERROR",
-                message: startResult.error || "Failed to start run",
-              });
-            }
-
-            // Update loop run count after successful start
-            await db
-              .update(agentLoop)
-              .set({
-                totalRuns: nextRunNumber, // Use the new run number directly
-                lastRunId: newRun.id,
-              })
-              .where(eq(agentLoop.id, loop.id));
-
-            logger.info("Created next automated run", {
-              action: "automated_run_created",
-              loopId: loop.id,
-              runId: newRun?.id,
-              runNumber: nextRunNumber,
-            });
-
-            return {
-              success: true,
-              message: "Run completed, next run created",
-              nextRunId: newRun?.id,
-            };
-          }
-
-          return {
-            success: true,
-            message: "Run completed, plan is complete",
-          };
-        } else {
-          // Update run as failed
-          await db
-            .update(agentLoopRun)
-            .set({
-              status: "failed",
-              completedAt: now,
-              durationSeconds,
-              sandboxId: input.sandboxId,
-              errorMessage: input.error,
-            })
-            .where(eq(agentLoopRun.id, input.runId));
-
-          // Update loop counters
-          // Note: totalRuns was already incremented when the run was created, so don't increment again
-          await db
-            .update(agentLoop)
-            .set({
-              failedRuns: loop.failedRuns + 1,
-              lastRunId: input.runId,
-              lastRunAt: now,
-              updatedAt: now,
-            })
-            .where(eq(agentLoop.id, loop.id));
-
-          logger.error("Agent loop run failed", {
-            action: "agent_loop_run_failed",
-            loopId: loop.id,
-            runId: input.runId,
-            runNumber: run.runNumber,
-            error: input.error,
-          });
-
-          return {
-            success: true,
-            message: "Run failure recorded",
-          };
-        }
-      } catch (error) {
-        logger.error("Failed to process agent loop callback", {
-          action: "agent_loop_callback_failed",
-          runId: input.runId,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to process agent loop callback",
-        });
-      }
     }),
 });
 

@@ -1,4 +1,4 @@
-import { createGittermWorkspaceClient } from "@gitterm/sdk";
+import { createGittermWorkspaceClient, type WorkspacePortVisibility } from "@gitterm/sdk";
 import { handleError, printJson, startSpinner, success } from "../ui.js";
 
 type JsonArgs = { json?: boolean };
@@ -27,19 +27,44 @@ export async function runPortList(args: JsonArgs) {
       console.log("No ports are open.");
       return;
     }
-    for (const port of ports) console.log(`${port.port}\t${port.name ?? ""}\t${port.url ?? ""}`);
+    for (const port of ports) {
+      console.log(`${port.port}\t${port.visibility}\t${port.name ?? ""}\t${port.url ?? ""}`);
+    }
   } catch (error) {
     handleError(error, args.json);
   }
 }
 
-export async function runPortOpen(args: JsonArgs & { port: number; name?: string }) {
+export async function runPortOpen(
+  args: JsonArgs & { port: number; name?: string; visibility?: WorkspacePortVisibility },
+) {
   const spin = startSpinner(`Opening port ${args.port}...`, args.json);
   try {
-    const port = await createGittermWorkspaceClient().ports.open(args.port, { name: args.name });
+    const port = await createGittermWorkspaceClient().ports.open(args.port, {
+      name: args.name,
+      visibility: args.visibility,
+    });
     spin?.stop();
     if (args.json) return printJson(port);
-    success(`Port ${port.port} opened${port.url ? `: ${port.url}` : "."}`);
+    success(`Port ${port.port} opened (${port.visibility})${port.url ? `: ${port.url}` : "."}`);
+  } catch (error) {
+    spin?.stop();
+    handleError(error, args.json);
+  }
+}
+
+export async function runPortVisibility(
+  args: JsonArgs & { port: number; visibility: WorkspacePortVisibility },
+) {
+  const spin = startSpinner(`Making port ${args.port} ${args.visibility}...`, args.json);
+  try {
+    const port = await createGittermWorkspaceClient().ports.setVisibility(
+      args.port,
+      args.visibility,
+    );
+    spin?.stop();
+    if (args.json) return printJson(port);
+    success(`Port ${port.port} is now ${port.visibility}.`);
   } catch (error) {
     spin?.stop();
     handleError(error, args.json);

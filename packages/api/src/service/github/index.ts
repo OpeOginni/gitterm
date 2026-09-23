@@ -500,37 +500,6 @@ export class GitHubAppService {
   }
 
   /**
-   * Get a repository-scoped token
-   * Even more restrictive - only works for specific repositories
-   */
-  async getRepositoryScopedToken(
-    installationId: string,
-    repositories: string[],
-  ): Promise<{ token: string; expiresAt: string }> {
-    try {
-      const { data } = await this.appOctokit.apps.createInstallationAccessToken({
-        installation_id: parseInt(installationId),
-        repositories,
-      });
-
-      return {
-        token: data.token,
-        expiresAt: data.expires_at,
-      };
-    } catch (error) {
-      if (isNotFoundError(error)) {
-        throw new GitHubInstallationNotFoundError(installationId);
-      }
-      logger.error(
-        "Failed to create repository-scoped token",
-        { action: "create_repo_token" },
-        error as Error,
-      );
-      throw new GitHubAPIError("Failed to generate repository-scoped GitHub token");
-    }
-  }
-
-  /**
    * Get repository information
    */
   async getRepository(
@@ -933,23 +902,6 @@ export class GitHubAppService {
   }
 
   /**
-   * @deprecated Use requestUninstallFromGitHub() instead. Database cleanup now happens via webhook.
-   *
-   * Remove GitHub App installation from database
-   * This is kept for backward compatibility but should not be called directly.
-   * Database cleanup is now handled by the webhook handler via removeInstallationByInstallationId()
-   */
-  async removeInstallation(userId: string, installationId: string): Promise<void> {
-    // Just call the GitHub API - webhook will handle DB cleanup
-    await this.requestUninstallFromGitHub(installationId);
-    logger.info("GitHub App uninstall requested - database cleanup will happen via webhook", {
-      userId,
-      installationId,
-      action: "remove_installation_deprecated",
-    });
-  }
-
-  /**
    * List repositories accessible through a GitHub App installation
    * Paginates through all repos (up to maxRepos limit)
    */
@@ -1129,97 +1081,6 @@ export class GitHubAppService {
       }
       logger.error("Failed to get file tree", { action: "get_file_tree" }, error as Error);
       throw new GitHubAPIError("Failed to get file tree");
-    }
-  }
-
-  /**
-   * Search files in a repository by name pattern
-   * Filters by file extensions (txt, md, json)
-   */
-  async searchFiles(
-    installationId: string,
-    owner: string,
-    repo: string,
-    query: string,
-    ref?: string,
-    extensions: string[] = ["txt", "md", "json"],
-  ): Promise<
-    {
-      path: string;
-      name: string;
-      size?: number;
-    }[]
-  > {
-    try {
-      const tree = await this.getFileTree(installationId, owner, repo, ref);
-
-      const lowerQuery = query.toLowerCase();
-      const extPattern = new RegExp(`\\.(${extensions.join("|")})$`, "i");
-
-      return tree
-        .filter((item) => {
-          if (item.type !== "blob") return false;
-          if (!extPattern.test(item.path)) return false;
-          const fileName = item.path.split("/").pop() || "";
-          return fileName.toLowerCase().includes(lowerQuery);
-        })
-        .map((item) => ({
-          path: item.path,
-          name: item.path.split("/").pop() || item.path,
-          size: item.size,
-        }))
-        .slice(0, 50); // Limit results
-    } catch (error) {
-      if (error instanceof GitHubInstallationNotFoundError) {
-        throw error;
-      }
-      logger.error("Failed to search files", { action: "search_files" }, error as Error);
-      throw new GitHubAPIError("Failed to search files");
-    }
-  }
-
-  /**
-   * Get file contents
-   */
-  async getFileContents(
-    installationId: string,
-    owner: string,
-    repo: string,
-    path: string,
-    ref?: string,
-  ): Promise<{
-    content: string;
-    encoding: string;
-    size: number;
-    sha: string;
-  }> {
-    try {
-      const { token } = await this.getUserToServerToken(installationId);
-      const userOctokit = new Octokit({ auth: token });
-
-      const { data } = await userOctokit.repos.getContent({
-        owner,
-        repo,
-        path,
-        ref,
-      });
-
-      if (Array.isArray(data) || data.type !== "file") {
-        throw new GitHubAPIError("Path is not a file");
-      }
-
-      return {
-        content: data.content,
-        encoding: data.encoding,
-        size: data.size,
-        sha: data.sha,
-      };
-    } catch (error) {
-      if (error instanceof GitHubInstallationNotFoundError || error instanceof GitHubAPIError) {
-        throw error;
-      }
-      logger.error("Failed to get file contents", { action: "get_file_contents" }, error as Error);
-      throw new GitHubAPIError("Failed to get file contents");
     }
   }
 

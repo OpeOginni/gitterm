@@ -172,21 +172,6 @@ export class EncryptionService {
     return JSON.parse(this.decrypt(encryptedCredential));
   }
 
-  encryptForSandbox(credential: ApiKeyCredential | OAuthCredential, sessionKey: Buffer): string {
-    if (sessionKey.length !== 32) throw new Error("Session key must be 32 bytes");
-    const nonce = randomBytes(NONCE_LENGTH);
-    const cipher = createCipheriv(ALGORITHM, sessionKey, nonce);
-    const ciphertext = Buffer.concat([
-      cipher.update(JSON.stringify(credential), "utf8"),
-      cipher.final(),
-    ]);
-    return Buffer.concat([nonce, ciphertext, cipher.getAuthTag()]).toString("base64");
-  }
-
-  static generateSessionKey(): Buffer {
-    return randomBytes(32);
-  }
-
   static generateMasterKey(): string {
     return randomBytes(32).toString("hex");
   }
@@ -215,5 +200,4 @@ export function getEncryptionService(): EncryptionService {
 export const encryption = {
   getService: getEncryptionService,
   generateMasterKey: EncryptionService.generateMasterKey,
-  generateSessionKey: EncryptionService.generateSessionKey,
 };

@@ -1,7 +1,7 @@
 import env from "@gitterm/env/server";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
-import type { RenderedEmail } from "./invite-templates";
+import type { RenderedEmail } from "./render";
 
 export interface OutgoingEmail extends RenderedEmail {
   to: string;

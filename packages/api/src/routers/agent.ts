@@ -1,8 +1,6 @@
-import { accountProcedure, publicProcedure, router } from "../index";
+import { accountProcedure, router } from "../index";
 
 export const agentRouter = router({
-  health: publicProcedure.query(() => ({ ok: true })),
-
   me: accountProcedure("identity:read").query(({ ctx }) => ({
     userId: ctx.session.user.id,
     email: ctx.session.user.email,

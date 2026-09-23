@@ -4,7 +4,7 @@ import {
   MonitorSmartphone,
   Save,
   Globe,
-  Users,
+  Code2,
   TerminalSquare,
   Timer,
 } from "lucide-react";
@@ -49,13 +49,13 @@ const features = [
     icon: Globe,
     tag: "expose",
     title: "Share a live app preview",
-    body: "Expose any workspace port through a shareable URL for testing, feedback, or a quick demo.",
+    body: "Expose any workspace port as a private URL for you, or make it public for APIs, webhooks, and demos.",
   },
   {
-    icon: Users,
-    tag: "team",
-    title: "Bring your team in",
-    body: "Share a workspace with teammates when a task needs another set of eyes or a clean handoff.",
+    icon: Code2,
+    tag: "editor",
+    title: "Open in your editor",
+    body: "Connect VS Code or Neovim over SSH when you would rather work in your own editor setup.",
   },
   {
     icon: TerminalSquare,

@@ -15,12 +15,9 @@ import * as authSchema from "./schema/auth";
 import * as cloudSchema from "./schema/cloud";
 import * as workspaceSchema from "./schema/workspace";
 import * as integrationsSchema from "./schema/integrations";
-import * as agentLoopSchema from "./schema/agent-loop";
 import * as modelCredentialsSchema from "./schema/model-credentials";
-import * as syncSchema from "./schema/sync";
 import * as providerConfigSchema from "./schema/provider-config";
 import * as workspaceRouteAccessSchema from "./schema/workspace-route-access";
-import * as workspaceAccessSchema from "./schema/workspace-access";
 import * as workspaceSetupSchema from "./schema/workspace-setup";
 import * as agentRunSchema from "./schema/agent-run";
 import * as credentialSecuritySchema from "./schema/credential-security";
@@ -31,12 +28,9 @@ export const db = drizzle(process.env.DATABASE_URL || "", {
     ...cloudSchema,
     ...workspaceSchema,
     ...integrationsSchema,
-    ...agentLoopSchema,
     ...modelCredentialsSchema,
-    ...syncSchema,
     ...providerConfigSchema,
     ...workspaceRouteAccessSchema,
-    ...workspaceAccessSchema,
     ...workspaceSetupSchema,
     ...agentRunSchema,
     ...credentialSecuritySchema,

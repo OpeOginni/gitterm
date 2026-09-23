@@ -26,6 +26,11 @@ import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-err
 import { readWorkspaceRuntimeBundle } from "../../service/workspace-runtime-bundle";
 import { recordCredentialAudit } from "../../service/credential-audit";
 import { redactSensitiveText } from "../../utils/redact-secrets";
+import {
+  getPortVisibility,
+  portVisibilitySchema,
+  type ExposedPort,
+} from "@gitterm/schema/workspace-ports";
 
 const workspacePortSchema = z.number().int().min(1).max(65535);
 const PORT_DOMAIN_TIMEOUT_MS = 15_000;
@@ -51,6 +56,15 @@ async function withPortDomainTimeout<T>(operation: Promise<T>): Promise<T> {
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+function toPortResponse(subdomain: string | null, entry: ExposedPort) {
+  return {
+    port: entry.port,
+    name: entry.name ?? null,
+    visibility: getPortVisibility(entry),
+    url: subdomain ? getWorkspacePortUrl(subdomain, entry.port) : null,
+  };
 }
 
 async function getAuthenticatedWorkspace(workspaceId: string, userId: string) {
@@ -145,11 +159,9 @@ export const workspaceOperationsRouter = router({
       checkoutRef: ws.repositoryCheckoutRef,
       providerKey: provider?.providerKey ?? null,
       url: ws.subdomain && ws.status !== "terminated" ? getWorkspaceUrl(ws.subdomain) : null,
-      ports: Object.values(ws.exposedPorts ?? {}).map((entry) => ({
-        port: entry.port,
-        name: entry.name ?? null,
-        url: ws.subdomain ? getWorkspacePortUrl(ws.subdomain, entry.port) : null,
-      })),
+      ports: Object.values(ws.exposedPorts ?? {}).map((entry) =>
+        toPortResponse(ws.subdomain, entry),
+      ),
     };
   }),
 
@@ -159,16 +171,16 @@ export const workspaceOperationsRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient port scope" });
     }
     const ws = await getAuthenticatedWorkspace(workspaceAuth.workspaceId, workspaceAuth.userId);
-    return Object.values(ws.exposedPorts ?? {}).map((entry) => ({
-      port: entry.port,
-      name: entry.name ?? null,
-      url: ws.subdomain ? getWorkspacePortUrl(ws.subdomain, entry.port) : null,
-    }));
+    return Object.values(ws.exposedPorts ?? {}).map((entry) => toPortResponse(ws.subdomain, entry));
   }),
 
   openPort: workspaceAuthProcedure
     .input(
-      z.object({ port: workspacePortSchema, name: z.string().trim().min(1).max(100).optional() }),
+      z.object({
+        port: workspacePortSchema,
+        name: z.string().trim().min(1).max(100).optional(),
+        visibility: portVisibilitySchema.optional(),
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const { workspaceAuth } = ctx;
@@ -191,19 +203,16 @@ export const workspaceOperationsRouter = router({
       const exposed = await withPortDomainTimeout(
         computeProvider.createOrGetExposedPortDomain(ws.externalInstanceId, input.port),
       );
+      const entry: ExposedPort = {
+        port: input.port,
+        name: input.name,
+        upstreamUrl: exposed.domain,
+        externalPortDomainId: exposed.externalPortDomainId,
+        visibility: input.visibility ?? getPortVisibility(ws.exposedPorts?.[input.port]),
+      };
       await updateWorkspaceRoutingAndInvalidate(
         ws.id,
-        {
-          exposedPorts: {
-            ...ws.exposedPorts,
-            [input.port]: {
-              port: input.port,
-              name: input.name,
-              upstreamUrl: exposed.domain,
-              externalPortDomainId: exposed.externalPortDomainId,
-            },
-          },
-        },
+        { exposedPorts: { ...ws.exposedPorts, [input.port]: entry } },
         ws.subdomain,
       );
       if (exposed.upstreamAccess?.headers) {
@@ -212,11 +221,28 @@ export const workspaceOperationsRouter = router({
         await deleteWorkspaceRouteAccess(ws.id, input.port);
       }
 
-      return {
-        port: input.port,
-        name: input.name ?? null,
-        url: ws.subdomain ? getWorkspacePortUrl(ws.subdomain, input.port) : null,
-      };
+      return toPortResponse(ws.subdomain, entry);
+    }),
+
+  setPortVisibility: workspaceAuthProcedure
+    .input(z.object({ port: workspacePortSchema, visibility: portVisibilitySchema }))
+    .mutation(async ({ input, ctx }) => {
+      const { workspaceAuth } = ctx;
+      if (!workspaceJWT.hasScope(workspaceAuth, "port:open")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient port scope" });
+      }
+      const ws = await getAuthenticatedWorkspace(workspaceAuth.workspaceId, workspaceAuth.userId);
+      const existing = ws.exposedPorts?.[input.port];
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Port is not open" });
+      }
+      const entry: ExposedPort = { ...existing, visibility: input.visibility };
+      await updateWorkspaceRoutingAndInvalidate(
+        ws.id,
+        { exposedPorts: { ...ws.exposedPorts, [input.port]: entry } },
+        ws.subdomain,
+      );
+      return toPortResponse(ws.subdomain, entry);
     }),
 
   closePort: workspaceAuthProcedure

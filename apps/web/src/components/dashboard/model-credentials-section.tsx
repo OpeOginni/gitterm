@@ -775,7 +775,7 @@ export function ModelCredentialsSection() {
             <DialogTitle>Delete Credential</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete this credential? This action cannot be undone and may
-              affect running agent loops.
+              affect running workspaces.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

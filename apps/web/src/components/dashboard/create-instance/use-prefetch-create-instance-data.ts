@@ -14,7 +14,6 @@ import { queryClient, trpc } from "@/utils/trpc";
  */
 export function usePrefetchCreateInstanceData() {
   useEffect(() => {
-    // Cloud instance flow
     void queryClient.prefetchQuery(trpc.workspace.listAgentTypes.queryOptions());
     void queryClient.prefetchQuery(
       trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true }),
@@ -23,14 +22,6 @@ export function usePrefetchCreateInstanceData() {
     void queryClient.prefetchQuery(trpc.user.getDefaultCloudProvider.queryOptions());
     void queryClient.prefetchQuery(trpc.workspace.getSubdomainPermissions.queryOptions());
     void queryClient.prefetchQuery(trpc.user.getSshPublicKey.queryOptions());
-
-    // Agent loop flow
-    void queryClient.prefetchQuery(
-      trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true, sandboxOnly: true }),
-    );
-    void queryClient.prefetchQuery(trpc.modelCredentials.listProviders.queryOptions());
-    void queryClient.prefetchQuery(trpc.modelCredentials.listModels.queryOptions());
     void queryClient.prefetchQuery(trpc.modelCredentials.listMyCredentials.queryOptions());
-    void queryClient.prefetchQuery(trpc.agentLoop.getUsage.queryOptions());
   }, []);
 }

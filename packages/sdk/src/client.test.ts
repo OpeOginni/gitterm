@@ -310,7 +310,7 @@ test("respond sends question answers keyed by question key", async () => {
   });
 });
 
-test("model discovery includes logical provider keys and workspace configuration", async () => {
+test("credential discovery includes logical provider keys and workspace configuration", async () => {
   const client = createGittermClient({
     token: "gt_test",
     fetch: (async (input) => {
@@ -331,17 +331,11 @@ test("model discovery includes logical provider keys and workspace configuration
       if (url.includes("getModelAccess"))
         return trpcOk({
           providers: [{ provider: "openai", source: "saved", label: "work", active: true }],
-          models: [],
         });
-      return trpcOk({
-        models: [
-          { modelId: "openai/test", displayName: "Test", isFree: false, isRecommended: true },
-        ],
-      });
+      return trpcOk({});
     }) as typeof fetch,
   });
   expect((await client.credentials.listProviders())[0]?.logicalProviderKey).toBe("openai");
-  expect((await client.models.list({ provider: "openai" }))[0]?.id).toBe("openai/test");
   expect((await client.workspaces.models("workspace")).providers[0]?.label).toBe("work");
 });
 
