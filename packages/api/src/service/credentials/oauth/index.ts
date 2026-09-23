@@ -6,3 +6,5 @@
 
 export * from "./github-copilot";
 export * from "./openai-oauth";
+export * from "./opencode-console";
+export * from "./xai-oauth";

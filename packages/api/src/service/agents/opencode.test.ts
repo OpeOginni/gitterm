@@ -95,3 +95,71 @@ test("workspaces receive the credentials file and importer plugin", () => {
     buildOpencodeCredentials(credentials),
   );
 });
+
+const extras: UserProviderCredential[] = [
+  {
+    credentialId: "cloudflare",
+    providerName: "cloudflare-workers-ai",
+    logicalProviderKey: "cloudflare-workers-ai",
+    label: "default",
+    isDefault: true,
+    credential: { type: "api_key", apiKey: "cf-key", metadata: { accountId: "a".repeat(32) } },
+  },
+  {
+    credentialId: "zen",
+    providerName: "opencode",
+    logicalProviderKey: "opencode",
+    label: "zen",
+    isDefault: false,
+    credential: { type: "api_key", apiKey: "zen-key" },
+  },
+  {
+    credentialId: "console",
+    providerName: "opencode-console",
+    logicalProviderKey: "opencode",
+    label: "Acme",
+    isDefault: true,
+    credential: {
+      type: "oauth",
+      refresh: "oc-refresh",
+      access: "oc-access",
+      expires: 1,
+      metadata: { server: "https://opencode.ai/console", orgID: "org_1" },
+    },
+  },
+];
+
+test("provider settings and OAuth metadata reach the OpenCode integration", () => {
+  expect(buildOpencodeCredentials(extras)).toEqual([
+    {
+      integration: "cloudflare-workers-ai",
+      label: "default",
+      active: true,
+      value: { type: "api", key: "cf-key", metadata: { accountId: "a".repeat(32) } },
+    },
+    { integration: "opencode", label: "zen", value: { type: "api", key: "zen-key" } },
+    {
+      integration: "opencode",
+      label: "Acme",
+      active: true,
+      value: {
+        type: "oauth",
+        refresh: "oc-refresh",
+        access: "oc-access",
+        expires: 1,
+        metadata: { server: "https://opencode.ai/console", orgID: "org_1" },
+      },
+    },
+  ]);
+});
+
+test("OpenCode 1.x auth.json skips the console account it cannot use", () => {
+  expect(JSON.parse(buildOpencodeAuthJson(extras))).toEqual({
+    "cloudflare-workers-ai": {
+      type: "api",
+      key: "cf-key",
+      metadata: { accountId: "a".repeat(32) },
+    },
+    opencode: { type: "api", key: "zen-key" },
+  });
+});

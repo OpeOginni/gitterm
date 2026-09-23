@@ -18,6 +18,7 @@ import {
   type OAuthCredential,
   EncryptionService,
 } from "../encryption";
+import { normalizeModelProviderFields } from "@gitterm/schema/model-providers";
 import { GitHubCopilotOAuthService } from "./oauth/github-copilot";
 import { OpenAIOAuthService } from "./oauth/openai-oauth";
 
@@ -26,6 +27,8 @@ export interface StoreApiKeyOptions {
   userId: string;
   providerName: string;
   apiKey: string;
+  /** Extra values the provider needs, validated against its field definitions. */
+  fields?: Record<string, string>;
   /** Unique per user + provider; used to select the credential from the SDK/CLI. */
   label: string;
 }
@@ -37,6 +40,8 @@ export interface StoreOAuthOptions {
   accessToken?: string;
   expiresAt?: number;
   enterpriseUrl?: string;
+  accountId?: string;
+  metadata?: Record<string, string>;
   /** Unique per user + provider; used to select the credential from the SDK/CLI. */
   label: string;
 }
@@ -142,7 +147,7 @@ export class ModelCredentialsService {
    * Store an API key credential
    */
   async storeApiKey(options: StoreApiKeyOptions): Promise<{ id: string; keyHash: string }> {
-    const { userId, providerName, apiKey, label } = options;
+    const { userId, providerName, apiKey, fields, label } = options;
 
     // Get the provider
     const provider = await this.getProviderByName(providerName);
@@ -154,10 +159,11 @@ export class ModelCredentialsService {
       throw new Error(`Provider ${providerName} does not support API key authentication`);
     }
 
-    // Create credential object
+    const metadata = normalizeModelProviderFields(providerName, fields);
     const credential: ApiKeyCredential = {
       type: "api_key",
       apiKey,
+      ...(metadata ? { metadata } : {}),
     };
 
     const normalizedLabel = await this.assertLabelAvailable(userId, provider.id, label);
@@ -203,8 +209,17 @@ export class ModelCredentialsService {
    * Store OAuth tokens (refresh token + optional access token)
    */
   async storeOAuthTokens(options: StoreOAuthOptions): Promise<{ id: string; keyHash: string }> {
-    const { userId, providerName, refreshToken, accessToken, expiresAt, enterpriseUrl, label } =
-      options;
+    const {
+      userId,
+      providerName,
+      refreshToken,
+      accessToken,
+      expiresAt,
+      enterpriseUrl,
+      accountId,
+      metadata,
+      label,
+    } = options;
 
     // Get the provider
     const provider = await this.getProviderByName(providerName);
@@ -223,6 +238,8 @@ export class ModelCredentialsService {
       access: accessToken,
       expires: expiresAt,
       enterpriseUrl,
+      accountId,
+      ...(metadata ? { metadata } : {}),
     };
 
     const normalizedLabel = await this.assertLabelAvailable(userId, provider.id, label);

@@ -63,7 +63,7 @@ async function loadPlugin(entries: OpencodeCredentialEntry[]) {
   return mod.default as { id: string; setup(ctx: unknown): Promise<void> };
 }
 
-type Method = { type: string; id?: string };
+type Method = { type: string; id?: string; form?: Array<{ key: string }> };
 type Connection = { type: "credential"; id: string; label: string };
 type Registration = {
   integrationID: string;
@@ -108,12 +108,19 @@ function fakeContext(input: {
           integrationID,
           key,
           label,
+          answer,
         }: {
           integrationID: string;
           key: string;
           label: string;
+          answer?: Record<string, string>;
         }) => {
-          stored.push({ integrationID, label, value: { type: "key", key } });
+          if (integrationID === "broken") throw new Error("rejected");
+          stored.push({
+            integrationID,
+            label,
+            value: { type: "key", key, ...(answer ? { metadata: answer } : {}) },
+          });
           state[integrationID]!.connections.push({
             type: "credential",
             id: `cred_${++sequence}`,
@@ -233,4 +240,93 @@ test("plugin tolerates a missing credentials file", async () => {
   const { ctx, stored } = fakeContext({ integrations: {} });
   await plugin.setup(ctx);
   expect(stored).toEqual([]);
+});
+
+test("plugin answers only the key form fields OpenCode asks for", async () => {
+  const plugin = await loadPlugin([
+    {
+      integration: "cloudflare-ai-gateway",
+      label: "gateway",
+      value: { type: "api", key: "cf-token", metadata: { accountId: "acct", gatewayId: "gw" } },
+    },
+    {
+      integration: "cloudflare-workers-ai",
+      label: "workers",
+      value: { type: "api", key: "cf-key", metadata: { accountId: "acct" } },
+    },
+  ]);
+  const { ctx, stored } = fakeContext({
+    integrations: {
+      // CLOUDFLARE_ACCOUNT_ID is set, so the gateway form only asks for the gateway.
+      "cloudflare-ai-gateway": { methods: [{ type: "key", form: [{ key: "gatewayId" }] }] },
+      // No form at all: OpenCode would reject any answer.
+      "cloudflare-workers-ai": { methods: [{ type: "key" }] },
+    },
+  });
+  await plugin.setup(ctx);
+  expect(stored).toEqual([
+    {
+      integrationID: "cloudflare-ai-gateway",
+      label: "gateway",
+      value: { type: "key", key: "cf-token", metadata: { gatewayId: "gw" } },
+    },
+    {
+      integrationID: "cloudflare-workers-ai",
+      label: "workers",
+      value: { type: "key", key: "cf-key" },
+    },
+  ]);
+});
+
+test("plugin keeps OAuth metadata such as the OpenCode console organization", async () => {
+  const plugin = await loadPlugin([
+    {
+      integration: "opencode",
+      label: "Acme",
+      value: {
+        type: "oauth",
+        refresh: "oc-refresh",
+        access: "oc-access",
+        expires: 5,
+        metadata: { server: "https://opencode.ai/console", orgID: "org_1", orgName: "Acme" },
+      },
+    },
+  ]);
+  const { ctx, stored } = fakeContext({
+    integrations: {
+      opencode: { methods: [{ type: "oauth", id: "device" }, { type: "key" }] },
+    },
+  });
+  await plugin.setup(ctx);
+  expect(stored).toEqual([
+    {
+      integrationID: "opencode",
+      label: "Acme",
+      value: {
+        type: "oauth",
+        methodID: "device",
+        refresh: "oc-refresh",
+        access: "oc-access",
+        expires: 5,
+        metadata: { server: "https://opencode.ai/console", orgID: "org_1", orgName: "Acme" },
+      },
+    },
+  ]);
+});
+
+test("plugin keeps importing after one credential is rejected", async () => {
+  const plugin = await loadPlugin([
+    { integration: "broken", label: "x", value: { type: "api", key: "bad" } },
+    { integration: "anthropic", label: "work", value: { type: "api", key: "sk-ant-work" } },
+  ]);
+  const { ctx, stored } = fakeContext({
+    integrations: {
+      broken: { methods: [{ type: "key" }] },
+      anthropic: { methods: [{ type: "key" }] },
+    },
+  });
+  await plugin.setup(ctx);
+  expect(stored).toEqual([
+    { integrationID: "anthropic", label: "work", value: { type: "key", key: "sk-ant-work" } },
+  ]);
 });

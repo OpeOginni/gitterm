@@ -17,21 +17,29 @@ function toBase64(value: string): string {
   return Buffer.from(value).toString("base64");
 }
 
-/** Both OpenAI authentication methods share the `openai` OpenCode provider. */
+/** The logical provider key is the OpenCode integration ID shared by all auth methods. */
 function opencodeIntegration(cred: UserProviderCredential): string {
-  return cred.providerName === "openai-oauth" ? "openai" : cred.providerName;
+  return cred.logicalProviderKey;
 }
 
 function opencodeAuthEntry(cred: UserProviderCredential): OpencodeAuthEntry {
-  return cred.credential.type === "api_key"
-    ? { type: "api", key: cred.credential.apiKey }
-    : {
-        type: "oauth",
-        refresh: cred.credential.refresh,
-        access: cred.credential.access,
-        expires: cred.credential.expires,
-        accountId: cred.credential.accountId,
-      };
+  const { credential } = cred;
+  if (credential.type === "api_key") {
+    return {
+      type: "api",
+      key: credential.apiKey,
+      ...(credential.metadata ? { metadata: credential.metadata } : {}),
+    };
+  }
+  return {
+    type: "oauth",
+    refresh: credential.refresh,
+    access: credential.access,
+    expires: credential.expires,
+    accountId: credential.accountId,
+    enterpriseUrl: credential.enterpriseUrl,
+    ...(credential.metadata ? { metadata: credential.metadata } : {}),
+  };
 }
 
 /** Every account, labelled as in the dashboard; imported into OpenCode by the credentials plugin. */
@@ -55,13 +63,23 @@ export function buildOpencodeCredentials(
   });
 }
 
-/** OpenCode 1.x auth.json: one account per provider, preferring the default. */
+/**
+ * OpenCode 1.x auth.json: one account per provider, preferring the default.
+ * 1.x has no OpenCode console OAuth and no OAuth metadata, so those are left out.
+ */
 export function buildOpencodeAuthJson(credentials: UserProviderCredential[]): string {
   return JSON.stringify(
     Object.fromEntries(
-      [...credentials]
+      credentials
+        .filter(
+          (cred) => !(cred.credential.type === "oauth" && opencodeIntegration(cred) === "opencode"),
+        )
         .sort((a, b) => Number(a.isDefault) - Number(b.isDefault))
-        .map((cred) => [opencodeIntegration(cred), opencodeAuthEntry(cred)]),
+        .map((cred) => {
+          const entry = opencodeAuthEntry(cred);
+          if (entry.type === "oauth") delete entry.metadata;
+          return [opencodeIntegration(cred), entry];
+        }),
     ),
   );
 }

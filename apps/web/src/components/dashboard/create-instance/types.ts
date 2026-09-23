@@ -124,6 +124,10 @@ const MODEL_PROVIDER_LOGO_ALIASES: Record<string, string> = {
   "openai-oauth": "openai",
   "openai-codex": "openai-codex",
   "github-copilot": "github-copilot",
+  "opencode-console": "opencode",
+  "xai-oauth": "xai",
+  "cloudflare-ai-gateway": "cloudflare",
+  "cloudflare-workers-ai": "cloudflare",
   claude: "anthropic",
 };
 
