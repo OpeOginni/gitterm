@@ -516,6 +516,8 @@ export type ModelCredential = {
   /** Select with models.providers[logicalProviderKey] = { source: "saved", label }. */
   label: string;
   keyHash: string;
+  /** Last four characters of the API key; null for OAuth credentials. */
+  keySuffix: string | null;
   isActive: boolean;
   isDefault: boolean;
   lastUsedAt: string | null;

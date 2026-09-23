@@ -108,17 +108,17 @@ export function ModelCredentialsSection() {
           variant="outline"
           onClick={() => setConnectOpen(true)}
           disabled={isLoadingProviders}
-          className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
+          className="gap-2 font-mono text-xs font-semibold uppercase tracking-[0.12em]"
         >
           <UserRound className="h-3.5 w-3.5" />
-          Connect account
+          Add OAuth
         </Button>
       )}
       <Button
         size="sm"
         onClick={() => setApiKeyOpen(true)}
         disabled={isLoadingProviders}
-        className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
+        className="gap-2 font-mono text-xs font-semibold uppercase tracking-[0.12em]"
       >
         <Plus className="h-3.5 w-3.5" />
         Add API key
@@ -183,9 +183,11 @@ export function ModelCredentialsSection() {
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         {credential.authType === "oauth" ? (
-                          <span>Signed in with OAuth</span>
+                          <span>OAuth</span>
                         ) : (
-                          <span className="font-mono">...{credential.keyHash.slice(-8)}</span>
+                          <span className={credential.keySuffix ? "font-mono" : undefined}>
+                            {credential.keySuffix ? `...${credential.keySuffix}` : "API key"}
+                          </span>
                         )}
                         {credential.lastUsedAt && (
                           <span>

@@ -1,0 +1,1 @@
+ALTER TABLE "user_model_credential" ADD COLUMN "key_suffix" text;

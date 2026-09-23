@@ -20,6 +20,9 @@ import {
 } from "../encryption";
 import { normalizeModelProviderFields } from "@gitterm/schema/model-providers";
 
+// Don't expose a large fraction of a short key just to provide a display hint.
+const apiKeySuffix = (key: string): string | null => (key.length >= 16 ? key.slice(-4) : null);
+
 // Types for credential operations
 export interface StoreApiKeyOptions {
   userId: string;
@@ -53,6 +56,7 @@ export interface CredentialMetadata {
   authType: string;
   label: string;
   keyHash: string;
+  keySuffix: string | null;
   isActive: boolean;
   isDefault: boolean;
   lastUsedAt: Date | null;
@@ -169,6 +173,7 @@ export class ModelCredentialsService {
     // Encrypt and hash
     const encryptedCredential = this.encryption.encryptCredential(credential);
     const keyHash = this.encryption.hashForAudit(apiKey);
+    const keySuffix = apiKeySuffix(apiKey);
 
     // Store in database
     const existingDefault = await db.query.userModelCredential.findFirst({
@@ -188,6 +193,7 @@ export class ModelCredentialsService {
         isDefault: !existingDefault,
         encryptedCredential,
         keyHash,
+        keySuffix,
         label: normalizedLabel,
       })
       .returning({ id: userModelCredential.id });
@@ -304,6 +310,7 @@ export class ModelCredentialsService {
       authType: cred.provider.authType,
       label: cred.label,
       keyHash: cred.keyHash,
+      keySuffix: cred.provider.authType === "api_key" ? cred.keySuffix : null,
       isActive: cred.isActive,
       isDefault: cred.isDefault,
       lastUsedAt: cred.lastUsedAt,

@@ -59,6 +59,10 @@ export const userModelCredential = pgTable(
     // SHA-256 prefix for audit (first 16 chars)
     keyHash: text("key_hash").notNull(),
 
+    // Last four characters of the original API key, for identifying it in the UI.
+    // Null for OAuth tokens and API keys saved before this field was added.
+    keySuffix: text("key_suffix"),
+
     // OAuth-specific: when access token expires (for auto-refresh)
     oauthExpiresAt: timestamp("oauth_expires_at"),
 
