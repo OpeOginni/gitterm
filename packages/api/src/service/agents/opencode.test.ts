@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   OPENCODE_CREDENTIALS_PATH,
   OPENCODE_CREDENTIALS_PLUGIN_PATH,
+  OPENCODE_MANAGED_REFRESH,
 } from "@gitterm/agent-runtime/opencode-credentials";
 import { buildOpencodeAuthJson, buildOpencodeCredentials, opencodeProvisioner } from "./opencode";
 import type { AgentProvisionerContext, UserProviderCredential } from "./types";
@@ -56,7 +57,12 @@ test("every dashboard account travels with its label and default flag", () => {
       integration: "openai",
       label: "subscription",
       active: true,
-      value: { type: "oauth", refresh: "refresh-token" },
+      // The ChatGPT refresh token rotates, so it stays in GitTerm.
+      value: {
+        type: "oauth",
+        refresh: OPENCODE_MANAGED_REFRESH,
+        metadata: { gittermCredentialId: "subscription" },
+      },
     },
     { integration: "openai", label: "work", value: { type: "api", key: "sk-openai-work" } },
     { integration: "anthropic", label: "work", value: { type: "api", key: "sk-ant-work" } },
@@ -144,13 +150,32 @@ test("provider settings and OAuth metadata reach the OpenCode integration", () =
       active: true,
       value: {
         type: "oauth",
-        refresh: "oc-refresh",
+        refresh: OPENCODE_MANAGED_REFRESH,
         access: "oc-access",
         expires: 1,
-        metadata: { server: "https://opencode.ai/console", orgID: "org_1" },
+        metadata: {
+          server: "https://opencode.ai/console",
+          orgID: "org_1",
+          gittermCredentialId: "console",
+        },
       },
     },
   ]);
+});
+
+test("accounts GitTerm does not refresh keep their own refresh token", () => {
+  const copilot: UserProviderCredential = {
+    credentialId: "copilot",
+    providerName: "github-copilot",
+    logicalProviderKey: "github-copilot",
+    label: "GitHub",
+    isDefault: true,
+    credential: { type: "oauth", refresh: "gho_token" },
+  };
+  expect(buildOpencodeCredentials([copilot])[0]!.value).toEqual({
+    type: "oauth",
+    refresh: "gho_token",
+  });
 });
 
 test("OpenCode 1.x auth.json skips the console account it cannot use", () => {

@@ -82,11 +82,11 @@ async function refreshAccessToken(refreshToken: string): Promise<OpenAITokenResp
       refresh_token: refreshToken,
       client_id: CLIENT_ID,
     }).toString(),
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Token refresh failed: ${response.status} ${text}`);
+    throw new Error(`Token refresh failed: ${response.status}`);
   }
 
   return response.json() as Promise<OpenAITokenResponse>;

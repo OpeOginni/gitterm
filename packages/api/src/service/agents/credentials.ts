@@ -6,6 +6,43 @@ import { getEncryptionService } from "../encryption";
 import { OPENCODE_CREDENTIAL_LABEL } from "@gitterm/agent-runtime/opencode-credentials";
 import type { UserProviderCredential } from "./types";
 import { selectWorkspaceCredentials } from "./credential-selection";
+import { getModelProviderDefinition } from "@gitterm/schema/model-providers";
+import { getFreshModelOAuthCredential } from "../credentials/workspace-model-token";
+import { logger } from "../../utils/logger";
+
+const STARTUP_MIN_REMAINING_MS = 30 * 60 * 1000;
+
+/**
+ * Accounts refreshed by GitTerm start with a fresh access token, so a new workspace
+ * does not need to call back before its record exists. Failure is not fatal: the
+ * workspace asks GitTerm again when OpenCode needs a token.
+ */
+async function withFreshAccessToken(
+  userId: string,
+  cred: UserProviderCredential,
+): Promise<UserProviderCredential> {
+  if (
+    !cred.credentialId ||
+    cred.credential.type !== "oauth" ||
+    !getModelProviderDefinition(cred.providerName)?.refreshedByGitterm
+  ) {
+    return cred;
+  }
+  try {
+    const credential = await getFreshModelOAuthCredential({
+      userId,
+      credentialId: cred.credentialId,
+      minRemainingMs: STARTUP_MIN_REMAINING_MS,
+    });
+    return { ...cred, credential };
+  } catch (error) {
+    logger.warn("Could not refresh model credential before provisioning", {
+      records: { credentialId: cred.credentialId },
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return cred;
+  }
+}
 
 export async function getUserProviderCredentials(
   userId: string,
@@ -41,7 +78,7 @@ export async function resolveWorkspaceProviderCredentials(options: {
         providerName: row.model_provider.name,
       })),
     );
-    return selected.map(
+    const resolved = selected.map(
       (selection): UserProviderCredential =>
         selection.source === "apiKey"
           ? {
@@ -66,6 +103,7 @@ export async function resolveWorkspaceProviderCredentials(options: {
               ),
             },
     );
+    return await Promise.all(resolved.map((cred) => withFreshAccessToken(options.userId, cred)));
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("MODEL_CREDENTIAL_")) {
       throw new TRPCError({ code: "BAD_REQUEST", message: error.message });

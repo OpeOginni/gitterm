@@ -26,6 +26,12 @@ export interface ModelProviderDefinition {
   authType: ModelProviderAuthType;
   /** OAuth flow implementation; null for API keys. */
   plugin: string | null;
+  /**
+   * The provider rotates refresh tokens, so copies in several workspaces would
+   * invalidate each other. GitTerm keeps the refresh token and workspaces fetch
+   * access tokens from it instead.
+   */
+  refreshedByGitterm?: boolean;
   isRecommended?: boolean;
   /** Listed first in the API key picker. */
   featured?: boolean;
@@ -53,6 +59,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     logicalProviderKey: "opencode",
     authType: "oauth",
     plugin: "opencode-console",
+    refreshedByGitterm: true,
     isRecommended: true,
     description: "Zen and Go through your OpenCode console account.",
     keyUrl: "https://opencode.ai/auth",
@@ -63,6 +70,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     logicalProviderKey: "openai",
     authType: "oauth",
     plugin: "oauth",
+    refreshedByGitterm: true,
     isRecommended: true,
     description: "Use your ChatGPT Plus or Pro subscription.",
   },
@@ -80,6 +88,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     logicalProviderKey: "xai",
     authType: "oauth",
     plugin: "xai-oauth",
+    refreshedByGitterm: true,
     description: "Use Grok models from your SuperGrok subscription.",
   },
 
