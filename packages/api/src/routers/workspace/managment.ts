@@ -2724,7 +2724,8 @@ export const workspaceRouter = router({
           imageId: imageRecord.id,
           cloudProviderId: input.cloudProviderId,
           regionId: regionRecord?.id,
-          gitIntegrationId: input.gitIntegrationId ?? null,
+          // Inline credentials win over an App ID; never later refresh an unused App token.
+          gitIntegrationId: input.repositoryCredentials ? null : (input.gitIntegrationId ?? null),
           githubPatId: input.githubPatId ?? null,
           googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
           repositoryUrl: input.repo ?? null,
@@ -2815,7 +2816,7 @@ export const workspaceRouter = router({
           cloudProviderId: input.cloudProviderId,
           machineProfileId: selectedMachineProfile?.id ?? null,
           launchProfileId: null,
-          gitIntegrationId: input.gitIntegrationId ?? null,
+          gitIntegrationId: input.repositoryCredentials ? null : (input.gitIntegrationId ?? null),
           githubPatId: input.githubPatId ?? null,
           googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
           // Persist resolved defaults too, so later runs validate the exact injected credentials.

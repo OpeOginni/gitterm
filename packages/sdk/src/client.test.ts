@@ -51,6 +51,14 @@ test("hosted workspace input exposes phased setup and strict secret modes", () =
   expect(phasedSetup.repositoryCredentials?.token).toBe("github-pat");
 });
 
+test("hosted workspace input can select a saved personal GitHub PAT", () => {
+  const input: WorkspaceCreateInput = {
+    repo: "https://github.com/gitterm/private-example",
+    githubPatId: "8dfe2276-8d75-4f7f-8905-485c311d650a",
+  };
+  expect(input.githubPatId).toBe("8dfe2276-8d75-4f7f-8905-485c311d650a");
+});
+
 test("maps stable lifecycle prefixes to WorkspaceLifecycleError", async () => {
   const fetchStub = (async () =>
     new Response(
@@ -179,7 +187,7 @@ function eventClient(frames: unknown[][], seen: string[] = []) {
   return createGittermClient({ token: "gt_test", fetch: fetchStub });
 }
 
-test("integration discovery maps GitHub and Google identities", async () => {
+test("integration discovery maps GitHub App, saved PAT, and Google identities", async () => {
   const fetchStub = (async (input: RequestInfo | URL) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("listUserInstallations")) {
@@ -200,6 +208,17 @@ test("integration discovery maps GitHub and Google identities", async () => {
         ],
       });
     }
+    if (url.includes("githubPat.list")) {
+      return trpcOk([
+        {
+          id: "pat-id",
+          name: "work",
+          accountLogin: "culinu-bot",
+          tokenSuffix: "1234",
+          createdAt: "2026-09-14T00:00:00.000Z",
+        },
+      ]);
+    }
     return trpcOk([
       {
         id: "google-id",
@@ -214,8 +233,11 @@ test("integration discovery maps GitHub and Google identities", async () => {
   const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
 
   const github = await client.integrations.github.list();
+  const pat = await client.integrations.githubPat.list();
   const google = await client.integrations.googleCloud.list();
   expect(github[0]).toMatchObject({ id: "github-id", accountLogin: "culinu-bot" });
+  expect(pat[0]).toMatchObject({ id: "pat-id", accountLogin: "culinu-bot", tokenSuffix: "1234" });
+  expect(pat[0]).not.toHaveProperty("token");
   expect(google[0]).toMatchObject({ id: "google-id", projectId: "kuechenzauber-dev" });
 });
 

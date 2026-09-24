@@ -4,7 +4,7 @@ import { githubPatRouter } from "./pat";
 
 afterEach(() => mock.restore());
 
-test("PATs are not readable without a browser session", async () => {
+test("PATs are not readable without authentication", async () => {
   const caller = githubPatRouter.createCaller({ session: null } as any);
   await expect(caller.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   await expect(caller.remove({ id: "8dfe2276-8d75-4f7f-8905-485c311d650a" })).rejects.toMatchObject(

@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { and, db, eq } from "@gitterm/db";
 import { githubPatConnection } from "@gitterm/db/schema/integrations";
 import z from "zod";
-import { protectedProcedure, router } from "../../index";
+import { accountProcedure, protectedProcedure, router } from "../../index";
 import { EncryptionService } from "../../service/encryption";
 import { integrationPolicy } from "../../service/integrations/catalog";
 
@@ -29,7 +29,7 @@ function publicPat(row: typeof githubPatConnection.$inferSelect) {
 }
 
 export const githubPatRouter = router({
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: accountProcedure("workspace:read").query(async ({ ctx }) => {
     if (!(await integrationPolicy("github")).enabled) return [];
     return (
       await db

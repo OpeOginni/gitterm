@@ -188,11 +188,12 @@ export type WorkspaceCreateInput = {
   agent?: AgentKey;
   /** Provider intent. Defaults to the user's or deployment's preferred provider. */
   provider?: WorkspaceProviderSelection;
-  /** Inline Git credentials for repository validation, cloning, and runtime pull/push. */
-  /** Runtime Git/gh authentication. Takes precedence over gitIntegrationId; not auto-renewed. */
+  /** Inline Git/gh credentials for validation, cloning, and runtime operations. Not auto-renewed. */
   repositoryCredentials?: { username?: string; token: string };
   /** Dashboard GitHub App integration; runtime Git/gh credentials are renewed automatically. */
   gitIntegrationId?: string;
+  /** Saved personal PAT on this account; mutually exclusive with gitIntegrationId and repositoryCredentials. */
+  githubPatId?: string;
   /** Google Workload Identity Federation integration; injects keyless ADC/gcloud auth. */
   googleCloudIntegrationId?: string;
   /** Defaults from the selected provider. */
@@ -233,6 +234,15 @@ export type GitHubIntegration = {
   repositorySelection: string;
   suspended: boolean;
   connectedAt: string;
+};
+
+/** Metadata only: saved GitHub PAT values are never returned by the SDK. */
+export type GitHubPatConnection = {
+  id: string;
+  name: string;
+  accountLogin: string;
+  tokenSuffix: string;
+  createdAt: string;
 };
 
 export type GoogleCloudIntegration = {
