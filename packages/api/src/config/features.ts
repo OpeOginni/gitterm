@@ -51,9 +51,9 @@ export const features = {
 
   /**
    * Enable GitHub OAuth provider
-   * Auto-detected from GitHub App OAuth credentials presence.
+   * Available only in managed mode with GitHub App OAuth credentials.
    */
-  githubAuth: !!getGitHubAuthCredentials(),
+  githubAuth: isManaged() && !!getGitHubAuthCredentials(),
 
   /**
    * Enable email/password authentication

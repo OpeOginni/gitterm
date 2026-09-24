@@ -118,6 +118,7 @@ const baseSchema = z
     ENABLE_QUOTA_ENFORCEMENT: boolWithDefault(false),
     ENABLE_IDLE_REAPING: boolWithDefault(true),
     ENABLE_USAGE_METERING: boolWithDefault(false),
+    // Managed-mode switches; self-hosted always uses email login instead.
     ENABLE_EMAIL_AUTH: boolWithDefault(true),
     ENABLE_GITHUB_AUTH: boolWithDefault(false),
     ENABLE_ANON_TRY: boolWithDefault(false),
@@ -155,8 +156,8 @@ const baseSchema = z
       }
     }
 
-    // GitHub auth requires GitHub OAuth credentials
-    if (data.ENABLE_GITHUB_AUTH) {
+    // Self-hosted login is always email-only; managed GitHub auth requires OAuth credentials.
+    if (data.DEPLOYMENT_MODE === "managed" && data.ENABLE_GITHUB_AUTH) {
       const hasGitHubAuthClientId = !!data.GITHUB_APP_CLIENT_ID;
       const hasGitHubAuthClientSecret = !!data.GITHUB_APP_CLIENT_SECRET;
 
@@ -242,8 +243,8 @@ export const isAnonTryEnabled = () => env.ENABLE_ANON_TRY;
 export const isManaged = () => env.DEPLOYMENT_MODE === "managed";
 export const isSelfHosted = () => env.DEPLOYMENT_MODE === "self-hosted";
 export const isBillingEnabled = () => isManaged() && !!env.POLAR_ACCESS_TOKEN;
-export const isGitHubAuthEnabled = () => env.ENABLE_GITHUB_AUTH;
-export const isEmailAuthEnabled = () => env.ENABLE_EMAIL_AUTH;
+export const isGitHubAuthEnabled = () => isManaged() && env.ENABLE_GITHUB_AUTH;
+export const isEmailAuthEnabled = () => isSelfHosted() || env.ENABLE_EMAIL_AUTH;
 export const isSubdomainRouting = () => env.ROUTING_MODE === "subdomain";
 export const isPathRouting = () => env.ROUTING_MODE === "path";
 

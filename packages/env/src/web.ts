@@ -5,16 +5,30 @@
  *   import env from '@gitterm/env/web';
  */
 
-import { z, parseEnv, optional, nodeEnv, boolWithDefault, routingMode } from "./index";
+import {
+  z,
+  parseEnv,
+  optional,
+  nodeEnv,
+  boolWithDefault,
+  routingMode,
+  deploymentMode,
+} from "./index";
 
 const routingModeWithBuildPlaceholder = z.preprocess(
   (value) => (value === "__NEXT_PUBLIC_ROUTING_MODE__" ? "path" : value),
   routingMode,
 );
+const deploymentModeWithBuildPlaceholder = z.preprocess(
+  (value) => (value === "__NEXT_PUBLIC_DEPLOYMENT_MODE__" ? "self-hosted" : value),
+  deploymentMode,
+);
 
 const schema = z.object({
   NODE_ENV: nodeEnv,
 
+  // Self-hosted auth is fixed to email; managed deployments can use the flags below.
+  NEXT_PUBLIC_DEPLOYMENT_MODE: deploymentModeWithBuildPlaceholder,
   NEXT_PUBLIC_ENABLE_BILLING: boolWithDefault(false),
   NEXT_PUBLIC_ENABLE_EMAIL_AUTH: boolWithDefault(false),
   NEXT_PUBLIC_ENABLE_GITHUB_AUTH: boolWithDefault(true),
@@ -38,6 +52,7 @@ export type WebEnv = z.infer<typeof schema>;
 // will not include these keys. Build an explicit env object so values are inlined.
 const rawEnv: Record<string, string | undefined> = {
   NODE_ENV: process.env.NODE_ENV,
+  NEXT_PUBLIC_DEPLOYMENT_MODE: process.env.NEXT_PUBLIC_DEPLOYMENT_MODE,
   NEXT_PUBLIC_ENABLE_BILLING: process.env.NEXT_PUBLIC_ENABLE_BILLING,
   NEXT_PUBLIC_ENABLE_EMAIL_AUTH: process.env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH,
   NEXT_PUBLIC_ENABLE_GITHUB_AUTH: process.env.NEXT_PUBLIC_ENABLE_GITHUB_AUTH,
@@ -57,8 +72,10 @@ const env = parseEnv(schema, rawEnv);
 export default env;
 
 export const isBillingEnabled = () => env.NEXT_PUBLIC_ENABLE_BILLING;
-export const isEmailAuthEnabled = () => env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH;
-export const isGitHubAuthEnabled = () => env.NEXT_PUBLIC_ENABLE_GITHUB_AUTH;
+export const isEmailAuthEnabled = () =>
+  env.NEXT_PUBLIC_DEPLOYMENT_MODE === "self-hosted" || env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH;
+export const isGitHubAuthEnabled = () =>
+  env.NEXT_PUBLIC_DEPLOYMENT_MODE === "managed" && env.NEXT_PUBLIC_ENABLE_GITHUB_AUTH;
 export const isAnonTryEnabled = () => env.NEXT_PUBLIC_ENABLE_ANON_TRY;
 
 export { schema as webEnvSchema };

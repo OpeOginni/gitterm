@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { Loader2 } from "lucide-react";
 import { isEmailAuthEnabled, isGitHubAuthEnabled } from "@gitterm/env/web";
-import env from "@gitterm/env/web";
 import posthog from "posthog-js";
 import { ANALYTICS_ENABLED } from "@/lib/analytics";
 
@@ -33,16 +32,14 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
   const emailAuthEnabled = isEmailAuthEnabled();
   const githubAuthEnabled = isGitHubAuthEnabled();
 
-  const webOrigin =
-    env.NODE_ENV === "development"
-      ? `http://${env.NEXT_PUBLIC_BASE_DOMAIN}`
-      : `https://${env.NEXT_PUBLIC_BASE_DOMAIN}`;
-
-  const requestedCallback = new URL(redirectUrl || "/dashboard", webOrigin);
-  const callbackURL =
-    requestedCallback.origin === webOrigin
+  const getCallbackURL = () => {
+    // Use the origin the user actually visited, not a potentially stale build-time domain.
+    const webOrigin = window.location.origin;
+    const requestedCallback = new URL(redirectUrl || "/dashboard", webOrigin);
+    return requestedCallback.origin === webOrigin
       ? requestedCallback.toString()
       : new URL("/dashboard", webOrigin).toString();
+  };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +50,7 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
       const result = await authClient.signIn.email({
         email,
         password,
-        callbackURL,
+        callbackURL: getCallbackURL(),
       });
       if (result.error) {
         setError(result.error.message || "Failed to sign in");
@@ -76,7 +73,7 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
     }
     authClient.signIn.social({
       provider: "github",
-      callbackURL,
+      callbackURL: getCallbackURL(),
     });
   };
 

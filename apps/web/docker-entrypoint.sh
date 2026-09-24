@@ -19,6 +19,7 @@ replace_literal "http://build.localhost:8888/listener" "${NEXT_PUBLIC_LISTENER_U
 replace_literal "http://build.localhost:8888/api" "${NEXT_PUBLIC_SERVER_URL:-http://localhost:8888/api}"
 replace_literal "http://build.localhost:8888" "${NEXT_PUBLIC_AUTH_URL:-http://localhost:8888}"
 replace_literal "build.localhost" "${NEXT_PUBLIC_BASE_DOMAIN:-localhost}"
+replace_literal "__NEXT_PUBLIC_DEPLOYMENT_MODE__" "${NEXT_PUBLIC_DEPLOYMENT_MODE:-self-hosted}"
 replace_literal "__NEXT_PUBLIC_ENABLE_BILLING__" "${NEXT_PUBLIC_ENABLE_BILLING:-false}"
 replace_literal "__NEXT_PUBLIC_ENABLE_EMAIL_AUTH__" "${NEXT_PUBLIC_ENABLE_EMAIL_AUTH:-false}"
 replace_literal "__NEXT_PUBLIC_ENABLE_GITHUB_AUTH__" "${NEXT_PUBLIC_ENABLE_GITHUB_AUTH:-true}"

@@ -56,6 +56,6 @@ export const getGitHubAuthCredentials = () => {
   return clientId && clientSecret ? { clientId, clientSecret } : null;
 };
 
-export const isGitHubAuthEnabled = () => !!getGitHubAuthCredentials();
+export const isGitHubAuthEnabled = () => isManaged() && !!getGitHubAuthCredentials();
 
 export { schema as authEnvSchema };
