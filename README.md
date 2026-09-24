@@ -103,9 +103,12 @@ If your `listener` service is not public, use the proxy form. Exact endpoints ar
 
 GitHub integration is optional. It allows users to connect repositories and perform git actions from their workspaces.
 An admin must enable GitHub repository access in **Admin → Integrations** before users can connect.
-This switch does not affect GitHub login.
+The admin can configure a GitHub App there (ID, private key, and webhook secret), or users can connect
+their own fine-grained personal access tokens instead. Neither requires GitHub login: email-only
+self-hosted deployments work with either method. GitHub login remains a separate setting.
 
-Set these env vars on the `server` service:
+Legacy GitHub App environment setup remains supported when no App has been saved in the admin panel.
+Set these env vars on the `server` service if using that legacy route:
 
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY`

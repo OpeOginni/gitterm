@@ -7,7 +7,7 @@ import {
   workspaceGitConfig,
 } from "@gitterm/db/schema/integrations";
 import { logger } from "../../utils/logger";
-import env from "@gitterm/env/server";
+import { githubRepositoryAppConfig } from "./config";
 
 /**
  * GitHub API error types
@@ -152,31 +152,24 @@ export async function resolveGitHubBranchHeadWithToken(
 export class GitHubAppService {
   private appOctokit: Octokit;
 
-  constructor() {
-    const GITHUB_APP_ID = env.GITHUB_APP_ID;
-    const GITHUB_APP_PRIVATE_KEY = env.GITHUB_APP_PRIVATE_KEY;
-
-    if (!GITHUB_APP_ID) {
-      throw new Error("GITHUB_APP_ID is required for GitHub App integration");
-    }
-
-    if (!GITHUB_APP_PRIVATE_KEY) {
-      throw new Error("GITHUB_APP_PRIVATE_KEY is required for GitHub App integration");
-    }
-
+  constructor(config: { appId: string; privateKey: string }) {
     // Decode and prepare the private key
-    const privateKey = decodePrivateKey(GITHUB_APP_PRIVATE_KEY!);
-
-    logger.info("Initializing GitHub App Service", { action: "github_init" });
+    const privateKey = decodePrivateKey(config.privateKey);
 
     // Initialize Octokit with App authentication
     this.appOctokit = new Octokit({
       authStrategy: createAppAuth,
       auth: {
-        appId: GITHUB_APP_ID,
+        appId: config.appId,
         privateKey,
       },
     });
+  }
+
+  async verifyApp(): Promise<{ id: string; slug: string }> {
+    const { data } = await this.appOctokit.apps.getAuthenticated();
+    if (!data?.id || !data.slug) throw new Error("GitHub App has no ID or slug");
+    return { id: String(data.id), slug: data.slug };
   }
 
   /**
@@ -1170,24 +1163,20 @@ export class GitHubAppService {
 
 // Lazy-loaded singleton instance
 // This prevents errors when GitHub App is not configured (e.g., in listener service)
-let _githubAppService: GitHubAppService | null = null;
-
 /**
- * Get the GitHub App service instance (lazy-loaded)
- * Throws if GitHub App is not configured
+ * Read the latest admin configuration instead of caching secrets across rotations.
  */
-export function getGitHubAppService(): GitHubAppService {
-  if (!_githubAppService) {
-    _githubAppService = new GitHubAppService();
-  }
-  return _githubAppService;
+export async function getGitHubAppService(): Promise<GitHubAppService> {
+  const config = await githubRepositoryAppConfig();
+  if (!config) throw new Error("GitHub App is not configured");
+  return new GitHubAppService(config);
 }
 
 /**
  * Check if GitHub App is configured
  */
-export function isGitHubAppConfigured(): boolean {
-  return !!env.GITHUB_APP_ID && !!env.GITHUB_APP_PRIVATE_KEY;
+export async function isGitHubAppConfigured(): Promise<boolean> {
+  return !!(await githubRepositoryAppConfig());
 }
 
 export async function checkPublicGitHubRepository(
@@ -1216,6 +1205,24 @@ export async function checkPublicGitHubRepository(
     return { valid: true, exists: true, canClone: true, branchExists: true };
   } catch {
     return { valid: true, exists: false, canClone: false, branchExists: false };
+  }
+}
+
+export async function getPublicGitHubRepository(owner: string, repo: string) {
+  try {
+    const { data } = await new Octokit().repos.get({ owner, repo });
+    return {
+      owner: data.owner.login,
+      repo: data.name,
+      htmlUrl: data.html_url,
+      defaultBranch: data.default_branch,
+      private: data.private,
+    };
+  } catch (error) {
+    const status = getGitHubErrorStatus(error);
+    if (status === 404 || status === 403)
+      throw new GitHubAPIError("Repository unavailable", status);
+    throw error;
   }
 }
 

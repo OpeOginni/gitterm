@@ -135,7 +135,7 @@ export const workspaceOperationsRouter = router({
         workspaceId: ws.id,
         userId: ws.userId,
         credentialKind: "github",
-        integrationId: ws.gitIntegrationId,
+        integrationId: ws.githubPatId ?? ws.gitIntegrationId,
         action: "issued",
         expiresAt: credential.expiresAt,
       });

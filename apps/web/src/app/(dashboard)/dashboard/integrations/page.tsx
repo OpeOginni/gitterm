@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { GitHubConnection } from "@/components/dashboard/github-connection";
+import { GithubPatConnection } from "@/components/dashboard/github-pat-connection";
 import { GoogleCloudConnection } from "@/components/dashboard/google-cloud-connection";
 import { IntegrationCallbackHandler } from "@/components/dashboard/integrations/integration-callback-handler";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -138,6 +139,7 @@ export default async function IntegrationsPage() {
           <Suspense fallback={<GitHubConnectionSkeleton />}>
             <GitHubConnection />
           </Suspense>
+          <GithubPatConnection />
         </section>
 
         <section className="space-y-4">

@@ -155,6 +155,7 @@ import {
   workloadIdentityIssuer,
 } from "../../service/workload-identity/google";
 import { integrationPolicy } from "../../service/integrations/catalog";
+import { readGithubPat } from "../../service/github/pat";
 import {
   railwayBootstrapEnvironment,
   storeWorkspaceRuntimeBundle,
@@ -306,6 +307,7 @@ const workspaceCreateBaseSchema = z.strictObject({
     ])
     .optional(),
   gitIntegrationId: z.string().optional(),
+  githubPatId: z.uuid().optional(),
   googleCloudIntegrationId: z.string().uuid().optional(),
   repositoryCredentials: repositoryCredentialsSchema.optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
@@ -2088,6 +2090,29 @@ export const workspaceRouter = router({
 
         const githubUsername = userRecord?.name ?? undefined;
 
+        if (
+          input.githubPatId &&
+          (input.gitIntegrationId || input.repositoryCredentials || !input.repo)
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Choose one GitHub connection and a repository",
+          });
+        }
+        if (input.githubPatId && !(await integrationPolicy("github")).enabled) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "GitHub repository access is disabled",
+          });
+        }
+        const selectedPat = input.githubPatId
+          ? await readGithubPat(input.githubPatId, userId)
+          : null;
+        if (input.githubPatId && !selectedPat) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "GitHub token connection not found" });
+        }
+        if (selectedPat) workspaceCreateLogger.addSecrets([selectedPat.token]);
+
         // Validate git integration / repo access first, then generate token if needed
         let githubAppToken: string | undefined;
         let githubAppTokenExpiry: string | undefined;
@@ -2101,7 +2126,7 @@ export const workspaceRouter = router({
               message: "GitHub repository integration is disabled",
             });
           }
-          if (!isGitHubAppConfigured()) {
+          if (!(await isGitHubAppConfigured())) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: "GitHub App is not configured for this deployment",
@@ -2132,7 +2157,7 @@ export const workspaceRouter = router({
         }
 
         if (input.repo) {
-          if (!input.repositoryCredentials && !isGitHubAppConfigured()) {
+          if (!input.repositoryCredentials && !selectedPat && !(await isGitHubAppConfigured())) {
             const parsed = parseGitHubRepoUrl(input.repo);
             if (!parsed) {
               throw new TRPCError({
@@ -2151,19 +2176,22 @@ export const workspaceRouter = router({
               ? { userId: userId, gitIntegrationId: selectedGitIntegration.id }
               : undefined;
 
-            const repoValidation = input.repositoryCredentials
-              ? await checkGitHubRepositoryWithToken(
-                  input.repo,
-                  input.repositoryCredentials.token,
-                  input.branch,
-                  resolvedBaseCommit ?? undefined,
-                )
-              : await getGitHubAppService().checkIfValidRepository(
-                  input.repo,
-                  options,
-                  input.branch,
-                  resolvedBaseCommit ?? undefined,
-                );
+            const repoValidation =
+              input.repositoryCredentials || selectedPat
+                ? await checkGitHubRepositoryWithToken(
+                    input.repo,
+                    input.repositoryCredentials?.token ?? selectedPat!.token,
+                    input.branch,
+                    resolvedBaseCommit ?? undefined,
+                  )
+                : await (
+                    await getGitHubAppService()
+                  ).checkIfValidRepository(
+                    input.repo,
+                    options,
+                    input.branch,
+                    resolvedBaseCommit ?? undefined,
+                  );
 
             if (!repoValidation.valid)
               throw new TRPCError({
@@ -2215,17 +2243,18 @@ export const workspaceRouter = router({
         }
 
         if (selectedGitIntegration) {
-          const installation = await getGitHubAppService().getUserInstallation(
-            userId,
-            selectedGitIntegration.providerInstallationId,
-          );
+          const installation = await (
+            await getGitHubAppService()
+          ).getUserInstallation(userId, selectedGitIntegration.providerInstallationId);
 
           if (installation && !installation.suspended) {
             const repoName = parseGitHubRepoUrl(input.repo || "")?.repo;
 
             githubInstallationId = installation.installationId;
             try {
-              const tokenData = await getGitHubAppService().getUserToServerToken(
+              const tokenData = await (
+                await getGitHubAppService()
+              ).getUserToServerToken(
                 installation.installationId,
                 repoName ? [repoName] : undefined,
               );
@@ -2238,6 +2267,10 @@ export const workspaceRouter = router({
             }
           }
         }
+        if (selectedPat) {
+          githubAppToken = selectedPat.token;
+          githubAppTokenExpiry = new Date(Date.now() + 15 * 60_000).toISOString();
+        }
 
         // Parse repo URL to get owner/name (only for cloud workspaces)
         const repoInfo = input.repo ? parseGitHubRepoUrl(input.repo) : null;
@@ -2245,23 +2278,26 @@ export const workspaceRouter = router({
         // Resolve exact base commit when not provided by the caller.
         if (input.repo && !resolvedBaseCommit) {
           try {
-            const headSha = input.repositoryCredentials
-              ? await resolveGitHubBranchHeadWithToken(
-                  input.repo,
-                  input.repositoryCredentials.token,
-                  input.branch,
-                )
-              : await getGitHubAppService().resolveBranchHeadSha(
-                  input.repo,
-                  input.branch,
-                  selectedGitIntegration
-                    ? {
-                        userId,
-                        gitIntegrationId: selectedGitIntegration.id,
-                        installationId: githubInstallationId,
-                      }
-                    : undefined,
-                );
+            const headSha =
+              input.repositoryCredentials || selectedPat
+                ? await resolveGitHubBranchHeadWithToken(
+                    input.repo,
+                    input.repositoryCredentials?.token ?? selectedPat!.token,
+                    input.branch,
+                  )
+                : await (
+                    await getGitHubAppService()
+                  ).resolveBranchHeadSha(
+                    input.repo,
+                    input.branch,
+                    selectedGitIntegration
+                      ? {
+                          userId,
+                          gitIntegrationId: selectedGitIntegration.id,
+                          installationId: githubInstallationId,
+                        }
+                      : undefined,
+                  );
             if (headSha) {
               resolvedBaseCommit = normalizeBaseCommit(headSha);
             }
@@ -2564,7 +2600,7 @@ export const workspaceRouter = router({
                 name: repoInfo?.repo,
                 authExpiresAt: githubAppTokenExpiry,
                 ...resolveRepositoryProvisioningAuth(input.repositoryCredentials, {
-                  username: githubUsername,
+                  username: selectedPat ? "x-access-token" : githubUsername,
                   token: githubAppToken,
                 }),
               }
@@ -2590,7 +2626,7 @@ export const workspaceRouter = router({
             }
           : input.environmentVariables;
         const DEFAULT_DOCKER_ENV_VARS = buildWorkspaceEnv(provisioningSpec, {
-          githubUsername,
+          githubUsername: selectedPat ? "x-access-token" : githubUsername,
           githubAppToken,
           githubAppTokenExpiry,
           googleApplicationCredentials: selectedGoogleCloudIntegration
@@ -2689,6 +2725,7 @@ export const workspaceRouter = router({
           cloudProviderId: input.cloudProviderId,
           regionId: regionRecord?.id,
           gitIntegrationId: input.gitIntegrationId ?? null,
+          githubPatId: input.githubPatId ?? null,
           googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
           repositoryUrl: input.repo ?? null,
           domain,
@@ -2779,6 +2816,7 @@ export const workspaceRouter = router({
           machineProfileId: selectedMachineProfile?.id ?? null,
           launchProfileId: null,
           gitIntegrationId: input.gitIntegrationId ?? null,
+          githubPatId: input.githubPatId ?? null,
           googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
           // Persist resolved defaults too, so later runs validate the exact injected credentials.
           modelCredentialIds: credentials

@@ -21,7 +21,7 @@ import {
   region,
 } from "./cloud";
 import { relations } from "drizzle-orm";
-import { gitIntegration, googleCloudIntegration } from "./integrations";
+import { gitIntegration, googleCloudIntegration, githubPatConnection } from "./integrations";
 
 /** Legacy marker; see `workspace.opencodeApi`. */
 export const opencodeApiEnum = pgEnum("opencode_api", ["v1", "v2"] as const);
@@ -76,6 +76,9 @@ export const workspace = pgTable(
     externalInstanceId: text("external_instance_id").notNull(),
     externalRunningDeploymentId: text("external_running_deployment_id"),
     gitIntegrationId: uuid("git_integration_id").references(() => gitIntegration.id, {
+      onDelete: "set null",
+    }),
+    githubPatId: uuid("github_pat_id").references(() => githubPatConnection.id, {
       onDelete: "set null",
     }),
     googleCloudIntegrationId: uuid("google_cloud_integration_id").references(

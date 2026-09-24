@@ -31,8 +31,12 @@ export default function AdminIntegrationsPage() {
   const [issuer, setIssuer] = useState(
     `${(env.NEXT_PUBLIC_SERVER_URL || "https://api.gitterm.dev").replace(/\/$/, "")}/api/workload-identity`,
   );
+  const [appId, setAppId] = useState("");
+  const [privateKey, setPrivateKey] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
   const update = useMutation(trpc.admin.integrations.update.mutationOptions());
   const configure = useMutation(trpc.admin.integrations.configureGoogle.mutationOptions());
+  const configureGithub = useMutation(trpc.admin.integrations.configureGithubApp.mutationOptions());
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: trpc.admin.integrations.list.queryKey() });
@@ -108,7 +112,7 @@ export default function AdminIntegrationsPage() {
                   {item.key === "google"
                     ? "GitTerm signs short-lived identity assertions; users attach their own service accounts."
                     : item.key === "github"
-                      ? "Users install the deployment’s GitHub App for repository access. Login is unaffected."
+                      ? "Users can install the deployment’s GitHub App or connect a personal access token. Login is unaffected."
                       : item.key === "executor"
                         ? "A future dedicated connection flow for each user, with optional admin-shared access."
                         : "The connector is not implemented yet. Configuration will appear here when it is ready."}
@@ -148,8 +152,7 @@ export default function AdminIntegrationsPage() {
                     ) : null}
                     {item.key === "github" ? (
                       <p className="text-fg-4">
-                        The GitHub App credentials for this deployment are unchanged in this
-                        release.
+                        A GitHub App is optional. Users can connect a PAT without one.
                       </p>
                     ) : null}
                   </div>
@@ -162,6 +165,108 @@ export default function AdminIntegrationsPage() {
             ))}
           </div>
         )}
+
+        <section className="rounded-2xl border border-line bg-settings p-6 sm:p-8">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-fill p-2">
+              <KeyRound className="size-5 text-fg-2" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-fg">GitHub App for repositories</h2>
+              <p className="text-xs text-fg-3">
+                Optional shared App; users can alternatively add their own PAT. This does not enable
+                GitHub login.
+              </p>
+            </div>
+          </div>
+          {data?.github ? (
+            <p className="mt-5 text-sm text-emerald-300">
+              App connected: {data.github.slug} (ID {data.github.appId})
+            </p>
+          ) : data?.githubConfigured ? (
+            <p className="mt-5 text-sm text-fg-3">
+              Using the legacy env-configured GitHub App. Save an App here to move repository access
+              into GitTerm.
+            </p>
+          ) : (
+            <p className="mt-5 text-sm text-fg-3">
+              No GitHub App configured. Users can still connect a personal access token after you
+              enable GitHub above.
+            </p>
+          )}
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label className="space-y-2 text-xs text-fg-3">
+              GitHub App ID
+              <Input
+                inputMode="numeric"
+                value={appId}
+                onChange={(event) => setAppId(event.target.value)}
+                placeholder="1234567"
+                className="bg-fill font-mono text-xs"
+              />
+            </label>
+            <label className="space-y-2 text-xs text-fg-3">
+              Webhook secret
+              <Input
+                type="password"
+                autoComplete="off"
+                value={webhookSecret}
+                onChange={(event) => setWebhookSecret(event.target.value)}
+                placeholder="Same secret configured in GitHub"
+                className="bg-fill font-mono text-xs"
+              />
+            </label>
+            <label className="space-y-2 text-xs text-fg-3 sm:col-span-2">
+              App private key (PEM)
+              <textarea
+                value={privateKey}
+                onChange={(event) => setPrivateKey(event.target.value)}
+                placeholder="-----BEGIN RSA PRIVATE KEY-----"
+                spellCheck={false}
+                className="min-h-28 w-full rounded-lg border border-line bg-fill p-3 font-mono text-xs text-fg outline-none focus:border-line-2"
+              />
+            </label>
+          </div>
+          <p className="mt-3 text-xs text-fg-4">
+            Set the App’s Setup URL to{" "}
+            <code className="break-all">
+              {env.NEXT_PUBLIC_SERVER_URL || "https://your-api.example.com"}/api/github/callback
+            </code>{" "}
+            and its installation webhook URL to your listener’s{" "}
+            <code>/trpc/github.handleInstallationWebhook</code>. Grant only the repository
+            permissions your users need.
+          </p>
+          <Button
+            disabled={configureGithub.isPending || !appId || !privateKey || !webhookSecret}
+            className="mt-5"
+            onClick={async () => {
+              if (
+                data?.github &&
+                !window.confirm(
+                  "Replace the GitHub App credentials? Existing installations must belong to the new App.",
+                )
+              )
+                return;
+              try {
+                await configureGithub.mutateAsync({ appId, privateKey, webhookSecret });
+                setPrivateKey("");
+                setWebhookSecret("");
+                await refresh();
+                toast.success("GitHub App verified and saved");
+              } catch (cause) {
+                toast.error(
+                  cause instanceof Error ? cause.message : "Couldn’t configure GitHub App",
+                );
+              }
+            }}
+          >
+            {data?.github ? "Replace App credentials" : "Verify & save GitHub App"}
+          </Button>
+          <p className="mt-2 text-[11px] text-amber-200/80">
+            The API and webhook listener need the same encryption master key to read this App’s
+            encrypted credentials.
+          </p>
+        </section>
 
         <section className="rounded-2xl border border-line bg-settings p-6 sm:p-8">
           <div className="flex items-center gap-3">

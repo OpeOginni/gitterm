@@ -1,7 +1,11 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { db, eq } from "@gitterm/db";
-import { googleIssuerConfig, integrationSettings } from "@gitterm/db/schema/integrations";
+import {
+  googleIssuerConfig,
+  githubAppConfig,
+  integrationSettings,
+} from "@gitterm/db/schema/integrations";
 import z from "zod";
 import { adminProcedure, router } from "../..";
 import { EncryptionService } from "../../service/encryption";
@@ -10,7 +14,7 @@ import {
   isWorkloadIdentityAvailable,
   workloadIdentitySignerConfig,
 } from "../../service/workload-identity/google";
-import { isGitHubAppConfigured } from "../../service/github";
+import { GitHubAppService, isGitHubAppConfigured } from "../../service/github";
 
 const key = z.enum(
   Object.keys(INTEGRATIONS) as [keyof typeof INTEGRATIONS, ...(keyof typeof INTEGRATIONS)[]],
@@ -29,7 +33,7 @@ const issuerSchema = z.url().refine((value) => {
 
 export const adminIntegrationsRouter = router({
   list: adminProcedure.query(async () => {
-    const [integrations, google] = await Promise.all([
+    const [integrations, google, github] = await Promise.all([
       integrationCatalog(),
       db
         .select({
@@ -39,8 +43,21 @@ export const adminIntegrationsRouter = router({
         })
         .from(googleIssuerConfig)
         .where(eq(googleIssuerConfig.id, "google")),
+      db
+        .select({
+          appId: githubAppConfig.appId,
+          slug: githubAppConfig.slug,
+          updatedAt: githubAppConfig.updatedAt,
+        })
+        .from(githubAppConfig)
+        .where(eq(githubAppConfig.id, "github")),
     ]);
-    return { integrations, google: google[0] ?? null };
+    return {
+      integrations,
+      google: google[0] ?? null,
+      github: github[0] ?? null,
+      githubConfigured: !!github[0] || (await isGitHubAppConfigured()),
+    };
   }),
 
   update: adminProcedure
@@ -72,12 +89,6 @@ export const adminIntegrationsRouter = router({
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "Configure the Google issuer before enabling Google Cloud",
-        });
-      }
-      if (input.enabled && input.key === "github" && !isGitHubAppConfigured()) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Configure the deployment's GitHub App before enabling repository access",
         });
       }
       await db
@@ -173,5 +184,56 @@ export const adminIntegrationsRouter = router({
           },
         });
       return { issuer, keyId, rotated: !!previous };
+    }),
+
+  configureGithubApp: adminProcedure
+    .input(
+      z.object({
+        appId: z.string().regex(/^[0-9]+$/),
+        privateKey: z.string().min(100).max(20000),
+        webhookSecret: z.string().min(16).max(1024),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      // Verify the App ID and key against GitHub before making it available to users.
+      let verified;
+      try {
+        verified = await new GitHubAppService({
+          appId: input.appId,
+          privateKey: input.privateKey,
+        }).verifyApp();
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "GitHub could not verify the App ID and private key",
+        });
+      }
+      if (verified.id !== input.appId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The key belongs to a different GitHub App",
+        });
+      }
+      const encryption = new EncryptionService();
+      await db
+        .insert(githubAppConfig)
+        .values({
+          id: "github",
+          appId: verified.id,
+          slug: verified.slug,
+          encryptedPrivateKey: encryption.encrypt(input.privateKey, "github:app:key"),
+          encryptedWebhookSecret: encryption.encrypt(input.webhookSecret, "github:app:webhook"),
+        })
+        .onConflictDoUpdate({
+          target: githubAppConfig.id,
+          set: {
+            appId: verified.id,
+            slug: verified.slug,
+            encryptedPrivateKey: encryption.encrypt(input.privateKey, "github:app:key"),
+            encryptedWebhookSecret: encryption.encrypt(input.webhookSecret, "github:app:webhook"),
+            updatedAt: new Date(),
+          },
+        });
+      return { appId: verified.id, slug: verified.slug };
     }),
 });

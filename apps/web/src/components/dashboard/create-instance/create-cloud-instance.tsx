@@ -85,6 +85,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     ...trpc.workspace.listUserInstallations.queryOptions(),
     staleTime: STALE_TIME,
   });
+  const { data: githubPatConnections = [] } = useQuery({
+    ...trpc.githubPat.list.queryOptions(),
+    staleTime: STALE_TIME,
+  });
   const { data: googleCloudIntegrations = [] } = useQuery({
     ...trpc.googleCloud.list.queryOptions(),
     staleTime: STALE_TIME,
@@ -408,7 +412,12 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       regionId: resolvedRegionId,
       machineProfileId: selectedMachineProfileId,
       awsAccessProfileId: isAwsGroup ? selectedAwsProfileId : undefined,
-      gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
+      gitIntegrationId: selectedGitIntegrationId.startsWith("app:")
+        ? selectedGitIntegrationId.slice(4)
+        : undefined,
+      githubPatId: selectedGitIntegrationId.startsWith("pat:")
+        ? selectedGitIntegrationId.slice(4)
+        : undefined,
       googleCloudIntegrationId:
         googleCloudIntegrationId === "none" ? undefined : googleCloudIntegrationId,
       persistent: effectivePersistent,
@@ -425,16 +434,21 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   }, [workspaceProfile, canEnableSSHAccess]);
 
   const integrations = installationsData?.installations;
-  const hasIntegrations = integrations && integrations.length > 0;
+  const hasIntegrations = !!(integrations?.length || githubPatConnections.length);
   const selectedGitIntegrationId =
-    userGitIntegrationId ?? integrations?.[0]?.git_integration.id ?? "none";
+    userGitIntegrationId ??
+    (integrations?.[0]
+      ? `app:${integrations[0].git_integration.id}`
+      : githubPatConnections[0]
+        ? `pat:${githubPatConnections[0].id}`
+        : "none");
 
   const selectedGitIntegration = useMemo(() => {
-    if (!integrations || selectedGitIntegrationId === "none") {
+    if (!integrations || !selectedGitIntegrationId.startsWith("app:")) {
       return null;
     }
     const match = integrations.find(
-      (installation) => installation.git_integration.id === selectedGitIntegrationId,
+      (installation) => installation.git_integration.id === selectedGitIntegrationId.slice(4),
     );
     if (!match) {
       return null;
@@ -788,7 +802,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         {/* ── 3. GitHub Connection ── */}
         <div className="grid gap-1.5">
           <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            GitHub Connection
+            GitHub repository access
             <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
               <ArrowUpRight className="h-3 w-3" />
             </Link>
@@ -800,14 +814,14 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               disabled={!hasIntegrations}
             >
               <SelectTrigger className="h-9">
-                <SelectValue placeholder={hasIntegrations ? "Select account" : "No integrations"} />
+                <SelectValue placeholder={hasIntegrations ? "Select account" : "No connections"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None (public repos only)</SelectItem>
                 {integrations?.map((installation) => (
                   <SelectItem
                     key={installation.git_integration.id}
-                    value={installation.git_integration.id}
+                    value={`app:${installation.git_integration.id}`}
                   >
                     <div className="flex items-center">
                       <Image
@@ -817,8 +831,13 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                         height={16}
                         className="mr-2 h-4 w-4"
                       />
-                      {installation.git_integration.providerAccountLogin}
+                      {installation.git_integration.providerAccountLogin} · GitHub App
                     </div>
+                  </SelectItem>
+                ))}
+                {githubPatConnections.map((connection) => (
+                  <SelectItem key={connection.id} value={`pat:${connection.id}`}>
+                    {connection.name} · PAT (@{connection.accountLogin})
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -80,7 +80,7 @@ app.get("/api/github/callback", async (c) => {
     });
 
     try {
-      const githubAppService = getGitHubAppService();
+      const githubAppService = await getGitHubAppService();
 
       // Get installation details from GitHub
       const installationData = await githubAppService.getInstallationDetails(installationId);

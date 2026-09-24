@@ -11,7 +11,13 @@ claiming secrets are inaccessible to an authorized workspace.
 
 - **GitHub integration:** GitHub App installation tokens are repository-scoped, expire after one
   hour, and refresh only while the workspace is running. Token and cache files live under
-  `/run/gitterm`, not the persistent home directory.
+  `/run/gitterm`, not the persistent home directory. Admin-managed App keys and webhook secrets
+  can instead be stored envelope-encrypted in the DB; the API and webhook listener both need
+  the deployment encryption key. User-owned PATs are stored encrypted in GitTerm but are
+  long-lived bearer credentials: a selected workspace receives the PAT under `/run/gitterm` to
+  perform git/gh operations, and the agent can read a credential its process can use. Removing
+  the connection stops brokered refresh, but revoke the PAT on GitHub to contain a running or
+  previously compromised workspace.
 - **Google Cloud integration:** no Google private key is stored. Five-minute GitTerm OIDC assertions
   are exchanged through Google Workload Identity Federation for the selected service account.
   The deployment's _GitTerm issuer_ private key (not a Google service-account key) can be generated

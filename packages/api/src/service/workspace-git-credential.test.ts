@@ -1,6 +1,7 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
 import { db } from "@gitterm/db";
 import * as github from "./github";
+import * as githubPat from "./github/pat";
 import { issueWorkspaceGitCredential } from "./workspace-git-credential";
 
 afterEach(() => mock.restore());
@@ -55,4 +56,30 @@ test("caller-supplied tokens without a saved integration are not refreshed", asy
   await expect(issueWorkspaceGitCredential({ ...ws, gitIntegrationId: null })).rejects.toThrow(
     "no refreshable",
   );
+});
+
+test("a workspace selected personal token is brokered only while running", async () => {
+  const app = spyOn(github, "getGitHubAppService");
+  spyOn(githubPat, "readGithubPat").mockResolvedValue({
+    id: "pat-id",
+    token: "secret",
+    accountLogin: "dev",
+    name: "work",
+  });
+  const patWorkspace = { ...ws, gitIntegrationId: null, githubPatId: "pat-id" };
+  const issued = await issueWorkspaceGitCredential(patWorkspace);
+  expect(issued.token).toBe("secret");
+  expect(Date.parse(issued.expiresAt)).toBeGreaterThan(Date.now() + 10 * 60_000);
+  expect(githubPat.readGithubPat).toHaveBeenCalledWith("pat-id", "owner");
+  expect(app).not.toHaveBeenCalled();
+  await expect(issueWorkspaceGitCredential({ ...patWorkspace, status: "paused" })).rejects.toThrow(
+    "not running",
+  );
+});
+
+test("removing a personal token blocks future credential issuance", async () => {
+  spyOn(githubPat, "readGithubPat").mockResolvedValue(null);
+  await expect(
+    issueWorkspaceGitCredential({ ...ws, gitIntegrationId: null, githubPatId: "pat-id" }),
+  ).rejects.toThrow("no longer available");
 });

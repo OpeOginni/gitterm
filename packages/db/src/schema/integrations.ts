@@ -41,6 +41,30 @@ export const googleIssuerConfig = pgTable("google_issuer_config", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/** One GitHub App per deployment; OAuth login remains configured independently. */
+export const githubAppConfig = pgTable("github_app_config", {
+  id: text("id").primaryKey(),
+  appId: text("app_id").notNull(),
+  slug: text("slug").notNull(),
+  encryptedPrivateKey: text("encrypted_private_key").notNull(),
+  encryptedWebhookSecret: text("encrypted_webhook_secret").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** Personal PATs are distinct from GitHub App installations. */
+export const githubPatConnection = pgTable("github_pat_connection", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  accountLogin: text("account_login").notNull(),
+  encryptedToken: text("encrypted_token").notNull(),
+  tokenSuffix: text("token_suffix").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // GitHub App installations - tracks which users have installed the GitHub App
 export const githubAppInstallation = pgTable("github_app_installation", {
   id: uuid("id").primaryKey().defaultRandom(),

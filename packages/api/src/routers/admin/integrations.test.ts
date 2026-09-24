@@ -14,4 +14,11 @@ test("only an admin browser session can change deployment integration policy", a
   await expect(
     user.configureGoogle({ issuer: "https://api.example.com/api/workload-identity" }),
   ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(
+    user.configureGithubApp({
+      appId: "12345",
+      privateKey: "a".repeat(120),
+      webhookSecret: "b".repeat(32),
+    }),
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
 });
