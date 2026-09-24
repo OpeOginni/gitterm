@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  ChevronDown,
   Key,
   Loader2,
   MoreHorizontal,
@@ -100,30 +101,50 @@ export function ModelCredentialsSection() {
     }),
   );
 
-  const actions = (
-    <>
-      {hasAccounts && (
+  const actions = hasAccounts ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
         <Button
           size="sm"
-          variant="outline"
-          onClick={() => setConnectOpen(true)}
           disabled={isLoadingProviders}
-          className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
+          className="gap-2 font-mono text-xs font-semibold uppercase tracking-[0.1em]"
         >
-          <UserRound className="h-3.5 w-3.5" />
-          Connect account
+          <Plus className="h-3.5 w-3.5" />
+          Add credential
+          <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-65" />
         </Button>
-      )}
-      <Button
-        size="sm"
-        onClick={() => setApiKeyOpen(true)}
-        disabled={isLoadingProviders}
-        className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        sideOffset={6}
+        className="w-[var(--radix-dropdown-menu-trigger-width)] border-line p-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
       >
-        <Plus className="h-3.5 w-3.5" />
-        Add API key
-      </Button>
-    </>
+        <DropdownMenuItem
+          onSelect={() => setConnectOpen(true)}
+          className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-xs font-medium text-fg-2 focus:bg-fill-2 focus:text-fg"
+        >
+          <UserRound className="h-4 w-4 text-fg-3" />
+          Connect with OAuth
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => setApiKeyOpen(true)}
+          className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-xs font-medium text-fg-2 focus:bg-fill-2 focus:text-fg"
+        >
+          <Key className="h-4 w-4 text-fg-3" />
+          Add API key
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : (
+    <Button
+      size="sm"
+      onClick={() => setApiKeyOpen(true)}
+      disabled={isLoadingProviders}
+      className="gap-2 font-mono text-xs font-semibold uppercase tracking-[0.12em]"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      Add API key
+    </Button>
   );
 
   return (
@@ -183,9 +204,11 @@ export function ModelCredentialsSection() {
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         {credential.authType === "oauth" ? (
-                          <span>Signed in with OAuth</span>
+                          <span>OAuth</span>
                         ) : (
-                          <span className="font-mono">...{credential.keyHash.slice(-8)}</span>
+                          <span className={credential.keySuffix ? "font-mono" : undefined}>
+                            {credential.keySuffix ? `...${credential.keySuffix}` : "API key"}
+                          </span>
                         )}
                         {credential.lastUsedAt && (
                           <span>

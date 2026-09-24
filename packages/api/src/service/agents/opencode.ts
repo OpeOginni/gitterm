@@ -1,6 +1,8 @@
 import type { AgentProvisioning } from "../../providers/compute";
 import { GITHUB_CLI_INSTRUCTIONS } from "@gitterm/agent-runtime/github-auth";
+import { getModelProviderDefinition } from "@gitterm/schema/model-providers";
 import {
+  OPENCODE_MANAGED_REFRESH,
   opencodeCredentialFiles,
   type OpencodeAuthEntry,
   type OpencodeCredentialEntry,
@@ -22,13 +24,30 @@ function opencodeIntegration(cred: UserProviderCredential): string {
   return cred.logicalProviderKey;
 }
 
-function opencodeAuthEntry(cred: UserProviderCredential): OpencodeAuthEntry {
+/** `managed` is off for OpenCode 1.x, which has no plugin to fetch access tokens from GitTerm. */
+function opencodeAuthEntry(cred: UserProviderCredential, managed = true): OpencodeAuthEntry {
   const { credential } = cred;
   if (credential.type === "api_key") {
     return {
       type: "api",
       key: credential.apiKey,
       ...(credential.metadata ? { metadata: credential.metadata } : {}),
+    };
+  }
+  // Rotating refresh tokens stay in GitTerm; the workspace plugin asks GitTerm for
+  // access tokens by credential ID, so any number of workspaces can share the account.
+  if (
+    managed &&
+    cred.credentialId &&
+    getModelProviderDefinition(cred.providerName)?.refreshedByGitterm
+  ) {
+    return {
+      type: "oauth",
+      refresh: OPENCODE_MANAGED_REFRESH,
+      access: credential.access,
+      expires: credential.expires,
+      accountId: credential.accountId,
+      metadata: { ...credential.metadata, gittermCredentialId: cred.credentialId },
     };
   }
   return {
@@ -74,9 +93,9 @@ export function buildOpencodeAuthJson(credentials: UserProviderCredential[]): st
         .filter(
           (cred) => !(cred.credential.type === "oauth" && opencodeIntegration(cred) === "opencode"),
         )
-        .sort((a, b) => Number(a.isDefault) - Number(b.isDefault))
+        .toSorted((a, b) => Number(a.isDefault) - Number(b.isDefault))
         .map((cred) => {
-          const entry = opencodeAuthEntry(cred);
+          const entry = opencodeAuthEntry(cred, false);
           if (entry.type === "oauth") delete entry.metadata;
           return [opencodeIntegration(cred), entry];
         }),

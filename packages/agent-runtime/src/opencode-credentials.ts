@@ -7,6 +7,11 @@ export const OPENCODE_CREDENTIALS_PATH = "~/.gitterm/opencode/credentials.json";
 export const OPENCODE_CREDENTIALS_PLUGIN_PATH = "~/.config/opencode/plugins/gitterm-credentials.js";
 /** Label for credentials that have no dashboard label, such as inline API keys. */
 export const OPENCODE_CREDENTIAL_LABEL = "Gitterm";
+/**
+ * Stands in for refresh tokens GitTerm keeps. Such credentials carry
+ * `metadata.gittermCredentialId`, and the plugin fetches access tokens from GitTerm.
+ */
+export const OPENCODE_MANAGED_REFRESH = "gitterm-managed";
 
 export type OpencodeAuthEntry =
   | {
@@ -62,7 +67,8 @@ export function opencodeCredentialFiles(
 
 // Plain ESM loaded in-process by OpenCode's Bun runtime from the config plugins
 // directory, so it must not import anything beyond node builtins. Stored OAuth
-// values carry OpenCode's built-in method ID so OpenCode refreshes them itself.
+// values carry OpenCode's built-in method ID so OpenCode refreshes them itself,
+// except GitTerm-managed ones, whose method refreshes through the GitTerm API.
 export const OPENCODE_CREDENTIALS_PLUGIN = String.raw`
 import { readFileSync } from "node:fs";
 import os from "node:os";
@@ -71,6 +77,9 @@ import path from "node:path";
 const METHOD_ID = "gitterm-import";
 const FILE = path.join(process.env.HOME || os.homedir(), ".gitterm/opencode/credentials.json");
 const DEVICE_FLOW = ["github-copilot", "opencode", "xai"];
+// OpenCode only enables ChatGPT routing for its own method IDs. The browser method cannot
+// complete in a remote workspace (its callback is loopback), so managed accounts take it over.
+const MANAGED_METHOD = { openai: "chatgpt-browser" };
 const log = (message, detail) => console.log("[gitterm-credentials] " + message + (detail ? ": " + detail : ""));
 
 // Groups entries by integration and orders each group so the active account is created
@@ -117,6 +126,42 @@ function keyAnswer(methods, metadata) {
   return Object.keys(answer).length ? answer : undefined;
 }
 
+const isManaged = (value) => value?.type === "oauth" && typeof value.metadata?.gittermCredentialId === "string";
+
+// One request per credential at a time; GitTerm serializes across workspaces.
+const inflight = new Map();
+function managedRefresh(credential) {
+  const id = credential.metadata?.gittermCredentialId;
+  if (typeof id !== "string") return Promise.resolve(credential);
+  if (!inflight.has(id)) {
+    inflight.set(id, requestToken(id).then(
+      (token) => ({ ...credential, access: token.access, expires: token.expires, metadata: { ...credential.metadata, ...token.metadata } }),
+    ).finally(() => inflight.delete(id)));
+  }
+  return inflight.get(id);
+}
+
+async function requestToken(credentialId) {
+  const url = process.env.WORKSPACE_API_URL;
+  const auth = process.env.WORKSPACE_AGENT_AUTH_TOKEN;
+  if (!url || !auth) throw new Error("GitTerm workspace identity is unavailable");
+  const response = await fetch(url.replace(/\/$/, "") + "/workspaceOps.modelCredential", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ credentialId }),
+    redirect: "error",
+    signal: AbortSignal.timeout(30000),
+  });
+  const body = await response.json().catch(() => undefined);
+  const data = body?.result?.data?.json ?? body?.result?.data;
+  if (!response.ok || typeof data?.access !== "string" || typeof data?.expires !== "number") {
+    const message = body?.error?.json?.message ?? body?.error?.message ?? "status " + response.status;
+    log("GitTerm token request failed", message);
+    throw new Error("GitTerm could not provide a token: " + message);
+  }
+  return data;
+}
+
 function toOAuthCredential(methodID, value) {
   const metadata = {
     ...(value.metadata && typeof value.metadata === "object" ? value.metadata : {}),
@@ -152,20 +197,35 @@ export default {
     const oauthIntegrations = [...groups].filter(([, entries]) => entries.some((entry) => entry.value.type === "oauth"));
     if (oauthIntegrations.length) {
       await ctx.integration.transform((editor) => {
-        for (const [id] of oauthIntegrations) {
+        for (const [id, entries] of oauthIntegrations) {
           if (!editor.get(id)) continue;
-          const methodID = builtinOAuthMethod(id, editor.method.list(id));
-          if (!methodID) continue;
-          editor.method.update({
-            integrationID: id,
-            method: { id: METHOD_ID, type: "oauth", label: "Gitterm" },
-            authorize: async () => ({
+          const builtin = builtinOAuthMethod(id, editor.method.list(id));
+          const managed = entries.some((entry) => isManaged(entry.value));
+          if (!builtin && !managed) continue;
+          const managedMethod = MANAGED_METHOD[id] ?? METHOD_ID;
+          const authorize = async () => {
+            const value = pending.get(id);
+            return {
               url: "",
               instructions: "Importing the credential provided by Gitterm",
               mode: "auto",
-              callback: Promise.resolve(toOAuthCredential(methodID, pending.get(id))),
-            }),
+              callback: Promise.resolve(toOAuthCredential(isManaged(value) ? managedMethod : builtin, value)),
+            };
+          };
+          editor.method.update({
+            integrationID: id,
+            method: { id: METHOD_ID, type: "oauth", label: "Gitterm" },
+            authorize,
+            refresh: managedRefresh,
           });
+          if (managed && managedMethod !== METHOD_ID) {
+            editor.method.update({
+              integrationID: id,
+              method: { id: managedMethod, type: "oauth", label: "Managed by Gitterm" },
+              authorize,
+              refresh: managedRefresh,
+            });
+          }
         }
       });
     }

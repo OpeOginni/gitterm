@@ -32,6 +32,7 @@ function form(body: Record<string, string>): RequestInit {
       Accept: "application/json",
     },
     body: new URLSearchParams(body).toString(),
+    signal: AbortSignal.timeout(15_000),
   };
 }
 
@@ -104,5 +105,27 @@ export const XaiOAuthService = {
     throw new Error(
       `xAI authorization failed: ${result.error_description ?? result.error ?? response.status}`,
     );
+  },
+
+  /** Exchanges a refresh token, keeping the old one if xAI does not rotate it. */
+  async refreshToken(refreshToken: string): Promise<XaiOAuthResult> {
+    const response = await fetch(
+      `${ISSUER}/token`,
+      form({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: CLIENT_ID }),
+    );
+    const result = (await response.json().catch(() => ({}))) as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+      error?: string;
+    };
+    if (!response.ok || !result.access_token) {
+      throw new Error(`xAI token refresh failed: ${result.error ?? response.status}`);
+    }
+    return {
+      accessToken: result.access_token,
+      refreshToken: result.refresh_token ?? refreshToken,
+      expiresAt: expiresAt(result.access_token, result.expires_in),
+    };
   },
 };

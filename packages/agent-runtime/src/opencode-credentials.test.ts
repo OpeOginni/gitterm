@@ -1,10 +1,11 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, mock, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   OPENCODE_CREDENTIALS_PATH,
   OPENCODE_CREDENTIALS_PLUGIN_PATH,
+  OPENCODE_MANAGED_REFRESH,
   opencodeCredentialFiles,
   type OpencodeCredentialEntry,
 } from "./opencode-credentials";
@@ -42,8 +43,12 @@ test("ships the credentials JSON plus the importer plugin", () => {
 
 const homes: string[] = [];
 const originalHome = process.env.HOME;
+const originalFetch = globalThis.fetch;
 afterEach(() => {
   process.env.HOME = originalHome;
+  globalThis.fetch = originalFetch;
+  delete process.env.WORKSPACE_API_URL;
+  delete process.env.WORKSPACE_AGENT_AUTH_TOKEN;
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
 });
 
@@ -69,6 +74,7 @@ type Registration = {
   integrationID: string;
   method: Method;
   authorize(): Promise<{ callback: Promise<Record<string, unknown>> }>;
+  refresh?(credential: Record<string, unknown>): Promise<Record<string, unknown>>;
 };
 
 /** Minimal stand-in for the OpenCode plugin context, recording what the plugin does. */
@@ -167,7 +173,7 @@ function fakeContext(input: {
       },
     },
   };
-  return { ctx, stored, state };
+  return { ctx, stored, state, registrations };
 }
 
 test("plugin imports every account with its label and creates the active one last", async () => {
@@ -329,4 +335,78 @@ test("plugin keeps importing after one credential is rejected", async () => {
   expect(stored).toEqual([
     { integrationID: "anthropic", label: "work", value: { type: "key", key: "sk-ant-work" } },
   ]);
+});
+
+test("GitTerm-managed accounts refresh through the GitTerm API, never a local refresh token", async () => {
+  const plugin = await loadPlugin([
+    {
+      integration: "opencode",
+      label: "Acme",
+      value: {
+        type: "oauth",
+        refresh: OPENCODE_MANAGED_REFRESH,
+        access: "old",
+        expires: 1,
+        metadata: { orgID: "org_1", gittermCredentialId: "cred-1" },
+      },
+    },
+    {
+      integration: "openai",
+      label: "ChatGPT",
+      value: {
+        type: "oauth",
+        refresh: OPENCODE_MANAGED_REFRESH,
+        access: "old",
+        expires: 1,
+        accountId: "acct",
+        metadata: { gittermCredentialId: "cred-2" },
+      },
+    },
+  ]);
+  const { ctx, stored, registrations } = fakeContext({
+    integrations: {
+      opencode: { methods: [{ type: "oauth", id: "device" }] },
+      openai: { methods: [{ type: "oauth", id: "chatgpt-browser" }] },
+    },
+  });
+  await plugin.setup(ctx);
+
+  expect(stored.map((entry) => [entry.integrationID, entry.value.methodID])).toEqual([
+    ["opencode", "gitterm-import"],
+    ["openai", "chatgpt-browser"],
+  ]);
+  expect(stored.every((entry) => entry.value.refresh === OPENCODE_MANAGED_REFRESH)).toBe(true);
+  // ChatGPT routing needs the built-in method ID, so the plugin takes that method over.
+  const override = registrations.find(
+    (registration) =>
+      registration.integrationID === "openai" && registration.method.id === "chatgpt-browser",
+  );
+  expect(override?.refresh).toBeDefined();
+
+  process.env.WORKSPACE_API_URL = "https://api.test/trpc/";
+  process.env.WORKSPACE_AGENT_AUTH_TOKEN = "agent-token";
+  const fetchMock = mock(async (_url: string, _init: RequestInit) =>
+    Response.json({
+      result: { data: { access: "new", expires: 99, metadata: { orgID: "org_2" } } },
+    }),
+  );
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
+  const credential = stored[0]!.value;
+  const [first, second] = await Promise.all([
+    override!.refresh!(stored[1]!.value),
+    registrations.find((registration) => registration.integrationID === "opencode")!.refresh!(
+      credential,
+    ),
+  ]);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  const [url, init] = fetchMock.mock.calls[1]!;
+  expect(url).toBe("https://api.test/trpc/workspaceOps.modelCredential");
+  expect(init.headers).toMatchObject({ Authorization: "Bearer agent-token" });
+  expect(JSON.parse(String(init.body))).toEqual({ credentialId: "cred-1" });
+  expect(first).toMatchObject({ access: "new", expires: 99, methodID: "chatgpt-browser" });
+  expect(second).toMatchObject({
+    access: "new",
+    refresh: OPENCODE_MANAGED_REFRESH,
+    metadata: { orgID: "org_2", gittermCredentialId: "cred-1" },
+  });
 });

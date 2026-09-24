@@ -34,12 +34,14 @@ async function post(path: string, body: Record<string, string | boolean>) {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
   });
 }
 
 async function get<T>(path: string, token: string): Promise<T> {
   const response = await fetch(`${SERVER}${path}`, {
     headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`OpenCode console request failed: ${response.status}`);
   return response.json() as Promise<T>;
@@ -116,6 +118,28 @@ export const OpencodeConsoleOAuthService = {
         email: user.email,
         ...(org ? { orgID: org.id, orgName: org.name } : {}),
       },
+    };
+  },
+
+  /** Exchanges a refresh token. The console rotates it, so the returned one replaces it. */
+  async refreshToken(
+    refreshToken: string,
+  ): Promise<{ refreshToken: string; accessToken: string; expiresAt: number; orgId?: string }> {
+    const response = await post("/auth/device/token", {
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: CLIENT_ID,
+    });
+    const result = (await response.json().catch(() => ({}))) as TokenResponse;
+    if (!response.ok || !("access_token" in result)) {
+      const error = "error" in result ? result.error : `status ${response.status}`;
+      throw new Error(`OpenCode token refresh failed: ${error}`);
+    }
+    return {
+      refreshToken: result.refresh_token,
+      accessToken: result.access_token,
+      expiresAt: Date.now() + result.expires_in * 1000,
+      ...(result.org_id ? { orgId: result.org_id } : {}),
     };
   },
 };

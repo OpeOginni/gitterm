@@ -1,6 +1,10 @@
 import z from "zod";
 import { issueWorkspaceGitCredential } from "../../service/workspace-git-credential";
 import {
+  issueWorkspaceModelToken,
+  ModelCredentialUnavailableError,
+} from "../../service/credentials/workspace-model-token";
+import {
   workspaceAgentAuthProcedure,
   workspaceAuthProcedure,
   workspaceSetupAuthProcedure,
@@ -137,6 +141,42 @@ export const workspaceOperationsRouter = router({
       });
     }
   }),
+  /** Access token for a shared OAuth account; the refresh token stays in GitTerm. */
+  modelCredential: workspaceAgentAuthProcedure
+    .input(z.object({ credentialId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!workspaceJWT.hasScope(ctx.workspaceAuth, "agent:credential"))
+        throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient workspace scope" });
+      const ws = await getAuthenticatedWorkspace(
+        ctx.workspaceAuth.workspaceId,
+        ctx.workspaceAuth.userId,
+      );
+      try {
+        const token = await issueWorkspaceModelToken(ws, input.credentialId);
+        await recordCredentialAudit({
+          workspaceId: ws.id,
+          userId: ws.userId,
+          credentialKind: "model",
+          integrationId: input.credentialId,
+          action: "issued",
+          expiresAt: new Date(token.expires).toISOString(),
+        });
+        return token;
+      } catch (error) {
+        if (error instanceof ModelCredentialUnavailableError) {
+          throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+        }
+        logger.warn("Model credential refresh failed", {
+          workspaceId: ws.id,
+          records: { credentialId: input.credentialId },
+          error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
+        });
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "The provider refused to refresh this account; reconnect it in GitTerm",
+        });
+      }
+    }),
   getSelf: workspaceAuthProcedure.query(async ({ ctx }) => {
     const { workspaceAuth } = ctx;
     if (!workspaceJWT.hasScope(workspaceAuth, "workspace:read")) {

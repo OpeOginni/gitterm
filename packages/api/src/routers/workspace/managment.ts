@@ -136,6 +136,7 @@ import {
 import { resolveCustomWorkspaceImage } from "../../service/workspace-image";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
 import { workspaceModelsSchema } from "@gitterm/schema/workspace-models";
+import { getModelProviderDefinition } from "@gitterm/schema/model-providers";
 import { getPortVisibility, portVisibilitySchema } from "@gitterm/schema/workspace-ports";
 import { getWorkspaceModelAccess } from "../../service/workspace-model-access";
 import {
@@ -2390,6 +2391,28 @@ export const workspaceRouter = router({
             models: input.models,
           }),
         );
+        const daytonaWorkspaceApiAccess =
+          providerKey !== "daytona" ||
+          (
+            (await getProviderConfigService().getProviderConfigForUse("daytona")) as {
+              tier3NetworkAccess?: boolean;
+            } | null
+          )?.tier3NetworkAccess === true;
+        if (
+          !daytonaWorkspaceApiAccess &&
+          agentTypeRecord.provisionerKey === "opencode" &&
+          credentials.some(
+            (cred) =>
+              cred.credential.type === "oauth" &&
+              getModelProviderDefinition(cred.providerName)?.refreshedByGitterm,
+          )
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "ChatGPT, OpenCode, and SuperGrok subscriptions need workspace access to the GitTerm API to refresh. Daytona Tier 1/2 blocks that connection; use a Tier 3+ Daytona organization or another provider.",
+          });
+        }
         workspaceCreateLogger.addSecrets(
           credentials.flatMap(({ credential }) =>
             credential.type === "api_key"
@@ -2485,13 +2508,7 @@ export const workspaceRouter = router({
         // Tier 1/2 Daytona sandboxes cannot reach the API: skip push reports
         // (their retry backoff would delay setup ~30s per report) and rely on
         // the server-side polling reconciler instead.
-        const workspaceCanPushSetupStatus =
-          providerKey !== "daytona" ||
-          (
-            (await getProviderConfigService().getProviderConfigForUse("daytona")) as {
-              tier3NetworkAccess?: boolean;
-            } | null
-          )?.tier3NetworkAccess === true;
+        const workspaceCanPushSetupStatus = daytonaWorkspaceApiAccess;
         const beforeAgentCommand = buildWorkspaceSetupCommand(beforeAgentCommands, setupProbePort, {
           phase: "before-agent",
           waitForAgent: false,
@@ -2649,6 +2666,11 @@ export const workspaceRouter = router({
           id: workspaceId,
           externalInstanceId: "",
           userId,
+          // The runtime can request a token during provisioning, before the final
+          // workspace update below. Authorize only the credentials selected for it.
+          modelCredentialIds: credentials
+            .map((credential) => credential.credentialId)
+            .filter((id): id is string => id !== null),
           imageId: imageRecord.id,
           cloudProviderId: input.cloudProviderId,
           regionId: regionRecord?.id,

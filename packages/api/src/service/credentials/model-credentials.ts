@@ -19,8 +19,9 @@ import {
   EncryptionService,
 } from "../encryption";
 import { normalizeModelProviderFields } from "@gitterm/schema/model-providers";
-import { GitHubCopilotOAuthService } from "./oauth/github-copilot";
-import { OpenAIOAuthService } from "./oauth/openai-oauth";
+
+// Don't expose a large fraction of a short key just to provide a display hint.
+const apiKeySuffix = (key: string): string | null => (key.length >= 16 ? key.slice(-4) : null);
 
 // Types for credential operations
 export interface StoreApiKeyOptions {
@@ -55,6 +56,7 @@ export interface CredentialMetadata {
   authType: string;
   label: string;
   keyHash: string;
+  keySuffix: string | null;
   isActive: boolean;
   isDefault: boolean;
   lastUsedAt: Date | null;
@@ -171,6 +173,7 @@ export class ModelCredentialsService {
     // Encrypt and hash
     const encryptedCredential = this.encryption.encryptCredential(credential);
     const keyHash = this.encryption.hashForAudit(apiKey);
+    const keySuffix = apiKeySuffix(apiKey);
 
     // Store in database
     const existingDefault = await db.query.userModelCredential.findFirst({
@@ -190,6 +193,7 @@ export class ModelCredentialsService {
         isDefault: !existingDefault,
         encryptedCredential,
         keyHash,
+        keySuffix,
         label: normalizedLabel,
       })
       .returning({ id: userModelCredential.id });
@@ -306,6 +310,7 @@ export class ModelCredentialsService {
       authType: cred.provider.authType,
       label: cred.label,
       keyHash: cred.keyHash,
+      keySuffix: cred.provider.authType === "api_key" ? cred.keySuffix : null,
       isActive: cred.isActive,
       isDefault: cred.isDefault,
       lastUsedAt: cred.lastUsedAt,
@@ -423,100 +428,6 @@ export class ModelCredentialsService {
         .set({ isDefault: true, updatedAt: new Date() })
         .where(eq(userModelCredential.id, replacement.id));
     }
-  }
-
-  // ==================== OAuth Token Refresh ====================
-
-  /**
-   * Refresh OAuth access token if expired
-   * Returns the current valid access token
-   */
-  async refreshOAuthTokenIfNeeded(credentialId: string, userId: string): Promise<string> {
-    const decrypted = await this.getCredential(credentialId, userId);
-
-    if (!decrypted) {
-      throw new Error("Credential not found");
-    }
-
-    if (decrypted.credential.type !== "oauth") {
-      throw new Error("Not an OAuth credential");
-    }
-
-    const oauthCred = decrypted.credential;
-
-    // Check if we have a valid access token
-    const now = Date.now();
-    const bufferMs = 5 * 60 * 1000; // 5 minute buffer
-
-    if (oauthCred.access && oauthCred.expires && oauthCred.expires > now + bufferMs) {
-      // Token is still valid
-      return oauthCred.access;
-    }
-
-    // Need to refresh - use the provider's plugin to determine refresh method
-    if (decrypted.plugin === "copilot-auth") {
-      const newToken = await GitHubCopilotOAuthService.refreshCopilotToken(
-        oauthCred.refresh,
-        oauthCred.enterpriseUrl,
-      );
-
-      // Update stored credential
-      const updatedCredential: OAuthCredential = {
-        type: "oauth",
-        refresh: oauthCred.refresh,
-        access: newToken.token,
-        expires: newToken.expiresAt * 1000, // Convert to milliseconds
-        enterpriseUrl: oauthCred.enterpriseUrl,
-      };
-
-      const encryptedCredential = this.encryption.encryptCredential(updatedCredential);
-
-      await db
-        .update(userModelCredential)
-        .set({
-          encryptedCredential,
-          oauthExpiresAt: new Date(newToken.expiresAt * 1000),
-          updatedAt: new Date(),
-        })
-        .where(eq(userModelCredential.id, credentialId));
-
-      await this.logAudit(credentialId, userId, "refreshed", decrypted.credential.type);
-
-      return newToken.token;
-    }
-
-    if (decrypted.plugin === "oauth") {
-      const newTokens = await OpenAIOAuthService.refreshToken(oauthCred.refresh);
-
-      // Update stored credential - Codex returns new refresh token too
-      const updatedCredential: OAuthCredential = {
-        type: "oauth",
-        refresh: newTokens.refreshToken,
-        access: newTokens.accessToken,
-        expires: newTokens.expiresAt,
-        // Codex stores accountId separately in the credential
-        accountId: newTokens.accountId,
-      };
-
-      const encryptedCredential = this.encryption.encryptCredential(updatedCredential);
-
-      await db
-        .update(userModelCredential)
-        .set({
-          encryptedCredential,
-          oauthExpiresAt: new Date(newTokens.expiresAt),
-          updatedAt: new Date(),
-        })
-        .where(eq(userModelCredential.id, credentialId));
-
-      await this.logAudit(credentialId, userId, "refreshed", decrypted.credential.type);
-
-      return newTokens.accessToken;
-    }
-
-    throw new Error(
-      `OAuth refresh not supported for provider: ${decrypted.providerName} (plugin: ${decrypted.plugin})`,
-    );
   }
 
   // ==================== Audit Logging ====================

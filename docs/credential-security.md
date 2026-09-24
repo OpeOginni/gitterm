@@ -14,6 +14,14 @@ claiming secrets are inaccessible to an authorized workspace.
   `/run/gitterm`, not the persistent home directory.
 - **Google Cloud integration:** no Google private key is stored. Five-minute GitTerm OIDC assertions
   are exchanged through Google Workload Identity Federation for the selected service account.
+- **Model subscriptions (ChatGPT, OpenCode console, SuperGrok):** these providers rotate refresh
+  tokens, so a copy per workspace would sign the others out. The refresh token stays encrypted in
+  GitTerm. Workspaces get an access token plus a placeholder, and the `gitterm-credentials`
+  OpenCode plugin calls `workspaceOps.modelCredential` for a new access token. GitTerm locks the
+  credential row, refreshes at most once, and every workspace sharing the account reuses the
+  result. Only running or starting workspaces that were created with the credential can ask.
+  GitHub Copilot tokens do not rotate and are still refreshed inside the workspace. T3Code
+  workspaces run OpenCode 1.x, which has no plugin hook, so they still receive the refresh token.
 - **Caller secret files:** encrypted in transit/provider storage and materialized under
   `/run/gitterm/secrets/<workspace>`. A repository path is a git-excluded symlink only.
 - **Railway:** raw runtime values are envelope-encrypted in `workspace_runtime_bundle`. Railway gets
@@ -63,7 +71,9 @@ master key is configured.
 
 - Workspace bearer tokens include `authVersion`; middleware compares it with the workspace row.
 - Terminated workspaces and deleted integrations cannot issue credentials.
-- Paused workspaces cannot fetch runtime bundles or mint GitHub/Google credentials.
+- Paused workspaces cannot fetch runtime bundles or mint GitHub/Google/model credentials.
+- Revoking or deleting a model credential stops every workspace from getting new access tokens
+  for it; tokens already issued last until they expire.
 - Runtime bundles are deleted on failed provisioning and termination.
 - Incrementing `workspace.authVersion` revokes all tokens for that workspace. The workspace must be
   reprovisioned because its runtime no longer has a valid identity.

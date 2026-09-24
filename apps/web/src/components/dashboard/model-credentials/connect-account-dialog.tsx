@@ -180,8 +180,8 @@ function ConnectAccountFlow({
           {selected ? `Connect ${selected.displayName}` : "Connect an account"}
         </DialogTitle>
         <DialogDescription className="text-[13px]">
-          Sign in with a subscription. Tokens are encrypted, sent only to your workspaces, and
-          refreshed there.
+          Sign in with a subscription. Your credentials are encrypted and only used for your
+          workspaces.
         </DialogDescription>
       </DialogHeader>
 
