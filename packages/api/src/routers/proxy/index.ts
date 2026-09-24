@@ -492,44 +492,8 @@ export const proxyResolverRouter = async (c: Context) => {
       );
     }
 
-    // Browsers omit credentials from CORS preflights. Route genuine
-    // preflights upstream so the workspace can return its CORS policy before
-    // requiring Basic auth for the actual request.
-    const isCorsPreflight =
-      c.req.header("X-Original-Method") === "OPTIONS" &&
-      Boolean(c.req.header("Origin")) &&
-      Boolean(c.req.header("Access-Control-Request-Method"));
-    if (isCorsPreflight) {
-      if (!ws.upstreamUrl) {
-        return htmlError(c, "error", 500);
-      }
-
-      let upstreamUrl = new URL(ws.upstreamUrl);
-      let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
-      if (extractedPort && portUpstream) {
-        const portUrl = new URL(portUpstream);
-        port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
-        upstreamUrl = portUrl;
-      }
-
-      return c.text(
-        "OK",
-        200,
-        buildProxyResolveHeaders(
-          {
-            "X-Upstream-URL": upstreamUrl.toString(),
-            "X-Container-Host": upstreamUrl.hostname,
-            "X-Container-Port": port,
-            "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
-            "X-Hosting-Type": ws.hostingType,
-          },
-          upstreamAccessHeaders,
-        ),
-      );
-    }
-
-    // Public ports are reachable by anyone with the URL, so APIs and webhooks
-    // work without a GitTerm session.
+    // Public ports, including CORS preflights, are reachable without a GitTerm
+    // session. Private ports must never forward unauthenticated OPTIONS requests.
     if (isPublicPort && portUpstream) {
       const portUrl = new URL(portUpstream);
       const port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
