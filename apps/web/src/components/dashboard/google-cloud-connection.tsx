@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  ExternalLink,
   KeyRound,
   Loader2,
   Plus,
@@ -18,6 +19,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { queryClient, trpc } from "@/utils/trpc";
+
+const DOCS = {
+  guide: "https://github.com/OpeOginni/gitterm/blob/main/docs/google-workload-identity.md",
+  projectNumber:
+    "https://cloud.google.com/resource-manager/docs/creating-managing-projects#identifying_projects",
+  serviceAccounts: "https://cloud.google.com/iam/docs/service-accounts-create",
+  grantRoles: "https://cloud.google.com/iam/docs/manage-access-service-accounts",
+  workloadIdentity: "https://cloud.google.com/iam/docs/workload-identity-federation",
+};
 
 const DEFAULT_POOL_ID = "gitterm";
 const DEFAULT_PROVIDER_ID = "gitterm";
@@ -90,6 +100,20 @@ function googleProviderCommands(integration: {
     `gcloud iam workload-identity-pools create '${pool}' --location=global --project='${integration.projectId}' --display-name='GitTerm workspaces'`,
     `gcloud iam workload-identity-pools providers create-oidc '${providerId}' --location=global --project='${integration.projectId}' --workload-identity-pool='${pool}' --issuer-uri='${integration.setup.issuer}' --allowed-audiences='${integration.setup.audience}' --attribute-mapping='google.subject=assertion.sub,attribute.integration_id=assertion.integration_id'`,
   ].join("\n");
+}
+
+function DocLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-0.5 text-fg-3 underline decoration-dotted underline-offset-2 hover:text-fg"
+    >
+      {children}
+      <ExternalLink className="size-2.5" />
+    </a>
+  );
 }
 
 function CommandBlock({ command, muted = false }: { command: string; muted?: boolean }) {
@@ -251,7 +275,9 @@ export function GoogleCloudConnection() {
             <p className="text-[12.5px] leading-relaxed text-fg-3">
               Three copy-paste commands, run from your own machine with{" "}
               <code>gcloud auth login</code>. GitTerm stores only resource identifiers—never a
-              Google private key.
+              Google private key. New to this?{" "}
+              <DocLink href={DOCS.guide}>Read the full setup guide</DocLink> or Google&apos;s{" "}
+              <DocLink href={DOCS.workloadIdentity}>Workload Identity Federation docs</DocLink>.
             </p>
           </div>
 
@@ -297,7 +323,10 @@ export function GoogleCloudConnection() {
                     </button>
                   </>
                 ) : (
-                  "The numeric ID shown on the project dashboard (not the project ID)."
+                  <>
+                    The numeric ID, not the project ID.{" "}
+                    <DocLink href={DOCS.projectNumber}>Where to find it</DocLink>
+                  </>
                 )
               }
             >
@@ -312,7 +341,13 @@ export function GoogleCloudConnection() {
             </Field>
             <Field
               label="Service account"
-              hint="The account workspaces will act as. Keep its roles narrow."
+              hint={
+                <>
+                  The account workspaces will act as; its roles are all a workspace can do.{" "}
+                  <DocLink href={DOCS.serviceAccounts}>Create one</DocLink> ·{" "}
+                  <DocLink href={DOCS.grantRoles}>Grant roles</DocLink>
+                </>
+              }
             >
               <Input
                 required

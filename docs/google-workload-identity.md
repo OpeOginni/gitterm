@@ -62,11 +62,37 @@ gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
   --attribute-mapping="google.subject=assertion.sub,attribute.integration_id=assertion.integration_id"
 ```
 
-## 3. Save the integration and authorize it
+## 3. Create a service account for workspaces
 
-In **Dashboard → Integrations → Google Cloud**, enter the provider resource, target project ID, and
-service-account email. Copy the generated IAM principal and grant only that principal permission to
-impersonate the service account:
+Workspaces act as a Google service account. Create a dedicated one and grant it only the roles the
+agent needs; these roles are the full extent of what a workspace can do in Google Cloud.
+
+```sh
+PROJECT_ID=my-project-123456
+
+gcloud iam service-accounts create gitterm-agent \
+  --project="$PROJECT_ID" \
+  --display-name="GitTerm workspace agent"
+
+# Example: read-only access to Cloud Storage. Repeat for each role the agent needs.
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:gitterm-agent@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/storage.objectViewer"
+```
+
+The account's email is `gitterm-agent@<PROJECT_ID>.iam.gserviceaccount.com`. No key file is
+created or downloaded.
+
+## 4. Save the integration and authorize it
+
+In **Dashboard → Integrations → Google Cloud → Add identity**, enter a display name, the project
+ID, the project number, and the service-account email from step 3. The form assembles the
+provider resource name (pool and provider IDs default to `gitterm`; expand *Use an existing pool or
+provider* to change them) and shows the exact step 2 commands with this deployment's issuer filled
+in, so you can run step 2 straight from the form.
+
+After saving, the identity card shows the final command. It grants only this GitTerm identity
+permission to impersonate the service account:
 
 ```sh
 gcloud iam service-accounts add-iam-policy-binding SERVICE_ACCOUNT_EMAIL \
