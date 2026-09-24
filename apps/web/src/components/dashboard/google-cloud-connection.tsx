@@ -151,8 +151,8 @@ export function GoogleCloudConnection() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {[
-              ["name", "Display name", "Culinu dev"],
-              ["projectId", "Google project ID", "kuechenzauber-dev"],
+              ["name", "Display name", "Production"],
+              ["projectId", "Google project ID", "my-project-123456"],
               [
                 "workloadIdentityProvider",
                 "Provider resource name",

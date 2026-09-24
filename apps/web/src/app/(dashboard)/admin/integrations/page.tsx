@@ -1,418 +1,165 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  ArrowUpRight,
-  Check,
-  KeyRound,
-  Link2,
-  LockKeyhole,
-  RotateCw,
-} from "lucide-react";
-import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { ChevronRight, Settings2 } from "lucide-react";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
-import env from "@gitterm/env/web";
+import { cn } from "@/lib/utils";
+import { INTEGRATION_META, type IntegrationKey } from "./_components/meta";
+import { IntegrationLogo, StatusBadge } from "./_components/ui";
+import {
+  useAdminIntegrations,
+  type AdminIntegrationsData,
+} from "./_components/use-admin-integrations";
+
+const CATEGORY_LABEL: Record<string, string> = {
+  git: "Source control",
+  cloud: "Cloud",
+  mcp: "Agents & MCP",
+};
+
+function integrationStatus(
+  item: AdminIntegrationsData["integrations"][number],
+  data: AdminIntegrationsData,
+) {
+  if (!item.ready) return "planned" as const;
+  if (item.enabled) return "enabled" as const;
+  const configured =
+    item.key === "github" ? !!data.githubMode : item.key === "google" ? !!data.google : true;
+  return configured ? ("disabled" as const) : ("unconfigured" as const);
+}
+
+function RowSkeleton() {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-11 w-11 rounded-xl bg-foreground/[0.08]" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-28 rounded-md bg-foreground/[0.08]" />
+            <Skeleton className="h-5 w-20 rounded-full bg-foreground/[0.07]" />
+          </div>
+          <Skeleton className="h-4 w-64 rounded-md bg-foreground/[0.06]" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminIntegrationsPage() {
+  const router = useRouter();
   const { data: session, isPending: sessionPending } = authClient.useSession();
-  const queryClient = useQueryClient();
-  const { data, isPending, error } = useQuery({
-    ...trpc.admin.integrations.list.queryOptions(),
-    enabled: (session?.user as { role?: string } | undefined)?.role === "admin",
-  });
-  const [issuer, setIssuer] = useState(
-    `${(env.NEXT_PUBLIC_SERVER_URL || "https://api.gitterm.dev").replace(/\/$/, "")}/api/workload-identity`,
-  );
-  const [appId, setAppId] = useState("");
-  const [privateKey, setPrivateKey] = useState("");
-  const [webhookSecret, setWebhookSecret] = useState("");
-  const [globalPat, setGlobalPat] = useState("");
-  const update = useMutation(trpc.admin.integrations.update.mutationOptions());
-  const configure = useMutation(trpc.admin.integrations.configureGoogle.mutationOptions());
-  const configureGithub = useMutation(trpc.admin.integrations.configureGithubApp.mutationOptions());
-  const configureGithubPat = useMutation(
-    trpc.admin.integrations.configureGithubPat.mutationOptions(),
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
+  const { data, isPending, error } = useAdminIntegrations(isAdmin);
+
+  useEffect(() => {
+    if (sessionPending) return;
+    if (!session?.user) router.push("/login");
+    else if (!isAdmin) router.push("/dashboard");
+  }, [session?.user, sessionPending, isAdmin, router]);
+
+  const header = (
+    <DashboardHeader
+      heading="Integrations"
+      text="Control which connections users can set up across this deployment."
+    >
+      <Button asChild variant="outline">
+        <Link
+          href={"/admin" as Route}
+          className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+        >
+          Back to Admin
+        </Link>
+      </Button>
+    </DashboardHeader>
   );
 
-  async function refresh() {
-    await queryClient.invalidateQueries({ queryKey: trpc.admin.integrations.list.queryKey() });
-    await queryClient.invalidateQueries({ queryKey: trpc.integrations.list.queryKey() });
-    await queryClient.invalidateQueries({ queryKey: trpc.googleCloud.availability.queryKey() });
-    await queryClient.invalidateQueries({ queryKey: trpc.github.appAvailability.queryKey() });
-  }
-
-  if (sessionPending || !session?.user || (session.user as { role?: string }).role !== "admin") {
+  if (sessionPending || !isAdmin || isPending) {
     return (
       <DashboardShell>
-        <p className="py-16 text-center text-sm text-fg-3">Admin access required.</p>
+        {header}
+        <div className="space-y-2 pt-2">
+          {[...Array(4)].map((_, i) => (
+            <RowSkeleton key={i} />
+          ))}
+        </div>
       </DashboardShell>
     );
   }
 
+  const grouped = new Map<string, AdminIntegrationsData["integrations"]>();
+  for (const item of data?.integrations ?? []) {
+    grouped.set(item.category, [...(grouped.get(item.category) ?? []), item]);
+  }
+
   return (
     <DashboardShell>
-      <DashboardHeader
-        heading="Integrations"
-        text="Control which connections are available across this deployment."
-      />
-      <div className="mx-auto max-w-5xl space-y-8 pb-16">
-        <Link
-          href={"/admin" as Route}
-          className="inline-flex items-center gap-2 text-xs text-fg-3 hover:text-fg"
-        >
-          <ArrowLeft className="size-3.5" /> Admin overview
-        </Link>
-        <div className="rounded-2xl border border-line bg-settings p-6 sm:p-8">
-          <div className="flex items-start gap-4">
-            <div className="rounded-xl border border-line bg-fill p-3">
-              <Link2 className="size-5 text-fg-2" />
-            </div>
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
-                Control plane
-              </p>
-              <h2 className="mt-1 text-xl font-semibold text-fg">
-                One catalog, different connection models.
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-fg-3">
-                Enable a service here before users connect it. GitHub login is independent of GitHub
-                repository access. Executor and other MCP flows remain planned, not usable yet.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {isPending ? (
-          <p className="text-sm text-fg-3">Loading integration policies…</p>
-        ) : error ? (
-          <p role="alert" className="text-sm text-red-300">
-            Couldn’t load integration settings: {error.message}
+      {header}
+      <div className="space-y-8 pt-2">
+        {error ? (
+          <p role="alert" className="text-sm text-red-400">
+            Couldn’t load integrations: {error.message}
           </p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {data?.integrations.map((item) => (
-              <article key={item.key} className="rounded-xl border border-line bg-settings p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-fg-4">
-                      {item.category} / {item.ready ? "Available" : "Planned"}
-                    </p>
-                    <h3 className="mt-2 text-lg font-semibold text-fg">{item.name}</h3>
-                  </div>
-                  <span
-                    className={`rounded-full border px-2 py-1 font-mono text-[10px] ${item.enabled ? "border-emerald-400/30 text-emerald-300" : "border-line text-fg-4"}`}
-                  >
-                    {item.enabled ? "Enabled" : "Off"}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-fg-3">
-                  {item.key === "google"
-                    ? "GitTerm signs short-lived identity assertions; users attach their own service accounts."
-                    : item.key === "github"
-                      ? "Choose one repository access mode: a shared admin PAT or an App that users install. Login is unaffected."
-                      : item.key === "executor"
-                        ? "A future dedicated connection flow for each user, with optional admin-shared access."
-                        : "The connector is not implemented yet. Configuration will appear here when it is ready."}
-                </p>
-                {item.ready ? (
-                  <div className="mt-5 space-y-3 border-t border-line pt-4 text-xs text-fg-2">
-                    <label className="flex items-center justify-between gap-3">
-                      <span>Enable for users</span>
-                      <input
-                        type="checkbox"
-                        checked={item.enabled}
-                        disabled={update.isPending}
-                        onChange={async (event) => {
-                          try {
-                            await update.mutateAsync({
-                              key: item.key,
-                              enabled: event.target.checked,
-                              allowPersonal:
-                                item.key === "github"
-                                  ? data?.githubMode?.mode === "app"
-                                  : item.allowPersonal,
-                              allowShared:
-                                item.key === "github"
-                                  ? data?.githubMode?.mode === "pat"
-                                  : item.allowShared,
-                            });
-                            await refresh();
-                          } catch (cause) {
-                            toast.error(
-                              cause instanceof Error
-                                ? cause.message
-                                : "Couldn’t update integration",
-                            );
-                          }
-                        }}
-                        className="size-4 accent-emerald-400"
-                      />
-                    </label>
-                    {item.key === "google" ? (
-                      <p className="text-fg-4">
-                        Configure the issuer below before enabling this integration.
-                      </p>
-                    ) : null}
-                    {item.key === "github" ? (
-                      <p className="text-fg-4">
-                        Configure a GitHub App or shared PAT below before enabling access.
-                      </p>
+        ) : null}
+
+        {[...grouped.entries()].map(([category, items]) => (
+          <section key={category} className="space-y-2">
+            <p className="px-1 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+              {CATEGORY_LABEL[category] ?? category}
+            </p>
+            <ul className="space-y-2">
+              {items.map((item) => {
+                const meta = INTEGRATION_META[item.key as IntegrationKey];
+                const status = integrationStatus(item, data!);
+                const body = (
+                  <div className="flex items-center gap-4">
+                    <IntegrationLogo meta={meta} />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-foreground/90">{item.name}</h3>
+                        <StatusBadge status={status} />
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">{meta.summary}</p>
+                    </div>
+                    {item.ready ? (
+                      <div className="hidden items-center gap-2 text-xs text-muted-foreground transition-colors group-hover:text-foreground/70 sm:flex">
+                        <Settings2 className="h-3.5 w-3.5" />
+                        <span className="font-mono uppercase tracking-[0.18em]">Configure</span>
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </div>
                     ) : null}
                   </div>
-                ) : (
-                  <p className="mt-5 border-t border-line pt-4 font-mono text-[10px] uppercase tracking-widest text-fg-4">
-                    Connector coming later
-                  </p>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-
-        <section className="rounded-2xl border border-line bg-settings p-6 sm:p-8">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-fill p-2">
-              <KeyRound className="size-5 text-fg-2" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-fg">GitHub repository credentials</h2>
-              <p className="text-xs text-fg-3">
-                Choose one: a deployment-wide PAT, or an App installed by each user. This does not
-                enable GitHub login.
-              </p>
-            </div>
-          </div>
-          {data?.github?.mode === "pat" ? (
-            <p className="mt-5 text-sm text-emerald-300">
-              Shared PAT active: @{data.github.accountLogin} (ending in {data.github.patSuffix})
-            </p>
-          ) : data?.github?.mode === "app" ? (
-            <p className="mt-5 text-sm text-emerald-300">
-              App connected: {data.github.slug} (ID {data.github.appId})
-            </p>
-          ) : data?.githubMode?.mode === "app" ? (
-            <p className="mt-5 text-sm text-fg-3">
-              Using the legacy env-configured GitHub App. Save an App here to move repository access
-              into GitTerm.
-            </p>
-          ) : (
-            <p className="mt-5 text-sm text-fg-3">
-              No repository credentials configured. Save either an App or shared PAT, then enable
-              GitHub above.
-            </p>
-          )}
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="space-y-2 text-xs text-fg-3">
-              GitHub App ID
-              <Input
-                inputMode="numeric"
-                value={appId}
-                onChange={(event) => setAppId(event.target.value)}
-                placeholder="1234567"
-                className="bg-fill font-mono text-xs"
-              />
-            </label>
-            <label className="space-y-2 text-xs text-fg-3">
-              Webhook secret
-              <Input
-                type="password"
-                autoComplete="off"
-                value={webhookSecret}
-                onChange={(event) => setWebhookSecret(event.target.value)}
-                placeholder="Same secret configured in GitHub"
-                className="bg-fill font-mono text-xs"
-              />
-            </label>
-            <label className="space-y-2 text-xs text-fg-3 sm:col-span-2">
-              App private key (PEM)
-              <textarea
-                value={privateKey}
-                onChange={(event) => setPrivateKey(event.target.value)}
-                placeholder="-----BEGIN RSA PRIVATE KEY-----"
-                spellCheck={false}
-                className="min-h-28 w-full rounded-lg border border-line bg-fill p-3 font-mono text-xs text-fg outline-none focus:border-line-2"
-              />
-            </label>
-          </div>
-          <p className="mt-3 text-xs text-fg-4">
-            Set the App’s Setup URL to{" "}
-            <code className="break-all">
-              {env.NEXT_PUBLIC_SERVER_URL || "https://your-api.example.com"}/api/github/callback
-            </code>{" "}
-            and its installation webhook URL to your listener’s{" "}
-            <code>/trpc/github.handleInstallationWebhook</code>. Grant only the repository
-            permissions your users need.
-          </p>
-          <Button
-            disabled={configureGithub.isPending || !appId || !privateKey || !webhookSecret}
-            className="mt-5"
-            onClick={async () => {
-              if (
-                data?.githubMode &&
-                !window.confirm(
-                  "Replace the current GitHub credentials? Switching modes stops refresh for existing workspaces using the previous mode.",
-                )
-              )
-                return;
-              try {
-                await configureGithub.mutateAsync({
-                  appId,
-                  privateKey,
-                  webhookSecret,
-                  replace: data?.githubMode?.mode === "pat",
-                });
-                setPrivateKey("");
-                setWebhookSecret("");
-                await refresh();
-                toast.success("GitHub App verified and saved");
-              } catch (cause) {
-                toast.error(
-                  cause instanceof Error ? cause.message : "Couldn’t configure GitHub App",
                 );
-              }
-            }}
-          >
-            {data?.githubMode?.mode === "pat"
-              ? "Switch to GitHub App"
-              : data?.github
-                ? "Replace App credentials"
-                : "Verify & save GitHub App"}
-          </Button>
-          <p className="mt-2 text-[11px] text-amber-200/80">
-            The API and webhook listener need the same encryption master key to read this App’s
-            encrypted credentials.
-          </p>
-          <div className="mt-8 border-t border-line pt-6">
-            <h3 className="text-sm font-semibold text-fg">Or use an admin-shared PAT</h3>
-            <p className="mt-2 text-xs leading-relaxed text-fg-3">
-              The PAT’s GitHub identity and permissions are shared with every workspace that selects
-              it. Use a narrowly scoped fine-grained PAT. Revoke it on GitHub to stop access in
-              running workspaces.
-            </p>
-            <label className="mt-4 block space-y-2 text-xs text-fg-3">
-              Fine-grained PAT
-              <Input
-                type="password"
-                autoComplete="off"
-                value={globalPat}
-                onChange={(event) => setGlobalPat(event.target.value)}
-                placeholder="github_pat_…"
-                className="bg-fill font-mono text-xs"
-              />
-            </label>
-            <Button
-              className="mt-4"
-              disabled={!globalPat.trim() || configureGithubPat.isPending}
-              onClick={async () => {
-                if (
-                  data?.githubMode &&
-                  !window.confirm(
-                    "Replace the current GitHub credentials? Switching modes stops refresh for existing workspaces using the previous mode. Revoke the old PAT on GitHub if needed.",
-                  )
-                )
-                  return;
-                try {
-                  await configureGithubPat.mutateAsync({
-                    token: globalPat,
-                    replace: data?.githubMode?.mode === "app",
-                  });
-                  setGlobalPat("");
-                  await refresh();
-                  toast.success("Shared GitHub PAT verified and saved");
-                } catch (cause) {
-                  toast.error(
-                    cause instanceof Error ? cause.message : "Couldn’t configure GitHub PAT",
-                  );
-                }
-              }}
-            >
-              {data?.githubMode?.mode === "app"
-                ? "Switch to shared PAT"
-                : "Verify & save shared PAT"}
-            </Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-line bg-settings p-6 sm:p-8">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-sky-400/10 p-2">
-              <KeyRound className="size-5 text-sky-300" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-fg">Google Cloud issuer</h2>
-              <p className="text-xs text-fg-3">
-                Deployment-wide identity used by users’ Google Cloud connections.
-              </p>
-            </div>
-          </div>
-          {data?.google ? (
-            <div className="mt-6 rounded-xl border border-line bg-fill p-4 text-sm text-fg-2">
-              <p className="flex items-center gap-2 text-emerald-300">
-                <Check className="size-4" /> Signing key stored encrypted in GitTerm
-              </p>
-              <p className="mt-3 break-all font-mono text-xs">{data.google.issuer}</p>
-              <p className="mt-1 font-mono text-[10px] text-fg-4">Key ID: {data.google.keyId}</p>
-            </div>
-          ) : (
-            <p className="mt-5 text-sm text-fg-3">
-              Generate a signing key here; no Google service-account private key is needed. Existing
-              deployments using env configuration continue to work until you migrate.
-            </p>
-          )}
-          <label className="mt-5 block space-y-2 text-xs text-fg-3">
-            <span>Public issuer URL (the API URL + /api/workload-identity)</span>
-            <Input
-              value={data?.google?.issuer ?? issuer}
-              onChange={(event) => setIssuer(event.target.value)}
-              disabled={!!data?.google}
-              className="bg-fill font-mono text-xs"
-            />
-          </label>
-          <p className="mt-2 text-xs text-amber-200/80">
-            Use the publicly reachable API URL. Rotating a key keeps the old public key available
-            briefly; do not change the issuer URL after connecting Google projects.
-          </p>
-          <Button
-            className="mt-5 gap-2"
-            disabled={configure.isPending || !data}
-            onClick={async () => {
-              const rotate = !!data?.google;
-              if (
-                rotate &&
-                !window.confirm(
-                  "Rotate the deployment-wide Google signing key? Existing tokens may need to refresh.",
-                )
-              )
-                return;
-              try {
-                await configure.mutateAsync({ issuer: data?.google?.issuer ?? issuer, rotate });
-                await refresh();
-                toast.success(rotate ? "Google signing key rotated" : "Google issuer configured");
-              } catch (cause) {
-                toast.error(
-                  cause instanceof Error ? cause.message : "Couldn’t configure Google issuer",
+                return (
+                  <li key={item.key}>
+                    {item.ready ? (
+                      <Link
+                        href={`/admin/integrations/${item.key}` as Route}
+                        className="group relative block overflow-hidden rounded-2xl border border-border bg-card p-5 transition-all hover:border-amber-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      >
+                        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-amber-500/[0.05] opacity-0 blur-3xl transition-opacity duration-300 group-hover:opacity-100" />
+                        {body}
+                      </Link>
+                    ) : (
+                      <div
+                        className={cn(
+                          "rounded-2xl border border-dashed border-border bg-card/40 p-5 opacity-70",
+                        )}
+                      >
+                        {body}
+                      </div>
+                    )}
+                  </li>
                 );
-              }
-            }}
-          >
-            {data?.google ? <RotateCw className="size-4" /> : <LockKeyhole className="size-4" />}
-            {data?.google ? "Rotate signing key" : "Generate signing key"}
-          </Button>
-          <Link
-            href={"/dashboard/integrations" as Route}
-            className="mt-5 flex items-center gap-1 text-xs text-fg-3 hover:text-fg"
-          >
-            See the user connection flow <ArrowUpRight className="size-3" />
-          </Link>
-        </section>
+              })}
+            </ul>
+          </section>
+        ))}
       </div>
     </DashboardShell>
   );
