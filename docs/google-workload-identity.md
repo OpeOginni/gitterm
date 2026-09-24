@@ -87,8 +87,8 @@ created or downloaded.
 
 In **Dashboard → Integrations → Google Cloud → Add identity**, enter a display name, the project
 ID, the project number, and the service-account email from step 3. The form assembles the
-provider resource name (pool and provider IDs default to `gitterm`; expand *Use an existing pool or
-provider* to change them) and shows the exact step 2 commands with this deployment's issuer filled
+provider resource name (pool and provider IDs default to `gitterm`; expand _Use an existing pool or
+provider_ to change them) and shows the exact step 2 commands with this deployment's issuer filled
 in, so you can run step 2 straight from the form.
 
 After saving, the identity card shows the final command. It grants only this GitTerm identity
