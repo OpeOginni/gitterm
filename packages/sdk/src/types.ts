@@ -190,12 +190,12 @@ export type WorkspaceCreateInput = {
   provider?: WorkspaceProviderSelection;
   /** Inline Git/gh credentials for validation, cloning, and runtime operations. Not auto-renewed. */
   repositoryCredentials?: { username?: string; token: string };
-  /** Dashboard GitHub App integration; runtime Git/gh credentials are renewed automatically. */
-  gitIntegrationId?: string;
-  /** Use the admin's deployment-wide PAT for this managed workspace. Mutually exclusive with other GitHub credentials. */
-  useGlobalGithubPat?: boolean;
-  /** Google Workload Identity Federation integration; injects keyless ADC/gcloud auth. */
-  googleCloudIntegrationId?: string;
+  /**
+   * Connection ids to attach, from `client.integrations.connections.list()`. At most one per
+   * integration. A GitHub connection renews Git/gh credentials automatically; a Google connection
+   * injects keyless ADC/gcloud auth. Cannot be combined with `repositoryCredentials` for GitHub.
+   */
+  connections?: string[];
   /** Defaults from the selected provider. */
   persistent?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
@@ -227,22 +227,105 @@ export type WorkspaceCreateInput = {
   };
 };
 
-export type GitHubIntegration = {
-  id: string;
-  accountLogin: string;
-  accountType: string;
-  repositorySelection: string;
-  suspended: boolean;
-  connectedAt: string;
+export type IntegrationKey = "github" | "google" | "gitlab" | "bitbucket" | "executor" | "mcp";
+export type IntegrationCategory = "git" | "cloud" | "mcp";
+
+/** An integration the admin has enabled for this deployment. */
+export type Integration = {
+  key: IntegrationKey;
+  name: string;
+  category: IntegrationCategory;
+  /** Users may create their own connections (e.g. install the GitHub App). */
+  allowPersonal: boolean;
+  /** The admin provides a deployment-wide connection with id `<key>:shared`. */
+  allowShared: boolean;
 };
 
-export type GoogleCloudIntegration = {
-  id: string;
-  name: string;
+export type ConnectionKind = "personal" | "shared";
+export type ConnectionStatus = "connected" | "suspended";
+
+export type GitHubConnectionDetails = {
+  integration: "github";
+  mode: "app" | "pat";
+  accountLogin: string;
+  accountType?: string;
+  repositorySelection?: "all" | "selected";
+  installationId?: string;
+  patSuffix?: string;
+};
+
+export type GoogleConnectionDetails = {
+  integration: "google";
   projectId: string;
-  workloadIdentityProvider: string;
   serviceAccountEmail: string;
+  workloadIdentityProvider: string;
+  setup: {
+    issuer: string;
+    audience: string;
+    principalSet: string;
+    attributeMapping: Record<string, string>;
+  };
+};
+
+export type ConnectionDetails = GitHubConnectionDetails | GoogleConnectionDetails;
+
+/**
+ * Something you can attach to a workspace via `connections: [id]`. Personal connections are
+ * owned by you; shared ones are provided by the admin and have stable ids like `github:shared`.
+ */
+export type Connection = {
+  id: string;
+  integration: IntegrationKey;
+  kind: ConnectionKind;
+  name: string;
+  status: ConnectionStatus;
   connectedAt: string;
+  details: ConnectionDetails;
+};
+
+export type CreateConnectionInput =
+  | {
+      integration: "google";
+      name: string;
+      projectId: string;
+      /** projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider> */
+      workloadIdentityProvider: string;
+      serviceAccountEmail: string;
+    }
+  | { integration: "github" };
+
+export type CreateConnectionResult =
+  | {
+      status: "connected";
+      connection: Connection;
+      /** Commands you still need to run outside GitTerm, e.g. the Google IAM binding. */
+      nextSteps: Array<{ label: string; command: string }>;
+    }
+  | {
+      /** Finish in a browser at `authorizeUrl`, then `connections.waitFor()` the new connection. */
+      status: "pending";
+      integration: IntegrationKey;
+      authorizeUrl: string;
+    };
+
+export type GitHubRepository = {
+  id: number;
+  name: string;
+  fullName: string;
+  owner: string;
+  private: boolean;
+  defaultBranch: string;
+  htmlUrl: string;
+  pushedAt: string | null;
+};
+
+export type GitHubBranch = { name: string; protected: boolean };
+
+export type GoogleSetup = {
+  available: boolean;
+  /** OIDC issuer to configure on the Google workload identity provider. */
+  issuer: string | null;
+  attributeMapping: Record<string, string>;
 };
 
 export type WorkspaceRestartResult = { status: WorkspaceStatus };

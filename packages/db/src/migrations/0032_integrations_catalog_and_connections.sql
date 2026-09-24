@@ -29,8 +29,7 @@ CREATE TABLE "integration_settings" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "workspace" ADD COLUMN "use_global_github_pat" boolean DEFAULT false NOT NULL;
---> statement-breakpoint
+ALTER TABLE "workspace" ADD COLUMN "shared_git_connection_id" text;--> statement-breakpoint
 -- Existing connections remain enabled after upgrade; fresh deployments require admin enablement.
 INSERT INTO "integration_settings" ("key", "enabled", "allow_personal", "allow_shared")
 SELECT 'google', true, true, false WHERE EXISTS (SELECT 1 FROM "google_cloud_integration");

@@ -1,5 +1,5 @@
 {
-  "id": "6c65b83c-33e6-45bd-a6d9-7f31e91af6e0",
+  "id": "70883f14-9ccb-4faa-b961-c1d63ef3d53f",
   "prevId": "250aacda-c0ae-4c4a-b663-e8434c8f22aa",
   "version": "7",
   "dialect": "postgresql",
@@ -3377,12 +3377,11 @@
           "primaryKey": false,
           "notNull": false
         },
-        "use_global_github_pat": {
-          "name": "use_global_github_pat",
-          "type": "boolean",
+        "shared_git_connection_id": {
+          "name": "shared_git_connection_id",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": false
+          "notNull": false
         },
         "google_cloud_integration_id": {
           "name": "google_cloud_integration_id",

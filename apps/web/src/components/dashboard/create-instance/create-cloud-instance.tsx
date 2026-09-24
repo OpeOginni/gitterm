@@ -412,12 +412,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       regionId: resolvedRegionId,
       machineProfileId: selectedMachineProfileId,
       awsAccessProfileId: isAwsGroup ? selectedAwsProfileId : undefined,
-      gitIntegrationId: selectedGitIntegrationId.startsWith("app:")
-        ? selectedGitIntegrationId.slice(4)
-        : undefined,
-      useGlobalGithubPat: selectedGitIntegrationId === "global-pat",
-      googleCloudIntegrationId:
-        googleCloudIntegrationId === "none" ? undefined : googleCloudIntegrationId,
+      connections: [
+        selectedGitIntegrationId.startsWith("app:") ? selectedGitIntegrationId.slice(4) : null,
+        selectedGitIntegrationId === "global-pat" ? "github:shared" : null,
+        googleCloudIntegrationId === "none" ? null : googleCloudIntegrationId,
+      ].filter((id): id is string => Boolean(id)),
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
       workspaceProfile,

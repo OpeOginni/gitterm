@@ -101,7 +101,7 @@ gcloud iam service-accounts add-iam-policy-binding SERVICE_ACCOUNT_EMAIL \
   --member='PRINCIPAL_SET_COPIED_FROM_GITTERM'
 ```
 
-Select the integration when creating a workspace, or pass `googleCloudIntegrationId` through the
+Select the integration when creating a workspace, or pass its connection id in `connections` through the
 SDK. GitTerm writes a non-key external-account ADC configuration to
 `/run/gitterm/google/application-default-credentials.json` and sets the standard Google/gcloud
 environment variables.

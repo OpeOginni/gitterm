@@ -66,7 +66,7 @@ test("caller-supplied tokens without a saved integration are not refreshed", asy
 test("a workspace explicitly selected global PAT is brokered only while running", async () => {
   const app = spyOn(github, "getGitHubAppService");
   spyOn(githubConfig, "githubGlobalPat").mockResolvedValue("secret");
-  const patWorkspace = { ...ws, gitIntegrationId: null, useGlobalGithubPat: true };
+  const patWorkspace = { ...ws, gitIntegrationId: null, sharedGitConnectionId: "github:shared" };
   const issued = await issueWorkspaceGitCredential(patWorkspace);
   expect(issued.token).toBe("secret");
   expect(Date.parse(issued.expiresAt)).toBeGreaterThan(Date.now() + 10 * 60_000);
@@ -80,6 +80,10 @@ test("a workspace explicitly selected global PAT is brokered only while running"
 test("switching away from a global PAT blocks future credential issuance", async () => {
   spyOn(githubConfig, "githubGlobalPat").mockResolvedValue(null);
   await expect(
-    issueWorkspaceGitCredential({ ...ws, gitIntegrationId: null, useGlobalGithubPat: true }),
+    issueWorkspaceGitCredential({
+      ...ws,
+      gitIntegrationId: null,
+      sharedGitConnectionId: "github:shared",
+    }),
   ).rejects.toThrow("no longer available");
 });

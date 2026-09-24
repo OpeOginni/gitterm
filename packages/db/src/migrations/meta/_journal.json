@@ -229,8 +229,8 @@
     {
       "idx": 32,
       "version": "7",
-      "when": 1790243850321,
-      "tag": "0032_foamy_sage",
+      "when": 1790253999383,
+      "tag": "0032_integrations_catalog_and_connections",
       "breakpoints": true
     }
   ]

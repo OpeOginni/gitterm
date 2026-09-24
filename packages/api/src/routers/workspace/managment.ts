@@ -154,8 +154,9 @@ import {
   GOOGLE_ADC_PATH,
   workloadIdentityIssuer,
 } from "../../service/workload-identity/google";
+import { resolveWorkspaceConnections } from "../../service/integrations/connections";
 import { integrationPolicy } from "../../service/integrations/catalog";
-import { githubGlobalPat, githubRepositoryMode } from "../../service/github/config";
+import { githubRepositoryMode } from "../../service/github/config";
 import {
   railwayBootstrapEnvironment,
   storeWorkspaceRuntimeBundle,
@@ -306,9 +307,11 @@ const workspaceCreateBaseSchema = z.strictObject({
       z.literal(""),
     ])
     .optional(),
-  gitIntegrationId: z.string().optional(),
-  useGlobalGithubPat: z.boolean().optional(),
-  googleCloudIntegrationId: z.string().uuid().optional(),
+  /**
+   * Connection ids from `integrations.connections.list` to attach (at most one per integration).
+   * Personal connections are row ids; shared ones are `<integration>:shared`, e.g. `github:shared`.
+   */
+  connections: z.array(z.string().min(1)).max(8).optional(),
   repositoryCredentials: repositoryCredentialsSchema.optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
   /** Per-provider selection: inline apiKey, dashboard credential by label, or dashboard default. */
@@ -1604,6 +1607,14 @@ export const workspaceRouter = router({
         });
       }
 
+      // Resolve attached integrations once; everything below reads these locals.
+      const attached = await resolveWorkspaceConnections(userId, rawInput.connections ?? []);
+      const gitIntegrationId =
+        attached.github?.kind === "personal" ? attached.github.gitIntegration.id : undefined;
+      const useGlobalGithubPat = attached.github?.kind === "shared";
+      const sharedGitConnectionId = useGlobalGithubPat ? attached.github!.connectionId : null;
+      const googleCloudIntegrationId = attached.google?.connectionId;
+
       const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
       const input = await resolveWorkspaceCreateIntent(rawInput, userId, viewerPlan);
 
@@ -2067,22 +2078,22 @@ export const workspaceRouter = router({
         if (savedWorkspaceEnvironment) {
           workspaceCreateLogger.addSecrets(Object.values(savedWorkspaceEnvironment));
         }
-        const selectedGoogleCloudIntegration = input.googleCloudIntegrationId
+        const selectedGoogleCloudIntegration = googleCloudIntegrationId
           ? await db.query.googleCloudIntegration.findFirst({
               where: and(
-                eq(googleCloudIntegration.id, input.googleCloudIntegrationId),
+                eq(googleCloudIntegration.id, googleCloudIntegrationId),
                 eq(googleCloudIntegration.userId, userId),
                 eq(googleCloudIntegration.active, true),
               ),
             })
           : undefined;
-        if (input.googleCloudIntegrationId && !(await integrationPolicy("google")).enabled) {
+        if (googleCloudIntegrationId && !(await integrationPolicy("google")).enabled) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Google Cloud integration is disabled",
           });
         }
-        if (input.googleCloudIntegrationId && !selectedGoogleCloudIntegration) {
+        if (googleCloudIntegrationId && !selectedGoogleCloudIntegration) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Google Cloud integration not found",
@@ -2094,28 +2105,15 @@ export const workspaceRouter = router({
 
         const githubUsername = userRecord?.name ?? undefined;
 
-        if (
-          input.useGlobalGithubPat &&
-          (input.gitIntegrationId || input.repositoryCredentials || !input.repo)
-        ) {
+        // Policy, ownership and PAT availability were validated by resolveWorkspaceConnections.
+        if (attached.github && (input.repositoryCredentials || !input.repo)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Choose one GitHub connection and a repository",
+            message:
+              "A GitHub connection requires a repository and cannot be combined with inline credentials",
           });
         }
-        if (input.useGlobalGithubPat && !(await integrationPolicy("github")).enabled) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "GitHub repository access is disabled",
-          });
-        }
-        const selectedPat = input.useGlobalGithubPat ? await githubGlobalPat() : null;
-        if (input.useGlobalGithubPat && !selectedPat) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "The admin's global GitHub PAT is not configured",
-          });
-        }
+        const selectedPat = attached.github?.kind === "shared" ? attached.github.pat : null;
         if (selectedPat) workspaceCreateLogger.addSecrets([selectedPat]);
 
         // Validate git integration / repo access first, then generate token if needed
@@ -2124,7 +2122,7 @@ export const workspaceRouter = router({
         let githubInstallationId: string | undefined;
         let selectedGitIntegration: typeof gitIntegration.$inferSelect | undefined;
 
-        if (input.gitIntegrationId && !input.repositoryCredentials) {
+        if (gitIntegrationId && !input.repositoryCredentials) {
           if (!(await integrationPolicy("github")).enabled) {
             throw new TRPCError({
               code: "FORBIDDEN",
@@ -2140,9 +2138,7 @@ export const workspaceRouter = router({
           const [gitIntegrationRecord] = await db
             .select()
             .from(gitIntegration)
-            .where(
-              and(eq(gitIntegration.id, input.gitIntegrationId), eq(gitIntegration.userId, userId)),
-            );
+            .where(and(eq(gitIntegration.id, gitIntegrationId), eq(gitIntegration.userId, userId)));
 
           if (!gitIntegrationRecord) {
             throw new TRPCError({
@@ -2740,9 +2736,9 @@ export const workspaceRouter = router({
           cloudProviderId: input.cloudProviderId,
           regionId: regionRecord?.id,
           // Inline credentials win over an App ID; never later refresh an unused App token.
-          gitIntegrationId: input.repositoryCredentials ? null : (input.gitIntegrationId ?? null),
-          useGlobalGithubPat: !!input.useGlobalGithubPat,
-          googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
+          gitIntegrationId: input.repositoryCredentials ? null : (gitIntegrationId ?? null),
+          sharedGitConnectionId,
+          googleCloudIntegrationId: googleCloudIntegrationId ?? null,
           repositoryUrl: input.repo ?? null,
           domain,
           subdomain,
@@ -2831,9 +2827,9 @@ export const workspaceRouter = router({
           cloudProviderId: input.cloudProviderId,
           machineProfileId: selectedMachineProfile?.id ?? null,
           launchProfileId: null,
-          gitIntegrationId: input.repositoryCredentials ? null : (input.gitIntegrationId ?? null),
-          useGlobalGithubPat: !!input.useGlobalGithubPat,
-          googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
+          gitIntegrationId: input.repositoryCredentials ? null : (gitIntegrationId ?? null),
+          sharedGitConnectionId,
+          googleCloudIntegrationId: googleCloudIntegrationId ?? null,
           // Persist resolved defaults too, so later runs validate the exact injected credentials.
           modelCredentialIds: credentials
             .map((credential) => credential.credentialId)

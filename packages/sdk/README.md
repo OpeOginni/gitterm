@@ -23,12 +23,12 @@ Create a workspace, run a prompt, and get the final result:
 import { createGittermClient } from "@gitterm/sdk";
 
 const client = createGittermClient({ token: process.env.GITTERM_API_TOKEN });
-const [github] = await client.integrations.github.list();
+const [github] = await client.integrations.connections.list({ integration: "github" });
 if (!github) throw new Error("Connect GitHub in the Gitterm dashboard first");
 
 const { workspace } = await client.workspaces.create({
   repo: "https://github.com/acme/product",
-  gitIntegrationId: github.id,
+  connections: [github.id],
   autoTerminateAfterMs: 2 * 60 * 60 * 1000,
 });
 
@@ -45,16 +45,17 @@ try {
 }
 ```
 
-Connected cloud identities are discoverable without returning credentials:
+Every integration you can attach, personal or admin-provided, is a **connection** with one shape.
+Attach any number by id (at most one per integration):
 
 ```ts
-const [github] = await client.integrations.github.list();
-const [googleCloud] = await client.integrations.googleCloud.list();
+const connections = await client.integrations.connections.list();
+const github = connections.find((c) => c.integration === "github");
+const google = connections.find((c) => c.integration === "google");
 
 await client.workspaces.create({
   repo: "https://github.com/acme/product",
-  gitIntegrationId: github.id,
-  googleCloudIntegrationId: googleCloud.id,
+  connections: [github!.id, google!.id],
 });
 ```
 
@@ -160,6 +161,15 @@ client.catalog.cloudProviders();
 client.catalog.workspaceOptions();
 client.credentials.list();             // dashboard credential metadata, never secrets
 client.credentials.listProviders();
+client.integrations.catalog();         // integrations the admin enabled: key, category, personal/shared
+client.integrations.connections.list(filter?); // what you can attach; personal + shared, one shape
+client.integrations.connections.get(id);
+client.integrations.connections.create(input); // integrations:write; may return a browser step
+client.integrations.connections.remove(id);
+client.integrations.connections.waitFor({ integration, since }); // after a `pending` create
+client.integrations.github.repositories(connectionId);
+client.integrations.github.branches(connectionId, owner, repo);
+client.integrations.google.setup();    // issuer + attribute mapping to configure Google
 client.workspaces.models(workspace);  // resolved credential sources; no secrets or runtime wake-up
 ```
 
@@ -174,33 +184,76 @@ finishes tearing down resources after the call returns.
 
 ## Workspaces
 
-### Managed private repositories
+### Integrations and connections
 
-For renewable, short-lived repository authentication, connect the GitHub App in the GitTerm
-dashboard and copy its **SDK integration ID** from the Integrations page:
-
-```ts
-const { workspace, runtime } = await client.workspaces.create({
-  repo: "https://github.com/acme/private-repo",
-  branch: "main",
-  gitIntegrationId: "your-dashboard-integration-id",
-});
-```
-
-The admin can configure that GitHub App in **Admin → Integrations** without enabling GitHub login.
-Alternatively, the admin can configure a shared PAT instead. Explicitly opt into it for a managed
-workspace (there is no per-user connection ID for a deployment-wide secret):
+`client.integrations` works the same way for every provider. `catalog()` tells you which
+integrations the admin has enabled and whether each allows **personal** connections (you create
+them, e.g. by installing the GitHub App) and/or a **shared** one (the admin provides it for the
+whole deployment). `connections.list()` returns everything you can attach right now:
 
 ```ts
-const { workspace } = await client.workspaces.create({
-  repo: "https://github.com/acme/private-repo",
-  useGlobalGithubPat: true,
-});
+for (const c of await client.integrations.connections.list()) {
+  console.log(c.id, c.integration, c.kind, c.name, c.status);
+}
+// 8c1f…        github  personal  acme-bot (GitHub App)   connected
+// github:shared github  shared    acme-ci (shared PAT)    connected
+// 3f7d…        google  personal  Production              connected
 ```
 
-This PAT authenticates as the admin-chosen GitHub account; permissions are shared by all workspaces
-that opt into it. GitTerm does not return the PAT through the SDK. Only one of the shared PAT mode
-or user-installed App mode can be active at a time.
+Personal connection ids are stable row ids. Shared connection ids are well-known:
+`<integration>:shared`. Pass any mix to `workspaces.create({ connections: [...] })`; the server
+rejects more than one connection per integration. Credentials are issued inside the workspace and
+are never returned to the SDK caller.
+
+#### Creating connections from the SDK
+
+Creating a connection requires an API token with the `integrations:write` scope. Some providers
+complete immediately; others need a browser step and return `pending`:
+
+```ts
+// Google Cloud: completes immediately, then tell the user what to run in gcloud.
+const setup = await client.integrations.google.setup(); // issuer to configure on the provider
+const created = await client.integrations.connections.create({
+  integration: "google",
+  name: "Production",
+  projectId: "my-project",
+  workloadIdentityProvider:
+    "projects/123456789/locations/global/workloadIdentityPools/gitterm/providers/gitterm",
+  serviceAccountEmail: "agent@my-project.iam.gserviceaccount.com",
+});
+if (created.status === "connected") {
+  for (const step of created.nextSteps) console.log(step.label, "\n", step.command);
+}
+
+// GitHub App: the user installs the App in a browser, then we wait for the connection.
+const started = new Date();
+const pending = await client.integrations.connections.create({ integration: "github" });
+if (pending.status === "pending") {
+  console.log("Open", pending.authorizeUrl);
+  const github = await client.integrations.connections.waitFor({
+    integration: "github",
+    since: started,
+  });
+  console.log("Connected as", github.name);
+}
+```
+
+`connections.remove(id)` disconnects a personal connection (for GitHub it asks GitHub to uninstall
+the App; the removal completes when GitHub confirms). Shared connections are managed by the admin.
+
+#### GitHub
+
+A GitHub App connection can browse what it has access to:
+
+```ts
+const repos = await client.integrations.github.repositories(github.id);
+const branches = await client.integrations.github.branches(github.id, "acme", "product");
+```
+
+The admin picks one repository mode for the deployment: either users install a GitHub App
+(personal connections) or the admin provides a shared PAT (`github:shared`). The shared PAT
+authenticates as the admin-chosen GitHub account, so its permissions apply to every workspace that
+attaches it. Neither mode requires GitHub login.
 
 Managed workspaces can also use dashboard-managed model subscriptions while accepting an
 application-owned GitHub PAT inline:
@@ -220,11 +273,10 @@ const { workspace, runtime } = await client.workspaces.create({
 });
 ```
 
-The username defaults to `x-access-token`. Choose one of `gitIntegrationId`,
-`useGlobalGithubPat`, or `repositoryCredentials`. Inline credentials take precedence over
-`gitIntegrationId` for backward compatibility; `useGlobalGithubPat` cannot be combined with either. All three authenticate
-repository validation, cloning, and runtime Git operations such as pull and push. Omitting
-`models` continues to use dashboard-managed model credentials.
+The username defaults to `x-access-token`. Use either a GitHub connection in `connections` or
+`repositoryCredentials`, not both. Both authenticate repository validation, cloning, and runtime
+Git operations such as pull and push. Omitting `models` continues to use dashboard-managed model
+credentials.
 
 #### GitHub CLI authentication
 
@@ -232,15 +284,15 @@ For GitHub repositories, GitTerm configures both Git and `gh` from the same work
 credentials. Agents can run commands such as `gh pr list` or `gh pr create` without
 running `gh auth login`:
 
-- `repositoryCredentials.token` takes precedence over `gitIntegrationId`. The supplied
-  token is retained in a permission-restricted file on the workspace machine and is
-  not automatically renewed. This also works with the standalone SDK's direct providers.
-- `gitIntegrationId` uses the GitHub App installation token. Git and `gh` share a
+- `repositoryCredentials.token` is retained in a permission-restricted file on the workspace
+  machine and is not automatically renewed. This also works with the standalone SDK's direct
+  providers.
+- A personal GitHub connection uses the GitHub App installation token. Git and `gh` share a
   cached token and refresh it through GitTerm before expiry. Concurrent commands share
   the refresh, and a failed refresh stops the command rather than using an expired token.
-- `useGlobalGithubPat: true` opts into the admin's deployment-wide PAT for a managed workspace.
-  Switching deployment mode prevents future refreshes for existing workspaces using this mode;
-  revoke the PAT at GitHub to stop access in an already-running workspace.
+- The shared `github:shared` connection uses the admin's deployment-wide PAT. Switching the
+  deployment's GitHub mode prevents future refreshes for existing workspaces using it; revoke
+  the PAT at GitHub to stop access in an already-running workspace.
 - Without repository credentials or an integration, GitTerm leaves CLI authentication
   to the environment or the CLI's existing configuration.
 
@@ -270,9 +322,9 @@ Updating an integration's token does not grant permissions absent from its insta
 GitTerm does not save inline PATs in its application database. Inline PATs must be delivered to the
 selected compute provider and retained on the workspace machine for runtime Git operations, so
 provider infrastructure and processes running in that workspace may be able to access them. Prefer
-`gitIntegrationId` for durable managed workspaces and use narrowly scoped, short-lived PATs when
+a GitHub connection for durable managed workspaces and use narrowly scoped, short-lived PATs when
 inline credentials are necessary. The standalone/direct SDK has no GitTerm account to look up:
-it supports `repositoryCredentials` but not `gitIntegrationId` or `useGlobalGithubPat`.
+it supports `repositoryCredentials` but not `connections`.
 
 The SDK deliberately exposes two clients. `createGittermClient()` uses a user API token and
 can manage the user's workspaces. `createGittermWorkspaceClient()` uses the scoped identity

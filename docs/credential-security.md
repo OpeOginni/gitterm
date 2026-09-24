@@ -96,7 +96,7 @@ Google. Third-party credentials issued from it are short-lived.
 
 Railway's brokered bootstrap requires a matching canonical image:
 
-1. Apply migrations through `0032_foamy_sage` before deploying the integration-policy API.
+1. Apply migrations through `0032_integrations_catalog_and_connections` before deploying the integration-policy API.
 2. Configure the encryption master key. Generate the Google workload-identity signing key in
    **Admin → Integrations** after deploying the API, or retain the legacy env key during migration.
 3. Build and publish all canonical agent images from this revision; verify they contain

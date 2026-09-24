@@ -7,6 +7,8 @@ export const API_TOKEN_SCOPES = [
   "workspace:write",
   "run:read",
   "run:write",
+  "integrations:read",
+  "integrations:write",
 ] as const;
 
 export type ApiTokenScope = (typeof API_TOKEN_SCOPES)[number];
@@ -38,4 +40,14 @@ export const API_TOKEN_SCOPE_DETAILS: ReadonlyArray<{
   },
   { scope: "run:read", label: "Read runs", description: "Inspect agent runs and messages" },
   { scope: "run:write", label: "Manage runs", description: "Create and cancel agent runs" },
+  {
+    scope: "integrations:read",
+    label: "Read integrations",
+    description: "List enabled integrations and your connections",
+  },
+  {
+    scope: "integrations:write",
+    label: "Manage integrations",
+    description: "Connect and disconnect your personal integrations",
+  },
 ];

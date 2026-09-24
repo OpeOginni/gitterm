@@ -44,8 +44,15 @@ import type {
   WorkspaceSetupStatus,
   ModelCredential,
   ModelProviderInfo,
-  GitHubIntegration,
-  GoogleCloudIntegration,
+  Integration,
+  IntegrationKey,
+  Connection,
+  ConnectionKind,
+  CreateConnectionInput,
+  CreateConnectionResult,
+  GitHubRepository,
+  GitHubBranch,
+  GoogleSetup,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl } from "./transport.js";
 import { runHelpers } from "./runs.js";
@@ -177,10 +184,50 @@ export type GittermClient = {
     listProviders(): Promise<ModelProviderInfo[]>;
   };
   integrations: {
-    github: { list(): Promise<GitHubIntegration[]> };
-    googleCloud: { list(): Promise<GoogleCloudIntegration[]> };
+    /** Integrations the admin has enabled for this deployment. */
+    catalog(): Promise<Integration[]>;
+    connections: {
+      /** Personal and shared connections you can attach to a workspace. */
+      list(filter?: { integration?: IntegrationKey; kind?: ConnectionKind }): Promise<Connection[]>;
+      get(id: string): Promise<Connection>;
+      /** Requires the `integrations:write` scope. */
+      create(input: CreateConnectionInput): Promise<CreateConnectionResult>;
+      /** Removes a personal connection. Shared connections are managed by the admin. */
+      remove(id: string): Promise<void>;
+      /**
+       * Poll until a connection for `integration` connected after `since` appears; use after a
+       * `pending` create result once the browser step is done.
+       */
+      waitFor(options: {
+        integration: IntegrationKey;
+        since?: Date | string;
+        timeoutMs?: number;
+        intervalMs?: number;
+      }): Promise<Connection>;
+    };
+    github: {
+      /** Repositories reachable through a GitHub App connection. */
+      repositories(connectionId: string): Promise<GitHubRepository[]>;
+      branches(connectionId: string, owner: string, repo: string): Promise<GitHubBranch[]>;
+    };
+    google: {
+      /** Issuer and attribute mapping to configure the Google provider before connecting. */
+      setup(): Promise<GoogleSetup>;
+    };
   };
 };
+
+function toConnection(connection: {
+  id: string;
+  integration: IntegrationKey;
+  kind: ConnectionKind;
+  name: string;
+  status: Connection["status"];
+  connectedAt: Date | string;
+  details: Connection["details"];
+}): Connection {
+  return { ...connection, connectedAt: toIso(connection.connectedAt)! };
+}
 
 function envValue(name: string): string | undefined {
   const value = typeof process !== "undefined" ? process.env[name] : undefined;
@@ -714,33 +761,64 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         run(async () => trpc.workspace.getWorkspaceCatalog.query()),
     },
     integrations: {
-      github: {
-        list: () =>
-          run(async (): Promise<GitHubIntegration[]> => {
-            const result = await trpc.workspace.listUserInstallations.query();
-            return result.installations.map(({ git_integration, github_app_installation }) => ({
-              id: git_integration.id,
-              accountLogin: git_integration.providerAccountLogin,
-              accountType: github_app_installation.accountType,
-              repositorySelection: github_app_installation.repositorySelection,
-              suspended: github_app_installation.suspended,
-              connectedAt: toIso(git_integration.connectedAt)!,
-            }));
+      catalog: () => run(async (): Promise<Integration[]> => trpc.integrations.catalog.query()),
+      connections: {
+        list: (filter) =>
+          run(async (): Promise<Connection[]> => {
+            const result = await trpc.integrations.connections.list.query(filter);
+            return result.map(toConnection);
+          }),
+        get: (id) =>
+          run(
+            async (): Promise<Connection> =>
+              toConnection(await trpc.integrations.connections.get.query({ id })),
+          ),
+        create: (input) =>
+          run(async (): Promise<CreateConnectionResult> => {
+            const result = await trpc.integrations.connections.create.mutate(input);
+            return result.status === "connected"
+              ? { ...result, connection: toConnection(result.connection) }
+              : result;
+          }),
+        remove: (id) =>
+          run(async (): Promise<void> => {
+            await trpc.integrations.connections.remove.mutate({ id });
+          }),
+        waitFor: ({ integration, since, timeoutMs = 5 * 60_000, intervalMs = 3_000 }) =>
+          run(async (): Promise<Connection> => {
+            const sinceMs = since ? new Date(since).getTime() : 0;
+            const deadline = Date.now() + timeoutMs;
+            while (Date.now() < deadline) {
+              const result = await trpc.integrations.connections.list.query({
+                integration,
+                kind: "personal",
+              });
+              const match = result
+                .map(toConnection)
+                .filter(
+                  (c) => c.status === "connected" && new Date(c.connectedAt).getTime() >= sinceMs,
+                )
+                .sort((a, b) => b.connectedAt.localeCompare(a.connectedAt))[0];
+              if (match) return match;
+              await new Promise((resolve) => setTimeout(resolve, intervalMs));
+            }
+            throw new Error(`Timed out waiting for a ${integration} connection`);
           }),
       },
-      googleCloud: {
-        list: () =>
-          run(async (): Promise<GoogleCloudIntegration[]> => {
-            const result = await trpc.googleCloud.list.query();
-            return result.map((integration) => ({
-              id: integration.id,
-              name: integration.name,
-              projectId: integration.projectId,
-              workloadIdentityProvider: integration.workloadIdentityProvider,
-              serviceAccountEmail: integration.serviceAccountEmail,
-              connectedAt: toIso(integration.connectedAt)!,
-            }));
-          }),
+      github: {
+        repositories: (connectionId) =>
+          run(
+            async (): Promise<GitHubRepository[]> =>
+              trpc.integrations.github.repositories.query({ connectionId }),
+          ),
+        branches: (connectionId, owner, repo) =>
+          run(
+            async (): Promise<GitHubBranch[]> =>
+              trpc.integrations.github.branches.query({ connectionId, owner, repo }),
+          ),
+      },
+      google: {
+        setup: () => run(async (): Promise<GoogleSetup> => trpc.integrations.google.setup.query()),
       },
     },
     credentials: {

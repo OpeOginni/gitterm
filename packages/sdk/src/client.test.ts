@@ -51,12 +51,12 @@ test("hosted workspace input exposes phased setup and strict secret modes", () =
   expect(phasedSetup.repositoryCredentials?.token).toBe("github-pat");
 });
 
-test("hosted workspace input can explicitly select the admin's global GitHub PAT", () => {
+test("hosted workspace input attaches integrations by connection id", () => {
   const input: WorkspaceCreateInput = {
     repo: "https://github.com/gitterm/private-example",
-    useGlobalGithubPat: true,
+    connections: ["github:shared", "3f7d3d0e-6f43-4a8e-9a0e-4d1c2b6f8a11"],
   };
-  expect(input.useGlobalGithubPat).toBe(true);
+  expect(input.connections).toContain("github:shared");
 });
 
 test("maps stable lifecycle prefixes to WorkspaceLifecycleError", async () => {
@@ -187,44 +187,42 @@ function eventClient(frames: unknown[][], seen: string[] = []) {
   return createGittermClient({ token: "gt_test", fetch: fetchStub });
 }
 
-test("integration discovery maps GitHub App and Google identities", async () => {
+test("integration connections list personal and shared connections in one shape", async () => {
+  const connections = [
+    {
+      id: "github-id",
+      integration: "github",
+      kind: "personal",
+      name: "culinu-bot (GitHub App)",
+      status: "connected",
+      connectedAt: "2026-09-14T00:00:00.000Z",
+      details: { integration: "github", mode: "app", accountLogin: "culinu-bot" },
+    },
+    {
+      id: "github:shared",
+      integration: "github",
+      kind: "shared",
+      name: "acme-bot (shared PAT)",
+      status: "connected",
+      connectedAt: "1970-01-01T00:00:00.000Z",
+      details: { integration: "github", mode: "pat", accountLogin: "acme-bot", patSuffix: "ab12" },
+    },
+  ];
   const fetchStub = (async (input: RequestInfo | URL) => {
     const url = String(input instanceof Request ? input.url : input);
-    if (url.includes("listUserInstallations")) {
-      return trpcOk({
-        installations: [
-          {
-            git_integration: {
-              id: "github-id",
-              providerAccountLogin: "culinu-bot",
-              connectedAt: "2026-09-14T00:00:00.000Z",
-            },
-            github_app_installation: {
-              accountType: "Organization",
-              repositorySelection: "selected",
-              suspended: false,
-            },
-          },
-        ],
-      });
-    }
-    return trpcOk([
-      {
-        id: "google-id",
-        name: "Culinu dev",
-        projectId: "kuechenzauber-dev",
-        workloadIdentityProvider: "projects/1/locations/global/workloadIdentityPools/p/providers/g",
-        serviceAccountEmail: "agent@kuechenzauber-dev.iam.gserviceaccount.com",
-        connectedAt: "2026-09-14T00:00:00.000Z",
-      },
-    ]);
+    if (url.includes("integrations.catalog"))
+      return trpcOk([
+        { key: "github", name: "GitHub", category: "git", allowPersonal: true, allowShared: true },
+      ]);
+    return trpcOk(connections);
   }) as unknown as typeof fetch;
   const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
 
-  const github = await client.integrations.github.list();
-  const google = await client.integrations.googleCloud.list();
-  expect(github[0]).toMatchObject({ id: "github-id", accountLogin: "culinu-bot" });
-  expect(google[0]).toMatchObject({ id: "google-id", projectId: "kuechenzauber-dev" });
+  const catalog = await client.integrations.catalog();
+  const list = await client.integrations.connections.list({ integration: "github" });
+  expect(catalog[0]?.key).toBe("github");
+  expect(list.map((c) => c.kind)).toEqual(["personal", "shared"]);
+  expect(list[1]?.id).toBe("github:shared");
 });
 
 test("run helpers accept the run object instead of an id pair", async () => {
