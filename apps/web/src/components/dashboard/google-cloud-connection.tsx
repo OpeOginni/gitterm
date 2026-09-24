@@ -274,8 +274,7 @@ export function GoogleCloudConnection() {
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-sky-300" />
             <p className="text-[12.5px] leading-relaxed text-fg-3">
               Three copy-paste commands, run from your own machine with{" "}
-              <code>gcloud auth login</code>. GitTerm stores only resource identifiers—never a
-              Google private key. New to this?{" "}
+              <code>gcloud auth login</code>. <br></br> New to this?{" "}
               <DocLink href={DOCS.guide}>Read the full setup guide</DocLink> or Google&apos;s{" "}
               <DocLink href={DOCS.workloadIdentity}>Workload Identity Federation docs</DocLink>.
             </p>
