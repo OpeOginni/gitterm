@@ -25,11 +25,7 @@ import {
   Plus,
   KeyRound,
   SquareArrowOutUpRight,
-  UserPlus,
-  UsersRound,
-  User,
-  Shield,
-  LogOut,
+  Lock,
 } from "lucide-react";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
@@ -46,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   getWorkspaceUrl,
   getAttachCommand,
@@ -70,9 +67,10 @@ const PROVIDER_LOGOS: Record<string, string> = {
   vercel: "/vercel.svg",
 };
 import Link from "next/link";
-import { ShareWorkspaceDialog } from "@/components/dashboard/share/share-workspace-dialog";
 
 const ITEMS_PER_PAGE = 6;
+
+const EMPTY_OPEN_PORT_FORM = { name: "", port: "", isPublic: false };
 
 export function InstanceList() {
   const [page, setPage] = useState(0);
@@ -173,27 +171,16 @@ type CloudProvider =
 type WorkspaceSSHAccess =
   (typeof trpc.workspace.getWorkspaceSSHAccess)["~types"]["output"]["access"];
 
-export type SharedAccess = {
-  role: string;
-  via: { kind: "user" } | { kind: "team"; teamName: string };
-  owner: { name: string; email: string } | null;
-};
-
 export function InstanceCard({
   workspace,
   providers,
-  shared,
 }: {
   workspace: Workspace;
   providers: CloudProvider[];
-  /** When set, renders a read-only card for a workspace shared with the user. */
-  shared?: SharedAccess;
 }) {
-  const isShared = !!shared;
   const [showConnectDialog, setShowConnectDialog] = useState(false);
-  const [showShareDialog, setShowShareDialog] = useState(false);
   const [showOpenPortDialog, setShowOpenPortDialog] = useState(false);
-  const [openPortForm, setOpenPortForm] = useState({ name: "", port: "" });
+  const [openPortForm, setOpenPortForm] = useState(EMPTY_OPEN_PORT_FORM);
   const [closingPort, setClosingPort] = useState<number | null>(null);
 
   const deleteServiceMutation = useMutation(
@@ -210,20 +197,6 @@ export function InstanceCard({
       },
       onError: (error) => {
         toast.error(`Failed to terminate workspace: ${error.message}`);
-      },
-    }),
-  );
-
-  const leaveSharedMutation = useMutation(
-    trpc.workspaceShare.leaveSharedWorkspace.mutationOptions({
-      onSuccess: () => {
-        toast.success("You've left this workspace");
-        queryClient.invalidateQueries({
-          queryKey: trpc.workspaceShare.listSharedWorkspaces.queryKey(),
-        });
-      },
-      onError: (error) => {
-        toast.error(error.message);
       },
     }),
   );
@@ -282,10 +255,28 @@ export function InstanceCard({
           queryKey: trpc.workspace.listWorkspaces.queryKey(),
         });
         setShowOpenPortDialog(false);
-        setOpenPortForm({ name: "", port: "" });
+        setOpenPortForm(EMPTY_OPEN_PORT_FORM);
       },
       onError: (error) => {
         toast.error(`Failed to open port: ${error.message}`);
+      },
+    }),
+  );
+
+  const setPortVisibilityMutation = useMutation(
+    trpc.workspace.setWorkspacePortVisibility.mutationOptions({
+      onSuccess: (data) => {
+        toast.success(
+          data.visibility === "public"
+            ? `Port ${data.port} is now public`
+            : `Port ${data.port} is now private`,
+        );
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspace.listWorkspaces.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(`Failed to update port: ${error.message}`);
       },
     }),
   );
@@ -626,15 +617,6 @@ export function InstanceCard({
 
   return (
     <>
-      {!isShared && (
-        <ShareWorkspaceDialog
-          workspaceId={workspace.id}
-          workspaceName={workspace.name || getRepoName() || "Untitled workspace"}
-          open={showShareDialog}
-          onOpenChange={setShowShareDialog}
-        />
-      )}
-
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
         <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
@@ -663,7 +645,7 @@ export function InstanceCard({
         open={showOpenPortDialog}
         onOpenChange={(open) => {
           setShowOpenPortDialog(open);
-          if (!open) setOpenPortForm({ name: "", port: "" });
+          if (!open) setOpenPortForm(EMPTY_OPEN_PORT_FORM);
         }}
       >
         <DialogContent className="sm:max-w-[425px]">
@@ -685,6 +667,7 @@ export function InstanceCard({
                 workspaceId: workspace.id,
                 port: p,
                 name: openPortForm.name.trim() || undefined,
+                visibility: openPortForm.isPublic ? "public" : "private",
               });
             }}
           >
@@ -708,6 +691,23 @@ export function InstanceCard({
                   value={openPortForm.port}
                   onChange={(e) => setOpenPortForm((f) => ({ ...f, port: e.target.value }))}
                   placeholder="e.g. 7681"
+                />
+              </div>
+              <div className="flex items-start justify-between gap-4 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5">
+                <div className="grid gap-1">
+                  <Label htmlFor="port-public">Public URL</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {openPortForm.isPublic
+                      ? "Anyone with the URL can reach this port. Use this for APIs and webhooks."
+                      : "Only you can reach this port, from a browser signed in to GitTerm."}
+                  </p>
+                </div>
+                <Switch
+                  id="port-public"
+                  checked={openPortForm.isPublic}
+                  onCheckedChange={(checked) =>
+                    setOpenPortForm((f) => ({ ...f, isPublic: checked }))
+                  }
                 />
               </div>
             </div>
@@ -788,33 +788,6 @@ export function InstanceCard({
         </div>
         <div className="pb-4 px-5 flex-1">
           <div className="grid gap-2.5 text-xs text-fg-4 pl-12">
-            {shared && (
-              <div className="flex items-center gap-2 min-w-0">
-                {shared.via.kind === "team" ? (
-                  <>
-                    <UsersRound className="h-3.5 w-3.5 shrink-0 text-primary opacity-70" />
-                    <span className="truncate text-primary/70">
-                      Via team {shared.via.teamName} · {shared.role}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Shield className="h-3.5 w-3.5 shrink-0 text-primary opacity-70" />
-                    <span className="truncate text-primary/70">
-                      Shared directly with you · {shared.role}
-                    </span>
-                  </>
-                )}
-              </div>
-            )}
-            {shared?.owner && (
-              <div className="flex items-center gap-2 min-w-0">
-                <User className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate" title={shared.owner.email}>
-                  Created by {shared.owner.name}
-                </span>
-              </div>
-            )}
             {regionInfo.name && (
               <div className="flex items-center gap-2">
                 <MapPin className="h-3.5 w-3.5 shrink-0" />
@@ -903,7 +876,7 @@ export function InstanceCard({
                     <Copy className="h-2.5 w-2.5 text-amber-400 opacity-70" />
                     Copy
                   </button>
-                  {isT3 && !isShared && isRunning && (
+                  {isT3 && isRunning && (
                     <button
                       type="button"
                       disabled={regenerateAccessCredentialMutation.isPending}
@@ -942,77 +915,108 @@ export function InstanceCard({
                 <span className="text-xs text-fg-4">Editor access enabled</span>
               </div>
             )}
-            {!isShared &&
-              ((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
-                isRunning) && (
-                <div className="flex items-start gap-2 mt-0.5 min-w-0">
-                  <EthernetPort className="h-3.5 w-3.5 shrink-0 mt-px" />
-                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    {workspace.exposedPorts &&
-                      Object.entries(workspace.exposedPorts).map(([port, exposedPort]) => {
-                        const portNum = parseInt(port, 10);
-                        const isClosing = closingPort === portNum;
-                        return (
-                          <div key={port} className="flex items-center gap-1.5 min-w-0">
-                            <span className="flex items-center gap-1 text-xs min-w-0 truncate">
-                              <Link
-                                href={portUrl(portNum) ?? ("#" as any)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="bg-muted px-1.5 py-0.5 rounded font-mono text-primary/90 border border-border hover:bg-primary/10 transition-colors"
-                                title={`Open :${port} in browser`}
-                              >
-                                :{port}
-                              </Link>
-                              <span className="text-muted-foreground">
-                                {exposedPort.name ? `(${exposedPort.name})` : "(Port)"}
-                              </span>
+            {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
+              isRunning) && (
+              <div className="flex items-start gap-2 mt-0.5 min-w-0">
+                <EthernetPort className="h-3.5 w-3.5 shrink-0 mt-px" />
+                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                  {workspace.exposedPorts &&
+                    Object.entries(workspace.exposedPorts).map(([port, exposedPort]) => {
+                      const portNum = parseInt(port, 10);
+                      const isClosing = closingPort === portNum;
+                      const isPublic = exposedPort.visibility === "public";
+                      const isUpdatingVisibility =
+                        setPortVisibilityMutation.isPending &&
+                        setPortVisibilityMutation.variables?.workspaceId === workspace.id &&
+                        setPortVisibilityMutation.variables?.port === portNum;
+                      return (
+                        <div key={port} className="flex items-center gap-1.5 min-w-0">
+                          <span className="flex items-center gap-1 text-xs min-w-0 truncate">
+                            <Link
+                              href={portUrl(portNum) ?? ("#" as any)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-muted px-1.5 py-0.5 rounded font-mono text-primary/90 border border-border hover:bg-primary/10 transition-colors"
+                              title={`Open :${port} in browser`}
+                            >
+                              :{port}
+                            </Link>
+                            <span className="text-muted-foreground">
+                              {exposedPort.name ? `(${exposedPort.name})` : "(Port)"}
                             </span>
-                            {!isShared && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setClosingPort(portNum);
-                                  closeWorkspacePortMutation.mutate({
-                                    workspaceId: workspace.id,
-                                    port: portNum,
-                                  });
-                                }}
-                                disabled={isClosing}
-                                className="shrink-0 p-0.5 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
-                                aria-label={`Remove port ${port}`}
-                              >
-                                {isClosing ? (
-                                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground opacity-50" />
-                                ) : (
-                                  <X className="h-3 w-3 text-muted-foreground opacity-50" />
-                                )}
-                              </button>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPortVisibilityMutation.mutate({
+                                workspaceId: workspace.id,
+                                port: portNum,
+                                visibility: isPublic ? "private" : "public",
+                              })
+                            }
+                            disabled={isUpdatingVisibility}
+                            className="shrink-0 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] text-muted-foreground/70 hover:text-primary hover:bg-primary/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
+                            title={
+                              isPublic
+                                ? "Public: anyone with the URL can reach this port. Click to make private."
+                                : "Private: only your signed-in browser can reach this port. Click to make public."
+                            }
+                            aria-label={
+                              isPublic ? `Make port ${port} private` : `Make port ${port} public`
+                            }
+                          >
+                            {isUpdatingVisibility ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : isPublic ? (
+                              <Globe className="h-3 w-3" />
+                            ) : (
+                              <Lock className="h-3 w-3" />
                             )}
-                          </div>
-                        );
-                      })}
-                    {isRunning && !isShared && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowOpenPortDialog(true);
-                          setOpenPortForm({ name: "", port: "" });
-                        }}
-                        className={`inline-flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-primary transition-colors w-fit focus:outline-none focus:ring-1 focus:ring-ring focus:ring-offset-0 rounded ${
-                          workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0
-                            ? "mt-0.5"
-                            : ""
-                        }`}
-                        aria-label="Open port"
-                      >
-                        <Plus className="h-3 w-3 text-muted-foreground opacity-70" />
-                        Open port
-                      </button>
-                    )}
-                  </div>
+                            {isPublic ? "Public" : "Private"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClosingPort(portNum);
+                              closeWorkspacePortMutation.mutate({
+                                workspaceId: workspace.id,
+                                port: portNum,
+                              });
+                            }}
+                            disabled={isClosing}
+                            className="shrink-0 p-0.5 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
+                            aria-label={`Remove port ${port}`}
+                          >
+                            {isClosing ? (
+                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground opacity-50" />
+                            ) : (
+                              <X className="h-3 w-3 text-muted-foreground opacity-50" />
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  {isRunning && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowOpenPortDialog(true);
+                        setOpenPortForm(EMPTY_OPEN_PORT_FORM);
+                      }}
+                      className={`inline-flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-primary transition-colors w-fit focus:outline-none focus:ring-1 focus:ring-ring focus:ring-offset-0 rounded ${
+                        workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0
+                          ? "mt-0.5"
+                          : ""
+                      }`}
+                      aria-label="Open port"
+                    >
+                      <Plus className="h-3 w-3 text-muted-foreground opacity-70" />
+                      Open port
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex gap-2 border-t border-line p-4">
@@ -1060,7 +1064,7 @@ export function InstanceCard({
                     Copy Attach
                   </Button>
                 )}
-                {!isShared && workspace.editorAccessEnabled && (
+                {workspace.editorAccessEnabled && (
                   <Button
                     size="sm"
                     className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
@@ -1112,7 +1116,7 @@ export function InstanceCard({
                 </a>
               </Button>
             ))}
-          {!isShared && isPaused && (
+          {isPaused && (
             <Button
               size="sm"
               className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
@@ -1128,7 +1132,7 @@ export function InstanceCard({
             </Button>
           )}
 
-          {!isShared && (isPending || isRunning) && (
+          {(isPending || isRunning) && (
             <Button
               variant="outline"
               size="sm"
@@ -1144,61 +1148,19 @@ export function InstanceCard({
             </Button>
           )}
 
-          {!isShared && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 px-3 border-border/50 hover:text-primary hover:border-primary/30"
-              onClick={() => setShowShareDialog(true)}
-              aria-label="Share workspace"
-            >
-              <UserPlus className="h-4 w-4" />
-            </Button>
-          )}
-
-          {!isShared && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
-              disabled={deleteServiceMutation.isPending}
-              onClick={() => deleteServiceMutation.mutate({ workspaceId: workspace.id })}
-            >
-              {deleteServiceMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
-            </Button>
-          )}
-
-          {isShared && !(isRunning && workspaceUrl) && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled
-              className="h-9 flex-1 text-xs border-border/50 opacity-70"
-            >
-              {isPaused ? "Workspace paused" : "Workspace not running"}
-            </Button>
-          )}
-
-          {isShared && shared?.via.kind === "user" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
-              disabled={leaveSharedMutation.isPending}
-              onClick={() => leaveSharedMutation.mutate({ workspaceId: workspace.id })}
-              aria-label="Leave shared workspace"
-            >
-              {leaveSharedMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <LogOut className="h-4 w-4" />
-              )}
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
+            disabled={deleteServiceMutation.isPending}
+            onClick={() => deleteServiceMutation.mutate({ workspaceId: workspace.id })}
+          >
+            {deleteServiceMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </div>
     </>

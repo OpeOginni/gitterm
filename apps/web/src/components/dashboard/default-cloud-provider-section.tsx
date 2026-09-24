@@ -77,7 +77,7 @@ export function DefaultCloudProviderSection() {
     <SettingsSection
       icon={Cloud}
       title="Default cloud provider"
-      description="Pre-selects the compute target when you spin up a new instance or agent loop. Only providers your admin has enabled appear here."
+      description="Pre-selects the compute target when you spin up a new instance. Only providers your admin has enabled appear here."
     >
       <SettingsSectionBody className="space-y-4">
         {isBusy ? (

@@ -282,7 +282,7 @@ export function ApiTokensSection() {
                 <DialogTitle>New API token</DialogTitle>
                 <DialogDescription>
                   Select only the SDK permissions this token needs. It cannot manage tokens,
-                  integrations, credentials, sharing, or administration.
+                  integrations, credentials, or administration.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">

@@ -1,6 +1,7 @@
 import { db, eq } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { getRedisClient, RedisKeys } from "@gitterm/redis";
+import type { ExposedPort } from "@gitterm/schema/workspace-ports";
 
 export const PROXY_WORKSPACE_CACHE_TTL_SECONDS = 15;
 export const PROXY_WORKSPACE_MISS_TTL_SECONDS = 60;
@@ -19,15 +20,7 @@ export type ProxyWorkspaceCacheEntry = {
   status: "running";
   serverOnly: boolean;
   agentTypeName?: string;
-  exposedPorts?: Record<
-    string,
-    {
-      port: number;
-      name?: string;
-      upstreamUrl?: string;
-      externalPortDomainId?: string;
-    }
-  > | null;
+  exposedPorts?: Record<string, ExposedPort> | null;
 };
 
 function logRedisCacheError(action: string, error: unknown) {

@@ -32,30 +32,6 @@ export const modelProvider = pgTable("model_provider", {
 });
 
 /**
- * Model - Models available for each provider
- * Seeded data, not user-editable
- *
- * Examples: claude-sonnet-4-20250514, gpt-4o
- */
-export const model = pgTable(
-  "model",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    providerId: uuid("provider_id")
-      .notNull()
-      .references(() => modelProvider.id, { onDelete: "cascade" }),
-    name: text("name").notNull(), // "claude-sonnet-4-20250514"
-    displayName: text("display_name").notNull(), // "Claude Sonnet 4"
-    modelId: text("model_id").notNull(), // Full ID: "anthropic/claude-sonnet-4-20250514"
-    isFree: boolean("is_free").notNull().default(false),
-    isEnabled: boolean("is_enabled").notNull().default(true),
-    isRecommended: boolean("is_recommended").notNull().default(false),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-  },
-  (table) => [unique("model_provider_id_name").on(table.providerId, table.name)],
-);
-
-/**
  * User Model Credential - Encrypted credentials per user per provider
  *
  * Only persistent credentials are stored here.
@@ -122,21 +98,13 @@ export const modelCredentialAudit = pgTable("model_credential_audit", {
   userId: text("user_id").notNull(),
   action: text("action").notNull(), // "created" | "used" | "refreshed" | "revoked"
   keyHash: text("key_hash"), // For identifying even after deletion
-  context: jsonb("context"), // { loopId, runId, workspaceId }
+  context: jsonb("context"), // { runId, workspaceId }
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // Relations
 export const modelProviderRelations = relations(modelProvider, ({ many }) => ({
-  models: many(model),
   credentials: many(userModelCredential),
-}));
-
-export const modelRelations = relations(model, ({ one }) => ({
-  provider: one(modelProvider, {
-    fields: [model.providerId],
-    references: [modelProvider.id],
-  }),
 }));
 
 export const userModelCredentialRelations = relations(userModelCredential, ({ one, many }) => ({
@@ -161,8 +129,6 @@ export const modelCredentialAuditRelations = relations(modelCredentialAudit, ({ 
 // Type exports
 export type ModelProvider = typeof modelProvider.$inferSelect;
 export type NewModelProvider = typeof modelProvider.$inferInsert;
-export type Model = typeof model.$inferSelect;
-export type NewModel = typeof model.$inferInsert;
 export type UserModelCredential = typeof userModelCredential.$inferSelect;
 export type NewUserModelCredential = typeof userModelCredential.$inferInsert;
 export type ModelCredentialAudit = typeof modelCredentialAudit.$inferSelect;

@@ -17,24 +17,7 @@ export interface WorkspaceLogContext {
   records?: Record<string, unknown>;
 }
 
-export interface AgentLoopLogContext {
-  loopId?: string;
-  runId?: string;
-  runNumber?: number;
-  userId?: string;
-  action?: string;
-  sandboxId?: string;
-  commitSha?: string;
-  durationSeconds?: number;
-  isComplete?: boolean;
-  acknowledged?: boolean;
-  error?: string;
-  status?: string;
-  totalRuns?: number;
-  maxRuns?: number;
-}
-
-export type LogContext = WorkspaceLogContext | AgentLoopLogContext;
+export type LogContext = WorkspaceLogContext;
 
 function formatLog(level: LogLevel, message: string, context?: LogContext): string {
   const timestamp = new Date().toISOString();
@@ -84,10 +67,6 @@ export const logger = {
 
   workspaceRestarted: (workspaceId: string, userId: string) => {
     logger.info("Workspace restarted", { workspaceId, userId, action: "restart" });
-  },
-
-  heartbeatReceived: (workspaceId: string) => {
-    logger.debug("Heartbeat received", { workspaceId, action: "heartbeat" });
   },
 
   quotaExhausted: (userId: string) => {

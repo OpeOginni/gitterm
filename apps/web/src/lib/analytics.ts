@@ -38,7 +38,6 @@ export const AnalyticsEvent = {
   GitHubSignInInitiated: "github_sign_in_initiated",
   CheckoutCompleted: "checkout_completed",
   UpgradeInitiated: "upgrade_initiated",
-  AgentLoopCreated: "agent_loop_created",
   FeedbackSubmitted: "feedback_submitted",
   AccountDeleted: "account_deleted",
   GitHubConnected: "github_connected",

@@ -44,7 +44,7 @@ Only enable it if the Daytona org backing the API key is actually Tier 3+.
   setup reaches a terminal state, and each exec is capped by a 15s timeout.
 - Anything that inherently requires workspace → API egress **does not work**:
   the scoped `gitterm` CLI inside the workspace (`workspace info`,
-  `ports open/close`) and agent credential/heartbeat calls. Setup commands
+  `ports open/close`) and agent credential calls. Setup commands
   that use the scoped CLI will fail and surface through the polled setup log.
   Setup push reports are skipped entirely (`disablePush`) so their retry
   backoff doesn't delay setup by ~30s per report.

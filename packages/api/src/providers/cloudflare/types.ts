@@ -9,8 +9,6 @@ export interface CloudflareConfig {
   workerUrl?: string;
   /** Shared secret authenticating GitTerm <-> worker (control + proxy). */
   internalApiKey?: string;
-  /** Legacy: callback secret for the agent-loop worker. */
-  callbackSecret?: string;
 }
 
 /** Config guaranteed to have the fields the compute provider needs at runtime. */

@@ -67,6 +67,12 @@ export interface XtermOptions {
   termOptions: ITerminalOptions;
 }
 
+// The terminal is one long-lived WebSocket, so the GitTerm proxy only sees the
+// handshake. While the user is typing, periodically make a normal HTTP request
+// through the proxy so it records workspace activity and the idle reaper
+// leaves the workspace running.
+const ACTIVITY_PING_INTERVAL_MS = 60_000;
+
 function toDisposable(f: () => void): IDisposable {
   return { dispose: f };
 }
@@ -106,6 +112,7 @@ export class Xterm {
   private reconnect = true;
   private doReconnect = true;
   private closeOnDisconnect = false;
+  private lastActivityPingAt = 0;
 
   private writeFunc = (data: ArrayBuffer) => this.writeData(new Uint8Array(data));
 
@@ -325,12 +332,23 @@ export class Xterm {
         }
       }),
     );
-    register(terminal.onData((data) => sendData(data)));
-    register(terminal.onBinary((data) => sendData(Uint8Array.from(data, (v) => v.charCodeAt(0)))));
+    register(
+      terminal.onData((data) => {
+        sendData(data);
+        this.reportActivity();
+      }),
+    );
+    register(
+      terminal.onBinary((data) => {
+        sendData(Uint8Array.from(data, (v) => v.charCodeAt(0)));
+        this.reportActivity();
+      }),
+    );
     register(
       terminal.onResize(({ cols, rows }) => {
         const msg = JSON.stringify({ columns: cols, rows: rows });
         this.socket?.send(this.textEncoder.encode(Command.RESIZE_TERMINAL + msg));
+        this.reportActivity();
         if (this.resizeOverlay) overlayAddon.showOverlay(`${cols}x${rows}`, 300);
       }),
     );
@@ -347,6 +365,14 @@ export class Xterm {
     );
     register(addEventListener(window, "resize", () => fitAddon.fit()));
     register(addEventListener(window, "beforeunload", this.onWindowUnload));
+  }
+
+  @bind
+  private reportActivity() {
+    const now = Date.now();
+    if (now - this.lastActivityPingAt < ACTIVITY_PING_INTERVAL_MS) return;
+    this.lastActivityPingAt = now;
+    fetch(this.options.tokenUrl, { cache: "no-store", credentials: "same-origin" }).catch(() => {});
   }
 
   @bind

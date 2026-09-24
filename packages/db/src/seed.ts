@@ -8,7 +8,7 @@ import {
   type CloudProvidersshAccessSupport,
   type ProviderSettlement,
 } from "./schema/cloud";
-import { modelProvider, model } from "./schema/model-credentials";
+import { modelProvider } from "./schema/model-credentials";
 import { providerType, providerConfigField } from "./schema/provider-config";
 import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
 
@@ -443,7 +443,7 @@ const seedRegions = [
 ];
 
 // =========================================================================
-// Model Providers and Models Seed Data
+// Model Providers Seed Data
 // =========================================================================
 
 const seedModelProviders = [
@@ -512,188 +512,6 @@ const seedModelProviders = [
     oauthConfig: null,
   },
 ];
-
-const availableModels = [
-  // Anthropic models
-  {
-    providerName: "anthropic",
-    name: "claude-sonnet-4-5",
-    displayName: "Claude Sonnet 4.5",
-    modelId: "anthropic/claude-sonnet-4-5",
-    isRecommended: true,
-  },
-  {
-    providerName: "anthropic",
-    name: "claude-opus-4-5",
-    displayName: "Claude Opus 4.5",
-    modelId: "anthropic/claude-opus-4-5",
-  },
-  // OpenAI models
-  {
-    providerName: "openai",
-    name: "gpt-4o",
-    displayName: "GPT-4o",
-    modelId: "openai/gpt-4o",
-  },
-  {
-    providerName: "openai",
-    name: "gpt-5.1-codex",
-    displayName: "GPT-5.1 Codex",
-    modelId: "openai/gpt-5.1-codex",
-  },
-  {
-    providerName: "openai",
-    name: "gpt-5.2",
-    displayName: "GPT-5.2",
-    modelId: "openai/gpt-5.2",
-  },
-  {
-    providerName: "openai",
-    name: "gpt-5.2-pro",
-    displayName: "GPT-5.2 Pro",
-    modelId: "openai/gpt-5.2-pro",
-  },
-  // Google AI models
-  {
-    providerName: "google",
-    name: "gemini-3-pro-preview",
-    displayName: "Gemini 3 Pro Preview",
-    modelId: "google/gemini-3-pro-preview",
-  },
-  // GitHub Copilot models
-  {
-    providerName: "github-copilot",
-    name: "claude-sonnet-4.5",
-    displayName: "Claude Sonnet 4.5",
-    modelId: "github-copilot/claude-sonnet-4.5",
-    isRecommended: true,
-  },
-  {
-    providerName: "github-copilot",
-    name: "claude-opus-4.5",
-    displayName: "Claude Opus 4.5",
-    modelId: "github-copilot/claude-opus-4.5",
-    isRecommended: true,
-  },
-  {
-    providerName: "github-copilot",
-    name: "gpt-5.1-codex",
-    displayName: "GPT-5.1 Codex",
-    modelId: "github-copilot/gpt-5.1-codex",
-  },
-  {
-    providerName: "github-copilot",
-    name: "gpt-5.2",
-    displayName: "GPT-5.2",
-    modelId: "github-copilot/gpt-5.2",
-  },
-  {
-    providerName: "github-copilot",
-    name: "gemini-3-pro-preview",
-    displayName: "Gemini 3 Pro Preview",
-    modelId: "github-copilot/gemini-3-pro-preview",
-  },
-  // OpenCode models
-  {
-    providerName: "opencode",
-    name: "gpt-5.1-codex",
-    displayName: "GPT-5.1 Codex",
-    modelId: "opencode/gpt-5.1-codex",
-  },
-  {
-    providerName: "opencode",
-    name: "gpt-5.2",
-    displayName: "GPT-5.2",
-    modelId: "opencode/gpt-5.2",
-  },
-  {
-    providerName: "opencode",
-    name: "gemini-3-pro",
-    displayName: "Gemini 3 Pro",
-    modelId: "opencode/gemini-3-pro",
-  },
-  {
-    providerName: "opencode",
-    name: "claude-opus-4-5",
-    displayName: "Claude Opus 4.5",
-    modelId: "opencode/claude-opus-4-5",
-    isRecommended: true,
-  },
-  // OpenAI Codex models (ChatGPT Pro/Plus subscription)
-  {
-    providerName: "openai-oauth",
-    name: "gpt-5.1-codex-max",
-    displayName: "GPT-5.1 Codex Max",
-    modelId: "openai-oauth/gpt-5.1-codex-max",
-    isRecommended: true,
-  },
-  {
-    providerName: "openai-oauth",
-    name: "gpt-5.1-codex-mini",
-    displayName: "GPT-5.1 Codex Mini",
-    modelId: "openai-oauth/gpt-5.1-codex-mini",
-  },
-  {
-    providerName: "openai-oauth",
-    name: "gpt-5.2",
-    displayName: "GPT-5.2",
-    modelId: "openai-oauth/gpt-5.2",
-  },
-  {
-    providerName: "openai-oauth",
-    name: "gpt-5.2-codex",
-    displayName: "GPT-5.2 Codex",
-    modelId: "openai-oauth/gpt-5.2-codex",
-  },
-  // zai-coding-plan
-  {
-    providerName: "zai-coding-plan",
-    name: "glm-4.7",
-    displayName: "GLM 4.7",
-    modelId: "zai-coding-plan/glm-4.7",
-  },
-  // OpenCode Go models
-  {
-    providerName: "opencode-go",
-    name: "kimi-k3",
-    displayName: "Kimi K3",
-    modelId: "opencode-go/kimi-k3",
-    isRecommended: true,
-  },
-  {
-    providerName: "opencode-go",
-    name: "glm-5.3",
-    displayName: "GLM-5.3",
-    modelId: "opencode-go/glm-5.3",
-  },
-  {
-    providerName: "opencode-go",
-    name: "qwen3.8-max",
-    displayName: "Qwen3.8 Max",
-    modelId: "opencode-go/qwen3.8-max",
-  },
-  {
-    providerName: "opencode-go",
-    name: "deepseek-v4-pro",
-    displayName: "DeepSeek V4 Pro",
-    modelId: "opencode-go/deepseek-v4-pro",
-  },
-  {
-    providerName: "opencode-go",
-    name: "minimax-m3",
-    displayName: "MiniMax-M3",
-    modelId: "opencode-go/minimax-m3",
-  },
-  {
-    providerName: "opencode-go",
-    name: "grok-4.6",
-    displayName: "Grok 4.6",
-    modelId: "opencode-go/grok-4.6",
-  },
-];
-
-// Models are intentionally not seeded while the supported catalog is being finalized.
-const seedModels: typeof availableModels = [];
 
 /**
  * Seed the database with initial data
@@ -1003,7 +821,6 @@ export async function seedDatabase(): Promise<void> {
   // Seed Model Providers
   // =========================================================================
   console.log("[seed] Seeding model providers...");
-  const modelProviderMap = new Map<string, string>(); // name -> id
 
   const legacyOpenAIOAuthProvider = await db.query.modelProvider.findFirst({
     where: eq(modelProvider.name, "openai-codex"),
@@ -1032,55 +849,18 @@ export async function seedDatabase(): Promise<void> {
         .set({ logicalProviderKey: provider.name === "openai-oauth" ? "openai" : provider.name })
         .where(eq(modelProvider.id, existing.id));
       console.log(`[seed]   Model provider "${provider.name}" already exists`);
-      modelProviderMap.set(provider.name, existing.id);
     } else {
-      const [created] = await db
-        .insert(modelProvider)
-        .values({
-          name: provider.name,
-          displayName: provider.displayName,
-          logicalProviderKey: provider.name === "openai-oauth" ? "openai" : provider.name,
-          authType: provider.authType,
-          plugin: provider.plugin,
-          oauthConfig: provider.oauthConfig,
-          isEnabled: true,
-          isRecommended: provider.isRecommended ?? false,
-        })
-        .returning();
-      console.log(`[seed]   Created model provider "${provider.name}"`);
-      modelProviderMap.set(provider.name, created!.id);
-    }
-  }
-
-  // =========================================================================
-  // Seed Models
-  // =========================================================================
-  console.log("[seed] Seeding models...");
-
-  for (const m of seedModels) {
-    const providerId = modelProviderMap.get(m.providerName);
-    if (!providerId) {
-      console.log(`[seed]   Skipping model "${m.name}" - provider not found`);
-      continue;
-    }
-
-    const existing = await db.query.model.findFirst({
-      where: eq(model.modelId, m.modelId),
-    });
-
-    if (existing) {
-      console.log(`[seed]   Model "${m.modelId}" already exists`);
-    } else {
-      await db.insert(model).values({
-        providerId,
-        name: m.name,
-        displayName: m.displayName,
-        modelId: m.modelId,
-        isFree: false,
+      await db.insert(modelProvider).values({
+        name: provider.name,
+        displayName: provider.displayName,
+        logicalProviderKey: provider.name === "openai-oauth" ? "openai" : provider.name,
+        authType: provider.authType,
+        plugin: provider.plugin,
+        oauthConfig: provider.oauthConfig,
         isEnabled: true,
-        isRecommended: m.isRecommended ?? false,
+        isRecommended: provider.isRecommended ?? false,
       });
-      console.log(`[seed]   Created model "${m.modelId}"`);
+      console.log(`[seed]   Created model provider "${provider.name}"`);
     }
   }
 

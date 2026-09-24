@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
-#include <uv.h>
 
 #include "pty.h"
 #include "server.h"
@@ -14,147 +12,6 @@
 
 // initial message list
 static char initial_cmds[] = {SET_WINDOW_TITLE, SET_PREFERENCES};
-
-// Workspace heartbeat
-static uv_timer_t heartbeat_timer;
-static bool heartbeat_timer_active = false;
-static uint64_t heartbeat_interval_ms = 30000;
-static uint64_t heartbeat_last_activity_ms = 0;
-static uint64_t heartbeat_last_sent_ms = 0;
-static const char *heartbeat_workspace_id = NULL;
-static const char *heartbeat_token = NULL;
-static char *heartbeat_url = NULL;
-static bool heartbeat_enabled = false;
-
-static void heartbeat_send_async(void) {
-    if (!heartbeat_enabled || heartbeat_url == NULL || heartbeat_workspace_id == NULL || heartbeat_token == NULL) {
-        return;
-    }
-
-    size_t cmd_len = strlen(heartbeat_url) + strlen(heartbeat_workspace_id) + strlen(heartbeat_token) + 256;
-    char *cmd = xmalloc(cmd_len);
-
-    unsigned long long timestamp_ms = (unsigned long long)uv_now(server->loop);
-    snprintf(
-        cmd,
-        cmd_len,
-        "curl -sS -m 5 -X POST '%s' -H 'Authorization: Bearer %s' -H 'Content-Type: application/json' --data '{\"workspaceId\":\"%s\",\"timestamp\":%llu,\"active\":true}' >/dev/null 2>&1 &",
-        heartbeat_url,
-        heartbeat_token,
-        heartbeat_workspace_id,
-        timestamp_ms
-    );
-
-    (void)system(cmd);
-    free(cmd);
-}
-
-static void heartbeat_timer_cb(uv_timer_t* handle) {
-    if (!heartbeat_enabled) {
-        return;
-    }
-
-    uv_update_time(server->loop);
-    uint64_t now = uv_now(server->loop);
-
-    if (heartbeat_last_activity_ms == 0) {
-        return;
-    }
-
-    if (heartbeat_last_activity_ms <= heartbeat_last_sent_ms) {
-        return;
-    }
-
-    if (now - heartbeat_last_sent_ms < heartbeat_interval_ms) {
-        return;
-    }
-
-    heartbeat_last_sent_ms = now;
-    heartbeat_send_async();
-}
-
-void setup_workspace_heartbeat(uv_loop_t *loop) {
-    const char *workspace_id = getenv("WORKSPACE_ID");
-    const char *token = getenv("WORKSPACE_AGENT_AUTH_TOKEN");
-    const char *api_url = getenv("WORKSPACE_API_URL");
-
-    if (workspace_id == NULL || token == NULL || api_url == NULL) {
-        lwsl_notice("Workspace heartbeat disabled (missing env vars)\n");
-        return;
-    }
-
-    const char *interval_env = getenv("WORKSPACE_HEARTBEAT_INTERVAL_MS");
-    if (interval_env != NULL) {
-        long parsed = strtol(interval_env, NULL, 10);
-        if (parsed >= 5000) {
-            heartbeat_interval_ms = (uint64_t)parsed;
-        }
-    }
-
-    size_t api_len = strlen(api_url);
-    size_t trim_len = api_len;
-
-    if (trim_len >= 5 && strcmp(api_url + trim_len - 5, "/trpc") == 0) {
-        trim_len -= 5;
-    } else if (trim_len >= 6 && strcmp(api_url + trim_len - 6, "/trpc/") == 0) {
-        trim_len -= 6;
-    }
-
-    if (trim_len > 0 && api_url[trim_len - 1] == '/') {
-        trim_len -= 1;
-    }
-    const char *suffix = "/api/internal/workspace-heartbeat";
-    size_t url_len = trim_len + strlen(suffix) + 1;
-    heartbeat_url = xmalloc(url_len);
-    snprintf(heartbeat_url, url_len, "%.*s%s", (int)trim_len, api_url, suffix);
-
-    heartbeat_workspace_id = workspace_id;
-    heartbeat_token = token;
-    heartbeat_enabled = true;
-
-    if (uv_timer_init(loop, &heartbeat_timer) < 0) {
-        lwsl_err("Failed to init heartbeat timer\n");
-        free(heartbeat_url);
-        heartbeat_url = NULL;
-        heartbeat_enabled = false;
-        return;
-    }
-
-    heartbeat_timer_active = true;
-    uv_timer_start(&heartbeat_timer, heartbeat_timer_cb, heartbeat_interval_ms, heartbeat_interval_ms);
-    lwsl_notice("Workspace heartbeat enabled (interval: %llums)\n", (unsigned long long)heartbeat_interval_ms);
-}
-
-void cleanup_workspace_heartbeat(void) {
-    if (heartbeat_timer_active) {
-        uv_timer_stop(&heartbeat_timer);
-        heartbeat_timer_active = false;
-    }
-
-    if (heartbeat_url != NULL) {
-        free(heartbeat_url);
-        heartbeat_url = NULL;
-    }
-
-    heartbeat_enabled = false;
-    heartbeat_last_activity_ms = 0;
-    heartbeat_last_sent_ms = 0;
-}
-
-void workspace_heartbeat_note_activity(void) {
-    if (!heartbeat_enabled) {
-        return;
-    }
-
-    uv_update_time(server->loop);
-    uint64_t now = uv_now(server->loop);
-    heartbeat_last_activity_ms = now;
-
-    if (heartbeat_last_sent_ms == 0) {
-        heartbeat_last_sent_ms = now;
-        heartbeat_send_async();
-    }
-}
 
 static int send_initial_message(struct lws *wsi, int index) {
   unsigned char message[LWS_PRE + 1 + 4096];
@@ -377,8 +234,6 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       pss->wsi = wsi;
       pss->lws_close_status = LWS_CLOSE_STATUS_NOSTATUS;
 
-      workspace_heartbeat_note_activity();
-
       if (server->url_arg) {
         while (lws_hdr_copy_fragment(wsi, buf, sizeof(buf), WSI_TOKEN_HTTP_URI_ARGS, n++) > 0) {
           if (strncmp(buf, "arg=", 4) == 0) {
@@ -437,10 +292,6 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       }
 
       const char command = pss->buffer[0];
-
-      if (command == INPUT || command == RESIZE_TERMINAL || command == JSON_DATA) {
-        workspace_heartbeat_note_activity();
-      }
 
       // check auth
       if (server->credential != NULL && !pss->authenticated && command != JSON_DATA) {

@@ -17,7 +17,6 @@ import {
 
 const schema = z.object({
   NODE_ENV: nodeEnv,
-  RAILWAY_ENVIRONMENT: optional,
 
   DEPLOYMENT_MODE: deploymentMode,
   BASE_DOMAIN: z.string().default("gitterm.dev"),
@@ -37,8 +36,6 @@ const schema = z.object({
   POLAR_ENVIRONMENT: polarEnvironment,
   POLAR_STARTER_PRODUCT_ID: optional,
   POLAR_PRO_PRODUCT_ID: optional,
-  POLAR_RUN_PACK_50_PRODUCT_ID: optional,
-  POLAR_RUN_PACK_100_PRODUCT_ID: optional,
 
   ENABLE_BILLING: boolWithDefault(false),
 });

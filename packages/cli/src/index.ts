@@ -17,6 +17,7 @@ import {
   runPortClose,
   runPortList,
   runPortOpen,
+  runPortVisibility,
 } from "./cmd/current-workspace.js";
 
 const jsonOption = {
@@ -64,8 +65,33 @@ if (workspaceEnvironment) {
             builder
               .positional("port", { type: "number", demandOption: true })
               .option("name", { type: "string", description: "Display name" })
+              .option("public", {
+                type: "boolean",
+                description: "Allow anyone with the URL to reach the port (default: private)",
+              })
               .options(jsonOption),
-          (argv) => runPortOpen({ port: argv.port, name: argv.name, json: argv.json }),
+          (argv) =>
+            runPortOpen({
+              port: argv.port,
+              name: argv.name,
+              visibility:
+                argv.public === undefined ? undefined : argv.public ? "public" : "private",
+              json: argv.json,
+            }),
+        )
+        .command(
+          "visibility <port> <visibility>",
+          "Make a port private (owner only) or public (anyone with the URL)",
+          (builder) =>
+            builder
+              .positional("port", { type: "number", demandOption: true })
+              .positional("visibility", {
+                choices: ["private", "public"] as const,
+                demandOption: true,
+              })
+              .options(jsonOption),
+          (argv) =>
+            runPortVisibility({ port: argv.port, visibility: argv.visibility, json: argv.json }),
         )
         .command(
           "close <port>",

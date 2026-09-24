@@ -22,7 +22,18 @@ export type WorkspaceSelf = {
   ports: WorkspacePort[];
 };
 
-export type WorkspacePort = { port: number; name: string | null; url: string | null };
+/**
+ * `private`: only the workspace owner's signed-in GitTerm browser session can reach the URL.
+ * `public`: anyone with the URL can reach it, so it works for APIs and webhooks.
+ */
+export type WorkspacePortVisibility = "private" | "public";
+
+export type WorkspacePort = {
+  port: number;
+  name: string | null;
+  visibility: WorkspacePortVisibility;
+  url: string | null;
+};
 
 export type WorkspaceClientOptions = Partial<WorkspaceEnvironment> & {
   fetch?: typeof globalThis.fetch;
@@ -34,7 +45,12 @@ export type GittermWorkspaceClient = {
   self: { get(): Promise<WorkspaceSelf> };
   ports: {
     list(): Promise<WorkspacePort[]>;
-    open(port: number, options?: { name?: string }): Promise<WorkspacePort>;
+    /** Ports open as `private` unless `visibility` is set; reopening keeps the current visibility. */
+    open(
+      port: number,
+      options?: { name?: string; visibility?: WorkspacePortVisibility },
+    ): Promise<WorkspacePort>;
+    setVisibility(port: number, visibility: WorkspacePortVisibility): Promise<WorkspacePort>;
     close(port: number): Promise<{ port: number; closed: boolean }>;
   };
 };
@@ -113,6 +129,8 @@ export function createGittermWorkspaceClient(
     ports: {
       list: () => run(() => trpc.workspaceOps.listPorts.query()),
       open: (port, input) => run(() => trpc.workspaceOps.openPort.mutate({ port, ...input })),
+      setVisibility: (port, visibility) =>
+        run(() => trpc.workspaceOps.setPortVisibility.mutate({ port, visibility })),
       close: (port) => run(() => trpc.workspaceOps.closePort.mutate({ port })),
     },
   };

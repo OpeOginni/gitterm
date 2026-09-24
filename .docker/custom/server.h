@@ -16,11 +16,6 @@
 #define SET_WINDOW_TITLE '1'
 #define SET_PREFERENCES '2'
 
-// Workspace heartbeat helpers
-void setup_workspace_heartbeat(uv_loop_t* loop);
-void cleanup_workspace_heartbeat(void);
-void workspace_heartbeat_note_activity(void);
-
 // url paths
 struct endpoints {
   char *ws;

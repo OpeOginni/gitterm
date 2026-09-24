@@ -39,9 +39,6 @@ export function CreateInstanceDialog() {
           });
           setOpen(false);
           break;
-        case "agent-loop":
-          setOpen(false);
-          break;
       }
     },
     [watchWorkspaceStatus],

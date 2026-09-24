@@ -50,12 +50,6 @@ export const features = {
   usageMetering: env.ENABLE_USAGE_METERING || isManaged(),
 
   /**
-   * Enable Discord notifications for new signups
-   * Only in managed mode when Discord is configured (no env flag - internal only)
-   */
-  discordNotifications: isManaged() && !!env.DISCORD_TOKEN,
-
-  /**
    * Enable GitHub OAuth provider
    * Auto-detected from GitHub App OAuth credentials presence.
    */
@@ -93,11 +87,6 @@ export const shouldReapIdleWorkspaces = (): boolean => features.idleReaping;
  */
 export const shouldMeterUsage = (): boolean => features.usageMetering;
 
-/**
- * Check if Discord notifications should be sent
- */
-export const shouldNotifyDiscord = (): boolean => features.discordNotifications;
-
 // ============================================================================
 // Plan Types
 // ============================================================================
@@ -130,11 +119,8 @@ export const PLAN_RANK: Record<UserPlan, number> = {
 //
 // This is the single source of truth for what each tier gets in managed mode.
 // Self-hosted deployments bypass these limits entirely (see guard functions).
-// Keep packages/auth/src/index.ts MONTHLY_RUN_QUOTAS in sync with this.
 
 export interface PlanLimits {
-  /** Monthly autonomous agent-loop runs. */
-  monthlyRuns: number;
   /** Maximum total workspaces (running, pending, or stopped). */
   workspaces: number;
   /** Daily cloud runtime minutes before the workspace is stopped. */
@@ -151,13 +137,6 @@ export interface PlanLimits {
   /** Whether the user can reserve custom cloud subdomains for branding. */
   customSubdomain: boolean;
   /**
-   * Whether the user can SHARE their own workspaces - i.e. invite collaborators,
-   * create teams, and grant team access. This gates the "granting" side only.
-   * Being invited to / accepting access to someone else's workspace is always
-   * free (see share router: accept/list/leave procedures are never gated).
-   */
-  sharing: boolean;
-  /**
    * Provider keys this plan may use. `null` means "all enabled providers".
    * Free is intentionally restricted to E2B only.
    */
@@ -166,52 +145,36 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
   free: {
-    monthlyRuns: 10,
     workspaces: 2,
     dailyMinutes: 60,
     idleTimeoutMinutes: 10,
     retentionDays: 2,
     persistence: false,
     customSubdomain: false,
-    sharing: false,
     allowedProviderKeys: ["e2b"],
   },
   starter: {
-    monthlyRuns: 75,
     workspaces: 5,
     dailyMinutes: 180,
     idleTimeoutMinutes: 20,
     retentionDays: 7,
     persistence: true,
     customSubdomain: true,
-    sharing: true,
     allowedProviderKeys: null,
   },
   pro: {
-    monthlyRuns: 250,
     workspaces: 15,
     dailyMinutes: 480,
     idleTimeoutMinutes: 30,
     retentionDays: 15,
     persistence: true,
     customSubdomain: true,
-    sharing: true,
     allowedProviderKeys: null,
   },
 };
 
 const getPlanLimits = (plan: UserPlan | string): PlanLimits =>
   PLAN_LIMITS[plan as UserPlan] ?? PLAN_LIMITS.free;
-
-/**
- * Monthly sandbox run quotas by plan
- * @deprecated Prefer `getMonthlyRunQuota` / `PLAN_LIMITS`. Kept for compatibility.
- */
-export const MONTHLY_RUN_QUOTAS: Record<UserPlan, number> = {
-  free: PLAN_LIMITS.free.monthlyRuns,
-  starter: PLAN_LIMITS.starter.monthlyRuns,
-  pro: PLAN_LIMITS.pro.monthlyRuns,
-};
 
 // ============================================================================
 // Plan Guard Functions
@@ -241,16 +204,6 @@ export const getDailyMinuteQuotaAsync = async (plan: UserPlan): Promise<number> 
   }
 
   return getPlanLimits(plan).dailyMinutes;
-};
-
-/**
- * Get monthly run quota for a plan
- * In self-hosted mode, returns Infinity (unlimited)
- */
-export const getMonthlyRunQuota = (plan: UserPlan): number => {
-  if (isSelfHosted()) return Infinity;
-
-  return getPlanLimits(plan).monthlyRuns;
 };
 
 /**
@@ -287,17 +240,6 @@ export const canUseCustomCloudSubdomain = (plan: UserPlan | string): boolean => 
 export const canCreatePersistentWorkspace = (plan: UserPlan | string): boolean => {
   if (isSelfHosted()) return true;
   return getPlanLimits(plan).persistence;
-};
-
-/**
- * Check whether a plan may SHARE its own workspaces (invite collaborators,
- * create teams, grant team access). Available on all paid plans (Starter, Pro).
- * Receiving/accepting access to a shared workspace is always allowed and is
- * never routed through this guard. Self-hosted deployments can always share.
- */
-export const canShareWorkspaces = (plan: UserPlan | string): boolean => {
-  if (isSelfHosted()) return true;
-  return getPlanLimits(plan).sharing;
 };
 
 /**

@@ -1,31 +1,15 @@
 import { db, eq, and, sql } from "@gitterm/db";
-import {
-  dailyUsage,
-  usageSession,
-  workspace,
-  type SessionStopSource,
-} from "@gitterm/db/schema/workspace";
+import { dailyUsage, usageSession, type SessionStopSource } from "@gitterm/db/schema/workspace";
 import { logger } from "./logger";
 import {
   shouldEnforceQuota,
   shouldMeterUsage,
   getDailyMinuteQuotaAsync,
-  getIdleTimeoutMinutesForPlan,
-  PLAN_LIMITS,
   type UserPlan,
 } from "../config/features";
 import { isSelfHosted } from "../config/deployment";
 import { user } from "@gitterm/db/schema/auth";
 import { getIdleTimeoutMinutes, getFreeTierDailyMinutes } from "../service/config/system-config";
-import {
-  filterIdleWorkspacesByRedisActivityWith,
-  recordWorkspaceActivity,
-} from "../service/workspace-activity";
-
-// Legacy constants - kept for backwards compatibility but should use getters below
-// These are now the DEFAULT values; actual values come from database
-export const FREE_TIER_DAILY_MINUTES = 60;
-export const IDLE_TIMEOUT_MINUTES = 30;
 
 /**
  * Get the configured idle timeout in minutes (from database)
@@ -219,79 +203,4 @@ export async function closeUsageSession(
   }
 
   return { durationMinutes };
-}
-
-/**
- * Update last active timestamp for a workspace
- */
-export async function updateLastActive(workspaceId: string): Promise<void> {
-  await recordWorkspaceActivity(workspaceId);
-}
-
-/**
- * Get workspaces that have been idle beyond the timeout
- * Uses configurable idle timeout from database
- */
-export async function getIdleWorkspaces(): Promise<
-  Array<{ id: string; externalInstanceId: string; userId: string; regionId: string | null }>
-> {
-  const globalIdleTimeoutMinutes = await getConfiguredIdleTimeout();
-  const now = Date.now();
-
-  // Pre-filter the DB query with the TIGHTEST (smallest) timeout across all
-  // plans so we never miss an aggressively-reaped workspace (e.g. free = 10m).
-  // The precise per-plan threshold is then applied in memory below.
-  const planTimeouts = (Object.keys(PLAN_LIMITS) as UserPlan[])
-    .map((plan) => getIdleTimeoutMinutesForPlan(plan))
-    .filter((value): value is number => value !== null);
-  const minCandidateMinutes = Math.min(globalIdleTimeoutMinutes, ...planTimeouts);
-  const candidateThreshold = new Date(now - minCandidateMinutes * 60 * 1000);
-
-  // Join the owner's plan so we can apply per-plan idle timeouts in managed mode.
-  const runningWorkspaces = await db
-    .select({
-      id: workspace.id,
-      externalInstanceId: workspace.externalInstanceId,
-      userId: workspace.userId,
-      regionId: workspace.regionId,
-      lastActiveAt: workspace.lastActiveAt,
-      plan: user.plan,
-    })
-    .from(workspace)
-    .leftJoin(user, eq(workspace.userId, user.id))
-    .where(
-      and(eq(workspace.status, "running"), sql`${workspace.lastActiveAt} < ${candidateThreshold}`),
-    );
-
-  // Resolve the precise idle threshold for each workspace's owning plan. In
-  // self-hosted mode `getIdleTimeoutMinutesForPlan` returns null, so we fall
-  // back to the single global system-config value (plan-agnostic). This same
-  // per-workspace threshold is used for the Redis activity cross-check so that
-  // fresher Redis activity correctly spares looser-plan workspaces.
-  const thresholdFor = (ws: { plan: string | null }): Date => {
-    const planTimeout = getIdleTimeoutMinutesForPlan((ws.plan ?? "free") as UserPlan);
-    const timeoutMinutes = planTimeout ?? globalIdleTimeoutMinutes;
-    return new Date(now - timeoutMinutes * 60 * 1000);
-  };
-
-  const filtered = await filterIdleWorkspacesByRedisActivityWith(runningWorkspaces, thresholdFor);
-  return filtered.map(
-    ({ lastActiveAt: _lastActiveAt, plan: _plan, ...idleWorkspace }) => idleWorkspace,
-  );
-}
-
-/**
- * Reset daily usage for all users (called by cron)
- */
-export async function resetDailyUsage(): Promise<number> {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0]!;
-
-  // We don't actually delete old records (for analytics),
-  // new records are created automatically for the new day
-  // This function can be used to clean up very old records if needed
-
-  console.log(`Daily usage reset completed for ${yesterdayStr}`);
-  return 0;
 }

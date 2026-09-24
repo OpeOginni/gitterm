@@ -9,7 +9,6 @@ const SETTINGS_SECTIONS = new Set([
   "providers",
   "agent-defaults",
   "ssh",
-  "teams",
   "api",
   "usage",
 ]);

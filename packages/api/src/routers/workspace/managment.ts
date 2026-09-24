@@ -2,12 +2,7 @@ import { randomUUID } from "crypto";
 import { AwsPermissionError, AwsWorkspaceStartupError } from "../../providers/aws/lifecycle";
 import { getAwsAccessProfiles, resolveAwsWorkspaceRole } from "../../providers/aws/access-profiles";
 import z from "zod";
-import {
-  accountProcedure,
-  protectedProcedure,
-  workspaceAgentAuthProcedure,
-  router,
-} from "../../index";
+import { accountProcedure, protectedProcedure, router } from "../../index";
 import { db, eq, and, asc, desc, or, ne, SQL, sql } from "@gitterm/db";
 import {
   agentWorkspaceConfig,
@@ -22,7 +17,6 @@ import { TRPCError } from "@trpc/server";
 import {
   getOrCreateDailyUsage,
   hasRemainingQuota,
-  updateLastActive,
   closeUsageSession,
   createUsageSession,
 } from "../../utils/metering";
@@ -142,13 +136,13 @@ import {
 import { resolveCustomWorkspaceImage } from "../../service/workspace-image";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
 import { workspaceModelsSchema } from "@gitterm/schema/workspace-models";
+import { getPortVisibility, portVisibilitySchema } from "@gitterm/schema/workspace-ports";
 import { getWorkspaceModelAccess } from "../../service/workspace-model-access";
 import {
   maskWorkspaceEnvironment,
   openWorkspaceEnvironment,
   sealWorkspaceEnvironment,
 } from "../../service/workspace-environment-secrets";
-import { userCanAccessWorkspace } from "./share";
 import { redactSensitiveText } from "../../utils/redact-secrets";
 import {
   workspaceCredentialAudit,
@@ -624,28 +618,6 @@ export const workspaceRouter = router({
       }
     }),
 
-  // List images for a specific agent type
-  listImages: protectedProcedure
-    .input(z.object({ agentTypeId: z.string().min(1) }))
-    .query(async ({ input }) => {
-      try {
-        const images = await db
-          .select()
-          .from(image)
-          .where(and(eq(image.agentTypeId, input.agentTypeId), eq(image.isEnabled, true)));
-        return {
-          success: true,
-          images,
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch images",
-          cause: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }),
-
   // List cloud providers
   listCloudProviders: accountProcedure("workspace:read")
     .input(
@@ -1067,13 +1039,10 @@ export const workspaceRouter = router({
     .input(z.object({ workspaceId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const workspaceRecord = await db.query.workspace.findFirst({
-        where: eq(workspace.id, input.workspaceId),
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, ctx.session.user.id)),
         columns: { id: true, serverPassword: true },
       });
-      if (
-        !workspaceRecord ||
-        !(await userCanAccessWorkspace(workspaceRecord.id, ctx.session.user.id))
-      ) {
+      if (!workspaceRecord) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
       }
       ctx.honoContext.header("Cache-Control", "no-store, private");
@@ -1596,123 +1565,6 @@ export const workspaceRouter = router({
       });
     }
   }),
-
-  // Check if user can start a new workspace (has remaining quota)
-  checkQuota: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "User not authenticated",
-      });
-    }
-
-    try {
-      const plan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
-      const canStart = await hasRemainingQuota(userId, plan);
-      const usage = await getOrCreateDailyUsage(userId, plan);
-      const dailyQuota = await getDailyMinuteQuotaAsync(plan);
-
-      return {
-        success: true,
-        canStartWorkspace: canStart,
-        minutesRemaining: usage.minutesRemaining,
-        dailyLimit: Number.isFinite(dailyQuota) ? dailyQuota : null,
-      };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to check quota",
-        cause: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }),
-
-  // Heartbeat endpoint for workspace agents (uses JWT auth)
-  heartbeat: workspaceAgentAuthProcedure
-    .input(
-      z.object({
-        workspaceId: z.uuid(),
-        timestamp: z.number().optional(),
-        cpu: z.number().optional(),
-        active: z.boolean().optional(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const { workspaceAuth } = ctx;
-
-      if (!workspaceJWT.hasScope(workspaceAuth, "agent:heartbeat")) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient agent scope" });
-      }
-
-      // Verify workspace ID matches token
-      if (workspaceAuth.workspaceId !== input.workspaceId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Token workspace mismatch",
-        });
-      }
-
-      try {
-        // Verify workspace exists
-        const [existingWorkspace] = await db
-          .select()
-          .from(workspace)
-          .where(eq(workspace.id, input.workspaceId));
-
-        if (!existingWorkspace) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Workspace not found",
-          });
-        }
-
-        // Verify ownership
-        if (existingWorkspace.userId !== workspaceAuth.userId) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Workspace ownership mismatch",
-          });
-        }
-
-        if (existingWorkspace.status !== "running" && existingWorkspace.status !== "pending") {
-          return {
-            success: true,
-            action: "shutdown" as const,
-            reason: "workspace_inactive",
-          };
-        }
-
-        // Check if workspace is still allowed to run (quota check)
-        const hasQuota = await hasRemainingQuota(existingWorkspace.userId);
-
-        if (!hasQuota) {
-          // User exceeded quota - signal shutdown
-          return {
-            success: true,
-            action: "shutdown" as const,
-            reason: "quota_exhausted",
-          };
-        }
-
-        // Update last active timestamp
-        await updateLastActive(input.workspaceId);
-
-        return {
-          success: true,
-          action: "continue" as const,
-          reason: null,
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to process heartbeat",
-          cause: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }),
 
   // Create a new workspace. ID-based input remains supported for the web app;
   // integrations can submit stable provider and agent intent instead.
@@ -2485,7 +2337,7 @@ export const workspaceRouter = router({
         const workspaceAgentAuthToken = workspaceJWT.generateToken(
           workspaceId,
           userId,
-          ["agent:bootstrap", "agent:credential", "agent:heartbeat"],
+          ["agent:bootstrap", "agent:credential"],
           "agent",
         );
         const workspaceSetupAuthToken = workspaceJWT.generateToken(
@@ -3965,6 +3817,7 @@ export const workspaceRouter = router({
         workspaceId: z.string(),
         port: z.number(),
         name: z.string().optional(),
+        visibility: portVisibilitySchema.optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -4018,6 +3871,8 @@ export const workspaceRouter = router({
               name: input.name,
               upstreamUrl: domain,
               externalPortDomainId,
+              visibility:
+                input.visibility ?? getPortVisibility(fetchedWorkspace.exposedPorts?.[input.port]),
             },
           },
         },
@@ -4034,6 +3889,48 @@ export const workspaceRouter = router({
         success: true,
         message: "Workspace port opened successfully",
       };
+    }),
+
+  setWorkspacePortVisibility: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string(),
+        port: z.number(),
+        visibility: portVisibilitySchema,
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const fetchedWorkspace = await db.query.workspace.findFirst({
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, ctx.session.user.id)),
+      });
+
+      if (!fetchedWorkspace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      const exposedPort = fetchedWorkspace.exposedPorts?.[input.port];
+      if (!exposedPort) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Port is not open",
+        });
+      }
+
+      await updateWorkspaceRoutingAndInvalidate(
+        input.workspaceId,
+        {
+          exposedPorts: {
+            ...fetchedWorkspace.exposedPorts,
+            [input.port]: { ...exposedPort, visibility: input.visibility },
+          },
+        },
+        fetchedWorkspace.subdomain,
+      );
+
+      return { port: input.port, visibility: input.visibility };
     }),
 
   closeWorkspacePort: protectedProcedure

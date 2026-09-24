@@ -60,12 +60,3 @@ export function getInternalClient(extraHeaders?: InternalClientExtraHeaders) {
   }
   return _internalClient;
 }
-
-/**
- * @deprecated Use createInternalClient() or getInternalClient() instead
- */
-export const internalClient = {
-  get internal() {
-    return getInternalClient().internal;
-  },
-};

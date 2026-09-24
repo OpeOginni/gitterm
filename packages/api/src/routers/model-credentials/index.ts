@@ -14,7 +14,7 @@ import { OpenAIOAuthService } from "../../service/credentials/oauth/openai-oauth
 const credentialsService = getModelCredentialsService();
 
 export const modelCredentialsRouter = router({
-  // ==================== Provider & Model Queries ====================
+  // ==================== Provider Queries ====================
 
   /**
    * List all enabled model providers
@@ -34,46 +34,6 @@ export const modelCredentialsRouter = router({
       })),
     };
   }),
-
-  /**
-   * List all enabled models (with provider info)
-   */
-  listModels: publicProcedure.query(async () => {
-    const models = await credentialsService.listAllModels();
-    return {
-      models: models.map((m) => ({
-        id: m.id,
-        name: m.name,
-        displayName: m.displayName,
-        modelId: m.modelId,
-        isFree: m.isFree,
-        isRecommended: m.isRecommended,
-        provider: {
-          id: m.provider.id,
-          name: m.provider.name,
-          displayName: m.provider.displayName,
-        },
-      })),
-    };
-  }),
-
-  /**
-   * List models for a specific provider
-   */
-  listModelsForProvider: publicProcedure
-    .input(z.object({ providerId: z.string().uuid() }))
-    .query(async ({ input }) => {
-      const models = await credentialsService.listModelsForProvider(input.providerId);
-      return {
-        models: models.map((m) => ({
-          id: m.id,
-          name: m.name,
-          displayName: m.displayName,
-          modelId: m.modelId,
-          isFree: m.isFree,
-        })),
-      };
-    }),
 
   // ==================== Credential Management ====================
 
@@ -219,33 +179,6 @@ export const modelCredentialsRouter = router({
         throw new TRPCError({
           code: "NOT_FOUND",
           message: error instanceof Error ? error.message : "Credential not found",
-        });
-      }
-    }),
-
-  /**
-   * Rotate an API key
-   */
-  rotateApiKey: protectedProcedure
-    .input(
-      z.object({
-        credentialId: z.string().uuid(),
-        newApiKey: z.string().min(1),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      if (!userId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
-      }
-
-      try {
-        await credentialsService.rotateApiKey(input.credentialId, userId, input.newApiKey);
-        return { success: true };
-      } catch (error) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: error instanceof Error ? error.message : "Failed to rotate API key",
         });
       }
     }),
@@ -468,29 +401,5 @@ export const modelCredentialsRouter = router({
           message: error instanceof Error ? error.message : "Failed to complete OAuth",
         });
       }
-    }),
-
-  // ==================== Credential Usage ====================
-
-  /**
-   * Check if user has a valid credential for a provider
-   */
-  hasCredentialForProvider: protectedProcedure
-    .input(z.object({ providerName: z.string().min(1) }))
-    .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      if (!userId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not authenticated" });
-      }
-
-      const credential = await credentialsService.getUserCredentialForProvider(
-        userId,
-        input.providerName,
-      );
-
-      return {
-        hasCredential: !!credential,
-        credentialId: credential?.id,
-      };
     }),
 });

@@ -53,7 +53,6 @@ import type {
   AgentRunEvent,
   AgentRunResult,
   RunResultOptions,
-  ModelInfo,
   WorkspaceModelAccess,
 } from "./types.js";
 
@@ -137,7 +136,7 @@ export type GittermClient = {
     terminate(workspace: WorkspaceRef): Promise<WorkspaceTerminateResult>;
     create(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
     setupStatus(workspace: WorkspaceRef): Promise<WorkspaceSetupStatus>;
-    /** Credential-source metadata and known models; never wakes the runtime. */
+    /** Credential-source metadata; never wakes the runtime. */
     models(workspace: WorkspaceRef): Promise<WorkspaceModelAccess>;
     waitForSetup(workspace: WorkspaceRef, options?: WaitOptions): Promise<WorkspaceSetupStatus>;
   };
@@ -181,7 +180,6 @@ export type GittermClient = {
     github: { list(): Promise<GitHubIntegration[]> };
     googleCloud: { list(): Promise<GoogleCloudIntegration[]> };
   };
-  models: { list(options?: { provider?: string }): Promise<ModelInfo[]> };
 };
 
 function envValue(name: string): string | undefined {
@@ -714,21 +712,6 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         }),
       workspaceOptions: (): Promise<WorkspaceCatalog> =>
         run(async () => trpc.workspace.getWorkspaceCatalog.query()),
-    },
-    models: {
-      list: (listOptions) =>
-        run(async () => {
-          const result = await trpc.modelCredentials.listModels.query();
-          return result.models
-            .map((model) => ({
-              id: model.modelId,
-              name: model.displayName,
-              provider: model.modelId.slice(0, model.modelId.indexOf("/")),
-              isFree: model.isFree,
-              isRecommended: model.isRecommended,
-            }))
-            .filter((model) => !listOptions?.provider || model.provider === listOptions.provider);
-        }),
     },
     integrations: {
       github: {

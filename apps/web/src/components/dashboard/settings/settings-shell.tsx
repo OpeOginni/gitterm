@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   UserRound,
-  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -79,12 +78,6 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
         label: "SSH keys",
         description: "Editor access identity",
         icon: KeyRound,
-      },
-      {
-        id: "teams",
-        label: "Teams",
-        description: "Members and shared access",
-        icon: UsersRound,
       },
     ],
   },

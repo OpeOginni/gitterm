@@ -2,14 +2,9 @@
 
 Runs GitTerm workspaces on [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) — Durable-Object-backed Linux containers — fronted by a Cloudflare Worker.
 
-There are **two** workers in this directory:
-
-| Worker                 | Path              | Purpose                                                            |
-| ---------------------- | ----------------- | ------------------------------------------------------------------ |
-| Compute sandbox worker | `sandbox-worker/` | Backs normal opencode workspaces (the `ComputeProvider`).          |
-| Agent-loop worker      | `agent-worker/`   | Legacy autonomous agent-loop runner (`CloudflareSandboxProvider`). |
-
-Both share one Cloudflare provider config row (`providerKey = "cloudflare"`).
+The compute sandbox worker lives in `sandbox-worker/` and backs normal opencode
+workspaces (the `ComputeProvider`). It uses the Cloudflare provider config row
+(`providerKey = "cloudflare"`).
 
 ## How the compute provider works
 
@@ -122,7 +117,6 @@ Defined in `packages/schema/src/provider-registry.ts` and typed in
 - `workerName` (defaults to `gitterm-sandbox`)
 - `workerUrl`
 - `internalApiKey`
-- `callbackSecret` (legacy agent-loop only)
 
 ## Limitations
 
