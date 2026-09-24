@@ -51,9 +51,13 @@ async function publicIntegration(integration: typeof googleCloudIntegration.$inf
 }
 
 export const googleCloudRouter = router({
-  availability: accountProcedure("workspace:read").query(async () => ({
-    available: (await integrationPolicy("google")).enabled && (await isWorkloadIdentityAvailable()),
-  })),
+  availability: accountProcedure("workspace:read").query(async () => {
+    const available =
+      (await integrationPolicy("google")).enabled && (await isWorkloadIdentityAvailable());
+    // The issuer is deployment-wide and public (it is the OIDC discovery URL), so users can
+    // create their Google provider before saving an identity.
+    return { available, issuer: available ? await workloadIdentityIssuer() : null };
+  }),
 
   list: accountProcedure("workspace:read").query(async ({ ctx }) => {
     if (!(await integrationPolicy("google")).enabled || !(await isWorkloadIdentityAvailable()))

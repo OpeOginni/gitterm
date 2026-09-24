@@ -1,20 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Image from "next/image";
-import { Check, Copy, KeyRound, Loader2, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  KeyRound,
+  Loader2,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { queryClient, trpc } from "@/utils/trpc";
 
+const DEFAULT_POOL_ID = "gitterm";
+const DEFAULT_PROVIDER_ID = "gitterm";
+
 const EMPTY_FORM = {
   name: "",
   projectId: "",
-  workloadIdentityProvider: "",
+  projectNumber: "",
   serviceAccountEmail: "",
+  poolId: DEFAULT_POOL_ID,
+  providerId: DEFAULT_PROVIDER_ID,
 };
+
+type FormState = typeof EMPTY_FORM;
+
+const GCP_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 async function copy(value: string) {
   try {
@@ -29,17 +48,83 @@ async function refreshGoogleIntegrations() {
   await queryClient.invalidateQueries({ queryKey: trpc.googleCloud.list.queryKey() });
 }
 
+/** Users never type this; it is assembled from the project number and pool/provider IDs. */
+function providerResourceName(form: FormState): string | null {
+  const projectNumber = form.projectNumber.trim();
+  const poolId = form.poolId.trim() || DEFAULT_POOL_ID;
+  const providerId = form.providerId.trim() || DEFAULT_PROVIDER_ID;
+  if (!/^\d+$/.test(projectNumber)) return null;
+  if (!GCP_ID_PATTERN.test(poolId) || !GCP_ID_PATTERN.test(providerId)) return null;
+  return `projects/${projectNumber}/locations/global/workloadIdentityPools/${poolId}/providers/${providerId}`;
+}
+
+function googleAudience(provider: string): string {
+  return `//iam.googleapis.com/${provider}`;
+}
+
+/** Step 1: create the pool and OIDC provider that trusts this GitTerm deployment. */
+function createProviderCommands(form: FormState, issuer: string): string | null {
+  const provider = providerResourceName(form);
+  const projectId = form.projectId.trim();
+  if (!provider || !projectId) return null;
+  const poolId = form.poolId.trim() || DEFAULT_POOL_ID;
+  const providerId = form.providerId.trim() || DEFAULT_PROVIDER_ID;
+  return [
+    `gcloud iam workload-identity-pools create '${poolId}' --location=global --project='${projectId}' --display-name='GitTerm workspaces'`,
+    `gcloud iam workload-identity-pools providers create-oidc '${providerId}' --location=global --project='${projectId}' --workload-identity-pool='${poolId}' --issuer-uri='${issuer}' --allowed-audiences='${googleAudience(provider)}' --attribute-mapping='google.subject=assertion.sub,attribute.integration_id=assertion.integration_id'`,
+  ].join("\n");
+}
+
+/** Same as step 1, rebuilt from a saved identity's stored provider path. */
 function googleProviderCommands(integration: {
   workloadIdentityProvider: string;
   projectId: string;
   setup: { issuer: string; audience: string };
-}) {
-  const [, projectNumber, pool, provider] =
+}): string {
+  const [, , pool, providerId] =
     integration.workloadIdentityProvider.match(
       /^projects\/(\d+)\/locations\/global\/workloadIdentityPools\/([A-Za-z0-9_-]+)\/providers\/([A-Za-z0-9_-]+)$/,
     ) ?? [];
-  if (!projectNumber || !pool || !provider) return "";
-  return `gcloud iam workload-identity-pools create '${pool}' --location=global --project='${integration.projectId}' --display-name='GitTerm workspaces'\ngcloud iam workload-identity-pools providers create-oidc '${provider}' --location=global --project='${integration.projectId}' --workload-identity-pool='${pool}' --issuer-uri='${integration.setup.issuer}' --allowed-audiences='${integration.setup.audience}' --attribute-mapping='google.subject=assertion.sub,attribute.integration_id=assertion.integration_id'`;
+  if (!pool || !providerId) return "";
+  return [
+    `gcloud iam workload-identity-pools create '${pool}' --location=global --project='${integration.projectId}' --display-name='GitTerm workspaces'`,
+    `gcloud iam workload-identity-pools providers create-oidc '${providerId}' --location=global --project='${integration.projectId}' --workload-identity-pool='${pool}' --issuer-uri='${integration.setup.issuer}' --allowed-audiences='${integration.setup.audience}' --attribute-mapping='google.subject=assertion.sub,attribute.integration_id=assertion.integration_id'`,
+  ].join("\n");
+}
+
+function CommandBlock({ command, muted = false }: { command: string; muted?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => copy(command)}
+      className={`flex w-full items-start gap-2 rounded-lg border border-line p-3 text-left font-mono text-[11px] transition-colors hover:border-line-2 ${
+        muted ? "bg-fill text-fg-3" : "bg-settings text-fg-2"
+      }`}
+    >
+      <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">{command}</span>
+      <Copy className="mt-0.5 size-3 shrink-0" />
+    </button>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  className,
+  children,
+}: {
+  label: string;
+  hint?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={className ?? "space-y-1.5"}>
+      <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-fg-4">{label}</span>
+      {children}
+      {hint ? <span className="block text-[11px] leading-relaxed text-fg-4">{hint}</span> : null}
+    </label>
+  );
 }
 
 function CopyValue({ label, value }: { label: string; value: string }) {
@@ -60,7 +145,8 @@ function CopyValue({ label, value }: { label: string; value: string }) {
 
 export function GoogleCloudConnection() {
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const {
     data: integrations = [],
@@ -71,17 +157,35 @@ export function GoogleCloudConnection() {
     trpc.googleCloud.availability.queryOptions(),
   );
   const isAvailable = availability?.available === true;
+  const issuer = availability?.issuer ?? null;
+  const provider = useMemo(() => providerResourceName(form), [form]);
+  const setupCommands = useMemo(
+    () => (issuer ? createProviderCommands(form, issuer) : null),
+    [form, issuer],
+  );
+  const update = (key: keyof FormState) => (event: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((current) => ({ ...current, [key]: event.target.value }));
   const createIntegration = useMutation(trpc.googleCloud.create.mutationOptions());
   const removeIntegration = useMutation(trpc.googleCloud.remove.mutationOptions());
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!provider) {
+      toast.error("Enter a numeric project number");
+      return;
+    }
     try {
-      await createIntegration.mutateAsync(form);
+      await createIntegration.mutateAsync({
+        name: form.name,
+        projectId: form.projectId,
+        workloadIdentityProvider: provider,
+        serviceAccountEmail: form.serviceAccountEmail,
+      });
       setForm(EMPTY_FORM);
+      setShowAdvanced(false);
       setAdding(false);
       await refreshGoogleIntegrations();
-      toast.success("Google Cloud identity saved. Complete the IAM steps below.");
+      toast.success("Identity saved. One IAM command left; see the card below.");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Couldn't connect Google Cloud");
     }
@@ -145,44 +249,145 @@ export function GoogleCloudConnection() {
           <div className="mb-5 flex gap-3 border-b border-line pb-4">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-sky-300" />
             <p className="text-[12.5px] leading-relaxed text-fg-3">
-              Create an OIDC provider in a Google Workload Identity Pool first. GitTerm stores only
-              these resource identifiers—never a Google private key.
+              Three copy-paste commands, run from your own machine with{" "}
+              <code>gcloud auth login</code>. GitTerm stores only resource identifiers—never a
+              Google private key.
             </p>
           </div>
+
+          <p className="mb-3 font-mono text-[10px] uppercase tracking-widest text-fg-3">
+            1 · Tell GitTerm about your project
+          </p>
           <div className="grid gap-4 sm:grid-cols-2">
-            {[
-              ["name", "Display name", "Production"],
-              ["projectId", "Google project ID", "my-project-123456"],
-              [
-                "workloadIdentityProvider",
-                "Provider resource name",
-                "projects/123456789/locations/global/workloadIdentityPools/gitterm/providers/gitterm",
-              ],
-              ["serviceAccountEmail", "Service account", "agent@project.iam.gserviceaccount.com"],
-            ].map(([key, label, placeholder]) => (
-              <label
-                key={key}
-                className={
-                  key === "workloadIdentityProvider" ? "space-y-1.5 sm:col-span-2" : "space-y-1.5"
-                }
-              >
-                <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-fg-4">
-                  {label}
-                </span>
+            <Field label="Display name">
+              <Input
+                required
+                value={form.name}
+                placeholder="Production"
+                onChange={update("name")}
+                className="h-10 bg-settings font-mono text-xs"
+              />
+            </Field>
+            <Field label="Google project ID">
+              <Input
+                required
+                value={form.projectId}
+                placeholder="my-project-123456"
+                onChange={update("projectId")}
+                className="h-10 bg-settings font-mono text-xs"
+              />
+            </Field>
+            <Field
+              label="Google project number"
+              hint={
+                form.projectId.trim() ? (
+                  <>
+                    Look it up:{" "}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        copy(
+                          `gcloud projects describe '${form.projectId.trim()}' --format='value(projectNumber)'`,
+                        )
+                      }
+                      className="font-mono text-fg-3 underline decoration-dotted underline-offset-2 hover:text-fg"
+                    >
+                      gcloud projects describe {form.projectId.trim()}{" "}
+                      --format=&apos;value(projectNumber)&apos;
+                    </button>
+                  </>
+                ) : (
+                  "The numeric ID shown on the project dashboard (not the project ID)."
+                )
+              }
+            >
+              <Input
+                required
+                inputMode="numeric"
+                value={form.projectNumber}
+                placeholder="123456789012"
+                onChange={update("projectNumber")}
+                className="h-10 bg-settings font-mono text-xs"
+              />
+            </Field>
+            <Field
+              label="Service account"
+              hint="The account workspaces will act as. Keep its roles narrow."
+            >
+              <Input
+                required
+                value={form.serviceAccountEmail}
+                placeholder="agent@project.iam.gserviceaccount.com"
+                onChange={update("serviceAccountEmail")}
+                className="h-10 bg-settings font-mono text-xs"
+              />
+            </Field>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((value) => !value)}
+            className="mt-4 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-fg-4 hover:text-fg-3"
+          >
+            <ChevronDown
+              className={`size-3 transition-transform ${showAdvanced ? "rotate-180" : ""}`}
+            />
+            Use an existing pool or provider
+          </button>
+          {showAdvanced ? (
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <Field label="Workload Identity Pool ID">
                 <Input
-                  required
-                  value={form[key as keyof typeof form]}
-                  placeholder={placeholder}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, [key]: event.target.value }))
-                  }
+                  value={form.poolId}
+                  placeholder={DEFAULT_POOL_ID}
+                  onChange={update("poolId")}
                   className="h-10 bg-settings font-mono text-xs"
                 />
-              </label>
-            ))}
+              </Field>
+              <Field label="OIDC provider ID">
+                <Input
+                  value={form.providerId}
+                  placeholder={DEFAULT_PROVIDER_ID}
+                  onChange={update("providerId")}
+                  className="h-10 bg-settings font-mono text-xs"
+                />
+              </Field>
+            </div>
+          ) : null}
+
+          <div className="mt-6 border-t border-line pt-5">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-fg-3">
+              2 · Create the pool and provider in Google
+            </p>
+            {setupCommands ? (
+              <>
+                <p className="mb-3 text-xs leading-relaxed text-fg-3">
+                  Run these once per project. Skip the first command if the pool already exists.
+                  They change your Google IAM configuration, not GitTerm.
+                </p>
+                <CommandBlock command={setupCommands} />
+                {provider ? (
+                  <p className="mt-2 truncate font-mono text-[10px] text-fg-4">
+                    Provider: {provider}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-xs text-fg-4">
+                Fill in the project ID and number above to generate the commands.
+              </p>
+            )}
           </div>
-          <div className="mt-5 flex justify-end">
-            <Button type="submit" disabled={createIntegration.isPending} className="gap-2">
+
+          <div className="mt-5 flex items-center justify-between gap-4 border-t border-line pt-5">
+            <p className="text-[11px] leading-relaxed text-fg-4">
+              3 · Save, then run the final IAM command shown on the identity card.
+            </p>
+            <Button
+              type="submit"
+              disabled={createIntegration.isPending || !provider}
+              className="shrink-0 gap-2"
+            >
               {createIntegration.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -242,55 +447,27 @@ export function GoogleCloudConnection() {
                   />
                 </div>
               </div>
-              <p className="mt-3 text-[11px] leading-relaxed text-fg-4">
-                Provider mapping: <code>google.subject=assertion.sub</code>,{" "}
-                <code>attribute.integration_id=assertion.integration_id</code>. Grant the principal
-                above <code>roles/iam.workloadIdentityUser</code> on this service account.
-              </p>
               <div className="mt-4 rounded-lg border border-line bg-fill p-4">
                 <p className="font-mono text-[10px] uppercase tracking-widest text-fg-3">
-                  Finish on your machine
+                  3 · Allow this identity to use the service account
                 </p>
                 <p className="mt-2 text-xs leading-relaxed text-fg-3">
-                  Sign in with <code>gcloud auth login</code> on your own machine. If the pool and
-                  provider do not exist, create them using the values above. Skip the first command
-                  when the pool already exists:
+                  Run once on your machine. It grants <code>roles/iam.workloadIdentityUser</code> on
+                  the service account to this identity only.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => copy(googleProviderCommands(integration))}
-                  className="mt-3 flex w-full items-start gap-2 rounded-lg border border-line bg-settings p-3 text-left font-mono text-[11px] text-fg-2 hover:border-line-2"
-                >
-                  <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">
-                    {googleProviderCommands(integration)}
-                  </span>
-                  <Copy className="mt-0.5 size-3 shrink-0" />
-                </button>
-                <p className="mt-3 text-xs leading-relaxed text-fg-3">
-                  Then grant this integration permission to impersonate the selected service
-                  account:
-                </p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    copy(
-                      `gcloud iam service-accounts add-iam-policy-binding '${integration.serviceAccountEmail}' --project='${integration.projectId}' --role='roles/iam.workloadIdentityUser' --member='${integration.setup.principalSet}'`,
-                    )
-                  }
-                  className="mt-3 flex w-full items-start gap-2 rounded-lg border border-line bg-settings p-3 text-left font-mono text-[11px] text-fg-2 hover:border-line-2"
-                >
-                  <span className="min-w-0 flex-1 break-all">
-                    gcloud iam service-accounts add-iam-policy-binding &apos;
-                    {integration.serviceAccountEmail}&apos; --project=&apos;{integration.projectId}
-                    &apos; --role=&apos;roles/iam.workloadIdentityUser&apos; --member=&apos;
-                    {integration.setup.principalSet}&apos;
-                  </span>
-                  <Copy className="mt-0.5 size-3 shrink-0" />
-                </button>
-                <p className="mt-2 text-[11px] text-fg-4">
-                  These commands change your Google IAM configuration, not GitTerm. Review the
-                  project and service account before running them.
-                </p>
+                <div className="mt-3">
+                  <CommandBlock
+                    command={`gcloud iam service-accounts add-iam-policy-binding '${integration.serviceAccountEmail}' --project='${integration.projectId}' --role='roles/iam.workloadIdentityUser' --member='${integration.setup.principalSet}'`}
+                  />
+                </div>
+                <details className="mt-3">
+                  <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-widest text-fg-4 hover:text-fg-3">
+                    Pool or provider missing? Re-create them
+                  </summary>
+                  <div className="mt-2">
+                    <CommandBlock command={googleProviderCommands(integration)} muted />
+                  </div>
+                </details>
               </div>
             </article>
           ))}
