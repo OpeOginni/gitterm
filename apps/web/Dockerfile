@@ -8,6 +8,9 @@ COPY apps ./apps
 
 RUN bun install --frozen-lockfile
 
+# Enables output: "standalone" in next.config.ts (build-only; see the note there).
+ENV NEXT_STANDALONE=1
+
 # Placeholder values baked into the client bundle; docker-entrypoint.sh swaps
 # them for the real NEXT_PUBLIC_* values at container start.
 ENV NEXT_PUBLIC_ENABLE_BILLING=__NEXT_PUBLIC_ENABLE_BILLING__
