@@ -13,10 +13,10 @@ claiming secrets are inaccessible to an authorized workspace.
   hour, and refresh only while the workspace is running. Token and cache files live under
   `/run/gitterm`, not the persistent home directory. Admin-managed App keys and webhook secrets
   can instead be stored envelope-encrypted in the DB; the API and webhook listener both need
-  the deployment encryption key. User-owned PATs are stored encrypted in GitTerm but are
-  long-lived bearer credentials: a selected workspace receives the PAT under `/run/gitterm` to
+  the deployment encryption key. An admin-shared PAT is stored encrypted in GitTerm but is a
+  long-lived bearer credential: an explicitly selected workspace receives the PAT under `/run/gitterm` to
   perform git/gh operations, and the agent can read a credential its process can use. Removing
-  the connection stops brokered refresh, but revoke the PAT on GitHub to contain a running or
+  the deployment's PAT configuration stops brokered refresh, but revoke the PAT on GitHub to contain a running or
   previously compromised workspace.
 - **Google Cloud integration:** no Google private key is stored. Five-minute GitTerm OIDC assertions
   are exchanged through Google Workload Identity Federation for the selected service account.
@@ -96,7 +96,7 @@ Google. Third-party credentials issued from it are short-lived.
 
 Railway's brokered bootstrap requires a matching canonical image:
 
-1. Apply migrations through `0032_glamorous_lord_tyger` before deploying the integration-policy API.
+1. Apply migrations through `0032_foamy_sage` before deploying the integration-policy API.
 2. Configure the encryption master key. Generate the Google workload-identity signing key in
    **Admin → Integrations** after deploying the API, or retain the legacy env key during migration.
 3. Build and publish all canonical agent images from this revision; verify they contain

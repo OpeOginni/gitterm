@@ -21,4 +21,7 @@ test("only an admin browser session can change deployment integration policy", a
       webhookSecret: "b".repeat(32),
     }),
   ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(
+    user.configureGithubPat({ token: "github_pat_test_1234567890" }),
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
 });

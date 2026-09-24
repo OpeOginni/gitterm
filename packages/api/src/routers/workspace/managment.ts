@@ -155,7 +155,7 @@ import {
   workloadIdentityIssuer,
 } from "../../service/workload-identity/google";
 import { integrationPolicy } from "../../service/integrations/catalog";
-import { readGithubPat } from "../../service/github/pat";
+import { githubGlobalPat, githubRepositoryMode } from "../../service/github/config";
 import {
   railwayBootstrapEnvironment,
   storeWorkspaceRuntimeBundle,
@@ -307,7 +307,7 @@ const workspaceCreateBaseSchema = z.strictObject({
     ])
     .optional(),
   gitIntegrationId: z.string().optional(),
-  githubPatId: z.uuid().optional(),
+  useGlobalGithubPat: z.boolean().optional(),
   googleCloudIntegrationId: z.string().uuid().optional(),
   repositoryCredentials: repositoryCredentialsSchema.optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
@@ -549,7 +549,11 @@ export const workspaceRouter = router({
         message: "User not authenticated",
       });
     }
-    if (!(await integrationPolicy("github")).enabled) return { success: true, installations: [] };
+    if (
+      !(await integrationPolicy("github")).enabled ||
+      (await githubRepositoryMode())?.mode !== "app"
+    )
+      return { success: true, installations: [] };
 
     const installations = await db
       .select()
@@ -2091,7 +2095,7 @@ export const workspaceRouter = router({
         const githubUsername = userRecord?.name ?? undefined;
 
         if (
-          input.githubPatId &&
+          input.useGlobalGithubPat &&
           (input.gitIntegrationId || input.repositoryCredentials || !input.repo)
         ) {
           throw new TRPCError({
@@ -2099,19 +2103,20 @@ export const workspaceRouter = router({
             message: "Choose one GitHub connection and a repository",
           });
         }
-        if (input.githubPatId && !(await integrationPolicy("github")).enabled) {
+        if (input.useGlobalGithubPat && !(await integrationPolicy("github")).enabled) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "GitHub repository access is disabled",
           });
         }
-        const selectedPat = input.githubPatId
-          ? await readGithubPat(input.githubPatId, userId)
-          : null;
-        if (input.githubPatId && !selectedPat) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "GitHub token connection not found" });
+        const selectedPat = input.useGlobalGithubPat ? await githubGlobalPat() : null;
+        if (input.useGlobalGithubPat && !selectedPat) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "The admin's global GitHub PAT is not configured",
+          });
         }
-        if (selectedPat) workspaceCreateLogger.addSecrets([selectedPat.token]);
+        if (selectedPat) workspaceCreateLogger.addSecrets([selectedPat]);
 
         // Validate git integration / repo access first, then generate token if needed
         let githubAppToken: string | undefined;
@@ -2166,11 +2171,16 @@ export const workspaceRouter = router({
               });
             }
           } else {
-            const [userExistingGithubAppInstallation] = await db
-              .select()
-              .from(githubAppInstallation)
-              .where(eq(githubAppInstallation.userId, userId))
-              .limit(1);
+            const userExistingGithubAppInstallation =
+              !selectedPat && !input.repositoryCredentials
+                ? (
+                    await db
+                      .select()
+                      .from(githubAppInstallation)
+                      .where(eq(githubAppInstallation.userId, userId))
+                      .limit(1)
+                  )[0]
+                : null;
 
             const options = selectedGitIntegration
               ? { userId: userId, gitIntegrationId: selectedGitIntegration.id }
@@ -2180,7 +2190,7 @@ export const workspaceRouter = router({
               input.repositoryCredentials || selectedPat
                 ? await checkGitHubRepositoryWithToken(
                     input.repo,
-                    input.repositoryCredentials?.token ?? selectedPat!.token,
+                    input.repositoryCredentials?.token ?? selectedPat!,
                     input.branch,
                     resolvedBaseCommit ?? undefined,
                   )
@@ -2200,7 +2210,7 @@ export const workspaceRouter = router({
               });
 
             if (!repoValidation.exists) {
-              if (input.repositoryCredentials) {
+              if (input.repositoryCredentials || selectedPat) {
                 throw new TRPCError({
                   code: "BAD_REQUEST",
                   message: "Can't access repository with the supplied repository credentials",
@@ -2223,9 +2233,10 @@ export const workspaceRouter = router({
             if (!repoValidation.canClone)
               throw new TRPCError({
                 code: "BAD_REQUEST",
-                message: input.repositoryCredentials
-                  ? "Can't clone repository with the supplied repository credentials"
-                  : "Can't clone repository, check github integration",
+                message:
+                  input.repositoryCredentials || selectedPat
+                    ? "Can't clone repository with the supplied repository credentials"
+                    : "Can't clone repository, check github integration",
               });
 
             if (input.branch && !repoValidation.branchExists)
@@ -2268,7 +2279,7 @@ export const workspaceRouter = router({
           }
         }
         if (selectedPat) {
-          githubAppToken = selectedPat.token;
+          githubAppToken = selectedPat;
           githubAppTokenExpiry = new Date(Date.now() + 15 * 60_000).toISOString();
         }
 
@@ -2276,13 +2287,17 @@ export const workspaceRouter = router({
         const repoInfo = input.repo ? parseGitHubRepoUrl(input.repo) : null;
 
         // Resolve exact base commit when not provided by the caller.
-        if (input.repo && !resolvedBaseCommit) {
+        if (
+          input.repo &&
+          !resolvedBaseCommit &&
+          (input.repositoryCredentials || selectedPat || (await isGitHubAppConfigured()))
+        ) {
           try {
             const headSha =
               input.repositoryCredentials || selectedPat
                 ? await resolveGitHubBranchHeadWithToken(
                     input.repo,
-                    input.repositoryCredentials?.token ?? selectedPat!.token,
+                    input.repositoryCredentials?.token ?? selectedPat!,
                     input.branch,
                   )
                 : await (
@@ -2726,7 +2741,7 @@ export const workspaceRouter = router({
           regionId: regionRecord?.id,
           // Inline credentials win over an App ID; never later refresh an unused App token.
           gitIntegrationId: input.repositoryCredentials ? null : (input.gitIntegrationId ?? null),
-          githubPatId: input.githubPatId ?? null,
+          useGlobalGithubPat: !!input.useGlobalGithubPat,
           googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
           repositoryUrl: input.repo ?? null,
           domain,
@@ -2817,7 +2832,7 @@ export const workspaceRouter = router({
           machineProfileId: selectedMachineProfile?.id ?? null,
           launchProfileId: null,
           gitIntegrationId: input.repositoryCredentials ? null : (input.gitIntegrationId ?? null),
-          githubPatId: input.githubPatId ?? null,
+          useGlobalGithubPat: !!input.useGlobalGithubPat,
           googleCloudIntegrationId: input.googleCloudIntegrationId ?? null,
           // Persist resolved defaults too, so later runs validate the exact injected credentials.
           modelCredentialIds: credentials

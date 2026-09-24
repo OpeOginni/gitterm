@@ -1,12 +1,12 @@
 import z from "zod";
-import { protectedProcedure, router } from "../../index";
+import { accountProcedure, protectedProcedure, router } from "../../index";
 import {
   GitHubAPIError,
   getGitHubAppService,
   getPublicGitHubRepository,
   parseGitHubRepoUrl,
 } from "../../service/github";
-import { githubRepositoryAppConfig } from "../../service/github/config";
+import { githubRepositoryMode } from "../../service/github/config";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and } from "@gitterm/db";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
@@ -14,11 +14,17 @@ import { logger } from "../../utils/logger";
 import { integrationPolicy } from "../../service/integrations/catalog";
 
 export const githubRouter = router({
-  appAvailability: protectedProcedure.query(async () => {
+  appAvailability: accountProcedure("workspace:read").query(async () => {
     const policy = await integrationPolicy("github");
-    if (!policy.enabled) return { enabled: false, configured: false, slug: null };
-    const config = await githubRepositoryAppConfig();
-    return { enabled: true, configured: !!config, slug: config?.slug || null };
+    const config = await githubRepositoryMode();
+    return {
+      enabled: policy.enabled,
+      configured: policy.enabled && config?.mode === "app",
+      mode: policy.enabled ? (config?.mode ?? null) : null,
+      slug: config?.mode === "app" ? config.slug : null,
+      accountLogin: config?.mode === "pat" ? config.accountLogin : null,
+      patSuffix: config?.mode === "pat" ? config.patSuffix : null,
+    };
   }),
   /**
    * Get GitHub App installation status for the current user
@@ -26,6 +32,8 @@ export const githubRouter = router({
    * Cleanup happens via webhook when the app is uninstalled
    */
   getInstallationStatus: protectedProcedure.query(async ({ ctx }) => {
+    if ((await githubRepositoryMode())?.mode !== "app")
+      return { connected: false, installations: [] };
     const userId = ctx.session.user.id;
 
     try {

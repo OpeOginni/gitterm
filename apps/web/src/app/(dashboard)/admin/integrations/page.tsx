@@ -34,14 +34,19 @@ export default function AdminIntegrationsPage() {
   const [appId, setAppId] = useState("");
   const [privateKey, setPrivateKey] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
+  const [globalPat, setGlobalPat] = useState("");
   const update = useMutation(trpc.admin.integrations.update.mutationOptions());
   const configure = useMutation(trpc.admin.integrations.configureGoogle.mutationOptions());
   const configureGithub = useMutation(trpc.admin.integrations.configureGithubApp.mutationOptions());
+  const configureGithubPat = useMutation(
+    trpc.admin.integrations.configureGithubPat.mutationOptions(),
+  );
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: trpc.admin.integrations.list.queryKey() });
     await queryClient.invalidateQueries({ queryKey: trpc.integrations.list.queryKey() });
     await queryClient.invalidateQueries({ queryKey: trpc.googleCloud.availability.queryKey() });
+    await queryClient.invalidateQueries({ queryKey: trpc.github.appAvailability.queryKey() });
   }
 
   if (sessionPending || !session?.user || (session.user as { role?: string }).role !== "admin") {
@@ -112,7 +117,7 @@ export default function AdminIntegrationsPage() {
                   {item.key === "google"
                     ? "GitTerm signs short-lived identity assertions; users attach their own service accounts."
                     : item.key === "github"
-                      ? "Users can install the deployment’s GitHub App or connect a personal access token. Login is unaffected."
+                      ? "Choose one repository access mode: a shared admin PAT or an App that users install. Login is unaffected."
                       : item.key === "executor"
                         ? "A future dedicated connection flow for each user, with optional admin-shared access."
                         : "The connector is not implemented yet. Configuration will appear here when it is ready."}
@@ -130,8 +135,14 @@ export default function AdminIntegrationsPage() {
                             await update.mutateAsync({
                               key: item.key,
                               enabled: event.target.checked,
-                              allowPersonal: item.allowPersonal,
-                              allowShared: item.allowShared,
+                              allowPersonal:
+                                item.key === "github"
+                                  ? data?.githubMode?.mode === "app"
+                                  : item.allowPersonal,
+                              allowShared:
+                                item.key === "github"
+                                  ? data?.githubMode?.mode === "pat"
+                                  : item.allowShared,
                             });
                             await refresh();
                           } catch (cause) {
@@ -152,7 +163,7 @@ export default function AdminIntegrationsPage() {
                     ) : null}
                     {item.key === "github" ? (
                       <p className="text-fg-4">
-                        A GitHub App is optional. Users can connect a PAT without one.
+                        Configure a GitHub App or shared PAT below before enabling access.
                       </p>
                     ) : null}
                   </div>
@@ -172,26 +183,30 @@ export default function AdminIntegrationsPage() {
               <KeyRound className="size-5 text-fg-2" />
             </div>
             <div>
-              <h2 className="font-semibold text-fg">GitHub App for repositories</h2>
+              <h2 className="font-semibold text-fg">GitHub repository credentials</h2>
               <p className="text-xs text-fg-3">
-                Optional shared App; users can alternatively add their own PAT. This does not enable
-                GitHub login.
+                Choose one: a deployment-wide PAT, or an App installed by each user. This does not
+                enable GitHub login.
               </p>
             </div>
           </div>
-          {data?.github ? (
+          {data?.github?.mode === "pat" ? (
+            <p className="mt-5 text-sm text-emerald-300">
+              Shared PAT active: @{data.github.accountLogin} (ending in {data.github.patSuffix})
+            </p>
+          ) : data?.github?.mode === "app" ? (
             <p className="mt-5 text-sm text-emerald-300">
               App connected: {data.github.slug} (ID {data.github.appId})
             </p>
-          ) : data?.githubConfigured ? (
+          ) : data?.githubMode?.mode === "app" ? (
             <p className="mt-5 text-sm text-fg-3">
               Using the legacy env-configured GitHub App. Save an App here to move repository access
               into GitTerm.
             </p>
           ) : (
             <p className="mt-5 text-sm text-fg-3">
-              No GitHub App configured. Users can still connect a personal access token after you
-              enable GitHub above.
+              No repository credentials configured. Save either an App or shared PAT, then enable
+              GitHub above.
             </p>
           )}
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -241,14 +256,19 @@ export default function AdminIntegrationsPage() {
             className="mt-5"
             onClick={async () => {
               if (
-                data?.github &&
+                data?.githubMode &&
                 !window.confirm(
-                  "Replace the GitHub App credentials? Existing installations must belong to the new App.",
+                  "Replace the current GitHub credentials? Switching modes stops refresh for existing workspaces using the previous mode.",
                 )
               )
                 return;
               try {
-                await configureGithub.mutateAsync({ appId, privateKey, webhookSecret });
+                await configureGithub.mutateAsync({
+                  appId,
+                  privateKey,
+                  webhookSecret,
+                  replace: data?.githubMode?.mode === "pat",
+                });
                 setPrivateKey("");
                 setWebhookSecret("");
                 await refresh();
@@ -260,12 +280,65 @@ export default function AdminIntegrationsPage() {
               }
             }}
           >
-            {data?.github ? "Replace App credentials" : "Verify & save GitHub App"}
+            {data?.githubMode?.mode === "pat"
+              ? "Switch to GitHub App"
+              : data?.github
+                ? "Replace App credentials"
+                : "Verify & save GitHub App"}
           </Button>
           <p className="mt-2 text-[11px] text-amber-200/80">
             The API and webhook listener need the same encryption master key to read this App’s
             encrypted credentials.
           </p>
+          <div className="mt-8 border-t border-line pt-6">
+            <h3 className="text-sm font-semibold text-fg">Or use an admin-shared PAT</h3>
+            <p className="mt-2 text-xs leading-relaxed text-fg-3">
+              The PAT’s GitHub identity and permissions are shared with every workspace that selects
+              it. Use a narrowly scoped fine-grained PAT. Revoke it on GitHub to stop access in
+              running workspaces.
+            </p>
+            <label className="mt-4 block space-y-2 text-xs text-fg-3">
+              Fine-grained PAT
+              <Input
+                type="password"
+                autoComplete="off"
+                value={globalPat}
+                onChange={(event) => setGlobalPat(event.target.value)}
+                placeholder="github_pat_…"
+                className="bg-fill font-mono text-xs"
+              />
+            </label>
+            <Button
+              className="mt-4"
+              disabled={!globalPat.trim() || configureGithubPat.isPending}
+              onClick={async () => {
+                if (
+                  data?.githubMode &&
+                  !window.confirm(
+                    "Replace the current GitHub credentials? Switching modes stops refresh for existing workspaces using the previous mode. Revoke the old PAT on GitHub if needed.",
+                  )
+                )
+                  return;
+                try {
+                  await configureGithubPat.mutateAsync({
+                    token: globalPat,
+                    replace: data?.githubMode?.mode === "app",
+                  });
+                  setGlobalPat("");
+                  await refresh();
+                  toast.success("Shared GitHub PAT verified and saved");
+                } catch (cause) {
+                  toast.error(
+                    cause instanceof Error ? cause.message : "Couldn’t configure GitHub PAT",
+                  );
+                }
+              }}
+            >
+              {data?.githubMode?.mode === "app"
+                ? "Switch to shared PAT"
+                : "Verify & save shared PAT"}
+            </Button>
+          </div>
         </section>
 
         <section className="rounded-2xl border border-line bg-settings p-6 sm:p-8">

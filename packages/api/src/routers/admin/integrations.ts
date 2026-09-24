@@ -1,9 +1,10 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
+import { Octokit } from "@octokit/rest";
 import { db, eq } from "@gitterm/db";
 import {
   googleIssuerConfig,
-  githubAppConfig,
+  githubRepositoryConfig,
   integrationSettings,
 } from "@gitterm/db/schema/integrations";
 import z from "zod";
@@ -15,6 +16,7 @@ import {
   workloadIdentitySignerConfig,
 } from "../../service/workload-identity/google";
 import { GitHubAppService, isGitHubAppConfigured } from "../../service/github";
+import { githubRepositoryMode } from "../../service/github/config";
 
 const key = z.enum(
   Object.keys(INTEGRATIONS) as [keyof typeof INTEGRATIONS, ...(keyof typeof INTEGRATIONS)[]],
@@ -45,18 +47,21 @@ export const adminIntegrationsRouter = router({
         .where(eq(googleIssuerConfig.id, "google")),
       db
         .select({
-          appId: githubAppConfig.appId,
-          slug: githubAppConfig.slug,
-          updatedAt: githubAppConfig.updatedAt,
+          mode: githubRepositoryConfig.mode,
+          appId: githubRepositoryConfig.appId,
+          slug: githubRepositoryConfig.slug,
+          accountLogin: githubRepositoryConfig.accountLogin,
+          patSuffix: githubRepositoryConfig.patSuffix,
+          updatedAt: githubRepositoryConfig.updatedAt,
         })
-        .from(githubAppConfig)
-        .where(eq(githubAppConfig.id, "github")),
+        .from(githubRepositoryConfig)
+        .where(eq(githubRepositoryConfig.id, "github")),
     ]);
     return {
       integrations,
       google: google[0] ?? null,
       github: github[0] ?? null,
-      githubConfigured: !!github[0] || (await isGitHubAppConfigured()),
+      githubMode: await githubRepositoryMode(),
     };
   }),
 
@@ -76,14 +81,30 @@ export const adminIntegrationsRouter = router({
           message: "This integration does not have a connector yet",
         });
       }
-      if (
-        (input.key === "google" || input.key === "github") &&
-        (!input.allowPersonal || input.allowShared)
-      ) {
+      if (input.key === "google" && (!input.allowPersonal || input.allowShared)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "This connector currently supports personal connections only",
+          message: "Google Cloud currently supports personal connections only",
         });
+      }
+      if (input.key === "github") {
+        const mode = await githubRepositoryMode();
+        if (input.enabled && !mode) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Configure a GitHub App or global PAT before enabling repository access",
+          });
+        }
+        if (
+          mode &&
+          (input.allowPersonal !== (mode.mode === "app") ||
+            input.allowShared !== (mode.mode === "pat"))
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Connection policy must match the configured GitHub mode",
+          });
+        }
       }
       if (input.enabled && input.key === "google" && !(await isWorkloadIdentityAvailable())) {
         throw new TRPCError({
@@ -192,6 +213,7 @@ export const adminIntegrationsRouter = router({
         appId: z.string().regex(/^[0-9]+$/),
         privateKey: z.string().min(100).max(20000),
         webhookSecret: z.string().min(16).max(1024),
+        replace: z.boolean().default(false),
       }),
     )
     .mutation(async ({ input }) => {
@@ -214,26 +236,127 @@ export const adminIntegrationsRouter = router({
           message: "The key belongs to a different GitHub App",
         });
       }
+      const [previous] = await db
+        .select({ mode: githubRepositoryConfig.mode })
+        .from(githubRepositoryConfig)
+        .where(eq(githubRepositoryConfig.id, "github"));
+      if (previous?.mode === "pat" && !input.replace) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Explicitly confirm switching from the global PAT to a GitHub App",
+        });
+      }
       const encryption = new EncryptionService();
+      const encryptedPrivateKey = encryption.encrypt(input.privateKey, "github:app:key");
+      const encryptedWebhookSecret = encryption.encrypt(input.webhookSecret, "github:app:webhook");
       await db
-        .insert(githubAppConfig)
+        .insert(githubRepositoryConfig)
         .values({
           id: "github",
+          mode: "app",
           appId: verified.id,
           slug: verified.slug,
-          encryptedPrivateKey: encryption.encrypt(input.privateKey, "github:app:key"),
-          encryptedWebhookSecret: encryption.encrypt(input.webhookSecret, "github:app:webhook"),
+          encryptedPrivateKey,
+          encryptedWebhookSecret,
         })
         .onConflictDoUpdate({
-          target: githubAppConfig.id,
+          target: githubRepositoryConfig.id,
           set: {
+            mode: "app",
             appId: verified.id,
             slug: verified.slug,
-            encryptedPrivateKey: encryption.encrypt(input.privateKey, "github:app:key"),
-            encryptedWebhookSecret: encryption.encrypt(input.webhookSecret, "github:app:webhook"),
+            encryptedPrivateKey,
+            encryptedWebhookSecret,
+            accountLogin: null,
+            encryptedPat: null,
+            patSuffix: null,
             updatedAt: new Date(),
           },
         });
+      await setGithubConnectionPolicy("app");
       return { appId: verified.id, slug: verified.slug };
     }),
+
+  configureGithubPat: adminProcedure
+    .input(
+      z.object({
+        token: z
+          .string()
+          .trim()
+          .min(20)
+          .max(4096)
+          .regex(/^[^\s]+$/),
+        replace: z.boolean().default(false),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      let accountLogin: string;
+      try {
+        const { data } = await new Octokit({ auth: input.token }).users.getAuthenticated();
+        accountLogin = data.login;
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "GitHub could not authenticate this PAT",
+        });
+      }
+      const [previous] = await db
+        .select({ mode: githubRepositoryConfig.mode })
+        .from(githubRepositoryConfig)
+        .where(eq(githubRepositoryConfig.id, "github"));
+      if (
+        (previous?.mode === "app" || (!previous && (await isGitHubAppConfigured()))) &&
+        !input.replace
+      ) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Explicitly confirm switching from the GitHub App to a global PAT",
+        });
+      }
+      const encryptedPat = new EncryptionService().encrypt(input.token, "github:global:pat");
+      await db
+        .insert(githubRepositoryConfig)
+        .values({
+          id: "github",
+          mode: "pat",
+          accountLogin,
+          patSuffix: input.token.slice(-4),
+          encryptedPat,
+        })
+        .onConflictDoUpdate({
+          target: githubRepositoryConfig.id,
+          set: {
+            mode: "pat",
+            accountLogin,
+            patSuffix: input.token.slice(-4),
+            encryptedPat,
+            appId: null,
+            slug: null,
+            encryptedPrivateKey: null,
+            encryptedWebhookSecret: null,
+            updatedAt: new Date(),
+          },
+        });
+      await setGithubConnectionPolicy("pat");
+      return { accountLogin, patSuffix: input.token.slice(-4) };
+    }),
 });
+
+async function setGithubConnectionPolicy(mode: "app" | "pat") {
+  await db
+    .insert(integrationSettings)
+    .values({
+      key: "github",
+      enabled: false,
+      allowPersonal: mode === "app",
+      allowShared: mode === "pat",
+    })
+    .onConflictDoUpdate({
+      target: integrationSettings.key,
+      set: {
+        allowPersonal: mode === "app",
+        allowShared: mode === "pat",
+        updatedAt: new Date(),
+      },
+    });
+}

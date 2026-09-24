@@ -85,8 +85,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     ...trpc.workspace.listUserInstallations.queryOptions(),
     staleTime: STALE_TIME,
   });
-  const { data: githubPatConnections = [] } = useQuery({
-    ...trpc.githubPat.list.queryOptions(),
+  const { data: githubAvailability } = useQuery({
+    ...trpc.github.appAvailability.queryOptions(),
     staleTime: STALE_TIME,
   });
   const { data: googleCloudIntegrations = [] } = useQuery({
@@ -415,9 +415,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       gitIntegrationId: selectedGitIntegrationId.startsWith("app:")
         ? selectedGitIntegrationId.slice(4)
         : undefined,
-      githubPatId: selectedGitIntegrationId.startsWith("pat:")
-        ? selectedGitIntegrationId.slice(4)
-        : undefined,
+      useGlobalGithubPat: selectedGitIntegrationId === "global-pat",
       googleCloudIntegrationId:
         googleCloudIntegrationId === "none" ? undefined : googleCloudIntegrationId,
       persistent: effectivePersistent,
@@ -434,14 +432,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   }, [workspaceProfile, canEnableSSHAccess]);
 
   const integrations = installationsData?.installations;
-  const hasIntegrations = !!(integrations?.length || githubPatConnections.length);
+  const hasIntegrations = !!(integrations?.length || githubAvailability?.mode === "pat");
   const selectedGitIntegrationId =
     userGitIntegrationId ??
-    (integrations?.[0]
-      ? `app:${integrations[0].git_integration.id}`
-      : githubPatConnections[0]
-        ? `pat:${githubPatConnections[0].id}`
-        : "none");
+    (integrations?.[0] ? `app:${integrations[0].git_integration.id}` : "none");
 
   const selectedGitIntegration = useMemo(() => {
     if (!integrations || !selectedGitIntegrationId.startsWith("app:")) {
@@ -835,11 +829,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                     </div>
                   </SelectItem>
                 ))}
-                {githubPatConnections.map((connection) => (
-                  <SelectItem key={connection.id} value={`pat:${connection.id}`}>
-                    {connection.name} · PAT (@{connection.accountLogin})
+                {githubAvailability?.mode === "pat" ? (
+                  <SelectItem value="global-pat">
+                    Shared GitHub PAT (@{githubAvailability.accountLogin})
                   </SelectItem>
-                ))}
+                ) : null}
               </SelectContent>
             </Select>
             {/* Help sits beside the picker so it never covers the controls above */}

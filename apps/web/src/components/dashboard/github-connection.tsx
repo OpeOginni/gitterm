@@ -337,9 +337,16 @@ export function GitHubConnection() {
           separate.
         </p>
       ) : null}
-      {isEnabled && appAvailability && !appAvailability.configured ? (
+      {isEnabled && appAvailability?.mode === "pat" ? (
         <p className="rounded-lg border border-line bg-fill p-4 text-xs text-fg-3">
-          This deployment has no GitHub App. You can still connect a personal access token below.
+          Your admin provides GitHub repository access with a shared PAT from @
+          {appAvailability.accountLogin}. Select it when creating a workspace. GitHub sign-in
+          remains separate.
+        </p>
+      ) : null}
+      {isEnabled && appAvailability && !appAvailability.mode ? (
+        <p className="rounded-lg border border-line bg-fill p-4 text-xs text-fg-3">
+          Your admin has not configured repository access yet.
         </p>
       ) : null}
 

@@ -41,27 +41,17 @@ export const googleIssuerConfig = pgTable("google_issuer_config", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-/** One GitHub App per deployment; OAuth login remains configured independently. */
-export const githubAppConfig = pgTable("github_app_config", {
+/** Exactly one repository authentication mode per deployment; OAuth login is independent. */
+export const githubRepositoryConfig = pgTable("github_repository_config", {
   id: text("id").primaryKey(),
-  appId: text("app_id").notNull(),
-  slug: text("slug").notNull(),
-  encryptedPrivateKey: text("encrypted_private_key").notNull(),
-  encryptedWebhookSecret: text("encrypted_webhook_secret").notNull(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-/** Personal PATs are distinct from GitHub App installations. */
-export const githubPatConnection = pgTable("github_pat_connection", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  accountLogin: text("account_login").notNull(),
-  encryptedToken: text("encrypted_token").notNull(),
-  tokenSuffix: text("token_suffix").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  mode: text("mode").$type<"app" | "pat">().notNull(),
+  appId: text("app_id"),
+  slug: text("slug"),
+  encryptedPrivateKey: text("encrypted_private_key"),
+  encryptedWebhookSecret: text("encrypted_webhook_secret"),
+  accountLogin: text("account_login"),
+  encryptedPat: text("encrypted_pat"),
+  patSuffix: text("pat_suffix"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

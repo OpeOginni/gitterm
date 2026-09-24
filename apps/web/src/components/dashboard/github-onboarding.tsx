@@ -31,6 +31,9 @@ export function GitHubOnboarding() {
   const [isConnecting, setIsConnecting] = useState(false);
 
   const { data, isLoading } = useQuery(trpc.workspace.listUserInstallations.queryOptions());
+  const { data: appAvailability, isLoading: isLoadingAvailability } = useQuery(
+    trpc.github.appAvailability.queryOptions(),
+  );
 
   const hasIntegration = (data?.installations?.length ?? 0) > 0;
 
@@ -43,7 +46,12 @@ export function GitHubOnboarding() {
     }
   }, []);
 
-  const shouldShow = !isLoading && !hasIntegration && !dismissed;
+  const shouldShow =
+    !isLoading &&
+    !isLoadingAvailability &&
+    !!appAvailability?.configured &&
+    !hasIntegration &&
+    !dismissed;
 
   useEffect(() => {
     if (shouldShow) track(AnalyticsEvent.GitHubOnboardingShown);
@@ -55,7 +63,7 @@ export function GitHubOnboarding() {
     track(AnalyticsEvent.GitHubOnboardingConnect);
     setIsConnecting(true);
     const redirectUrl = `${env.NEXT_PUBLIC_SERVER_URL}/api/github/callback`;
-    window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
+    window.location.href = `https://github.com/apps/${appAvailability?.slug || GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
   };
 
   const handleDismiss = () => {

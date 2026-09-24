@@ -45,7 +45,6 @@ import type {
   ModelCredential,
   ModelProviderInfo,
   GitHubIntegration,
-  GitHubPatConnection,
   GoogleCloudIntegration,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl } from "./transport.js";
@@ -179,7 +178,6 @@ export type GittermClient = {
   };
   integrations: {
     github: { list(): Promise<GitHubIntegration[]> };
-    githubPat: { list(): Promise<GitHubPatConnection[]> };
     googleCloud: { list(): Promise<GoogleCloudIntegration[]> };
   };
 };
@@ -727,19 +725,6 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
               repositorySelection: github_app_installation.repositorySelection,
               suspended: github_app_installation.suspended,
               connectedAt: toIso(git_integration.connectedAt)!,
-            }));
-          }),
-      },
-      githubPat: {
-        list: () =>
-          run(async (): Promise<GitHubPatConnection[]> => {
-            const result = await trpc.githubPat.list.query();
-            return result.map((connection) => ({
-              id: connection.id,
-              name: connection.name,
-              accountLogin: connection.accountLogin,
-              tokenSuffix: connection.tokenSuffix,
-              createdAt: toIso(connection.createdAt)!,
             }));
           }),
       },

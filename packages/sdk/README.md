@@ -188,20 +188,19 @@ const { workspace, runtime } = await client.workspaces.create({
 ```
 
 The admin can configure that GitHub App in **Admin → Integrations** without enabling GitHub login.
-Alternatively, connect a personal PAT to your own account in the dashboard and select it by ID:
+Alternatively, the admin can configure a shared PAT instead. Explicitly opt into it for a managed
+workspace (there is no per-user connection ID for a deployment-wide secret):
 
 ```ts
-const [connection] = await client.integrations.githubPat.list();
-if (!connection) throw new Error("Connect a GitHub PAT in the dashboard first");
-
 const { workspace } = await client.workspaces.create({
   repo: "https://github.com/acme/private-repo",
-  githubPatId: connection.id,
+  useGlobalGithubPat: true,
 });
 ```
 
-Only connection metadata is returned by `list()`, never the PAT. This saved PAT is available only
-to workspaces owned by the same account, not to other users as an admin-shared token.
+This PAT authenticates as the admin-chosen GitHub account; permissions are shared by all workspaces
+that opt into it. GitTerm does not return the PAT through the SDK. Only one of the shared PAT mode
+or user-installed App mode can be active at a time.
 
 Managed workspaces can also use dashboard-managed model subscriptions while accepting an
 application-owned GitHub PAT inline:
@@ -221,9 +220,9 @@ const { workspace, runtime } = await client.workspaces.create({
 });
 ```
 
-The username defaults to `x-access-token`. Choose exactly one of `gitIntegrationId`, `githubPatId`,
-or `repositoryCredentials`. Inline credentials take precedence over `gitIntegrationId` for
-backward compatibility; `githubPatId` cannot be combined with either. All three authenticate
+The username defaults to `x-access-token`. Choose one of `gitIntegrationId`,
+`useGlobalGithubPat`, or `repositoryCredentials`. Inline credentials take precedence over
+`gitIntegrationId` for backward compatibility; `useGlobalGithubPat` cannot be combined with either. All three authenticate
 repository validation, cloning, and runtime Git operations such as pull and push. Omitting
 `models` continues to use dashboard-managed model credentials.
 
@@ -239,9 +238,9 @@ running `gh auth login`:
 - `gitIntegrationId` uses the GitHub App installation token. Git and `gh` share a
   cached token and refresh it through GitTerm before expiry. Concurrent commands share
   the refresh, and a failed refresh stops the command rather than using an expired token.
-- `githubPatId` uses a PAT saved on the caller's GitTerm account. GitTerm brokers it to the
-  selected managed workspace while it is running. Removing the saved connection prevents
-  future refreshes; revoke the PAT at GitHub to stop access in an already-running workspace.
+- `useGlobalGithubPat: true` opts into the admin's deployment-wide PAT for a managed workspace.
+  Switching deployment mode prevents future refreshes for existing workspaces using this mode;
+  revoke the PAT at GitHub to stop access in an already-running workspace.
 - Without repository credentials or an integration, GitTerm leaves CLI authentication
   to the environment or the CLI's existing configuration.
 
@@ -273,7 +272,7 @@ selected compute provider and retained on the workspace machine for runtime Git 
 provider infrastructure and processes running in that workspace may be able to access them. Prefer
 `gitIntegrationId` for durable managed workspaces and use narrowly scoped, short-lived PATs when
 inline credentials are necessary. The standalone/direct SDK has no GitTerm account to look up:
-it supports `repositoryCredentials` but not `gitIntegrationId` or `githubPatId`.
+it supports `repositoryCredentials` but not `gitIntegrationId` or `useGlobalGithubPat`.
 
 The SDK deliberately exposes two clients. `createGittermClient()` uses a user API token and
 can manage the user's workspaces. `createGittermWorkspaceClient()` uses the scoped identity

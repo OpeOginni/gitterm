@@ -192,8 +192,8 @@ export type WorkspaceCreateInput = {
   repositoryCredentials?: { username?: string; token: string };
   /** Dashboard GitHub App integration; runtime Git/gh credentials are renewed automatically. */
   gitIntegrationId?: string;
-  /** Saved personal PAT on this account; mutually exclusive with gitIntegrationId and repositoryCredentials. */
-  githubPatId?: string;
+  /** Use the admin's deployment-wide PAT for this managed workspace. Mutually exclusive with other GitHub credentials. */
+  useGlobalGithubPat?: boolean;
   /** Google Workload Identity Federation integration; injects keyless ADC/gcloud auth. */
   googleCloudIntegrationId?: string;
   /** Defaults from the selected provider. */
@@ -234,15 +234,6 @@ export type GitHubIntegration = {
   repositorySelection: string;
   suspended: boolean;
   connectedAt: string;
-};
-
-/** Metadata only: saved GitHub PAT values are never returned by the SDK. */
-export type GitHubPatConnection = {
-  id: string;
-  name: string;
-  accountLogin: string;
-  tokenSuffix: string;
-  createdAt: string;
 };
 
 export type GoogleCloudIntegration = {

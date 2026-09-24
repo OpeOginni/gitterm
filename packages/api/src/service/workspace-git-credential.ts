@@ -1,24 +1,27 @@
 import { db, and, eq } from "@gitterm/db";
 import { gitIntegration } from "@gitterm/db/schema/integrations";
 import { getGitHubAppService, parseGitHubRepoUrl } from "./github";
-import { readGithubPat } from "./github/pat";
+import { githubGlobalPat } from "./github/config";
+import { integrationPolicy } from "./integrations/catalog";
 
 export async function issueWorkspaceGitCredential(ws: {
   id: string;
   userId: string;
   gitIntegrationId: string | null;
-  githubPatId?: string | null;
+  useGlobalGithubPat?: boolean;
   repositoryUrl: string | null;
   status: "pending" | "running" | "paused" | "terminated";
 }) {
   if (ws.status !== "running") throw new Error("Workspace is not running");
   const repo = ws.repositoryUrl ? parseGitHubRepoUrl(ws.repositoryUrl) : null;
-  if (!repo || (!ws.gitIntegrationId && !ws.githubPatId))
+  if (!repo || (!ws.gitIntegrationId && !ws.useGlobalGithubPat))
     throw new Error("Workspace has no refreshable GitHub integration");
-  if (ws.githubPatId) {
-    const pat = await readGithubPat(ws.githubPatId, ws.userId);
-    if (!pat) throw new Error("GitHub token connection is no longer available");
-    return { token: pat.token, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() };
+  if (!(await integrationPolicy("github")).enabled)
+    throw new Error("GitHub repository access is disabled");
+  if (ws.useGlobalGithubPat) {
+    const token = await githubGlobalPat();
+    if (!token) throw new Error("Global GitHub PAT is no longer available");
+    return { token, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() };
   }
   if (!ws.gitIntegrationId) throw new Error("Workspace has no GitHub App integration");
   const integration = await db.query.gitIntegration.findFirst({
