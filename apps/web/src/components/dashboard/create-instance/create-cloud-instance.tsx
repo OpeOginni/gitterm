@@ -85,6 +85,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     ...trpc.workspace.listUserInstallations.queryOptions(),
     staleTime: STALE_TIME,
   });
+  const { data: githubAvailability } = useQuery({
+    ...trpc.github.appAvailability.queryOptions(),
+    staleTime: STALE_TIME,
+  });
   const { data: googleCloudIntegrations = [] } = useQuery({
     ...trpc.googleCloud.list.queryOptions(),
     staleTime: STALE_TIME,
@@ -408,9 +412,17 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       regionId: resolvedRegionId,
       machineProfileId: selectedMachineProfileId,
       awsAccessProfileId: isAwsGroup ? selectedAwsProfileId : undefined,
-      gitIntegrationId: selectedGitIntegrationId === "none" ? undefined : selectedGitIntegrationId,
-      googleCloudIntegrationId:
-        googleCloudIntegrationId === "none" ? undefined : googleCloudIntegrationId,
+      connections: [
+        githubAvailability?.enabled && selectedGitIntegrationId.startsWith("app:")
+          ? selectedGitIntegrationId.slice(4)
+          : null,
+        githubAvailability?.enabled && selectedGitIntegrationId === "global-pat"
+          ? "github:shared"
+          : null,
+        isGoogleCloudAvailable && googleCloudIntegrationId !== "none"
+          ? googleCloudIntegrationId
+          : null,
+      ].filter((id): id is string => Boolean(id)),
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
       workspaceProfile,
@@ -425,16 +437,17 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   }, [workspaceProfile, canEnableSSHAccess]);
 
   const integrations = installationsData?.installations;
-  const hasIntegrations = integrations && integrations.length > 0;
+  const hasIntegrations = !!(integrations?.length || githubAvailability?.mode === "pat");
   const selectedGitIntegrationId =
-    userGitIntegrationId ?? integrations?.[0]?.git_integration.id ?? "none";
+    userGitIntegrationId ??
+    (integrations?.[0] ? `app:${integrations[0].git_integration.id}` : "none");
 
   const selectedGitIntegration = useMemo(() => {
-    if (!integrations || selectedGitIntegrationId === "none") {
+    if (!integrations || !selectedGitIntegrationId.startsWith("app:")) {
       return null;
     }
     const match = integrations.find(
-      (installation) => installation.git_integration.id === selectedGitIntegrationId,
+      (installation) => installation.git_integration.id === selectedGitIntegrationId.slice(4),
     );
     if (!match) {
       return null;
@@ -501,46 +514,44 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </p>
         </div>
 
-        {/* ── 3d. Google Cloud workload identity ── */}
-        <div className="grid gap-1.5">
-          <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            Google Cloud Identity
-            <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-              <ArrowUpRight className="h-3 w-3" />
-            </Link>
-          </Label>
-          <div className="flex items-center gap-2">
-            <Select
-              value={googleCloudIntegrationId}
-              onValueChange={setGoogleCloudIntegrationId}
-              disabled={!isGoogleCloudAvailable || googleCloudIntegrations.length === 0}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue
-                  placeholder={
-                    !isGoogleCloudAvailable
-                      ? "Unavailable on this deployment"
-                      : googleCloudIntegrations.length
-                        ? "Select service account"
-                        : "No integrations"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {googleCloudIntegrations.map((integration) => (
-                  <SelectItem key={integration.id} value={integration.id}>
-                    {integration.name} · {integration.projectId}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <HelpHint label="How is Google Cloud authenticated?">
-              GitTerm exchanges a five-minute workspace identity through Google Workload Identity
-              Federation. No service-account JSON key is stored.
-            </HelpHint>
+        {/* ── 3d. Google Cloud workload identity (only when the admin has enabled it) ── */}
+        {isGoogleCloudAvailable ? (
+          <div className="grid gap-1.5">
+            <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              Google Cloud Identity
+              <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </Label>
+            <div className="flex items-center gap-2">
+              <Select
+                value={googleCloudIntegrationId}
+                onValueChange={setGoogleCloudIntegrationId}
+                disabled={googleCloudIntegrations.length === 0}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue
+                    placeholder={
+                      googleCloudIntegrations.length ? "Select service account" : "No integrations"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {googleCloudIntegrations.map((integration) => (
+                    <SelectItem key={integration.id} value={integration.id}>
+                      {integration.name} · {integration.projectId}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <HelpHint label="How is Google Cloud authenticated?">
+                GitTerm exchanges a five-minute workspace identity through Google Workload Identity
+                Federation. No service-account JSON key is stored.
+              </HelpHint>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {/* ── 3. Agent + Cloud (+ Region) ── */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -786,49 +797,58 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         )}
 
         {/* ── 3. GitHub Connection ── */}
-        <div className="grid gap-1.5">
-          <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            GitHub Connection
-            <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-              <ArrowUpRight className="h-3 w-3" />
-            </Link>
-          </Label>
-          <div className="flex items-center gap-2">
-            <Select
-              value={selectedGitIntegrationId}
-              onValueChange={setuserGitIntegrationId}
-              disabled={!hasIntegrations}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder={hasIntegrations ? "Select account" : "No integrations"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None (public repos only)</SelectItem>
-                {integrations?.map((installation) => (
-                  <SelectItem
-                    key={installation.git_integration.id}
-                    value={installation.git_integration.id}
-                  >
-                    <div className="flex items-center">
-                      <Image
-                        src="/github.svg"
-                        alt="GitHub"
-                        width={16}
-                        height={16}
-                        className="mr-2 h-4 w-4"
-                      />
-                      {installation.git_integration.providerAccountLogin}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {/* Help sits beside the picker so it never covers the controls above */}
-            <HelpHint label="What does a GitHub connection do?">
-              Connect a GitHub account to enable commit, push, fork and private repo access.
-            </HelpHint>
+        {githubAvailability?.enabled ? (
+          <div className="grid gap-1.5">
+            <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              GitHub repository access
+              <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </Label>
+            <div className="flex items-center gap-2">
+              <Select
+                value={selectedGitIntegrationId}
+                onValueChange={setuserGitIntegrationId}
+                disabled={!hasIntegrations}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue
+                    placeholder={hasIntegrations ? "Select account" : "No connections"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (public repos only)</SelectItem>
+                  {integrations?.map((installation) => (
+                    <SelectItem
+                      key={installation.git_integration.id}
+                      value={`app:${installation.git_integration.id}`}
+                    >
+                      <div className="flex items-center">
+                        <Image
+                          src="/github.svg"
+                          alt="GitHub"
+                          width={16}
+                          height={16}
+                          className="mr-2 h-4 w-4"
+                        />
+                        {installation.git_integration.providerAccountLogin} · GitHub App
+                      </div>
+                    </SelectItem>
+                  ))}
+                  {githubAvailability.mode === "pat" ? (
+                    <SelectItem value="global-pat">
+                      Shared GitHub PAT (@{githubAvailability.accountLogin})
+                    </SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+              {/* Help sits beside the picker so it never covers the controls above */}
+              <HelpHint label="What does a GitHub connection do?">
+                Connect a GitHub account to enable commit, push, fork and private repo access.
+              </HelpHint>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {/* ── 4. SSH Editor Access ── */}
         <div className="flex items-center gap-2">

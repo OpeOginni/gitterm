@@ -1,6 +1,9 @@
 import { createPrivateKey, createPublicKey, randomUUID, type JsonWebKey } from "node:crypto";
 import jwt from "jsonwebtoken";
 import env from "@gitterm/env/server";
+import { db, eq } from "@gitterm/db";
+import { googleIssuerConfig } from "@gitterm/db/schema/integrations";
+import { EncryptionService } from "../encryption";
 
 export const GOOGLE_SUBJECT_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:jwt";
 export const GOOGLE_TOKEN_URL = "https://sts.googleapis.com/v1/token";
@@ -24,7 +27,7 @@ function normalizePrivateKey(value: string): string {
   return value.includes("\\n") ? value.replaceAll("\\n", "\n") : value;
 }
 
-export function workloadIdentitySignerConfig(): WorkloadIdentitySignerConfig {
+function legacyWorkloadIdentitySignerConfig(): WorkloadIdentitySignerConfig {
   const issuer = env.WORKLOAD_IDENTITY_ISSUER?.replace(/\/$/, "");
   const privateKey = env.WORKLOAD_IDENTITY_PRIVATE_KEY;
   if (!issuer || !privateKey) {
@@ -44,18 +47,34 @@ export function workloadIdentitySignerConfig(): WorkloadIdentitySignerConfig {
   };
 }
 
+export async function workloadIdentitySignerConfig(): Promise<WorkloadIdentitySignerConfig> {
+  const [stored] = await db
+    .select()
+    .from(googleIssuerConfig)
+    .where(eq(googleIssuerConfig.id, "google"));
+  if (stored) {
+    return {
+      issuer: stored.issuer,
+      keyId: stored.keyId,
+      privateKey: new EncryptionService().decrypt(stored.encryptedPrivateKey, "google:issuer:key"),
+    };
+  }
+  // Existing installations keep working until an admin moves their key into the app.
+  return legacyWorkloadIdentitySignerConfig();
+}
+
 /** Whether this deployment can issue Google workload identity assertions. */
-export function isWorkloadIdentityAvailable(): boolean {
+export async function isWorkloadIdentityAvailable(): Promise<boolean> {
   try {
-    workloadIdentitySignerConfig();
+    await workloadIdentitySignerConfig();
     return true;
   } catch {
     return false;
   }
 }
 
-export function workloadIdentityIssuer(): string {
-  return workloadIdentitySignerConfig().issuer;
+export async function workloadIdentityIssuer(): Promise<string> {
+  return (await workloadIdentitySignerConfig()).issuer;
 }
 
 export function googleAudience(provider: string): string {
@@ -65,7 +84,7 @@ export function googleAudience(provider: string): string {
 export function issueGoogleSubjectToken(
   claims: { workspaceId: string; userId: string; integrationId: string },
   integration: GoogleWorkloadIdentityIntegrationConfig,
-  signer = workloadIdentitySignerConfig(),
+  signer: WorkloadIdentitySignerConfig,
 ): string {
   return jwt.sign(
     {
@@ -87,7 +106,7 @@ export function issueGoogleSubjectToken(
   );
 }
 
-export function workloadIdentityJwks(signer = workloadIdentitySignerConfig()): {
+export function workloadIdentityJwks(signer: WorkloadIdentitySignerConfig): {
   keys: JsonWebKey[];
 } {
   const privateKey = createPrivateKey(signer.privateKey);
@@ -95,7 +114,7 @@ export function workloadIdentityJwks(signer = workloadIdentitySignerConfig()): {
   return { keys: [{ ...publicJwk, alg: "RS256", use: "sig", kid: signer.keyId }] };
 }
 
-export function workloadIdentityDiscovery(signer = workloadIdentitySignerConfig()) {
+export function workloadIdentityDiscovery(signer: WorkloadIdentitySignerConfig) {
   return {
     issuer: signer.issuer,
     jwks_uri: `${signer.issuer}/jwks`,

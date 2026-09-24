@@ -1,18 +1,39 @@
 import z from "zod";
-import { protectedProcedure, router } from "../../index";
-import { GitHubAPIError, getGitHubAppService } from "../../service/github";
+import { accountProcedure, protectedProcedure, router } from "../../index";
+import {
+  GitHubAPIError,
+  getGitHubAppService,
+  getPublicGitHubRepository,
+  parseGitHubRepoUrl,
+} from "../../service/github";
+import { githubRepositoryMode } from "../../service/github/config";
 import { TRPCError } from "@trpc/server";
 import { db, eq, and } from "@gitterm/db";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { logger } from "../../utils/logger";
+import { integrationPolicy } from "../../service/integrations/catalog";
 
 export const githubRouter = router({
+  appAvailability: accountProcedure("workspace:read").query(async () => {
+    const policy = await integrationPolicy("github");
+    const config = await githubRepositoryMode();
+    return {
+      enabled: policy.enabled,
+      configured: policy.enabled && config?.mode === "app",
+      mode: policy.enabled ? (config?.mode ?? null) : null,
+      slug: config?.mode === "app" ? config.slug : null,
+      accountLogin: config?.mode === "pat" ? config.accountLogin : null,
+      patSuffix: config?.mode === "pat" ? config.patSuffix : null,
+    };
+  }),
   /**
    * Get GitHub App installation status for the current user
    * Returns the installation from our database without verifying against GitHub API
    * Cleanup happens via webhook when the app is uninstalled
    */
   getInstallationStatus: protectedProcedure.query(async ({ ctx }) => {
+    if ((await githubRepositoryMode())?.mode !== "app")
+      return { connected: false, installations: [] };
     const userId = ctx.session.user.id;
 
     try {
@@ -91,9 +112,9 @@ export const githubRouter = router({
 
         // Request GitHub to uninstall the app
         // Database cleanup will happen via webhook when GitHub sends the "deleted" event
-        await getGitHubAppService().requestUninstallFromGitHub(
-          gitIntegrationRecord.providerInstallationId,
-        );
+        await (
+          await getGitHubAppService()
+        ).requestUninstallFromGitHub(gitIntegrationRecord.providerInstallationId);
 
         logger.info("GitHub App disconnect requested - awaiting webhook for cleanup", {
           userId,
@@ -131,6 +152,11 @@ export const githubRouter = router({
   listAccessibleRepos: protectedProcedure
     .input(z.object({ installationId: z.string() }))
     .query(async ({ input, ctx }) => {
+      if (!(await integrationPolicy("github")).enabled)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "GitHub repository integration is disabled",
+        });
       const userId = ctx.session.user.id;
 
       try {
@@ -152,7 +178,7 @@ export const githubRouter = router({
           });
         }
 
-        const repos = await getGitHubAppService().listAccessibleRepos(input.installationId);
+        const repos = await (await getGitHubAppService()).listAccessibleRepos(input.installationId);
 
         return { repos };
       } catch (error) {
@@ -186,8 +212,13 @@ export const githubRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
+      if (input.gitIntegrationId && !(await integrationPolicy("github")).enabled)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "GitHub repository integration is disabled",
+        });
       const userId = ctx.session.user.id;
-      const parsed = getGitHubAppService().parseRepoUrl(input.repositoryUrl);
+      const parsed = parseGitHubRepoUrl(input.repositoryUrl);
 
       if (!parsed) {
         throw new TRPCError({
@@ -198,10 +229,7 @@ export const githubRouter = router({
 
       try {
         if (!input.gitIntegrationId) {
-          const repository = await getGitHubAppService().getPublicRepository(
-            parsed.owner,
-            parsed.repo,
-          );
+          const repository = await getPublicGitHubRepository(parsed.owner, parsed.repo);
 
           return {
             repository: {
@@ -233,10 +261,9 @@ export const githubRouter = router({
           });
         }
 
-        const installation = await getGitHubAppService().getUserInstallation(
-          userId,
-          gitIntegrationRecord.providerInstallationId,
-        );
+        const installation = await (
+          await getGitHubAppService()
+        ).getUserInstallation(userId, gitIntegrationRecord.providerInstallationId);
 
         if (!installation) {
           throw new TRPCError({
@@ -245,11 +272,9 @@ export const githubRouter = router({
           });
         }
 
-        const repository = await getGitHubAppService().getRepository(
-          installation.installationId,
-          parsed.owner,
-          parsed.repo,
-        );
+        const repository = await (
+          await getGitHubAppService()
+        ).getRepository(installation.installationId, parsed.owner, parsed.repo);
 
         return {
           repository: {
@@ -311,6 +336,11 @@ export const githubRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
+      if (!(await integrationPolicy("github")).enabled)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "GitHub repository integration is disabled",
+        });
       const userId = ctx.session.user.id;
 
       try {
@@ -332,11 +362,9 @@ export const githubRouter = router({
           });
         }
 
-        const branches = await getGitHubAppService().listBranches(
-          input.installationId,
-          input.owner,
-          input.repo,
-        );
+        const branches = await (
+          await getGitHubAppService()
+        ).listBranches(input.installationId, input.owner, input.repo);
 
         return { branches };
       } catch (error) {

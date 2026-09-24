@@ -78,6 +78,11 @@ export const workspace = pgTable(
     gitIntegrationId: uuid("git_integration_id").references(() => gitIntegration.id, {
       onDelete: "set null",
     }),
+    /**
+     * Admin-provided (shared) git connection explicitly attached at creation, e.g. `github:shared`
+     * for the deployment PAT. Never applied to workspaces created without consent.
+     */
+    sharedGitConnectionId: text("shared_git_connection_id"),
     googleCloudIntegrationId: uuid("google_cloud_integration_id").references(
       () => googleCloudIntegration.id,
       { onDelete: "set null" },

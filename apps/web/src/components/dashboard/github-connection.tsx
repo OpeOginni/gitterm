@@ -238,14 +238,19 @@ export function GitHubConnection() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const { data, isLoading, refetch } = useQuery(trpc.github.getInstallationStatus.queryOptions());
+  const { data: integrationCatalog } = useQuery(trpc.integrations.list.queryOptions());
+  const { data: appAvailability } = useQuery(trpc.github.appAvailability.queryOptions());
+  const isEnabled =
+    integrationCatalog?.find((integration) => integration.key === "github")?.enabled === true;
   const disconnectMutation = useMutation(trpc.github.disconnectApp.mutationOptions());
   const installations = data?.installations ?? [];
 
   function handleConnect() {
+    if (!appAvailability?.enabled || !appAvailability.configured) return;
     track("github_connected");
     setIsConnecting(true);
     const redirectUrl = `${env.NEXT_PUBLIC_SERVER_URL}/api/github/callback`;
-    window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
+    window.location.href = `https://github.com/apps/${appAvailability.slug ?? GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
   }
 
   async function handleRefresh() {
@@ -308,22 +313,36 @@ export function GitHubConnection() {
               <RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} />
             </button>
           ) : null}
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleConnect}
-            disabled={isConnecting}
-            className="h-9 gap-1.5 bg-primary px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-primary-foreground hover:bg-primary/90"
-          >
-            {isConnecting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Plus className="size-3.5" />
-            )}
-            {installations.length > 0 ? "Add account" : "Connect"}
-          </Button>
+          {appAvailability?.configured ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConnect}
+              disabled={isConnecting || !isEnabled}
+              className="h-9 gap-1.5 bg-primary px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-primary-foreground hover:bg-primary/90"
+            >
+              {isConnecting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )}
+              {installations.length > 0 ? "Add account" : "Connect"}
+            </Button>
+          ) : null}
         </div>
       </header>
+      {isEnabled && appAvailability?.mode === "pat" ? (
+        <p className="rounded-lg border border-line bg-fill p-4 text-xs text-fg-3">
+          Your admin provides GitHub repository access with a shared PAT from @
+          {appAvailability.accountLogin}. Select it when creating a workspace. GitHub sign-in
+          remains separate.
+        </p>
+      ) : null}
+      {isEnabled && appAvailability && !appAvailability.mode ? (
+        <p className="rounded-lg border border-line bg-fill p-4 text-xs text-fg-3">
+          Your admin has not configured repository access yet.
+        </p>
+      ) : null}
 
       <div>
         {isLoading ? (
@@ -342,7 +361,7 @@ export function GitHubConnection() {
               />
             ))}
           </div>
-        ) : (
+        ) : appAvailability?.configured ? (
           <div className="flex flex-col items-center px-6 py-10 text-center">
             <Github className="size-8 text-fg-4" />
             <p className="mt-4 text-sm font-semibold text-fg">No GitHub accounts connected</p>
@@ -351,7 +370,7 @@ export function GitHubConnection() {
               GitTerm can access.
             </p>
           </div>
-        )}
+        ) : null}
       </div>
     </section>
   );

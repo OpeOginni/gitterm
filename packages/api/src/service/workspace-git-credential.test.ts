@@ -1,9 +1,15 @@
-import { afterEach, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import { db } from "@gitterm/db";
 import * as github from "./github";
+import * as githubConfig from "./github/config";
 import { issueWorkspaceGitCredential } from "./workspace-git-credential";
 
 afterEach(() => mock.restore());
+beforeEach(() => {
+  spyOn(db, "select").mockImplementation((() => ({
+    from: () => ({ where: async () => [{ enabled: true }] }),
+  })) as any);
+});
 const ws = {
   id: "workspace",
   userId: "owner",
@@ -55,4 +61,29 @@ test("caller-supplied tokens without a saved integration are not refreshed", asy
   await expect(issueWorkspaceGitCredential({ ...ws, gitIntegrationId: null })).rejects.toThrow(
     "no refreshable",
   );
+});
+
+test("a workspace explicitly selected global PAT is brokered only while running", async () => {
+  const app = spyOn(github, "getGitHubAppService");
+  spyOn(githubConfig, "githubGlobalPat").mockResolvedValue("secret");
+  const patWorkspace = { ...ws, gitIntegrationId: null, sharedGitConnectionId: "github:shared" };
+  const issued = await issueWorkspaceGitCredential(patWorkspace);
+  expect(issued.token).toBe("secret");
+  expect(Date.parse(issued.expiresAt)).toBeGreaterThan(Date.now() + 10 * 60_000);
+  expect(githubConfig.githubGlobalPat).toHaveBeenCalled();
+  expect(app).not.toHaveBeenCalled();
+  await expect(issueWorkspaceGitCredential({ ...patWorkspace, status: "paused" })).rejects.toThrow(
+    "not running",
+  );
+});
+
+test("switching away from a global PAT blocks future credential issuance", async () => {
+  spyOn(githubConfig, "githubGlobalPat").mockResolvedValue(null);
+  await expect(
+    issueWorkspaceGitCredential({
+      ...ws,
+      gitIntegrationId: null,
+      sharedGitConnectionId: "github:shared",
+    }),
+  ).rejects.toThrow("no longer available");
 });

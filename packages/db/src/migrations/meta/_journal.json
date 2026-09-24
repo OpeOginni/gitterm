@@ -225,6 +225,13 @@
       "when": 1790190207453,
       "tag": "0031_api_key_suffix",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790253999383,
+      "tag": "0032_integrations_catalog_and_connections",
+      "breakpoints": true
     }
   ]
 }

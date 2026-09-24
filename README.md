@@ -102,8 +102,14 @@ If your `listener` service is not public, use the proxy form. Exact endpoints ar
 ## GitHub Integration
 
 GitHub integration is optional. It allows users to connect repositories and perform git actions from their workspaces.
+An admin must enable GitHub repository access in **Admin → Integrations** before users can connect.
+The admin chooses a GitHub App (ID, private key, and webhook secret) that users install,
+or an admin-shared fine-grained PAT that users explicitly select when creating a workspace.
+The two modes are mutually exclusive. Neither requires GitHub login: email-only self-hosted
+deployments work with either method. GitHub login remains a separate setting.
 
-Set these env vars on the `server` service:
+Legacy GitHub App environment setup remains supported when no App has been saved in the admin panel.
+Set these env vars on the `server` service if using that legacy route:
 
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY`
@@ -124,9 +130,16 @@ GitHub App setup:
 ## Google Cloud Integration
 
 Google Cloud Workload Identity Federation gives workspaces keyless `gcloud` and ADC access through
-short-lived GitTerm identity assertions. Configure the server's workload-identity signing key, then
-connect a narrowly scoped service account from the Integrations dashboard. See
+short-lived GitTerm identity assertions. An admin enables Google Cloud and generates the
+deployment-wide signing key in **Admin → Integrations**. Users connect narrowly scoped service
+accounts from the Integrations dashboard. Existing deployments may continue using the legacy
+`WORKLOAD_IDENTITY_*` settings until they configure the issuer in the app; the database config
+takes precedence. See
 [`docs/google-workload-identity.md`](docs/google-workload-identity.md) for setup and IAM guidance.
+
+The admin catalog also lists GitLab, Bitbucket, Executor, and other MCPs as planned connectors.
+They cannot be enabled until their dedicated connection flows are implemented. The deployment encryption master key remains in the deployment
+secret manager so that integration secrets stored in the database are encrypted independently.
 
 The complete storage, broker, rotation, audit, and provider threat model is documented in
 [`docs/credential-security.md`](docs/credential-security.md).

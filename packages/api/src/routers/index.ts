@@ -13,6 +13,7 @@ import { anonRouter } from "./anon";
 import { apiTokensRouter } from "./api-tokens";
 import { runRouter } from "./run";
 import { googleCloudRouter } from "./google-cloud";
+import { integrationsRouter } from "./integrations";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -31,6 +32,7 @@ export const appRouter = router({
   apiTokens: apiTokensRouter,
   run: runRouter,
   googleCloud: googleCloudRouter,
+  integrations: integrationsRouter,
 });
 export type AppRouter = typeof appRouter;
 

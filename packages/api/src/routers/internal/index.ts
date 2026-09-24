@@ -921,7 +921,7 @@ export const internalRouter = router({
       if (input.action === "deleted") {
         // User uninstalled the GitHub App from GitHub's side
         // Clean up our database records
-        const githubService = getGitHubAppService();
+        const githubService = await getGitHubAppService();
         const result = await githubService.removeInstallationByInstallationId(input.installationId);
 
         logger.info("GitHub installation deleted via webhook", {

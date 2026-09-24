@@ -3,25 +3,7 @@ import { githubWebhookProcedure, router } from "../../index";
 import { TRPCError } from "@trpc/server";
 import { getInternalClient } from "../../client";
 import { Webhooks } from "@octokit/webhooks";
-import env from "@gitterm/env/server";
-
-// Lazy initialization of Webhooks - only create if secret is configured
-let webhooksInstance: Webhooks | null = null;
-
-function getWebhooks(): Webhooks {
-  if (!webhooksInstance) {
-    const secret = env.GITHUB_WEBHOOK_SECRET;
-    if (!secret || secret.trim() === "") {
-      throw new Error(
-        "GitHub webhooks are not configured. GITHUB_WEBHOOK_SECRET is required but not set.",
-      );
-    }
-    webhooksInstance = new Webhooks({
-      secret,
-    });
-  }
-  return webhooksInstance;
-}
+import { githubWebhookSecret } from "../../service/github/config";
 
 // GitHub installation webhook payload schema - only validate fields we need
 // Use passthrough to allow additional fields GitHub sends
@@ -59,7 +41,7 @@ export const githubWebhookRouter = router({
     .input(githubWebhookPayloadSchema)
     .mutation(async ({ input, ctx }) => {
       // Check if GitHub webhooks are configured
-      const secret = env.GITHUB_WEBHOOK_SECRET;
+      const secret = await githubWebhookSecret();
       if (!secret || secret.trim() === "") {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -67,7 +49,7 @@ export const githubWebhookRouter = router({
         });
       }
 
-      const webhooks = getWebhooks();
+      const webhooks = new Webhooks({ secret });
       const verified = await webhooks.verify(ctx.rawBody, ctx.githubXHubSignature256!);
 
       if (!verified) {

@@ -145,11 +145,9 @@ export async function buildWorkspaceToolingManifestBase64(params: {
   }
 
   try {
-    const tree = await getGitHubAppService().getFileTree(
-      params.installationId,
-      params.owner,
-      params.repo,
-    );
+    const tree = await (
+      await getGitHubAppService()
+    ).getFileTree(params.installationId, params.owner, params.repo);
     const filePaths = tree.filter((item) => item.type === "blob").map((item) => item.path);
     const manifest = detectWorkspaceToolingManifestFromPaths(filePaths, params.owner, params.repo);
     return encodeWorkspaceToolingManifestBase64(manifest);

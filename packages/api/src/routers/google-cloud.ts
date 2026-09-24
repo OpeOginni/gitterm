@@ -2,13 +2,14 @@ import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, db, eq } from "@gitterm/db";
 import { googleCloudIntegration } from "@gitterm/db/schema/integrations";
-import { accountProcedure, protectedProcedure, router } from "../index";
+import { accountProcedure, router } from "../index";
 import {
   googleAudience,
   googlePrincipalSet,
   isWorkloadIdentityAvailable,
   workloadIdentityIssuer,
 } from "../service/workload-identity/google";
+import { integrationPolicy } from "../service/integrations/catalog";
 
 const providerPattern =
   /^projects\/[0-9]+\/locations\/global\/workloadIdentityPools\/[A-Za-z0-9_-]+\/providers\/[A-Za-z0-9_-]+$/;
@@ -27,7 +28,7 @@ const integrationInput = z.object({
   serviceAccountEmail: z.string().trim().toLowerCase().regex(serviceAccountPattern),
 });
 
-function publicIntegration(integration: typeof googleCloudIntegration.$inferSelect) {
+async function publicIntegration(integration: typeof googleCloudIntegration.$inferSelect) {
   return {
     id: integration.id,
     name: integration.name,
@@ -38,7 +39,7 @@ function publicIntegration(integration: typeof googleCloudIntegration.$inferSele
     connectedAt: integration.connectedAt,
     updatedAt: integration.updatedAt,
     setup: {
-      issuer: workloadIdentityIssuer(),
+      issuer: await workloadIdentityIssuer(),
       audience: googleAudience(integration.workloadIdentityProvider),
       attributeMapping: {
         "google.subject": "assertion.sub",
@@ -50,12 +51,17 @@ function publicIntegration(integration: typeof googleCloudIntegration.$inferSele
 }
 
 export const googleCloudRouter = router({
-  availability: accountProcedure("workspace:read").query(() => ({
-    available: isWorkloadIdentityAvailable(),
-  })),
+  availability: accountProcedure("integrations:read").query(async () => {
+    const available =
+      (await integrationPolicy("google")).enabled && (await isWorkloadIdentityAvailable());
+    // The issuer is deployment-wide and public (it is the OIDC discovery URL), so users can
+    // create their Google provider before saving an identity.
+    return { available, issuer: available ? await workloadIdentityIssuer() : null };
+  }),
 
-  list: accountProcedure("workspace:read").query(async ({ ctx }) => {
-    if (!isWorkloadIdentityAvailable()) return [];
+  list: accountProcedure("integrations:read").query(async ({ ctx }) => {
+    if (!(await integrationPolicy("google")).enabled || !(await isWorkloadIdentityAvailable()))
+      return [];
 
     const integrations = await db
       .select()
@@ -66,26 +72,33 @@ export const googleCloudRouter = router({
           eq(googleCloudIntegration.active, true),
         ),
       );
-    return integrations.map(publicIntegration);
+    return Promise.all(integrations.map(publicIntegration));
   }),
 
-  create: protectedProcedure.input(integrationInput).mutation(async ({ input, ctx }) => {
-    // Fail before writing a selectable integration when this deployment cannot issue assertions.
-    workloadIdentityIssuer();
-    const [integration] = await db
-      .insert(googleCloudIntegration)
-      .values({ ...input, userId: ctx.session.user.id })
-      .returning();
-    if (!integration) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to create Google Cloud integration",
-      });
-    }
-    return publicIntegration(integration);
-  }),
+  create: accountProcedure("integrations:write")
+    .input(integrationInput)
+    .mutation(async ({ input, ctx }) => {
+      // Fail before writing a selectable integration when this deployment cannot issue assertions.
+      if (!(await integrationPolicy("google")).enabled || !(await isWorkloadIdentityAvailable())) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Google Cloud is not enabled and configured by an admin",
+        });
+      }
+      const [integration] = await db
+        .insert(googleCloudIntegration)
+        .values({ ...input, userId: ctx.session.user.id })
+        .returning();
+      if (!integration) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create Google Cloud integration",
+        });
+      }
+      return publicIntegration(integration);
+    }),
 
-  remove: protectedProcedure
+  remove: accountProcedure("integrations:write")
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       const [removed] = await db
