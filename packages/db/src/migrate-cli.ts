@@ -13,6 +13,9 @@
  *
  * Waits for the database to accept connections and holds an advisory lock for
  * the duration, so multiple replicas booting together do not race.
+ *
+ * The SQL folder defaults to ./migrations next to this file; when bundled into
+ * another location (the server image), point DB_MIGRATIONS_DIR at it instead.
  */
 import { resolve } from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -26,7 +29,9 @@ import {
 
 const SCRIPT = "migrate";
 const { url } = loadDatabaseUrl(SCRIPT);
-const migrationsFolder = resolve(import.meta.dir, "./migrations");
+const migrationsFolder = process.env.DB_MIGRATIONS_DIR
+  ? resolve(process.env.DB_MIGRATIONS_DIR)
+  : resolve(import.meta.dir, "./migrations");
 
 const pool = createBootstrapPool(url);
 

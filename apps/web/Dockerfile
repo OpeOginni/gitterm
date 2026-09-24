@@ -8,6 +8,8 @@ COPY apps ./apps
 
 RUN bun install --frozen-lockfile
 
+# Placeholder values baked into the client bundle; docker-entrypoint.sh swaps
+# them for the real NEXT_PUBLIC_* values at container start.
 ENV NEXT_PUBLIC_ENABLE_BILLING=__NEXT_PUBLIC_ENABLE_BILLING__
 ENV NEXT_PUBLIC_ENABLE_EMAIL_AUTH=__NEXT_PUBLIC_ENABLE_EMAIL_AUTH__
 ENV NEXT_PUBLIC_ENABLE_GITHUB_AUTH=__NEXT_PUBLIC_ENABLE_GITHUB_AUTH__
@@ -29,10 +31,12 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
 
-COPY --from=builder /app/package.json /app/bun.lock ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/apps/web ./apps/web
+# Next.js standalone output (next.config.ts: output "standalone") contains the
+# server plus only the traced runtime dependencies. Static assets and public
+# files are not included by default and are copied alongside.
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY ./apps/web/docker-entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh
@@ -42,4 +46,4 @@ WORKDIR /app/apps/web
 EXPOSE 8080
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["sh", "-c", "bun run next start --hostname ${HOSTNAME} --port ${PORT}"]
+CMD ["bun", "run", "server.js"]

@@ -21,33 +21,18 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=8080
+ENV DB_MIGRATIONS_DIR=/app/migrations
 
-# Copy root package files and node_modules
-COPY --from=builder /app/package.json /app/bun.lock ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/turbo.json ./turbo.json
-
-# Copy only packages needed for db scripts (auth, db, env, config)
-COPY --from=builder /app/packages/db ./packages/db
-COPY --from=builder /app/packages/auth ./packages/auth
-COPY --from=builder /app/packages/env ./packages/env
-COPY --from=builder /app/packages/config ./packages/config
-COPY --from=builder /app/packages/schema ./packages/schema
-
-# Copy built server output
-COPY --from=builder /app/apps/server/dist ./apps/server/dist
-COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
-
-# Copy entrypoint script
+# The server and its bootstrap scripts (migrate, seed, seed-admin) are fully
+# bundled by tsdown, so no node_modules are needed at runtime. Only the SQL
+# migration files are copied alongside.
+COPY --from=builder /app/apps/server/dist ./dist
+COPY --from=builder /app/packages/db/src/migrations ./migrations
 COPY --from=builder /app/apps/server/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
 # Expose port (configurable via PORT env)
 EXPOSE 8080
 
-# ============================================================================
 # Migrations, seeding, and admin setup run in docker-entrypoint.sh
-# ============================================================================
-
-# Use entrypoint to start the server
 ENTRYPOINT ["./docker-entrypoint.sh"]

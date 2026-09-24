@@ -65,8 +65,10 @@ To run these steps yourself instead (for example as a release job before rolling
 
 ```bash
 docker compose -f docker-compose.selfhost.yml run --rm --no-deps server \
-  sh -c 'cd /app/packages/db && bun run db:migrate:prod && bun run db:seed:prod'
+  sh -c 'bun run dist/scripts/migrate.mjs --prod && bun run dist/scripts/seed.mjs --prod'
 ```
+
+From a checkout, the equivalents are `bun run db:migrate:prod` and `bun run db:seed:prod`.
 
 `DB_WAIT_TIMEOUT_MS` (default `60000`) controls how long the steps wait for the database before giving up.
 

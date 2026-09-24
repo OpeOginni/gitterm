@@ -1,6 +1,11 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Emit a self-contained server (.next/standalone) so the Docker image only
+  // ships traced runtime dependencies instead of the whole monorepo node_modules.
+  output: "standalone",
+  outputFileTracingRoot: path.join(__dirname, "../../"),
   typedRoutes: true,
   reactCompiler: true,
   typescript: {

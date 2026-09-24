@@ -22,23 +22,22 @@ if is_true "${SKIP_MIGRATIONS:-}"; then
   echo "[entrypoint] SKIP_MIGRATIONS set, skipping migrations"
 else
   echo "[entrypoint] Running migrations..."
-  (cd /app/packages/db && bun run db:migrate:prod)
+  bun run /app/dist/scripts/migrate.mjs --prod
 fi
 
 if is_true "${SKIP_SEED:-}"; then
   echo "[entrypoint] SKIP_SEED set, skipping seed"
 else
   echo "[entrypoint] Running seed..."
-  (cd /app/packages/db && bun run db:seed:prod)
+  bun run /app/dist/scripts/seed.mjs --prod
 fi
 
 if is_true "${SKIP_ADMIN_SEED:-}"; then
   echo "[entrypoint] SKIP_ADMIN_SEED set, skipping admin seed"
 else
   echo "[entrypoint] Running admin seed..."
-  (cd /app/apps/server && bun run db:seed-admin:prod)
+  bun run /app/dist/scripts/seed-admin.mjs
 fi
 
 echo "[entrypoint] Starting server..."
-cd /app/apps/server
-exec bun run dist/src/index.mjs
+exec bun run /app/dist/src/index.mjs
