@@ -32,6 +32,44 @@ The fastest way to self-host:
 3. If you want subdomain routing, give the `proxy` service a wildcard domain like `*.your-domain.com`.
 4. Configure your workspace providers in the admin panel before users create workspaces.
 
+## Deploy with Docker Compose
+
+`docker-compose.selfhost.yml` runs the whole stack from the published GHCR images behind the Caddy proxy:
+
+```bash
+cp .env.selfhost.example .env.selfhost
+# fill in PUBLIC_URL, POSTGRES_PASSWORD and the secrets (openssl rand -hex 32)
+docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d
+```
+
+Open `PUBLIC_URL` (default `http://localhost:8888`) and sign in with `ADMIN_EMAIL`/`ADMIN_PASSWORD`. Pin a release with `GITTERM_IMAGE_TAG=vX.Y.Z`, or add `--build` to build from source.
+
+`ROUTING_MODE` picks how workspaces are exposed (see [Routing](#routing)):
+
+- `path` (default): everything on one origin, `PUBLIC_URL/ws/<workspace>/`. Works with a single A record and one certificate.
+- `subdomain`: `<port>-<workspace>.<PUBLIC_HOST>`. Point a wildcard DNS record (`*.your-domain.com`) at the host and terminate TLS with a wildcard certificate in front of the `proxy` service (any reverse proxy with a DNS-01 ACME challenge, or Cloudflare, works). The proxy itself listens on plain HTTP.
+
+`docker-compose.yml` (no suffix) is different: it only starts Postgres and Redis for local development, where the apps run natively. See `CONTRIBUTING.md`.
+
+### Database migrations and seeding
+
+The `server` image prepares the database itself on every start (`apps/server/docker-entrypoint.sh`), in order:
+
+1. **Migrations**: applies the committed SQL in `packages/db/src/migrations` and records progress in `drizzle.__drizzle_migrations`.
+2. **Seed**: upserts the provider, agent, image, region and model catalogs.
+3. **Admin seed**: creates or updates the `ADMIN_EMAIL` account.
+
+Every step waits for Postgres to accept connections and holds a Postgres advisory lock, so running several `server` replicas is safe: the first one does the work and the others wait, then find nothing to do. A failure in any step aborts startup so a half-migrated server never serves traffic.
+
+To run these steps yourself instead (for example as a release job before rolling the fleet), set `SKIP_MIGRATIONS=true`, `SKIP_SEED=true` and/or `SKIP_ADMIN_SEED=true` on the `server` service and run the same commands from the image or a checkout with `DATABASE_URL` set:
+
+```bash
+docker compose -f docker-compose.selfhost.yml run --rm --no-deps server \
+  sh -c 'cd /app/packages/db && bun run db:migrate:prod && bun run db:seed:prod'
+```
+
+`DB_WAIT_TIMEOUT_MS` (default `60000`) controls how long the steps wait for the database before giving up.
+
 ## Services
 
 Required services:
@@ -154,12 +192,13 @@ Common commands:
 bun run dev
 bun run build
 bun run check-types
-bun run db:push
 bun run db:studio:dev
-bun run db:generate
-bun run db:migrate:dev
+bun run db:generate     # write a new SQL migration after editing packages/db/src/schema
+bun run db:migrate:dev  # apply committed migrations to the local docker postgres
 bun run db:seed:dev
 ```
+
+Schema changes ship as migrations: edit the schema, run `db:generate`, commit the new files under `packages/db/src/migrations`, and `db:migrate:*` applies them. `bun run db:push` syncs the schema directly without writing a migration; it is fine for throwaway local databases but will drift from the journal, so do not use it against a database you intend to migrate later.
 
 ## Links
 
