@@ -48,8 +48,14 @@ describe("managed runtime smoke options", () => {
 });
 
 test("each workspace selects the matching adapter and setup, with automatic expiry", () => {
-  const input = workspaceInput("e2b", options, settings, "smoke");
+  const input = workspaceInput(
+    "e2b",
+    options,
+    { ...settings, connections: ["github:shared"] },
+    "smoke",
+  );
   expect(input.provider).toEqual({ type: "e2b" });
+  expect(input.connections).toEqual(["github:shared"]);
   expect(input.setup?.beforeAgent).toEqual([beforeAgent()]);
   expect(input.setup?.afterAgent?.[0]).toContain("smoke-version=");
   expect(input.autoTerminateAfterMs).toBeGreaterThan(

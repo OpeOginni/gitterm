@@ -31,7 +31,7 @@ The go-to local smoke test for the hosted providers is:
 GITTERM_E2E_TIMEOUT_MS=360000 GITTERM_SERVER_URL=http://localhost:3000 GITTERM_API_TOKEN=<your-token> GITTERM_E2E_REPO=https://github.com/OpeOginni/opencode-copilot-auto bun run test:providers --provider railway,e2b,daytona,vercel
 ```
 
-Replace `<your-token>` with a valid GitTerm API token. The server must be running at `http://localhost:3000`, and the local proxy, listener, and tunnel requirements above still apply when cloud providers need to reach the local server.
+Replace `<your-token>` with a valid GitTerm API token that includes `integrations:read` as well as the workspace, run, and credential scopes needed by the smoke test. The server must be running at `http://localhost:3000`, and the local proxy, listener, and tunnel requirements above still apply when cloud providers need to reach the local server.
 
 For a staging deployment, set the same values as exports and choose the providers explicitly:
 
@@ -52,7 +52,11 @@ export GITTERM_E2E_AGENT=opencode
 export GITTERM_E2E_MODEL=opencode/gpt-5.6-luna
 export GITTERM_E2E_TIMEOUT_MS=240000
 export GITTERM_E2E_RUN_TIMEOUT_MS=1800000
+# Optional: attach connections returned by client.integrations.connections.list().
+export GITTERM_E2E_CONNECTION_IDS=github:shared,<google-connection-id>
 ```
+
+The managed smoke runners use the SDK to read the enabled integration catalog and list connections. If `GITTERM_E2E_CONNECTION_IDS` is set, they verify each selected connection with `connections.get()` and attach it to every test workspace. Select at most one per integration and ensure the selected GitHub connection can access `GITTERM_E2E_REPO`. The runtime smoke runner does not allow a GitHub connection together with `GITTERM_E2E_REPO_TOKEN`. Leave the variable unset to test public repositories without attaching an integration.
 
 Providers run sequentially to limit cost. Every workspace receives a unique idempotency key and is terminated in a `finally` block after a normal test failure. The summary reports cleanup failures separately so leaked resources are visible.
 

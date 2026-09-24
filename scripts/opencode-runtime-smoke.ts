@@ -11,6 +11,7 @@
  * managed server, not here. Unavailable providers fail rather than silently skip.
  * Uses opencode/gpt-5.6-luna; override with --model or GITTERM_E2E_MODEL.
  * GITTERM_MODEL_API_KEY optionally supplies an inline model credential.
+ * GITTERM_E2E_CONNECTION_IDS optionally attaches comma-separated SDK connection IDs.
  * Canonical images and provider templates install OpenCode 2 from @opencode/cli.
  * Every matrix entry gets its own workspace, terminated even on test failure.
  */
@@ -25,6 +26,7 @@ import {
   type ProviderKey,
   type WorkspaceCreateInput,
 } from "../packages/sdk/src/index.ts";
+import { smokeConnections } from "./smoke-connections";
 
 export const PROVIDERS = [
   "railway",
@@ -87,6 +89,7 @@ type Settings = {
   repo: string;
   branch?: string;
   repositoryCredentials?: WorkspaceCreateInput["repositoryCredentials"];
+  connections?: WorkspaceCreateInput["connections"];
   models: WorkspaceCreateInput["models"];
   setupTimeoutMs: number;
   runTimeoutMs: number;
@@ -129,6 +132,7 @@ export function workspaceInput(
     repo: settings.repo,
     branch: settings.branch,
     repositoryCredentials: settings.repositoryCredentials,
+    connections: settings.connections,
     agent: "opencode",
     provider: { type: provider },
     models: settings.models,
@@ -313,7 +317,8 @@ Usage: bun run scripts/opencode-runtime-smoke.ts [options]
   --verbose                  Log managed run events
 Requires GITTERM_SERVER_URL, GITTERM_API_TOKEN, GITTERM_E2E_REPO in scripts/.env.
 Optional: GITTERM_MODEL_API_KEY, GITTERM_E2E_BRANCH, GITTERM_E2E_REPO_TOKEN,
-GITTERM_E2E_REPO_USERNAME, GITTERM_E2E_TIMEOUT_MS, GITTERM_E2E_RUN_TIMEOUT_MS.`);
+ GITTERM_E2E_REPO_USERNAME, GITTERM_E2E_CONNECTION_IDS (comma-separated),
+ GITTERM_E2E_TIMEOUT_MS, GITTERM_E2E_RUN_TIMEOUT_MS.`);
     return;
   }
   const matrix = options.providers;
@@ -331,10 +336,15 @@ GITTERM_E2E_REPO_USERNAME, GITTERM_E2E_TIMEOUT_MS, GITTERM_E2E_RUN_TIMEOUT_MS.`)
   const username = process.env.GITTERM_E2E_REPO_USERNAME?.trim();
   if (username && !repoToken)
     throw new Error("GITTERM_E2E_REPO_USERNAME requires GITTERM_E2E_REPO_TOKEN");
+  const connections = await smokeConnections(client);
+  if (repoToken && connections.some((connection) => connection.integration === "github")) {
+    throw new Error("Select either a GitHub connection or GITTERM_E2E_REPO_TOKEN, not both");
+  }
   const settings: Settings = {
     repo: requiredEnv("GITTERM_E2E_REPO"),
     branch: process.env.GITTERM_E2E_BRANCH?.trim() || undefined,
     repositoryCredentials: repoToken ? { token: repoToken, username } : undefined,
+    connections: connections.map((connection) => connection.id),
     models: modelApiKey
       ? { providers: { [modelProvider]: { source: "apiKey", apiKey: modelApiKey } } }
       : undefined,

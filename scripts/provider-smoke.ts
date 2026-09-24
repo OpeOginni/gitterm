@@ -5,7 +5,10 @@ import {
   type ProviderKey,
   type WorkspaceProviderSelection,
 } from "../packages/sdk/src/index.ts";
+import { smokeConnections } from "./smoke-connections";
 
+// Optionally set GITTERM_E2E_CONNECTION_IDS to comma-separated IDs from the SDK connection list.
+// Omit it to exercise discovery without attaching credentials to smoke workspaces.
 dotenv.config({ path: join(import.meta.dir, ".env") });
 
 const PROVIDERS = [
@@ -197,6 +200,11 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
   console.log(`\n${provider}`);
   try {
     await step(result.steps, "authenticate SDK", () => client.auth.status());
+    const connections = (
+      await step(result.steps, "validate SDK integration connections", () =>
+        smokeConnections(client),
+      )
+    ).map((connection) => connection.id);
     const savedCredentials = await step(
       result.steps,
       "select saved model credentials",
@@ -268,6 +276,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
         idempotencyKey: `provider-smoke-${provider}-${runId}`,
         name: `e2e-${provider}-${runId}`,
         repo,
+        connections,
         agent,
         provider: { type: provider } as WorkspaceProviderSelection,
         models,
