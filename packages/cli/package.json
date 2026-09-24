@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/cli",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "description": "Complete suit of gitterm tools in one CLI",
   "keywords": [
     "gitterm",
