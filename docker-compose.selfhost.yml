@@ -1,0 +1,199 @@
+# =============================================================================
+# GitTerm — self-hosted stack
+# =============================================================================
+# Runs the full platform (Postgres, Redis, API server, listener, worker, web,
+# and the Caddy edge proxy) from the published GHCR images.
+#
+# ROUTING_MODE=path (default) serves everything from one origin, no DNS setup.
+# ROUTING_MODE=subdomain serves workspaces at <port>-<workspace>.<PUBLIC_HOST>
+# and needs wildcard DNS (*.PUBLIC_HOST) plus a wildcard TLS certificate on
+# whatever terminates TLS in front of the proxy service.
+#
+#   cp .env.selfhost.example .env.selfhost   # then fill in the secrets
+#   docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d
+#
+# Migrations, catalog seed and admin bootstrap run automatically inside the
+# server container on every start (see apps/server/docker-entrypoint.sh).
+# Set SKIP_MIGRATIONS/SKIP_SEED/SKIP_ADMIN_SEED=true to manage them yourself.
+#
+# To build from source instead of pulling images:
+#   docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d --build
+#
+# NOTE: docker-compose.yml (no suffix) is the infra-only file used for local
+# development against natively-run apps. This file is independent of it.
+# =============================================================================
+
+name: gitterm-selfhost
+
+x-internal-env: &internal-env
+  SERVER_URL: http://server:8080/api
+  INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
+  DEPLOYMENT_MODE: self-hosted
+  NODE_ENV: production
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gitterm}
+      POSTGRES_USER: ${POSTGRES_USER:-gitterm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  server:
+    image: ${GITTERM_IMAGE_PREFIX:-ghcr.io/opeoginni/gitterm}-server:${GITTERM_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *internal-env
+      PORT: 8080
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gitterm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gitterm}
+      REDIS_URL: redis://redis:6379
+      ROUTING_MODE: ${ROUTING_MODE:-path}
+
+      BASE_URL: ${PUBLIC_URL:?PUBLIC_URL is required}
+      BASE_DOMAIN: ${PUBLIC_HOST:?PUBLIC_HOST is required}
+      CORS_ORIGIN: ${PUBLIC_URL}
+      BETTER_AUTH_URL: ${PUBLIC_URL}/api
+      API_URL: ${PUBLIC_URL}/api
+      WORKSPACE_API_URL: ${PUBLIC_URL}/api/trpc
+      DEVICE_CODE_VERIFICATION_URI: ${PUBLIC_URL}/verify
+
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      WORKSPACE_JWT_SECRET: ${WORKSPACE_JWT_SECRET:?WORKSPACE_JWT_SECRET is required}
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:?ENCRYPTION_MASTER_KEY is required}
+
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ENABLE_EMAIL_AUTH: ${ENABLE_EMAIL_AUTH:-true}
+      ENABLE_GITHUB_AUTH: ${ENABLE_GITHUB_AUTH:-false}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+
+      ENABLE_IDLE_REAPING: ${ENABLE_IDLE_REAPING:-true}
+
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-auto}
+      EMAIL_FROM: ${EMAIL_FROM:-GitTerm <no-reply@example.com>}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+
+      SKIP_MIGRATIONS: ${SKIP_MIGRATIONS:-false}
+      SKIP_SEED: ${SKIP_SEED:-false}
+      SKIP_ADMIN_SEED: ${SKIP_ADMIN_SEED:-false}
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://localhost:8080/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+
+  listener:
+    image: ${GITTERM_IMAGE_PREFIX:-ghcr.io/opeoginni/gitterm}-listener:${GITTERM_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/listener/Dockerfile
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      <<: *internal-env
+      PORT: 8080
+      BASE_DOMAIN: ${PUBLIC_HOST}
+      CORS_ORIGIN: ${PUBLIC_URL}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+    restart: unless-stopped
+
+  worker:
+    image: ${GITTERM_IMAGE_PREFIX:-ghcr.io/opeoginni/gitterm}-worker:${GITTERM_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      <<: *internal-env
+      ENABLE_IDLE_REAPING: ${ENABLE_IDLE_REAPING:-true}
+    restart: unless-stopped
+
+  web:
+    image: ${GITTERM_IMAGE_PREFIX:-ghcr.io/opeoginni/gitterm}-web:${GITTERM_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_BASE_DOMAIN: ${PUBLIC_HOST}
+      NEXT_PUBLIC_SERVER_URL: ${PUBLIC_URL}/api
+      NEXT_PUBLIC_AUTH_URL: ${PUBLIC_URL}
+      NEXT_PUBLIC_LISTENER_URL: ${PUBLIC_URL}/listener
+      NEXT_PUBLIC_ROUTING_MODE: ${ROUTING_MODE:-path}
+      NEXT_PUBLIC_ENABLE_BILLING: "false"
+      NEXT_PUBLIC_ENABLE_EMAIL_AUTH: ${ENABLE_EMAIL_AUTH:-true}
+      NEXT_PUBLIC_ENABLE_GITHUB_AUTH: ${ENABLE_GITHUB_AUTH:-false}
+      NEXT_PUBLIC_GITHUB_APP_NAME: ${GITHUB_APP_NAME:-}
+    restart: unless-stopped
+
+  proxy:
+    image: ${GITTERM_IMAGE_PREFIX:-ghcr.io/opeoginni/gitterm}-proxy:${GITTERM_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/proxy/Dockerfile
+    depends_on:
+      - server
+      - web
+      - listener
+    ports:
+      - "${GITTERM_PORT:-8888}:80"
+    environment:
+      ROUTING_MODE: ${ROUTING_MODE:-path}
+      BASE_DOMAIN: ${PUBLIC_HOST}
+      WEB_URL: web:8080
+      SERVER_URL: server:8080
+      LISTENER_URL: listener:8080
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

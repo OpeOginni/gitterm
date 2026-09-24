@@ -1,6 +1,17 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
+// Set by apps/web/Dockerfile. Emits a self-contained server (.next/standalone) so
+// the image ships only traced runtime dependencies instead of the whole monorepo
+// node_modules. Kept opt-in because moving the tracing root also moves Turbopack's
+// root, which breaks Tailwind's `@import "tailwindcss"` resolution in `next dev`
+// (vercel/next.js#98023).
+const standalone = process.env.NEXT_STANDALONE === "1";
+
 const nextConfig: NextConfig = {
+  ...(standalone
+    ? { output: "standalone", outputFileTracingRoot: path.join(__dirname, "../../") }
+    : {}),
   typedRoutes: true,
   reactCompiler: true,
   typescript: {
