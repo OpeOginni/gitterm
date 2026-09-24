@@ -198,9 +198,9 @@ export function GoogleCloudConnection() {
         <div className="flex justify-center py-10">
           <Loader2 className="size-5 animate-spin text-fg-4" />
         </div>
-      ) : !isAvailable || error ? (
+      ) : error ? (
         <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-200">
-          Google Cloud is not enabled and configured by this deployment’s admin.
+          Couldn’t load your Google Cloud identities. Try again in a moment.
         </div>
       ) : integrations.length ? (
         <div className="grid gap-4">

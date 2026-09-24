@@ -331,12 +331,6 @@ export function GitHubConnection() {
           ) : null}
         </div>
       </header>
-      {!isEnabled && integrationCatalog ? (
-        <p className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-4 text-xs text-amber-200">
-          GitHub repository access is not enabled by this deployment’s admin. GitHub sign-in is
-          separate.
-        </p>
-      ) : null}
       {isEnabled && appAvailability?.mode === "pat" ? (
         <p className="rounded-lg border border-line bg-fill p-4 text-xs text-fg-3">
           Your admin provides GitHub repository access with a shared PAT from @

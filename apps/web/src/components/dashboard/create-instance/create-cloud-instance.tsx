@@ -509,46 +509,44 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </p>
         </div>
 
-        {/* ── 3d. Google Cloud workload identity ── */}
-        <div className="grid gap-1.5">
-          <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            Google Cloud Identity
-            <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-              <ArrowUpRight className="h-3 w-3" />
-            </Link>
-          </Label>
-          <div className="flex items-center gap-2">
-            <Select
-              value={googleCloudIntegrationId}
-              onValueChange={setGoogleCloudIntegrationId}
-              disabled={!isGoogleCloudAvailable || googleCloudIntegrations.length === 0}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue
-                  placeholder={
-                    !isGoogleCloudAvailable
-                      ? "Unavailable on this deployment"
-                      : googleCloudIntegrations.length
-                        ? "Select service account"
-                        : "No integrations"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {googleCloudIntegrations.map((integration) => (
-                  <SelectItem key={integration.id} value={integration.id}>
-                    {integration.name} · {integration.projectId}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <HelpHint label="How is Google Cloud authenticated?">
-              GitTerm exchanges a five-minute workspace identity through Google Workload Identity
-              Federation. No service-account JSON key is stored.
-            </HelpHint>
+        {/* ── 3d. Google Cloud workload identity (only when the admin has enabled it) ── */}
+        {isGoogleCloudAvailable ? (
+          <div className="grid gap-1.5">
+            <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              Google Cloud Identity
+              <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </Label>
+            <div className="flex items-center gap-2">
+              <Select
+                value={googleCloudIntegrationId}
+                onValueChange={setGoogleCloudIntegrationId}
+                disabled={googleCloudIntegrations.length === 0}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue
+                    placeholder={
+                      googleCloudIntegrations.length ? "Select service account" : "No integrations"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {googleCloudIntegrations.map((integration) => (
+                    <SelectItem key={integration.id} value={integration.id}>
+                      {integration.name} · {integration.projectId}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <HelpHint label="How is Google Cloud authenticated?">
+                GitTerm exchanges a five-minute workspace identity through Google Workload Identity
+                Federation. No service-account JSON key is stored.
+              </HelpHint>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {/* ── 3. Agent + Cloud (+ Region) ── */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
