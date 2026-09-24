@@ -10,6 +10,9 @@ import { TRPCError } from "@trpc/server";
 import { getModelCredentialsService } from "../../service/credentials/model-credentials";
 import { GitHubCopilotOAuthService } from "../../service/credentials/oauth/github-copilot";
 import { OpenAIOAuthService } from "../../service/credentials/oauth/openai-oauth";
+import { OpencodeConsoleOAuthService } from "../../service/credentials/oauth/opencode-console";
+import { XaiOAuthService } from "../../service/credentials/oauth/xai-oauth";
+import { getModelProviderDefinition, MODEL_PROVIDERS } from "@gitterm/schema/model-providers";
 
 const credentialsService = getModelCredentialsService();
 
@@ -22,16 +25,25 @@ export const modelCredentialsRouter = router({
   listProviders: publicProcedure.query(async () => {
     const providers = await credentialsService.listProviders();
     return {
-      providers: providers.map((p) => ({
-        id: p.id,
-        name: p.name,
-        logicalProviderKey: p.logicalProviderKey,
-        displayName: p.displayName,
-        authType: p.authType,
-        plugin: p.plugin,
-        hasOAuthConfig: !!p.oauthConfig,
-        isRecommended: p.isRecommended,
-      })),
+      providers: providers.map((p) => {
+        const definition = getModelProviderDefinition(p.name);
+        return {
+          id: p.id,
+          name: p.name,
+          logicalProviderKey: p.logicalProviderKey,
+          displayName: p.displayName,
+          authType: p.authType,
+          plugin: p.plugin,
+          hasOAuthConfig: !!p.oauthConfig,
+          isRecommended: p.isRecommended,
+          featured: definition?.featured ?? false,
+          order: definition ? MODEL_PROVIDERS.indexOf(definition) : MODEL_PROVIDERS.length,
+          description: definition?.description ?? null,
+          keyUrl: definition?.keyUrl ?? null,
+          keyPlaceholder: definition?.keyPlaceholder ?? null,
+          fields: definition?.fields ?? [],
+        };
+      }),
     };
   }),
 
@@ -58,6 +70,7 @@ export const modelCredentialsRouter = router({
       z.object({
         providerName: z.string().min(1),
         apiKey: z.string().min(1),
+        fields: z.record(z.string(), z.string().max(200)).optional(),
         label: z.string().trim().min(1, "Label is required").max(100),
       }),
     )
@@ -72,6 +85,7 @@ export const modelCredentialsRouter = router({
           userId,
           providerName: input.providerName,
           apiKey: input.apiKey,
+          fields: input.fields,
           label: input.label,
         });
 
@@ -240,6 +254,16 @@ export const modelCredentialsRouter = router({
           return { success: true, flowType: "device_code" as const, ...deviceCode };
         }
 
+        if (provider.plugin === "opencode-console") {
+          const deviceCode = await OpencodeConsoleOAuthService.initiateDeviceCode();
+          return { success: true, flowType: "device_code" as const, ...deviceCode };
+        }
+
+        if (provider.plugin === "xai-oauth") {
+          const deviceCode = await XaiOAuthService.initiateDeviceCode();
+          return { success: true, flowType: "device_code" as const, ...deviceCode };
+        }
+
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: `OAuth plugin not implemented for provider: ${input.providerName}`,
@@ -327,6 +351,35 @@ export const modelCredentialsRouter = router({
             refreshToken: tokens.refreshToken,
             accessToken: tokens.accessToken,
             expiresAt: tokens.expiresAt,
+            accountId: tokens.accountId,
+            label: input.label,
+          });
+          return { status: "success" as const };
+        }
+
+        if (provider.plugin === "opencode-console" || provider.plugin === "xai-oauth") {
+          const tokens:
+            | {
+                refreshToken: string;
+                accessToken: string;
+                expiresAt: number;
+                metadata?: Record<string, string>;
+              }
+            | null
+            | "slow_down" =
+            provider.plugin === "opencode-console"
+              ? await OpencodeConsoleOAuthService.pollDeviceCode(input.deviceCode)
+              : await XaiOAuthService.pollDeviceCode(input.deviceCode);
+          if (!tokens) return { status: "pending" as const };
+          if (tokens === "slow_down") return { status: "slow_down" as const };
+
+          await credentialsService.storeOAuthTokens({
+            userId,
+            providerName: input.providerName,
+            refreshToken: tokens.refreshToken,
+            accessToken: tokens.accessToken,
+            expiresAt: tokens.expiresAt,
+            metadata: tokens.metadata,
             label: input.label,
           });
           return { status: "success" as const };

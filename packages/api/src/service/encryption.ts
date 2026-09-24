@@ -180,6 +180,8 @@ export class EncryptionService {
 export interface ApiKeyCredential {
   type: "api_key";
   apiKey: string;
+  /** Non-secret provider values, such as a Cloudflare account ID. */
+  metadata?: Record<string, string>;
 }
 
 export interface OAuthCredential {
@@ -189,6 +191,8 @@ export interface OAuthCredential {
   expires?: number;
   enterpriseUrl?: string;
   accountId?: string;
+  /** Provider account details OpenCode keeps with the token, such as an OpenCode org. */
+  metadata?: Record<string, string>;
 }
 
 let encryptionService: EncryptionService | null = null;

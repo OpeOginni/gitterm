@@ -57,3 +57,12 @@ test("missing, ambiguous labels and unknown providers fail instead of falling ba
     selectWorkspaceCredentials({ providers: { invalid: { source: "default" } } }, providers, saved),
   ).toThrow("MODEL_CREDENTIAL_INVALID");
 });
+test("inline keys are refused for providers that need extra settings", () => {
+  expect(() =>
+    selectWorkspaceCredentials(
+      { providers: { azure: { source: "apiKey", apiKey: "key" } } },
+      [{ name: "azure", logicalProviderKey: "azure", authType: "api_key" }],
+      [],
+    ),
+  ).toThrow("needs extra settings");
+});

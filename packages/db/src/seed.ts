@@ -11,6 +11,7 @@ import {
 import { modelProvider } from "./schema/model-credentials";
 import { providerType, providerConfigField } from "./schema/provider-config";
 import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
+import { MODEL_PROVIDERS } from "@gitterm/schema/model-providers";
 
 /**
  * Seed data definitions
@@ -446,72 +447,14 @@ const seedRegions = [
 // Model Providers Seed Data
 // =========================================================================
 
-const seedModelProviders = [
-  {
-    name: "anthropic",
-    displayName: "Anthropic",
-    authType: "api_key",
-    plugin: null,
-    oauthConfig: null,
+const modelProviderOAuthConfig: Record<string, Record<string, string>> = {
+  "github-copilot": {
+    clientId: "Iv1.b507a08c87ecfe98",
+    deviceCodeUrl: "https://github.com/login/device/code",
+    accessTokenUrl: "https://github.com/login/oauth/access_token",
+    copilotTokenUrl: "https://api.github.com/copilot_internal/v2/token",
   },
-  {
-    name: "openai",
-    displayName: "OpenAI",
-    authType: "api_key",
-    plugin: null,
-    oauthConfig: null,
-  },
-  {
-    name: "google",
-    displayName: "Google AI",
-    authType: "api_key",
-    plugin: null,
-    oauthConfig: null,
-  },
-  {
-    name: "opencode",
-    displayName: "OpenCode Zen",
-    authType: "api_key",
-    plugin: null,
-    oauthConfig: null,
-    isRecommended: true,
-  },
-  // Separate OpenCode provider ID (`opencode-go`, zen/go/v1); a Zen key does not select Go models.
-  {
-    name: "opencode-go",
-    displayName: "OpenCode Go",
-    authType: "api_key",
-    plugin: null,
-    oauthConfig: null,
-    isRecommended: true,
-  },
-  {
-    name: "github-copilot",
-    displayName: "GitHub Copilot",
-    authType: "oauth",
-    plugin: "copilot-auth",
-    oauthConfig: {
-      clientId: "Iv1.b507a08c87ecfe98",
-      deviceCodeUrl: "https://github.com/login/device/code",
-      accessTokenUrl: "https://github.com/login/oauth/access_token",
-      copilotTokenUrl: "https://api.github.com/copilot_internal/v2/token",
-    },
-  },
-  {
-    name: "openai-oauth",
-    displayName: "OpenAI",
-    authType: "oauth",
-    plugin: "oauth",
-    isRecommended: true,
-  },
-  {
-    name: "zai-coding-plan",
-    displayName: "Zai Coding Plan",
-    authType: "api_key",
-    plugin: null,
-    oauthConfig: null,
-  },
-];
+};
 
 /**
  * Seed the database with initial data
@@ -838,27 +781,27 @@ export async function seedDatabase(): Promise<void> {
     console.log('[seed]   Renamed model provider "openai-codex" to "openai-oauth"');
   }
 
-  for (const provider of seedModelProviders) {
+  for (const provider of MODEL_PROVIDERS) {
     const existing = await db.query.modelProvider.findFirst({
       where: eq(modelProvider.name, provider.name),
     });
+    const values = {
+      displayName: provider.displayName,
+      logicalProviderKey: provider.logicalProviderKey,
+      authType: provider.authType,
+      plugin: provider.plugin,
+      isRecommended: provider.isRecommended ?? false,
+    };
 
     if (existing) {
-      await db
-        .update(modelProvider)
-        .set({ logicalProviderKey: provider.name === "openai-oauth" ? "openai" : provider.name })
-        .where(eq(modelProvider.id, existing.id));
-      console.log(`[seed]   Model provider "${provider.name}" already exists`);
+      await db.update(modelProvider).set(values).where(eq(modelProvider.id, existing.id));
+      console.log(`[seed]   Synced model provider "${provider.name}"`);
     } else {
       await db.insert(modelProvider).values({
         name: provider.name,
-        displayName: provider.displayName,
-        logicalProviderKey: provider.name === "openai-oauth" ? "openai" : provider.name,
-        authType: provider.authType,
-        plugin: provider.plugin,
-        oauthConfig: provider.oauthConfig,
+        ...values,
+        oauthConfig: modelProviderOAuthConfig[provider.name] ?? null,
         isEnabled: true,
-        isRecommended: provider.isRecommended ?? false,
       });
       console.log(`[seed]   Created model provider "${provider.name}"`);
     }

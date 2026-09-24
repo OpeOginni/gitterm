@@ -1,3 +1,4 @@
+import { modelProviderRequiresFields } from "@gitterm/schema/model-providers";
 import type { WorkspaceModelsInput } from "@gitterm/schema/workspace-models";
 
 type Provider = { name: string; logicalProviderKey: string; authType: string };
@@ -29,6 +30,10 @@ export function selectWorkspaceCredentials<T extends SavedCredential>(
       const provider = available.find((candidate) => candidate.authType === "api_key");
       if (!provider)
         throw new Error(`MODEL_CREDENTIAL_INVALID: ${key} requires a saved OAuth credential`);
+      if (modelProviderRequiresFields(provider.name))
+        throw new Error(
+          `MODEL_CREDENTIAL_INVALID: ${key} needs extra settings; save the credential in the dashboard and select it by label`,
+        );
       result.push({ source: "apiKey", provider, apiKey: selection.apiKey });
       continue;
     }

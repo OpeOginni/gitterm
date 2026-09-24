@@ -9,7 +9,12 @@ export const OPENCODE_CREDENTIALS_PLUGIN_PATH = "~/.config/opencode/plugins/gitt
 export const OPENCODE_CREDENTIAL_LABEL = "Gitterm";
 
 export type OpencodeAuthEntry =
-  | { type: "api"; key: string; metadata?: Record<string, string> }
+  | {
+      type: "api";
+      key: string;
+      /** Answers to the integration's key form, such as a Cloudflare `accountId`. */
+      metadata?: Record<string, string>;
+    }
   | {
       type: "oauth";
       refresh: string;
@@ -17,6 +22,8 @@ export type OpencodeAuthEntry =
       expires?: number;
       accountId?: string;
       enterpriseUrl?: string;
+      /** Stored with the credential as-is, e.g. the OpenCode console `server` and `orgID`. */
+      metadata?: Record<string, string>;
     };
 
 /** One OpenCode account. An integration may receive several, distinguished by label. */
@@ -98,8 +105,21 @@ function builtinOAuthMethod(id, methods) {
   return (oauth.find((method) => method.id === preferred) ?? oauth[0])?.id;
 }
 
+// Only answers the key method asks for: OpenCode rejects answers when it shows no form
+// (for example because CLOUDFLARE_ACCOUNT_ID is already set).
+function keyAnswer(methods, metadata) {
+  const form = methods.find((method) => method.type === "key")?.form;
+  if (!metadata || !Array.isArray(form)) return undefined;
+  const answer = {};
+  for (const field of form) {
+    if (typeof field?.key === "string" && typeof metadata[field.key] === "string") answer[field.key] = metadata[field.key];
+  }
+  return Object.keys(answer).length ? answer : undefined;
+}
+
 function toOAuthCredential(methodID, value) {
   const metadata = {
+    ...(value.metadata && typeof value.metadata === "object" ? value.metadata : {}),
     ...(value.accountId ? { accountID: value.accountId } : {}),
     ...(value.enterpriseUrl ? { enterpriseUrl: value.enterpriseUrl } : {}),
   };
@@ -162,19 +182,24 @@ export default {
       for (const entry of entries) {
         const target = id + " (" + entry.label + ")";
         if (existing.has(entry.label)) continue;
-        if (entry.value.type === "api") {
-          await ctx.integration.connect.key({ integrationID: id, key: entry.value.key, label: entry.label });
-          log("imported API key", target);
-          continue;
+        try {
+          if (entry.value.type === "api") {
+            const answer = keyAnswer(info.methods, entry.value.metadata);
+            await ctx.integration.connect.key({ integrationID: id, key: entry.value.key, label: entry.label, ...(answer ? { answer } : {}) });
+            log("imported API key", target);
+            continue;
+          }
+          if (!importable) {
+            log("no OAuth method available, skipping", target);
+            continue;
+          }
+          pending.set(id, entry.value);
+          const result = await importOAuth(ctx, id, entry.label);
+          if (result.status === "complete") log("imported OAuth credential", target);
+          else log("OAuth import " + result.status, target + (result.message ? " (" + result.message + ")" : ""));
+        } catch (error) {
+          log("import failed", target + " (" + String(error?.message ?? error) + ")");
         }
-        if (!importable) {
-          log("no OAuth method available, skipping", target);
-          continue;
-        }
-        pending.set(id, entry.value);
-        const result = await importOAuth(ctx, id, entry.label);
-        if (result.status === "complete") log("imported OAuth credential", target);
-        else log("OAuth import " + result.status, target + (result.message ? " (" + result.message + ")" : ""));
       }
     }
   },
