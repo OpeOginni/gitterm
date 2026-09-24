@@ -413,9 +413,15 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       machineProfileId: selectedMachineProfileId,
       awsAccessProfileId: isAwsGroup ? selectedAwsProfileId : undefined,
       connections: [
-        selectedGitIntegrationId.startsWith("app:") ? selectedGitIntegrationId.slice(4) : null,
-        selectedGitIntegrationId === "global-pat" ? "github:shared" : null,
-        googleCloudIntegrationId === "none" ? null : googleCloudIntegrationId,
+        githubAvailability?.enabled && selectedGitIntegrationId.startsWith("app:")
+          ? selectedGitIntegrationId.slice(4)
+          : null,
+        githubAvailability?.enabled && selectedGitIntegrationId === "global-pat"
+          ? "github:shared"
+          : null,
+        isGoogleCloudAvailable && googleCloudIntegrationId !== "none"
+          ? googleCloudIntegrationId
+          : null,
       ].filter((id): id is string => Boolean(id)),
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
@@ -791,54 +797,58 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         )}
 
         {/* ── 3. GitHub Connection ── */}
-        <div className="grid gap-1.5">
-          <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            GitHub repository access
-            <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-              <ArrowUpRight className="h-3 w-3" />
-            </Link>
-          </Label>
-          <div className="flex items-center gap-2">
-            <Select
-              value={selectedGitIntegrationId}
-              onValueChange={setuserGitIntegrationId}
-              disabled={!hasIntegrations}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder={hasIntegrations ? "Select account" : "No connections"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None (public repos only)</SelectItem>
-                {integrations?.map((installation) => (
-                  <SelectItem
-                    key={installation.git_integration.id}
-                    value={`app:${installation.git_integration.id}`}
-                  >
-                    <div className="flex items-center">
-                      <Image
-                        src="/github.svg"
-                        alt="GitHub"
-                        width={16}
-                        height={16}
-                        className="mr-2 h-4 w-4"
-                      />
-                      {installation.git_integration.providerAccountLogin} · GitHub App
-                    </div>
-                  </SelectItem>
-                ))}
-                {githubAvailability?.mode === "pat" ? (
-                  <SelectItem value="global-pat">
-                    Shared GitHub PAT (@{githubAvailability.accountLogin})
-                  </SelectItem>
-                ) : null}
-              </SelectContent>
-            </Select>
-            {/* Help sits beside the picker so it never covers the controls above */}
-            <HelpHint label="What does a GitHub connection do?">
-              Connect a GitHub account to enable commit, push, fork and private repo access.
-            </HelpHint>
+        {githubAvailability?.enabled ? (
+          <div className="grid gap-1.5">
+            <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              GitHub repository access
+              <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </Label>
+            <div className="flex items-center gap-2">
+              <Select
+                value={selectedGitIntegrationId}
+                onValueChange={setuserGitIntegrationId}
+                disabled={!hasIntegrations}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue
+                    placeholder={hasIntegrations ? "Select account" : "No connections"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (public repos only)</SelectItem>
+                  {integrations?.map((installation) => (
+                    <SelectItem
+                      key={installation.git_integration.id}
+                      value={`app:${installation.git_integration.id}`}
+                    >
+                      <div className="flex items-center">
+                        <Image
+                          src="/github.svg"
+                          alt="GitHub"
+                          width={16}
+                          height={16}
+                          className="mr-2 h-4 w-4"
+                        />
+                        {installation.git_integration.providerAccountLogin} · GitHub App
+                      </div>
+                    </SelectItem>
+                  ))}
+                  {githubAvailability.mode === "pat" ? (
+                    <SelectItem value="global-pat">
+                      Shared GitHub PAT (@{githubAvailability.accountLogin})
+                    </SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+              {/* Help sits beside the picker so it never covers the controls above */}
+              <HelpHint label="What does a GitHub connection do?">
+                Connect a GitHub account to enable commit, push, fork and private repo access.
+              </HelpHint>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {/* ── 4. SSH Editor Access ── */}
         <div className="flex items-center gap-2">

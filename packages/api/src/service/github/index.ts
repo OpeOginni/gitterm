@@ -760,6 +760,9 @@ export class GitHubAppService {
             providerInstallationId: data.installationId,
             providerAccountId: data.accountId,
             active: true,
+            // The installation callback can complete an SDK connection attempt for an
+            // existing installation. Make its connection time reflect this reconnection.
+            connectedAt: new Date(),
             updatedAt: new Date(),
           })
           .where(

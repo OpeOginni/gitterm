@@ -225,6 +225,36 @@ test("integration connections list personal and shared connections in one shape"
   expect(list[1]?.id).toBe("github:shared");
 });
 
+test("waitFor returns an existing GitHub installation after it reconnects", async () => {
+  const since = new Date("2026-09-24T12:00:00.000Z");
+  let polls = 0;
+  const fetchStub = (async () => {
+    polls++;
+    return trpcOk([
+      {
+        id: "existing-installation",
+        integration: "github",
+        kind: "personal",
+        name: "acme (GitHub App)",
+        status: "connected",
+        connectedAt: polls === 1 ? "2026-09-14T00:00:00.000Z" : "2026-09-24T12:00:01.000Z",
+        details: { integration: "github", mode: "app", accountLogin: "acme" },
+      },
+    ]);
+  }) as unknown as typeof fetch;
+  const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
+
+  const connection = await client.integrations.connections.waitFor({
+    integration: "github",
+    since,
+    intervalMs: 1,
+    timeoutMs: 1000,
+  });
+
+  expect(connection.id).toBe("existing-installation");
+  expect(polls).toBe(2);
+});
+
 test("run helpers accept the run object instead of an id pair", async () => {
   const seen: string[] = [];
   const client = eventClient(

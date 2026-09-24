@@ -1607,14 +1607,6 @@ export const workspaceRouter = router({
         });
       }
 
-      // Resolve attached integrations once; everything below reads these locals.
-      const attached = await resolveWorkspaceConnections(userId, rawInput.connections ?? []);
-      const gitIntegrationId =
-        attached.github?.kind === "personal" ? attached.github.gitIntegration.id : undefined;
-      const useGlobalGithubPat = attached.github?.kind === "shared";
-      const sharedGitConnectionId = useGlobalGithubPat ? attached.github!.connectionId : null;
-      const googleCloudIntegrationId = attached.google?.connectionId;
-
       const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
       const input = await resolveWorkspaceCreateIntent(rawInput, userId, viewerPlan);
 
@@ -1677,6 +1669,15 @@ export const workspaceRouter = router({
           };
         }
       }
+
+      // An idempotent retry returns the existing workspace even if a connection has since been
+      // removed or disabled. Only new workspaces need their connections resolved.
+      const attached = await resolveWorkspaceConnections(userId, input.connections ?? []);
+      const gitIntegrationId =
+        attached.github?.kind === "personal" ? attached.github.gitIntegration.id : undefined;
+      const sharedGitConnectionId =
+        attached.github?.kind === "shared" ? attached.github.connectionId : null;
+      const googleCloudIntegrationId = attached.google?.connectionId;
 
       // Validate that the provided repo is publicly clonable using `git ls-remote`
       if (input.repo) {
