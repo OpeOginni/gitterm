@@ -9,6 +9,7 @@ import {
   isWorkloadIdentityAvailable,
   workloadIdentityIssuer,
 } from "../service/workload-identity/google";
+import { integrationPolicy } from "../service/integrations/catalog";
 
 const providerPattern =
   /^projects\/[0-9]+\/locations\/global\/workloadIdentityPools\/[A-Za-z0-9_-]+\/providers\/[A-Za-z0-9_-]+$/;
@@ -27,7 +28,7 @@ const integrationInput = z.object({
   serviceAccountEmail: z.string().trim().toLowerCase().regex(serviceAccountPattern),
 });
 
-function publicIntegration(integration: typeof googleCloudIntegration.$inferSelect) {
+async function publicIntegration(integration: typeof googleCloudIntegration.$inferSelect) {
   return {
     id: integration.id,
     name: integration.name,
@@ -38,7 +39,7 @@ function publicIntegration(integration: typeof googleCloudIntegration.$inferSele
     connectedAt: integration.connectedAt,
     updatedAt: integration.updatedAt,
     setup: {
-      issuer: workloadIdentityIssuer(),
+      issuer: await workloadIdentityIssuer(),
       audience: googleAudience(integration.workloadIdentityProvider),
       attributeMapping: {
         "google.subject": "assertion.sub",
@@ -50,12 +51,13 @@ function publicIntegration(integration: typeof googleCloudIntegration.$inferSele
 }
 
 export const googleCloudRouter = router({
-  availability: accountProcedure("workspace:read").query(() => ({
-    available: isWorkloadIdentityAvailable(),
+  availability: accountProcedure("workspace:read").query(async () => ({
+    available: (await integrationPolicy("google")).enabled && (await isWorkloadIdentityAvailable()),
   })),
 
   list: accountProcedure("workspace:read").query(async ({ ctx }) => {
-    if (!isWorkloadIdentityAvailable()) return [];
+    if (!(await integrationPolicy("google")).enabled || !(await isWorkloadIdentityAvailable()))
+      return [];
 
     const integrations = await db
       .select()
@@ -66,12 +68,17 @@ export const googleCloudRouter = router({
           eq(googleCloudIntegration.active, true),
         ),
       );
-    return integrations.map(publicIntegration);
+    return Promise.all(integrations.map(publicIntegration));
   }),
 
   create: protectedProcedure.input(integrationInput).mutation(async ({ input, ctx }) => {
     // Fail before writing a selectable integration when this deployment cannot issue assertions.
-    workloadIdentityIssuer();
+    if (!(await integrationPolicy("google")).enabled || !(await isWorkloadIdentityAvailable())) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Google Cloud is not enabled and configured by an admin",
+      });
+    }
     const [integration] = await db
       .insert(googleCloudIntegration)
       .values({ ...input, userId: ctx.session.user.id })

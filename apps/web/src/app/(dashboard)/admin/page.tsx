@@ -3,7 +3,17 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import { Users, Server, Image, Globe, ChevronRight, Settings, Loader2, Trash2 } from "lucide-react";
+import {
+  Users,
+  Server,
+  Image,
+  Globe,
+  ChevronRight,
+  Settings,
+  Loader2,
+  Trash2,
+  Link2,
+} from "lucide-react";
 import Link from "next/link";
 import { trpcClient } from "@/utils/trpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,6 +35,12 @@ const NAV_ITEMS = [
     icon: Globe,
     title: "Cloud Providers",
     description: "Configure cloud providers and regions for workspaces.",
+  },
+  {
+    href: "/admin/integrations" as Route,
+    icon: Link2,
+    title: "Integrations",
+    description: "Enable services, configure Google identity, and set connection policy.",
   },
   {
     href: "/admin/agents" as Route,

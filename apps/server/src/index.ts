@@ -10,12 +10,14 @@ import { workspaceJWT } from "@gitterm/api/service/auth/workspace-jwt";
 import { startRunWatcherSweep } from "@gitterm/api/service/agent-run";
 import { and, db, eq } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
-import { googleCloudIntegration } from "@gitterm/db/schema/integrations";
+import { googleCloudIntegration, googleIssuerConfig } from "@gitterm/db/schema/integrations";
 import {
   issueGoogleSubjectToken,
   workloadIdentityDiscovery,
   workloadIdentityJwks,
+  workloadIdentitySignerConfig,
 } from "@gitterm/api/service/workload-identity/google";
+import { integrationPolicy } from "@gitterm/api/service/integrations/catalog";
 import { recordCredentialAudit } from "@gitterm/api/service/credential-audit";
 
 import { Hono } from "hono";
@@ -58,6 +60,9 @@ app.get("/api/github/callback", async (c) => {
 
     if (!session) {
       return c.redirect(`${webUrl}/login?returnTo=/dashboard/integrations`);
+    }
+    if (!(await integrationPolicy("github")).enabled) {
+      return c.redirect(`${webUrl}/dashboard/integrations?error=github_disabled`);
     }
 
     const installationId = c.req.query("installation_id");
@@ -127,23 +132,40 @@ app.post("/api/device/token", async (c) => {
   });
 });
 
-app.get("/api/workload-identity/.well-known/openid-configuration", (c) => {
+app.get("/api/workload-identity/.well-known/openid-configuration", async (c) => {
   try {
-    return c.json(workloadIdentityDiscovery(), 200, { "Cache-Control": "public, max-age=300" });
+    return c.json(workloadIdentityDiscovery(await workloadIdentitySignerConfig()), 200, {
+      "Cache-Control": "public, max-age=300",
+    });
   } catch {
     return c.json({ error: "workload_identity_unavailable" }, 503);
   }
 });
 
-app.get("/api/workload-identity/jwks", (c) => {
+app.get("/api/workload-identity/jwks", async (c) => {
   try {
-    return c.json(workloadIdentityJwks(), 200, { "Cache-Control": "public, max-age=300" });
+    const signer = await workloadIdentitySignerConfig();
+    const jwks = workloadIdentityJwks(signer);
+    const [stored] = await db
+      .select()
+      .from(googleIssuerConfig)
+      .where(eq(googleIssuerConfig.id, "google"));
+    if (
+      stored?.previousPublicKey &&
+      stored.previousKeyExpiresAt &&
+      stored.previousKeyExpiresAt > new Date()
+    ) {
+      jwks.keys.push(stored.previousPublicKey);
+    }
+    return c.json(jwks, 200, { "Cache-Control": "public, max-age=300" });
   } catch {
     return c.json({ error: "workload_identity_unavailable" }, 503);
   }
 });
 
 app.get("/api/workload-identity/google/subject-token", async (c) => {
+  if (!(await integrationPolicy("google")).enabled)
+    return c.json({ error: "google_integration_disabled" }, 403);
   const authHeader = c.req.header("Authorization") || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   let payload;
@@ -190,6 +212,7 @@ app.get("/api/workload-identity/google/subject-token", async (c) => {
       integrationId: record.integrationId,
     },
     { ...record, id: record.integrationId },
+    await workloadIdentitySignerConfig(),
   );
   await recordCredentialAudit({
     workspaceId: record.workspaceId,

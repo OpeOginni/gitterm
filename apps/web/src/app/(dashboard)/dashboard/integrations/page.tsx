@@ -148,6 +148,11 @@ export default async function IntegrationsPage() {
         <section className="space-y-4">
           <SectionEyebrow>Coming soon</SectionEyebrow>
           <ComingSoonCards />
+          <p className="rounded-xl border border-dashed border-line bg-fill p-5 text-sm leading-relaxed text-fg-3">
+            <strong className="text-fg-2">Executor and other MCPs:</strong> planned for a dedicated
+            release. Admins will enable them before users can connect their own accounts or opt into
+            a shared connection.
+          </p>
         </section>
       </div>
     </DashboardShell>

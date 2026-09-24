@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, uuid, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, boolean, pgEnum, jsonb } from "drizzle-orm/pg-core";
+import type { JsonWebKey } from "node:crypto";
 import { user } from "./auth";
 import { relations } from "drizzle-orm";
 
@@ -17,6 +18,26 @@ export const googleCloudIntegration = pgTable("google_cloud_integration", {
   serviceAccountEmail: text("service_account_email").notNull(),
   active: boolean("active").notNull().default(true),
   connectedAt: timestamp("connected_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** Deployment-wide integration policy. Missing rows are disabled, not implicitly enabled. */
+export const integrationSettings = pgTable("integration_settings", {
+  key: text("key").primaryKey(),
+  enabled: boolean("enabled").notNull().default(false),
+  allowPersonal: boolean("allow_personal").notNull().default(true),
+  allowShared: boolean("allow_shared").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** GitTerm's Google issuer is deployment-wide; never return its signing key to a client. */
+export const googleIssuerConfig = pgTable("google_issuer_config", {
+  id: text("id").primaryKey(),
+  issuer: text("issuer").notNull(),
+  keyId: text("key_id").notNull(),
+  encryptedPrivateKey: text("encrypted_private_key").notNull(),
+  previousPublicKey: jsonb("previous_public_key").$type<JsonWebKey | null>(),
+  previousKeyExpiresAt: timestamp("previous_key_expires_at"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

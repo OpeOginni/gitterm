@@ -238,6 +238,9 @@ export function GitHubConnection() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const { data, isLoading, refetch } = useQuery(trpc.github.getInstallationStatus.queryOptions());
+  const { data: integrationCatalog } = useQuery(trpc.integrations.list.queryOptions());
+  const isEnabled =
+    integrationCatalog?.find((integration) => integration.key === "github")?.enabled === true;
   const disconnectMutation = useMutation(trpc.github.disconnectApp.mutationOptions());
   const installations = data?.installations ?? [];
 
@@ -312,7 +315,7 @@ export function GitHubConnection() {
             type="button"
             size="sm"
             onClick={handleConnect}
-            disabled={isConnecting}
+            disabled={isConnecting || !isEnabled}
             className="h-9 gap-1.5 bg-primary px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-primary-foreground hover:bg-primary/90"
           >
             {isConnecting ? (
@@ -324,6 +327,12 @@ export function GitHubConnection() {
           </Button>
         </div>
       </header>
+      {!isEnabled && integrationCatalog ? (
+        <p className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-4 text-xs text-amber-200">
+          GitHub repository access is not enabled by this deployment’s admin. GitHub sign-in is
+          separate.
+        </p>
+      ) : null}
 
       <div>
         {isLoading ? (

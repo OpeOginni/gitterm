@@ -61,6 +61,10 @@
       "types": "./src/service/workload-identity/google.ts",
       "default": "./src/service/workload-identity/google.ts"
     },
+    "./service/integrations/catalog": {
+      "types": "./src/service/integrations/catalog.ts",
+      "default": "./src/service/integrations/catalog.ts"
+    },
     "./service/*": {
       "default": "./src/service/*/index.ts"
     },

@@ -6,8 +6,16 @@ Google Security Token Service, and impersonates one explicitly configured servic
 
 ## 1. Configure the GitTerm issuer
 
-Generate a dedicated RS256 key. Keep the private key in the deployment secret manager, never in the
-database or repository.
+In **Admin → Integrations**, enable Google Cloud and enter your public API issuer URL, ending in
+`/api/workload-identity`. Generate the deployment-wide RS256 key there. GitTerm stores it
+envelope-encrypted in the database using the deployment encryption master key; only admins can
+rotate it. Never put the private key in the repository or a user's workspace.
+
+Existing deployments with `WORKLOAD_IDENTITY_*` env settings keep working until an admin saves
+the issuer in the app. To migrate, use the same issuer URL already trusted by Google. The old
+public key remains in JWKS for 15 minutes after rotation so short-lived assertions can expire.
+
+Legacy environment setup (only for existing deployments):
 
 ```sh
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out workload-identity.pem

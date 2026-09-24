@@ -154,6 +154,7 @@ import {
   GOOGLE_ADC_PATH,
   workloadIdentityIssuer,
 } from "../../service/workload-identity/google";
+import { integrationPolicy } from "../../service/integrations/catalog";
 import {
   railwayBootstrapEnvironment,
   storeWorkspaceRuntimeBundle,
@@ -546,6 +547,7 @@ export const workspaceRouter = router({
         message: "User not authenticated",
       });
     }
+    if (!(await integrationPolicy("github")).enabled) return { success: true, installations: [] };
 
     const installations = await db
       .select()
@@ -2068,6 +2070,12 @@ export const workspaceRouter = router({
               ),
             })
           : undefined;
+        if (input.googleCloudIntegrationId && !(await integrationPolicy("google")).enabled) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Google Cloud integration is disabled",
+          });
+        }
         if (input.googleCloudIntegrationId && !selectedGoogleCloudIntegration) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -2087,6 +2095,12 @@ export const workspaceRouter = router({
         let selectedGitIntegration: typeof gitIntegration.$inferSelect | undefined;
 
         if (input.gitIntegrationId && !input.repositoryCredentials) {
+          if (!(await integrationPolicy("github")).enabled) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "GitHub repository integration is disabled",
+            });
+          }
           if (!isGitHubAppConfigured()) {
             throw new TRPCError({
               code: "BAD_REQUEST",
@@ -2456,7 +2470,7 @@ export const workspaceRouter = router({
         if (selectedGoogleCloudIntegration) {
           const externalAccount = buildGoogleExternalAccountConfig({
             integration: selectedGoogleCloudIntegration,
-            subjectTokenUrl: `${workloadIdentityIssuer()}/google/subject-token`,
+            subjectTokenUrl: `${await workloadIdentityIssuer()}/google/subject-token`,
             workspaceAgentAuthToken,
           });
           agentProvisioning.files.push({

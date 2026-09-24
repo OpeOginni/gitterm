@@ -29,6 +29,19 @@ async function refreshGoogleIntegrations() {
   await queryClient.invalidateQueries({ queryKey: trpc.googleCloud.list.queryKey() });
 }
 
+function googleProviderCommands(integration: {
+  workloadIdentityProvider: string;
+  projectId: string;
+  setup: { issuer: string; audience: string };
+}) {
+  const [, projectNumber, pool, provider] =
+    integration.workloadIdentityProvider.match(
+      /^projects\/(\d+)\/locations\/global\/workloadIdentityPools\/([A-Za-z0-9_-]+)\/providers\/([A-Za-z0-9_-]+)$/,
+    ) ?? [];
+  if (!projectNumber || !pool || !provider) return "";
+  return `gcloud iam workload-identity-pools create '${pool}' --location=global --project='${integration.projectId}' --display-name='GitTerm workspaces'\ngcloud iam workload-identity-pools providers create-oidc '${provider}' --location=global --project='${integration.projectId}' --workload-identity-pool='${pool}' --issuer-uri='${integration.setup.issuer}' --allowed-audiences='${integration.setup.audience}' --attribute-mapping='google.subject=assertion.sub,attribute.integration_id=assertion.integration_id'`;
+}
+
 function CopyValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1.5">
@@ -68,7 +81,7 @@ export function GoogleCloudConnection() {
       setForm(EMPTY_FORM);
       setAdding(false);
       await refreshGoogleIntegrations();
-      toast.success("Google Cloud identity connected");
+      toast.success("Google Cloud identity saved. Complete the IAM steps below.");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Couldn't connect Google Cloud");
     }
@@ -187,8 +200,7 @@ export function GoogleCloudConnection() {
         </div>
       ) : !isAvailable || error ? (
         <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-200">
-          Google workload identity is disabled because this deployment has no issuer or signing key
-          configured.
+          Google Cloud is not enabled and configured by this deployment’s admin.
         </div>
       ) : integrations.length ? (
         <div className="grid gap-4">
@@ -235,6 +247,51 @@ export function GoogleCloudConnection() {
                 <code>attribute.integration_id=assertion.integration_id</code>. Grant the principal
                 above <code>roles/iam.workloadIdentityUser</code> on this service account.
               </p>
+              <div className="mt-4 rounded-lg border border-line bg-fill p-4">
+                <p className="font-mono text-[10px] uppercase tracking-widest text-fg-3">
+                  Finish on your machine
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-fg-3">
+                  Sign in with <code>gcloud auth login</code> on your own machine. If the pool and
+                  provider do not exist, create them using the values above. Skip the first command
+                  when the pool already exists:
+                </p>
+                <button
+                  type="button"
+                  onClick={() => copy(googleProviderCommands(integration))}
+                  className="mt-3 flex w-full items-start gap-2 rounded-lg border border-line bg-settings p-3 text-left font-mono text-[11px] text-fg-2 hover:border-line-2"
+                >
+                  <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">
+                    {googleProviderCommands(integration)}
+                  </span>
+                  <Copy className="mt-0.5 size-3 shrink-0" />
+                </button>
+                <p className="mt-3 text-xs leading-relaxed text-fg-3">
+                  Then grant this integration permission to impersonate the selected service
+                  account:
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    copy(
+                      `gcloud iam service-accounts add-iam-policy-binding '${integration.serviceAccountEmail}' --project='${integration.projectId}' --role='roles/iam.workloadIdentityUser' --member='${integration.setup.principalSet}'`,
+                    )
+                  }
+                  className="mt-3 flex w-full items-start gap-2 rounded-lg border border-line bg-settings p-3 text-left font-mono text-[11px] text-fg-2 hover:border-line-2"
+                >
+                  <span className="min-w-0 flex-1 break-all">
+                    gcloud iam service-accounts add-iam-policy-binding &apos;
+                    {integration.serviceAccountEmail}&apos; --project=&apos;{integration.projectId}
+                    &apos; --role=&apos;roles/iam.workloadIdentityUser&apos; --member=&apos;
+                    {integration.setup.principalSet}&apos;
+                  </span>
+                  <Copy className="mt-0.5 size-3 shrink-0" />
+                </button>
+                <p className="mt-2 text-[11px] text-fg-4">
+                  These commands change your Google IAM configuration, not GitTerm. Review the
+                  project and service account before running them.
+                </p>
+              </div>
             </article>
           ))}
         </div>

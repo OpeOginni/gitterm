@@ -14,6 +14,9 @@ claiming secrets are inaccessible to an authorized workspace.
   `/run/gitterm`, not the persistent home directory.
 - **Google Cloud integration:** no Google private key is stored. Five-minute GitTerm OIDC assertions
   are exchanged through Google Workload Identity Federation for the selected service account.
+  The deployment's _GitTerm issuer_ private key (not a Google service-account key) can be generated
+  by an admin and stored envelope-encrypted in `google_issuer_config`. Legacy env configuration
+  remains a fallback until migrated; the database value takes precedence.
 - **Model subscriptions (ChatGPT, OpenCode console, SuperGrok):** these providers rotate refresh
   tokens, so a copy per workspace would sign the others out. The refresh token stays encrypted in
   GitTerm. Workspaces get an access token plus a placeholder, and the `gitterm-credentials`
@@ -87,8 +90,9 @@ Google. Third-party credentials issued from it are short-lived.
 
 Railway's brokered bootstrap requires a matching canonical image:
 
-1. Apply migration `0028_smart_radioactive_man`.
-2. Configure encryption and workload-identity signing keys.
+1. Apply migrations through `0032_glamorous_lord_tyger` before deploying the integration-policy API.
+2. Configure the encryption master key. Generate the Google workload-identity signing key in
+   **Admin → Integrations** after deploying the API, or retain the legacy env key during migration.
 3. Build and publish all canonical agent images from this revision; verify they contain
    `/usr/local/bin/gitterm-runtime-bootstrap` and OpenCode 2 (`@opencode/cli`). Model credentials
    are provisioned through `~/.gitterm/opencode/credentials.json`, imported into OpenCode's

@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { db, eq, and } from "@gitterm/db";
 import { githubAppInstallation, gitIntegration } from "@gitterm/db/schema/integrations";
 import { logger } from "../../utils/logger";
+import { integrationPolicy } from "../../service/integrations/catalog";
 
 export const githubRouter = router({
   /**
@@ -131,6 +132,11 @@ export const githubRouter = router({
   listAccessibleRepos: protectedProcedure
     .input(z.object({ installationId: z.string() }))
     .query(async ({ input, ctx }) => {
+      if (!(await integrationPolicy("github")).enabled)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "GitHub repository integration is disabled",
+        });
       const userId = ctx.session.user.id;
 
       try {
@@ -186,6 +192,11 @@ export const githubRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
+      if (input.gitIntegrationId && !(await integrationPolicy("github")).enabled)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "GitHub repository integration is disabled",
+        });
       const userId = ctx.session.user.id;
       const parsed = getGitHubAppService().parseRepoUrl(input.repositoryUrl);
 
@@ -311,6 +322,11 @@ export const githubRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
+      if (!(await integrationPolicy("github")).enabled)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "GitHub repository integration is disabled",
+        });
       const userId = ctx.session.user.id;
 
       try {

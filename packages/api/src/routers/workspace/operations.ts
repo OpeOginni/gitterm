@@ -29,6 +29,7 @@ import { getWorkspacePortUrl, getWorkspaceUrl } from "../../utils/routing";
 import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-error";
 import { readWorkspaceRuntimeBundle } from "../../service/workspace-runtime-bundle";
 import { recordCredentialAudit } from "../../service/credential-audit";
+import { integrationPolicy } from "../../service/integrations/catalog";
 import { redactSensitiveText } from "../../utils/redact-secrets";
 import {
   getPortVisibility,
@@ -117,6 +118,11 @@ export const workspaceOperationsRouter = router({
     }
   }),
   gitCredential: workspaceAgentAuthProcedure.mutation(async ({ ctx }) => {
+    if (!(await integrationPolicy("github")).enabled)
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "GitHub repository integration is disabled",
+      });
     if (!workspaceJWT.hasScope(ctx.workspaceAuth, "agent:credential"))
       throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient workspace scope" });
     const ws = await getAuthenticatedWorkspace(
