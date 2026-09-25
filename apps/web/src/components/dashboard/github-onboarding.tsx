@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, GitCommitHorizontal, Loader2, ShieldCheck, X } from "lucide-react";
+import { apiPath } from "@gitterm/schema/url";
 import { GitHub as Github } from "@/components/logos/Github";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/utils/trpc";
@@ -62,7 +63,7 @@ export function GitHubOnboarding() {
   const handleConnect = () => {
     track(AnalyticsEvent.GitHubOnboardingConnect);
     setIsConnecting(true);
-    const redirectUrl = `${env.NEXT_PUBLIC_SERVER_URL}/api/github/callback`;
+    const redirectUrl = apiPath(env.NEXT_PUBLIC_SERVER_URL || "", "github/callback");
     window.location.href = `https://github.com/apps/${appAvailability?.slug || GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
   };
 

@@ -163,7 +163,7 @@ A separate GitHub OAuth App is not required.
 GitHub App setup:
 
 - Callback URL: `https://<base-domain>/api/auth/callback/github`
-- Setup URL: `https://<api-url>/api/github/callback`
+- Setup URL: `https://<api-host>/api/github/callback` (e.g. `https://<base-domain>/api/github/callback` or `https://api.<base-domain>/api/github/callback`)
 - Webhook via proxy: `https://<your-base-domain>/listener/trpc/github.handleInstallationWebhook`
 - Webhook via listener: `https://<listener-base-url>/trpc/github.handleInstallationWebhook`
 

@@ -18,6 +18,7 @@ import {
 } from "@gitterm/db/schema/integrations";
 import { z } from "zod";
 import env from "@gitterm/env/server";
+import { apiPath } from "@gitterm/schema/url";
 import { githubGlobalPat, githubRepositoryMode } from "../github/config";
 import { getGitHubAppService } from "../github";
 import {
@@ -348,8 +349,8 @@ export type CreateConnectionResult =
       authorizeUrl: string;
     };
 
-function serverUrl(): string {
-  return (env.API_URL || env.BASE_URL || `http://${env.BASE_DOMAIN}`).replace(/\/api$/, "");
+function githubAppCallbackUrl(): string {
+  return apiPath(env.API_URL || env.BASE_URL || `http://${env.BASE_DOMAIN}`, "github/callback");
 }
 
 export async function createConnection(
@@ -404,7 +405,7 @@ export async function createConnection(
       message: "This deployment does not use a GitHub App for personal connections",
     });
   }
-  const redirect = encodeURIComponent(`${serverUrl()}/api/github/callback`);
+  const redirect = encodeURIComponent(githubAppCallbackUrl());
   return {
     status: "pending",
     integration: "github",
