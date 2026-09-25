@@ -2207,6 +2207,24 @@ export const workspaceRouter = router({
               });
 
             if (!repoValidation.exists) {
+              if (selectedPat && !input.repositoryCredentials) {
+                const shared = await githubRepositoryMode();
+                const account =
+                  shared?.mode === "pat" ? `@${shared.accountLogin}` : "the shared account";
+                const repo = parseGitHubRepoUrl(input.repo);
+                const repoName = repo ? `${repo.owner}/${repo.repo}` : input.repo;
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message:
+                    `The admin's shared GitHub token (${account}) can't see ${repoName}. ` +
+                    `GitHub hides private repositories a token isn't allowed to read. ` +
+                    `Ask your admin to check that ${account} has access to the repository` +
+                    (repo
+                      ? ` and, for a fine-grained token, that its resource owner is ${repo.owner}`
+                      : "") +
+                    ` with this repository selected (and approved, if the organization requires it).`,
+                });
+              }
               if (input.repositoryCredentials || selectedPat) {
                 throw new TRPCError({
                   code: "BAD_REQUEST",
