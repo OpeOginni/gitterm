@@ -22,7 +22,7 @@ export async function loginWithDeviceCode(
 ): Promise<{ token: string }> {
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
   const fetchImpl = createNoRedirectFetch(options.fetch);
-  const codeRes = await fetchImpl(new URL("/api/device/code", normalizedServerUrl), {
+  const codeRes = await fetchImpl(apiEndpoint(normalizedServerUrl, "device/code"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ clientName: options.clientName ?? "gitterm" }),
@@ -40,7 +40,7 @@ export async function loginWithDeviceCode(
 
   const deadline = Date.now() + codeJson.expiresInSeconds * 1000;
   while (Date.now() < deadline) {
-    const tokenRes = await fetchImpl(new URL("/api/device/token", normalizedServerUrl), {
+    const tokenRes = await fetchImpl(apiEndpoint(normalizedServerUrl, "device/token"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ deviceCode: codeJson.deviceCode }),
@@ -61,4 +61,4 @@ export async function loginWithDeviceCode(
 
   throw new Error("Device code expired; try again.");
 }
-import { createNoRedirectFetch, normalizeServerUrl } from "./transport.js";
+import { apiEndpoint, createNoRedirectFetch, normalizeServerUrl } from "./transport.js";

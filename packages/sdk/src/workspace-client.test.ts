@@ -59,6 +59,23 @@ describe("getWorkspaceEnvironment", () => {
     expect(requestedUrl).toStartWith("https://tunnel.example.com/api/trpc/");
   });
 
+  test("keeps a proxy /api base path", async () => {
+    let requestedUrl = "";
+    const client = createGittermWorkspaceClient({
+      workspaceId: "workspace",
+      serverUrl: "https://gitterm.example.com/api",
+      token: "token",
+      fetch: (async (input) => {
+        requestedUrl = String(input);
+        return new Response("upstream unavailable", { status: 502 });
+      }) as typeof fetch,
+    });
+
+    await client.self.get().catch(() => undefined);
+
+    expect(requestedUrl).toStartWith("https://gitterm.example.com/api/trpc/");
+  });
+
   test("adds the direct server tRPC path", async () => {
     let requestedUrl = "";
     const client = createGittermWorkspaceClient({

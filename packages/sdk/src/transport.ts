@@ -22,6 +22,32 @@ export function normalizeServerUrl(value: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
+function withPath(serverUrl: string, pathname: string): string {
+  const url = new URL(serverUrl);
+  url.pathname = pathname;
+  return url.toString();
+}
+
+function basePath(serverUrl: string): string {
+  return new URL(serverUrl).pathname.replace(/\/+$/, "");
+}
+
+/**
+ * Resolve the tRPC endpoint relative to the server URL's path, so a base like
+ * `https://host/api` (path-routing proxy) maps to `https://host/api/trpc`.
+ */
+export function trpcEndpoint(serverUrl: string): string {
+  const base = basePath(serverUrl);
+  return withPath(serverUrl, base.endsWith("/trpc") ? base : `${base}/trpc`);
+}
+
+/** Resolve a server `/api/*` route, adding `/api` only when the base doesn't already end in it. */
+export function apiEndpoint(serverUrl: string, route: string): string {
+  const base = basePath(serverUrl);
+  const apiBase = base.endsWith("/api") ? base : `${base}/api`;
+  return withPath(serverUrl, `${apiBase}/${route.replace(/^\/+/, "")}`);
+}
+
 export function createNoRedirectFetch(fetchImpl: typeof fetch = fetch): typeof fetch {
   return (async (input, init) => {
     const response = await fetchImpl(input, { ...init, redirect: "manual" });

@@ -4,7 +4,17 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
-## Unreleased
+## 0.6.1
+
+### Fixed
+
+- The client keeps the server URL's base path when building the tRPC endpoint, so
+  `serverUrl: "https://<host>/api"` (self-hosted behind the path-routing proxy) calls
+  `https://<host>/api/trpc` instead of `https://<host>/trpc`. The workspace client and
+  `loginWithDeviceCode()` resolve their routes the same way. A base that already ends in `/trpc`
+  or `/api` is not doubled, and the hosted default is unchanged.
+
+## 0.6.0
 
 ### Breaking
 
