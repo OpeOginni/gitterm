@@ -12,7 +12,6 @@ import {
   ExternalLink,
   GitBranch,
   Loader2,
-  Lock,
   Plus,
   RefreshCw,
   Trash2,
@@ -242,87 +241,57 @@ function SharedGitHubWelcome({
   accountLogin: string;
   patSuffix: string | null;
 }) {
-  const profileUrl = `https://github.com/${accountLogin}`;
-  const links = [
-    { label: `@${accountLogin} on GitHub`, href: profileUrl },
-    { label: "Repositories", href: `${profileUrl}?tab=repositories` },
-  ];
+  const [copied, setCopied] = useState(false);
+  const copiedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
+    },
+    [],
+  );
+
+  async function handleCopy() {
+    if (!(await copyIntegrationId("github:shared"))) return;
+
+    setCopied(true);
+    if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
+    copiedTimeout.current = setTimeout(() => setCopied(false), 1800);
+  }
 
   return (
-    <article className="relative overflow-hidden rounded-xl border border-line bg-settings">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-24 -left-10 size-56 rounded-full bg-primary/10 blur-3xl"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"
-      />
-
-      <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
-        <a href={profileUrl} target="_blank" rel="noreferrer" className="relative shrink-0">
-          <span
-            aria-hidden
-            className="absolute -inset-1.5 rounded-full bg-gradient-to-br from-primary/40 to-transparent"
-          />
-          <Image
-            src={`${profileUrl}.png`}
-            alt={`${accountLogin} GitHub profile`}
-            width={56}
-            height={56}
-            className="relative size-14 rounded-full object-cover ring-1 ring-line-2"
-          />
-          <span className="absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full border border-line-2 bg-settings text-fg">
-            <Github className="size-3.5" fill="currentColor" />
-          </span>
-        </a>
-        <div className="min-w-0 flex-1 space-y-1.5">
+    <article className="rounded-xl border border-line bg-settings p-4 sm:p-5">
+      <div className="flex items-center gap-3">
+        <Image
+          src={`https://github.com/${accountLogin}.png`}
+          alt={`${accountLogin} GitHub profile`}
+          width={40}
+          height={40}
+          className="size-10 shrink-0 rounded-full object-cover"
+        />
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-semibold tracking-tight text-fg">
-              You're set up for GitHub
-            </h3>
-            <StatusIndicator suspended={false} />
+            <h3 className="truncate text-sm font-semibold text-fg">@{accountLogin}</h3>
+            <span className="rounded-md border border-line px-1.5 py-0.5 font-mono text-[10px] text-fg-3">
+              Admin{patSuffix ? ` · ••••${patSuffix}` : ""}
+            </span>
           </div>
-          <p className="text-[13px] leading-relaxed text-fg-3">
-            Your admin connected{" "}
-            <a
-              href={profileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-fg underline-offset-4 hover:underline"
-            >
-              @{accountLogin}
-            </a>{" "}
-            for everyone on this deployment. There's nothing to connect: pick it when you create a
-            workspace, and clones, pushes, and pull requests will go through this account.
-          </p>
+          <p className="mt-0.5 text-xs text-fg-3">Shared GitHub access for your workspaces.</p>
         </div>
       </div>
-
-      <div className="relative flex flex-col gap-3 border-t border-line bg-fill/60 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          {links.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              target="_blank"
-              rel="noreferrer"
-              className="group inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.13em] text-fg-3 transition-colors hover:text-fg"
-            >
-              {link.label}
-              <ExternalLink className="size-3 transition-transform group-hover:-translate-y-px group-hover:translate-x-px" />
-            </a>
-          ))}
-        </div>
-        <span className="inline-flex items-center gap-2 self-start rounded-full border border-line bg-fill-2 py-1 pr-3 pl-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-3 sm:self-auto">
-          <Lock className="size-3 text-primary" />
-          Managed by admin
-          {patSuffix ? (
-            <>
-              <span className="h-3 w-px bg-line-2" />
-              <span className="normal-case tracking-normal text-fg-4">••••{patSuffix}</span>
-            </>
-          ) : null}
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-3">
+        <span>Connection ID for the SDK</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label="Copy connection ID github:shared"
+          className="inline-flex items-center gap-1.5 rounded-md border border-line bg-fill px-2 py-1 font-mono text-[11px] text-fg transition-colors hover:border-line-2 hover:bg-fill-2"
+        >
+          github:shared
+          {copied ? <Check className="size-3 text-emerald-300" /> : <Copy className="size-3" />}
+        </button>
+        <span aria-live="polite" className="text-[11px] text-emerald-300">
+          {copied ? "Copied" : ""}
         </span>
       </div>
     </article>
