@@ -249,16 +249,32 @@ function SharedGitHubWelcome({
   ];
 
   return (
-    <article className="overflow-hidden rounded-xl border border-line bg-settings">
-      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
-        <a href={profileUrl} target="_blank" rel="noreferrer" className="shrink-0">
+    <article className="relative overflow-hidden rounded-xl border border-line bg-settings">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-24 -left-10 size-56 rounded-full bg-primary/10 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"
+      />
+
+      <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
+        <a href={profileUrl} target="_blank" rel="noreferrer" className="relative shrink-0">
+          <span
+            aria-hidden
+            className="absolute -inset-1.5 rounded-full bg-gradient-to-br from-primary/40 to-transparent"
+          />
           <Image
             src={`${profileUrl}.png`}
             alt={`${accountLogin} GitHub profile`}
             width={56}
             height={56}
-            className="size-14 rounded-full object-cover ring-1 ring-line-2"
+            className="relative size-14 rounded-full object-cover ring-1 ring-line-2"
           />
+          <span className="absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full border border-line-2 bg-settings text-fg">
+            <Github className="size-3.5" fill="currentColor" />
+          </span>
         </a>
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -283,7 +299,7 @@ function SharedGitHubWelcome({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-line px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div className="relative flex flex-col gap-3 border-t border-line bg-fill/60 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           {links.map((link) => (
             <a
@@ -291,16 +307,22 @@ function SharedGitHubWelcome({
               href={link.href}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.13em] text-fg-3 transition-colors hover:text-fg"
+              className="group inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.13em] text-fg-3 transition-colors hover:text-fg"
             >
               {link.label}
-              <ExternalLink className="size-3" />
+              <ExternalLink className="size-3 transition-transform group-hover:-translate-y-px group-hover:translate-x-px" />
             </a>
           ))}
         </div>
-        <span className="inline-flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-4">
-          <Lock className="size-3" />
-          Managed by admin{patSuffix ? ` · token ••••${patSuffix}` : ""}
+        <span className="inline-flex items-center gap-2 self-start rounded-full border border-line bg-fill-2 py-1 pr-3 pl-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-3 sm:self-auto">
+          <Lock className="size-3 text-primary" />
+          Managed by admin
+          {patSuffix ? (
+            <>
+              <span className="h-3 w-px bg-line-2" />
+              <span className="normal-case tracking-normal text-fg-4">••••{patSuffix}</span>
+            </>
+          ) : null}
         </span>
       </div>
     </article>
