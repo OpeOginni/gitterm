@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { strToU8, zipSync } from "fflate";
 import { awsRoleSelectionSchema, awsAccessProfileSchema } from "@gitterm/schema";
 import { AwsSetupGuide } from "../_components/aws-setup-guide";
+import { ProviderWebhookGuide } from "../_components/provider-webhook-guide";
 import {
   AwsAccessProfiles,
   AwsRoleInput,
@@ -1556,6 +1557,13 @@ export default function ProviderSettingsPage() {
               )}
 
               {isAwsProvider && <AwsSetupGuide region={awsDefaultRegion} role={awsRoleSelection} />}
+
+              <ProviderWebhookGuide
+                providerKey={providerKey || selectedProviderType?.name || ""}
+                providerName={
+                  selectedProviderType?.displayName ?? provider?.name ?? "this provider"
+                }
+              />
 
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">

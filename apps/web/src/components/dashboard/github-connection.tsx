@@ -11,7 +11,9 @@ import {
   Copy,
   ExternalLink,
   GitBranch,
+  KeyRound,
   Loader2,
+  Lock,
   Plus,
   RefreshCw,
   Trash2,
@@ -234,6 +236,62 @@ function GitHubProfileCard({
   );
 }
 
+function SharedGitHubCard({
+  accountLogin,
+  patSuffix,
+}: {
+  accountLogin: string;
+  patSuffix: string | null;
+}) {
+  return (
+    <article className="rounded-xl border border-line bg-settings p-4 sm:p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <Image
+            src={`https://github.com/${accountLogin}.png`}
+            alt={`${accountLogin} GitHub profile`}
+            width={44}
+            height={44}
+            className="size-11 shrink-0 rounded-full object-cover"
+          />
+          <div className="min-w-0">
+            <div className="mb-1.5 flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-base font-semibold tracking-tight text-fg">
+                @{accountLogin}
+              </h3>
+              <StatusIndicator suspended={false} />
+            </div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-fg-4">
+              Shared access token
+            </p>
+          </div>
+        </div>
+
+        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-line px-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-3">
+          <Lock className="size-3" />
+          Managed by admin
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 sm:gap-8">
+        <ProfileDetail icon={GitBranch} label="Repository access">
+          Repositories the token can reach
+        </ProfileDetail>
+        {patSuffix ? (
+          <ProfileDetail icon={KeyRound} label="Token">
+            <span className="font-mono">••••{patSuffix}</span>
+          </ProfileDetail>
+        ) : null}
+      </div>
+
+      <p className="mt-4 text-xs leading-relaxed text-fg-4">
+        Your admin set this up for everyone on this deployment. Select it when creating a workspace
+        to clone and push. Only an admin can change or remove it.
+      </p>
+    </article>
+  );
+}
+
 export function GitHubConnection() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -332,12 +390,11 @@ export function GitHubConnection() {
           ) : null}
         </div>
       </header>
-      {isEnabled && appAvailability?.mode === "pat" ? (
-        <p className="rounded-lg border border-line bg-fill p-4 text-xs text-fg-3">
-          Your admin provides GitHub repository access with a shared PAT from @
-          {appAvailability.accountLogin}. Select it when creating a workspace. GitHub sign-in
-          remains separate.
-        </p>
+      {isEnabled && appAvailability?.mode === "pat" && appAvailability.accountLogin ? (
+        <SharedGitHubCard
+          accountLogin={appAvailability.accountLogin}
+          patSuffix={appAvailability.patSuffix}
+        />
       ) : null}
       {isEnabled && appAvailability && !appAvailability.mode ? (
         <p className="rounded-lg border border-line bg-fill p-4 text-xs text-fg-3">
