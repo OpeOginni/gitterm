@@ -12,6 +12,7 @@ import {
   getConnection,
   listConnections,
   removeConnection,
+  requireConnection,
   userIntegrationCatalog,
   type GitHubConnectionDetails,
 } from "../service/integrations/connections";
@@ -64,12 +65,7 @@ export const integrationsRouter = router({
 
     get: accountProcedure("integrations:read")
       .input(z.object({ id: z.string().min(1) }))
-      .query(async ({ ctx, input }) => {
-        const connection = await getConnection(ctx.session.user.id, input.id);
-        if (!connection)
-          throw new TRPCError({ code: "NOT_FOUND", message: "Connection not found" });
-        return connection;
-      }),
+      .query(({ ctx, input }) => requireConnection(ctx.session.user.id, input.id)),
 
     create: accountProcedure("integrations:write")
       .input(createConnectionInput)

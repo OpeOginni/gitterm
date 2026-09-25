@@ -228,25 +228,27 @@ app.get("/api/workload-identity/google/subject-token", async (c) => {
   });
 });
 
-app.use(
-  "/trpc/*",
-  trpcServer({
-    router: appRouter,
-    createContext: (_opts, context) => {
-      return createContext({ context });
-    },
-    onError: ({ path, type, error, req }) => {
-      const cause = error.cause ?? error;
-      console.error(
-        `[tRPC] ${type} "${path ?? "<unknown>"}" → ${error.code}: ${error.message}`,
-        "\n  cause:",
-        cause instanceof Error ? `${cause.name}: ${cause.message}\n${cause.stack}` : cause,
-        "\n  url:",
-        req.url,
-      );
-    },
-  }),
-);
+const trpcHandler = trpcServer({
+  router: appRouter,
+  createContext: (_opts, context) => {
+    return createContext({ context });
+  },
+  onError: ({ path, type, error, req }) => {
+    const cause = error.cause ?? error;
+    console.error(
+      `[tRPC] ${type} "${path ?? "<unknown>"}" → ${error.code}: ${error.message}`,
+      "\n  cause:",
+      cause instanceof Error ? `${cause.name}: ${cause.message}\n${cause.stack}` : cause,
+      "\n  url:",
+      req.url,
+    );
+  },
+});
+
+// /api/trpc lets an API base ending in /api (https://api.example.com/api) reach
+// tRPC when the host points straight at this server instead of the proxy.
+app.use("/trpc/*", trpcHandler);
+app.use("/api/trpc/*", trpcHandler);
 
 app.get("/api/internal/proxy-resolve", async (c) => await proxyResolverRouter(c));
 

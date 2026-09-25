@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { apiPath } from "@gitterm/schema/url";
 import { trpc } from "@/utils/trpc";
 import env from "@gitterm/env/web";
 import type { AdminIntegrationsData } from "./use-admin-integrations";
@@ -19,7 +20,7 @@ type Props = {
 
 export function GoogleConfig({ data, refresh }: Props) {
   const [issuer, setIssuer] = useState(
-    `${(env.NEXT_PUBLIC_SERVER_URL || "https://api.gitterm.dev").replace(/\/$/, "")}/api/workload-identity`,
+    apiPath(env.NEXT_PUBLIC_SERVER_URL || "https://api.gitterm.dev", "workload-identity"),
   );
   const configure = useMutation(trpc.admin.integrations.configureGoogle.mutationOptions());
   const configured = data.google;

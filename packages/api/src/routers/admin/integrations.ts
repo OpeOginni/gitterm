@@ -29,7 +29,7 @@ const issuerSchema = z.url().refine((value) => {
     !url.hash &&
     !url.username &&
     !url.password &&
-    url.pathname === "/api/workload-identity"
+    /^\/api\/workload-identity\/?$/.test(url.pathname)
   );
 }, "Use a public HTTPS URL ending in /api/workload-identity");
 

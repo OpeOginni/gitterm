@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { authClient } from "@/lib/auth-client";
@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { strToU8, zipSync } from "fflate";
 import { awsRoleSelectionSchema, awsAccessProfileSchema } from "@gitterm/schema";
 import { AwsSetupGuide } from "../_components/aws-setup-guide";
+import { ProviderWebhookGuide } from "../_components/provider-webhook-guide";
 import {
   AwsAccessProfiles,
   AwsRoleInput,
@@ -114,6 +115,25 @@ function setNestedOption(options: Record<string, any>, path: string, value: stri
   return { ...options, [parent]: { ...options[parent], [child]: parsedValue } };
 }
 
+function mergePreservedEncryptedFields(
+  providerKey: string | undefined,
+  nextConfig: Record<string, any>,
+  currentConfig: Record<string, any>,
+) {
+  if (providerKey !== "aws") return nextConfig;
+
+  const merged = { ...nextConfig };
+  for (const fieldName of ["accessKeyId", "secretAccessKey"]) {
+    const nextValue = String(nextConfig[fieldName] ?? "").trim();
+    const currentValue = String(currentConfig[fieldName] ?? "").trim();
+    if (!nextValue && currentValue) {
+      merged[fieldName] = currentConfig[fieldName];
+    }
+  }
+
+  return merged;
+}
+
 function getMachineProfileKey(name: string) {
   return name
     .trim()
@@ -139,6 +159,14 @@ export default function ProviderSettingsPage() {
   const [configForm, setConfigForm] = useState<Record<string, any>>({});
   const [configName, setConfigName] = useState("");
   const [configEnabled, setConfigEnabled] = useState(true);
+  // Unsaved credential edits must survive region toggles. Those mutations refetch
+  // the provider, but they do not change the saved config.
+  const settingsDirtyRef = useRef(false);
+  const hydratedProviderIdRef = useRef<string | null>(null);
+  const appliedSettingsKeyRef = useRef("");
+  const markSettingsDirty = () => {
+    settingsDirtyRef.current = true;
+  };
   const [awsSetupSummary, setAwsSetupSummary] = useState<AwsSetupSummary | null>(null);
   const [awsRoleOverride, setAwsRoleOverride] = useState<AwsRoleSelection | null>(null);
   const [awsRoleCheck, setAwsRoleCheck] = useState<Awaited<
@@ -166,31 +194,12 @@ export default function ProviderSettingsPage() {
     });
   };
 
-  const preserveAwsEncryptedFields = (
-    nextConfig: Record<string, any>,
-    currentConfig: Record<string, any>,
-  ) => {
-    if ((provider as { providerKey?: string } | undefined)?.providerKey !== "aws") {
-      return nextConfig;
-    }
-
-    const merged = { ...nextConfig };
-    for (const fieldName of ["accessKeyId", "secretAccessKey"]) {
-      const nextValue = String(nextConfig[fieldName] ?? "").trim();
-      const currentValue = String(currentConfig[fieldName] ?? "").trim();
-      if (!nextValue && currentValue) {
-        merged[fieldName] = currentConfig[fieldName];
-      }
-    }
-
-    return merged;
-  };
-
   const applyAwsBootstrapState = (data: {
     config: Record<string, any>;
     summary: AwsSetupSummary;
   }) => {
     refreshProviderQueries();
+    settingsDirtyRef.current = false;
     setConfigForm(data.config);
     setConfigEnabled(true);
     setAllowUserRegionSelection(false);
@@ -503,47 +512,63 @@ export default function ProviderSettingsPage() {
     }
   }, [session?.user, isSessionPending, router]);
 
+  const pinnedAwsRegionIdentifier =
+    provider?.providerKey === "aws"
+      ? ((provider.regions?.find((region) => region.isEnabled) ?? provider.regions?.[0])
+          ?.externalRegionIdentifier ?? "")
+      : "";
+
+  // Region rows are excluded (only the pinned AWS region feeds the form). Toggling
+  // or adding one refetches the provider, but that is not a new saved configuration.
+  const savedSettingsKey = JSON.stringify({
+    id: provider?.id ?? null,
+    updatedAt: provider?.updatedAt ?? null,
+    name: provider?.name ?? null,
+    allowUserRegionSelection: provider?.allowUserRegionSelection ?? null,
+    providerKey: provider?.providerKey ?? null,
+    configId: provider?.providerConfig?.id ?? null,
+    configUpdatedAt: provider?.providerConfig?.updatedAt ?? null,
+    configName: provider?.providerConfig?.name ?? null,
+    configEnabled: provider?.providerConfig?.isEnabled ?? null,
+    config: provider?.providerConfig?.config ?? null,
+    pinnedAwsRegionIdentifier,
+  });
+
   useEffect(() => {
     if (!provider) {
       return;
     }
 
-    const pinnedAwsRegion =
-      provider.providerKey === "aws"
-        ? (provider.regions?.find((region: any) => region.isEnabled) ?? provider.regions?.[0])
-        : undefined;
+    if (hydratedProviderIdRef.current !== provider.id) {
+      settingsDirtyRef.current = false;
+      hydratedProviderIdRef.current = provider.id;
+      appliedSettingsKeyRef.current = "";
+    }
 
+    if (appliedSettingsKeyRef.current === savedSettingsKey) {
+      return;
+    }
+
+    if (settingsDirtyRef.current) {
+      return;
+    }
+
+    appliedSettingsKeyRef.current = savedSettingsKey;
     setProviderName(provider.name ?? "");
     setAllowUserRegionSelection(provider.allowUserRegionSelection ?? true);
     setConfigName(provider.providerConfig?.name ?? `${provider.name} Default`);
+    setConfigEnabled(provider.providerConfig?.isEnabled ?? true);
     setConfigForm((current) =>
-      preserveAwsEncryptedFields(
+      mergePreservedEncryptedFields(
+        provider.providerKey,
         {
           ...provider.providerConfig?.config,
-          ...(pinnedAwsRegion
-            ? {
-                defaultRegion: pinnedAwsRegion.externalRegionIdentifier,
-              }
-            : {}),
+          ...(pinnedAwsRegionIdentifier ? { defaultRegion: pinnedAwsRegionIdentifier } : {}),
         },
         current,
       ),
     );
-    setConfigEnabled(provider.providerConfig?.isEnabled ?? true);
-  }, [
-    provider?.id,
-    provider?.updatedAt,
-    provider?.providerConfig?.id,
-    provider?.providerConfig?.updatedAt,
-    provider?.regions,
-    provider?.name,
-    provider?.providerConfig?.name,
-    provider?.providerConfig?.config,
-    provider?.providerKey,
-    provider,
-    provider?.providerConfig?.isEnabled,
-    provider?.allowUserRegionSelection,
-  ]);
+  }, [provider, savedSettingsKey, pinnedAwsRegionIdentifier]);
 
   useEffect(() => {
     if (!provider || selectedProviderTypeId) {
@@ -666,6 +691,7 @@ export default function ProviderSettingsPage() {
         });
       }
 
+      settingsDirtyRef.current = false;
       queryClient.invalidateQueries({ queryKey: ["admin", "providers"] });
       queryClient.invalidateQueries({
         queryKey: ["admin", "provider", providerId],
@@ -713,12 +739,13 @@ export default function ProviderSettingsPage() {
             type="password"
             placeholder={hasSavedEncryptedValue ? "Enter new value to replace" : field.fieldLabel}
             value={value}
-            onChange={(e) =>
-              setConfigForm({
-                ...configForm,
+            onChange={(e) => {
+              markSettingsDirty();
+              setConfigForm((current) => ({
+                ...current,
                 [field.fieldName]: e.target.value,
-              })
-            }
+              }));
+            }}
             required={field.isRequired && !readOnly}
             readOnly={readOnly}
             className={cn(readOnly && "cursor-default")}
@@ -747,9 +774,11 @@ export default function ProviderSettingsPage() {
             id={field.fieldName}
             checked={value === true || value === "true"}
             disabled={readOnly}
-            onCheckedChange={(checked) =>
-              !readOnly && setConfigForm({ ...configForm, [field.fieldName]: checked })
-            }
+            onCheckedChange={(checked) => {
+              if (readOnly) return;
+              markSettingsDirty();
+              setConfigForm((current) => ({ ...current, [field.fieldName]: checked }));
+            }}
           />
         </div>
       );
@@ -774,7 +803,10 @@ export default function ProviderSettingsPage() {
           ) : (
             <Select
               value={value}
-              onValueChange={(val) => setConfigForm({ ...configForm, [field.fieldName]: val })}
+              onValueChange={(val) => {
+                markSettingsDirty();
+                setConfigForm((current) => ({ ...current, [field.fieldName]: val }));
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder={`Select ${field.fieldLabel}`} />
@@ -843,7 +875,13 @@ export default function ProviderSettingsPage() {
           type={field.fieldType === "number" ? "number" : field.fieldType}
           placeholder={hasSavedEncryptedValue ? "Enter new value to replace" : field.fieldLabel}
           value={value}
-          onChange={(e) => setConfigForm({ ...configForm, [field.fieldName]: e.target.value })}
+          onChange={(e) => {
+            markSettingsDirty();
+            setConfigForm((current) => ({
+              ...current,
+              [field.fieldName]: e.target.value,
+            }));
+          }}
           required={field.isRequired && !readOnly}
           readOnly={readOnly}
           className={cn(readOnly && "cursor-default")}
@@ -1231,7 +1269,10 @@ export default function ProviderSettingsPage() {
                     <Input
                       id="provider-name"
                       value={providerName}
-                      onChange={(e) => setProviderName(e.target.value)}
+                      onChange={(e) => {
+                        markSettingsDirty();
+                        setProviderName(e.target.value);
+                      }}
                       placeholder="e.g., Railway"
                     />
                   </div>
@@ -1261,7 +1302,10 @@ export default function ProviderSettingsPage() {
                       <Switch
                         checked={isAwsProvider ? false : allowUserRegionSelection}
                         disabled={isAwsProvider}
-                        onCheckedChange={setAllowUserRegionSelection}
+                        onCheckedChange={(checked) => {
+                          markSettingsDirty();
+                          setAllowUserRegionSelection(checked);
+                        }}
                       />
                     </div>
                   </div>
@@ -1514,13 +1558,23 @@ export default function ProviderSettingsPage() {
 
               {isAwsProvider && <AwsSetupGuide region={awsDefaultRegion} role={awsRoleSelection} />}
 
+              <ProviderWebhookGuide
+                providerKey={providerKey || selectedProviderType?.name || ""}
+                providerName={
+                  selectedProviderType?.displayName ?? provider?.name ?? "this provider"
+                }
+              />
+
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="config-name">Configuration Name</Label>
                   <Input
                     id="config-name"
                     value={configName}
-                    onChange={(e) => setConfigName(e.target.value)}
+                    onChange={(e) => {
+                      markSettingsDirty();
+                      setConfigName(e.target.value);
+                    }}
                     placeholder="e.g., Railway Production"
                   />
                 </div>

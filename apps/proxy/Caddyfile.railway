@@ -42,8 +42,16 @@
 		respond `{"status":"UP","mode":"railway"}` 200
 	}
 
-	# Block reserved subdomains at the Caddy level (defense in depth)
-	@reserved_subdomain header_regexp subdomain Host ^(api|cloud)\.{$BASE_DOMAIN}$|^\d+-(api|cloud)\.{$BASE_DOMAIN}$
+	# Block reserved subdomains at the Caddy level (defense in depth).
+	# api.{BASE_DOMAIN}/api/* falls through to the API handlers below, so an
+	# API base of https://api.{BASE_DOMAIN}/api works like the single-domain /api.
+	@reserved_subdomain {
+		header_regexp subdomain Host ^(api|cloud)\.{$BASE_DOMAIN}$|^\d+-(api|cloud)\.{$BASE_DOMAIN}$
+		not {
+			header_regexp api_host Host ^api\.{$BASE_DOMAIN}$
+			path /api/*
+		}
+	}
 	handle @reserved_subdomain {
 		root * /srv/errors
 		rewrite * /unavailable.html

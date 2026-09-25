@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { GittermError, WorkspaceLifecycleError } from "./errors";
 import { createGittermClient } from "./client";
+import { apiEndpoint, trpcEndpoint } from "./transport";
 import type { WorkspaceCreateInput, WorkspaceProviderSelection } from "./types";
 
 describe("createGittermClient", () => {
@@ -10,6 +11,43 @@ describe("createGittermClient", () => {
       configPath: "/path/that/does/not/exist",
     });
     expect(client.serverUrl).toBe("https://api.gitterm.dev");
+  });
+
+  test("keeps a proxy /api base path when calling tRPC", async () => {
+    let requestedUrl = "";
+    const client = createGittermClient({
+      serverUrl: "https://gitterm.example.com/api",
+      token: "gt_test",
+      fetch: (async (input) => {
+        requestedUrl = String(input);
+        return new Response("upstream unavailable", { status: 502 });
+      }) as typeof fetch,
+    });
+
+    await client.auth.status().catch(() => undefined);
+
+    expect(requestedUrl).toStartWith("https://gitterm.example.com/api/trpc/");
+  });
+});
+
+describe("server endpoints", () => {
+  test.each([
+    ["https://api.gitterm.dev", "https://api.gitterm.dev/trpc"],
+    ["https://api.gitterm.dev/", "https://api.gitterm.dev/trpc"],
+    ["https://host/api", "https://host/api/trpc"],
+    ["https://host/api/", "https://host/api/trpc"],
+    ["https://host/api/trpc", "https://host/api/trpc"],
+    ["https://host/trpc", "https://host/trpc"],
+  ])("trpcEndpoint(%s)", (base, expected) => {
+    expect(trpcEndpoint(base)).toBe(expected);
+  });
+
+  test.each([
+    ["https://api.gitterm.dev", "https://api.gitterm.dev/api/device/code"],
+    ["https://host/api", "https://host/api/device/code"],
+    ["https://host/gitterm", "https://host/gitterm/api/device/code"],
+  ])("apiEndpoint(%s)", (base, expected) => {
+    expect(apiEndpoint(base, "device/code")).toBe(expected);
   });
 });
 

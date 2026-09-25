@@ -18,6 +18,7 @@ import {
 } from "@gitterm/db/schema/integrations";
 import { z } from "zod";
 import env from "@gitterm/env/server";
+import { apiPath } from "@gitterm/schema/url";
 import { githubGlobalPat, githubRepositoryMode } from "../github/config";
 import { getGitHubAppService } from "../github";
 import {
@@ -151,6 +152,33 @@ async function githubSharedConnection(): Promise<Connection | null> {
   };
 }
 
+/** Why a shared connection id can't be used right now, phrased for the end user. */
+async function sharedUnavailableMessage(integration: IntegrationKey): Promise<string> {
+  const name = INTEGRATIONS[integration].name;
+  const policy = await integrationPolicy(integration);
+  if (!policy.enabled) {
+    return `${name} is not enabled for users on this deployment. Ask an admin to enable it under Admin → Integrations.`;
+  }
+  if (integration === "github" && (await githubRepositoryMode())?.mode !== "pat") {
+    return "Your admin has not set up a shared GitHub account for this deployment. Connect your own GitHub account under Integrations instead.";
+  }
+  if (!policy.allowShared) {
+    return `Your admin has not made the shared ${name} connection available to users.`;
+  }
+  return `The shared ${name} connection is not available on this deployment.`;
+}
+
+/** Like `getConnection`, but throws a NOT_FOUND that explains why the connection is missing. */
+export async function requireConnection(userId: string, id: string): Promise<Connection> {
+  const connection = await getConnection(userId, id);
+  if (connection) return connection;
+  const shared = parseSharedConnectionId(id);
+  throw new TRPCError({
+    code: "NOT_FOUND",
+    message: shared ? await sharedUnavailableMessage(shared) : `Connection not found: ${id}`,
+  });
+}
+
 async function googleConnection(
   row: typeof googleCloudIntegration.$inferSelect,
   issuer: string,
@@ -244,10 +272,7 @@ export async function resolveWorkspaceConnections(
   const seen = new Set<IntegrationKey>();
 
   for (const id of new Set(ids)) {
-    const connection = await getConnection(userId, id);
-    if (!connection) {
-      throw new TRPCError({ code: "NOT_FOUND", message: `Connection not found: ${id}` });
-    }
+    const connection = await requireConnection(userId, id);
     if (connection.status !== "connected") {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -348,8 +373,8 @@ export type CreateConnectionResult =
       authorizeUrl: string;
     };
 
-function serverUrl(): string {
-  return (env.API_URL || env.BASE_URL || `http://${env.BASE_DOMAIN}`).replace(/\/api$/, "");
+function githubAppCallbackUrl(): string {
+  return apiPath(env.API_URL || env.BASE_URL || `http://${env.BASE_DOMAIN}`, "github/callback");
 }
 
 export async function createConnection(
@@ -404,7 +429,7 @@ export async function createConnection(
       message: "This deployment does not use a GitHub App for personal connections",
     });
   }
-  const redirect = encodeURIComponent(`${serverUrl()}/api/github/callback`);
+  const redirect = encodeURIComponent(githubAppCallbackUrl());
   return {
     status: "pending",
     integration: "github",

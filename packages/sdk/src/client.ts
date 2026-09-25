@@ -54,7 +54,7 @@ import type {
   GitHubBranch,
   GoogleSetup,
 } from "./types.js";
-import { createNoRedirectFetch, normalizeServerUrl } from "./transport.js";
+import { createNoRedirectFetch, normalizeServerUrl, trpcEndpoint } from "./transport.js";
 import { runHelpers } from "./runs.js";
 import type {
   AgentRunEvent,
@@ -248,10 +248,6 @@ function resolveCredentials(options: GittermClientOptions): Credentials {
   }
 
   return { serverUrl: normalizeServerUrl(serverUrl), token };
-}
-
-function toTrpcUrl(serverUrl: string): string {
-  return new URL("/trpc", serverUrl).toString();
 }
 
 function toIso(value: Date | string | null | undefined): string | null {
@@ -511,7 +507,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         condition: (operation) => operation.type === "subscription",
         // EventSource cannot set headers itself, so the ponyfill's fetch adds the token.
         true: httpSubscriptionLink({
-          url: toTrpcUrl(credentials.serverUrl),
+          url: trpcEndpoint(credentials.serverUrl),
           EventSource,
           eventSourceOptions: {
             fetch: (url, init) =>
@@ -519,7 +515,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           },
         }),
         false: httpBatchLink({
-          url: toTrpcUrl(credentials.serverUrl),
+          url: trpcEndpoint(credentials.serverUrl),
           fetch: fetchImpl as HttpBatchLinkOptions["fetch"],
           headers: () => ({ authorization }),
         }),

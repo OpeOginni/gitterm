@@ -118,12 +118,14 @@ without a GitTerm server, is described at the [end](#direct-provider-mode).
 `createGittermClient()` resolves its server and token in this order: constructor options →
 `GITTERM_SERVER_URL` / `GITTERM_API_TOKEN` → the CLI config at `~/.config/gitterm/cli.json`
 written by `gitterm login`. The default server is the hosted API at `https://api.gitterm.dev`;
-self-hosted instances use the same SDK with their own `serverUrl`:
+self-hosted instances use the same SDK with their own `serverUrl`. Behind the bundled
+path-routing proxy, point it at the `/api` path (for example
+`GITTERM_SERVER_URL=https://<host>/api`); a server reached directly uses its origin:
 
 ```ts
 const hosted = createGittermClient({ token: process.env.GITTERM_API_TOKEN });
 const selfHosted = createGittermClient({
-  serverUrl: "https://gitterm.example.com", // or http://localhost:3000
+  serverUrl: "https://gitterm.example.com/api", // or http://localhost:3000
   token: process.env.GITTERM_API_TOKEN,
 });
 const fromCli = createGittermClient(); // env vars, then the CLI's saved login

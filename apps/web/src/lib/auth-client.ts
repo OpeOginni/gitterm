@@ -2,6 +2,7 @@ import { createAuthClient } from "better-auth/react";
 import { inferAdditionalFields } from "better-auth/client/plugins";
 import { polarClient } from "@polar-sh/better-auth/client";
 import env from "@gitterm/env/web";
+import { apiPath } from "@gitterm/schema/url";
 
 // Mirror the server's `user.additionalFields` (packages/auth/src/index.ts) so
 // the client infers them on `session.user`. We use the runtime-config form of
@@ -20,7 +21,7 @@ const additionalFields = () =>
 const isBillingEnabled = env.NEXT_PUBLIC_ENABLE_BILLING;
 const authBaseUrl =
   env.NEXT_PUBLIC_AUTH_URL ??
-  (env.NEXT_PUBLIC_SERVER_URL ? `${env.NEXT_PUBLIC_SERVER_URL}/api/auth` : undefined);
+  (env.NEXT_PUBLIC_SERVER_URL ? apiPath(env.NEXT_PUBLIC_SERVER_URL, "auth") : undefined);
 
 /**
  * Auth client for non-billing mode

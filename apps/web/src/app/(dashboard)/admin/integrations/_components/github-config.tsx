@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AppWindow, KeyRound } from "lucide-react";
+import Image from "next/image";
 import { toast } from "sonner";
+import { apiPath } from "@gitterm/schema/url";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +20,29 @@ type Props = {
   data: AdminIntegrationsData;
   refresh: () => Promise<void>;
 };
+
+function GithubAccountLink({ login, size = "sm" }: { login: string; size?: "sm" | "md" }) {
+  const safeLogin = encodeURIComponent(login);
+  return (
+    <a
+      href={`https://github.com/${safeLogin}`}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex min-w-0 items-center gap-2 rounded-full border border-border bg-foreground/[0.03] py-1 pr-3 pl-1 text-foreground/90 transition-colors hover:bg-foreground/[0.06]"
+    >
+      <Image
+        src={`https://github.com/${safeLogin}.png`}
+        alt=""
+        width={size === "md" ? 32 : 24}
+        height={size === "md" ? 32 : 24}
+        className={
+          size === "md" ? "size-8 rounded-full object-cover" : "size-6 rounded-full object-cover"
+        }
+      />
+      <span className="truncate text-xs font-medium">@{login}</span>
+    </a>
+  );
+}
 
 function ActiveBadge({ active, label }: { active: boolean; label: string }) {
   return (
@@ -45,7 +70,17 @@ export function GithubConfig({ data, refresh }: Props) {
 
   const mode = data.githubMode?.mode ?? null;
   const stored = data.github;
-  const serverUrl = env.NEXT_PUBLIC_SERVER_URL || "https://your-api.example.com";
+  const callbackUrl = apiPath(
+    env.NEXT_PUBLIC_SERVER_URL || "https://your-api.example.com",
+    "github/callback",
+  );
+  // The webhook router lives on the listener, not the API server.
+  const listenerUrl = (env.NEXT_PUBLIC_LISTENER_URL || "https://your-listener.example.com").replace(
+    /\/+$/,
+    "",
+  );
+  const webhookUrl = `${listenerUrl}/trpc/github.handleInstallationWebhook`;
+  const patLogin = stored?.mode === "pat" && stored.accountLogin ? stored.accountLogin : null;
 
   const statusText =
     stored?.mode === "pat"
@@ -107,7 +142,10 @@ export function GithubConfig({ data, refresh }: Props) {
               <KeyRound className="size-4 text-muted-foreground" />
               <p className="text-sm font-medium text-foreground/90">Repository credentials</p>
             </div>
-            <p className="text-xs text-muted-foreground">{statusText}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs text-muted-foreground">{statusText}</p>
+              {patLogin ? <GithubAccountLink login={patLogin} /> : null}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <ActiveBadge active={mode === "app"} label="GitHub App" />
@@ -159,16 +197,10 @@ export function GithubConfig({ data, refresh }: Props) {
             </div>
             <div className="rounded-xl border border-border bg-fill p-3 text-xs text-muted-foreground space-y-1.5">
               <p>
-                Setup URL:{" "}
-                <code className="break-all text-foreground/80">
-                  {serverUrl}/api/github/callback
-                </code>
+                Setup URL: <code className="break-all text-foreground/80">{callbackUrl}</code>
               </p>
               <p>
-                Webhook URL:{" "}
-                <code className="break-all text-foreground/80">
-                  /trpc/github.handleInstallationWebhook
-                </code>
+                Webhook URL: <code className="break-all text-foreground/80">{webhookUrl}</code>
               </p>
               <p>Grant only the repository permissions your users need.</p>
             </div>
@@ -199,6 +231,12 @@ export function GithubConfig({ data, refresh }: Props) {
           description="One fine-grained PAT shared with every workspace that selects it. Revoke it on GitHub to cut access."
         >
           <div className="space-y-4">
+            {patLogin ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-fill p-3">
+                <GithubAccountLink login={patLogin} size="md" />
+                <p className="text-xs text-muted-foreground">Ending in {stored?.patSuffix}</p>
+              </div>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="gh-pat">Fine-grained PAT</Label>
               <Input
