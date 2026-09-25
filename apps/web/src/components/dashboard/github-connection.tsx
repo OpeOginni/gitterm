@@ -11,7 +11,6 @@ import {
   Copy,
   ExternalLink,
   GitBranch,
-  KeyRound,
   Loader2,
   Lock,
   Plus,
@@ -236,58 +235,74 @@ function GitHubProfileCard({
   );
 }
 
-function SharedGitHubCard({
+function SharedGitHubWelcome({
   accountLogin,
   patSuffix,
 }: {
   accountLogin: string;
   patSuffix: string | null;
 }) {
-  return (
-    <article className="rounded-xl border border-line bg-settings p-4 sm:p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3.5">
-          <Image
-            src={`https://github.com/${accountLogin}.png`}
-            alt={`${accountLogin} GitHub profile`}
-            width={44}
-            height={44}
-            className="size-11 shrink-0 rounded-full object-cover"
-          />
-          <div className="min-w-0">
-            <div className="mb-1.5 flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-base font-semibold tracking-tight text-fg">
-                @{accountLogin}
-              </h3>
-              <StatusIndicator suspended={false} />
-            </div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-fg-4">
-              Shared access token
-            </p>
-          </div>
-        </div>
+  const profileUrl = `https://github.com/${accountLogin}`;
+  const links = [
+    { label: `@${accountLogin} on GitHub`, href: profileUrl },
+    { label: "Repositories", href: `${profileUrl}?tab=repositories` },
+  ];
 
-        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-line px-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-3">
+  return (
+    <article className="overflow-hidden rounded-xl border border-line bg-settings">
+      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
+        <a href={profileUrl} target="_blank" rel="noreferrer" className="shrink-0">
+          <Image
+            src={`${profileUrl}.png`}
+            alt={`${accountLogin} GitHub profile`}
+            width={56}
+            height={56}
+            className="size-14 rounded-full object-cover ring-1 ring-line-2"
+          />
+        </a>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold tracking-tight text-fg">
+              You're set up for GitHub
+            </h3>
+            <StatusIndicator suspended={false} />
+          </div>
+          <p className="text-[13px] leading-relaxed text-fg-3">
+            Your admin connected{" "}
+            <a
+              href={profileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-fg underline-offset-4 hover:underline"
+            >
+              @{accountLogin}
+            </a>{" "}
+            for everyone on this deployment. There's nothing to connect: pick it when you create a
+            workspace, and clones, pushes, and pull requests will go through this account.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-line px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          {links.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.13em] text-fg-3 transition-colors hover:text-fg"
+            >
+              {link.label}
+              <ExternalLink className="size-3" />
+            </a>
+          ))}
+        </div>
+        <span className="inline-flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-4">
           <Lock className="size-3" />
-          Managed by admin
+          Managed by admin{patSuffix ? ` · token ••••${patSuffix}` : ""}
         </span>
       </div>
-
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 sm:gap-8">
-        <ProfileDetail icon={GitBranch} label="Repository access">
-          Repositories the token can reach
-        </ProfileDetail>
-        {patSuffix ? (
-          <ProfileDetail icon={KeyRound} label="Token">
-            <span className="font-mono">••••{patSuffix}</span>
-          </ProfileDetail>
-        ) : null}
-      </div>
-
-      <p className="mt-4 text-xs leading-relaxed text-fg-4">
-        Your admin set this up for everyone on this deployment. Select it when creating a workspace
-        to clone and push. Only an admin can change or remove it.
-      </p>
     </article>
   );
 }
@@ -391,7 +406,7 @@ export function GitHubConnection() {
         </div>
       </header>
       {isEnabled && appAvailability?.mode === "pat" && appAvailability.accountLogin ? (
-        <SharedGitHubCard
+        <SharedGitHubWelcome
           accountLogin={appAvailability.accountLogin}
           patSuffix={appAvailability.patSuffix}
         />
