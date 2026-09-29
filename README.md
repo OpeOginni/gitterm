@@ -1,14 +1,14 @@
 ![GitTerm](./apps/web/public/og-card/og-card-v4.png)
 
-Run your coding agent in the cloud. GitTerm runs Opencode in remote workspaces on the cloud provider or sandbox of your choice, so you can code from any device with your own model keys.
+Run your coding agent in the cloud. GitTerm runs OpenCode or T3Code in remote workspaces on the cloud provider or sandbox of your choice, so you can code from any device with your own model keys.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 ## What GitTerm does
 
-- Runs Opencode in cloud workspaces across multiple providers
-- Opens the Opencode TUI in your browser through TTYD
-- Gives you server-only Opencode URLs for desktop or local clients
+- Runs OpenCode or T3Code in cloud workspaces across multiple providers
+- Opens the agent TUI in your browser through TTYD
+- Gives you server-only agent URLs for desktop or local clients
 - Exposes any workspace port behind a shareable URL, so you can preview and test your app live
 - Keeps your model keys yours (bring your own keys, no markup)
 
@@ -91,6 +91,9 @@ Worker cron jobs:
 | Worker        | Schedule       | Purpose                                   |
 | ------------- | -------------- | ----------------------------------------- |
 | `idle-reaper` | `*/10 * * * *` | Stops idle workspaces and enforces quotas |
+
+On Railway the worker runs as a Cron job (run-once per invocation, `REAP_INTERVAL_MINUTES=0`).
+In Docker Compose it loops in-process — set `REAP_INTERVAL_MINUTES` (default `10`) to control how often it reaps.
 
 ## Routing
 
@@ -206,6 +209,7 @@ Schema changes ship as migrations: edit the schema, run `db:generate`, commit th
 
 - Website: https://gitterm.dev
 - OpenCode: https://opencode.ai
+- T3Code: https://github.com/pingdotgg/t3code
 - GitHub: https://github.com/OpeOginni/gitterm
 
 ## License
@@ -214,4 +218,4 @@ MIT. See `LICENSE`.
 
 ## Disclaimer
 
-GitTerm is an independent project and is not affiliated with, endorsed by, or sponsored by Opencode or its maintainers. "Opencode" and any related names or marks belong to their respective owners.
+GitTerm is an independent project and is not affiliated with, endorsed by, or sponsored by OpenCode, T3Code, or their maintainers. "OpenCode", "T3Code", and any related names or marks belong to their respective owners.

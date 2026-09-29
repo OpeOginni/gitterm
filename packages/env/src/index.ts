@@ -49,6 +49,17 @@ export const boolWithDefault = (defaultVal: boolean) =>
     .optional()
     .transform((val) => (val === undefined ? defaultVal : val === "true"));
 
+/** Non-negative integer from string with default value */
+export const intWithDefault = (defaultVal: number) =>
+  z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val.trim() === "") return defaultVal;
+      const parsed = parseInt(val.trim(), 10);
+      return Number.isNaN(parsed) ? defaultVal : parsed;
+    });
+
 /** Port number */
 export const port = z
   .string()

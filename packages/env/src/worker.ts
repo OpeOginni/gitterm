@@ -5,7 +5,15 @@
  *   import env from '@gitterm/env/worker';
  */
 
-import { z, parseEnv, deploymentMode, optional, boolWithDefault, nodeEnv } from "./index";
+import {
+  z,
+  parseEnv,
+  deploymentMode,
+  optional,
+  boolWithDefault,
+  intWithDefault,
+  nodeEnv,
+} from "./index";
 
 const schema = z.object({
   NODE_ENV: nodeEnv,
@@ -16,6 +24,10 @@ const schema = z.object({
 
   ENABLE_IDLE_REAPING: boolWithDefault(true),
   ENABLE_QUOTA_ENFORCEMENT: boolWithDefault(false),
+
+  // Minutes between reap passes. 0 = run once and exit (Railway Cron mode).
+  // Any positive value = loop forever, sleeping between passes (self-host/Docker mode).
+  REAP_INTERVAL_MINUTES: intWithDefault(0),
 });
 
 export type WorkerEnv = z.infer<typeof schema>;

@@ -149,6 +149,9 @@ services:
     environment:
       <<: *internal-env
       ENABLE_IDLE_REAPING: ${ENABLE_IDLE_REAPING:-true}
+      # Minutes between reap passes. Must be >0 here: the worker loops in-process
+      # because Compose has no external cron. 0 = run once and exit (Railway Cron mode).
+      REAP_INTERVAL_MINUTES: ${REAP_INTERVAL_MINUTES:-10}
     restart: unless-stopped
 
   web:

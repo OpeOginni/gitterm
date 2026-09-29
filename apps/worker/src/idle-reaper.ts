@@ -8,19 +8,46 @@ import { features } from "@gitterm/api/config";
  * This worker pauses idle/quota-exhausted workspaces, then permanently removes
  * paused workspaces after their plan's retention window expires.
  *
+ * Two modes (controlled by REAP_INTERVAL_MINUTES):
+ * - "0" (default): run once and exit. For Railway Cron, which handles
+ *   scheduling via `cronSchedule` in railway.config.json. This is the cheapest
+ *   option on usage-billed platforms (pay per execution, not per uptime).
+ * - ">0": loop forever, sleeping that many minutes between passes. For
+ *   self-hosted Docker Compose, where the container stays up and there is no
+ *   external cron. Idle CPU/RAM cost is negligible (~0 while sleeping).
  *
  * Feature flags (controlled via environment):
  * - ENABLE_IDLE_REAPING: Controls idle workspace reaping (default: true)
  * - ENABLE_QUOTA_ENFORCEMENT: Controls quota checking (default: true in managed mode)
+ * - REAP_INTERVAL_MINUTES: Minutes between passes, 0 = run once (default: 0)
  */
 
-async function main() {
-  console.log("[idle-reaper] Starting workspace reaper...");
-  console.log(`[idle-reaper] Idle reaping: ${features.idleReaping ? "enabled" : "disabled"}`);
-  console.log(
-    `[idle-reaper] Quota enforcement: ${features.quotaEnforcement ? "enabled" : "disabled"}`,
-  );
+const REAP_INTERVAL_MINUTES = (() => {
+  const raw = process.env.REAP_INTERVAL_MINUTES;
+  if (raw === undefined || raw.trim() === "") return 0;
+  const parsed = parseInt(raw.trim(), 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    console.warn(
+      `[idle-reaper] Invalid REAP_INTERVAL_MINUTES="${raw}", falling back to 0 (run once)`,
+    );
+    return 0;
+  }
+  return parsed;
+})();
 
+let shuttingDown = false;
+process.on("SIGTERM", () => {
+  console.log("[idle-reaper] Received SIGTERM, shutting down after current pass...");
+  shuttingDown = true;
+});
+process.on("SIGINT", () => {
+  console.log("[idle-reaper] Received SIGINT, shutting down after current pass...");
+  shuttingDown = true;
+});
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function runOnce() {
   let totalTransitions = 0;
 
   try {
@@ -175,11 +202,59 @@ async function main() {
       console.error("[idle-reaper] AWS orphan cleanup failed:", error);
     }
 
-    console.log(`[idle-reaper] Completed. Total lifecycle transitions: ${totalTransitions}`);
-    process.exit(0);
+    console.log(`[idle-reaper] Pass completed. Lifecycle transitions: ${totalTransitions}`);
+    return totalTransitions;
   } catch (error) {
-    console.error("[idle-reaper] Fatal error:", error);
-    process.exit(1);
+    console.error("[idle-reaper] Pass failed:", error);
+    throw error;
+  }
+}
+
+async function main() {
+  console.log("[idle-reaper] Starting workspace reaper...");
+  console.log(`[idle-reaper] Idle reaping: ${features.idleReaping ? "enabled" : "disabled"}`);
+  console.log(
+    `[idle-reaper] Quota enforcement: ${features.quotaEnforcement ? "enabled" : "disabled"}`,
+  );
+
+  // Run-once mode for external schedulers (Railway Cron).
+  if (REAP_INTERVAL_MINUTES <= 0) {
+    console.log("[idle-reaper] Mode: run-once (REAP_INTERVAL_MINUTES=0)");
+    try {
+      await runOnce();
+      process.exit(0);
+    } catch {
+      process.exit(1);
+    }
+    return;
+  }
+
+  // Loop mode for self-hosted Docker (no external cron).
+  console.log(
+    `[idle-reaper] Mode: loop every ${REAP_INTERVAL_MINUTES} minute(s). Set REAP_INTERVAL_MINUTES=0 for run-once (cron) mode.`,
+  );
+  let pass = 0;
+  for (;;) {
+    if (shuttingDown) {
+      console.log("[idle-reaper] Shutdown requested, exiting...");
+      process.exit(0);
+    }
+    pass++;
+    console.log(`[idle-reaper] Starting pass #${pass}...`);
+    try {
+      await runOnce();
+    } catch {
+      // Errors already logged per-pass; keep the loop alive so one bad pass
+      // doesn't stop reaping. Exit only on shutdown signal.
+    }
+    if (shuttingDown) {
+      console.log("[idle-reaper] Shutdown requested, exiting...");
+      process.exit(0);
+    }
+    console.log(
+      `[idle-reaper] Sleeping ${REAP_INTERVAL_MINUTES} minute(s) until pass #${pass + 1}...`,
+    );
+    await sleep(REAP_INTERVAL_MINUTES * 60_000);
   }
 }
 
