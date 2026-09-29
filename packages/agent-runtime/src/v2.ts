@@ -65,7 +65,12 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
       await switchSessionOptions(input.sessionId, input.agent, input.model);
       await call(
         client.session.prompt(
-          { sessionID: input.sessionId, id: input.messageId, text: input.prompt },
+          {
+            sessionID: input.sessionId,
+            id: input.messageId,
+            text: input.prompt,
+            files: input.files,
+          },
           options(),
         ),
       );

@@ -32,10 +32,14 @@ export { startRunWatcherSweep } from "./watcher";
 const ABANDONED_PENDING_MS = 30_000;
 const NATIVE_CANCEL_TIMEOUT_MS = 2_000;
 
+export type RunAttachment = { name?: string; mime: string; data: string };
+
 type RunCreateInput = {
   workspaceId: string;
   idempotencyKey: string;
   prompt: string;
+  /** Base64 files handed to OpenCode as `data:` attachments next to the prompt. */
+  attachments?: RunAttachment[];
   title?: string;
   agent?: string;
   model?: string;
@@ -71,6 +75,13 @@ function requestHash(input: RunCreateInput): string {
       JSON.stringify({
         workspaceId: input.workspaceId,
         prompt: input.prompt,
+        // Hash the payloads, not the payloads themselves: an idempotent retry of a prompt with
+        // images must match without keeping megabytes in the hash input.
+        attachments: (input.attachments ?? []).map((attachment) => ({
+          name: attachment.name ?? null,
+          mime: attachment.mime,
+          data: createHash("sha256").update(attachment.data).digest("hex"),
+        })),
         title: input.title ?? null,
         agent: input.agent ?? null,
         model: input.model ?? null,
@@ -343,6 +354,10 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       sessionId: nativeSessionId,
       messageId: nativeMessageId,
       prompt: input.prompt,
+      files: input.attachments?.map((attachment) => ({
+        uri: `data:${attachment.mime};base64,${attachment.data}`,
+        name: attachment.name,
+      })),
       agent: input.agent,
       model: input.model,
     });

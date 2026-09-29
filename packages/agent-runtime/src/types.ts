@@ -41,6 +41,8 @@ export type QuestionInputRequest = Extract<AgentRunInputRequest, { kind: "questi
 
 export type PermissionReply = "once" | "always" | "reject";
 
+export type PromptFile = { uri: string; name?: string };
+
 export interface OpencodeRuntime {
   createSession(input: {
     title?: string;
@@ -51,6 +53,8 @@ export interface OpencodeRuntime {
     sessionId: string;
     messageId: string;
     prompt: string;
+    /** OpenCode file attachments (`data:` or `file://` URIs), sent alongside the text. */
+    files?: PromptFile[];
     agent?: string;
     model?: string;
   }): Promise<void>;
