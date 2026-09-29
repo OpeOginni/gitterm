@@ -6,7 +6,12 @@ import { getProviderByCloudProviderId } from "../providers";
 import type { DaytonaConfig } from "../providers/daytona/types";
 import { getWorkspaceUrl } from "../utils/routing";
 import { decryptWorkspacePassword } from "../utils/workspace-password";
-import { createRuntimeHttp, RuntimeHttpError } from "@gitterm/agent-runtime/http";
+import {
+  call,
+  createOpencodeClient,
+  requestTimeout,
+  RuntimeHttpError,
+} from "@gitterm/agent-runtime/http";
 import { getProviderConfigService } from "./config/provider-config";
 import { resolveProjectDirectory } from "./workspace-runtime";
 import { redactSensitiveText } from "../utils/redact-secrets";
@@ -180,11 +185,17 @@ async function readMarkersViaOpencode(input: {
   directory: string;
   password: string | null;
 }): Promise<SetupMarkers | null> {
-  const http = createRuntimeHttp(input);
+  const client = createOpencodeClient(input);
   const readFile = async (name: string): Promise<string | null> => {
     // Same relative form the direct SDK uses for its own setup status reads.
     try {
-      return await (await http.send(`/api/fs/read/${SETUP_RELATIVE_DIR}/${name}`)).text();
+      const bytes = await call(
+        client.file.read(
+          { path: `${SETUP_RELATIVE_DIR}/${name}`, location: { directory: input.directory } },
+          requestTimeout(),
+        ),
+      );
+      return new TextDecoder().decode(bytes);
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.status === 404) return null;
       throw error;

@@ -96,7 +96,8 @@ describe("createDirectGittermClient", () => {
       if (path === "/api/session/session-1") return Response.json({ data: { id: "session-1" } });
       if (path.endsWith("/permission") || path.endsWith("/form"))
         return Response.json({ data: [] });
-      if (path === "/api/session/session-1/message") return Response.json({ data: [] });
+      if (path === "/api/session/session-1/message")
+        return Response.json({ data: [], cursor: { next: null } });
       throw new Error(`Unexpected request: ${request.method} ${path}`);
     }) as typeof fetch;
 
@@ -153,6 +154,7 @@ describe("createDirectGittermClient", () => {
             },
             { id: "message-2", type: "user", time: { created: Date.now() }, text: "again" },
           ],
+          cursor: { next: null },
         });
       }
       throw new Error(`Unexpected request: ${request.method} ${path}`);
@@ -206,9 +208,10 @@ describe("createDirectGittermClient", () => {
         project: { id: "project", directory: "/workspace" },
       };
 
+      expect(url.searchParams.get("location[directory]")).toBe("/workspace");
       if (request.method === "POST" && url.pathname === "/api/integration/openai/connect/key") {
         expect(await request.json()).toEqual({ key: "sk-rotated" });
-        return Response.json({ location, data: undefined });
+        return new Response(null, { status: 204 });
       }
 
       if (request.method === "GET" && url.pathname === "/api/integration/openai") {
@@ -225,7 +228,6 @@ describe("createDirectGittermClient", () => {
       if (request.method === "POST" && url.pathname === "/api/integration/openai/connect/oauth") {
         expect(await request.json()).toEqual({
           methodID: "chatgpt-headless",
-          inputs: {},
           label: "Slack bot",
         });
         return Response.json({
@@ -239,7 +241,10 @@ describe("createDirectGittermClient", () => {
           },
         });
       }
-      if (request.method === "GET" && url.pathname === "/api/integration/attempt/attempt-1") {
+      if (
+        request.method === "GET" &&
+        url.pathname === "/api/integration/openai/connect/oauth/attempt-1"
+      ) {
         statusRequests += 1;
         return Response.json({
           location,

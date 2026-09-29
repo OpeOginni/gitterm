@@ -4,6 +4,24 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.7.0
+
+### Breaking
+
+- Direct workspaces talk to OpenCode through the OpenCode 2 client (`@opencode/client`, bundled
+  into `@gitterm/sdk/direct`) instead of `@opencode-ai/sdk/v2`, which is no longer a dependency.
+  `DirectAuthIntegration`, `DirectAuthMethod`, and `DirectAuthPrompt` now match OpenCode 2's
+  `IntegrationInfo`, `IntegrationMethod`, and `FormField`: auth methods describe their inputs with
+  `form` instead of `prompts`, and `command` methods are listed.
+- `direct.auth.*` failures reject with `GittermError` (`NOT_FOUND`, `UNAUTHORIZED`, …) instead of a
+  plain `Error`.
+
+### Fixed
+
+- Permission replies, question rejections, and OAuth attempt `status()` / `complete()` /
+  `cancel()` use the current OpenCode 2 routes and payloads. Hosted runs get the same fix once the
+  API is redeployed.
+
 ## 0.6.1
 
 ### Fixed

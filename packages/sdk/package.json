@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/sdk",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "files": [
     "dist"
   ],
@@ -25,14 +25,13 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts --outdir dist --target node --format esm --external @trpc/client --external eventsource --external @opencode-ai/sdk --external @opencode-ai/sdk/v2 --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts --outdir dist --target node --format esm --external @trpc/client --external eventsource --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@asciidev/box-sdk": "^0.0.34",
     "@daytonaio/sdk": "^0.207.0",
-    "@opencode-ai/sdk": "^1.18.25",
     "@trpc/client": "^11.8.1",
     "@vercel/sandbox": "^3.2.1",
     "e2b": "^2.46.1",
@@ -41,6 +40,7 @@
   "devDependencies": {
     "@gitterm/agent-runtime": "workspace:*",
     "@gitterm/api": "workspace:*",
+    "@opencode/client": "^2.0.19",
     "@trpc/server": "catalog:",
     "@types/bun": "^1.2.6",
     "typescript": "^5.8.2"

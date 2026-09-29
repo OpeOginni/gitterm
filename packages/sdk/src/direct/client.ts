@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { directError, directRunOperations, directRuntime } from "./runs.js";
 import { aborted, terminal } from "../runs.js";
 import { GittermError } from "../errors.js";
-import { createRuntimeHttp, RuntimeHttpError } from "@gitterm/agent-runtime/http";
 import {
-  createOpencodeClient as createOpencodeV2Client,
-  type IntegrationAttemptStatus,
-} from "@opencode-ai/sdk/v2";
+  call,
+  createOpencodeClient,
+  requestTimeout,
+  RuntimeHttpError,
+} from "@gitterm/agent-runtime/http";
+import type { IntegrationAttemptStatus } from "@opencode/client";
 import { createAsciiDirectProvider } from "./ascii.js";
 import { createDaytonaDirectProvider } from "./daytona.js";
 import { createE2BDirectProvider } from "./e2b.js";
@@ -59,35 +61,6 @@ function resolveProvider(provider: DirectGittermClientOptions["provider"]): Dire
     case "vercel":
       return createVercelDirectProvider(provider);
   }
-}
-
-function createAuthClient(workspace: DirectWorkspace, fetchImpl?: typeof fetch) {
-  const authorization = workspace.runtime.password
-    ? `Basic ${Buffer.from(`opencode:${workspace.runtime.password}`).toString("base64")}`
-    : undefined;
-  return createOpencodeV2Client({
-    fetch: fetchImpl,
-    baseUrl: workspace.runtime.url,
-    directory: workspace.runtime.directory,
-    headers: {
-      ...workspace.runtime.headers,
-      ...(authorization ? { Authorization: authorization } : {}),
-    },
-  });
-}
-
-function errorMessage(error: unknown): string {
-  if (!error) return "OpenCode request failed";
-  if (typeof error === "string") return error;
-  if (typeof error === "object" && "data" in error) {
-    const data = (error as { data?: { message?: unknown } }).data;
-    if (typeof data?.message === "string") return data.message;
-  }
-  if (typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string") return message;
-  }
-  return error instanceof Error ? error.message : JSON.stringify(error);
 }
 
 function authStatus(status: IntegrationAttemptStatus): DirectAuthAttemptStatus {
@@ -153,15 +126,22 @@ function setupRunner(commands: string[]): string {
 
 export function createDirectGittermClient(options: DirectGittermClientOptions) {
   const provider = resolveProvider(options.provider);
-  const authClient = (workspace: DirectWorkspace) => createAuthClient(workspace, options.fetch);
-  const http = (workspace: DirectWorkspace) =>
-    createRuntimeHttp({
+  const opencode = (workspace: DirectWorkspace) =>
+    createOpencodeClient({
       url: workspace.runtime.url,
-      directory: workspace.runtime.directory,
       password: workspace.runtime.password ?? null,
       headers: workspace.runtime.headers,
       fetch: options.fetch,
     });
+  const location = (workspace: DirectWorkspace) => ({ directory: workspace.runtime.directory });
+  /** Runs one OpenCode request with the default timeout, mapping failures onto GittermError codes. */
+  async function request<T>(operation: (requestOptions: { signal: AbortSignal }) => Promise<T>) {
+    try {
+      return await call(operation(requestTimeout()));
+    } catch (error) {
+      throw directError(error);
+    }
+  }
 
   function assertWorkspace(workspace: DirectWorkspace) {
     if (workspace.provider !== provider.name) {
@@ -186,25 +166,43 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
     workspace: DirectWorkspace,
   ): Promise<DirectAuthAttemptStatus> {
     assertAuthAttempt(attempt, workspace);
-    const result = await authClient(workspace).v2.integration.attempt.status({
-      attemptID: attempt.id,
-    });
-    if (result.error || !result.data) throw new Error(errorMessage(result.error));
-    return authStatus(result.data.data);
+    const result = await request((requestOptions) =>
+      opencode(workspace).integration.oauth.status(
+        {
+          integrationID: attempt.integrationId,
+          attemptID: attempt.id,
+          location: location(workspace),
+        },
+        requestOptions,
+      ),
+    );
+    return authStatus(result.data);
   }
 
   async function startPty(workspace: DirectWorkspace, command: string, title: string) {
-    return http(workspace).json("/api/pty", {
-      method: "POST",
-      json: { command: "bash", args: ["-lc", command], cwd: workspace.runtime.directory, title },
-    });
+    return request((requestOptions) =>
+      opencode(workspace).pty.create(
+        {
+          location: location(workspace),
+          command: "bash",
+          args: ["-lc", command],
+          cwd: workspace.runtime.directory,
+          title,
+        },
+        requestOptions,
+      ),
+    );
   }
 
   async function setupFile(workspace: DirectWorkspace, name: string): Promise<string | null> {
     try {
-      return (
-        await (await http(workspace).send(`/api/fs/read/${SETUP_DIR}/${name}`)).text()
-      ).trim();
+      const bytes = await call(
+        opencode(workspace).file.read(
+          { path: `${SETUP_DIR}/${name}`, location: location(workspace) },
+          requestTimeout(),
+        ),
+      );
+      return new TextDecoder().decode(bytes).trim();
     } catch (error) {
       if (error instanceof RuntimeHttpError && error.status === 404) return null;
       throw directError(error);
@@ -268,24 +266,29 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
             "Use connectOAuth() for OAuth credential rotation, or inject an OAuth bundle when creating the workspace",
           );
         directModelAuth(credential);
-        await http(workspace).send(
-          `/api/integration/${encodeURIComponent(providerName)}/connect/key`,
-          { method: "POST", json: { key: credential.apiKey } },
+        await request((requestOptions) =>
+          opencode(workspace).integration.connect.key(
+            { integrationID: providerName, key: credential.apiKey, location: location(workspace) },
+            requestOptions,
+          ),
         );
       },
       async list(workspace: DirectWorkspace): Promise<DirectAuthIntegration[]> {
         assertWorkspace(workspace);
-        const result = await authClient(workspace).v2.integration.list();
-        if (result.error || !result.data) throw new Error(errorMessage(result.error));
-        return result.data.data;
+        const result = await request((requestOptions) =>
+          opencode(workspace).integration.list({ location: location(workspace) }, requestOptions),
+        );
+        return result.data;
       },
       async get(workspace: DirectWorkspace, integrationId: string): Promise<DirectAuthIntegration> {
         assertWorkspace(workspace);
-        const result = await authClient(workspace).v2.integration.get({
-          integrationID: integrationId,
-        });
-        if (result.error || !result.data) throw new Error(errorMessage(result.error));
-        return result.data.data;
+        const result = await request((requestOptions) =>
+          opencode(workspace).integration.get(
+            { integrationID: integrationId, location: location(workspace) },
+            requestOptions,
+          ),
+        );
+        return result.data;
       },
       async connectKey(input: {
         workspace: DirectWorkspace;
@@ -294,12 +297,17 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         label?: string;
       }): Promise<void> {
         assertWorkspace(input.workspace);
-        const result = await authClient(input.workspace).v2.integration.connect.key({
-          integrationID: input.integrationId,
-          key: input.key,
-          label: input.label,
-        });
-        if (result.error) throw new Error(errorMessage(result.error));
+        await request((requestOptions) =>
+          opencode(input.workspace).integration.connect.key(
+            {
+              integrationID: input.integrationId,
+              key: input.key,
+              label: input.label,
+              location: location(input.workspace),
+            },
+            requestOptions,
+          ),
+        );
       },
       async connectOAuth(input: {
         workspace: DirectWorkspace;
@@ -309,14 +317,19 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         label?: string;
       }): Promise<DirectAuthAttempt> {
         assertWorkspace(input.workspace);
-        const result = await authClient(input.workspace).v2.integration.connect.oauth({
-          integrationID: input.integrationId,
-          methodID: input.methodId,
-          inputs: input.inputs ?? {},
-          label: input.label,
-        });
-        if (result.error || !result.data) throw new Error(errorMessage(result.error));
-        const attempt = result.data.data;
+        const result = await request((requestOptions) =>
+          opencode(input.workspace).integration.oauth.connect(
+            {
+              integrationID: input.integrationId,
+              methodID: input.methodId,
+              answer: input.inputs,
+              label: input.label,
+              location: location(input.workspace),
+            },
+            requestOptions,
+          ),
+        );
+        const attempt = result.data;
         return {
           id: attempt.attemptID,
           workspaceId: input.workspace.id,
@@ -343,11 +356,17 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
         if (attempt.mode !== "code")
           throw new Error("Only code-based OAuth attempts are completed manually");
         if (!code.trim()) throw new Error("OAuth authorization code is required");
-        const result = await authClient(workspace).v2.integration.attempt.complete({
-          attemptID: attempt.id,
-          code,
-        });
-        if (result.error) throw new Error(errorMessage(result.error));
+        await request((requestOptions) =>
+          opencode(workspace).integration.oauth.complete(
+            {
+              integrationID: attempt.integrationId,
+              attemptID: attempt.id,
+              code,
+              location: location(workspace),
+            },
+            requestOptions,
+          ),
+        );
       },
       async wait(
         attempt: DirectAuthAttempt,
@@ -373,10 +392,16 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
       },
       async cancel(attempt: DirectAuthAttempt, workspace: DirectWorkspace): Promise<void> {
         assertAuthAttempt(attempt, workspace);
-        const result = await authClient(workspace).v2.integration.attempt.cancel({
-          attemptID: attempt.id,
-        });
-        if (result.error) throw new Error(errorMessage(result.error));
+        await request((requestOptions) =>
+          opencode(workspace).integration.oauth.cancel(
+            {
+              integrationID: attempt.integrationId,
+              attemptID: attempt.id,
+              location: location(workspace),
+            },
+            requestOptions,
+          ),
+        );
       },
     },
     workspaces: {

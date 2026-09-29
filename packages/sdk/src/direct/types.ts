@@ -43,33 +43,66 @@ export type DirectOAuthModelCredential = {
 
 export type DirectModelCredential = DirectApiModelCredential | DirectOAuthModelCredential;
 
-export type DirectAuthPrompt =
-  | {
-      type: "text";
-      key: string;
-      message: string;
-      placeholder?: string;
-      when?: { key: string; op: "eq" | "neq"; value: string };
-    }
-  | {
-      type: "select";
-      key: string;
-      message: string;
-      options: Array<{ label: string; value: string; hint?: string }>;
-      when?: { key: string; op: "eq" | "neq"; value: string };
-    };
+type DirectAuthPromptBase = {
+  key: string;
+  title?: string;
+  description?: string;
+  required?: boolean;
+  hidden?: boolean;
+  /** Show the field only when every condition holds for an earlier answer. */
+  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>;
+};
 
+type DirectAuthPromptOption = { value: string; label: string; description?: string };
+
+type DirectAuthPromptNumber = number | "Infinity" | "-Infinity" | "NaN";
+
+/** A field an OAuth or key method asks for (OpenCode 2 `FormField`); answer it with `connectOAuth({ inputs })`. */
+export type DirectAuthPrompt =
+  | (DirectAuthPromptBase & {
+      type: "string";
+      format?: "email" | "uri" | "date" | "date-time";
+      minLength?: number;
+      maxLength?: number;
+      pattern?: string;
+      placeholder?: string;
+      default?: string;
+      options?: DirectAuthPromptOption[];
+      custom?: boolean;
+    })
+  | (DirectAuthPromptBase & {
+      type: "number" | "integer";
+      minimum?: DirectAuthPromptNumber;
+      maximum?: DirectAuthPromptNumber;
+      default?: DirectAuthPromptNumber;
+    })
+  | (DirectAuthPromptBase & { type: "boolean"; default?: boolean })
+  | (DirectAuthPromptBase & {
+      type: "multiselect";
+      options: DirectAuthPromptOption[];
+      minItems?: number;
+      maxItems?: number;
+      custom?: boolean;
+      default?: string[];
+    })
+  | { key: string; type: "external"; url: string; title?: string; description?: string };
+
+/** OpenCode 2 `IntegrationMethod`. */
 export type DirectAuthMethod =
-  | { type: "oauth"; id: string; label: string; prompts?: DirectAuthPrompt[] }
-  | { type: "key"; label?: string }
+  | { type: "oauth"; id: string; label: string; form?: DirectAuthPrompt[] }
+  | { type: "command"; id: string; label: string; command: string[] }
+  | { type: "key"; label?: string; form?: DirectAuthPrompt[] }
   | { type: "env"; names: string[] };
 
+/** OpenCode 2 `IntegrationInfo`. */
 export type DirectAuthIntegration = {
   id: string;
   name: string;
+  metadata?: Record<string, unknown>;
   methods: DirectAuthMethod[];
   connections: Array<
-    { type: "credential"; id: string; label: string } | { type: "env"; name: string }
+    | { type: "credential"; id: string; label: string; method: "key" | "oauth" }
+    | { type: "env"; name: string }
   >;
 };
 

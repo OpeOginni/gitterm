@@ -8,9 +8,11 @@ import {
   asRecord,
   asString,
   asStringArray,
-  createRuntimeHttp,
+  call,
+  createOpencodeClient,
   isSessionNotFound,
-  signalStream,
+  requestTimeout,
+  unwrapClientError,
 } from "./http";
 import {
   missingSessionSnapshot,
@@ -24,73 +26,71 @@ import {
   type RuntimeTarget,
 } from "./types";
 
-/** OpenCode 2 (`/api/*`, `{ id, type, data }` events, questions as forms). Verified on 2.0.3. */
-function session(sessionId: string): string {
-  return `/api/session/${encodeURIComponent(sessionId)}`;
-}
-
+/** OpenCode 2 through `@opencode/client` (`{ id, type, data }` events, questions as forms). */
 export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
-  const http = createRuntimeHttp(target);
+  const client = createOpencodeClient(target);
+  const options = () => requestTimeout(target.signal);
 
-  async function switchSessionOptions(sessionId: string, agent?: string, model?: string) {
+  async function switchSessionOptions(sessionID: string, agent?: string, model?: string) {
     const modelRef = parseModelRef(model);
     if (modelRef) {
-      await http.send(`${session(sessionId)}/model`, {
-        method: "POST",
-        json: { model: { providerID: modelRef.providerID, id: modelRef.modelID } },
-      });
+      await call(
+        client.session.switchModel(
+          { sessionID, model: { providerID: modelRef.providerID, id: modelRef.modelID } },
+          options(),
+        ),
+      );
     }
-    if (agent) {
-      await http.send(`${session(sessionId)}/agent`, { method: "POST", json: { agent } });
-    }
+    if (agent) await call(client.session.switchAgent({ sessionID, agent }, options()));
   }
 
   return {
     async createSession(input) {
       const modelRef = parseModelRef(input.model);
-      const created = await http.json<{ data: { id: string; title?: string | null } }>(
-        "/api/session",
-        {
-          method: "POST",
-          json: {
+      const created = await call(
+        client.session.create(
+          {
             title: input.title,
             agent: input.agent,
             model: modelRef ? { providerID: modelRef.providerID, id: modelRef.modelID } : undefined,
             location: { directory: target.directory },
           },
-        },
+          options(),
+        ),
       );
-      return { id: created.data.id, title: created.data.title ?? input.title ?? "Agent run" };
+      return { id: created.id, title: created.title ?? input.title ?? "Agent run" };
     },
 
     async prompt(input) {
       await switchSessionOptions(input.sessionId, input.agent, input.model);
-      await http.send(`${session(input.sessionId)}/prompt`, {
-        method: "POST",
-        json: { id: input.messageId, text: input.prompt },
-      });
+      await call(
+        client.session.prompt(
+          { sessionID: input.sessionId, id: input.messageId, text: input.prompt },
+          options(),
+        ),
+      );
     },
 
-    async abort(sessionId) {
-      await http.send(`${session(sessionId)}/interrupt`, { method: "POST", json: {} });
+    async abort(sessionID) {
+      await call(client.session.interrupt({ sessionID }, options()));
     },
 
-    async deleteSession(sessionId) {
-      await http.send(session(sessionId), { method: "DELETE" });
+    async deleteSession(sessionID) {
+      await call(client.session.remove({ sessionID }, options()));
     },
 
-    async snapshot(sessionId, messageId) {
+    async snapshot(sessionID, messageId) {
       try {
-        await http.send(session(sessionId));
+        await call(client.session.get({ sessionID }, options()));
       } catch (error) {
         if (isSessionNotFound(error)) return missingSessionSnapshot();
         throw error;
       }
       const [active, messages, permissions, forms] = await Promise.all([
-        http.json<{ data: Record<string, unknown> }>("/api/session/active"),
-        listMessages(sessionId),
-        http.json<{ data: unknown[] }>(`${session(sessionId)}/permission`),
-        http.json<{ data: unknown[] }>(`${session(sessionId)}/form`),
+        call(client.session.active(options())),
+        listMessages(sessionID),
+        call(client.permission.list({ sessionID }, options())),
+        call(client.session.form.list({ sessionID }, options())),
       ]);
 
       const runMessages = selectRunMessages(messages, messageId);
@@ -105,7 +105,7 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
       return {
         sessionExists: true,
         superseded,
-        busy: sessionId in asRecord(active.data),
+        busy: sessionID in active,
         retry: Boolean(assistant?.retry) && assistantTime.completed == null,
         messages: runMessages.map(normalizeMessage),
         finalText: finalText || null,
@@ -121,57 +121,61 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
         },
         pendingInputs: superseded
           ? []
-          : [
-              ...(permissions.data ?? []).map(asRecord).map(permissionRequest),
-              ...(forms.data ?? []).map(asRecord).map(formRequest),
-            ],
+          : [...permissions.map(permissionRequest), ...forms.map(formRequest)],
       };
     },
 
-    subscribe: (signal) => signalStream(target, "/api/event", parseV2Signal, signal),
-
-    async replyPermission(sessionId, requestId, reply) {
-      await http.send(`${session(sessionId)}/permission/${encodeURIComponent(requestId)}/reply`, {
-        method: "POST",
-        json: { reply },
-      });
+    async *subscribe(signal) {
+      try {
+        for await (const event of client.event.subscribe({ signal })) {
+          if (event.type === "server.connected") {
+            yield { type: "connected" };
+            continue;
+          }
+          const parsed = parseV2Signal(event);
+          if (parsed) yield parsed;
+        }
+        // The shared event source ends quietly on abort; callers expect the stream to throw.
+        signal.throwIfAborted();
+      } catch (error) {
+        throw unwrapClientError(error);
+      }
     },
 
-    async replyQuestion(sessionId, request: QuestionInputRequest, answers) {
+    async replyPermission(sessionID, requestID, decision) {
+      await call(client.permission.reply({ sessionID, requestID, decision }, options()));
+    },
+
+    async replyQuestion(sessionID, request: QuestionInputRequest, answers) {
       const answer: Record<string, string | string[]> = {};
       request.questions.forEach((question, index) => {
         const selected = (answers[index] ?? []).map((label) => optionValue(question, label));
         answer[question.key] = question.multiple ? selected : (selected[0] ?? "");
       });
-      await http.send(`${session(sessionId)}/form/${encodeURIComponent(request.id)}/reply`, {
-        method: "POST",
-        json: { answer },
-      });
+      await call(client.session.form.reply({ sessionID, formID: request.id, answer }, options()));
     },
 
-    async rejectQuestion(sessionId, requestId) {
-      await http.send(`${session(sessionId)}/form/${encodeURIComponent(requestId)}/cancel`, {
-        method: "POST",
-        json: {},
-      });
+    async rejectQuestion(sessionID, formID) {
+      await call(client.session.form.cancel({ sessionID, formID }, options()));
     },
   };
 
-  async function listMessages(sessionId: string): Promise<Record<string, unknown>[]> {
-    type MessagePage = { data?: unknown[]; cursor?: { next?: string | null } };
-    const pageSize = 200;
+  async function listMessages(sessionID: string): Promise<Record<string, unknown>[]> {
+    const limit = 200;
     const messages: Record<string, unknown>[] = [];
     // The server rejects `order` together with `cursor`, so only the first page states it.
-    let query: string = `?order=asc&limit=${pageSize}`;
+    let cursor: string | undefined;
     while (true) {
-      const page: MessagePage = await http.json<MessagePage>(
-        `${session(sessionId)}/message${query}`,
+      const page = await call(
+        client.message.list(
+          cursor ? { sessionID, cursor, limit } : { sessionID, order: "asc", limit },
+          options(),
+        ),
       );
-      const items = page.data ?? [];
-      messages.push(...items.map(asRecord));
-      const next = page.cursor?.next ?? null;
-      if (!next || items.length < pageSize) break;
-      query = `?cursor=${encodeURIComponent(next)}&limit=${pageSize}`;
+      messages.push(...page.data);
+      const next = page.cursor.next ?? null;
+      if (!next || page.data.length < limit) break;
+      cursor = next;
     }
     return messages;
   }
@@ -312,7 +316,7 @@ function optionValue(question: QuestionInputRequest["questions"][number], label:
   return option?.value ?? label;
 }
 
-export function parseV2Signal(raw: Record<string, unknown>): RuntimeSignal | null {
+export function parseV2Signal(raw: { type: string; data?: unknown }): RuntimeSignal | null {
   const data = asRecord(raw.data);
   const type = asString(raw.type) ?? "";
   const sessionId = asString(data.sessionID);

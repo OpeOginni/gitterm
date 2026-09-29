@@ -31,7 +31,7 @@ describe("direct run interaction", () => {
   function fixture() {
     let messageId = "";
     let phase: "tool" | "question" | "permission" | "done" = "tool";
-    const posts: Array<{ path: string; body: unknown }> = [];
+    const posts: Array<{ method: string; path: string; body: unknown }> = [];
     let connection: ReadableStreamDefaultController<Uint8Array> | undefined;
     let streamClosed = false;
     const encoder = new TextEncoder();
@@ -53,10 +53,21 @@ describe("direct run interaction", () => {
       const path = url.pathname;
       expect(request.headers.get("x-routing-token")).toBe("route");
       if (path === "/api/event") {
+        // Like a real fetch body, the stream errors once the request is aborted.
+        request.signal.addEventListener("abort", () => {
+          streamClosed = true;
+          connection?.error(request.signal.reason);
+          connection = undefined;
+        });
         return new Response(
           new ReadableStream<Uint8Array>({
             start(controller) {
               connection = controller;
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: "server.connected", data: {} })}\n\n`,
+                ),
+              );
             },
             cancel() {
               streamClosed = true;
@@ -66,22 +77,22 @@ describe("direct run interaction", () => {
           { headers: { "content-type": "text/event-stream" } },
         );
       }
-      if (request.method === "POST") {
+      if (request.method === "POST" || request.method === "DELETE") {
         const text = await request.text();
         const body = (text ? JSON.parse(text) : {}) as Record<string, unknown>;
-        posts.push({ path, body });
+        posts.push({ method: request.method, path, body });
         if (path === "/api/session")
           return Response.json({ data: { id: "ses_test", title: "test" } });
-        if (path.endsWith("/prompt")) messageId = body.id as string;
-        if (
-          path.includes("/reply") ||
-          path.includes("/permissions/per_test") ||
-          path.endsWith("/cancel")
-        ) {
+        if (path.endsWith("/prompt")) {
+          messageId = body.id as string;
+          return Response.json({ data: { id: messageId } });
+        }
+        if (path.endsWith("/interrupt")) return Response.json({ data: {} });
+        if (path.endsWith("/reply") || request.method === "DELETE") {
           phase = "done";
           emit();
         }
-        return Response.json(true);
+        return new Response(null, { status: 204 });
       }
       if (path === "/api/session/ses_test") return Response.json({ data: { id: "ses_test" } });
       if (path === "/api/session/active")
@@ -127,6 +138,7 @@ describe("direct run interaction", () => {
               content: [{ type: "text", text: phase === "done" ? "Finished" : "Working" }],
             },
           ],
+          cursor: { next: null },
         });
       }
       throw new Error(`Unexpected ${request.method} ${path}`);
@@ -190,7 +202,7 @@ describe("direct run interaction", () => {
     });
     expect(result.status).toBe("completed");
     expect(f.posts.find((post) => post.path.includes("per_test"))?.body).toEqual({
-      reply: "once",
+      decision: "once",
     });
   });
 
@@ -203,11 +215,13 @@ describe("direct run interaction", () => {
     await expect(
       client.runs.respond(run, { requestId: "que_test", reply: { type: "question" } as never }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(f.posts.some((post) => post.path.endsWith("/cancel"))).toBe(false);
+    const cancelled = () =>
+      f.posts.some((post) => post.method === "DELETE" && post.path.endsWith("/form/que_test"));
+    expect(cancelled()).toBe(false);
     await client.runs.respond(run, {
       requestId: "que_test",
       reply: { type: "question", reject: true },
     });
-    expect(f.posts.some((post) => post.path.endsWith("/cancel"))).toBe(true);
+    expect(cancelled()).toBe(true);
   });
 });

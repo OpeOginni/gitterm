@@ -10,6 +10,9 @@
   "scripts": {
     "check-types": "tsc --noEmit"
   },
+  "dependencies": {
+    "@opencode/client": "^2.0.19"
+  },
   "devDependencies": {
     "@gitterm/config": "workspace:*",
     "typescript": "catalog:"
