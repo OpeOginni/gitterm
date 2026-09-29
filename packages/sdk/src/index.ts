@@ -32,6 +32,7 @@ export type {
   AgentQuestionOption,
   AgentQuestionRequest,
   AgentRun,
+  AgentRunAttachment,
   AgentRunCreateInput,
   AgentRunInputRequest,
   AgentRunMessage,

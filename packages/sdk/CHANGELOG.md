@@ -4,6 +4,14 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.8.0
+
+### Added
+
+- `runs.create({ attachments })` sends files (base64 + mime, e.g. screenshots) to the agent as
+  OpenCode attachments next to the prompt. At most 10 per run and 20 MB of base64 in total; the
+  hosted API needs a redeploy before it accepts the field.
+
 ## 0.7.0
 
 ### Breaking
