@@ -293,6 +293,99 @@ test("waitFor returns an existing GitHub installation after it reconnects", asyn
   expect(polls).toBe(2);
 });
 
+test("MCP SDK supports creation, testing and updates", async () => {
+  const connection = {
+    id: "11111111-1111-4111-8111-111111111111",
+    integration: "mcp",
+    kind: "personal",
+    name: "Docs",
+    status: "connected",
+    connectedAt: "2026-10-01T00:00:00.000Z",
+    details: {
+      integration: "mcp",
+      url: "https://mcp.example/mcp",
+      authType: "none",
+      codemode: true,
+      toolCount: 2,
+      serverInfo: { name: "fixture", version: "1" },
+      lastCheckedAt: "2026-10-02T00:00:00.000Z",
+    },
+  } as const;
+  const seen: string[] = [];
+  const fetchStub = (async (input: RequestInfo | URL) => {
+    const url = String(input instanceof Request ? input.url : input);
+    seen.push(url);
+    if (url.includes("connections.create"))
+      return trpcOk({
+        status: "saved",
+        connection: { ...connection, status: "error" },
+        message: "Check endpoint",
+        nextSteps: [],
+      });
+    if (url.includes("mcp.test"))
+      return trpcOk({ status: "connected", connection, message: "Connected" });
+    return trpcOk(connection);
+  }) as unknown as typeof fetch;
+  const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
+  const saved = await client.integrations.connections.create({
+    integration: "mcp",
+    name: "Docs",
+    url: "https://mcp.example/mcp",
+    authentication: { type: "none" },
+  });
+  expect(saved.status).toBe("saved");
+  if (saved.status !== "pending") expect(saved.connection.connectedAt).toBe(connection.connectedAt);
+  expect((await client.integrations.mcp.test(connection.id)).connection.details).toEqual(
+    connection.details,
+  );
+  expect(
+    (
+      await client.integrations.mcp.update({
+        id: connection.id,
+        name: "Updated",
+        url: connection.details.url,
+      })
+    ).id,
+  ).toBe(connection.id);
+  expect(seen).toHaveLength(3);
+});
+
+test("MCP waitFor follows the exact connection, including reconnecting older accounts", async () => {
+  let polls = 0;
+  const fetchStub = (async () => {
+    polls++;
+    const base = {
+      integration: "mcp",
+      kind: "personal",
+      name: "Tools",
+      connectedAt: "2026-09-01T00:00:00.000Z",
+      details: {
+        integration: "mcp",
+        url: "https://example.com/mcp",
+        authType: "headers",
+        codemode: true,
+        toolCount: null,
+        serverInfo: null,
+        lastCheckedAt: null,
+      },
+    };
+    return trpcOk([
+      { ...base, id: "another-account", status: "connected" },
+      { ...base, id: "selected-account", status: polls === 1 ? "needs_auth" : "connected" },
+    ]);
+  }) as unknown as typeof fetch;
+  const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
+  const result = await client.integrations.connections.waitFor({
+    integration: "mcp",
+    connectionId: "selected-account",
+    since: "2026-10-02T00:00:00.000Z",
+    timeoutMs: 1000,
+    intervalMs: 1,
+  });
+  expect(result.id).toBe("selected-account");
+  expect(polls).toBe(2);
+});
+
 test("run helpers accept the run object instead of an id pair", async () => {
   const seen: string[] = [];
   const client = eventClient(

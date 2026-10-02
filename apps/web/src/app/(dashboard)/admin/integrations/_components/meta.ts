@@ -46,16 +46,16 @@ export const INTEGRATION_META: Record<IntegrationKey, IntegrationMeta> = {
     accent: "bg-blue-500/[0.08]",
   },
   executor: {
-    summary: "Dedicated per-user execution connection.",
+    summary: "Connect a user's Executor tool catalog over MCP.",
     description:
-      "A future dedicated connection flow for each user, with optional admin-shared access.",
+      "Users connect an Executor organization endpoint and PAT through the same setup as custom MCP servers. OpenCode connects directly. Credentials are encrypted at rest but accessible to attached workspace agents. Personal connections only.",
     logo: "/executor.png",
     accent: "bg-violet-500/[0.08]",
   },
   mcp: {
     summary: "Bring your own MCP servers.",
     description:
-      "The connector is not implemented yet. Configuration will appear here when it is ready.",
+      "Users add public HTTPS Streamable HTTP servers with no auth or encrypted authentication headers and attach connections to OpenCode workspaces. No GitTerm relay or managed OAuth. Workspace agents can read credentials. Personal connections only.",
     logo: "/mcp.svg",
     accent: "bg-foreground/[0.06]",
   },

@@ -28,7 +28,7 @@ import {
 } from "../../providers";
 import {
   BeforeAgentSetupError,
-  RESERVED_WORKSPACE_ENV_KEYS,
+  isReservedWorkspaceEnvKey,
   type ComputeProvider,
 } from "../../providers/compute";
 import { createProvisionLogger } from "../../providers/provision-logger";
@@ -155,6 +155,8 @@ import {
   workloadIdentityIssuer,
 } from "../../service/workload-identity/google";
 import { resolveWorkspaceConnections } from "../../service/integrations/connections";
+import { workspaceMcpConnection } from "@gitterm/db/schema/mcp";
+import { recordCredentialAudit } from "../../service/credential-audit";
 import { integrationPolicy } from "../../service/integrations/catalog";
 import { githubRepositoryMode } from "../../service/github/config";
 import {
@@ -308,10 +310,11 @@ const workspaceCreateBaseSchema = z.strictObject({
     ])
     .optional(),
   /**
-   * Connection ids from `integrations.connections.list` to attach (at most one per integration).
+   * Connection ids from `integrations.connections.list` to attach. MCP supports multiple;
+   * repository and cloud identities retain single-selection semantics.
    * Personal connections are row ids; shared ones are `<integration>:shared`, e.g. `github:shared`.
    */
-  connections: z.array(z.string().min(1)).max(8).optional(),
+  connections: z.array(z.string().min(1)).max(32).optional(),
   repositoryCredentials: repositoryCredentialsSchema.optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
   /** Per-provider selection: inline apiKey, dashboard credential by label, or dashboard default. */
@@ -321,7 +324,7 @@ const workspaceCreateBaseSchema = z.strictObject({
     .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(20_000))
     .refine((variables) => Object.keys(variables).length <= 50, "Too many environment variables")
     .refine(
-      (variables) => Object.keys(variables).every((name) => !RESERVED_WORKSPACE_ENV_KEYS.has(name)),
+      (variables) => Object.keys(variables).every((name) => !isReservedWorkspaceEnvKey(name)),
       "Environment variables cannot override reserved workspace keys",
     )
     .optional(),
@@ -1673,6 +1676,9 @@ export const workspaceRouter = router({
       // An idempotent retry returns the existing workspace even if a connection has since been
       // removed or disabled. Only new workspaces need their connections resolved.
       const attached = await resolveWorkspaceConnections(userId, input.connections ?? []);
+      workspaceCreateLogger.addSecrets(
+        attached.mcp.flatMap((connection) => Object.values(connection.headers)),
+      );
       const gitIntegrationId =
         attached.github?.kind === "personal" ? attached.github.gitIntegration.id : undefined;
       const sharedGitConnectionId =
@@ -2516,6 +2522,13 @@ export const workspaceRouter = router({
         ]
           .filter((instructions): instructions is string => Boolean(instructions))
           .join("\n\n");
+        if (attached.mcp.length && agentTypeRecord.provisionerKey !== "opencode") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "GitTerm MCP connections currently require an OpenCode workspace; T3Code support is not yet available",
+          });
+        }
         const agentProvisioning = getAgentProvisioner(agentTypeRecord.provisionerKey).provision({
           userId,
           userDisplayName: fetchedUser.name,
@@ -2525,6 +2538,7 @@ export const workspaceRouter = router({
           agentConfigs,
           serverPassword,
           credentials,
+          mcpConnections: attached.mcp,
           additionalAgentInstructions: additionalAgentInstructions || undefined,
           opencode: input.models?.default
             ? {
@@ -2773,6 +2787,23 @@ export const workspaceRouter = router({
           persistent: effectivePersistent,
           idempotencyKey: input.idempotencyKey ?? null,
         });
+        if (attached.mcp.length) {
+          await db.insert(workspaceMcpConnection).values(
+            attached.mcp.map((connection) => ({
+              workspaceId,
+              connectionId: connection.connectionId,
+            })),
+          );
+          for (const connection of attached.mcp) {
+            await recordCredentialAudit({
+              workspaceId,
+              userId,
+              credentialKind: "mcp",
+              integrationId: connection.connectionId,
+              action: "issued",
+            });
+          }
+        }
         if (providerKey === "railway") {
           await storeWorkspaceRuntimeBundle(workspaceId, DEFAULT_DOCKER_ENV_VARS);
         }

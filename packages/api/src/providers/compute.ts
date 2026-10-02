@@ -132,6 +132,10 @@ void _ensureAllSystemKeysListed;
 /** Reserved keys that user-defined env vars must not override. */
 export const RESERVED_WORKSPACE_ENV_KEYS: ReadonlySet<string> = new Set(SYSTEM_WORKSPACE_ENV_KEYS);
 
+export function isReservedWorkspaceEnvKey(key: string): boolean {
+  return RESERVED_WORKSPACE_ENV_KEYS.has(key) || key.startsWith("GITTERM_MCP_");
+}
+
 /**
  * Final environment handed to a compute provider: the typed system keys plus
  * any user-defined vars (arbitrary string keys, already stripped of reserved

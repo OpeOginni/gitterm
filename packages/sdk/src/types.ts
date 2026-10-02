@@ -242,7 +242,7 @@ export type Integration = {
 };
 
 export type ConnectionKind = "personal" | "shared";
-export type ConnectionStatus = "connected" | "suspended";
+export type ConnectionStatus = "connected" | "suspended" | "untested" | "needs_auth" | "error";
 
 export type GitHubConnectionDetails = {
   integration: "github";
@@ -267,7 +267,39 @@ export type GoogleConnectionDetails = {
   };
 };
 
-export type ConnectionDetails = GitHubConnectionDetails | GoogleConnectionDetails;
+export type McpConnectionDetails = {
+  integration: "mcp" | "executor";
+  url: string;
+  authType: "none" | "headers";
+  codemode: boolean;
+  toolCount: number | null;
+  serverInfo: { name: string; version: string } | null;
+  lastCheckedAt: string | null;
+};
+export type McpAuthentication =
+  | { type: "none" }
+  | { type: "headers"; headers: Record<string, string> };
+export type CreateMcpConnectionInput = {
+  integration: "mcp" | "executor";
+  name: string;
+  url: string;
+  authentication: McpAuthentication;
+  codemode?: boolean;
+};
+export type UpdateMcpConnectionInput = Omit<
+  CreateMcpConnectionInput,
+  "integration" | "authentication"
+> & { id: string; authentication?: McpAuthentication };
+export type McpConnectionTestResult = {
+  status: "connected" | "needs_auth" | "error";
+  message: string;
+  connection: Connection;
+};
+
+export type ConnectionDetails =
+  | GitHubConnectionDetails
+  | GoogleConnectionDetails
+  | McpConnectionDetails;
 
 /**
  * Something you can attach to a workspace via `connections: [id]`. Personal connections are
@@ -292,14 +324,16 @@ export type CreateConnectionInput =
       workloadIdentityProvider: string;
       serviceAccountEmail: string;
     }
-  | { integration: "github" };
+  | { integration: "github" }
+  | CreateMcpConnectionInput;
 
 export type CreateConnectionResult =
   | {
-      status: "connected";
+      status: "connected" | "saved";
       connection: Connection;
       /** Commands you still need to run outside GitTerm, e.g. the Google IAM binding. */
       nextSteps: Array<{ label: string; command: string }>;
+      message?: string;
     }
   | {
       /** Finish in a browser at `authorizeUrl`, then `connections.waitFor()` the new connection. */

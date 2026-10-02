@@ -180,9 +180,20 @@ accounts from the Integrations dashboard. Existing deployments may continue usin
 takes precedence. See
 [`docs/google-workload-identity.md`](docs/google-workload-identity.md) for setup and IAM guidance.
 
-The admin catalog also lists GitLab, Bitbucket, Executor, and other MCPs as planned connectors.
-They cannot be enabled until their dedicated connection flows are implemented. The deployment encryption master key remains in the deployment
-secret manager so that integration secrets stored in the database are encrypted independently.
+## MCP and Executor
+
+An admin enables **MCP servers** and/or **Executor** in **Admin → Integrations**. Users save
+personal HTTPS MCP endpoints with no auth, bearer tokens, or custom headers and explicitly select
+them when creating an OpenCode workspace. Multiple servers and accounts are supported.
+
+OpenCode connects directly to each server. Executor is an optional preset, not a required
+dependency: use its organization endpoint and PAT to access an existing tool catalog. GitTerm
+does not aggregate tools, proxy tool traffic, or manage MCP OAuth. Credentials are encrypted at
+rest, but attached workspace agents can read them. See [the MCP guide](docs/mcp-integrations.md)
+for setup, SDK examples, supported protocols, and revocation limitations.
+
+GitLab and Bitbucket remain planned connectors. The deployment encryption master key stays in
+the deployment secret manager so integration secrets in the database are encrypted independently.
 
 The complete storage, broker, rotation, audit, and provider threat model is documented in
 [`docs/credential-security.md`](docs/credential-security.md).

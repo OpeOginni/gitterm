@@ -24,7 +24,7 @@ export default async function IntegrationsPage() {
     <DashboardShell>
       <DashboardHeader
         heading="Integrations"
-        text="Connect the services your workspaces pull code from."
+        text="Connect repository access, cloud identities, and tools for your agents."
       />
       <div className="mx-auto max-w-4xl space-y-10 pt-2">
         <Suspense fallback={null}>
