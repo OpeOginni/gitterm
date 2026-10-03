@@ -172,7 +172,10 @@ describe.skipIf(!testDatabase)("direct MCP integration (isolated PostgreSQL)", (
     };
     expect(definition.url).toBe(upstreamUrl);
     const headers = Object.fromEntries(
-      Object.entries(definition.headers).map(([key, value]) => [key, env[value.slice(5, -1)]!]),
+      Object.entries(definition.headers).map(([key, value]) => [
+        key,
+        value.startsWith("{env:") ? env[value.slice(5, -1)]! : value,
+      ]),
     );
     const client = new Client({ name: "workspace", version: "1.0" });
     const transport = new StreamableHTTPClientTransport(new URL(definition.url), {

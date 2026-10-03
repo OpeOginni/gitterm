@@ -57,10 +57,10 @@ function positionalAnswers(
 ): string[][] {
   try {
     return questionAnswers(request, answers);
-  } catch (error) {
+  } catch {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: error instanceof Error ? error.message : "Invalid question answers",
+      message: "Invalid question answers",
     });
   }
 }
@@ -289,7 +289,7 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       parentRunId: parentRun?.id,
       nativeSessionId: parentRun?.nativeSessionId,
       nativeMessageId,
-      title: input.title ?? "Agent run",
+      title: "Agent run",
     })
     .onConflictDoNothing()
     .returning();
@@ -308,7 +308,6 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
   let nativeSessionId = inserted.nativeSessionId ?? undefined;
   let ownsNativeSession = false;
   try {
-    let nativeTitle = inserted.title;
     if (!nativeSessionId) {
       const native = await runtime.createSession({
         title: input.title,
@@ -316,14 +315,13 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
         model: input.model,
       });
       nativeSessionId = native.id;
-      nativeTitle = native.title;
       ownsNativeSession = true;
     }
     const [submitting] = await db
       .update(agentRun)
       .set({
         nativeSessionId,
-        title: nativeTitle,
+        title: "Agent run",
         status: "running",
         submittedAt: new Date(),
         updatedAt: new Date(),
@@ -347,14 +345,13 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       model: input.model,
     });
     const current = (await loadRun(inserted.id)) ?? submitting;
-    if (!isActiveRunStatus(current.status)) {
+    // A fast run may settle before prompt() returns. Keep its session: it is
+    // the only copy of the output, including diagnostics for failed runs.
+    if (current.status === "cancelled" || current.status === "failed") {
       await cancelNativeRun(runtime, nativeSessionId).catch(() => undefined);
-      if (ownsNativeSession) {
-        await deleteNativeSession(runtime, nativeSessionId).catch(() => undefined);
-      }
     }
     return publicRun(current);
-  } catch (error) {
+  } catch {
     untrackRun(input.workspaceId, inserted.id);
     if (nativeSessionId) {
       await cancelNativeRun(runtime, nativeSessionId).catch(() => undefined);
@@ -368,7 +365,7 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
     }
     const failed = await settleRun(inserted.id, {
       status: "failed",
-      errorMessage: error instanceof Error ? error.message : "Agent request failed",
+      errorMessage: "Agent request failed",
     });
     return publicRun(failed ?? (await loadRun(inserted.id)) ?? inserted);
   }
@@ -376,7 +373,16 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
 
 export async function getAgentRun(workspaceId: string, runId: string, userId: string) {
   const { run, workspaceStatus } = await getOwnedRun(workspaceId, runId, userId);
-  return publicRun(await reconcileRun(run, workspaceStatus));
+  const current = await reconcileRun(run, workspaceStatus);
+  const result = publicRun(current);
+  if (workspaceStatus !== "running" || !current.nativeSessionId) return result;
+  const runtime = getRuntime(await getRuntimeTarget(workspaceId, userId));
+  const live = await runtime
+    .snapshot(current.nativeSessionId, current.nativeMessageId)
+    .catch(() => null);
+  return live
+    ? { ...result, finalText: live.finalText, pendingInputs: live.pendingInputs }
+    : result;
 }
 
 export async function listAgentRuns(
@@ -423,19 +429,15 @@ export async function listAgentRuns(
 export async function getAgentRunMessages(workspaceId: string, runId: string, userId: string) {
   const { run, workspaceStatus } = await getOwnedRun(workspaceId, runId, userId);
   const current = await reconcileRun(run, workspaceStatus);
-  // Rows only capture messages at lifecycle transitions; in-flight runs are read live.
-  if (
-    isActiveRunStatus(current.status) &&
-    current.nativeSessionId &&
-    workspaceStatus === "running"
-  ) {
+  // Content lives only in the workspace, including for completed runs.
+  if (current.nativeSessionId && workspaceStatus === "running") {
     const runtime = getRuntime(await getRuntimeTarget(workspaceId, userId));
     const live = await runtime
       .snapshot(current.nativeSessionId, current.nativeMessageId)
       .catch(() => null);
     if (live) return live.messages;
   }
-  return current.messages;
+  return [];
 }
 
 export async function respondToAgentRun(
@@ -449,7 +451,9 @@ export async function respondToAgentRun(
       message: "INPUT_NOT_PENDING: Run is not waiting for input",
     });
   }
-  const request = run.pendingInputs.find((candidate) => candidate.id === input.requestId);
+  const runtime = getRuntime(await getRuntimeTarget(input.workspaceId, userId));
+  const live = await runtime.snapshot(run.nativeSessionId, run.nativeMessageId);
+  const request = live.pendingInputs.find((candidate) => candidate.id === input.requestId);
   if (!request) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -463,7 +467,6 @@ export async function respondToAgentRun(
     });
   }
 
-  const runtime = getRuntime(await getRuntimeTarget(input.workspaceId, userId));
   try {
     if (request.kind === "permission" && input.reply.type === "permission") {
       await runtime.replyPermission(run.nativeSessionId, request.id, input.reply.response);

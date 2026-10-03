@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Image from "next/image";
-import { Loader2, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { Check, Copy, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { EXECUTOR_MCP_URL, type McpAuthentication } from "@gitterm/schema/mcp";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,47 @@ const statusLabels: Record<string, string> = {
 
 async function refreshMcpConnections() {
   await queryClient.invalidateQueries({ queryKey: trpc.integrations.connections.list.queryKey() });
+}
+
+function CopyConnectionId({ id, name }: { id: string; name: string }) {
+  const [copied, setCopied] = useState(false);
+  const copiedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
+    },
+    [],
+  );
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+      if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
+      copiedTimeout.current = setTimeout(() => setCopied(false), 1800);
+      toast.success("Integration ID copied");
+    } catch {
+      toast.error("Couldn't copy the integration ID");
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      onClick={handleCopy}
+      aria-label={copied ? "Integration ID copied" : `Copy integration ID for ${name}`}
+      title={`Connection ID: ${id}`}
+      className="text-fg-3 hover:bg-fill-2 hover:text-fg"
+    >
+      {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+      <span className="sr-only" aria-live="polite">
+        {copied ? "Copied" : ""}
+      </span>
+    </Button>
+  );
 }
 
 function Field({
@@ -180,6 +221,144 @@ export function McpConnections({
     }
   }
 
+  const connectionForm = form ? (
+    <form onSubmit={submit} className="space-y-5 rounded-xl border border-line-2 bg-settings p-5">
+      <div className="flex items-center justify-between gap-3 border-b border-line pb-4">
+        <h3 className="text-sm font-semibold text-fg">
+          {form.id
+            ? "Edit connection"
+            : form.integration === "executor"
+              ? "Connect Executor"
+              : "New MCP connection"}
+        </h3>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Cancel connection form"
+          disabled={saving}
+          onClick={() => setForm(null)}
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
+      {form.integration === "executor" ? (
+        <p className="text-xs leading-relaxed text-fg-3">
+          Configure your apps in{" "}
+          <a
+            href="https://executor.sh"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+          >
+            Executor
+          </a>
+          , then copy your organization&apos;s MCP endpoint and PAT from its API keys page. Replace
+          the organization placeholder in the example URL below. Public HTTPS self-hosted endpoints
+          work too. Verify the permissions and approval behavior of your Executor deployment.
+        </p>
+      ) : null}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Connection name">
+          <Input
+            autoFocus
+            required
+            maxLength={100}
+            value={form.name}
+            onChange={(event) => change("name", event.target.value)}
+            placeholder="e.g. Documentation · personal"
+          />
+        </Field>
+        <Field
+          label="MCP endpoint"
+          hint="Public HTTPS Streamable HTTP endpoint. Connection tests block private-network addresses."
+        >
+          <Input
+            required
+            type="url"
+            value={form.url}
+            onChange={(event) => change("url", event.target.value)}
+            placeholder={
+              form.integration === "executor" ? EXECUTOR_MCP_URL : "https://mcp.example.com/mcp"
+            }
+            spellCheck={false}
+          />
+        </Field>
+      </div>
+      <Field
+        label="Authentication"
+        hint={
+          form.id
+            ? "Leave credential fields blank to retain authentication when the endpoint is unchanged."
+            : "No auth, bearer tokens, and custom headers are supported. GitTerm-managed OAuth is not included."
+        }
+      >
+        <select
+          value={form.authMode}
+          onChange={(event) => change("authMode", event.target.value as AuthMode)}
+          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="none">No authentication</option>
+          <option value="bearer">Bearer token / API key</option>
+          <option value="headers">Custom authentication headers</option>
+        </select>
+      </Field>
+      {form.authMode === "bearer" ? (
+        <Field label="Bearer token">
+          <Input
+            type="password"
+            autoComplete="new-password"
+            value={form.token}
+            onChange={(event) => change("token", event.target.value)}
+            placeholder={form.id ? "Leave blank to keep existing credential" : "Paste your token"}
+          />
+        </Field>
+      ) : null}
+      {form.authMode === "headers" ? (
+        <Field
+          label="Header JSON"
+          hint="Values are encrypted; cookies and transport/proxy headers are not allowed."
+        >
+          <textarea
+            rows={3}
+            autoComplete="off"
+            spellCheck={false}
+            value={form.headers}
+            onChange={(event) => change("headers", event.target.value)}
+            placeholder={
+              form.id ? "Leave blank to keep existing headers" : '{"X-API-Key": "your-key"}'
+            }
+            className="w-full rounded-md border border-input bg-background p-3 font-mono text-xs"
+          />
+        </Field>
+      ) : null}
+      <label className="flex items-center gap-2 text-xs text-fg-3">
+        <Checkbox
+          checked={form.codemode}
+          onCheckedChange={(checked) => change("codemode", checked === true)}
+        />
+        Use OpenCode Code Mode (recommended)
+      </label>
+      {form.id ? (
+        <p className="text-xs leading-relaxed text-fg-4">
+          Changes apply to newly created workspaces. Existing workspaces keep their configuration
+          and credentials; revoke tokens at the provider to stop their access.
+        </p>
+      ) : null}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" disabled={saving} onClick={() => setForm(null)}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving} className="gap-2">
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+          {form.id ? "Save changes" : "Save and test"}
+        </Button>
+      </div>
+    </form>
+  ) : null;
+  // Editing replaces the connection's own card so there is one source of truth on screen.
+  const editingId = form?.id ?? null;
+
   return (
     <section className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -218,157 +397,8 @@ export function McpConnections({
           ) : null}
         </div>
       </header>
-      <div className="flex items-start gap-2.5 rounded-lg border border-line bg-fill px-4 py-3 text-xs leading-relaxed text-fg-3">
-        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-fg-3" />
-        <p>
-          Credentials are encrypted in GitTerm, then delivered to the workspaces you select. Their
-          agents can read and use those credentials. Executor can keep service keys behind its
-          gateway, but its access token is still available to the agent. Use narrowly scoped tokens
-          and connect only servers you trust.
-        </p>
-      </div>
 
-      {form ? (
-        <form
-          onSubmit={submit}
-          className="space-y-5 rounded-xl border border-line-2 bg-settings p-5"
-        >
-          <div className="flex items-center justify-between gap-3 border-b border-line pb-4">
-            <h3 className="text-sm font-semibold text-fg">
-              {form.id
-                ? "Edit connection"
-                : form.integration === "executor"
-                  ? "Connect Executor"
-                  : "New MCP connection"}
-            </h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Cancel connection form"
-              disabled={saving}
-              onClick={() => setForm(null)}
-            >
-              <X className="size-4" />
-            </Button>
-          </div>
-          {form.integration === "executor" ? (
-            <p className="text-xs leading-relaxed text-fg-3">
-              Configure your apps in{" "}
-              <a
-                href="https://executor.sh"
-                target="_blank"
-                rel="noreferrer"
-                className="underline underline-offset-2"
-              >
-                Executor
-              </a>
-              , then copy your organization&apos;s MCP endpoint and PAT from its API keys page.
-              Replace the organization placeholder in the example URL below. Public HTTPS
-              self-hosted endpoints work too. Verify the permissions and approval behavior of your
-              Executor deployment.
-            </p>
-          ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Connection name">
-              <Input
-                autoFocus
-                required
-                maxLength={100}
-                value={form.name}
-                onChange={(event) => change("name", event.target.value)}
-                placeholder="e.g. Documentation · personal"
-              />
-            </Field>
-            <Field
-              label="MCP endpoint"
-              hint="Public HTTPS Streamable HTTP endpoint. Connection tests block private-network addresses."
-            >
-              <Input
-                required
-                type="url"
-                value={form.url}
-                onChange={(event) => change("url", event.target.value)}
-                placeholder={
-                  form.integration === "executor" ? EXECUTOR_MCP_URL : "https://mcp.example.com/mcp"
-                }
-                spellCheck={false}
-              />
-            </Field>
-          </div>
-          <Field
-            label="Authentication"
-            hint={
-              form.id
-                ? "Leave credential fields blank to retain authentication when the endpoint is unchanged."
-                : "No auth, bearer tokens, and custom headers are supported. GitTerm-managed OAuth is not included."
-            }
-          >
-            <select
-              value={form.authMode}
-              onChange={(event) => change("authMode", event.target.value as AuthMode)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="none">No authentication</option>
-              <option value="bearer">Bearer token / API key</option>
-              <option value="headers">Custom authentication headers</option>
-            </select>
-          </Field>
-          {form.authMode === "bearer" ? (
-            <Field label="Bearer token">
-              <Input
-                type="password"
-                autoComplete="new-password"
-                value={form.token}
-                onChange={(event) => change("token", event.target.value)}
-                placeholder={
-                  form.id ? "Leave blank to keep existing credential" : "Paste your token"
-                }
-              />
-            </Field>
-          ) : null}
-          {form.authMode === "headers" ? (
-            <Field
-              label="Header JSON"
-              hint="Values are encrypted; cookies and transport/proxy headers are not allowed."
-            >
-              <textarea
-                rows={3}
-                autoComplete="off"
-                spellCheck={false}
-                value={form.headers}
-                onChange={(event) => change("headers", event.target.value)}
-                placeholder={
-                  form.id ? "Leave blank to keep existing headers" : '{"X-API-Key": "your-key"}'
-                }
-                className="w-full rounded-md border border-input bg-background p-3 font-mono text-xs"
-              />
-            </Field>
-          ) : null}
-          <label className="flex items-center gap-2 text-xs text-fg-3">
-            <Checkbox
-              checked={form.codemode}
-              onCheckedChange={(checked) => change("codemode", checked === true)}
-            />
-            Use OpenCode Code Mode (recommended)
-          </label>
-          {form.id ? (
-            <p className="text-xs leading-relaxed text-fg-4">
-              Changes apply to newly created workspaces. Existing workspaces keep their
-              configuration and credentials; revoke tokens at the provider to stop their access.
-            </p>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" disabled={saving} onClick={() => setForm(null)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving} className="gap-2">
-              {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {form.id ? "Save changes" : "Save and test"}
-            </Button>
-          </div>
-        </form>
-      ) : null}
+      {form && !editingId ? connectionForm : null}
 
       {error ? (
         <p role="alert" className="text-sm text-red-400">
@@ -388,6 +418,9 @@ export function McpConnections({
         {connections.map((connection) => {
           const details = connection.details;
           if (details.integration !== "mcp" && details.integration !== "executor") return null;
+          if (connection.id === editingId) {
+            return <div key={connection.id}>{connectionForm}</div>;
+          }
           return (
             <article key={connection.id} className="rounded-xl border border-line bg-settings p-4">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -428,12 +461,14 @@ export function McpConnections({
                   >
                     Test
                   </Button>
+                  <CopyConnectionId id={connection.id} name={connection.name} />
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
                     disabled={saving || busyId !== null}
                     aria-label={`Edit ${connection.name}`}
+                    className="text-fg-3 hover:bg-fill-2 hover:text-fg"
                     onClick={() =>
                       setForm({
                         ...emptyForm(connection.integration as "mcp" | "executor"),
@@ -455,9 +490,10 @@ export function McpConnections({
                     variant="ghost"
                     disabled={busyId !== null || saving}
                     aria-label={`Remove ${connection.name}`}
+                    className="text-red-400/80 hover:bg-red-400/10 hover:text-red-300"
                     onClick={() => action(connection.id, "remove")}
                   >
-                    <Trash2 className="size-3.5 text-fg-4" />
+                    <Trash2 className="size-3.5" />
                   </Button>
                 </div>
               </div>

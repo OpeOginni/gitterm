@@ -23,7 +23,7 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "check-types": "turbo check-types",
-    "test": "bun test packages/*/src apps/*/src benchmarks",
+    "test": "bun test packages/*/src apps/*/src benchmarks scripts",
     "test:providers": "bun run scripts/provider-smoke.ts",
     "test:providers:hosted": "bun run test:providers --hosted",
     "test:providers:direct": "bun run scripts/direct-provider-smoke.ts",

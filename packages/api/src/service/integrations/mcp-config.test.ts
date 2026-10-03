@@ -27,20 +27,15 @@ test("merges direct MCP connections without losing unrelated config or existing 
       servers: { custom: { type: "remote", url: "https://example.com/mcp" } },
     },
   };
-  const { config, env } = withMcpConnections(original, connections);
+  const { config } = withMcpConnections(original, connections);
   expect(Object.keys(original.mcp.servers)).toHaveLength(1);
   expect(config!.model).toBe("p/m");
   const mcp = config!.mcp as typeof original.mcp;
   expect(mcp.timeout).toEqual({ catalog: 5000 });
-  expect(Object.keys(mcp.servers)).toHaveLength(3);
-  expect(Object.values(mcp.servers).map((server) => server.url)).toContain(
-    "https://first.example/mcp",
-  );
-  expect(JSON.stringify(config)).not.toContain("first-secret");
-  expect(JSON.stringify(config)).not.toContain("second-secret");
-  expect(Object.values(env)).toEqual(["Bearer first-secret", "second-secret"]);
-  expect(Object.keys(env)).toHaveLength(2);
-  expect(JSON.stringify(config)).not.toContain("/relay/");
+  expect(Object.values(mcp.servers).map((server) => server.url)).toEqual([
+    "https://example.com/mcp",
+    ...connections.map((connection) => connection.url),
+  ]);
 });
 test("preserves legacy definitions, including OAuth, alongside new V2 entries", () => {
   const old = {
@@ -74,16 +69,21 @@ test("OpenCode gets credentials through isolated environment substitutions, not 
     result.files.find((file) => file.path === OPENCODE_CONFIG_PATH)!.contentBase64,
     "base64",
   ).toString();
-  expect(configText).not.toContain("first-secret");
+  for (const connection of connections) {
+    for (const secret of Object.values(connection.headers))
+      expect(configText).not.toContain(secret);
+  }
   const servers = Object.values(JSON.parse(configText).mcp.servers) as Record<string, any>[];
   expect(servers).toHaveLength(2);
   expect(servers[0]!.oauth).toBe(false);
   expect(servers[0]!.protocol).toBe("legacy");
   expect(servers[1]!.codemode).toBe(false);
-  for (const server of servers) {
-    for (const reference of Object.values(server.headers) as string[]) {
+  for (const [index, server] of servers.entries()) {
+    expect(server.headers.Connection).toBe("close");
+    for (const [name, reference] of Object.entries(server.headers) as [string, string][]) {
+      if (name === "Connection") continue;
       expect(reference).toMatch(/^\{env:GITTERM_MCP_[\w]+\}$/);
-      expect(result.env[reference.slice(5, -1)]).toBeTruthy();
+      expect(result.env[reference.slice(5, -1)]).toBe(connections[index]!.headers[name]);
     }
   }
 });
@@ -92,5 +92,7 @@ test("no-auth servers do not mint credentials, and no attachments leave user con
   expect(withMcpConnections(original, []).config).toBe(original);
   const result = withMcpConnections(undefined, [{ ...connections[0]!, headers: {} }]);
   expect(result.env).toEqual({});
-  expect(Object.values((result.config!.mcp as any).servers)[0]).not.toHaveProperty("headers");
+  expect(Object.values((result.config!.mcp as any).servers)[0]).toHaveProperty("headers", {
+    Connection: "close",
+  });
 });

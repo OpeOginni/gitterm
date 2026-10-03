@@ -3402,11 +3402,14 @@ export const workspaceRouter = router({
               workspaceRegion?.externalRegionIdentifier,
               existingWorkspace.externalRunningDeploymentId ?? undefined,
             );
-            await relaunchWorkspaceSetup(computeProvider, existingWorkspace, provider.providerKey);
+            await relaunchWorkspaceSetup(computeProvider, claimedWorkspace, provider.providerKey);
           } catch (error) {
             await updateWorkspaceByIdAndInvalidate(
               input.workspaceId,
-              { status: "paused", updatedAt: new Date() },
+              {
+                status: "paused",
+                updatedAt: new Date(),
+              },
               existingWorkspace.subdomain,
             );
             throw new TRPCError({
@@ -3755,13 +3758,15 @@ export const workspaceRouter = router({
         } catch (error) {
           await updateWorkspaceByIdAndInvalidate(
             input.workspaceId,
-            { status: "paused", updatedAt: new Date() },
+            {
+              status: "paused",
+              updatedAt: new Date(),
+            },
             existingWorkspace.subdomain,
           );
           throw error;
         }
         await relaunchWorkspaceSetup(computeProvider, existingWorkspace, provider.providerKey);
-
         const restartWorkspaceStatus =
           provider.restartSettlement === "immediate" ? "running" : "pending";
         // Update workspace status
@@ -3803,7 +3808,7 @@ export const workspaceRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to restart workspace",
-          cause: error instanceof Error ? error.message : "Unknown error",
+          cause: error,
         });
       }
     }),

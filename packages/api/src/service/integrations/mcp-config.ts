@@ -6,6 +6,10 @@ export type McpWorkspaceConnection = {
   headers: Record<string, string>;
 };
 
+export function workspaceMcpServerName(connectionId: string): string {
+  return `gitterm_${connectionId.replace(/-/g, "_")}`;
+}
+
 /** Connection IDs, rather than display names, prevent normalization collisions. */
 export function withMcpConnections(
   config: Record<string, unknown> | null | undefined,
@@ -23,7 +27,7 @@ export function withMcpConnections(
   // V2 explicitly supports mixed members inside mcp. Leave legacy entries intact so
   // OpenCode can normalize all their OAuth/timeout fields without a partial migration.
   for (const connection of connections) {
-    const name = `gitterm_${connection.connectionId.replace(/-/g, "_")}`;
+    const name = workspaceMcpServerName(connection.connectionId);
     if (name in servers || name in mcp)
       throw new Error(`GitTerm MCP server name conflicts with user configuration: ${name}`);
     const headers: Record<string, string> = {};
@@ -38,7 +42,9 @@ export function withMcpConnections(
       oauth: false,
       codemode: connection.codemode,
       protocol: "legacy",
-      ...(Object.keys(headers).length ? { headers } : {}),
+      // A resumed VM retains Bun's HTTP pool, but its old TCP connections are
+      // gone. Close each HTTP connection instead of reusing a frozen socket.
+      headers: { ...headers, Connection: "close" },
     };
   }
   return { config: { ...config, mcp: { ...mcp, servers } }, env };

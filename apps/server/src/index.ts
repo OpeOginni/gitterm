@@ -234,6 +234,11 @@ const trpcHandler = trpcServer({
     return createContext({ context });
   },
   onError: ({ path, type, error, req }) => {
+    if (path?.startsWith("run.")) {
+      // Runtime/validation errors and query URLs can contain conversation data.
+      console.error(`[tRPC] ${type} "${path}" → ${error.code}`);
+      return;
+    }
     const cause = error.cause ?? error;
     console.error(
       `[tRPC] ${type} "${path ?? "<unknown>"}" → ${error.code}: ${error.message}`,

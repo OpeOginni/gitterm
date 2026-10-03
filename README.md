@@ -163,6 +163,29 @@ Set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` together for repo integration. 
 `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` if GitHub login is enabled.
 A separate GitHub OAuth App is not required.
 
+For GitHub sign-in on a **managed** deployment, configure both services:
+
+```dotenv
+# Server service (apps/server/.env.development.local for local dev)
+DEPLOYMENT_MODE=managed
+ENABLE_GITHUB_AUTH=true
+ENABLE_EMAIL_AUTH=false
+GITHUB_APP_CLIENT_ID=<your-app-client-id>
+GITHUB_APP_CLIENT_SECRET=<your-app-client-secret>
+
+# Web service (apps/web/.env.development.local for local dev)
+NEXT_PUBLIC_DEPLOYMENT_MODE=managed
+NEXT_PUBLIC_ENABLE_GITHUB_AUTH=true
+NEXT_PUBLIC_ENABLE_EMAIL_AUTH=false
+```
+
+The App ID and private key do not enable sign-in. If the web deployment mode is
+unset, the login form defaults to email-only self-hosted mode even when the server
+has GitHub credentials. Restart both local dev processes after changing these
+files; rebuild and redeploy the web service for production changes because
+`NEXT_PUBLIC_*` values are baked into the browser bundle by Next.js. Keep OAuth
+secrets on the server only—never use a `NEXT_PUBLIC_*` variable for them.
+
 GitHub App setup:
 
 - Callback URL: `https://<base-domain>/api/auth/callback/github`

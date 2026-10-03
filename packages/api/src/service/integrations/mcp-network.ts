@@ -99,6 +99,13 @@ export const mcpFetch: FetchLike = async (input, init) => {
       (res) => {
         clearTimeout(headerTimeout);
         const status = res.statusCode ?? 502;
+        // Node accepts three-digit statuses outside the Fetch Response range.
+        // Reject here: throwing in this asynchronous callback escapes the promise.
+        if (status < 200 || status > 599) {
+          res.destroy();
+          reject(new McpNetworkError("The MCP endpoint returned an invalid HTTP status"));
+          return;
+        }
         if (status >= 300 && status < 400 && status !== 304) {
           res.destroy();
           reject(new McpNetworkError("The MCP endpoint redirected; use its final HTTPS URL"));

@@ -293,7 +293,7 @@ test("waitFor returns an existing GitHub installation after it reconnects", asyn
   expect(polls).toBe(2);
 });
 
-test("MCP SDK supports creation, testing and updates", async () => {
+test("MCP SDK sends connection payloads to the correct mutation endpoints", async () => {
   const connection = {
     id: "11111111-1111-4111-8111-111111111111",
     integration: "mcp",
@@ -311,20 +311,26 @@ test("MCP SDK supports creation, testing and updates", async () => {
       lastCheckedAt: "2026-10-02T00:00:00.000Z",
     },
   } as const;
-  const seen: string[] = [];
-  const fetchStub = (async (input: RequestInfo | URL) => {
-    const url = String(input instanceof Request ? input.url : input);
-    seen.push(url);
-    if (url.includes("connections.create"))
+  const seen: Array<{ path: string; method: string | undefined; input: unknown }> = [];
+  const fetchStub = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input instanceof Request ? input.url : input));
+    seen.push({
+      path: url.pathname,
+      method: init?.method,
+      input: JSON.parse(String(init?.body))["0"],
+    });
+    if (url.pathname.endsWith("integrations.connections.create"))
       return trpcOk({
         status: "saved",
         connection: { ...connection, status: "error" },
         message: "Check endpoint",
         nextSteps: [],
       });
-    if (url.includes("mcp.test"))
+    if (url.pathname.endsWith("integrations.mcp.test"))
       return trpcOk({ status: "connected", connection, message: "Connected" });
-    return trpcOk(connection);
+    if (url.pathname.endsWith("integrations.mcp.update"))
+      return trpcOk({ ...connection, name: "Updated" });
+    throw new Error(`Unexpected endpoint: ${url.pathname}`);
   }) as unknown as typeof fetch;
   const client = createGittermClient({ token: "gt_test", fetch: fetchStub });
   const saved = await client.integrations.connections.create({
@@ -345,9 +351,30 @@ test("MCP SDK supports creation, testing and updates", async () => {
         name: "Updated",
         url: connection.details.url,
       })
-    ).id,
-  ).toBe(connection.id);
-  expect(seen).toHaveLength(3);
+    ).name,
+  ).toBe("Updated");
+  expect(seen).toEqual([
+    {
+      path: "/trpc/integrations.connections.create",
+      method: "POST",
+      input: {
+        integration: "mcp",
+        name: "Docs",
+        url: connection.details.url,
+        authentication: { type: "none" },
+      },
+    },
+    { path: "/trpc/integrations.mcp.test", method: "POST", input: { id: connection.id } },
+    {
+      path: "/trpc/integrations.mcp.update",
+      method: "POST",
+      input: {
+        id: connection.id,
+        name: "Updated",
+        url: connection.details.url,
+      },
+    },
+  ]);
 });
 
 test("MCP waitFor follows the exact connection, including reconnecting older accounts", async () => {

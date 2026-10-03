@@ -79,3 +79,15 @@ test("secure fetch never follows a redirect carrying credentials", async () => {
   ).rejects.toThrow("redirected");
   expect(requests).toBe(1);
 });
+
+test("invalid upstream HTTP statuses reject instead of escaping the async response callback", async () => {
+  const response = responseFixture(600, {}, []);
+  spyOn(https, "request").mockImplementation((_url: any, _options?: any, callback?: any) => {
+    const req = new EventEmitter() as any;
+    req.end = () => queueMicrotask(() => callback(response));
+    req.destroy = () => {};
+    return req;
+  });
+  await expect(mcpFetch("https://1.1.1.1/mcp")).rejects.toThrow("invalid HTTP status");
+  expect(response.destroyed).toBe(true);
+});
