@@ -8,6 +8,7 @@ import {
   type OpencodeCredentialEntry,
 } from "@gitterm/agent-runtime/opencode-credentials";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
+import { withMcpConnections } from "../integrations/mcp-config";
 
 export const OPENCODE_CONFIG_PATH = "~/.config/opencode/opencode.json";
 export const OPENCODE_TUI_CONFIG_PATH = "~/.config/opencode/tui.json";
@@ -185,9 +186,12 @@ export const opencodeProvisioner: AgentProvisioner = {
       env.OPENCODE_SERVER_PASSWORD = ctx.serverPassword;
     }
 
-    const opencodeConfig = ctx.opencode?.config
+    const requestedConfig = ctx.opencode?.config
       ? { ...ctx.agentConfigs?.opencode, ...ctx.opencode.config }
       : ctx.agentConfigs?.opencode;
+    const mcp = withMcpConnections(requestedConfig, ctx.mcpConnections ?? []);
+    Object.assign(env, mcp.env);
+    const opencodeConfig = mcp.config;
 
     return {
       files: [

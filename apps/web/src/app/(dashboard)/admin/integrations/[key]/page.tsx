@@ -87,8 +87,18 @@ export default function AdminIntegrationDetailPage() {
       await update.mutateAsync({
         key: item!.key,
         enabled,
-        allowPersonal: key === "github" ? data!.githubMode?.mode === "app" : item!.allowPersonal,
-        allowShared: key === "github" ? data!.githubMode?.mode === "pat" : item!.allowShared,
+        allowPersonal:
+          key === "github"
+            ? data!.githubMode?.mode === "app"
+            : key === "mcp" || key === "executor"
+              ? true
+              : item!.allowPersonal,
+        allowShared:
+          key === "github"
+            ? data!.githubMode?.mode === "pat"
+            : key === "mcp" || key === "executor"
+              ? false
+              : item!.allowShared,
       });
       await refresh();
       toast.success(enabled ? `${item!.name} enabled for users` : `${item!.name} disabled`);

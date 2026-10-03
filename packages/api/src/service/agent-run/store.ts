@@ -29,7 +29,16 @@ export async function settleRun(
   const now = new Date();
   const [updated] = await db
     .update(agentRun)
-    .set({ ...patch, pendingInputs: [], completedAt: now, updatedAt: now })
+    .set({
+      ...patch,
+      errorMessage: patch.errorMessage ? "Agent run failed or was interrupted" : null,
+      title: "Agent run",
+      messages: [],
+      finalText: null,
+      pendingInputs: [],
+      completedAt: now,
+      updatedAt: now,
+    })
     .where(and(eq(agentRun.id, runId), inArray(agentRun.status, [...ACTIVE_RUN_STATUSES])))
     .returning();
   if (updated) publishRun(updated);

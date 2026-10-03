@@ -1,5 +1,6 @@
 import type { AgentProvisioning } from "../../providers/compute";
 import type { ApiKeyCredential, OAuthCredential } from "../encryption";
+import type { McpWorkspaceConnection } from "../integrations/mcp-config";
 
 export interface UserProviderCredential {
   /** Dashboard credential ID, or null for inline credentials that are never stored. */
@@ -26,6 +27,7 @@ export interface AgentProvisionerContext {
   agentConfigs?: AgentConfigByKind;
   serverPassword?: string;
   credentials: UserProviderCredential[];
+  mcpConnections?: McpWorkspaceConnection[];
   /** Trusted integration context appended to the generated global AGENTS.md. */
   additionalAgentInstructions?: string;
   opencode?: {

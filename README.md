@@ -163,6 +163,29 @@ Set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` together for repo integration. 
 `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` if GitHub login is enabled.
 A separate GitHub OAuth App is not required.
 
+For GitHub sign-in on a **managed** deployment, configure both services:
+
+```dotenv
+# Server service (apps/server/.env.development.local for local dev)
+DEPLOYMENT_MODE=managed
+ENABLE_GITHUB_AUTH=true
+ENABLE_EMAIL_AUTH=false
+GITHUB_APP_CLIENT_ID=<your-app-client-id>
+GITHUB_APP_CLIENT_SECRET=<your-app-client-secret>
+
+# Web service (apps/web/.env.development.local for local dev)
+NEXT_PUBLIC_DEPLOYMENT_MODE=managed
+NEXT_PUBLIC_ENABLE_GITHUB_AUTH=true
+NEXT_PUBLIC_ENABLE_EMAIL_AUTH=false
+```
+
+The App ID and private key do not enable sign-in. If the web deployment mode is
+unset, the login form defaults to email-only self-hosted mode even when the server
+has GitHub credentials. Restart both local dev processes after changing these
+files; rebuild and redeploy the web service for production changes because
+`NEXT_PUBLIC_*` values are baked into the browser bundle by Next.js. Keep OAuth
+secrets on the server only—never use a `NEXT_PUBLIC_*` variable for them.
+
 GitHub App setup:
 
 - Callback URL: `https://<base-domain>/api/auth/callback/github`
@@ -180,9 +203,20 @@ accounts from the Integrations dashboard. Existing deployments may continue usin
 takes precedence. See
 [`docs/google-workload-identity.md`](docs/google-workload-identity.md) for setup and IAM guidance.
 
-The admin catalog also lists GitLab, Bitbucket, Executor, and other MCPs as planned connectors.
-They cannot be enabled until their dedicated connection flows are implemented. The deployment encryption master key remains in the deployment
-secret manager so that integration secrets stored in the database are encrypted independently.
+## MCP and Executor
+
+An admin enables **MCP servers** and/or **Executor** in **Admin → Integrations**. Users save
+personal HTTPS MCP endpoints with no auth, bearer tokens, or custom headers and explicitly select
+them when creating an OpenCode workspace. Multiple servers and accounts are supported.
+
+OpenCode connects directly to each server. Executor is an optional preset, not a required
+dependency: use its organization endpoint and PAT to access an existing tool catalog. GitTerm
+does not aggregate tools, proxy tool traffic, or manage MCP OAuth. Credentials are encrypted at
+rest, but attached workspace agents can read them. See [the MCP guide](docs/mcp-integrations.md)
+for setup, SDK examples, supported protocols, and revocation limitations.
+
+GitLab and Bitbucket remain planned connectors. The deployment encryption master key stays in
+the deployment secret manager so integration secrets in the database are encrypted independently.
 
 The complete storage, broker, rotation, audit, and provider threat model is documented in
 [`docs/credential-security.md`](docs/credential-security.md).

@@ -232,6 +232,13 @@
       "when": 1790253999383,
       "tag": "0032_integrations_catalog_and_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790940800260,
+      "tag": "0033_mcp_connections",
+      "breakpoints": true
     }
   ]
 }

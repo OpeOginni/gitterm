@@ -53,6 +53,9 @@ import type {
   GitHubRepository,
   GitHubBranch,
   GoogleSetup,
+  McpConnectionDetails,
+  McpConnectionTestResult,
+  UpdateMcpConnectionInput,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl, trpcEndpoint } from "./transport.js";
 import { runHelpers } from "./runs.js";
@@ -203,6 +206,7 @@ export type GittermClient = {
         since?: Date | string;
         timeoutMs?: number;
         intervalMs?: number;
+        connectionId?: string;
       }): Promise<Connection>;
     };
     github: {
@@ -214,6 +218,10 @@ export type GittermClient = {
       /** Issuer and attribute mapping to configure the Google provider before connecting. */
       setup(): Promise<GoogleSetup>;
     };
+    mcp: {
+      test(id: string): Promise<McpConnectionTestResult>;
+      update(input: UpdateMcpConnectionInput): Promise<Connection>;
+    };
   };
 };
 
@@ -224,9 +232,19 @@ function toConnection(connection: {
   name: string;
   status: Connection["status"];
   connectedAt: Date | string;
-  details: Connection["details"];
+  details:
+    | Connection["details"]
+    | (Omit<McpConnectionDetails, "lastCheckedAt"> & { lastCheckedAt: Date | string | null });
 }): Connection {
-  return { ...connection, connectedAt: toIso(connection.connectedAt)! };
+  const details = connection.details;
+  return {
+    ...connection,
+    connectedAt: toIso(connection.connectedAt)!,
+    details:
+      "lastCheckedAt" in details
+        ? { ...details, lastCheckedAt: toIso(details.lastCheckedAt) }
+        : details,
+  };
 }
 
 function envValue(name: string): string | undefined {
@@ -772,7 +790,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         create: (input) =>
           run(async (): Promise<CreateConnectionResult> => {
             const result = await trpc.integrations.connections.create.mutate(input);
-            return result.status === "connected"
+            return result.status !== "pending"
               ? { ...result, connection: toConnection(result.connection) }
               : result;
           }),
@@ -780,7 +798,13 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           run(async (): Promise<void> => {
             await trpc.integrations.connections.remove.mutate({ id });
           }),
-        waitFor: ({ integration, since, timeoutMs = 5 * 60_000, intervalMs = 3_000 }) =>
+        waitFor: ({
+          integration,
+          since,
+          connectionId,
+          timeoutMs = 5 * 60_000,
+          intervalMs = 3_000,
+        }) =>
           run(async (): Promise<Connection> => {
             const sinceMs = since ? new Date(since).getTime() : 0;
             const deadline = Date.now() + timeoutMs;
@@ -792,7 +816,11 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
               const match = result
                 .map(toConnection)
                 .filter(
-                  (c) => c.status === "connected" && new Date(c.connectedAt).getTime() >= sinceMs,
+                  (c) =>
+                    c.status === "connected" &&
+                    (connectionId
+                      ? c.id === connectionId
+                      : new Date(c.connectedAt).getTime() >= sinceMs),
                 )
                 .sort((a, b) => b.connectedAt.localeCompare(a.connectedAt))[0];
               if (match) return match;
@@ -815,6 +843,15 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
       },
       google: {
         setup: () => run(async (): Promise<GoogleSetup> => trpc.integrations.google.setup.query()),
+      },
+      mcp: {
+        test: (id) =>
+          run(async () => {
+            const result = await trpc.integrations.mcp.test.mutate({ id });
+            return { ...result, connection: toConnection(result.connection) };
+          }),
+        update: (input) =>
+          run(async () => toConnection(await trpc.integrations.mcp.update.mutate(input))),
       },
     },
     credentials: {

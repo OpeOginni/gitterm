@@ -19,7 +19,8 @@ test("new integrations require admin enablement", async () => {
 
 test("planned connectors remain unavailable even when settings enable them", async () => {
   settings({ enabled: true, allowPersonal: true, allowShared: true });
-  expect((await integrationPolicy("executor")).enabled).toBe(false);
+  expect((await integrationPolicy("executor")).enabled).toBe(true);
+  expect((await integrationPolicy("mcp")).enabled).toBe(true);
   expect((await integrationPolicy("gitlab")).enabled).toBe(false);
   expect((await integrationPolicy("google")).enabled).toBe(true);
 });

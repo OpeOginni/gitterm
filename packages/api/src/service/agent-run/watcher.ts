@@ -28,6 +28,7 @@ import {
   type TrackableRun,
 } from "./store";
 import { getRuntimeTargetForWorkspace } from "./target";
+import { inputReferences } from "./privacy";
 
 const HEARTBEAT_MS = 30_000;
 const INACTIVITY_PROBE_MS = 60_000;
@@ -66,7 +67,8 @@ type TrackedRun = {
 };
 
 function log(level: "info" | "warn", message: string, context: Record<string, unknown>) {
-  console[level](`[run-watcher] ${message}`, context);
+  const { error: _error, ...metadata } = context;
+  console[level](`[run-watcher] ${message}`, metadata);
 }
 
 /** For when no live watcher can re-read the session. */
@@ -274,7 +276,8 @@ class WorkspaceWatcher implements RunWatcherHandle {
       submittedAt: tracked.submittedAt,
       sessionError: tracked.sessionError,
     });
-    const pendingInputs = JSON.stringify(snapshot.pendingInputs);
+    const references = inputReferences(snapshot.pendingInputs);
+    const pendingInputs = JSON.stringify(references);
     // Only lifecycle changes are persisted; message and token churn stays in OpenCode.
     if (derived.status === tracked.status && pendingInputs === tracked.pendingInputs) return;
     const terminal = isTerminalRunStatus(derived.status);
@@ -282,10 +285,11 @@ class WorkspaceWatcher implements RunWatcherHandle {
       .update(agentRun)
       .set({
         status: derived.status,
-        errorMessage: derived.errorMessage,
-        finalText: snapshot.finalText,
-        messages: snapshot.messages,
-        pendingInputs: terminal ? [] : snapshot.pendingInputs,
+        errorMessage: derived.errorMessage ? "Agent run failed or was interrupted" : null,
+        finalText: null,
+        messages: [],
+        title: "Agent run",
+        pendingInputs: terminal ? [] : references,
         completedAt: terminal ? new Date() : null,
         updatedAt: new Date(),
       })

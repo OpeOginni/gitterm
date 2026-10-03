@@ -6,8 +6,8 @@ export const INTEGRATIONS = {
   google: { name: "Google Cloud", category: "cloud", ready: true },
   gitlab: { name: "GitLab", category: "git", ready: false },
   bitbucket: { name: "Bitbucket", category: "git", ready: false },
-  executor: { name: "Executor", category: "mcp", ready: false },
-  mcp: { name: "Other MCP servers", category: "mcp", ready: false },
+  executor: { name: "Executor", category: "mcp", ready: true },
+  mcp: { name: "MCP servers", category: "mcp", ready: true },
 } as const;
 
 export type IntegrationKey = keyof typeof INTEGRATIONS;
@@ -22,7 +22,7 @@ export async function integrationPolicy(key: IntegrationKey) {
     ...INTEGRATIONS[key],
     enabled: INTEGRATIONS[key].ready && (settings?.enabled ?? false),
     allowPersonal: settings?.allowPersonal ?? true,
-    allowShared: settings?.allowShared ?? false,
+    allowShared: key === "mcp" || key === "executor" ? false : (settings?.allowShared ?? false),
   };
 }
 

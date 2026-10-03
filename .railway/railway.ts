@@ -87,6 +87,7 @@ export default defineRailway(() => {
         "packages/api/**/*",
         "packages/auth/**/*",
         "packages/config/**/*",
+        "packages/env/**/*",
         "apps/web/.env*",
         ...rootWatch,
       ],
@@ -102,8 +103,12 @@ export default defineRailway(() => {
     env: {
       NEXT_PUBLIC_AUTH_URL: preserve(),
       NEXT_PUBLIC_BASE_DOMAIN: preserve(),
+      // This project hosts the managed product, not the email-only self-hosted image.
+      NEXT_PUBLIC_DEPLOYMENT_MODE: "managed",
       NEXT_PUBLIC_ENABLE_ANON_TRY: preserve(),
       NEXT_PUBLIC_ENABLE_BILLING: preserve(),
+      NEXT_PUBLIC_ENABLE_EMAIL_AUTH: preserve(),
+      NEXT_PUBLIC_ENABLE_GITHUB_AUTH: preserve(),
       NEXT_PUBLIC_GITHUB_APP_NAME: preserve(),
       NEXT_PUBLIC_LISTENER_URL: preserve(),
       NEXT_PUBLIC_POSTHOG_HOST: preserve(),
@@ -139,6 +144,7 @@ export default defineRailway(() => {
         "packages/auth/**/*",
         "packages/config/**/*",
         "packages/db/**/*",
+        "packages/env/**/*",
         "packages/schema/**/*",
         "apps/server/.env*",
         ...rootWatch,

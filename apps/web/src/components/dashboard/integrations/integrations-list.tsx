@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Plug } from "lucide-react";
 import { GitHubConnection } from "@/components/dashboard/github-connection";
 import { GoogleCloudConnection } from "@/components/dashboard/google-cloud-connection";
+import { McpConnections } from "./mcp-connections";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
 
@@ -76,8 +77,10 @@ export function IntegrationsList() {
 
   const showGitHub = isEnabled("github");
   const showGoogle = isEnabled("google") && googleAvailability?.available === true;
+  const showMcp = isEnabled("mcp");
+  const showExecutor = isEnabled("executor");
 
-  if (!showGitHub && !showGoogle) return <EmptyState />;
+  if (!showGitHub && !showGoogle && !showMcp && !showExecutor) return <EmptyState />;
 
   return (
     <>
@@ -92,6 +95,12 @@ export function IntegrationsList() {
         <section className="space-y-4">
           <SectionEyebrow>Cloud identity</SectionEyebrow>
           <GoogleCloudConnection />
+        </section>
+      ) : null}
+      {showMcp || showExecutor ? (
+        <section className="space-y-4">
+          <SectionEyebrow>MCP connections</SectionEyebrow>
+          <McpConnections allowCustom={showMcp} allowExecutor={showExecutor} />
         </section>
       ) : null}
     </>
