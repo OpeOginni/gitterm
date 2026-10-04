@@ -99,6 +99,7 @@
         "@gitterm/auth": "workspace:*",
         "@gitterm/env": "workspace:*",
         "@gitterm/schema": "workspace:*",
+        "@gitterm/slack-bot": "workspace:*",
         "@polar-sh/better-auth": "^1.6.4",
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-dialog": "^1.1.15",

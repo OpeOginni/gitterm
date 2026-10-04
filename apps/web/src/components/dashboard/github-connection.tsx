@@ -26,6 +26,15 @@ import env from "@gitterm/env/web";
 
 const GITHUB_APP_NAME = env.NEXT_PUBLIC_GITHUB_APP_NAME || "gitterm-dev";
 
+/** Where GitHub sends the user after they install the app; the server stores the installation. */
+export function githubInstallUrl(slug: string | null | undefined): string {
+  const redirectUrl = apiPath(env.NEXT_PUBLIC_SERVER_URL || "", "github/callback");
+  return `https://github.com/apps/${slug ?? GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
+}
+
+/** Remembered across the GitHub round trip so the callback can return the user to this page. */
+export const GITHUB_RETURN_TO_KEY = "gitterm:github-return-to";
+
 async function copyIntegrationId(integrationId: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(integrationId);
@@ -314,8 +323,7 @@ export function GitHubConnection() {
     if (!appAvailability?.enabled || !appAvailability.configured) return;
     track("github_connected");
     setIsConnecting(true);
-    const redirectUrl = apiPath(env.NEXT_PUBLIC_SERVER_URL || "", "github/callback");
-    window.location.href = `https://github.com/apps/${appAvailability.slug ?? GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
+    window.location.href = githubInstallUrl(appAvailability.slug);
   }
 
   async function handleRefresh() {
