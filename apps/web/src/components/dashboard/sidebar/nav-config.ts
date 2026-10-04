@@ -1,13 +1,19 @@
 import {
   BarChart3,
+  Braces,
+  Container,
+  Cpu,
+  Gauge,
+  Plug,
+  Server,
+  Settings2,
+  Users,
   Bot,
   Cloud,
   CreditCard,
   KeyRound,
-  KeySquare,
   LayoutDashboard,
   Link2,
-  Shield,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -36,7 +42,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/models", label: "Models", icon: Sparkles },
       { href: "/dashboard/integrations", label: "Integrations", icon: Link2 },
       { href: "/dashboard/compute", label: "Compute", icon: Cloud },
-      { href: "/dashboard/settings/api", label: "API tokens", icon: KeySquare },
+      { href: "/dashboard/settings/api", label: "API tokens", icon: Braces },
     ],
   },
   {
@@ -58,7 +64,15 @@ export const NAV_GROUPS: NavGroup[] = [
 
 export const ADMIN_GROUP: NavGroup = {
   label: "Admin",
-  items: [{ href: "/admin", label: "Admin panel", icon: Shield }],
+  items: [
+    { href: "/admin", label: "Overview", icon: Gauge },
+    { href: "/admin/users", label: "Users", icon: Users },
+    { href: "/admin/providers", label: "Cloud providers", icon: Server },
+    { href: "/admin/integrations", label: "Integrations", icon: Plug },
+    { href: "/admin/agents", label: "Agent types", icon: Cpu },
+    { href: "/admin/images", label: "Images", icon: Container },
+    { href: "/admin/settings", label: "System", icon: Settings2 },
+  ],
 };
 
 /** The item for the current page: the longest href the path starts with. */

@@ -12,8 +12,6 @@ import { Settings, Save } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import Link from "next/link";
-import type { Route } from "next";
 
 interface SettingValue {
   key: string;
@@ -117,14 +115,6 @@ export default function SettingsPage() {
         text="Configure system-wide settings for workspaces and quotas."
       >
         <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <Link
-              href={"/admin" as Route}
-              className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-            >
-              Back to Admin
-            </Link>
-          </Button>
           <Button
             onClick={handleSave}
             disabled={!hasChanges || updateSettings.isPending}

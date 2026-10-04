@@ -3,17 +3,14 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  Bot,
+  Braces,
+  CalendarClock,
   ChevronDown,
+  Clock,
   Copy,
-  Eye,
-  KeyRound,
-  KeySquare,
   Loader2,
   Plus,
-  SlidersHorizontal,
-  Terminal,
-  type LucideIcon,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { queryClient, trpc } from "@/utils/trpc";
@@ -22,16 +19,13 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { API_TOKEN_SCOPE_DETAILS, API_TOKEN_SCOPES, type ApiTokenScope } from "@gitterm/schema";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SettingsEmptyState } from "@/components/ui/form-card";
 import { BOT_TOKEN_SCOPES } from "@/components/dashboard/bots/config";
 import { cn } from "@/lib/utils";
 
@@ -39,35 +33,30 @@ import { cn } from "@/lib/utils";
 const TOKEN_PRESETS = [
   {
     id: "full",
-    icon: Terminal,
     label: "Full access",
-    description: "The CLI and your own scripts.",
+    description: "The CLI and your scripts",
     scopes: [...API_TOKEN_SCOPES],
   },
   {
     id: "bot",
-    icon: Bot,
     label: "Bot",
-    description: "Slack and Discord bots: sandboxes and runs.",
+    description: "Slack and Discord bots",
     scopes: BOT_TOKEN_SCOPES,
   },
   {
     id: "read",
-    icon: Eye,
     label: "Read only",
-    description: "Dashboards and monitoring.",
+    description: "Dashboards and monitoring",
     scopes: API_TOKEN_SCOPES.filter((scope) => scope.endsWith(":read")),
   },
   {
     id: "custom",
-    icon: SlidersHorizontal,
     label: "Custom",
-    description: "Pick each permission.",
+    description: "Choose permissions",
     scopes: null,
   },
 ] as const satisfies ReadonlyArray<{
   id: string;
-  icon: LucideIcon;
   label: string;
   description: string;
   scopes: readonly ApiTokenScope[] | null;
@@ -162,124 +151,101 @@ export function ApiTokensSection() {
 
   const tokens = data?.tokens ?? [];
 
+  const eyebrow = "font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4";
+
   return (
-    <section className="space-y-5">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold text-fg">API tokens</h3>
-          <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-fg-3">
-            Scoped credentials for the SDK, CLI, and automations. Device-code logins also appear
-            here.
-          </p>
-        </div>
-        <Button size="sm" className="gap-2" onClick={() => handleOpenChange(true)}>
-          <Plus className="h-4 w-4" />
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-4">
+        <p className={eyebrow}>
+          {tokens.length ? `${tokens.length} token${tokens.length === 1 ? "" : "s"}` : "Tokens"}
+        </p>
+        <Button size="sm" className="h-9 gap-1.5 text-xs" onClick={() => handleOpenChange(true)}>
+          <Plus className="size-3.5" />
           New token
         </Button>
-      </header>
+      </div>
 
-      <div>
+      <div className="overflow-hidden rounded-2xl border border-line bg-card">
         {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+          <div className="space-y-2 p-5">
+            <Skeleton className="h-10 w-full bg-fill" />
+            <Skeleton className="h-10 w-full bg-fill" />
           </div>
         ) : tokens.length === 0 ? (
-          <SettingsEmptyState
-            icon={KeySquare}
-            title="No API tokens yet"
-            description={
-              <>
+          <div className="flex items-center gap-3 px-5 py-4">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
+              <Braces className="size-4 text-fg-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-fg">No tokens yet</p>
+              <p className="text-xs text-fg-4">
                 Create one for the CLI, SDK, or CI, or run{" "}
-                <span className="font-mono text-fg-3">gitterm login</span> and it will appear here.
-              </>
-            }
-            action={
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-2"
-                onClick={() => handleOpenChange(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Create your first token
-              </Button>
-            }
-          />
+                <span className="font-mono text-fg-3">gitterm login</span>.
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="divide-y divide-line">
             {tokens.map((token) => (
-              <div
-                key={token.id}
-                className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-6"
-              >
-                <div className="min-w-0">
+              <div key={token.id} className="flex items-start gap-3 px-5 py-4">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
+                  <Braces className="size-4 text-fg-3" />
+                </span>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-fg">{token.name}</span>
+                    <span className="truncate text-sm font-semibold text-fg">{token.name}</span>
                     <span className="font-mono text-[11px] text-fg-4">{token.tokenPrefix}…</span>
                   </div>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-3">
-                    <span>
-                      {token.lastUsedAt
-                        ? `Last used ${formatDate(token.lastUsedAt)}`
-                        : "Never used"}
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-4">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="size-3.5" />
+                      {token.lastUsedAt ? `Used ${formatDate(token.lastUsedAt)}` : "Never used"}
                     </span>
-                    <span aria-hidden="true" className="text-fg-4">
-                      ·
+                    <span className="flex items-center gap-1.5">
+                      <CalendarClock className="size-3.5" />
+                      {token.expiresAt ? `Expires ${formatDate(token.expiresAt)}` : "No expiry"}
                     </span>
-                    <span>
-                      {token.expiresAt ? `Expires ${formatDate(token.expiresAt)}` : "No expiration"}
-                    </span>
-                    <span aria-hidden="true" className="text-fg-4">
-                      ·
-                    </span>
-                    <span>{accessSummary(token.scopes)}</span>
-                  </p>
-                  <details className="group mt-2 text-xs text-fg-4">
-                    <summary className="inline-flex cursor-pointer list-none items-center gap-1 transition-colors hover:text-fg-2">
-                      Details
-                      <ChevronDown className="size-3 transition-transform group-open:rotate-180" />
-                    </summary>
-                    <div className="mt-2 space-y-2 border-l border-line pl-3">
-                      <p>Created {formatDate(token.createdAt)}</p>
-                      <div>
-                        <p className="mb-1 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-fg-3">
-                          Permissions
-                        </p>
-                        <ul className="flex flex-wrap gap-x-3 gap-y-1.5">
-                          {token.scopes.map((scope) => (
-                            <li key={scope} className="font-mono text-[11px] text-fg-2">
-                              {scope}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </details>
+                    <details className="group">
+                      <summary className="flex cursor-pointer list-none items-center gap-1.5 transition-colors hover:text-fg-2">
+                        <ShieldCheck className="size-3.5" />
+                        {accessSummary(token.scopes)}
+                        <ChevronDown className="size-3 transition-transform group-open:rotate-180" />
+                      </summary>
+                      <p className="mt-1.5 font-mono text-[11px] leading-relaxed text-fg-3">
+                        {token.scopes.join(" · ")}
+                        <span className="text-fg-4"> · created {formatDate(token.createdAt)}</span>
+                      </p>
+                    </details>
+                  </div>
                 </div>
                 {confirmingId === token.id ? (
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-1.5">
                     <Button
                       size="sm"
                       variant="destructive"
                       disabled={revokeMutation.isPending}
                       onClick={() => revokeMutation.mutate({ tokenId: token.id })}
-                      className="gap-2"
+                      className="h-8 gap-1.5 text-xs"
                     >
                       {revokeMutation.isPending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <Loader2 className="size-3.5 animate-spin" />
                       ) : null}
-                      Confirm revoke
+                      Revoke
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setConfirmingId(null)}>
-                      Cancel
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-xs"
+                      onClick={() => setConfirmingId(null)}
+                    >
+                      Keep
                     </Button>
                   </div>
                 ) : (
                   <Button
                     size="sm"
                     variant="outline"
-                    className="shrink-0"
+                    className="h-8 shrink-0 border-line text-xs text-fg-3 hover:text-fg"
                     onClick={() => setConfirmingId(token.id)}
                   >
                     Revoke
@@ -292,172 +258,136 @@ export function ApiTokensSection() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-line bg-settings-dialog sm:max-w-xl">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto border-line bg-card p-0 sm:max-w-md">
           {createdToken ? (
             <>
-              <DialogHeader>
-                <div className="mb-1 flex size-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                  <KeyRound className="size-5" />
-                </div>
-                <DialogTitle>Your token is ready</DialogTitle>
-                <DialogDescription>
-                  Copy it now and store it somewhere secure. You won&apos;t be able to see it again.
+              <DialogHeader className="px-5 pt-5 pb-4 text-left">
+                <DialogTitle className="text-base">Your token is ready</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Copy it now. It won&apos;t be shown again.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-line bg-input/70 p-1.5 pl-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
-                <div className="min-w-0">
-                  <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-fg-4">
-                    API token
-                  </span>
+              <div className="px-5 pb-5">
+                <button
+                  type="button"
+                  onClick={handleCopyToken}
+                  className="group relative w-full rounded-xl border border-line bg-fill px-3.5 py-3 text-left transition-colors hover:border-line-2"
+                >
                   <code
-                    className="mt-0.5 block truncate font-mono text-xs text-fg selection:bg-primary selection:text-primary-foreground"
+                    className="block truncate pr-7 font-mono text-xs text-fg selection:bg-primary selection:text-primary-foreground"
                     title={createdToken}
                   >
                     {createdToken}
                   </code>
-                </div>
-                <Button variant="secondary" className="h-10 gap-2" onClick={handleCopyToken}>
-                  <Copy className="h-4 w-4" />
+                  <Copy className="absolute top-1/2 right-3.5 size-3.5 -translate-y-1/2 text-fg-4 transition-colors group-hover:text-fg" />
+                </button>
+              </div>
+              <div className="flex gap-2 border-t border-line p-4">
+                <Button variant="outline" className="h-9 flex-1 text-xs" onClick={handleCopyToken}>
+                  <Copy className="size-3.5" />
                   Copy
                 </Button>
+                <Button className="h-9 flex-1 text-xs" onClick={() => handleOpenChange(false)}>
+                  Done
+                </Button>
               </div>
-              <DialogFooter className="mt-1">
-                <Button onClick={() => handleOpenChange(false)}>Done</Button>
-              </DialogFooter>
             </>
           ) : (
             <>
-              <DialogHeader>
-                <div className="flex items-start gap-3.5">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
-                    <KeySquare className="size-5" />
-                  </span>
-                  <div className="space-y-1">
-                    <DialogTitle>New API token</DialogTitle>
-                    <DialogDescription>
-                      Pick what it is for. A token can never manage other tokens, model credentials,
-                      or administration.
-                    </DialogDescription>
-                  </div>
-                </div>
+              <DialogHeader className="px-5 pt-5 pb-4 text-left">
+                <DialogTitle className="text-base">New API token</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Tokens can never manage other tokens, model credentials, or administration.
+                </DialogDescription>
               </DialogHeader>
-              <div className="space-y-5">
+
+              <div className="space-y-5 px-5 pb-5">
                 <div className="space-y-2">
-                  <Label htmlFor="api-token-name">Name</Label>
+                  <label htmlFor="api-token-name" className={eyebrow}>
+                    Name
+                  </label>
                   <Input
                     id="api-token-name"
                     autoFocus
-                    placeholder="e.g. ci-deploys, slack-bot"
+                    placeholder="ci-deploys"
                     value={tokenName}
                     onChange={(event) => setTokenName(event.target.value)}
                     maxLength={100}
-                    className="h-11 font-mono text-[13px] placeholder:font-sans"
+                    className="h-10 font-mono text-[13px] placeholder:text-fg-4"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-baseline justify-between">
-                    <Label>Access</Label>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4">
-                      {scopes.length} of {API_TOKEN_SCOPES.length} permissions
-                    </span>
-                  </div>
-                  <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
+                  <p className={eyebrow}>Access</p>
+                  <div
+                    role="radiogroup"
+                    className="divide-y divide-line rounded-xl border border-line"
+                  >
                     {TOKEN_PRESETS.map((entry) => {
                       const selected = preset === entry.id;
                       return (
-                        <button
-                          key={entry.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          onClick={() => setPreset(entry.id)}
-                          className={cn(
-                            "group relative flex items-start gap-3 rounded-xl border p-3 pr-8 text-left transition-colors",
-                            selected
-                              ? "border-primary/45 bg-primary/[0.06]"
-                              : "border-line bg-fill hover:border-line-2 hover:bg-fill-2",
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors",
-                              selected
-                                ? "border-primary/30 bg-primary/10 text-primary"
-                                : "border-line bg-fill-2 text-fg-3 group-hover:text-fg-2",
-                            )}
+                        <div key={entry.id}>
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={() => setPreset(entry.id)}
+                            className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-fill"
                           >
-                            <entry.icon className="size-4" />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium text-fg">{entry.label}</span>
-                            <span className="mt-0.5 block text-xs leading-snug text-fg-4">
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "flex size-3.5 shrink-0 items-center justify-center rounded-full border",
+                                selected ? "border-primary" : "border-line-2",
+                              )}
+                            >
+                              {selected ? (
+                                <span className="size-1.5 rounded-full bg-primary" />
+                              ) : null}
+                            </span>
+                            <span className={cn("text-sm", selected ? "text-fg" : "text-fg-2")}>
+                              {entry.label}
+                            </span>
+                            <span className="ml-auto truncate text-xs text-fg-4">
                               {entry.description}
                             </span>
-                          </span>
-                          <span
-                            aria-hidden="true"
-                            className={cn(
-                              "absolute top-3 right-3 flex size-3.5 items-center justify-center rounded-full border transition-colors",
-                              selected ? "border-primary" : "border-line-2",
-                            )}
-                          >
-                            {selected ? (
-                              <span className="size-1.5 rounded-full bg-primary" />
-                            ) : null}
-                          </span>
-                        </button>
+                          </button>
+                          {entry.id === "custom" && selected ? (
+                            <div className="grid gap-1 px-3.5 pb-3 pl-10 sm:grid-cols-2">
+                              {API_TOKEN_SCOPE_DETAILS.map((detail) => (
+                                <label
+                                  key={detail.scope}
+                                  title={detail.description}
+                                  className="flex cursor-pointer items-center gap-2 py-1 text-xs text-fg-3 hover:text-fg"
+                                >
+                                  <Checkbox
+                                    className="size-3.5"
+                                    checked={customScopes.includes(detail.scope)}
+                                    onCheckedChange={(checked) =>
+                                      setCustomScopes((current) =>
+                                        checked
+                                          ? [...new Set([...current, detail.scope])]
+                                          : current.filter((scope) => scope !== detail.scope),
+                                      )
+                                    }
+                                  />
+                                  {detail.label}
+                                </label>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
                       );
                     })}
                   </div>
-
-                  {preset === "custom" ? (
-                    <div className="overflow-hidden rounded-xl border border-line bg-fill px-1.5">
-                      {API_TOKEN_SCOPE_DETAILS.map((detail) => (
-                        <label
-                          key={detail.scope}
-                          className="group flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border-b border-line px-2.5 py-2 text-sm transition-colors last:border-b-0 hover:bg-fill"
-                        >
-                          <Checkbox
-                            className="size-[18px] group-hover:border-line-2"
-                            checked={customScopes.includes(detail.scope)}
-                            onCheckedChange={(checked) =>
-                              setCustomScopes((current) =>
-                                checked
-                                  ? [...new Set([...current, detail.scope])]
-                                  : current.filter((scope) => scope !== detail.scope),
-                              )
-                            }
-                          />
-                          <span className="min-w-0 leading-tight">
-                            <span className="block font-medium text-fg">{detail.label}</span>
-                            <span className="mt-0.5 block text-xs leading-tight text-fg-4">
-                              {detail.description}
-                            </span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5 pt-0.5">
-                      {scopes.map((scope) => (
-                        <span
-                          key={scope}
-                          className="rounded-md border border-line bg-fill-2 px-1.5 py-0.5 font-mono text-[10.5px] text-fg-3"
-                        >
-                          {scope}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <p className="font-mono text-[11px] leading-relaxed text-fg-4">
+                    {scopes.length ? scopes.join(" · ") : "No permissions selected"}
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Expires</Label>
-                  <div
-                    role="radiogroup"
-                    className="inline-flex rounded-lg border border-line bg-fill p-0.5"
-                  >
+                <div className="flex items-center justify-between gap-3">
+                  <p className={eyebrow}>Expires</p>
+                  <div role="radiogroup" className="flex gap-1">
                     {EXPIRY_OPTIONS.map((option) => (
                       <button
                         key={option.value}
@@ -466,9 +396,9 @@ export function ApiTokensSection() {
                         aria-checked={expiry === option.value}
                         onClick={() => setExpiry(option.value)}
                         className={cn(
-                          "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                          "rounded-md px-2.5 py-1 text-xs transition-colors",
                           expiry === option.value
-                            ? "bg-fill-2 text-fg shadow-[inset_0_0_0_1px_var(--line-2)]"
+                            ? "bg-fill-2 text-fg"
                             : "text-fg-4 hover:text-fg-2",
                         )}
                       >
@@ -478,22 +408,24 @@ export function ApiTokensSection() {
                   </div>
                 </div>
               </div>
-              <DialogFooter className="items-center gap-3 sm:justify-between">
-                <p className="text-xs text-fg-4">The token is shown once, right after this.</p>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleCreate}
-                    disabled={!tokenName.trim() || scopes.length === 0 || createMutation.isPending}
-                    className="gap-2"
-                  >
-                    {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Create token
-                  </Button>
-                </div>
-              </DialogFooter>
+
+              <div className="flex gap-2 border-t border-line p-4">
+                <Button
+                  variant="outline"
+                  className="h-9 text-xs"
+                  onClick={() => handleOpenChange(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreate}
+                  disabled={!tokenName.trim() || scopes.length === 0 || createMutation.isPending}
+                  className="h-9 flex-1 gap-2 text-xs"
+                >
+                  {createMutation.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                  Create token
+                </Button>
+              </div>
             </>
           )}
         </DialogContent>

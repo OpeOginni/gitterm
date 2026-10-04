@@ -32,11 +32,9 @@ import {
   Trash2,
   Plus,
 } from "lucide-react";
-import type { Route } from "next";
 import { trpcClient } from "@/utils/trpc";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import Link from "next/link";
 
 type UserPlan = "free" | "starter" | "pro";
 type UserRole = "user" | "admin";
@@ -158,14 +156,6 @@ export default function UsersPage() {
     <DashboardShell>
       <DashboardHeader heading="User Management" text="View and manage all users in the system.">
         <div className="flex items-center gap-2">
-          <Button asChild variant="outline">
-            <Link
-              href={"/admin" as Route}
-              className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-            >
-              Back to Admin
-            </Link>
-          </Button>
           {canCreateUsers && (
             <Button
               onClick={() => setShowCreateDialog(true)}
