@@ -69,8 +69,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [googleCloudIntegrationId, setGoogleCloudIntegrationId] = useState("none");
   const [mcpConnectionIds, setMcpConnectionIds] = useState<string[]>([]);
   const [showIntegrations, setShowIntegrations] = useState(false);
-  const [persistent, setPersistent] = useState(true);
-  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
+  // Editor (SSH) access is no longer offered here; every workspace uses the standard profile.
+  const workspaceProfile: WorkspaceProfile = "standard";
 
   // Data fetching -- staleTime keeps the prefetched cache from refetching on
   // open so the dialog renders fully populated without a flicker or resize.
@@ -113,10 +113,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const defaultCloudProviderId = defaultProviderData?.cloudProviderId ?? null;
   const { data: subdomainPermissions } = useQuery({
     ...trpc.workspace.getSubdomainPermissions.queryOptions(),
-    staleTime: STALE_TIME,
-  });
-  const { data: sshPublicKeyData } = useQuery({
-    ...trpc.user.getSshPublicKey.queryOptions(),
     staleTime: STALE_TIME,
   });
   const { data: credentialsData } = useQuery(
@@ -263,7 +259,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   // Cloudflare sandboxes) cannot keep files between sessions at all.
   const persistenceSupported = selectedCloudProvider?.supportsPersistence !== false;
   const isAutoPersistent = persistenceSupported && !!selectedCloudProvider?.autoPersistent;
-  const effectivePersistent = persistenceSupported ? (isAutoPersistent ? true : persistent) : false;
+  // Storage persists whenever it can: always on providers that force it, and on the others
+  // unless billing limits the plan (free plans cannot opt in).
+  const userPlan = (session?.user as { plan?: string } | undefined)?.plan ?? "free";
+  const canOptInPersistence = !isBillingEnabled() || userPlan !== "free";
+  const effectivePersistent = persistenceSupported && (isAutoPersistent || canOptInPersistence);
 
   const availableRegions = useMemo((): Region[] => {
     if (isAwsGroup) {
@@ -315,12 +315,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     return availableRegions[0]?.id ?? "";
   }, [isAwsGroup, awsProviders, userRegionId, availableRegions]);
 
-  const canEnableSSHAccess =
-    !!selectedCloudProvider?.sshAccessSupport?.supported &&
-    availableAgents.some((agent) => agent.id === selectedAgentTypeId && agent.serverOnly) &&
-    (selectedCloudProvider?.providerKey === "daytona" || sshPublicKeyData?.hasPublicKey === true);
-
-  const requiresUserSshKey = selectedCloudProvider?.providerKey !== "daytona";
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
   const supportsMcp = selectedAgent?.provisionerKey === "opencode";
   const selectedIntegrations =
@@ -349,10 +343,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         setUserCloudProviderId(providerId);
       }
     }
-  };
-
-  const handleProfileChange = (enabled: boolean) => {
-    setWorkspaceProfile(enabled ? "ssh-enabled" : "standard");
   };
 
   // Mutation
@@ -447,12 +437,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       models: { inherit: "none", providers: Object.fromEntries(selectedModelCredentials) },
     });
   };
-
-  useEffect(() => {
-    if (workspaceProfile === "ssh-enabled" && !canEnableSSHAccess) {
-      setWorkspaceProfile("standard");
-    }
-  }, [workspaceProfile, canEnableSSHAccess]);
 
   const integrations = installationsData?.installations;
   const hasIntegrations = !!(integrations?.length || githubAvailability?.mode === "pat");
@@ -829,72 +813,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </div>
         ) : null}
 
-        {/* ── 4. SSH Editor Access ── */}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="editor-access"
-            checked={workspaceProfile === "ssh-enabled"}
-            onCheckedChange={(checked) => handleProfileChange(checked === true)}
-            disabled={!canEnableSSHAccess}
-            className="data-[state=checked]:bg-primary data-[state=checked]:border-accent disabled:opacity-100 disabled:cursor-not-allowed"
-          />
-          <Label
-            htmlFor="editor-access"
-            className={cn(
-              "group flex flex-1 items-center gap-2 text-xs",
-              canEnableSSHAccess
-                ? "cursor-pointer text-foreground/90"
-                : "cursor-default text-foreground/55",
-            )}
-          >
-            <span>Editor Access (SSH)</span>
-            {canEnableSSHAccess ? (
-              <>
-                <span className="text-muted-foreground/40">&mdash; opens in</span>
-                <span className="flex items-center gap-2 px-1.5 py-0.5 transition-colors">
-                  {[
-                    { src: "/vscode.svg", alt: "VS Code" },
-                    { src: "/cursor.svg", alt: "Cursor" },
-                    { src: "/zed.svg", alt: "Zed" },
-                    { src: "/neovim.svg", alt: "Neovim" },
-                  ].map((editor) => (
-                    <Image
-                      key={editor.src}
-                      src={editor.src}
-                      alt={editor.alt}
-                      width={11}
-                      height={11}
-                      className={cn(
-                        "transition-opacity group-hover:opacity-100",
-                        workspaceProfile === "ssh-enabled" ? "opacity-100" : "opacity-60",
-                      )}
-                    />
-                  ))}
-                </span>
-              </>
-            ) : (
-              <span className="text-foreground/55">
-                &mdash;{" "}
-                {!selectedCloudProvider?.sshAccessSupport?.supported ? (
-                  "not supported by this provider"
-                ) : !selectedAgent?.serverOnly ? (
-                  "requires a server agent type"
-                ) : requiresUserSshKey && !sshPublicKeyData?.hasPublicKey ? (
-                  <Link
-                    href={"/dashboard/settings/ssh" as Route}
-                    onClick={(e) => e.stopPropagation()}
-                    className="font-medium text-amber-300 hover:text-amber-200 hover:underline"
-                  >
-                    add an SSH key in Settings
-                  </Link>
-                ) : (
-                  "unavailable"
-                )}
-              </span>
-            )}
-          </Label>
-        </div>
-
         {/* ── 4b. Optional integrations, folded away until someone wants one ── */}
         {isGoogleCloudAvailable || mcpConnections.length > 0 ? (
           <div className="rounded-xl border border-dashed border-line">
@@ -1034,44 +952,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             ) : null}
           </div>
         ) : null}
-
-        {/* ── 5. Persistent storage ── */}
-        {(() => {
-          // Disabled when the provider forces it on (autoPersistent) or can't
-          // persist at all (supportsPersistence === false).
-          const locked = isAutoPersistent || !persistenceSupported;
-          return (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="persistent"
-                checked={effectivePersistent}
-                disabled={locked}
-                onCheckedChange={(checked) => setPersistent(checked as boolean)}
-                className="data-[state=checked]:bg-primary data-[state=checked]:border-accent disabled:opacity-100 disabled:cursor-not-allowed"
-              />
-              <Label
-                htmlFor="persistent"
-                className={cn(
-                  "text-xs",
-                  locked
-                    ? "cursor-not-allowed text-foreground/55"
-                    : "cursor-pointer text-foreground/90",
-                )}
-              >
-                Persistent storage
-                <span className={cn(locked ? "text-foreground/45" : "text-foreground/55")}>
-                  {" "}
-                  &mdash;{" "}
-                  {!persistenceSupported
-                    ? `not supported on ${selectedCloudProvider?.name ?? "this provider"} — commit & push to save work`
-                    : isAutoPersistent
-                      ? `always on for ${selectedCloudProvider?.name ?? "this provider"}`
-                      : "keep files between sessions"}
-                </span>
-              </Label>
-            </div>
-          );
-        })()}
       </div>
 
       <DialogFooter>
