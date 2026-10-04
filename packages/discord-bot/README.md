@@ -55,8 +55,7 @@ Discord's gateway, so it needs no public URL.
 - **Pick a repository per thread.** With `repos`, people name one in a thread's first message
   (`@Acme Agent in acme/api, why is login slow?`); a channel without a repository asks which one.
   The thread stays on that repository.
-- **Credited pull requests.** The agent opens pull requests that start with "Requested by <name>
-  in Discord" and a link to the thread. The request gets 👀 when picked up, then ✅ or ❌.
+- **Credited pull requests.** The agent opens pull requests that start with "Requested by <name> in Discord", without linking the conversation (the repository may be public). The request gets 👀 when picked up, then ✅ or ❌.
 - **It asks back.** Agent questions appear as a card with a button per option (a menu for
   multiple choice or long lists, a dialog for a written answer). Tool approvals show _Allow
   once_, _Always allow_, and _Deny_. The person who asked can also reply in the thread with an

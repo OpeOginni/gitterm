@@ -297,9 +297,5 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
       await recent.get(message.id)?.react({ seen: "👀", done: "✅", failed: "❌" }[state]);
       if (state !== "seen") recent.delete(message.id);
     },
-
-    async permalink(location) {
-      return (await thread(location.thread)).url;
-    },
   };
 }

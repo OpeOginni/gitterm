@@ -415,13 +415,5 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         name: { seen: "eyes", done: "white_check_mark", failed: "x" }[state],
       });
     },
-
-    async permalink(thread) {
-      const link = await client.chat.getPermalink({
-        channel: thread.channel,
-        message_ts: thread.thread,
-      });
-      return link.permalink;
-    },
   };
 }

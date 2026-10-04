@@ -413,7 +413,6 @@ export function createBot(options: BotOptions): Bot {
       message,
       history,
       continued: Boolean(session),
-      link: await adapter.permalink?.(job.thread).catch(() => undefined),
     });
     const attachments = await attachmentsFor(prompt.images);
     const input = {

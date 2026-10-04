@@ -226,9 +226,6 @@ function fakeAdapter(history: HistoryMessage[] = [], indicator?: boolean) {
     async mark(message, state) {
       log.marks.push(`${message.id}:${state}`);
     },
-    async permalink(target) {
-      return `https://chat.example/${target.channel}/${target.thread}`;
-    },
     ...(indicator === undefined
       ? {}
       : {
@@ -724,7 +721,6 @@ describe("createBot", () => {
     chat.send({ id: "101", text: "in acme/api, why is login slow?", inThread: true });
     await until(() => gitterm.calls.runs.length === 1, "run");
     expect(gitterm.calls.created[0]?.repo).toBe("https://github.com/acme/api");
-    expect(gitterm.calls.runs[0]?.prompt).toContain("Thread: https://chat.example/C1/100");
     gitterm.stream("run1").push({ type: "run.completed", run: run("run1", "completed") });
     await until(() => chat.log.marks.includes("101:done"), "done mark");
     expect(chat.log.marks).toEqual(["101:seen", "101:done"]);

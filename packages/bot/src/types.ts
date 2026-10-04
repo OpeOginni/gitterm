@@ -122,8 +122,6 @@ export interface ChatAdapter {
    * turn), then `done` (✅) or `failed` (❌). Optional.
    */
   mark?(message: ChatMessage, state: "seen" | "done" | "failed"): Promise<void>;
-  /** A link to the thread, credited in pull requests the agent opens. Optional. */
-  permalink?(thread: ChatThread): Promise<string | undefined>;
 }
 
 /** A repository, optionally with a branch: `https://github.com/acme/app` or `…/app#develop`. */
