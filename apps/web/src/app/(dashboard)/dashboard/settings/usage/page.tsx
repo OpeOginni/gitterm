@@ -1,13 +1,7 @@
-import { SettingsPage } from "@/components/dashboard/settings/settings-page";
-import { UsageSection } from "@/components/dashboard/settings/usage-section";
+import { redirect } from "next/navigation";
+import type { Route } from "next";
 
+// Usage is part of the Account page.
 export default function UsageSettingsPage() {
-  return (
-    <SettingsPage
-      title="Usage"
-      description="Monitor runtime allowance and review workspace activity."
-    >
-      <UsageSection />
-    </SettingsPage>
-  );
+  redirect("/dashboard/settings/account#usage" as Route);
 }

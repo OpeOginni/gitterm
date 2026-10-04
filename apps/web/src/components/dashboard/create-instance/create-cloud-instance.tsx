@@ -6,7 +6,7 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowUpRight, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,6 +68,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string | null>(null);
   const [googleCloudIntegrationId, setGoogleCloudIntegrationId] = useState("none");
   const [mcpConnectionIds, setMcpConnectionIds] = useState<string[]>([]);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   const [persistent, setPersistent] = useState(true);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
 
@@ -322,6 +323,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const requiresUserSshKey = selectedCloudProvider?.providerKey !== "daytona";
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
   const supportsMcp = selectedAgent?.provisionerKey === "opencode";
+  const selectedIntegrations =
+    (googleCloudIntegrationId !== "none" ? 1 : 0) + (supportsMcp ? mcpConnectionIds.length : 0);
 
   const handleCloudGroupChange = (groupKey: CloudGroupKey) => {
     setUserCloudGroupKey(groupKey);
@@ -528,45 +531,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             )}
           </p>
         </div>
-
-        {/* ── 3d. Google Cloud workload identity (only when the admin has enabled it) ── */}
-        {isGoogleCloudAvailable ? (
-          <div className="grid gap-1.5">
-            <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Google Cloud Identity
-              <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-                <ArrowUpRight className="h-3 w-3" />
-              </Link>
-            </Label>
-            <div className="flex items-center gap-2">
-              <Select
-                value={googleCloudIntegrationId}
-                onValueChange={setGoogleCloudIntegrationId}
-                disabled={googleCloudIntegrations.length === 0}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue
-                    placeholder={
-                      googleCloudIntegrations.length ? "Select service account" : "No integrations"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {googleCloudIntegrations.map((integration) => (
-                    <SelectItem key={integration.id} value={integration.id}>
-                      {integration.name} · {integration.projectId}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <HelpHint label="How is Google Cloud authenticated?">
-                GitTerm exchanges a five-minute workspace identity through Google Workload Identity
-                Federation. No service-account JSON key is stored.
-              </HelpHint>
-            </div>
-          </div>
-        ) : null}
 
         {/* ── 3. Agent + Cloud (+ Region) ── */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -931,65 +895,145 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </Label>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-border p-3">
-          <div className="flex items-center justify-between gap-3">
-            <Label className="text-xs font-medium">
-              MCP tools <span className="font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <Link
-              href={"/dashboard/integrations" as Route}
-              className="text-xs text-muted-foreground underline underline-offset-2"
+        {/* ── 4b. Optional integrations, folded away until someone wants one ── */}
+        {isGoogleCloudAvailable || mcpConnections.length > 0 ? (
+          <div className="rounded-xl border border-dashed border-line">
+            <button
+              type="button"
+              aria-expanded={showIntegrations}
+              onClick={() => setShowIntegrations((value) => !value)}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-fill"
             >
-              Manage connections
-            </Link>
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {supportsMcp
-              ? "Choose servers for this workspace. OpenCode connects directly; their credentials will be available to its agent."
-              : "GitTerm MCP connections require an OpenCode workspace. T3Code is not supported yet."}
-          </p>
-          {connectionsError ? (
-            <p role="alert" className="text-xs text-red-400">
-              Couldn't load connections. You can create a workspace without MCP tools.
-            </p>
-          ) : null}
-          {!mcpConnections.length ? (
-            <p className="text-xs text-muted-foreground">
-              Connect a remote server or Executor from Integrations first.
-            </p>
-          ) : null}
-          {mcpConnections.map((connection) => (
-            <label key={connection.id} className="flex items-center gap-2 text-xs">
-              <Checkbox
-                disabled={
-                  !supportsMcp ||
-                  connection.status !== "connected" ||
-                  (mcpConnectionIds.length >= 30 && !mcpConnectionIds.includes(connection.id))
-                }
-                checked={
-                  supportsMcp &&
-                  connection.status === "connected" &&
-                  mcpConnectionIds.includes(connection.id)
-                }
-                onCheckedChange={(checked) =>
-                  setMcpConnectionIds((ids) =>
-                    checked === true
-                      ? [...new Set([...ids, connection.id])]
-                      : ids.filter((id) => id !== connection.id),
-                  )
-                }
-              />
-              <span className="min-w-0 flex-1 truncate">{connection.name}</span>
-              <span className="shrink-0 text-muted-foreground">
-                {connection.status === "connected"
-                  ? connection.integration === "executor"
-                    ? "Executor"
-                    : "MCP"
-                  : "Needs attention"}
+              <Plus className="size-3.5 shrink-0 text-fg-4" />
+              <span className="text-xs text-fg-2">Add integrations</span>
+              <span className="truncate text-xs text-fg-4">
+                {[
+                  isGoogleCloudAvailable ? "Google Cloud" : null,
+                  mcpConnections.length ? "MCP servers, Executor" : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
               </span>
-            </label>
-          ))}
-        </div>
+              <span className="ml-auto flex shrink-0 items-center gap-2">
+                {selectedIntegrations > 0 ? (
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary">
+                    {selectedIntegrations} selected
+                  </span>
+                ) : null}
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 text-fg-4 transition-transform",
+                    showIntegrations && "rotate-180",
+                  )}
+                />
+              </span>
+            </button>
+            {showIntegrations ? (
+              <div className="space-y-4 border-t border-line px-3.5 py-3.5">
+                {isGoogleCloudAvailable ? (
+                  <div className="grid gap-1.5">
+                    <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                      Google Cloud Identity
+                      <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
+                        <ArrowUpRight className="h-3 w-3" />
+                      </Link>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={googleCloudIntegrationId}
+                        onValueChange={setGoogleCloudIntegrationId}
+                        disabled={googleCloudIntegrations.length === 0}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue
+                            placeholder={
+                              googleCloudIntegrations.length
+                                ? "Select service account"
+                                : "No integrations"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {googleCloudIntegrations.map((integration) => (
+                            <SelectItem key={integration.id} value={integration.id}>
+                              {integration.name} · {integration.projectId}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <HelpHint label="How is Google Cloud authenticated?">
+                        GitTerm exchanges a five-minute workspace identity through Google Workload
+                        Identity Federation. No service-account JSON key is stored.
+                      </HelpHint>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      MCP servers and Executor
+                    </Label>
+                    <Link
+                      href={"/dashboard/integrations" as Route}
+                      className="text-xs text-muted-foreground underline underline-offset-2"
+                    >
+                      Manage connections
+                    </Link>
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {supportsMcp
+                      ? "Choose servers for this workspace. OpenCode connects directly; their credentials will be available to its agent."
+                      : "GitTerm MCP connections require an OpenCode workspace. T3Code is not supported yet."}
+                  </p>
+                  {connectionsError ? (
+                    <p role="alert" className="text-xs text-red-400">
+                      Couldn't load connections. You can create a workspace without MCP tools.
+                    </p>
+                  ) : null}
+                  {!mcpConnections.length ? (
+                    <p className="text-xs text-muted-foreground">
+                      Connect a remote server or Executor from Integrations first.
+                    </p>
+                  ) : null}
+                  {mcpConnections.map((connection) => (
+                    <label key={connection.id} className="flex items-center gap-2 text-xs">
+                      <Checkbox
+                        disabled={
+                          !supportsMcp ||
+                          connection.status !== "connected" ||
+                          (mcpConnectionIds.length >= 30 &&
+                            !mcpConnectionIds.includes(connection.id))
+                        }
+                        checked={
+                          supportsMcp &&
+                          connection.status === "connected" &&
+                          mcpConnectionIds.includes(connection.id)
+                        }
+                        onCheckedChange={(checked) =>
+                          setMcpConnectionIds((ids) =>
+                            checked === true
+                              ? [...new Set([...ids, connection.id])]
+                              : ids.filter((id) => id !== connection.id),
+                          )
+                        }
+                      />
+                      <span className="min-w-0 flex-1 truncate">{connection.name}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {connection.status === "connected"
+                          ? connection.integration === "executor"
+                            ? "Executor"
+                            : "MCP"
+                          : "Needs attention"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* ── 5. Persistent storage ── */}
         {(() => {
@@ -1030,20 +1074,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         })()}
       </div>
 
-      <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button
-          variant="outline"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className="w-full sm:w-auto"
-        >
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={isSubmitting || !isValid}
-          className="w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto"
-        >
+        <Button onClick={handleSubmit} disabled={isSubmitting || !isValid} className="gap-2">
           {isSubmitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />

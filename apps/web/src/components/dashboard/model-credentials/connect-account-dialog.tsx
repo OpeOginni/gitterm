@@ -175,11 +175,11 @@ function ConnectAccountFlow({
 
   return (
     <>
-      <DialogHeader className="border-b border-line px-5 py-4 text-left sm:px-6">
-        <DialogTitle className="text-lg font-semibold tracking-[-0.02em]">
+      <DialogHeader className="px-5 pt-5 pb-4">
+        <DialogTitle>
           {selected ? `Connect ${selected.displayName}` : "Connect an account"}
         </DialogTitle>
-        <DialogDescription className="text-[13px]">
+        <DialogDescription>
           Sign in with a subscription. Your credentials are encrypted and only used for your
           workspaces.
         </DialogDescription>
@@ -309,7 +309,7 @@ function ConnectAccountFlow({
         </div>
       )}
 
-      <DialogFooter className="border-t border-line px-5 py-3.5 sm:px-6">
+      <DialogFooter className="m-0">
         <Button variant="outline" onClick={onClose}>
           Cancel
         </Button>

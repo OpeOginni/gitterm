@@ -651,7 +651,7 @@ export function InstanceCard({
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Open workspace port</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
+            <DialogDescription>
               Expose a port from this workspace. Enter a short name and the port number.
             </DialogDescription>
           </DialogHeader>

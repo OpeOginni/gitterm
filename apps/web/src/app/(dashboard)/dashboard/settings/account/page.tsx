@@ -8,7 +8,7 @@ export default async function AccountSettingsPage() {
     ?.plan ?? "free") as "free" | "starter" | "pro";
 
   return (
-    <SettingsPage title="Account" description="Your identity and account-level controls.">
+    <SettingsPage title="Account" description="Your profile, plan, usage, and account controls.">
       <AccountSection currentPlan={currentPlan} />
     </SettingsPage>
   );

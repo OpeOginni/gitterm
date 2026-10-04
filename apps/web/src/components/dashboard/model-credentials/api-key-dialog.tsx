@@ -272,11 +272,9 @@ function ApiKeyForm({
 
   return (
     <>
-      <DialogHeader className="border-b border-line px-5 py-4 text-left sm:px-6">
-        <DialogTitle className="text-lg font-semibold tracking-[-0.02em]">Add API key</DialogTitle>
-        <DialogDescription className="text-[13px]">
-          Keys are encrypted and only sent to your workspaces.
-        </DialogDescription>
+      <DialogHeader className="px-5 pt-5 pb-4">
+        <DialogTitle>Add API key</DialogTitle>
+        <DialogDescription>Keys are encrypted and only sent to your workspaces.</DialogDescription>
       </DialogHeader>
 
       <form
@@ -369,7 +367,7 @@ function ApiKeyForm({
         </div>
       </form>
 
-      <DialogFooter className="border-t border-line px-5 py-4 sm:px-6">
+      <DialogFooter className="m-0">
         <Button variant="outline" onClick={onClose}>
           Cancel
         </Button>
@@ -377,7 +375,7 @@ function ApiKeyForm({
           type="submit"
           form="api-key-form"
           disabled={!canSubmit || storeApiKey.isPending}
-          className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
+          className="gap-2"
         >
           {storeApiKey.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
           {storeApiKey.isPending ? "Saving..." : "Save key"}

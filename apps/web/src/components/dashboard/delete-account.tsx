@@ -138,7 +138,7 @@ export function DeleteAccountSection() {
                 </div>
               </div>
 
-              <DialogFooter className="gap-2 sm:gap-0">
+              <DialogFooter>
                 <DialogClose asChild>
                   <Button variant="ghost" onClick={() => setConfirmText("")}>
                     Cancel

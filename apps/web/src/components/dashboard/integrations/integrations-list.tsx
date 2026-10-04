@@ -1,5 +1,6 @@
 "use client";
 
+import { SettingsEmptyState } from "@/components/ui/form-card";
 import type React from "react";
 import { useState } from "react";
 import Image from "next/image";
@@ -107,14 +108,11 @@ function IntegrationsSkeleton() {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line bg-fill px-6 py-14 text-center">
-      <Plug className="size-5 text-fg-4" />
-      <p className="text-sm font-medium text-fg-2">No integrations available</p>
-      <p className="max-w-sm text-sm text-fg-4">
-        This deployment has not turned on any integrations yet. Your workspaces can still clone
-        public repositories.
-      </p>
-    </div>
+    <SettingsEmptyState
+      icon={Plug}
+      title="No integrations available"
+      description="This deployment has not turned on any integrations yet. Your workspaces can still clone public repositories."
+    />
   );
 }
 

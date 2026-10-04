@@ -1,9 +1,12 @@
 "use client";
 
+import type React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { DeleteAccountSection } from "@/components/dashboard/delete-account";
+import { BillingSection } from "@/components/dashboard/billing-section";
+import { UsageSection } from "@/components/dashboard/settings/usage-section";
 import { FormCard, FormCardBody, FormCardHeader } from "@/components/ui/form-card";
 import { authClient } from "@/lib/auth-client";
 
@@ -16,10 +19,7 @@ function memberSince(createdAt: Date | string | undefined): string | null {
   return date.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
-/**
- * Identity card - who is signed in, at a glance. Billing and API tokens live
- * on their own focused settings pages.
- */
+/** Identity card: who is signed in, at a glance. */
 function ProfileCard({ currentPlan }: { currentPlan: UserPlan }) {
   const { data: session } = authClient.useSession();
   const user = session?.user;
@@ -55,7 +55,7 @@ function ProfileCard({ currentPlan }: { currentPlan: UserPlan }) {
             <p className="truncate text-sm text-fg-3">{user?.email ?? ""}</p>
           </div>
           <Link
-            href={"/dashboard/settings/billing" as Route}
+            href={"/dashboard/settings/account#billing" as Route}
             aria-label="Manage current plan"
             className="group flex items-center gap-3 border-l border-line pl-4"
           >
@@ -72,10 +72,34 @@ function ProfileCard({ currentPlan }: { currentPlan: UserPlan }) {
   );
 }
 
+/** A part of the account page, reachable by its anchor (e.g. from the plan badge). */
+function AccountPart({
+  id,
+  label,
+  children,
+}: {
+  id: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} className="scroll-mt-8 space-y-3 pt-4">
+      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">{label}</p>
+      {children}
+    </section>
+  );
+}
+
 export function AccountSection({ currentPlan }: { currentPlan: UserPlan }) {
   return (
     <div className="space-y-6">
       <ProfileCard currentPlan={currentPlan} />
+      <AccountPart id="billing" label="Plan and billing">
+        <BillingSection currentPlan={currentPlan} />
+      </AccountPart>
+      <AccountPart id="usage" label="Usage">
+        <UsageSection />
+      </AccountPart>
       <DeleteAccountSection />
     </div>
   );
