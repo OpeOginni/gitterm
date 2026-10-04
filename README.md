@@ -239,10 +239,12 @@ import { createSlackBot } from "@gitterm/slack-bot";
 await createSlackBot({ repo: "https://github.com/acme/app" }).start();
 ```
 
-Each repository gets one sandbox that pauses when idle and wakes on the next message; each chat
-thread is one agent session. Agent questions and tool approvals become buttons in the thread, and
-the bot attaches your GitHub, MCP, and Executor connections automatically. The shared engine,
-[`@gitterm/bot`](packages/bot), can drive other chat platforms.
+Set one up from **Bots** in the dashboard: it walks through a model key, GitHub, the repository,
+and tools, creates a correctly scoped token, and hands you the `.env` (and, for Slack, a
+one-click app). Each repository gets one sandbox that pauses when idle and wakes on the next
+message; each chat thread is one agent session. Agent questions and tool approvals become buttons
+in the thread. GitHub access is attached automatically; tools (MCP, Executor) are attached by
+name. The shared engine, [`@gitterm/bot`](packages/bot), can drive other chat platforms.
 
 ## Development
 

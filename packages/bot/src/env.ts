@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { parseArgs } from "node:util";
+import { parseArgs, parseEnv } from "node:util";
 import type { WorkspaceProviderSelection } from "@gitterm/sdk";
 import type { BotOptions, RepoTarget } from "./types.js";
 
@@ -29,6 +29,25 @@ function parseChannels(value: string): Record<string, RepoTarget> {
   return channels;
 }
 
+const list = (value: string) =>
+  value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+/** A dotenv file whose variables go into new sandboxes, e.g. test credentials. */
+function readSandboxEnv(path: string | undefined): Record<string, string> | undefined {
+  if (!path) return undefined;
+  try {
+    const parsed = parseEnv(readFileSync(path, "utf8")) as Record<string, string | undefined>;
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, string] => entry[1] !== undefined),
+    );
+  } catch (error) {
+    throw new Error(`Could not read the sandbox environment file ${path}`, { cause: error });
+  }
+}
+
 function readInstructionsFile(path: string | undefined): string | undefined {
   if (!path) return undefined;
   try {
@@ -51,10 +70,16 @@ export function botOptionsFromEnv(env: Env = process.env): Omit<BotOptions, "ada
   const repo = read(env, "GITTERM_BOT_REPO");
   if (repo) options.repo = repo;
   if (channels) options.channels = parseChannels(channels);
-  if (connections && connections !== "auto") {
-    options.connections =
-      connections === "none" ? [] : connections.split(",").map((value) => value.trim());
-  }
+  if (connections) options.connections = list(connections);
+  const repos = read(env, "GITTERM_BOT_REPOS");
+  if (repos) options.repos = list(repos);
+  const allowedUsers = read(env, "GITTERM_BOT_ALLOWED_USERS");
+  if (allowedUsers) options.allowedUsers = list(allowedUsers);
+  if (read(env, "GITTERM_BOT_ALLOW_GUESTS") === "true") options.allowGuests = true;
+  const setup = read(env, "GITTERM_BOT_SETUP");
+  if (setup) options.setup = [setup];
+  const sandboxEnv = readSandboxEnv(read(env, "GITTERM_BOT_SANDBOX_ENV_FILE"));
+  if (sandboxEnv) options.env = sandboxEnv;
   const model = read(env, "GITTERM_BOT_MODEL");
   const credential = read(env, "GITTERM_BOT_MODEL_CREDENTIAL");
   const apiKey = read(env, "GITTERM_BOT_MODEL_API_KEY");
@@ -112,3 +137,25 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
   for (const [name, value] of Object.entries(flags)) if (value) env[name] = value;
   return { command: positionals[0], options: botOptionsFromEnv(env) };
 }
+
+/** The environment variables every bot command line reads, for its usage text. */
+export const BOT_ENV_HELP = `  GITTERM_API_TOKEN               GitTerm API token (dashboard → Bots creates one)
+  GITTERM_SERVER_URL              Self-hosted GitTerm API URL (default: hosted)
+  GITTERM_BOT_REPO                Repository for every channel: https://github.com/acme/app[#branch]
+  GITTERM_BOT_REPOS               More repositories people can name in a thread: url,url
+  GITTERM_BOT_CHANNELS            Per-channel repositories: <channel id>=<url>,…
+  GITTERM_BOT_MODEL               provider/model, e.g. anthropic/claude-sonnet-4-5
+  GITTERM_BOT_MODEL_CREDENTIAL    Saved credential label (default: the provider's default)
+  GITTERM_BOT_MODEL_API_KEY       Or a model API key for this bot only
+  GITTERM_BOT_CONNECTIONS         Tools besides GitHub, by name: Linear,Sentry
+  GITTERM_BOT_ALLOWED_USERS       Only these user ids may use the bot: U012,U034
+  GITTERM_BOT_ALLOW_GUESTS        true lets guests and external people use the bot
+  GITTERM_BOT_INSTRUCTIONS[_FILE] What the agent should know and how to behave
+  GITTERM_BOT_SETUP               Command run before the agent starts, e.g. "pnpm install"
+  GITTERM_BOT_SANDBOX_ENV_FILE    dotenv file of variables for the sandbox (test credentials)
+  GITTERM_BOT_PROVIDER            Compute provider for new sandboxes (railway, e2b, …)
+  GITTERM_BOT_STATE_FILE, GITTERM_BOT_RUN_TIMEOUT_MINUTES`;
+
+/** Whether the options name at least one repository the bot can work on. */
+export const hasRepository = (options: Omit<BotOptions, "adapter">) =>
+  Boolean(options.repo || options.repos?.length || Object.keys(options.channels ?? {}).length);

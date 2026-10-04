@@ -1,10 +1,4 @@
-import type {
-  Connection,
-  GittermClient,
-  ModelCredential,
-  Workspace,
-  WorkspaceModelsInput,
-} from "@gitterm/sdk";
+import type { GittermClient, ModelCredential, Workspace, WorkspaceModelsInput } from "@gitterm/sdk";
 import type { StatusText } from "./status.js";
 import type { BotLogger, ModelChoice, RepoTarget, WorkspaceOverrides } from "./types.js";
 
@@ -25,59 +19,11 @@ export function repoLabel(repo: Repo): string {
   return match?.[1] ?? repo.url;
 }
 
-function githubOwner(url: string): string | undefined {
-  return /^(?:https?:\/\/github\.com\/|git@github\.com:)([^/]+)\//i.exec(url)?.[1]?.toLowerCase();
-}
-
-/**
- * The bot's opinion of what a sandbox needs: GitHub access for the repository's owner (or the
- * deployment's shared GitHub connection) and every connected MCP/Executor tool source.
- */
-export function pickConnections(
-  available: Connection[],
-  repo: Repo,
-  choice: "auto" | string[],
-): string[] {
-  const connected = available.filter((connection) => connection.status === "connected");
-  if (choice !== "auto") {
-    return choice.map((reference) => {
-      const match =
-        connected.find((connection) => connection.id === reference) ??
-        connected.find((connection) => connection.name.toLowerCase() === reference.toLowerCase());
-      if (!match) {
-        throw new Error(
-          `GitTerm connection "${reference}" is not connected. Check its id or name under Dashboard → Integrations.`,
-        );
-      }
-      return match.id;
-    });
-  }
-
-  const picked: string[] = [];
-  const owner = githubOwner(repo.url);
-  if (owner) {
-    const github = connected.filter((connection) => connection.integration === "github");
-    const match =
-      github.find(
-        (connection) =>
-          connection.details.integration === "github" &&
-          connection.details.accountLogin.toLowerCase() === owner,
-      ) ?? github.find((connection) => connection.kind === "shared");
-    if (match) picked.push(match.id);
-  }
-  for (const connection of connected) {
-    if (connection.integration === "mcp" || connection.integration === "executor") {
-      picked.push(connection.id);
-    }
-  }
-  return picked;
-}
-
 /**
  * Credentials for exactly the chosen model's provider, so a sandbox shared by a whole channel
  * holds one model key instead of every account on the dashboard. A provider without a saved
- * credential (free or ambient-auth models) gets none; a run that needs one then fails with
- * `MODEL_CREDENTIAL_REQUIRED` naming it.
+ * credential (free or ambient-auth models) gets none; a run that needs one then fails with the
+ * provider's authentication error, and startup warns about it.
  */
 export function modelsFor(model: ModelChoice, saved: ModelCredential[]): WorkspaceModelsInput {
   const provider = model.id.split("/")[0] ?? "";
@@ -102,6 +48,17 @@ export function modelsFor(model: ModelChoice, saved: ModelCredential[]): Workspa
   return { default: model.id };
 }
 
+/**
+ * `["github"]` when GitTerm has a GitHub connection covering the repository (the server picks
+ * it), otherwise nothing: a public repository still clones, and startup already warned.
+ */
+export async function githubFor(gitterm: GittermClient, repo: Repo): Promise<string[]> {
+  return gitterm.integrations.connections.resolve(["github"], { repo: repo.url }).then(
+    () => ["github"],
+    () => [],
+  );
+}
+
 const RESUME_TIMEOUT_MS = 5 * 60_000;
 
 export type WorkspaceManager = {
@@ -117,7 +74,9 @@ export function createWorkspaceManager(input: {
   gitterm: GittermClient;
   platform: string;
   scope: string;
-  connections: "auto" | string[];
+  connections: string[];
+  env: Record<string, string>;
+  setup: string[];
   model: ModelChoice | undefined;
   instructions: string;
   overrides: WorkspaceOverrides | undefined;
@@ -141,11 +100,10 @@ export function createWorkspaceManager(input: {
   };
 
   const create = async (repo: Repo) => {
-    const connections = pickConnections(
-      await gitterm.integrations.connections.list(),
-      repo,
-      input.connections,
-    );
+    const connections = [...(await githubFor(gitterm, repo)), ...input.connections];
+    const env = { ...input.overrides?.environmentVariables, ...input.env };
+    const setup =
+      input.overrides?.setup ?? (input.setup.length ? { beforeAgent: input.setup } : undefined);
     const models =
       input.overrides?.models ??
       (input.model ? modelsFor(input.model, await gitterm.credentials.list()) : undefined);
@@ -163,6 +121,8 @@ export function createWorkspaceManager(input: {
       metadata: tags(repo),
       connections,
       ...(models ? { models } : {}),
+      ...(Object.keys(env).length ? { environmentVariables: env } : {}),
+      ...(setup ? { setup } : {}),
       additionalAgentInstructions: [
         input.instructions,
         input.overrides?.additionalAgentInstructions,

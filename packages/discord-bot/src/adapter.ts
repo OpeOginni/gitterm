@@ -125,7 +125,14 @@ async function onInteraction(events: ChatEvents, interaction: Interaction) {
     const valid = labels.filter((label): label is string => Boolean(label));
     if (valid.length > 0) answer = { kind: "question", labels: valid };
   }
-  if (!answer || !events.answer(parsed.promptId, answer, by)) return stale();
+  const outcome = answer ? events.answer(parsed.promptId, answer, by) : "stale";
+  if (outcome === "forbidden") {
+    return interaction.reply({
+      content: "Only people allowed to use this bot can answer.",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  if (outcome !== "answered") return stale();
   // The engine edits the prompt message with the outcome; only acknowledge here.
   if (interaction.isModalSubmit() && !interaction.isFromMessage()) {
     return interaction.reply({ content: "Sent to the agent.", flags: MessageFlags.Ephemeral });
@@ -151,7 +158,7 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
     }
   }
   const client = options.client ?? new Client({ intents: INTENTS });
-  /** Messages reported to the engine, kept briefly so `acknowledge` can react to them. */
+  /** Messages reported to the engine, kept so `mark` can react to them until they are done. */
   const recent = new Map<string, Message>();
 
   const botId = () => client.user?.id ?? "";
@@ -286,9 +293,13 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
       ).messages.edit(messageId, settledMessage(prompt, outcome));
     },
 
-    async acknowledge(message) {
-      await recent.get(message.id)?.react("👀");
-      recent.delete(message.id);
+    async mark(message, state) {
+      await recent.get(message.id)?.react({ seen: "👀", done: "✅", failed: "❌" }[state]);
+      if (state !== "seen") recent.delete(message.id);
+    },
+
+    async permalink(location) {
+      return (await thread(location.thread)).url;
     },
   };
 }

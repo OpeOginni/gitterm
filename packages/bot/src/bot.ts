@@ -18,6 +18,7 @@ import {
   interpretPermissionReply,
   interpretTypedAnswer,
 } from "./prompt.js";
+import { checkSetup } from "./preflight.js";
 import { createLocks, openStateStore, type InFlightRequest, type StateStore } from "./state.js";
 import {
   minutes,
@@ -65,6 +66,8 @@ type Job = {
   status: StatusLine;
   requester: ChatUser;
   repo: Repo;
+  /** The request's message, for ✅/❌; absent for runs reattached after a restart. */
+  message?: ChatMessage;
 };
 
 type OpenPrompt = {
@@ -110,6 +113,8 @@ async function attachmentsFor(files: ChatFile[]) {
   );
 }
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** Remembers recently handled message ids, because platforms redeliver events. */
 function recentIds(limit: number) {
   const ids = new Set<string>();
@@ -134,12 +139,21 @@ export function createBot(options: BotOptions): Bot {
   const runTimeoutMs = options.runTimeoutMs ?? 60 * 60_000;
   const inputTimeoutMs = options.inputTimeoutMs ?? 30 * 60_000;
   const defaultRepo = options.repo ? parseRepo(options.repo) : undefined;
+  const extraRepos = (options.repos ?? []).map(parseRepo);
+  const allowedUsers = options.allowedUsers ? new Set(options.allowedUsers) : undefined;
   const model = typeof options.model === "string" ? { id: options.model } : options.model;
   const channelRepos = new Map(
     Object.entries(options.channels ?? {}).map(([channel, repo]) => [channel, parseRepo(repo)]),
   );
-  if (!defaultRepo && channelRepos.size === 0) {
-    throw new Error("Give the bot a `repo`, or a repository per channel in `channels`.");
+  const knownRepos = [
+    ...new Map(
+      [defaultRepo, ...channelRepos.values(), ...extraRepos]
+        .filter((repo): repo is Repo => Boolean(repo))
+        .map((repo) => [repoKey(repo), repo]),
+    ).values(),
+  ];
+  if (knownRepos.length === 0) {
+    throw new Error("Give the bot a `repo`, `repos` to choose from, or a repository per channel.");
   }
 
   const lock = createLocks();
@@ -151,10 +165,34 @@ export function createBot(options: BotOptions): Bot {
   let store: StateStore;
   let workspaces: WorkspaceManager;
   let scope = "";
+  let ready = Promise.resolve();
   /** Aborted by `stop()`: run observers detach and leave their runs to the next `start()`. */
   let shutdown = new AbortController();
 
-  const repoFor = (channel: string) => channelRepos.get(channel) ?? defaultRepo;
+  const allowed = (user: ChatUser) =>
+    (!user.guest || options.allowGuests === true) && (!allowedUsers || allowedUsers.has(user.id));
+  const servesChannel = (channel: string) =>
+    channelRepos.has(channel) || Boolean(defaultRepo) || extraRepos.length > 0;
+
+  /**
+   * A thread's repository: the one its session already works on, else one the message names
+   * ("in acme/api"), else the channel's. Undefined when the person has to say which.
+   */
+  function repoFor(message: ChatMessage): Repo | undefined {
+    const session = store.session(threadKeyOf(message.thread));
+    const current = session && knownRepos.find((repo) => repoKey(repo) === session.repo);
+    if (current) return current;
+    const text = message.text.toLowerCase();
+    // `acme/api` or the repository URL as a whole word: not `acme/api-v2` or a file path.
+    // Slack wraps links as <url> or <url|text>.
+    const named = knownRepos.find((repo) => {
+      const names = [repoLabel(repo), repo.url.replace(/\.git$/, "")].map((name) =>
+        escapeRegExp(name.toLowerCase()),
+      );
+      return new RegExp(`(^|[\\s(\\[<])(${names.join("|")})(?=$|[\\s.,;:!?)\\]>|])`).test(text);
+    });
+    return named ?? channelRepos.get(message.thread.channel) ?? defaultRepo;
+  }
   const say = (thread: ChatThread, text: string) => adapter.post(thread, text).catch(noop);
 
   // ── Prompts (questions and permissions) ───────────────────────────────────────────────────
@@ -324,6 +362,7 @@ export function createBot(options: BotOptions): Bot {
         `${repoLabel(job.repo)} · ${minutes(Date.now() - startedAt)} min · GitTerm`,
       );
       await status.remove();
+      if (job.message) await adapter.mark?.(job.message, "done").catch(noop);
     } catch (error) {
       // Stopped: the run carries on in GitTerm and stays in the state file for the next start.
       if (stopping.aborted) return;
@@ -334,6 +373,7 @@ export function createBot(options: BotOptions): Bot {
         log.error("Agent run did not complete", { thread: job.key }, error);
       }
       await status.finish(describeFailure(error, { stoppedBy: entry.stoppedBy, timedOut }));
+      if (job.message) await adapter.mark?.(job.message, "failed").catch(noop);
     } finally {
       clearTimeout(timer);
       for (const controller of relays.values()) {
@@ -373,6 +413,7 @@ export function createBot(options: BotOptions): Bot {
       message,
       history,
       continued: Boolean(session),
+      link: await adapter.permalink?.(job.thread).catch(() => undefined),
     });
     const attachments = await attachmentsFor(prompt.images);
     const input = {
@@ -400,6 +441,7 @@ export function createBot(options: BotOptions): Bot {
       return gitterm.runs.create(input);
     });
     await store.setSession(job.key, {
+      repo: repoKey(job.repo),
       workspaceId: workspace.id,
       runId: run.id,
       lastMessageId: message.id,
@@ -410,7 +452,14 @@ export function createBot(options: BotOptions): Bot {
   async function handleRequest(message: ChatMessage, repo: Repo) {
     const key = threadKeyOf(message.thread);
     const status = await openStatusLine(adapter, message.thread);
-    const job: Job = { key, thread: message.thread, status, requester: message.author, repo };
+    const job: Job = {
+      key,
+      thread: message.thread,
+      status,
+      requester: message.author,
+      repo,
+      message,
+    };
     const request: InFlightRequest = {
       thread: job.thread,
       ...(status.messageId ? { statusId: status.messageId } : {}),
@@ -424,6 +473,7 @@ export function createBot(options: BotOptions): Bot {
     } catch (error) {
       log.error("Could not start an agent run", { thread: key }, error);
       await status.finish(describeFailure(error));
+      await adapter.mark?.(message, "failed").catch(noop);
       await store.setInFlight(key, undefined);
       return;
     }
@@ -432,7 +482,13 @@ export function createBot(options: BotOptions): Bot {
     await follow(job, run);
   }
 
-  async function command(name: string, message: ChatMessage, repo: Repo) {
+  const askForRepo = (thread: ChatThread) =>
+    say(
+      thread,
+      `Which repository? Mention me again and name one of: ${knownRepos.map(repoLabel).join(", ")}.`,
+    );
+
+  async function command(name: string, message: ChatMessage, repo: Repo | undefined) {
     const key = threadKeyOf(message.thread);
     if (name === "stop") {
       const current = active.get(key);
@@ -440,6 +496,24 @@ export function createBot(options: BotOptions): Bot {
       current.stoppedBy = message.author;
       await gitterm.runs.cancel(current.run);
       return;
+    }
+    if (name === "help" || !repo) {
+      const others = knownRepos.filter((entry) => !repo || repoKey(entry) !== repoKey(repo));
+      return say(
+        message.thread,
+        [
+          repo
+            ? `I run a coding agent on ${repoLabel(repo)} in a GitTerm sandbox.`
+            : "I run a coding agent in a GitTerm sandbox.",
+          others.length
+            ? `Name a repository in a thread's first message to work on it instead: ${others.map(repoLabel).join(", ")}.`
+            : "",
+          "Mention me with a question or a task; every thread is its own session, so follow up in the thread.",
+          "Commands: *stop* cancels the work in this thread, *status* shows what I can access, *reset* replaces the sandbox with a fresh one.",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
     }
     if (name === "reset") {
       const terminated = await lock(`repo:${repoKey(repo)}`, () => workspaces.reset(repo));
@@ -450,32 +524,39 @@ export function createBot(options: BotOptions): Bot {
           : `There is no ${repoLabel(repo)} sandbox yet; the next message creates one.`,
       );
     }
-    if (name === "status") {
-      const workspace = await workspaces.find(repo);
-      const state = workspace
-        ? `is ${workspace.status}${workspace.status === "paused" ? " and wakes up with the next message" : ""}`
-        : "does not exist yet; the next message creates it";
-      const running = active.has(key) ? " An agent is working in this thread." : "";
-      return say(message.thread, `The ${repoLabel(repo)} sandbox ${state}.${running}`);
-    }
+    // status: what this thread can reach, so people can check before asking.
+    const workspace = await workspaces.find(repo);
+    const sandbox = workspace
+      ? `${workspace.status}${workspace.status === "paused" ? ", wakes with the next message" : ""}`
+      : "created with the next message";
     return say(
       message.thread,
       [
-        `I run a coding agent on ${repoLabel(repo)} in a GitTerm sandbox. Mention me with a question or a task; every thread is its own session, so follow up in the thread.`,
-        "Commands: *stop* cancels the work in this thread, *status* shows the sandbox, *reset* replaces the sandbox with a fresh one.",
-      ].join("\n"),
+        `*${repoLabel(repo)}*${repo.branch ? ` (${repo.branch})` : ""} · sandbox ${sandbox}`,
+        `Model: ${model?.id ?? "dashboard default"} · Tools: ${options.connections?.length ? options.connections.join(", ") : "GitHub only"}`,
+        `Who can use me: ${allowedUsers ? `${allowedUsers.size} allowed people` : "everyone in this channel"}${options.allowGuests ? "" : ", no guests"}`,
+        active.has(key) ? "An agent is working in this thread right now." : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
     );
   }
 
   function onMessage(message: ChatMessage) {
     const key = threadKeyOf(message.thread);
-    const repo = repoFor(message.thread.channel);
-    if (!repo || !fresh(`${key}:${message.id}`)) return;
+    if (!servesChannel(message.thread.channel) || !fresh(`${key}:${message.id}`)) return;
+    if (!allowed(message.author)) {
+      if (message.mentioned) {
+        void say(message.thread, "Sorry, I only take requests from people my admin allowed.");
+      }
+      return;
+    }
     const name = message.mentioned
       ? Object.keys(COMMANDS).find((entry) =>
           COMMANDS[entry]?.test(message.text.trim().replace(/[.!]+$/, "")),
         )
       : undefined;
+    const repo = repoFor(message);
     // Commands come first, so "stop" works while a question is open.
     if (name) {
       void command(name, message, repo).catch((error: unknown) => {
@@ -489,7 +570,11 @@ export function createBot(options: BotOptions): Bot {
       void command("help", message, repo);
       return;
     }
-    void adapter.acknowledge?.(message).catch(noop);
+    if (!repo) {
+      void askForRepo(message.thread);
+      return;
+    }
+    void adapter.mark?.(message, "seen").catch(noop);
     // Threads run concurrently in the sandbox; messages within one thread wait their turn.
     void lock(key, () => handleRequest(message, repo)).catch((error: unknown) =>
       log.error("Request failed", { thread: key }, error),
@@ -530,32 +615,47 @@ export function createBot(options: BotOptions): Bot {
       store = await openStateStore(
         resolvePath(options.stateFile ?? `.gitterm-bot/${adapter.platform}.json`),
       );
+      // Fail here, with what to fix, rather than at the first mention.
+      await checkSetup({
+        gitterm,
+        repos: knownRepos,
+        connections: options.connections ?? [],
+        model,
+        overrides: options.workspace,
+        log,
+      });
+      let markReady = noop as () => void;
+      ready = new Promise<void>((resolve) => (markReady = resolve));
       const started = await adapter.start({
-        message: onMessage,
+        // Messages that arrive while the bot finishes starting wait for it.
+        message: (message) => void ready.then(() => onMessage(message)),
         answer(promptId, answer, by) {
           const open = prompts.get(promptId);
-          if (!open || open.prompt.kind !== answer.kind) return false;
+          if (!open || open.prompt.kind !== answer.kind) return "stale";
+          if (!allowed(by)) return "forbidden";
           open.finish({ answer, by });
-          return true;
+          return "answered";
         },
         prompt: (promptId) => prompts.get(promptId)?.prompt,
-        accepts: (channel) => Boolean(repoFor(channel)),
+        accepts: servesChannel,
       });
       scope = started.scope;
       workspaces = createWorkspaceManager({
         gitterm,
         platform: adapter.platform,
         scope,
-        connections: options.connections ?? "auto",
+        connections: options.connections ?? [],
+        env: options.env ?? {},
+        setup: options.setup ?? [],
         model,
         instructions: agentInstructions(adapter.displayName, options.instructions),
         overrides: options.workspace,
         log,
       });
+      markReady();
       await recover();
-      const repos = [defaultRepo, ...channelRepos.values()].filter(Boolean) as Repo[];
       log.info(
-        `GitTerm ${adapter.displayName} bot is running for ${[...new Set(repos.map(repoLabel))].join(", ")}.`,
+        `GitTerm ${adapter.displayName} bot is running for ${knownRepos.map(repoLabel).join(", ")}.`,
       );
     },
     // Runs keep going in GitTerm and stay in the state file; the next start reattaches to them

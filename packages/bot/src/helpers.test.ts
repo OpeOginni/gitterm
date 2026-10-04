@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentQuestion, Connection, ModelCredential } from "@gitterm/sdk";
+import type { AgentQuestion, ModelCredential } from "@gitterm/sdk";
 import { botOptionsFromEnv } from "./env.js";
 import { splitMessage, tablesToCode } from "./markdown.js";
 import { buildPrompt, interpretPermissionReply, interpretTypedAnswer } from "./prompt.js";
 import type { ChatFile } from "./types.js";
-import { modelsFor, parseRepo, pickConnections, repoLabel } from "./workspaces.js";
+import { modelsFor, parseRepo, repoLabel } from "./workspaces.js";
 
 const image = (id: string, size = 100): ChatFile => ({
   id,
@@ -25,48 +25,6 @@ describe("repositories", () => {
     });
     expect(parseRepo({ url: "https://github.com/acme/app" }).branch).toBeUndefined();
     expect(repoLabel(parseRepo("https://github.com/acme/app.git"))).toBe("acme/app");
-  });
-});
-
-describe("pickConnections", () => {
-  const connection = (patch: Partial<Connection> & Record<string, unknown>) =>
-    ({ kind: "personal", status: "connected", connectedAt: "", name: "x", ...patch }) as Connection;
-  const ownGithub = connection({
-    id: "gh-acme",
-    integration: "github",
-    details: { integration: "github", mode: "app", accountLogin: "acme" },
-  });
-  const otherGithub = connection({
-    id: "gh-other",
-    integration: "github",
-    details: { integration: "github", mode: "app", accountLogin: "other" },
-  });
-  const shared = connection({
-    id: "github:shared",
-    integration: "github",
-    kind: "shared",
-    details: { integration: "github", mode: "pat", accountLogin: "bot" },
-  });
-  const executor = connection({ id: "ex1", integration: "executor", name: "Executor" } as never);
-  const repo = parseRepo("https://github.com/acme/app");
-
-  test("auto picks the owner's GitHub connection and every MCP source", () => {
-    expect(pickConnections([otherGithub, ownGithub, shared, executor], repo, "auto")).toEqual([
-      "gh-acme",
-      "ex1",
-    ]);
-  });
-
-  test("auto falls back to the shared GitHub connection, never another owner's", () => {
-    expect(pickConnections([otherGithub, shared], repo, "auto")).toEqual(["github:shared"]);
-    expect(pickConnections([otherGithub], repo, "auto")).toEqual([]);
-  });
-
-  test("explicit choices match ids or names and must be connected", () => {
-    expect(pickConnections([executor], repo, ["executor"])).toEqual(["ex1"]);
-    expect(() =>
-      pickConnections([{ ...executor, status: "error" } as Connection], repo, ["ex1"]),
-    ).toThrow("not connected");
   });
 });
 
@@ -163,14 +121,18 @@ describe("botOptionsFromEnv", () => {
       botOptionsFromEnv({
         GITTERM_BOT_REPO: "https://github.com/acme/app",
         GITTERM_BOT_CHANNELS: "C1=https://github.com/acme/api#main, C2=https://github.com/acme/web",
-        GITTERM_BOT_CONNECTIONS: "none",
+        GITTERM_BOT_CONNECTIONS: "Linear, executor",
+        GITTERM_BOT_REPOS: "https://github.com/acme/web",
+        GITTERM_BOT_ALLOWED_USERS: "U1,U2",
         GITTERM_BOT_PROVIDER: "railway",
         GITTERM_BOT_RUN_TIMEOUT_MINUTES: "20",
       }),
     ).toEqual({
       repo: "https://github.com/acme/app",
       channels: { C1: "https://github.com/acme/api#main", C2: "https://github.com/acme/web" },
-      connections: [],
+      connections: ["Linear", "executor"],
+      repos: ["https://github.com/acme/web"],
+      allowedUsers: ["U1", "U2"],
       workspace: { provider: { type: "railway" } },
       runTimeoutMs: 20 * 60_000,
     });
@@ -244,4 +206,13 @@ test("env reads the model with its credential", () => {
   expect(() => botOptionsFromEnv({ GITTERM_BOT_MODEL_API_KEY: "sk" })).toThrow(
     "need GITTERM_BOT_MODEL",
   );
+});
+
+test("env reads a sandbox environment file", () => {
+  const file = join(mkdtempSync(join(tmpdir(), "gitterm-bot-")), ".env.sandbox");
+  writeFileSync(file, "DATABASE_URL=postgres://test\n# comment\nSTRIPE_KEY='sk_test'\n");
+  expect(botOptionsFromEnv({ GITTERM_BOT_SANDBOX_ENV_FILE: file }).env).toEqual({
+    DATABASE_URL: "postgres://test",
+    STRIPE_KEY: "sk_test",
+  });
 });

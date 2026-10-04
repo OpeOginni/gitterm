@@ -4,6 +4,8 @@ import type { ChatThread, ChatUser } from "./types.js";
 
 /** The run a thread continues from and the last chat message it has seen. */
 export type ThreadSession = {
+  /** The repository the thread works on, chosen by its first message. */
+  repo: string;
   workspaceId: string;
   runId: string;
   lastMessageId: string;

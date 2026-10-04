@@ -1,5 +1,6 @@
 export { createBot } from "./bot.js";
-export { botOptionsFromEnv, cliOptions } from "./env.js";
+export { BOT_ENV_HELP, botOptionsFromEnv, cliOptions, hasRepository } from "./env.js";
+export { BOT_TOKEN_SCOPES } from "./preflight.js";
 export { splitMessage, tablesToCode } from "./markdown.js";
 export { interpretTypedAnswer } from "./prompt.js";
 export type {

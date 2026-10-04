@@ -85,6 +85,7 @@ function fakeGitterm(
     workspaces?: Workspace[];
     connections?: Connection[];
     credentials?: ModelCredential[];
+    signedIn?: boolean;
   } = {},
 ) {
   const workspaces = [...(options.workspaces ?? [])];
@@ -126,7 +127,37 @@ function fakeGitterm(
       },
       terminate: async () => ({ workspace: null, cleanupInBackground: false }),
     },
-    integrations: { connections: { list: async () => options.connections ?? [] } },
+    auth: {
+      status: async () => {
+        if (options.signedIn === false) throw new GittermError("UNAUTHORIZED", "bad token");
+        return { email: "owner@acme.dev" };
+      },
+    },
+    catalog: {
+      workspaceOptions: async () => ({
+        providers: [{ type: "railway", name: "Railway", isDefault: true }],
+      }),
+    },
+    integrations: {
+      connections: {
+        list: async () => options.connections ?? [],
+        // Stands in for the server: "github" needs a GitHub connection, names must exist.
+        resolve: async (references: string[]) =>
+          references.map((reference) => {
+            const all = options.connections ?? [];
+            const match =
+              reference === "github"
+                ? all.find((connection) => connection.integration === "github")
+                : all.find(
+                    (connection) =>
+                      connection.id === reference ||
+                      connection.name.toLowerCase() === reference.toLowerCase(),
+                  );
+            if (!match) throw new Error(`No connection is named "${reference}"`);
+            return match;
+          }),
+      },
+    },
     credentials: { list: async () => options.credentials ?? [] },
     runs: {
       create: async (input: Record<string, unknown>) => {
@@ -159,6 +190,7 @@ function fakeAdapter(history: HistoryMessage[] = [], indicator?: boolean) {
     prompts: [] as ChatPrompt[],
     settled: [] as string[],
     indicators: [] as string[],
+    marks: [] as string[],
   };
   const adapter: ChatAdapter = {
     platform: "test",
@@ -190,6 +222,12 @@ function fakeAdapter(history: HistoryMessage[] = [], indicator?: boolean) {
     },
     async settle(_thread, _id, _prompt, outcome) {
       log.settled.push(outcome);
+    },
+    async mark(message, state) {
+      log.marks.push(`${message.id}:${state}`);
+    },
+    async permalink(target) {
+      return `https://chat.example/${target.channel}/${target.thread}`;
     },
     ...(indicator === undefined
       ? {}
@@ -250,6 +288,9 @@ describe("createBot", () => {
       adapter: chat.adapter,
       gitterm: gitterm.client,
       repo: "https://github.com/acme/app#main",
+      connections: ["Docs"],
+      env: { DATABASE_URL: "postgres://test" },
+      setup: ["pnpm install"],
       stateFile: await stateFile(),
       logger: quiet,
     });
@@ -265,7 +306,9 @@ describe("createBot", () => {
         "gitterm-bot": "test:T1",
         "gitterm-bot-repo": "https://github.com/acme/app#main",
       },
-      connections: ["gh1", "mcp1"],
+      connections: ["github", "Docs"],
+      environmentVariables: { DATABASE_URL: "postgres://test" },
+      setup: { beforeAgent: ["pnpm install"] },
     });
     expect(gitterm.calls.runs[0]).toMatchObject({
       workspace: "ws1",
@@ -398,14 +441,20 @@ describe("createBot", () => {
     });
     await until(() => chat.log.prompts.length === 1);
     const prompt = chat.log.prompts[0]!;
-    expect(chat.events().answer(prompt.id, { kind: "question", labels: ["x"] }, alice)).toBe(false);
+    expect(chat.events().answer(prompt.id, { kind: "question", labels: ["x"] }, alice)).toBe(
+      "stale",
+    );
+    const guest = { id: "G1", name: "Guest", guest: true };
+    expect(chat.events().answer(prompt.id, { kind: "permission", response: "once" }, guest)).toBe(
+      "forbidden",
+    );
     expect(chat.events().answer(prompt.id, { kind: "permission", response: "always" }, alice)).toBe(
-      true,
+      "answered",
     );
     await until(() => gitterm.calls.responses.length === 1);
     expect(gitterm.calls.responses[0]?.reply).toEqual({ type: "permission", response: "always" });
     expect(chat.events().answer(prompt.id, { kind: "permission", response: "once" }, alice)).toBe(
-      false,
+      "stale",
     );
   });
 
@@ -653,5 +702,82 @@ describe("createBot", () => {
       providers: { anthropic: { source: "default" } },
     });
     expect(gitterm.calls.runs[0]?.model).toBe("anthropic/claude-sonnet-5-5");
+  });
+
+  test("a thread works on the repository its first message names", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repos: ["https://github.com/acme/app", "https://github.com/acme/api"],
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+
+    chat.send({ id: "100", text: "why is login slow?" });
+    await until(() => chat.log.posts.length === 1, "repository question");
+    expect(chat.log.posts[0]).toContain("Which repository?");
+    expect(gitterm.calls.runs).toEqual([]);
+
+    chat.send({ id: "101", text: "in acme/api, why is login slow?", inThread: true });
+    await until(() => gitterm.calls.runs.length === 1, "run");
+    expect(gitterm.calls.created[0]?.repo).toBe("https://github.com/acme/api");
+    expect(gitterm.calls.runs[0]?.prompt).toContain("Thread: https://chat.example/C1/100");
+    gitterm.stream("run1").push({ type: "run.completed", run: run("run1", "completed") });
+    await until(() => chat.log.marks.includes("101:done"), "done mark");
+    expect(chat.log.marks).toEqual(["101:seen", "101:done"]);
+
+    // The thread stays on acme/api even when a follow-up names nothing.
+    chat.send({ id: "102", text: "and add a test", inThread: true });
+    await until(() => gitterm.calls.runs.length === 2, "follow-up run");
+    expect(gitterm.calls.created).toHaveLength(1);
+  });
+
+  test("only allowed people and no guests can use the bot", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      allowedUsers: ["U1"],
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "hello", author: { id: "U2", name: "Bob" } });
+    chat.send({
+      id: "101",
+      text: "hello",
+      thread: { channel: "C1", thread: "200" },
+      author: { id: "U1", name: "Alice", guest: true },
+    });
+    await until(() => chat.log.posts.length === 2, "refusals");
+    expect(chat.log.posts.every((post) => post.includes("only take requests"))).toBe(true);
+    expect(gitterm.calls.runs).toEqual([]);
+  });
+
+  test("start fails with what to fix when the setup is incomplete", async () => {
+    const chat = fakeAdapter();
+    const signedOut = createBot({
+      adapter: chat.adapter,
+      gitterm: fakeGitterm({ signedIn: false }).client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await expect(signedOut.start()).rejects.toThrow("did not accept the API token");
+
+    const missingTool = createBot({
+      adapter: chat.adapter,
+      gitterm: fakeGitterm().client,
+      repo: "https://github.com/acme/app",
+      connections: ["Linear"],
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await expect(missingTool.start()).rejects.toThrow('acme/app: No connection is named "Linear"');
   });
 });

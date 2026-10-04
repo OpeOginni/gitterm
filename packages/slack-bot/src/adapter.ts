@@ -85,7 +85,7 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
     });
   // Its own client, so a supplied app that authorizes per workspace (no default token) works too.
   const client = owned ? app.client : new webApi.WebClient(botToken);
-  const names = new Map<string, string>();
+  const users = new Map<string, ChatUser>();
   /** Ticked checkboxes of open multi-select questions, submitted with the Submit button. */
   const ticked = new Map<string, number[]>();
   /** Cleared once Slack refuses the native status indicator; status messages are used instead. */
@@ -95,20 +95,28 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
 
   const stripMention = (text: string) => text.replaceAll(`<@${botUserId}>`, "").trim();
 
+  // Guests (single- and multi-channel) and people from other organisations in shared
+  // channels are flagged, so the engine can keep them away unless the bot allows guests.
   const user = async (id: string | undefined): Promise<ChatUser> => {
     if (!id) return { id: "unknown", name: "someone" };
-    let name = names.get(id);
-    if (!name) {
-      name = await client.users
+    let known = users.get(id);
+    if (!known) {
+      known = await client.users
         .info({ user: id })
-        .then(
-          (result) =>
-            result.user?.profile?.display_name || result.user?.real_name || result.user?.name || id,
-        )
-        .catch(() => id);
-      names.set(id, name);
+        .then(({ user: profile }) => ({
+          id,
+          name: profile?.profile?.display_name || profile?.real_name || profile?.name || id,
+          guest: Boolean(
+            profile?.is_restricted ||
+            profile?.is_ultra_restricted ||
+            (profile?.team_id && teamId && profile.team_id !== teamId),
+          ),
+        }))
+        // Unknown means unverified: treat as a guest rather than let them in.
+        .catch(() => ({ id, name: id, guest: true }));
+      users.set(id, known);
     }
-    return { id, name };
+    return known;
   };
 
   const file = (entry: SlackFile): ChatFile => ({
@@ -172,19 +180,23 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         });
       });
 
-      const answer = (
+      const answer = async (
         body: BlockAction,
         promptId: string | null,
         value: Parameters<ChatEvents["answer"]>[1],
-      ) =>
-        promptId !== null &&
-        sameTeam(body.team?.id) &&
-        events.answer(promptId, value, { id: body.user.id, name: body.user.name ?? body.user.id });
-      const stale = {
+      ) => (promptId === null ? "stale" : events.answer(promptId, value, await user(body.user.id)));
+      const notice = (text: string) => ({
         response_type: "ephemeral" as const,
         replace_original: false,
-        text: "This was already answered.",
-      };
+        text,
+      });
+      const stale = notice("This was already answered.");
+      const outcomeNotice = (outcome: Awaited<ReturnType<typeof answer>>) =>
+        outcome === "forbidden"
+          ? notice("Only people allowed to use this bot can answer.")
+          : outcome === "stale"
+            ? stale
+            : undefined;
 
       app.action<BlockButtonAction>(ACTION.option, async ({ ack, body, action, respond }) => {
         await ack();
@@ -194,8 +206,10 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
           prompt?.kind === "question"
             ? prompt.question.options[Number(action.value)]?.label
             : undefined;
-        if (!label || !answer(body, promptId, { kind: "question", labels: [label] }))
-          await respond(stale);
+        const reply = label
+          ? outcomeNotice(await answer(body, promptId, { kind: "question", labels: [label] }))
+          : stale;
+        if (reply) await respond(reply);
       });
 
       app.action<BlockCheckboxesAction>(ACTION.toggle, async ({ ack, action }) => {
@@ -223,14 +237,17 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
           await respond({ ...stale, text: "Tick at least one option before pressing Submit." });
           return;
         }
-        if (!answer(body, promptId, { kind: "question", labels })) await respond(stale);
+        const reply = outcomeNotice(await answer(body, promptId, { kind: "question", labels }));
+        if (reply) await respond(reply);
       });
 
       app.action<BlockButtonAction>(ACTION.permission, async ({ ack, body, action, respond }) => {
         await ack();
         const response = action.value as "once" | "always" | "reject";
-        if (!answer(body, promptIdOf(action.block_id), { kind: "permission", response }))
-          await respond(stale);
+        const reply = outcomeNotice(
+          await answer(body, promptIdOf(action.block_id), { kind: "permission", response }),
+        );
+        if (reply) await respond(reply);
       });
 
       app.action<BlockButtonAction>(
@@ -258,22 +275,23 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
                 (index) => prompt.question.options[index]?.label ?? "",
               )
             : [];
-        const answered =
-          text &&
-          sameTeam(body.team?.id) &&
-          events.answer(
-            promptId,
-            { kind: "question", labels: [...new Set([...labels.filter(Boolean), text])] },
-            {
-              id: body.user.id,
-              name: body.user.name,
-            },
-          );
-        if (answered) return ack();
+        const outcome = text
+          ? events.answer(
+              promptId,
+              { kind: "question", labels: [...new Set([...labels.filter(Boolean), text])] },
+              await user(body.user.id),
+            )
+          : "empty";
+        if (outcome === "answered") return ack();
         await ack({
           response_action: "errors",
           errors: {
-            answer: text ? "This question was already answered." : "Write an answer first.",
+            answer:
+              outcome === "empty"
+                ? "Write an answer first."
+                : outcome === "forbidden"
+                  ? "Only people allowed to use this bot can answer."
+                  : "This question was already answered.",
           },
         });
       });
@@ -390,12 +408,20 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
       }
     },
 
-    async acknowledge(message) {
+    async mark(message, state) {
       await client.reactions.add({
         channel: message.thread.channel,
         timestamp: message.id,
-        name: "eyes",
+        name: { seen: "eyes", done: "white_check_mark", failed: "x" }[state],
       });
+    },
+
+    async permalink(thread) {
+      const link = await client.chat.getPermalink({
+        channel: thread.channel,
+        message_ts: thread.thread,
+      });
+      return link.permalink;
     },
   };
 }

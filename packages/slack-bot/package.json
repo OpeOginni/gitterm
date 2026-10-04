@@ -26,6 +26,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./manifest": {
+      "types": "./dist/manifest.d.ts",
+      "default": "./dist/manifest.js"
     }
   },
   "publishConfig": {
@@ -33,7 +37,7 @@
   },
   "scripts": {
     "dev": "bun --watch src/cli.ts",
-    "build": "rm -rf dist && bun build src/index.ts src/cli.ts --outdir dist --target node --format esm --packages external && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/cli.ts src/manifest.ts --outdir dist --target node --format esm --packages external && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },

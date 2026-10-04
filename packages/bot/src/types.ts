@@ -9,7 +9,15 @@ import type {
 /** A conversation: the channel and the thread inside it. Every thread is one agent session. */
 export type ChatThread = { channel: string; thread: string };
 
-export type ChatUser = { id: string; name: string };
+export type ChatUser = {
+  id: string;
+  name: string;
+  /**
+   * Not a full member of the workspace (Slack guests and people from other organisations in
+   * shared channels). Guests cannot use the bot unless `allowGuests` is set.
+   */
+  guest?: boolean;
+};
 
 /** A file posted in the chat. Only images are forwarded to the agent; the rest are named. */
 export type ChatFile = {
@@ -65,8 +73,11 @@ export type ChatAnswer =
 /** What the engine gives an adapter to report chat activity. */
 export type ChatEvents = {
   message(message: ChatMessage): void;
-  /** Button, menu, or dialog answer. False when the prompt is no longer open. */
-  answer(promptId: string, answer: ChatAnswer, by: ChatUser): boolean;
+  /**
+   * Button, menu, or dialog answer. `stale` when the prompt is no longer open, `forbidden` when
+   * this person may not use the bot; adapters tell the clicker privately.
+   */
+  answer(promptId: string, answer: ChatAnswer, by: ChatUser): "answered" | "stale" | "forbidden";
   /** The open prompt, e.g. to build a free-text dialog for it; undefined once settled. */
   prompt(promptId: string): ChatPrompt | undefined;
   /** Whether the bot works in this channel, so adapters do not open threads elsewhere. */
@@ -106,8 +117,13 @@ export interface ChatAdapter {
    * keeps a status message instead. Optional.
    */
   indicate?(thread: ChatThread, status: string): Promise<boolean>;
-  /** React to an accepted message (e.g. 👀) so people know it was seen while it waits its turn. */
-  acknowledge?(message: ChatMessage): Promise<void>;
+  /**
+   * React to a request's message: `seen` when accepted (e.g. 👀, so people know it waits its
+   * turn), then `done` (✅) or `failed` (❌). Optional.
+   */
+  mark?(message: ChatMessage, state: "seen" | "done" | "failed"): Promise<void>;
+  /** A link to the thread, credited in pull requests the agent opens. Optional. */
+  permalink?(thread: ChatThread): Promise<string | undefined>;
 }
 
 /** A repository, optionally with a branch: `https://github.com/acme/app` or `…/app#develop`. */
@@ -136,21 +152,34 @@ export type BotOptions = {
   gitterm?: GittermClient | GittermClientOptions;
   /** Repository for every channel without its own entry in `channels`. */
   repo?: RepoTarget;
-  /** Per-channel repositories. Without `repo`, the bot only works in these channels. */
+  /** Per-channel repositories. Without `repo` or `repos`, the bot only works in these channels. */
   channels?: Record<string, RepoTarget>;
   /**
-   * GitTerm connections to attach to new sandboxes, by id or name. `"auto"` (default) attaches
-   * the GitHub connection for the repository's owner (or the shared one) and every connected
-   * MCP and Executor connection.
+   * More repositories people can pick by naming them in a thread's first message, e.g.
+   * "@bot in acme/api, why is login slow?". A channel without a repository asks which one.
    */
-  connections?: "auto" | string[];
+  repos?: RepoTarget[];
+  /**
+   * Tools to attach to new sandboxes besides GitHub: connection names as shown under
+   * Integrations (`"Linear"`), integration keys (`"executor"`), or ids. GitHub access for the
+   * repository is attached automatically.
+   */
+  connections?: string[];
+  /** Environment variables for new sandboxes, e.g. test credentials. Never logged. */
+  env?: Record<string, string>;
+  /** Shell commands run in the checkout before the agent starts in a new sandbox. */
+  setup?: string[];
+  /** Platform user ids allowed to use the bot. Default: everyone in channels it can see. */
+  allowedUsers?: string[];
+  /** Let guests and people from other organisations use the bot. Default false. */
+  allowGuests?: boolean;
   /**
    * The model for every run, as OpenCode `provider/model`. Only that provider's credential
    * reaches new sandboxes: its dashboard default, the saved credential labelled `credential`, or
    * an inline `apiKey`. Without a model, sandboxes get every saved dashboard credential.
    */
   model?: string | ModelChoice;
-  /** Extra agent instructions, appended to the bot's own. Applies to new sandboxes. */
+  /** What the agent should know and how to behave, after the bot's own rules. New sandboxes. */
   instructions?: string;
   /** Provider, image, setup, OpenCode config, and other workspace settings for new sandboxes. */
   workspace?: WorkspaceOverrides;
