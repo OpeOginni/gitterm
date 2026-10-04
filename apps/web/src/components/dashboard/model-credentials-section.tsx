@@ -167,7 +167,7 @@ export function ModelCredentialsSection() {
             <SettingsEmptyState
               icon={Key}
               title="No credentials saved"
-              description="Paste an API key from any supported provider, or sign in with an OpenCode, ChatGPT, Copilot or SuperGrok subscription."
+              description="Paste an API key from any supported provider, or sign in with an OpenCode Console, Codex, Copilot or SuperGrok subscription."
               action={
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button size="sm" className="gap-2" onClick={() => setApiKeyOpen(true)}>

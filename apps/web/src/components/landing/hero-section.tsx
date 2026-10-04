@@ -37,7 +37,7 @@ const clouds = [
   { src: "/railway.svg", label: "Railway" },
   { src: "/ECS.svg", label: "AWS" },
   { src: "/cloudflare.svg", label: "Cloudflare" },
-  { src: "/ascii.svg", label: "Ascii" },
+  { src: "/boat.svg", label: "boat" },
   { src: "/vercel.svg", label: "Vercel" },
   { src: "/exe.png", label: "exe.dev" },
 ];
@@ -337,7 +337,7 @@ function LaunchForm({
         rel="noreferrer"
         className="mx-auto mt-3 flex w-fit items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.16em] text-fg-4 transition-colors hover:text-fg-3"
       >
-        <Image src="/E2B.svg" alt="" width={13} height={14} className="h-3.5 w-auto opacity-60" />
+        <Image src="/E2B.svg" alt="" width={15} height={14} className="h-3.5 w-auto opacity-60" />
         <span>Sponsored by E2B</span>
       </a>
     </div>

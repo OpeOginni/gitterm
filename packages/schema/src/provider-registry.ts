@@ -405,7 +405,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
   },
   ascii: {
     name: "ascii",
-    displayName: "Ascii Box",
+    displayName: "boat",
     category: "sandbox",
     configSchema: z.object({
       apiKey: z.string().min(1, "API key is required"),
@@ -413,7 +413,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     fields: [
       {
         fieldName: "apiKey",
-        fieldLabel: "Box API Key",
+        fieldLabel: "boat API key",
         fieldType: "password",
         isRequired: true,
         isEncrypted: true,

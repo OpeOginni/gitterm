@@ -151,7 +151,7 @@ export function ApiTokensSection() {
 
   const tokens = data?.tokens ?? [];
 
-  const eyebrow = "font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4";
+  const eyebrow = "font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4";
 
   return (
     <section className="space-y-3">
@@ -258,14 +258,12 @@ export function ApiTokensSection() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto border-line bg-card p-0 sm:max-w-md">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto border-line bg-card p-0 sm:max-w-[560px]">
           {createdToken ? (
             <>
               <DialogHeader className="px-5 pt-5 pb-4 text-left">
-                <DialogTitle className="text-base">Your token is ready</DialogTitle>
-                <DialogDescription className="text-xs">
-                  Copy it now. It won&apos;t be shown again.
-                </DialogDescription>
+                <DialogTitle>Your token is ready</DialogTitle>
+                <DialogDescription>Copy it now. It won&apos;t be shown again.</DialogDescription>
               </DialogHeader>
               <div className="px-5 pb-5">
                 <button
@@ -274,7 +272,7 @@ export function ApiTokensSection() {
                   className="group relative w-full rounded-xl border border-line bg-fill px-3.5 py-3 text-left transition-colors hover:border-line-2"
                 >
                   <code
-                    className="block truncate pr-7 font-mono text-xs text-fg selection:bg-primary selection:text-primary-foreground"
+                    className="block truncate pr-7 font-mono text-sm text-fg selection:bg-primary selection:text-primary-foreground"
                     title={createdToken}
                   >
                     {createdToken}
@@ -283,11 +281,11 @@ export function ApiTokensSection() {
                 </button>
               </div>
               <div className="flex gap-2 border-t border-line p-4">
-                <Button variant="outline" className="h-9 flex-1 text-xs" onClick={handleCopyToken}>
+                <Button variant="outline" className="h-10 flex-1 text-sm" onClick={handleCopyToken}>
                   <Copy className="size-3.5" />
                   Copy
                 </Button>
-                <Button className="h-9 flex-1 text-xs" onClick={() => handleOpenChange(false)}>
+                <Button className="h-10 flex-1 text-sm" onClick={() => handleOpenChange(false)}>
                   Done
                 </Button>
               </div>
@@ -295,8 +293,8 @@ export function ApiTokensSection() {
           ) : (
             <>
               <DialogHeader className="px-5 pt-5 pb-4 text-left">
-                <DialogTitle className="text-base">New API token</DialogTitle>
-                <DialogDescription className="text-xs">
+                <DialogTitle>New API token</DialogTitle>
+                <DialogDescription>
                   Tokens can never manage other tokens, model credentials, or administration.
                 </DialogDescription>
               </DialogHeader>
@@ -313,7 +311,7 @@ export function ApiTokensSection() {
                     value={tokenName}
                     onChange={(event) => setTokenName(event.target.value)}
                     maxLength={100}
-                    className="h-10 font-mono text-[13px] placeholder:text-fg-4"
+                    className="h-11 font-mono text-sm placeholder:text-fg-4"
                   />
                 </div>
 
@@ -332,7 +330,7 @@ export function ApiTokensSection() {
                             role="radio"
                             aria-checked={selected}
                             onClick={() => setPreset(entry.id)}
-                            className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-fill"
+                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-fill"
                           >
                             <span
                               aria-hidden="true"
@@ -345,10 +343,10 @@ export function ApiTokensSection() {
                                 <span className="size-1.5 rounded-full bg-primary" />
                               ) : null}
                             </span>
-                            <span className={cn("text-sm", selected ? "text-fg" : "text-fg-2")}>
+                            <span className={cn("text-[15px]", selected ? "text-fg" : "text-fg-2")}>
                               {entry.label}
                             </span>
-                            <span className="ml-auto truncate text-xs text-fg-4">
+                            <span className="ml-auto truncate text-[13px] text-fg-3">
                               {entry.description}
                             </span>
                           </button>
@@ -380,7 +378,7 @@ export function ApiTokensSection() {
                       );
                     })}
                   </div>
-                  <p className="font-mono text-[11px] leading-relaxed text-fg-4">
+                  <p className="font-mono text-xs leading-relaxed text-fg-4">
                     {scopes.length ? scopes.join(" · ") : "No permissions selected"}
                   </p>
                 </div>
@@ -396,7 +394,7 @@ export function ApiTokensSection() {
                         aria-checked={expiry === option.value}
                         onClick={() => setExpiry(option.value)}
                         className={cn(
-                          "rounded-md px-2.5 py-1 text-xs transition-colors",
+                          "rounded-md px-3 py-1.5 text-sm transition-colors",
                           expiry === option.value
                             ? "bg-fill-2 text-fg"
                             : "text-fg-4 hover:text-fg-2",
@@ -412,7 +410,7 @@ export function ApiTokensSection() {
               <div className="flex gap-2 border-t border-line p-4">
                 <Button
                   variant="outline"
-                  className="h-9 text-xs"
+                  className="h-10 text-sm"
                   onClick={() => handleOpenChange(false)}
                 >
                   Cancel
@@ -420,7 +418,7 @@ export function ApiTokensSection() {
                 <Button
                   onClick={handleCreate}
                   disabled={!tokenName.trim() || scopes.length === 0 || createMutation.isPending}
-                  className="h-9 flex-1 gap-2 text-xs"
+                  className="h-10 flex-1 gap-2 text-sm"
                 >
                   {createMutation.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
                   Create token

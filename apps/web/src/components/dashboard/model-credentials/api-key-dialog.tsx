@@ -190,7 +190,7 @@ export function ApiKeyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         ref={setContainer}
-        className="gap-0 overflow-visible border-line bg-settings-dialog p-0 sm:max-w-[480px]"
+        className="gap-0 overflow-visible border-line bg-card p-0 sm:max-w-[560px]"
       >
         {/* Mounted per open, so every open starts from a clean form. */}
         <ApiKeyForm {...props} container={container} onClose={() => onOpenChange(false)} />

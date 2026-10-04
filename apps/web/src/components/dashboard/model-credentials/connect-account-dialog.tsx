@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Check, Copy, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
@@ -53,7 +53,7 @@ export function ConnectAccountDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 border-line bg-settings-dialog p-0 sm:max-w-[640px]">
+      <DialogContent className="gap-0 border-line bg-card p-0 sm:max-w-[560px]">
         {/* Mounted per open: closing the dialog also stops any polling. */}
         <ConnectAccountFlow {...props} onClose={() => onOpenChange(false)} />
       </DialogContent>
@@ -186,69 +186,58 @@ function ConnectAccountFlow({
       </DialogHeader>
 
       {!selected ? (
-        <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6">
-          {accounts.map((provider) => {
-            const connected = credentials.filter(
-              (credential) => credential.providerId === provider.id && credential.isActive,
-            ).length;
-            return (
-              <button
-                key={provider.id}
-                type="button"
-                onClick={() => choose(provider)}
-                className="group flex flex-col items-start gap-3 rounded-xl border border-line bg-fill p-4 text-left transition-colors hover:border-line-2 hover:bg-fill-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <div className="flex w-full items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fill-2 group-hover:bg-fill">
+        <div className="px-5 pb-5">
+          <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+            {accounts.map((provider) => {
+              const connected = credentials.filter(
+                (credential) => credential.providerId === provider.id && credential.isActive,
+              ).length;
+              return (
+                <button
+                  key={provider.id}
+                  type="button"
+                  onClick={() => choose(provider)}
+                  className="group flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-fill focus-visible:bg-fill focus-visible:outline-none"
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill">
                     <ProviderLogo
                       name={provider.name}
                       displayName={provider.displayName}
-                      size={18}
+                      size={20}
                     />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
-                    {provider.displayName}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-medium text-fg">
+                      {provider.displayName}
+                    </span>
+                    {provider.description ? (
+                      <span className="mt-0.5 block truncate text-[13px] text-fg-3">
+                        {provider.description}
+                      </span>
+                    ) : null}
                   </span>
                   {connected > 0 ? (
-                    <span className="inline-flex items-center gap-1 font-mono text-[9.5px] uppercase tracking-[0.14em] text-primary/80">
-                      <Check className="h-3 w-3" />
-                      {connected} connected
-                    </span>
-                  ) : provider.isRecommended ? (
-                    <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-4">
-                      Recommended
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-primary">
+                      <Check className="size-3" />
+                      {connected}
                     </span>
                   ) : null}
-                </div>
-                {provider.description && (
-                  <p className="text-[12px] leading-relaxed text-fg-3">{provider.description}</p>
-                )}
-              </button>
-            );
-          })}
+                  <ChevronRight className="size-3.5 shrink-0 text-fg-4 transition-transform group-hover:translate-x-0.5" />
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : (
-        <div className="grid gap-5 p-5 sm:p-6">
+        <div className="grid gap-4 px-5 pb-5">
           <button
             type="button"
             onClick={() => choose(null)}
-            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-fg-3 transition-colors hover:text-fg"
+            className="inline-flex w-fit items-center gap-1.5 text-sm text-fg-3 transition-colors hover:text-fg"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             All accounts
           </button>
-
-          <div className="flex items-center gap-3.5">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-fill-2">
-              <ProviderLogo name={selected.name} displayName={selected.displayName} size={22} />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[15px] font-medium text-fg">{selected.displayName}</p>
-              {selected.description && (
-                <p className="text-[12.5px] text-fg-3">{selected.description}</p>
-              )}
-            </div>
-          </div>
 
           {step.kind === "waiting" ? (
             <DeviceCodePanel device={step.device} providerName={selected.displayName} />
@@ -261,12 +250,7 @@ function ConnectAccountFlow({
               }}
             >
               <div className="grid gap-2">
-                <Label
-                  htmlFor="account-label"
-                  className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4"
-                >
-                  Label
-                </Label>
+                <Label htmlFor="account-label">Label</Label>
                 <Input
                   id="account-label"
                   value={label}
@@ -291,7 +275,7 @@ function ConnectAccountFlow({
               <Button
                 type="submit"
                 disabled={!label.trim() || labelTaken || step.kind === "starting"}
-                className="h-10 gap-2 font-mono text-[11px] uppercase tracking-[0.14em]"
+                className="h-10 gap-2 text-sm"
               >
                 {step.kind === "starting" ? (
                   <>

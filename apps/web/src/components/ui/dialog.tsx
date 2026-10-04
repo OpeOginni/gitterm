@@ -86,7 +86,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="dialog-footer"
       className={cn(
         // A full-width action bar like the workspace cards: the last action fills the row.
-        "-mx-5 -mb-5 mt-1 flex flex-wrap gap-2 border-t border-line p-4 [&>button]:h-9 [&>button]:text-xs [&>*:last-child]:flex-1",
+        "-mx-5 -mb-5 mt-1 flex flex-wrap gap-2 border-t border-line p-4 [&>button]:h-10 [&>button]:text-sm [&>*:last-child]:flex-1",
         className,
       )}
       {...props}
@@ -98,7 +98,7 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-base font-semibold leading-tight tracking-tight text-fg", className)}
+      className={cn("text-lg font-semibold leading-tight tracking-tight text-fg", className)}
       {...props}
     />
   );
@@ -111,7 +111,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-xs leading-relaxed text-fg-4", className)}
+      className={cn("text-sm leading-relaxed text-fg-3", className)}
       {...props}
     />
   );

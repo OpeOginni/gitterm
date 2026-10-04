@@ -40,7 +40,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   daytona: "Daytona",
   cloudflare: "Cloudflare",
   vercel: "Vercel",
-  ascii: "Ascii",
+  ascii: "boat",
   exedev: "exe.dev",
   railway: "Railway",
 };
@@ -82,7 +82,7 @@ const PROVIDER_DEFINITIONS = [
   },
   {
     key: "ascii",
-    label: "Ascii",
+    label: "boat",
     description: "Box size and agent installation commands.",
     initial: { size: "default", setupCommands: [] },
   },
