@@ -8,7 +8,7 @@ const SETTINGS_SECTIONS = new Set([
   "workspace",
   "providers",
   "agent-defaults",
-  "ssh",
+  // "ssh", hidden while editor (SSH) access is not offered
   "api",
   "usage",
 ]);

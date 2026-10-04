@@ -9,7 +9,6 @@ import {
   Users,
   Bot,
   Cloud,
-  KeyRound,
   LayoutDashboard,
   Link2,
   ShieldCheck,
@@ -52,7 +51,8 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Agent defaults",
         icon: SlidersHorizontal,
       },
-      { href: "/dashboard/settings/ssh", label: "SSH keys", icon: KeyRound },
+      // Hidden while editor (SSH) access is not offered; see settings/ssh/page.tsx.
+      // { href: "/dashboard/settings/ssh", label: "SSH keys", icon: KeyRound },
       { href: "/dashboard/settings/privacy", label: "Privacy", icon: ShieldCheck },
     ],
   },
