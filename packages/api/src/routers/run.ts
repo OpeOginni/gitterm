@@ -28,6 +28,10 @@ async function translateAgentError<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
+const MAX_ATTACHMENTS = 10;
+/** Base64 characters across all attachments per run; vision models cap single images near 5 MB. */
+const MAX_ATTACHMENT_BYTES = 20_000_000;
+
 export const runRouter = router({
   create: accountProcedure("run:write")
     .input(
@@ -35,6 +39,22 @@ export const runRouter = router({
         workspaceId: z.uuid(),
         idempotencyKey: z.string().trim().min(1).max(255),
         prompt: z.string().trim().min(1).max(100_000),
+        attachments: z
+          .array(
+            z.object({
+              name: z.string().trim().min(1).max(255).optional(),
+              mime: z.string().regex(/^[\w.+-]+\/[\w.+-]+$/, "mime must look like image/png"),
+              data: z.string().base64().min(1),
+            }),
+          )
+          .max(MAX_ATTACHMENTS)
+          .refine(
+            (attachments) =>
+              attachments.reduce((total, attachment) => total + attachment.data.length, 0) <=
+              MAX_ATTACHMENT_BYTES,
+            `attachments exceed ${MAX_ATTACHMENT_BYTES / 1_000_000} MB in total`,
+          )
+          .optional(),
         title: z.string().trim().min(1).max(255).optional(),
         agent: z.string().trim().min(1).max(100).optional(),
         model: z.string().trim().min(3).max(255).optional(),
