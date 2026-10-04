@@ -66,6 +66,10 @@ Slack over Socket Mode, so it needs no public URL.
 - **Restarts are safe.** Runs live in GitTerm, not in the bot. A restarted bot reattaches to
   running work and posts the result. The state file only holds thread → run ids, so losing it
   costs thread continuity, never sandboxes (they are found by their tags).
+- **Open the sandbox yourself.** Each repository's sandbox is the GitTerm workspace named
+  `slack-bot-<repository>`. Its dashboard page has the server URL and password, so you can
+  attach the OpenCode TUI or desktop app and see every thread's session. Prompts you send there
+  are not posted back to Slack.
 
 ### Commands
 
