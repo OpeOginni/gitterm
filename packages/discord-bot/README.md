@@ -17,11 +17,21 @@ Discord's gateway, so it needs no public URL.
    Connect GitHub under **Integrations** so the agent can clone private repositories and open
    pull requests. MCP and Executor connections you have added there are attached as well.
 
-3. **Run it:**
+3. **Start it**, from the terminal or from your own code:
 
    ```sh
    export DISCORD_BOT_TOKEN=… GITTERM_API_TOKEN=gt_…
    npx @gitterm/discord-bot --repo https://github.com/acme/app
+   ```
+
+   ```ts
+   import { createDiscordBot } from "@gitterm/discord-bot";
+
+   await createDiscordBot({
+     repo: "https://github.com/acme/app",
+     token: "…", // or DISCORD_BOT_TOKEN
+     gitterm: { token: "gt_…" }, // or GITTERM_API_TOKEN
+   }).start();
    ```
 
 4. **Invite it.** Open the invite link the bot prints on startup and pick your server. It asks
@@ -29,8 +39,6 @@ Discord's gateway, so it needs no public URL.
    add reactions, and embed links.
 
 5. **Mention it** in a channel: `@Acme Agent why does the login page flash on load?`
-
-A `.env` file in the working directory is loaded too.
 
 ## How it works
 
@@ -68,26 +76,59 @@ when a sandbox is created.
 
 ## Configuration
 
-| Environment variable              | Meaning                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------- |
-| `DISCORD_BOT_TOKEN`               | Bot token.                                                                            |
-| `GITTERM_API_TOKEN`               | GitTerm API token. Falls back to the `gitterm login` config.                          |
-| `GITTERM_SERVER_URL`              | Self-hosted GitTerm API, e.g. `https://gitterm.example.com/api`.                      |
-| `GITTERM_BOT_REPO`                | Repository for every channel; `url#branch` picks a branch. Same as `--repo`.          |
-| `GITTERM_BOT_CHANNELS`            | Per-channel repositories by channel id: `1234=https://github.com/acme/api,5678=…`.    |
-| `GITTERM_BOT_CONNECTIONS`         | `auto` (default), `none`, or connection ids/names separated by commas.                |
-| `GITTERM_BOT_MODEL`               | OpenCode `provider/model` for every run. Same as `--model`.                           |
-| `GITTERM_BOT_PROVIDER`            | Compute provider for new sandboxes (`railway`, `e2b`, `daytona`, …).                  |
-| `GITTERM_BOT_INSTRUCTIONS`        | Extra agent instructions, e.g. team conventions.                                      |
-| `GITTERM_BOT_STATE_FILE`          | Where thread sessions are kept. Default `.gitterm-bot/discord.json`.                  |
-| `GITTERM_BOT_RUN_TIMEOUT_MINUTES` | Give up on a request after this long, including time waiting for answers. Default 60. |
+Every setting works from code and from the terminal. In code, pass it to `createDiscordBot()`; on
+the command line, set the environment variable (a `.env` file in the working directory is
+loaded) or the flag.
 
-With `GITTERM_BOT_CHANNELS` and no `GITTERM_BOT_REPO`, the bot only answers in the listed
-channels (copy a channel id with Developer Mode on). `auto` connections attach the GitHub
-connection for the repository's owner (or the deployment's shared one) and every connected MCP and
-Executor connection.
+| Option           | Environment variable / flag                                                        | Meaning                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `token`          | `DISCORD_BOT_TOKEN`                                                                | Bot token.                                                                                      |
+| `client`         | —                                                                                  | A discord.js client you already run; see [below](#add-it-to-a-bot-you-already-run).             |
+| `gitterm`        | `GITTERM_API_TOKEN`, `GITTERM_SERVER_URL`                                          | `{ token, serverUrl }` or a client. Falls back to the `gitterm login` config.                   |
+| `repo`           | `GITTERM_BOT_REPO`, `--repo`                                                       | Repository for every channel; `url#branch` picks a branch.                                      |
+| `channels`       | `GITTERM_BOT_CHANNELS` (`1234=https://github.com/acme/api,…`)                      | Per-channel repositories by channel id. Without `repo`, the bot answers only in these channels. |
+| `connections`    | `GITTERM_BOT_CONNECTIONS` (`auto`, `none`, or ids/names)                           | GitTerm connections for new sandboxes. Default `auto`.                                          |
+| `model`          | `GITTERM_BOT_MODEL`, `--model`                                                     | OpenCode `provider/model` for every run.                                                        |
+| `instructions`   | `GITTERM_BOT_INSTRUCTIONS`, `GITTERM_BOT_INSTRUCTIONS_FILE`, `--instructions-file` | What the agent should know and how it should behave; see [Instructions](#instructions).         |
+| `workspace`      | `GITTERM_BOT_PROVIDER` (provider only)                                             | Any `workspaces.create()` setting for new sandboxes: provider, image, setup, OpenCode config.   |
+| `stateFile`      | `GITTERM_BOT_STATE_FILE`                                                           | Where thread sessions are kept. Default `.gitterm-bot/discord.json`.                            |
+| `runTimeoutMs`   | `GITTERM_BOT_RUN_TIMEOUT_MINUTES`                                                  | Give up on a request after this long, including time waiting for answers. Default 60 min.       |
+| `inputTimeoutMs` | —                                                                                  | How long a question or approval waits for an answer. Default 30 min.                            |
+| `logger`         | —                                                                                  | Where the bot logs. Default `console`.                                                          |
 
-### From code
+Copy channel ids with Developer Mode on. `auto` connections attach the GitHub connection for the
+repository's owner (or the deployment's shared one) and every connected MCP and Executor
+connection. `workspace` takes any [`@gitterm/sdk`](https://www.npmjs.com/package/@gitterm/sdk)
+`workspaces.create()` option except the repository, name, agent, connections, and tags, which the
+bot owns.
+
+### Instructions
+
+Tell the agent about your team and how to behave. The text is added after the bot's own rules and
+loaded into every session:
+
+```ts
+import { readFile } from "node:fs/promises";
+
+createDiscordBot({
+  repo: "https://github.com/acme/app",
+  instructions: await readFile("bot-instructions.md", "utf8"),
+});
+```
+
+```sh
+npx @gitterm/discord-bot --repo https://github.com/acme/app --instructions-file bot-instructions.md
+```
+
+Instructions are written into a sandbox when it is created; after changing them, mention the bot
+with `reset`. Project knowledge that belongs with the code (how to run tests, where things live)
+is better in an `AGENTS.md` in the repository, which OpenCode reads on its own.
+
+## Running from code
+
+`createDiscordBot()` returns `{ start(), stop() }`. `start()` resolves once the bot is connected;
+`stop()` disconnects it. Runs keep going in GitTerm while the bot is down, and the next
+`start()` picks them up.
 
 ```ts
 import { createDiscordBot } from "@gitterm/discord-bot";
@@ -100,13 +141,51 @@ const bot = createDiscordBot({
     provider: { type: "railway" },
     setup: { beforeAgent: ["pnpm install"] },
   },
+  logger: myLogger, // anything with info, warn, and error
 });
+
 await bot.start();
+process.once("SIGTERM", () => void bot.stop());
 ```
 
-`workspace` takes any `workspaces.create()` option from
-[`@gitterm/sdk`](https://www.npmjs.com/package/@gitterm/sdk) except the repository, name, agent,
-connections, and tags, which the bot owns.
+### Add it to a bot you already run
+
+Pass your discord.js client and the agent answers its mentions alongside your own handlers. The
+client needs the `Guilds`, `GuildMessages`, and `MessageContent` intents (the bot tells you which
+are missing). You log it in and destroy it yourself; `start()` resolves once it is ready, so log
+in without waiting on it. Make sure none of your own handlers also answer mentions of the bot.
+
+```ts
+import { Client, GatewayIntentBits } from "discord.js";
+import { createDiscordBot } from "@gitterm/discord-bot";
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
+client.on("interactionCreate", handleMySlashCommands);
+
+const agent = createDiscordBot({ client, repo: "https://github.com/acme/app" });
+await Promise.all([agent.start(), client.login(process.env.DISCORD_BOT_TOKEN)]);
+```
+
+### Slack and Discord in one process
+
+```ts
+import { createDiscordBot } from "@gitterm/discord-bot";
+import { createSlackBot } from "@gitterm/slack-bot";
+
+const settings = {
+  repo: "https://github.com/acme/app",
+  gitterm: { token: process.env.GITTERM_API_TOKEN },
+};
+await Promise.all([createSlackBot(settings).start(), createDiscordBot(settings).start()]);
+```
+
+Each platform gets its own sandbox and its own state file.
 
 ## Hosting
 

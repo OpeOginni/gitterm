@@ -10,6 +10,7 @@ import type {
 import {
   App,
   LogLevel,
+  webApi,
   type BlockAction,
   type BlockButtonAction,
   type BlockCheckboxesAction,
@@ -30,6 +31,12 @@ export type SlackAdapterOptions = {
   botToken?: string;
   /** App-level token with `connections:write` (`xapp-…`) for Socket Mode. Defaults to `SLACK_APP_TOKEN`. */
   appToken?: string;
+  /**
+   * A Bolt app you already run, to add the agent to an existing bot. The agent registers its
+   * listeners on it; you start and stop the app yourself, with any receiver. Make sure your own
+   * listeners do not also answer the same mentions.
+   */
+  app?: App;
 };
 
 /** The part of a Slack message the bot reads, from events and `conversations.replies`. */
@@ -62,10 +69,22 @@ function required(value: string | undefined, name: string): string {
  * invited to; every thread is one agent session.
  */
 export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapter {
-  const botToken = required(options.botToken ?? process.env.SLACK_BOT_TOKEN, "SLACK_BOT_TOKEN");
-  const appToken = required(options.appToken ?? process.env.SLACK_APP_TOKEN, "SLACK_APP_TOKEN");
-  const app = new App({ token: botToken, appToken, socketMode: true, logLevel: LogLevel.WARN });
-  const client = app.client;
+  // The bot token also downloads Slack files, so a supplied app must carry one.
+  const botToken = required(
+    options.botToken ?? options.app?.client.token ?? process.env.SLACK_BOT_TOKEN,
+    "SLACK_BOT_TOKEN",
+  );
+  const owned = !options.app;
+  const app =
+    options.app ??
+    new App({
+      token: botToken,
+      appToken: required(options.appToken ?? process.env.SLACK_APP_TOKEN, "SLACK_APP_TOKEN"),
+      socketMode: true,
+      logLevel: LogLevel.WARN,
+    });
+  // Its own client, so a supplied app that authorizes per workspace (no default token) works too.
+  const client = owned ? app.client : new webApi.WebClient(botToken);
   const names = new Map<string, string>();
   /** Ticked checkboxes of open multi-select questions, submitted with the Submit button. */
   const ticked = new Map<string, number[]>();
@@ -259,11 +278,12 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         });
       });
 
-      app.error(async (error) => {
-        console.error("Slack error", error);
-      });
-
-      await app.start();
+      if (owned) {
+        app.error(async (error) => {
+          console.error("Slack error", error);
+        });
+        await app.start();
+      }
       const identity = await client.auth.test();
       teamId = identity.team_id ?? "";
       botUserId = identity.user_id ?? "";
@@ -271,7 +291,7 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
     },
 
     async stop() {
-      await app.stop();
+      if (owned) await app.stop();
     },
 
     async history(thread, after) {

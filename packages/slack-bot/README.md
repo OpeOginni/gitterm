@@ -24,17 +24,26 @@ Slack over Socket Mode, so it needs no public URL.
    Connect GitHub under **Integrations** so the agent can clone private repositories and open
    pull requests. MCP and Executor connections you have added there are attached as well.
 
-4. **Run it:**
+4. **Start it**, from the terminal or from your own code:
 
    ```sh
    export SLACK_BOT_TOKEN=xoxb-… SLACK_APP_TOKEN=xapp-… GITTERM_API_TOKEN=gt_…
    npx @gitterm/slack-bot --repo https://github.com/acme/app
    ```
 
+   ```ts
+   import { createSlackBot } from "@gitterm/slack-bot";
+
+   await createSlackBot({
+     repo: "https://github.com/acme/app",
+     botToken: "xoxb-…", // or SLACK_BOT_TOKEN
+     appToken: "xapp-…", // or SLACK_APP_TOKEN
+     gitterm: { token: "gt_…" }, // or GITTERM_API_TOKEN
+   }).start();
+   ```
+
 5. **Invite the bot** to a channel (`/invite @Acme Agent`) and mention it:
    `@Acme Agent why does the login page flash on load?`
-
-A `.env` file in the working directory is loaded too.
 
 ## How it works
 
@@ -74,26 +83,59 @@ when a sandbox is created.
 
 ## Configuration
 
-| Environment variable              | Meaning                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------- |
-| `SLACK_BOT_TOKEN`                 | Bot token (`xoxb-…`).                                                                 |
-| `SLACK_APP_TOKEN`                 | App-level token with `connections:write` (`xapp-…`).                                  |
-| `GITTERM_API_TOKEN`               | GitTerm API token. Falls back to the `gitterm login` config.                          |
-| `GITTERM_SERVER_URL`              | Self-hosted GitTerm API, e.g. `https://gitterm.example.com/api`.                      |
-| `GITTERM_BOT_REPO`                | Repository for every channel; `url#branch` picks a branch. Same as `--repo`.          |
-| `GITTERM_BOT_CHANNELS`            | Per-channel repositories: `C0123=https://github.com/acme/api,C0456=…`.                |
-| `GITTERM_BOT_CONNECTIONS`         | `auto` (default), `none`, or connection ids/names separated by commas.                |
-| `GITTERM_BOT_MODEL`               | OpenCode `provider/model` for every run. Same as `--model`.                           |
-| `GITTERM_BOT_PROVIDER`            | Compute provider for new sandboxes (`railway`, `e2b`, `daytona`, …).                  |
-| `GITTERM_BOT_INSTRUCTIONS`        | Extra agent instructions, e.g. team conventions.                                      |
-| `GITTERM_BOT_STATE_FILE`          | Where thread sessions are kept. Default `.gitterm-bot/slack.json`.                    |
-| `GITTERM_BOT_RUN_TIMEOUT_MINUTES` | Give up on a request after this long, including time waiting for answers. Default 60. |
+Every setting works from code and from the terminal. In code, pass it to `createSlackBot()`; on
+the command line, set the environment variable (a `.env` file in the working directory is
+loaded) or the flag.
 
-With `GITTERM_BOT_CHANNELS` and no `GITTERM_BOT_REPO`, the bot only answers in the listed
-channels. `auto` connections attach the GitHub connection for the repository's owner (or the
-deployment's shared one) and every connected MCP and Executor connection.
+| Option           | Environment variable / flag                                                        | Meaning                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `botToken`       | `SLACK_BOT_TOKEN`                                                                  | Bot token (`xoxb-…`).                                                                         |
+| `appToken`       | `SLACK_APP_TOKEN`                                                                  | App-level token with `connections:write` (`xapp-…`).                                          |
+| `app`            | —                                                                                  | A Bolt app you already run; see [below](#add-it-to-a-bot-you-already-run).                    |
+| `gitterm`        | `GITTERM_API_TOKEN`, `GITTERM_SERVER_URL`                                          | `{ token, serverUrl }` or a client. Falls back to the `gitterm login` config.                 |
+| `repo`           | `GITTERM_BOT_REPO`, `--repo`                                                       | Repository for every channel; `url#branch` picks a branch.                                    |
+| `channels`       | `GITTERM_BOT_CHANNELS` (`C0123=https://github.com/acme/api,…`)                     | Per-channel repositories. Without `repo`, the bot answers only in these channels.             |
+| `connections`    | `GITTERM_BOT_CONNECTIONS` (`auto`, `none`, or ids/names)                           | GitTerm connections for new sandboxes. Default `auto`.                                        |
+| `model`          | `GITTERM_BOT_MODEL`, `--model`                                                     | OpenCode `provider/model` for every run.                                                      |
+| `instructions`   | `GITTERM_BOT_INSTRUCTIONS`, `GITTERM_BOT_INSTRUCTIONS_FILE`, `--instructions-file` | What the agent should know and how it should behave; see [Instructions](#instructions).       |
+| `workspace`      | `GITTERM_BOT_PROVIDER` (provider only)                                             | Any `workspaces.create()` setting for new sandboxes: provider, image, setup, OpenCode config. |
+| `stateFile`      | `GITTERM_BOT_STATE_FILE`                                                           | Where thread sessions are kept. Default `.gitterm-bot/slack.json`.                            |
+| `runTimeoutMs`   | `GITTERM_BOT_RUN_TIMEOUT_MINUTES`                                                  | Give up on a request after this long, including time waiting for answers. Default 60 min.     |
+| `inputTimeoutMs` | —                                                                                  | How long a question or approval waits for an answer. Default 30 min.                          |
+| `logger`         | —                                                                                  | Where the bot logs. Default `console`.                                                        |
 
-### From code
+`auto` connections attach the GitHub connection for the repository's owner (or the deployment's
+shared one) and every connected MCP and Executor connection. `workspace` takes any
+[`@gitterm/sdk`](https://www.npmjs.com/package/@gitterm/sdk) `workspaces.create()` option except
+the repository, name, agent, connections, and tags, which the bot owns.
+
+### Instructions
+
+Tell the agent about your team and how to behave. The text is added after the bot's own rules and
+loaded into every session:
+
+```ts
+import { readFile } from "node:fs/promises";
+
+createSlackBot({
+  repo: "https://github.com/acme/app",
+  instructions: await readFile("bot-instructions.md", "utf8"),
+});
+```
+
+```sh
+npx @gitterm/slack-bot --repo https://github.com/acme/app --instructions-file bot-instructions.md
+```
+
+Instructions are written into a sandbox when it is created; after changing them, mention the bot
+with `reset`. Project knowledge that belongs with the code (how to run tests, where things live)
+is better in an `AGENTS.md` in the repository, which OpenCode reads on its own.
+
+## Running from code
+
+`createSlackBot()` returns `{ start(), stop() }`. `start()` resolves once the bot is connected;
+`stop()` disconnects it. Runs keep going in GitTerm while the bot is down, and the next
+`start()` picks them up.
 
 ```ts
 import { createSlackBot } from "@gitterm/slack-bot";
@@ -108,13 +150,53 @@ const bot = createSlackBot({
     setup: { beforeAgent: ["pnpm install"] },
     opencode: { config: { permission: { bash: "allow", edit: "allow" } } },
   },
+  logger: myLogger, // anything with info, warn, and error
 });
+
 await bot.start();
+process.once("SIGTERM", () => void bot.stop());
 ```
 
-`workspace` takes any `workspaces.create()` option from
-[`@gitterm/sdk`](https://www.npmjs.com/package/@gitterm/sdk) except the repository, name, agent,
-connections, and tags, which the bot owns.
+### Add it to a bot you already run
+
+Pass your Bolt app and the agent answers its mentions alongside your own listeners. You keep
+starting and stopping the app, with whatever receiver it uses (Socket Mode or HTTP). Your app
+needs the scopes and events from `npx @gitterm/slack-bot manifest`; make sure none of your own
+listeners also answer `app_mention`.
+
+```ts
+import { App } from "@slack/bolt";
+import { createSlackBot } from "@gitterm/slack-bot";
+
+const app = new App({
+  token: process.env.SLACK_BOT_TOKEN,
+  signingSecret: process.env.SLACK_SIGNING_SECRET,
+});
+app.command("/deploy", async ({ ack }) => {
+  await ack("Deploying…");
+});
+
+await createSlackBot({ app, repo: "https://github.com/acme/app" }).start();
+await app.start(3000);
+```
+
+An app that authorizes per workspace also needs `botToken`, which the agent uses for its own API
+calls and file downloads.
+
+### Slack and Discord in one process
+
+```ts
+import { createDiscordBot } from "@gitterm/discord-bot";
+import { createSlackBot } from "@gitterm/slack-bot";
+
+const settings = {
+  repo: "https://github.com/acme/app",
+  gitterm: { token: process.env.GITTERM_API_TOKEN },
+};
+await Promise.all([createSlackBot(settings).start(), createDiscordBot(settings).start()]);
+```
+
+Each platform gets its own sandbox and its own state file.
 
 ## Hosting
 

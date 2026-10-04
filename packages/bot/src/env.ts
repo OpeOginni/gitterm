@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import type { WorkspaceProviderSelection } from "@gitterm/sdk";
 import type { BotOptions, RepoTarget } from "./types.js";
@@ -29,6 +29,15 @@ function parseChannels(value: string): Record<string, RepoTarget> {
   return channels;
 }
 
+function readInstructionsFile(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  try {
+    return readFileSync(path, "utf8").trim() || undefined;
+  } catch (error) {
+    throw new Error(`Could not read the instructions file ${path}`, { cause: error });
+  }
+}
+
 /**
  * Bot settings from the environment, shared by the Slack and Discord command lines. GitTerm
  * credentials are read by the SDK itself (`GITTERM_API_TOKEN`, `GITTERM_SERVER_URL`, or the
@@ -48,7 +57,12 @@ export function botOptionsFromEnv(env: Env = process.env): Omit<BotOptions, "ada
   }
   const model = read(env, "GITTERM_BOT_MODEL");
   if (model) options.model = model;
-  const instructions = read(env, "GITTERM_BOT_INSTRUCTIONS");
+  const instructions = [
+    read(env, "GITTERM_BOT_INSTRUCTIONS"),
+    readInstructionsFile(read(env, "GITTERM_BOT_INSTRUCTIONS_FILE")),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   if (instructions) options.instructions = instructions;
   if (provider) options.workspace = { provider: { type: provider } as WorkspaceProviderSelection };
   const stateFile = read(env, "GITTERM_BOT_STATE_FILE");
@@ -59,8 +73,8 @@ export function botOptionsFromEnv(env: Env = process.env): Omit<BotOptions, "ada
 }
 
 /**
- * The shared command-line entry: loads `.env` from the working directory, applies `--repo`,
- * and returns the bot options.
+ * The shared command-line entry: loads `.env` from the working directory and returns the bot
+ * options. `--repo`, `--model`, and `--instructions-file` override their environment variables.
  */
 export function cliOptions(argv: string[] = process.argv.slice(2)): {
   command: string | undefined;
@@ -70,10 +84,18 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { repo: { type: "string" }, model: { type: "string" } },
+    options: {
+      repo: { type: "string" },
+      model: { type: "string" },
+      "instructions-file": { type: "string" },
+    },
   });
-  const options = botOptionsFromEnv();
-  if (values.repo) options.repo = values.repo;
-  if (values.model) options.model = values.model;
-  return { command: positionals[0], options };
+  const flags: Env = {
+    GITTERM_BOT_REPO: values.repo,
+    GITTERM_BOT_MODEL: values.model,
+    GITTERM_BOT_INSTRUCTIONS_FILE: values["instructions-file"],
+  };
+  const env = { ...process.env };
+  for (const [name, value] of Object.entries(flags)) if (value) env[name] = value;
+  return { command: positionals[0], options: botOptionsFromEnv(env) };
 }

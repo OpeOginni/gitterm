@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { GittermError } from "@gitterm/sdk";
 import type {
   AgentRun,
   AgentRunEvent,
@@ -33,26 +34,29 @@ async function until(condition: () => boolean, label = "condition") {
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-/** A push-driven async iterable standing in for the run event stream. */
+/**
+ * A push-driven stand-in for a run's event stream. Every subscriber reads the whole log from the
+ * start, as a reconnecting SSE client gets the run's current state again.
+ */
 function stream<T>() {
-  const queue: T[] = [];
-  let wake: (() => void) | undefined;
-  let closed = false;
+  const items: T[] = [];
+  const waiters = new Set<() => void>();
   return {
     push(item: T) {
-      queue.push(item);
-      wake?.();
+      items.push(item);
+      for (const wake of waiters) wake();
+      waiters.clear();
     },
-    close() {
-      closed = true;
-      wake?.();
-    },
-    async *[Symbol.asyncIterator]() {
-      while (true) {
-        if (queue.length === 0 && closed) return;
-        if (queue.length === 0) await new Promise<void>((resolve) => (wake = resolve));
-        const item = queue.shift();
-        if (item !== undefined) yield item;
+    async *subscribe(signal?: AbortSignal): AsyncGenerator<T> {
+      for (let index = 0; ; index++) {
+        while (index >= items.length) {
+          if (signal?.aborted) throw new GittermError("ABORTED", "aborted");
+          await new Promise<void>((resolve) => {
+            waiters.add(resolve);
+            signal?.addEventListener("abort", () => resolve(), { once: true });
+          });
+        }
+        yield items[index] as T;
       }
     },
   };
@@ -121,7 +125,8 @@ function fakeGitterm(options: { workspaces?: Workspace[]; connections?: Connecti
         calls.runs.push(input);
         return run(`run${calls.runs.length}`, "pending");
       },
-      events: (ref: { id: string }) => streamFor(ref.id),
+      events: (ref: { id: string }, watch?: { signal?: AbortSignal }) =>
+        streamFor(ref.id).subscribe(watch?.signal),
       respond: async (_ref: unknown, input: { requestId: string; reply: AgentRunReply }) => {
         calls.responses.push(input);
         return run("x", "running");
@@ -584,5 +589,35 @@ describe("createBot", () => {
       run: run("run1", "failed", { error: "model unavailable" }),
     });
     await until(() => chat.log.edits.get("s1")?.includes("model unavailable") === true);
+  });
+
+  test("stop detaches from running work and the next start picks it up once", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "long task" });
+    await until(() => gitterm.calls.runs.length === 1);
+    await tick();
+
+    await bot.stop();
+    await tick();
+    expect(gitterm.calls.cancelled).toEqual([]);
+    expect(chat.log.edits.get("s1")).toBe("Working on it…");
+
+    await bot.start();
+    gitterm.stream("run1").push({
+      type: "run.completed",
+      run: run("run1", "completed", { finalText: "Finished" }),
+    });
+    await until(() => chat.log.replies.length === 1, "reply after restart");
+    await tick();
+    expect(chat.log.replies).toHaveLength(1);
   });
 });

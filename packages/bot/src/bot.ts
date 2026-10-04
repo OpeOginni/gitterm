@@ -150,6 +150,8 @@ export function createBot(options: BotOptions): Bot {
   let store: StateStore;
   let workspaces: WorkspaceManager;
   let scope = "";
+  /** Aborted by `stop()`: run observers detach and leave their runs to the next `start()`. */
+  let shutdown = new AbortController();
 
   const repoFor = (channel: string) => channelRepos.get(channel) ?? defaultRepo;
   const say = (thread: ChatThread, text: string) => adapter.post(thread, text).catch(noop);
@@ -255,6 +257,7 @@ export function createBot(options: BotOptions): Bot {
 
   async function follow(job: Job, run: RunRef): Promise<void> {
     const { status } = job;
+    const stopping = shutdown.signal;
     const entry: { run: RunRef; stoppedBy?: ChatUser } = { run };
     active.set(job.key, entry);
     const startedAt = Date.now();
@@ -289,7 +292,9 @@ export function createBot(options: BotOptions): Bot {
       let completed: AgentRun | undefined;
       for (let attempt = 0; !completed; attempt++) {
         try {
-          for await (const event of gitterm.runs.events(run, { signal: timeout.signal })) {
+          for await (const event of gitterm.runs.events(run, {
+            signal: AbortSignal.any([timeout.signal, shutdown.signal]),
+          })) {
             if (event.type === "input.required" && !seen.has(event.request.id)) {
               seen.add(event.request.id);
               void relay(event.request);
@@ -319,6 +324,8 @@ export function createBot(options: BotOptions): Bot {
       );
       await status.remove();
     } catch (error) {
+      // Stopped: the run carries on in GitTerm and stays in the state file for the next start.
+      if (stopping.aborted) return;
       const timedOut = timeout.signal.aborted;
       // A failed or cancelled run is already over; anything else would leave it running unseen.
       if (!(error instanceof AgentRunError)) await gitterm.runs.cancel(run).catch(noop);
@@ -329,11 +336,15 @@ export function createBot(options: BotOptions): Bot {
     } finally {
       clearTimeout(timer);
       for (const controller of relays.values()) {
-        controller.abort("The run ended before anyone answered.");
+        controller.abort(
+          stopping.aborted
+            ? "The bot stopped before anyone answered; it asks again when it is back."
+            : "The run ended before anyone answered.",
+        );
       }
       status.stop();
       active.delete(job.key);
-      await store.setInFlight(job.key, undefined);
+      if (!stopping.aborted) await store.setInFlight(job.key, undefined);
     }
   }
 
@@ -514,6 +525,7 @@ export function createBot(options: BotOptions): Bot {
 
   return {
     async start() {
+      shutdown = new AbortController();
       store = await openStateStore(
         resolvePath(options.stateFile ?? `.gitterm-bot/${adapter.platform}.json`),
       );
@@ -544,8 +556,10 @@ export function createBot(options: BotOptions): Bot {
         `GitTerm ${adapter.displayName} bot is running for ${[...new Set(repos.map(repoLabel))].join(", ")}.`,
       );
     },
-    // Open prompts stay in the state file's runs; the next start reattaches and asks again.
+    // Runs keep going in GitTerm and stay in the state file; the next start reattaches to them
+    // and asks open questions again.
     async stop() {
+      shutdown.abort();
       await adapter.stop();
     },
   };

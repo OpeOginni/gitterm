@@ -231,6 +231,14 @@ SLACK_BOT_TOKEN=xoxb-… SLACK_APP_TOKEN=xapp-… GITTERM_API_TOKEN=gt_… \
   npx @gitterm/slack-bot --repo https://github.com/acme/app
 ```
 
+or from code, standalone or added to a Slack/Discord bot you already run:
+
+```ts
+import { createSlackBot } from "@gitterm/slack-bot";
+
+await createSlackBot({ repo: "https://github.com/acme/app" }).start();
+```
+
 Each repository gets one sandbox that pauses when idle and wakes on the next message; each chat
 thread is one agent session. Agent questions and tool approvals become buttons in the thread, and
 the bot attaches your GitHub, MCP, and Executor connections automatically. The shared engine,

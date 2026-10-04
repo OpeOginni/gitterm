@@ -4,6 +4,7 @@ import { createSlackBot } from "./index.js";
 import { slackManifest } from "./manifest.js";
 
 const USAGE = `Usage: gitterm-slack-bot [--repo <url>[#branch]] [--model <provider/model>]
+                    [--instructions-file <path>]
        gitterm-slack-bot manifest [name]
 
 Environment (a .env file in the working directory is loaded):
@@ -14,7 +15,8 @@ Environment (a .env file in the working directory is loaded):
   GITTERM_BOT_REPO      Repository for every channel, e.g. https://github.com/acme/app#main
   GITTERM_BOT_CHANNELS  Per-channel repositories: C0123=https://github.com/acme/api,…
   GITTERM_BOT_MODEL, GITTERM_BOT_PROVIDER, GITTERM_BOT_CONNECTIONS (auto | none | id,…),
-  GITTERM_BOT_INSTRUCTIONS, GITTERM_BOT_STATE_FILE, GITTERM_BOT_RUN_TIMEOUT_MINUTES`;
+  GITTERM_BOT_INSTRUCTIONS, GITTERM_BOT_INSTRUCTIONS_FILE, GITTERM_BOT_STATE_FILE,
+  GITTERM_BOT_RUN_TIMEOUT_MINUTES`;
 
 const { command, options } = cliOptions();
 if (command === "manifest") {

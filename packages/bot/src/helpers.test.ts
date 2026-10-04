@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AgentQuestion, Connection } from "@gitterm/sdk";
 import { botOptionsFromEnv } from "./env.js";
 import { splitMessage, tablesToCode } from "./markdown.js";
@@ -171,5 +174,19 @@ describe("botOptionsFromEnv", () => {
       workspace: { provider: { type: "railway" } },
       runTimeoutMs: 20 * 60_000,
     });
+  });
+
+  test("joins inline instructions with an instructions file", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "gitterm-bot-")), "bot.md");
+    writeFileSync(file, "# Team rules\n\nAnswer in German.\n");
+    expect(
+      botOptionsFromEnv({
+        GITTERM_BOT_INSTRUCTIONS: "Be brief.",
+        GITTERM_BOT_INSTRUCTIONS_FILE: file,
+      }).instructions,
+    ).toBe("Be brief.\n\n# Team rules\n\nAnswer in German.");
+    expect(() => botOptionsFromEnv({ GITTERM_BOT_INSTRUCTIONS_FILE: `${file}.missing` })).toThrow(
+      "Could not read the instructions file",
+    );
   });
 });

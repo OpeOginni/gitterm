@@ -11,6 +11,7 @@ import {
   Client,
   Events,
   GatewayIntentBits,
+  IntentsBitField,
   MessageFlags,
   PermissionsBitField,
   ThreadAutoArchiveDuration,
@@ -30,7 +31,20 @@ import {
 export type DiscordAdapterOptions = {
   /** Bot token from the Discord developer portal. Defaults to `DISCORD_BOT_TOKEN`. */
   token?: string;
+  /**
+   * A discord.js client you already run, to add the agent to an existing bot. It needs the
+   * Guilds, GuildMessages, and MessageContent intents. You log it in and destroy it yourself;
+   * `start()` resolves once it is ready. Make sure your own handlers do not also answer the same
+   * mentions.
+   */
+  client?: Client;
 };
+
+const INTENTS = [
+  GatewayIntentBits.Guilds,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.MessageContent,
+];
 
 const THREAD_NAME_LIMIT = 90;
 const HISTORY_LIMIT = 100;
@@ -124,15 +138,19 @@ async function onInteraction(events: ChatEvents, interaction: Interaction) {
  * thread for the conversation; every thread is one agent session.
  */
 export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatAdapter {
-  const token = (options.token ?? process.env.DISCORD_BOT_TOKEN)?.trim();
-  if (!token) throw new Error("DISCORD_BOT_TOKEN is required");
-  const client = new Client({
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.MessageContent,
-    ],
-  });
+  const owned = !options.client;
+  const token = owned ? (options.token ?? process.env.DISCORD_BOT_TOKEN)?.trim() : undefined;
+  if (owned && !token) throw new Error("DISCORD_BOT_TOKEN is required");
+  if (options.client) {
+    const intents = new IntentsBitField(options.client.options.intents);
+    const missing = INTENTS.filter((intent) => !intents.has(intent));
+    if (missing.length > 0) {
+      throw new Error(
+        `The Discord client needs the ${missing.map((intent) => GatewayIntentBits[intent]).join(", ")} intent(s)`,
+      );
+    }
+  }
+  const client = options.client ?? new Client({ intents: INTENTS });
   /** Messages reported to the engine, kept briefly so `acknowledge` can react to them. */
   const recent = new Map<string, Message>();
 
@@ -193,9 +211,11 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
           console.error("Discord interaction handling failed", error),
         );
       });
-      const ready = once(client, Events.ClientReady);
-      await client.login(token);
-      await ready;
+      if (!client.isReady()) {
+        const ready = once(client, Events.ClientReady);
+        if (owned) await client.login(token);
+        await ready;
+      }
       const applicationId = client.application?.id ?? client.user?.id ?? "";
       console.info(
         `Invite the bot: https://discord.com/oauth2/authorize?client_id=${applicationId}&scope=bot&permissions=${INVITE_PERMISSIONS.bitfield}`,
@@ -204,7 +224,7 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
     },
 
     async stop() {
-      await client.destroy();
+      if (owned) await client.destroy();
     },
 
     async history(location, after) {
