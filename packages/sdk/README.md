@@ -13,7 +13,7 @@ npm install @gitterm/sdk
 ```
 
 Requires Node 22.12+ or Bun. Create an API token in the dashboard under
-**Settings → Account → API tokens**, or with `gitterm login`.
+**Settings → Developer → API & tokens**, or with `gitterm login`.
 
 ## Quick start
 
@@ -23,12 +23,10 @@ Create a workspace, run a prompt, and get the final result:
 import { createGittermClient } from "@gitterm/sdk";
 
 const client = createGittermClient({ token: process.env.GITTERM_API_TOKEN });
-const [github] = await client.integrations.connections.list({ integration: "github" });
-if (!github) throw new Error("Connect GitHub in the Gitterm dashboard first");
 
 const { workspace } = await client.workspaces.create({
   repo: "https://github.com/acme/product",
-  connections: [github.id],
+  connections: ["github"], // the GitHub connection that covers acme
   autoTerminateAfterMs: 2 * 60 * 60 * 1000,
 });
 
@@ -48,18 +46,23 @@ try {
 ```
 
 Every integration you can attach, personal or admin-provided, is a **connection** with one shape.
-Attach any number by id (at most one per integration):
+Reference each one the way you remember it:
 
 ```ts
-const connections = await client.integrations.connections.list();
-const github = connections.find((c) => c.integration === "github");
-const google = connections.find((c) => c.integration === "google");
-
 await client.workspaces.create({
   repo: "https://github.com/acme/product",
-  connections: [github!.id, google!.id],
+  connections: [
+    "github", // integration key: the GitHub connection that covers acme, or the shared one
+    "Linear", // a connection name, as shown under Integrations (case-insensitive)
+    "3f7d0c2e-…", // or an id from connections.list()
+  ],
 });
 ```
+
+An integration key works when it is unambiguous: `github` picks by the repository's owner;
+`google`, `mcp`, and `executor` need exactly one connection of that kind. Names are not unique, so
+a name shared by two connections is rejected with both ids; use the id or rename one. At most one
+GitHub and one Google connection can be attached; MCP and Executor connections are unlimited.
 
 GitHub tokens and Google workload credentials are issued inside the workspace; the SDK caller does
 not receive or forward them.
@@ -168,6 +171,7 @@ client.credentials.listProviders();
 client.integrations.catalog();         // integrations the admin enabled: key, category, personal/shared
 client.integrations.connections.list(filter?); // what you can attach; personal + shared, one shape
 client.integrations.connections.get(id);
+client.integrations.connections.resolve(references, { repo }); // what ids/keys/names attach
 client.integrations.connections.create(input); // integrations:write; may return a browser step
 client.integrations.connections.remove(id);
 client.integrations.connections.waitFor({ integration, since }); // after a `pending` create
@@ -840,7 +844,7 @@ await saveConfig({
 ```
 
 Device-code logins produce the same revocable `gt_...` API token as the dashboard;
-they appear in **Settings → Account → API tokens** and can be revoked there.
+they appear in **Settings → Developer → API & tokens** and can be revoked there.
 
 ## Direct provider mode
 

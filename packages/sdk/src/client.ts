@@ -193,6 +193,12 @@ export type GittermClient = {
       /** Personal and shared connections you can attach to a workspace. */
       list(filter?: { integration?: IntegrationKey; kind?: ConnectionKind }): Promise<Connection[]>;
       get(id: string): Promise<Connection>;
+      /**
+       * The connections `workspaces.create({ connections })` would attach for these references
+       * (ids, integration keys, or names), without creating anything. Rejects with the same
+       * message creation would, e.g. for an ambiguous name. Pass `repo` to resolve `"github"`.
+       */
+      resolve(references: string[], options?: { repo?: string }): Promise<Connection[]>;
       /** Requires the `integrations:write` scope. */
       create(input: CreateConnectionInput): Promise<CreateConnectionResult>;
       /** Removes a personal connection. Shared connections are managed by the admin. */
@@ -787,6 +793,14 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
             async (): Promise<Connection> =>
               toConnection(await trpc.integrations.connections.get.query({ id })),
           ),
+        resolve: (references, options) =>
+          run(async (): Promise<Connection[]> => {
+            const result = await trpc.integrations.connections.resolve.query({
+              references,
+              ...(options?.repo ? { repo: options.repo } : {}),
+            });
+            return result.map(toConnection);
+          }),
         create: (input) =>
           run(async (): Promise<CreateConnectionResult> => {
             const result = await trpc.integrations.connections.create.mutate(input);

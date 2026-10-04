@@ -20,6 +20,7 @@ import { z } from "zod";
 import { mcpConnectionInput } from "@gitterm/schema/mcp";
 import { mcpConnection } from "@gitterm/db/schema/mcp";
 import { createMcpConnection, listMcpConnections, resolveMcpWorkspaceConnection } from "./mcp";
+import { matchConnectionReference } from "./connection-references";
 import type { McpWorkspaceConnection } from "./mcp-config";
 import env from "@gitterm/env/server";
 import { apiPath } from "@gitterm/schema/url";
@@ -285,25 +286,35 @@ export type ResolvedWorkspaceConnections = {
   mcp: McpWorkspaceConnection[];
 };
 
-/**
- * Validate a workspace's requested connection ids: each must exist, be usable by this user
- * under the current admin policy. MCP allows multiple connections; repository/cloud identity
- * selection remains single-valued.
- */
-export async function resolveWorkspaceConnections(
-  userId: string,
-  ids: readonly string[],
-): Promise<ResolvedWorkspaceConnections> {
-  const resolved: ResolvedWorkspaceConnections = { mcp: [] };
-  const seen = new Set<IntegrationKey>();
-  // Resolve the catalog once, rather than doing a full listing for each MCP attachment.
-  const requestedIds = new Set(ids);
-  const available = requestedIds.size
-    ? new Map((await listConnections(userId)).map((connection) => [connection.id, connection]))
-    : new Map<string, Connection>();
+const isConnectionId = (reference: string) =>
+  UUID_PATTERN.test(reference) || reference.endsWith(SHARED_SUFFIX);
 
-  for (const id of requestedIds) {
-    const connection = available.get(id) ?? (await requireConnection(userId, id));
+/**
+ * The connections a list of references points at, validated for attaching together: each must
+ * exist, be connected, and be usable by this user under the current admin policy. A reference
+ * is an id, an integration key, or a connection name (see connection-references.ts); `repo` lets
+ * `github` pick the connection covering the repository's owner. MCP allows multiple
+ * connections; repository/cloud identity selection remains single-valued. Returns no secrets.
+ */
+export async function resolveConnectionReferences(
+  userId: string,
+  references: readonly string[],
+  options: { repo?: string } = {},
+): Promise<Connection[]> {
+  // Resolve the catalog once, rather than doing a full listing for each MCP attachment.
+  const listed = references.length ? await listConnections(userId) : [];
+  const available = new Map(listed.map((connection) => [connection.id, connection]));
+  const connections = new Map<string, Connection>();
+  for (const reference of new Set(references)) {
+    const connection = isConnectionId(reference)
+      ? (available.get(reference) ?? (await requireConnection(userId, reference)))
+      : matchConnectionReference(reference, listed, options.repo);
+    // `executor` and the Executor connection's name are the same attachment.
+    connections.set(connection.id, connection);
+  }
+
+  const seen = new Set<IntegrationKey>();
+  for (const connection of connections.values()) {
     if (connection.status !== "connected") {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -321,7 +332,18 @@ export async function resolveWorkspaceConnections(
       });
     }
     seen.add(connection.integration);
+  }
+  return [...connections.values()];
+}
 
+/** Resolve a workspace's requested connections and load what the workspace needs from each. */
+export async function resolveWorkspaceConnections(
+  userId: string,
+  references: readonly string[],
+  options: { repo?: string } = {},
+): Promise<ResolvedWorkspaceConnections> {
+  const resolved: ResolvedWorkspaceConnections = { mcp: [] };
+  for (const connection of await resolveConnectionReferences(userId, references, options)) {
     if (connection.integration === "mcp" || connection.integration === "executor") {
       resolved.mcp.push(await resolveMcpWorkspaceConnection(userId, connection.id));
     } else if (connection.integration === "github") {
