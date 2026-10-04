@@ -2,7 +2,19 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CalendarClock, ChevronDown, Copy, KeyRound, KeySquare, Loader2, Plus } from "lucide-react";
+import {
+  Bot,
+  ChevronDown,
+  Copy,
+  Eye,
+  KeyRound,
+  KeySquare,
+  Loader2,
+  Plus,
+  SlidersHorizontal,
+  Terminal,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
@@ -18,21 +30,55 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { API_TOKEN_SCOPE_DETAILS, API_TOKEN_SCOPES, type ApiTokenScope } from "@gitterm/schema";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsEmptyState } from "@/components/ui/form-card";
+import { BOT_TOKEN_SCOPES } from "@/components/dashboard/bots/config";
+import { cn } from "@/lib/utils";
+
+/** Most tokens are one of these; Custom keeps per-permission control for the rest. */
+const TOKEN_PRESETS = [
+  {
+    id: "full",
+    icon: Terminal,
+    label: "Full access",
+    description: "The CLI and your own scripts.",
+    scopes: [...API_TOKEN_SCOPES],
+  },
+  {
+    id: "bot",
+    icon: Bot,
+    label: "Bot",
+    description: "Slack and Discord bots: sandboxes and runs.",
+    scopes: BOT_TOKEN_SCOPES,
+  },
+  {
+    id: "read",
+    icon: Eye,
+    label: "Read only",
+    description: "Dashboards and monitoring.",
+    scopes: API_TOKEN_SCOPES.filter((scope) => scope.endsWith(":read")),
+  },
+  {
+    id: "custom",
+    icon: SlidersHorizontal,
+    label: "Custom",
+    description: "Pick each permission.",
+    scopes: null,
+  },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  icon: LucideIcon;
+  label: string;
+  description: string;
+  scopes: readonly ApiTokenScope[] | null;
+}>;
+type PresetId = (typeof TOKEN_PRESETS)[number]["id"];
 
 const EXPIRY_OPTIONS = [
   { value: "30", label: "30 days" },
   { value: "90", label: "90 days" },
   { value: "365", label: "1 year" },
-  { value: "never", label: "No expiry" },
+  { value: "never", label: "Never" },
 ] as const;
 
 function formatDate(value: Date | string | null): string {
@@ -56,7 +102,9 @@ export function ApiTokensSection() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tokenName, setTokenName] = useState("");
   const [expiry, setExpiry] = useState<string>("90");
-  const [scopes, setScopes] = useState<ApiTokenScope[]>([...API_TOKEN_SCOPES]);
+  const [preset, setPreset] = useState<PresetId>("full");
+  const [customScopes, setCustomScopes] = useState<ApiTokenScope[]>([...API_TOKEN_SCOPES]);
+  const scopes = TOKEN_PRESETS.find((entry) => entry.id === preset)?.scopes ?? customScopes;
   // Set after a successful create; the dialog switches to show-once mode.
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -92,7 +140,8 @@ export function ApiTokensSection() {
     if (!open) {
       setTokenName("");
       setExpiry("90");
-      setScopes([...API_TOKEN_SCOPES]);
+      setPreset("full");
+      setCustomScopes([...API_TOKEN_SCOPES]);
       setCreatedToken(null);
     }
   };
@@ -100,7 +149,7 @@ export function ApiTokensSection() {
   const handleCreate = () => {
     createMutation.mutate({
       name: tokenName.trim(),
-      scopes,
+      scopes: [...scopes],
       expiresInDays: expiry === "never" ? null : Number(expiry),
     });
   };
@@ -279,85 +328,171 @@ export function ApiTokensSection() {
           ) : (
             <>
               <DialogHeader>
-                <DialogTitle>New API token</DialogTitle>
-                <DialogDescription>
-                  Select only the SDK permissions this token needs. It cannot manage tokens,
-                  integrations, credentials, or administration.
-                </DialogDescription>
+                <div className="flex items-start gap-3.5">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+                    <KeySquare className="size-5" />
+                  </span>
+                  <div className="space-y-1">
+                    <DialogTitle>New API token</DialogTitle>
+                    <DialogDescription>
+                      Pick what it is for. A token can never manage other tokens, model credentials,
+                      or administration.
+                    </DialogDescription>
+                  </div>
+                </div>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="api-token-name">Name</Label>
                   <Input
                     id="api-token-name"
-                    placeholder="e.g. opencode-plugin, ci"
+                    autoFocus
+                    placeholder="e.g. ci-deploys, slack-bot"
                     value={tokenName}
                     onChange={(event) => setTokenName(event.target.value)}
                     maxLength={100}
+                    className="h-11 font-mono text-[13px] placeholder:font-sans"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Permissions</Label>
-                  <div className="overflow-hidden rounded-xl border border-line bg-fill px-1.5">
-                    {API_TOKEN_SCOPE_DETAILS.map((detail) => (
-                      <label
-                        key={detail.scope}
-                        className="group flex min-h-14 cursor-pointer items-center gap-3 rounded-lg border-b border-line px-2.5 py-2 text-sm transition-colors last:border-b-0 hover:bg-fill"
-                      >
-                        <Checkbox
-                          className="size-[18px] group-hover:border-line-2"
-                          checked={scopes.includes(detail.scope)}
-                          onCheckedChange={(checked) =>
-                            setScopes((current) =>
-                              checked
-                                ? [...new Set([...current, detail.scope])]
-                                : current.filter((scope) => scope !== detail.scope),
-                            )
-                          }
-                        />
-                        <span className="min-w-0 leading-tight">
-                          <span className="block font-medium text-fg">{detail.label}</span>
-                          <span className="mt-1 block text-xs leading-tight text-fg-4">
-                            {detail.description}
+                  <div className="flex items-baseline justify-between">
+                    <Label>Access</Label>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4">
+                      {scopes.length} of {API_TOKEN_SCOPES.length} permissions
+                    </span>
+                  </div>
+                  <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
+                    {TOKEN_PRESETS.map((entry) => {
+                      const selected = preset === entry.id;
+                      return (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setPreset(entry.id)}
+                          className={cn(
+                            "group relative flex items-start gap-3 rounded-xl border p-3 pr-8 text-left transition-colors",
+                            selected
+                              ? "border-primary/45 bg-primary/[0.06]"
+                              : "border-line bg-fill hover:border-line-2 hover:bg-fill-2",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                              selected
+                                ? "border-primary/30 bg-primary/10 text-primary"
+                                : "border-line bg-fill-2 text-fg-3 group-hover:text-fg-2",
+                            )}
+                          >
+                            <entry.icon className="size-4" />
                           </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-fg">{entry.label}</span>
+                            <span className="mt-0.5 block text-xs leading-snug text-fg-4">
+                              {entry.description}
+                            </span>
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              "absolute top-3 right-3 flex size-3.5 items-center justify-center rounded-full border transition-colors",
+                              selected ? "border-primary" : "border-line-2",
+                            )}
+                          >
+                            {selected ? (
+                              <span className="size-1.5 rounded-full bg-primary" />
+                            ) : null}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {preset === "custom" ? (
+                    <div className="overflow-hidden rounded-xl border border-line bg-fill px-1.5">
+                      {API_TOKEN_SCOPE_DETAILS.map((detail) => (
+                        <label
+                          key={detail.scope}
+                          className="group flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border-b border-line px-2.5 py-2 text-sm transition-colors last:border-b-0 hover:bg-fill"
+                        >
+                          <Checkbox
+                            className="size-[18px] group-hover:border-line-2"
+                            checked={customScopes.includes(detail.scope)}
+                            onCheckedChange={(checked) =>
+                              setCustomScopes((current) =>
+                                checked
+                                  ? [...new Set([...current, detail.scope])]
+                                  : current.filter((scope) => scope !== detail.scope),
+                              )
+                            }
+                          />
+                          <span className="min-w-0 leading-tight">
+                            <span className="block font-medium text-fg">{detail.label}</span>
+                            <span className="mt-0.5 block text-xs leading-tight text-fg-4">
+                              {detail.description}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {scopes.map((scope) => (
+                        <span
+                          key={scope}
+                          className="rounded-md border border-line bg-fill-2 px-1.5 py-0.5 font-mono text-[10.5px] text-fg-3"
+                        >
+                          {scope}
                         </span>
-                      </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Expires</Label>
+                  <div
+                    role="radiogroup"
+                    className="inline-flex rounded-lg border border-line bg-fill p-0.5"
+                  >
+                    {EXPIRY_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={expiry === option.value}
+                        onClick={() => setExpiry(option.value)}
+                        className={cn(
+                          "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                          expiry === option.value
+                            ? "bg-fill-2 text-fg shadow-[inset_0_0_0_1px_var(--line-2)]"
+                            : "text-fg-4 hover:text-fg-2",
+                        )}
+                      >
+                        {option.label}
+                      </button>
                     ))}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Expiration</Label>
-                  <Select value={expiry} onValueChange={setExpiry}>
-                    <SelectTrigger className="h-12 w-full border border-line bg-input/70 px-3.5 hover:border-line-2 hover:bg-input focus-visible:border-primary/35 sm:w-48">
-                      <CalendarClock className="size-4 text-primary opacity-80" />
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="start" className="border-line bg-surface-2 p-1">
-                      {EXPIRY_OPTIONS.map((option) => (
-                        <SelectItem
-                          key={option.value}
-                          value={option.value}
-                          className="rounded-md py-2.5 pr-9 pl-3 focus:bg-fill-2"
-                        >
-                          <span className="text-fg">{option.label}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleCreate}
-                  disabled={!tokenName.trim() || scopes.length === 0 || createMutation.isPending}
-                  className="gap-2"
-                >
-                  {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Create token
-                </Button>
+              <DialogFooter className="items-center gap-3 sm:justify-between">
+                <p className="text-xs text-fg-4">The token is shown once, right after this.</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCreate}
+                    disabled={!tokenName.trim() || scopes.length === 0 || createMutation.isPending}
+                    className="gap-2"
+                  >
+                    {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Create token
+                  </Button>
+                </div>
               </DialogFooter>
             </>
           )}

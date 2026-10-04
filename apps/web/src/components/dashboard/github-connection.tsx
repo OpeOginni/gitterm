@@ -434,14 +434,10 @@ export function GitHubConnection() {
             ))}
           </div>
         ) : appAvailability?.configured ? (
-          <div className="flex flex-col items-center px-6 py-10 text-center">
-            <Github className="size-8 text-fg-4" />
-            <p className="mt-4 text-sm font-semibold text-fg">No GitHub accounts connected</p>
-            <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-fg-3">
-              Connect a personal or organization account. You choose exactly which repositories
-              GitTerm can access.
-            </p>
-          </div>
+          <p className="rounded-lg border border-dashed border-line px-4 py-3 text-[13px] text-fg-3">
+            <span className="text-fg-2">No GitHub account yet.</span> Connect a personal or
+            organization account; you choose which repositories GitTerm can access.
+          </p>
         ) : null}
       </div>
     </section>

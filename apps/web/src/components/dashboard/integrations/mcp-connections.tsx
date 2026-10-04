@@ -133,9 +133,12 @@ function authentication(current: Form): McpAuthentication | undefined {
 export function McpConnections({
   allowCustom,
   allowExecutor,
+  embedded = false,
 }: {
   allowCustom: boolean;
   allowExecutor: boolean;
+  /** Drops the title row when the integrations list already shows it. */
+  embedded?: boolean;
 }) {
   const [form, setForm] = useState<Form | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -144,8 +147,11 @@ export function McpConnections({
     isLoading,
     error,
   } = useQuery(trpc.integrations.connections.list.queryOptions());
+  // Each list shows only the kinds it can add, so Executor and MCP servers can sit apart.
   const connections = all.filter(
-    (connection) => connection.integration === "mcp" || connection.integration === "executor",
+    (connection) =>
+      (connection.integration === "mcp" && allowCustom) ||
+      (connection.integration === "executor" && allowExecutor),
   );
   const create = useMutation(trpc.integrations.connections.create.mutationOptions());
   const update = useMutation(trpc.integrations.mcp.update.mutationOptions());
@@ -361,14 +367,18 @@ export function McpConnections({
 
   return (
     <section className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight text-fg">Tools for your agent</h2>
-          <p className="mt-1 max-w-lg text-[12.5px] leading-relaxed text-fg-3">
-            Connect a remote MCP server, or bring your tool catalog through Executor. OpenCode
-            connects directly—GitTerm stays out of the tool traffic.
-          </p>
-        </div>
+      <header
+        className={`flex flex-wrap items-start gap-4 ${embedded ? "justify-end" : "justify-between"}`}
+      >
+        {embedded ? null : (
+          <div>
+            <h2 className="text-base font-semibold tracking-tight text-fg">Tools for your agent</h2>
+            <p className="mt-1 max-w-lg text-[12.5px] leading-relaxed text-fg-3">
+              Connect a remote MCP server, or bring your tool catalog through Executor. OpenCode
+              connects directly—GitTerm stays out of the tool traffic.
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {allowExecutor ? (
             <Button
@@ -407,12 +417,19 @@ export function McpConnections({
       ) : null}
       {isLoading ? <p className="text-xs text-fg-4">Loading connections…</p> : null}
       {!isLoading && !error && !connections.length ? (
-        <div className="rounded-xl border border-dashed border-line px-5 py-8 text-center">
-          <p className="text-sm text-fg-3">No MCP servers connected yet</p>
-          <p className="mt-1 text-xs text-fg-4">
-            Start with a documentation server, or connect your existing Executor catalog.
-          </p>
-        </div>
+        <p className="rounded-lg border border-dashed border-line px-4 py-3 text-[13px] text-fg-3">
+          {allowCustom ? (
+            <>
+              <span className="text-fg-2">No MCP servers yet.</span> Start with a documentation
+              server, or any public HTTPS MCP endpoint.
+            </>
+          ) : (
+            <>
+              <span className="text-fg-2">No Executor catalog yet.</span> Connect your Executor
+              organization once and every tool in it reaches your agents.
+            </>
+          )}
+        </p>
       ) : null}
       <div className="space-y-3">
         {connections.map((connection) => {

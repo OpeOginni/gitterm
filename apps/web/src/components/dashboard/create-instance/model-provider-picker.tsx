@@ -343,7 +343,7 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
 
           <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <Link
-              href={"/dashboard/settings/providers#model-credentials" as Route}
+              href={"/dashboard/models" as Route}
               className="text-[13px] text-fg-3 underline decoration-line-2 underline-offset-4 hover:text-fg"
             >
               Manage credentials
@@ -446,7 +446,7 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
             {summary}
           </span>
           <Link
-            href={"/dashboard/settings/providers#model-credentials" as Route}
+            href={"/dashboard/models" as Route}
             className="text-[11.5px] text-fg-3 transition-colors hover:text-fg"
           >
             Manage credentials

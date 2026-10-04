@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { InstanceList } from "@/components/dashboard/instance-list";
-import { GitHubOnboarding } from "@/components/dashboard/github-onboarding";
 import { CreateInstanceDialog } from "@/components/dashboard/create-instance/create-instance-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
@@ -45,7 +44,6 @@ export default async function DashboardPage() {
       >
         <CreateInstanceDialog />
       </DashboardHeader>
-      <GitHubOnboarding />
       <Suspense fallback={<InstanceListSkeleton />}>
         <InstanceList />
       </Suspense>

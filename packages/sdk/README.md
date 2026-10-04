@@ -12,8 +12,8 @@ bun add @gitterm/sdk
 npm install @gitterm/sdk
 ```
 
-Requires Node 22.12+ or Bun. Create an API token in the dashboard under
-**Settings → Developer → API & tokens**, or with `gitterm login`.
+Requires Node 22.12+ or Bun. Create an API token under **API tokens** in the dashboard, or with
+`gitterm login`.
 
 ## Quick start
 
@@ -844,7 +844,7 @@ await saveConfig({
 ```
 
 Device-code logins produce the same revocable `gt_...` API token as the dashboard;
-they appear in **Settings → Developer → API & tokens** and can be revoked there.
+they appear under **API tokens** in the dashboard and can be revoked there.
 
 ## Direct provider mode
 

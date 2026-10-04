@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Image from "next/image";
+import { cn } from "@/lib/utils";
 import {
   Check,
   ChevronDown,
@@ -167,7 +168,8 @@ function CopyValue({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function GoogleCloudConnection() {
+/** `embedded` drops the title row when the integrations list already shows it. */
+export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean }) {
   const [adding, setAdding] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -230,29 +232,36 @@ export function GoogleCloudConnection() {
 
   return (
     <section className="space-y-5">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/google-cloud.svg"
-            alt=""
-            width={28}
-            height={28}
-            className="size-7 shrink-0"
-          />
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h2 className="text-base font-semibold tracking-tight text-fg">Google Cloud</h2>
-              {integrations.length ? (
-                <span className="font-mono text-[10px] text-fg-4">
-                  {integrations.length} identities
-                </span>
-              ) : null}
+      <header
+        className={cn(
+          "flex flex-col gap-4 sm:flex-row sm:items-center",
+          embedded ? "sm:justify-end" : "sm:justify-between",
+        )}
+      >
+        {embedded ? null : (
+          <div className="flex items-center gap-3">
+            <Image
+              src="/google-cloud.svg"
+              alt=""
+              width={28}
+              height={28}
+              className="size-7 shrink-0"
+            />
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-base font-semibold tracking-tight text-fg">Google Cloud</h2>
+                {integrations.length ? (
+                  <span className="font-mono text-[10px] text-fg-4">
+                    {integrations.length} identities
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-[12.5px] text-fg-3">
+                Keyless gcloud access through Workload Identity Federation.
+              </p>
             </div>
-            <p className="mt-0.5 text-[12.5px] text-fg-3">
-              Keyless gcloud access through Workload Identity Federation.
-            </p>
           </div>
-        </div>
+        )}
         <Button
           type="button"
           size="sm"
@@ -507,13 +516,10 @@ export function GoogleCloudConnection() {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center px-6 py-10 text-center">
-          <Image src="/google-cloud.svg" alt="" width={32} height={32} className="size-8" />
-          <p className="mt-4 text-sm font-semibold text-fg">No Google Cloud identities</p>
-          <p className="mt-1 max-w-md text-[13px] leading-relaxed text-fg-3">
-            Connect a narrowly scoped service account without downloading or storing a JSON key.
-          </p>
-        </div>
+        <p className="rounded-lg border border-dashed border-line px-4 py-3 text-[13px] text-fg-3">
+          <span className="text-fg-2">No Google Cloud identity yet.</span> Connect a narrowly scoped
+          service account without storing a JSON key.
+        </p>
       )}
     </section>
   );

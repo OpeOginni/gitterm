@@ -25,7 +25,7 @@ export class DeviceCodeService {
   /**
    * Exchange an approved device code for a user API token (`gt_...`).
    * The token is identical to one created from the dashboard: DB-backed,
-   * revocable from Settings -> Developer -> API & tokens.
+   * revocable from the dashboard's API tokens page.
    */
   async exchangeDeviceCode(deviceCode: string): Promise<{
     token: string;
