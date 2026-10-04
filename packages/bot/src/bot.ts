@@ -19,6 +19,15 @@ import {
   interpretTypedAnswer,
 } from "./prompt.js";
 import { createLocks, openStateStore, type InFlightRequest, type StateStore } from "./state.js";
+import {
+  minutes,
+  openStatusLine,
+  WAITING_FOR_ANSWER,
+  WAITING_FOR_APPROVAL,
+  WORKING,
+  type StatusLine,
+  type StatusText,
+} from "./status.js";
 import type {
   Bot,
   BotOptions,
@@ -38,7 +47,6 @@ import {
   type WorkspaceManager,
 } from "./workspaces.js";
 
-const STATUS_TICK_MS = 60_000;
 const NETWORK_RETRIES = 5;
 const ERROR_PREVIEW = 1200;
 const RECENT_MESSAGES = 2000;
@@ -50,11 +58,11 @@ const COMMANDS: Record<string, RegExp> = {
   help: /^help$/i,
 };
 
-/** One request: a thread, its status line, and (once created) its run. */
+/** One request: the thread it came from, who asked, and its status line. */
 type Job = {
   key: string;
   thread: ChatThread;
-  statusId: string;
+  status: StatusLine;
   requester: ChatUser;
   repo: Repo;
 };
@@ -66,7 +74,6 @@ type OpenPrompt = {
 };
 
 const threadKeyOf = (thread: ChatThread) => `${thread.channel}:${thread.thread}`;
-const minutes = (ms: number) => Math.max(1, Math.round(ms / 60_000));
 const noop = () => undefined;
 const isClient = (value: BotOptions["gitterm"]): value is GittermClient =>
   typeof value === "object" && value !== null && "runs" in value;
@@ -146,42 +153,6 @@ export function createBot(options: BotOptions): Bot {
 
   const repoFor = (channel: string) => channelRepos.get(channel) ?? defaultRepo;
   const say = (thread: ChatThread, text: string) => adapter.post(thread, text).catch(noop);
-
-  // ── Status line ────────────────────────────────────────────────────────────────────────────
-
-  /** The request's single status message: ticks while the agent works, then is replaced. */
-  function statusLine(job: Job) {
-    const startedAt = Date.now();
-    let text = "Working on it…";
-    let done = false;
-    const render = () => {
-      const elapsed = Date.now() - startedAt;
-      const suffix = elapsed >= STATUS_TICK_MS ? ` (${minutes(elapsed)} min)` : "";
-      return adapter.edit(job.thread, job.statusId, `${text}${suffix}`).catch(noop);
-    };
-    const timer = setInterval(() => void render(), STATUS_TICK_MS);
-    // Prompts can close after the run ended; nothing may overwrite the final line.
-    const end = () => {
-      done = true;
-      clearInterval(timer);
-    };
-    return {
-      set(next: string) {
-        if (done || next === text) return;
-        text = next;
-        void render();
-      },
-      async finish(final: string) {
-        end();
-        await adapter.edit(job.thread, job.statusId, final).catch(noop);
-      },
-      async remove() {
-        end();
-        await adapter.remove(job.thread, job.statusId).catch(noop);
-      },
-      stop: end,
-    };
-  }
 
   // ── Prompts (questions and permissions) ───────────────────────────────────────────────────
 
@@ -283,7 +254,7 @@ export function createBot(options: BotOptions): Bot {
   }
 
   async function follow(job: Job, run: RunRef): Promise<void> {
-    const status = statusLine(job);
+    const { status } = job;
     const entry: { run: RunRef; stoppedBy?: ChatUser } = { run };
     active.set(job.key, entry);
     const startedAt = Date.now();
@@ -295,11 +266,7 @@ export function createBot(options: BotOptions): Bot {
     const relay = async (request: AgentRunInputRequest) => {
       const controller = new AbortController();
       relays.set(request.id, controller);
-      status.set(
-        request.kind === "permission"
-          ? "Waiting for approval below…"
-          : "Waiting for an answer below…",
-      );
+      status.set(request.kind === "permission" ? WAITING_FOR_APPROVAL : WAITING_FOR_ANSWER);
       try {
         const reply = await replyTo(job, request, controller.signal);
         if (controller.signal.aborted) return;
@@ -313,7 +280,7 @@ export function createBot(options: BotOptions): Bot {
         log.warn("Could not relay an agent prompt", { thread: job.key }, error);
       } finally {
         relays.delete(request.id);
-        if (relays.size === 0) status.set("Working on it…");
+        if (relays.size === 0) status.set(WORKING);
       }
     };
 
@@ -372,18 +339,21 @@ export function createBot(options: BotOptions): Bot {
 
   // ── Requests ─────────────────────────────────────────────────────────────────────────────
 
-  async function startRun(job: Job, message: ChatMessage, report: (text: string) => void) {
+  async function startRun(job: Job, message: ChatMessage) {
+    const report = (status: StatusText) => job.status.set(status);
     const workspace = await lock(`repo:${repoKey(job.repo)}`, () =>
       workspaces.ensure(job.repo, report),
     );
-    report("Working on it…");
+    report(WORKING);
     const stored = store.session(job.key);
     // A session from a sandbox that has since been reset cannot be continued.
     const session = stored?.workspaceId === workspace.id ? stored : undefined;
     const history = message.inThread
       ? (await adapter.history(job.thread, session?.lastMessageId)).filter(
           (entry) =>
-            entry.id !== message.id && entry.id !== job.statusId && (!session || !entry.fromBot),
+            entry.id !== message.id &&
+            entry.id !== job.status.messageId &&
+            (!session || !entry.fromBot),
         )
       : [];
     const prompt = buildPrompt({
@@ -427,25 +397,21 @@ export function createBot(options: BotOptions): Bot {
 
   async function handleRequest(message: ChatMessage, repo: Repo) {
     const key = threadKeyOf(message.thread);
-    const statusId = await adapter.post(message.thread, "Working on it…");
-    const job: Job = { key, thread: message.thread, statusId, requester: message.author, repo };
+    const status = await openStatusLine(adapter, message.thread);
+    const job: Job = { key, thread: message.thread, status, requester: message.author, repo };
     const request: InFlightRequest = {
       thread: job.thread,
-      statusId,
+      ...(status.messageId ? { statusId: status.messageId } : {}),
       requester: job.requester,
       repo: repoKey(repo),
     };
     await store.setInFlight(key, request);
     let run: AgentRun;
     try {
-      run = await startRun(
-        job,
-        message,
-        (text) => void adapter.edit(job.thread, statusId, text).catch(noop),
-      );
+      run = await startRun(job, message);
     } catch (error) {
       log.error("Could not start an agent run", { thread: key }, error);
-      await adapter.edit(job.thread, statusId, describeFailure(error)).catch(noop);
+      await status.finish(describeFailure(error));
       await store.setInFlight(key, undefined);
       return;
     }
@@ -523,20 +489,19 @@ export function createBot(options: BotOptions): Bot {
     for (const [key, request] of Object.entries(store.inFlight())) {
       const repo = parseRepo(request.repo);
       if (!request.run) {
-        await adapter
-          .edit(
-            request.thread,
-            request.statusId,
-            "I restarted before this started. Please mention me again.",
-          )
-          .catch(noop);
+        const lost = "I restarted before this started. Please mention me again.";
+        await (
+          request.statusId
+            ? adapter.edit(request.thread, request.statusId, lost)
+            : adapter.post(request.thread, lost)
+        ).catch(noop);
         await store.setInFlight(key, undefined);
         continue;
       }
       const job: Job = {
         key,
         thread: request.thread,
-        statusId: request.statusId,
+        status: await openStatusLine(adapter, request.thread, request.statusId),
         requester: request.requester,
         repo,
       };

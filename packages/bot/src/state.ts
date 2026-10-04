@@ -13,7 +13,8 @@ export type ThreadSession = {
 /** A request being worked on, so a restarted bot can pick its run up again. */
 export type InFlightRequest = {
   thread: ChatThread;
-  statusId: string;
+  /** The status message; absent when the platform showed a native indicator instead. */
+  statusId?: string;
   requester: ChatUser;
   repo: string;
   /** Set once the run exists; before that a restart can only report the request as lost. */

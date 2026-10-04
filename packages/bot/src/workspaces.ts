@@ -1,4 +1,5 @@
 import type { Connection, GittermClient, Workspace } from "@gitterm/sdk";
+import type { StatusText } from "./status.js";
 import type { BotLogger, RepoTarget, WorkspaceOverrides } from "./types.js";
 
 export type Repo = { url: string; branch: string | undefined };
@@ -70,7 +71,7 @@ const RESUME_TIMEOUT_MS = 5 * 60_000;
 
 export type WorkspaceManager = {
   /** The repository's sandbox, found by its tags or created, and running. */
-  ensure(repo: Repo, progress: (text: string) => void): Promise<Workspace>;
+  ensure(repo: Repo, progress: (status: StatusText) => void): Promise<Workspace>;
   /** The repository's sandbox, if there is one, without waking it. */
   find(repo: Repo): Promise<Workspace | null>;
   /** Terminate the repository's sandbox; the next request creates a fresh one. */
@@ -134,10 +135,13 @@ export function createWorkspaceManager(input: {
     async ensure(repo, progress) {
       let workspace = await find(repo);
       if (!workspace) {
-        progress(`Creating a sandbox for ${repoLabel(repo)}. The first start takes a few minutes…`);
+        progress({
+          message: `Creating a sandbox for ${repoLabel(repo)}. The first start takes a few minutes…`,
+          indicator: `is creating a sandbox for ${repoLabel(repo)} (the first start takes a few minutes)…`,
+        });
         workspace = await create(repo);
       } else if (workspace.status === "paused") {
-        progress("Waking up the sandbox…");
+        progress({ message: "Waking up the sandbox…", indicator: "is waking up the sandbox…" });
       }
       const running = await gitterm.workspaces.ensureRunning(workspace.id, {
         timeoutMs: RESUME_TIMEOUT_MS,

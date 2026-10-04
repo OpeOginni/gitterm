@@ -45,6 +45,9 @@ A `.env` file in the working directory is loaded too.
   the thread continues it with full context. Anyone in the thread can follow up, and messages
   posted between mentions are passed along as context. Threads work in parallel; messages within
   one thread wait their turn.
+- **Native progress.** While it works, Slack shows _“Acme Agent is working on it…”_ under the
+  thread, the same indicator Slack's AI apps use, with the elapsed time. Workspaces that refuse it
+  get a status message the bot keeps up to date instead.
 - **It asks back.** Agent questions appear as a card with a button per option (checkboxes for
   multiple choice, a dialog for a written answer). Tool approvals show _Allow once_, _Always
   allow_, and _Deny_. The person who asked can also just reply in the thread with an option

@@ -55,3 +55,7 @@ await createBot({ adapter, repo: "https://github.com/acme/app" }).start();
 The engine reports a message to the agent only when `mentioned` is true. Other thread replies
 answer an open prompt when they come from the person who asked. Every message id must be unique
 within its thread, and `history(thread, after)` must return only messages after `after`.
+
+Two adapter methods are optional: `acknowledge(message)` reacts to an accepted message, and
+`indicate(thread, status)` shows a native "is working…" indicator instead of a status message
+(`""` hides it; resolve `false` to fall back to status messages).

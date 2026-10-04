@@ -69,6 +69,8 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
   const names = new Map<string, string>();
   /** Ticked checkboxes of open multi-select questions, submitted with the Submit button. */
   const ticked = new Map<string, number[]>();
+  /** Cleared once Slack refuses the native status indicator; status messages are used instead. */
+  let indicatorAvailable = true;
   let teamId = "";
   let botUserId = "";
 
@@ -342,6 +344,30 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         text: "",
         attachments: [settledAttachment(prompt, outcome)],
       });
+    },
+
+    // "Acme Agent is working on it…" under the thread, like Slack's own AI apps. Channel apps
+    // only need chat:write for it.
+    async indicate(thread, status) {
+      if (!indicatorAvailable) return false;
+      try {
+        await client.assistant.threads.setStatus({
+          channel_id: thread.channel,
+          thread_ts: thread.thread,
+          status,
+        });
+        return true;
+      } catch (error) {
+        // Slack said no (scope, plan, policy): stop asking. A network error only skips this call.
+        if ((error as { code?: string }).code === "slack_webapi_platform_error") {
+          indicatorAvailable = false;
+          console.warn(
+            "Slack refused the native status indicator; using status messages instead",
+            error,
+          );
+        }
+        return false;
+      }
     },
 
     async acknowledge(message) {

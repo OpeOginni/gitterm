@@ -136,7 +136,7 @@ function fakeGitterm(options: { workspaces?: Workspace[]; connections?: Connecti
   return { client: client as unknown as GittermClient, calls, stream: streamFor };
 }
 
-function fakeAdapter(history: HistoryMessage[] = []) {
+function fakeAdapter(history: HistoryMessage[] = [], indicator?: boolean) {
   let events!: ChatEvents;
   const log = {
     posts: [] as string[],
@@ -145,6 +145,7 @@ function fakeAdapter(history: HistoryMessage[] = []) {
     replies: [] as Array<{ markdown: string; footer: string }>,
     prompts: [] as ChatPrompt[],
     settled: [] as string[],
+    indicators: [] as string[],
   };
   const adapter: ChatAdapter = {
     platform: "test",
@@ -177,6 +178,14 @@ function fakeAdapter(history: HistoryMessage[] = []) {
     async settle(_thread, _id, _prompt, outcome) {
       log.settled.push(outcome);
     },
+    ...(indicator === undefined
+      ? {}
+      : {
+          async indicate(_thread: ChatThread, status: string) {
+            log.indicators.push(status);
+            return indicator;
+          },
+        }),
   };
   const send = (message: Partial<ChatMessage> & { id: string; text: string }) =>
     events.message({
@@ -506,5 +515,74 @@ describe("createBot", () => {
     chat.send({ id: "100", text: "hello" });
     await tick();
     expect(chat.log.posts).toEqual([]);
+  });
+
+  test("uses the native indicator instead of a status message when the platform has one", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter([], true);
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "pick one" });
+    await until(() => gitterm.calls.runs.length === 1);
+    gitterm.stream("run1").push({
+      type: "input.required",
+      run: run("run1", "awaiting_input"),
+      request: {
+        id: "perm1",
+        kind: "permission",
+        createdAt: null,
+        toolCallId: null,
+        permission: "bash",
+        patterns: [],
+        always: [],
+        title: "bash: ls",
+      },
+    });
+    await until(() => chat.log.prompts.length === 1);
+    chat.events().answer(chat.log.prompts[0]!.id, { kind: "permission", response: "once" }, alice);
+    await until(() => gitterm.calls.responses.length === 1);
+    gitterm.stream("run1").push({
+      type: "run.completed",
+      run: run("run1", "completed", { finalText: "Done" }),
+    });
+    await until(() => chat.log.replies.length === 1);
+    await until(() => chat.log.indicators.at(-1) === "", "indicator cleared");
+
+    expect(chat.log.posts).toEqual([]);
+    expect(chat.log.indicators).toEqual([
+      "is working on it…",
+      "is creating a sandbox for acme/app (the first start takes a few minutes)…",
+      "is working on it…",
+      "", // hidden while the approval prompt waits
+      "is working on it…",
+      "", // cleared once the answer is posted
+    ]);
+  });
+
+  test("falls back to a status message when the platform refuses the indicator", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter([], false);
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "hello" });
+    await until(() => gitterm.calls.runs.length === 1);
+    expect(chat.log.posts[0]).toBe("Working on it…");
+    gitterm.stream("run1").push({
+      type: "run.failed",
+      run: run("run1", "failed", { error: "model unavailable" }),
+    });
+    await until(() => chat.log.edits.get("s1")?.includes("model unavailable") === true);
   });
 });

@@ -100,6 +100,12 @@ export interface ChatAdapter {
   ask(thread: ChatThread, prompt: ChatPrompt): Promise<string>;
   /** Replace the prompt's controls with its outcome once it is answered or abandoned. */
   settle(thread: ChatThread, messageId: string, prompt: ChatPrompt, outcome: string): Promise<void>;
+  /**
+   * Show the platform's native "working" indicator in the thread (e.g. "Acme Agent is working
+   * on it…"); an empty status hides it. Resolve false when the platform refuses, and the engine
+   * keeps a status message instead. Optional.
+   */
+  indicate?(thread: ChatThread, status: string): Promise<boolean>;
   /** React to an accepted message (e.g. 👀) so people know it was seen while it waits its turn. */
   acknowledge?(message: ChatMessage): Promise<void>;
 }
