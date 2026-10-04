@@ -1,0 +1,45 @@
+{
+  "name": "@gitterm/bot",
+  "version": "0.1.0",
+  "description": "Chat-platform-agnostic engine for GitTerm agent bots: one sandbox per repository, one agent session per thread",
+  "keywords": [
+    "agent",
+    "bot",
+    "gitterm",
+    "opencode"
+  ],
+  "homepage": "https://gitterm.dev",
+  "license": "MIT",
+  "author": "Opeyemi Oginni",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --packages external && tsc -p tsconfig.build.json",
+    "prepublishOnly": "bun run check-types && bun run build",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gitterm/sdk": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.6",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

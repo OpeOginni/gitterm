@@ -1,0 +1,52 @@
+{
+  "name": "@gitterm/slack-bot",
+  "version": "0.1.0",
+  "description": "Slack bot that runs a coding agent on your repository in a GitTerm sandbox",
+  "keywords": [
+    "agent",
+    "bot",
+    "gitterm",
+    "opencode",
+    "slack"
+  ],
+  "homepage": "https://gitterm.dev",
+  "license": "MIT",
+  "author": "Opeyemi Oginni",
+  "bin": {
+    "gitterm-slack-bot": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "bun --watch src/cli.ts",
+    "build": "rm -rf dist && bun build src/index.ts src/cli.ts --outdir dist --target node --format esm --packages external && tsc -p tsconfig.build.json",
+    "prepublishOnly": "bun run check-types && bun run build",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gitterm/bot": "workspace:^",
+    "@gitterm/sdk": "workspace:^",
+    "@slack/bolt": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.6",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
