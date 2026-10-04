@@ -32,10 +32,10 @@
     "access": "public"
   },
   "scripts": {
-    "dev": "bun --watch src/cli.ts",
     "build": "rm -rf dist && bun build src/index.ts src/cli.ts --outdir dist --target node --format esm --packages external && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "start:local": "bun --watch src/cli.ts"
   },
   "dependencies": {
     "@gitterm/bot": "workspace:^",
