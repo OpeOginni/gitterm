@@ -94,11 +94,11 @@ export function AccountSection({ currentPlan }: { currentPlan: UserPlan }) {
   return (
     <div className="space-y-6">
       <ProfileCard currentPlan={currentPlan} />
-      <AccountPart id="billing" label="Plan and billing">
-        <BillingSection currentPlan={currentPlan} />
-      </AccountPart>
       <AccountPart id="usage" label="Usage">
         <UsageSection />
+      </AccountPart>
+      <AccountPart id="billing" label="Plan and billing">
+        <BillingSection currentPlan={currentPlan} />
       </AccountPart>
       <DeleteAccountSection />
     </div>
