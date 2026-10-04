@@ -9,6 +9,7 @@ import type {
   AgentRunReply,
   Connection,
   GittermClient,
+  ModelCredential,
   Workspace,
 } from "@gitterm/sdk";
 import { createBot } from "./bot.js";
@@ -79,7 +80,13 @@ function run(id: string, status: AgentRun["status"], extra: Partial<AgentRun> = 
   };
 }
 
-function fakeGitterm(options: { workspaces?: Workspace[]; connections?: Connection[] } = {}) {
+function fakeGitterm(
+  options: {
+    workspaces?: Workspace[];
+    connections?: Connection[];
+    credentials?: ModelCredential[];
+  } = {},
+) {
   const workspaces = [...(options.workspaces ?? [])];
   const streams = new Map<string, ReturnType<typeof stream<AgentRunEvent>>>();
   const calls = {
@@ -120,6 +127,7 @@ function fakeGitterm(options: { workspaces?: Workspace[]; connections?: Connecti
       terminate: async () => ({ workspace: null, cleanupInBackground: false }),
     },
     integrations: { connections: { list: async () => options.connections ?? [] } },
+    credentials: { list: async () => options.credentials ?? [] },
     runs: {
       create: async (input: Record<string, unknown>) => {
         calls.runs.push(input);
@@ -619,5 +627,31 @@ describe("createBot", () => {
     await until(() => chat.log.replies.length === 1, "reply after restart");
     await tick();
     expect(chat.log.replies).toHaveLength(1);
+  });
+
+  test("a chosen model ships only its provider's credential and is used for every run", async () => {
+    const gitterm = fakeGitterm({
+      credentials: [
+        { logicalProviderKey: "anthropic", label: "work", isActive: true, isDefault: true },
+        { logicalProviderKey: "openai", label: "home", isActive: true, isDefault: true },
+      ] as ModelCredential[],
+    });
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      model: "anthropic/claude-sonnet-5-5",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "hello" });
+    await until(() => gitterm.calls.runs.length === 1);
+    expect(gitterm.calls.created[0]?.models).toEqual({
+      default: "anthropic/claude-sonnet-5-5",
+      providers: { anthropic: { source: "default" } },
+    });
+    expect(gitterm.calls.runs[0]?.model).toBe("anthropic/claude-sonnet-5-5");
   });
 });

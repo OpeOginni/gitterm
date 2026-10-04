@@ -1,6 +1,12 @@
-import type { Connection, GittermClient, Workspace } from "@gitterm/sdk";
+import type {
+  Connection,
+  GittermClient,
+  ModelCredential,
+  Workspace,
+  WorkspaceModelsInput,
+} from "@gitterm/sdk";
 import type { StatusText } from "./status.js";
-import type { BotLogger, RepoTarget, WorkspaceOverrides } from "./types.js";
+import type { BotLogger, ModelChoice, RepoTarget, WorkspaceOverrides } from "./types.js";
 
 export type Repo = { url: string; branch: string | undefined };
 
@@ -67,6 +73,35 @@ export function pickConnections(
   return picked;
 }
 
+/**
+ * Credentials for exactly the chosen model's provider, so a sandbox shared by a whole channel
+ * holds one model key instead of every account on the dashboard. A provider without a saved
+ * credential (free or ambient-auth models) gets none; a run that needs one then fails with
+ * `MODEL_CREDENTIAL_REQUIRED` naming it.
+ */
+export function modelsFor(model: ModelChoice, saved: ModelCredential[]): WorkspaceModelsInput {
+  const provider = model.id.split("/")[0] ?? "";
+  if (!provider || provider === model.id) {
+    throw new Error(`The model "${model.id}" must look like provider/model`);
+  }
+  const only = (source: NonNullable<WorkspaceModelsInput["providers"]>[string]) => ({
+    default: model.id,
+    providers: { [provider]: source },
+  });
+  if (model.apiKey) return only({ source: "apiKey", apiKey: model.apiKey });
+  if (model.credential) return only({ source: "saved", label: model.credential });
+  const forProvider = saved.filter(
+    (credential) => credential.logicalProviderKey === provider && credential.isActive,
+  );
+  if (forProvider.some((credential) => credential.isDefault)) return only({ source: "default" });
+  if (forProvider.length > 0) {
+    throw new Error(
+      `Several saved ${provider} credentials and none is the default; pick one with \`credential\` (${forProvider.map((credential) => JSON.stringify(credential.label)).join(", ")})`,
+    );
+  }
+  return { default: model.id };
+}
+
 const RESUME_TIMEOUT_MS = 5 * 60_000;
 
 export type WorkspaceManager = {
@@ -83,6 +118,7 @@ export function createWorkspaceManager(input: {
   platform: string;
   scope: string;
   connections: "auto" | string[];
+  model: ModelChoice | undefined;
   instructions: string;
   overrides: WorkspaceOverrides | undefined;
   log: BotLogger;
@@ -110,7 +146,13 @@ export function createWorkspaceManager(input: {
       repo,
       input.connections,
     );
-    log.info(`Creating a GitTerm sandbox for ${repoKey(repo)}`, { connections });
+    const models =
+      input.overrides?.models ??
+      (input.model ? modelsFor(input.model, await gitterm.credentials.list()) : undefined);
+    log.info(`Creating a GitTerm sandbox for ${repoKey(repo)}`, {
+      connections,
+      model: input.model?.id ?? "dashboard defaults",
+    });
     const name = repoLabel(repo).split("/").pop() ?? "repo";
     const { workspace } = await gitterm.workspaces.create({
       ...input.overrides,
@@ -120,6 +162,7 @@ export function createWorkspaceManager(input: {
       agent: "opencode",
       metadata: tags(repo),
       connections,
+      ...(models ? { models } : {}),
       additionalAgentInstructions: [
         input.instructions,
         input.overrides?.additionalAgentInstructions,

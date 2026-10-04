@@ -15,6 +15,7 @@ export type {
   ChatThread,
   ChatUser,
   HistoryMessage,
+  ModelChoice,
   RepoTarget,
   WorkspaceOverrides,
 } from "./types.js";

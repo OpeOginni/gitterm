@@ -113,6 +113,15 @@ export interface ChatAdapter {
 /** A repository, optionally with a branch: `https://github.com/acme/app` or `…/app#develop`. */
 export type RepoTarget = string | { url: string; branch?: string };
 
+export type ModelChoice = {
+  /** OpenCode `provider/model`, e.g. `anthropic/claude-sonnet-5-5`. */
+  id: string;
+  /** Label of a saved dashboard credential. Default: the provider's default credential. */
+  credential?: string;
+  /** An API key for this bot only; injected into the sandbox, never saved in the dashboard. */
+  apiKey?: string;
+};
+
 /** Workspace settings the bot does not decide itself. */
 export type WorkspaceOverrides = Omit<
   WorkspaceCreateInput,
@@ -135,8 +144,12 @@ export type BotOptions = {
    * MCP and Executor connection.
    */
   connections?: "auto" | string[];
-  /** OpenCode `provider/model` for every run. Defaults to the workspace default. */
-  model?: string;
+  /**
+   * The model for every run, as OpenCode `provider/model`. Only that provider's credential
+   * reaches new sandboxes: its dashboard default, the saved credential labelled `credential`, or
+   * an inline `apiKey`. Without a model, sandboxes get every saved dashboard credential.
+   */
+  model?: string | ModelChoice;
   /** Extra agent instructions, appended to the bot's own. Applies to new sandboxes. */
   instructions?: string;
   /** Provider, image, setup, OpenCode config, and other workspace settings for new sandboxes. */

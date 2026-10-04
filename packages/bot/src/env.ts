@@ -56,7 +56,20 @@ export function botOptionsFromEnv(env: Env = process.env): Omit<BotOptions, "ada
       connections === "none" ? [] : connections.split(",").map((value) => value.trim());
   }
   const model = read(env, "GITTERM_BOT_MODEL");
-  if (model) options.model = model;
+  const credential = read(env, "GITTERM_BOT_MODEL_CREDENTIAL");
+  const apiKey = read(env, "GITTERM_BOT_MODEL_API_KEY");
+  if ((credential || apiKey) && !model) {
+    throw new Error(
+      "GITTERM_BOT_MODEL_CREDENTIAL and GITTERM_BOT_MODEL_API_KEY need GITTERM_BOT_MODEL",
+    );
+  }
+  if (model) {
+    options.model = {
+      id: model,
+      ...(credential ? { credential } : {}),
+      ...(apiKey ? { apiKey } : {}),
+    };
+  }
   const instructions = [
     read(env, "GITTERM_BOT_INSTRUCTIONS"),
     readInstructionsFile(read(env, "GITTERM_BOT_INSTRUCTIONS_FILE")),

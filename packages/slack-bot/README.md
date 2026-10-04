@@ -87,22 +87,22 @@ Every setting works from code and from the terminal. In code, pass it to `create
 the command line, set the environment variable (a `.env` file in the working directory is
 loaded) or the flag.
 
-| Option           | Environment variable / flag                                                        | Meaning                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `botToken`       | `SLACK_BOT_TOKEN`                                                                  | Bot token (`xoxb-…`).                                                                         |
-| `appToken`       | `SLACK_APP_TOKEN`                                                                  | App-level token with `connections:write` (`xapp-…`).                                          |
-| `app`            | —                                                                                  | A Bolt app you already run; see [below](#add-it-to-a-bot-you-already-run).                    |
-| `gitterm`        | `GITTERM_API_TOKEN`, `GITTERM_SERVER_URL`                                          | `{ token, serverUrl }` or a client. Falls back to the `gitterm login` config.                 |
-| `repo`           | `GITTERM_BOT_REPO`, `--repo`                                                       | Repository for every channel; `url#branch` picks a branch.                                    |
-| `channels`       | `GITTERM_BOT_CHANNELS` (`C0123=https://github.com/acme/api,…`)                     | Per-channel repositories. Without `repo`, the bot answers only in these channels.             |
-| `connections`    | `GITTERM_BOT_CONNECTIONS` (`auto`, `none`, or ids/names)                           | GitTerm connections for new sandboxes. Default `auto`.                                        |
-| `model`          | `GITTERM_BOT_MODEL`, `--model`                                                     | OpenCode `provider/model` for every run.                                                      |
-| `instructions`   | `GITTERM_BOT_INSTRUCTIONS`, `GITTERM_BOT_INSTRUCTIONS_FILE`, `--instructions-file` | What the agent should know and how it should behave; see [Instructions](#instructions).       |
-| `workspace`      | `GITTERM_BOT_PROVIDER` (provider only)                                             | Any `workspaces.create()` setting for new sandboxes: provider, image, setup, OpenCode config. |
-| `stateFile`      | `GITTERM_BOT_STATE_FILE`                                                           | Where thread sessions are kept. Default `.gitterm-bot/slack.json`.                            |
-| `runTimeoutMs`   | `GITTERM_BOT_RUN_TIMEOUT_MINUTES`                                                  | Give up on a request after this long, including time waiting for answers. Default 60 min.     |
-| `inputTimeoutMs` | —                                                                                  | How long a question or approval waits for an answer. Default 30 min.                          |
-| `logger`         | —                                                                                  | Where the bot logs. Default `console`.                                                        |
+| Option           | Environment variable / flag                                                                 | Meaning                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `botToken`       | `SLACK_BOT_TOKEN`                                                                           | Bot token (`xoxb-…`).                                                                                       |
+| `appToken`       | `SLACK_APP_TOKEN`                                                                           | App-level token with `connections:write` (`xapp-…`).                                                        |
+| `app`            | —                                                                                           | A Bolt app you already run; see [below](#add-it-to-a-bot-you-already-run).                                  |
+| `gitterm`        | `GITTERM_API_TOKEN`, `GITTERM_SERVER_URL`                                                   | `{ token, serverUrl }` or a client. Falls back to the `gitterm login` config.                               |
+| `repo`           | `GITTERM_BOT_REPO`, `--repo`                                                                | Repository for every channel; `url#branch` picks a branch.                                                  |
+| `channels`       | `GITTERM_BOT_CHANNELS` (`C0123=https://github.com/acme/api,…`)                              | Per-channel repositories. Without `repo`, the bot answers only in these channels.                           |
+| `connections`    | `GITTERM_BOT_CONNECTIONS` (`auto`, `none`, or ids/names)                                    | GitTerm connections for new sandboxes. Default `auto`.                                                      |
+| `model`          | `GITTERM_BOT_MODEL`, `--model`, `GITTERM_BOT_MODEL_CREDENTIAL`, `GITTERM_BOT_MODEL_API_KEY` | `provider/model` for every run; only that provider's credential reaches the sandbox. See [Models](#models). |
+| `instructions`   | `GITTERM_BOT_INSTRUCTIONS`, `GITTERM_BOT_INSTRUCTIONS_FILE`, `--instructions-file`          | What the agent should know and how it should behave; see [Instructions](#instructions).                     |
+| `workspace`      | `GITTERM_BOT_PROVIDER` (provider only)                                                      | Any `workspaces.create()` setting for new sandboxes: provider, image, setup, OpenCode config.               |
+| `stateFile`      | `GITTERM_BOT_STATE_FILE`                                                                    | Where thread sessions are kept. Default `.gitterm-bot/slack.json`.                                          |
+| `runTimeoutMs`   | `GITTERM_BOT_RUN_TIMEOUT_MINUTES`                                                           | Give up on a request after this long, including time waiting for answers. Default 60 min.                   |
+| `inputTimeoutMs` | —                                                                                           | How long a question or approval waits for an answer. Default 30 min.                                        |
+| `logger`         | —                                                                                           | Where the bot logs. Default `console`.                                                                      |
 
 `auto` connections attach the GitHub connection for the repository's owner (or the deployment's
 shared one) and every connected MCP and Executor connection. `workspace` takes any
@@ -130,6 +130,23 @@ npx @gitterm/slack-bot --repo https://github.com/acme/app --instructions-file bo
 Instructions are written into a sandbox when it is created; after changing them, mention the bot
 with `reset`. Project knowledge that belongs with the code (how to run tests, where things live)
 is better in an `AGENTS.md` in the repository, which OpenCode reads on its own.
+
+### Models
+
+Pick the model and the bot hands the sandbox that one provider's credential, nothing else. A
+sandbox anyone in the channel can drive should not hold every model account on your dashboard.
+
+```ts
+model: "anthropic/claude-sonnet-5-5"                                    // the provider's default saved credential
+model: { id: "anthropic/claude-sonnet-5-5", credential: "team" }        // a saved credential by label
+model: { id: "anthropic/claude-sonnet-5-5", apiKey: process.env.KEY }   // a key for this bot only, never saved
+```
+
+On the command line: `GITTERM_BOT_MODEL`, plus `GITTERM_BOT_MODEL_CREDENTIAL` or
+`GITTERM_BOT_MODEL_API_KEY`. Models that need no key (such as OpenCode's free models) get no
+credential. Without a model, the sandbox gets every saved dashboard credential and the dashboard's
+default model. Credentials are set when a sandbox is created; after switching to another
+provider, mention the bot with `reset`.
 
 ## Running from code
 

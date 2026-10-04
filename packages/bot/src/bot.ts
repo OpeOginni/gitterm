@@ -134,6 +134,7 @@ export function createBot(options: BotOptions): Bot {
   const runTimeoutMs = options.runTimeoutMs ?? 60 * 60_000;
   const inputTimeoutMs = options.inputTimeoutMs ?? 30 * 60_000;
   const defaultRepo = options.repo ? parseRepo(options.repo) : undefined;
+  const model = typeof options.model === "string" ? { id: options.model } : options.model;
   const channelRepos = new Map(
     Object.entries(options.channels ?? {}).map(([channel, repo]) => [channel, parseRepo(repo)]),
   );
@@ -380,7 +381,7 @@ export function createBot(options: BotOptions): Bot {
       prompt: prompt.text,
       ...(attachments.length ? { attachments } : {}),
       title: (message.text || `Message from ${adapter.displayName}`).slice(0, 120),
-      ...(options.model ? { model: options.model } : {}),
+      ...(model ? { model: model.id } : {}),
       ...(session
         ? {
             context: {
@@ -546,6 +547,7 @@ export function createBot(options: BotOptions): Bot {
         platform: adapter.platform,
         scope,
         connections: options.connections ?? "auto",
+        model,
         instructions: agentInstructions(adapter.displayName, options.instructions),
         overrides: options.workspace,
         log,

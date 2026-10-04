@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentQuestion, Connection } from "@gitterm/sdk";
+import type { AgentQuestion, Connection, ModelCredential } from "@gitterm/sdk";
 import { botOptionsFromEnv } from "./env.js";
 import { splitMessage, tablesToCode } from "./markdown.js";
 import { buildPrompt, interpretPermissionReply, interpretTypedAnswer } from "./prompt.js";
 import type { ChatFile } from "./types.js";
-import { parseRepo, pickConnections, repoLabel } from "./workspaces.js";
+import { modelsFor, parseRepo, pickConnections, repoLabel } from "./workspaces.js";
 
 const image = (id: string, size = 100): ChatFile => ({
   id,
@@ -189,4 +189,59 @@ describe("botOptionsFromEnv", () => {
       "Could not read the instructions file",
     );
   });
+});
+
+describe("modelsFor", () => {
+  const credential = (patch: Partial<ModelCredential>) =>
+    ({
+      logicalProviderKey: "anthropic",
+      label: "work",
+      isActive: true,
+      isDefault: false,
+      ...patch,
+    }) as ModelCredential;
+  const model = { id: "anthropic/claude-sonnet-5-5" };
+
+  test("ships only the chosen provider's default credential", () => {
+    expect(
+      modelsFor(model, [
+        credential({ isDefault: true }),
+        credential({ logicalProviderKey: "openai", isDefault: true }),
+      ]),
+    ).toEqual({
+      default: "anthropic/claude-sonnet-5-5",
+      providers: { anthropic: { source: "default" } },
+    });
+  });
+
+  test("a label or an inline key picks the credential explicitly", () => {
+    expect(modelsFor({ ...model, credential: "team" }, []).providers).toEqual({
+      anthropic: { source: "saved", label: "team" },
+    });
+    expect(modelsFor({ ...model, apiKey: "sk-1" }, []).providers).toEqual({
+      anthropic: { source: "apiKey", apiKey: "sk-1" },
+    });
+  });
+
+  test("a provider with no saved credential gets none; several without a default must be chosen", () => {
+    expect(modelsFor({ id: "opencode/big-pickle" }, [credential({})])).toEqual({
+      default: "opencode/big-pickle",
+    });
+    expect(() => modelsFor(model, [credential({}), credential({ label: "home" })])).toThrow(
+      'pick one with `credential` ("work", "home")',
+    );
+    expect(() => modelsFor({ id: "sonnet" }, [])).toThrow("provider/model");
+  });
+});
+
+test("env reads the model with its credential", () => {
+  expect(
+    botOptionsFromEnv({
+      GITTERM_BOT_MODEL: "openai/gpt-5",
+      GITTERM_BOT_MODEL_CREDENTIAL: "team",
+    }).model,
+  ).toEqual({ id: "openai/gpt-5", credential: "team" });
+  expect(() => botOptionsFromEnv({ GITTERM_BOT_MODEL_API_KEY: "sk" })).toThrow(
+    "need GITTERM_BOT_MODEL",
+  );
 });
