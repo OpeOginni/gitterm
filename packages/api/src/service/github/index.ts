@@ -8,6 +8,10 @@ import {
 } from "@gitterm/db/schema/integrations";
 import { logger } from "../../utils/logger";
 import { githubRepositoryAppConfig } from "./config";
+import { githubCommitIdentity, type GitIdentity } from "../git-commit-identity";
+
+// The app's bot account never changes; only its public name and noreply address are kept.
+let commitIdentity: { appId: string; identity: Promise<GitIdentity> } | undefined;
 
 /**
  * GitHub API error types
@@ -151,8 +155,10 @@ export async function resolveGitHubBranchHeadWithToken(
  */
 export class GitHubAppService {
   private appOctokit: Octokit;
+  private appId: string;
 
   constructor(config: { appId: string; privateKey: string }) {
+    this.appId = config.appId;
     // Decode and prepare the private key
     const privateKey = decodePrivateKey(config.privateKey);
 
@@ -170,6 +176,31 @@ export class GitHubAppService {
     const { data } = await this.appOctokit.apps.getAuthenticated();
     if (!data?.id || !data.slug) throw new Error("GitHub App has no ID or slug");
     return { id: String(data.id), slug: data.slug };
+  }
+
+  /** `<slug>[bot]` and its noreply address: the committer on GitTerm's commits. */
+  async getCommitIdentity(): Promise<GitIdentity> {
+    if (commitIdentity?.appId !== this.appId) {
+      const identity = (async () => {
+        // Authenticated, so private apps (typical when self-hosting) resolve too.
+        const request = { signal: AbortSignal.timeout(3_000) };
+        const { data: app } = await this.appOctokit.apps.getAuthenticated({ request });
+        if (!app?.slug) throw new Error("GitHub App has no slug");
+        const { data } = await new Octokit().users.getByUsername({
+          username: `${app.slug}[bot]`,
+          request,
+        });
+        if (data.type !== "Bot") throw new Error("GitHub App bot identity mismatch");
+        // The bot user ID differs from the app ID and the installation ID.
+        return githubCommitIdentity({ id: data.id, login: data.login });
+      })();
+      commitIdentity = { appId: this.appId, identity };
+      // A failure is retried by the next workspace, not cached.
+      identity.catch(() => {
+        if (commitIdentity?.identity === identity) commitIdentity = undefined;
+      });
+    }
+    return commitIdentity.identity;
   }
 
   /**
@@ -358,7 +389,7 @@ export class GitHubAppService {
   }
 
   /**
-   * Get a user-to-server access token for a specific installation
+   * Get a server-to-server installation access token (not a user OAuth token)
    * This token is short-lived (1 hour) and scoped to the installation's permissions
    */
   async getUserToServerToken(

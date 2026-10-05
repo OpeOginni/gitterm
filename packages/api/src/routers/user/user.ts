@@ -40,6 +40,26 @@ async function resolveDefaultCloudProviderId(storedId?: string | null): Promise<
 }
 
 export const userRouter = router({
+  getCommitAttribution: protectedProcedure.query(async ({ ctx }) => {
+    const record = await db.query.user.findFirst({
+      where: eq(user.id, ctx.session.user.id),
+      columns: { showGitTermOnCommits: true },
+    });
+    return { showGitTermOnCommits: record?.showGitTermOnCommits ?? true };
+  }),
+
+  setCommitAttribution: protectedProcedure
+    .input(z.object({ showGitTermOnCommits: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db
+        .update(user)
+        .set({ showGitTermOnCommits: input.showGitTermOnCommits, updatedAt: new Date() })
+        .where(eq(user.id, ctx.session.user.id))
+        .returning({ showGitTermOnCommits: user.showGitTermOnCommits });
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      return updated;
+    }),
+
   getSshPublicKey: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
     if (!userId) {

@@ -7,6 +7,7 @@ import type {
   ChatUser,
   HistoryMessage,
 } from "@gitterm/bot";
+import { downloadImage } from "@gitterm/bot";
 import {
   Client,
   Events,
@@ -72,14 +73,11 @@ const file = (attachment: Attachment): ChatFile => ({
   name: attachment.name,
   mime: attachment.contentType?.split(";")[0] ?? "application/octet-stream",
   size: attachment.size,
-  async download() {
-    const response = await fetch(attachment.url);
-    if (!response.ok) {
-      throw new Error(
-        `Could not download “${attachment.name}” from Discord (HTTP ${response.status})`,
-      );
-    }
-    return Buffer.from(await response.arrayBuffer()).toString("base64");
+  async download(signal) {
+    return downloadImage(attachment.url, {
+      hosts: ["cdn.discordapp.com", "media.discordapp.net"],
+      signal,
+    });
   },
 });
 
@@ -200,6 +198,7 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
       files: [...message.attachments.values()].map(file),
       mentioned,
       inThread: channel.isThread(),
+      tenant: message.guildId!,
     });
   }
 
@@ -274,11 +273,13 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
       await (await thread(location.thread)).messages.delete(messageId);
     },
 
-    async reply(location, markdown, footer) {
+    async reply(location, markdown, footer, delivery) {
       const channel = await thread(location.thread);
       // Agent output never pings anyone.
-      for (const content of answerContents(markdown, footer)) {
-        await channel.send({ content, allowedMentions: NO_MENTIONS });
+      const contents = answerContents(markdown, footer);
+      for (let index = delivery?.sent ?? 0; index < contents.length; index++) {
+        await channel.send({ content: contents[index], allowedMentions: NO_MENTIONS });
+        await delivery?.recordSent(index + 1);
       }
     },
 

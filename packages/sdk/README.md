@@ -304,6 +304,11 @@ running `gh auth login`:
 - Without repository credentials or an integration, GitTerm leaves CLI authentication
   to the environment or the CLI's existing configuration.
 
+Commit attribution is separate from these push credentials. By default the workspace owner
+is the author (their GitHub noreply address when GitHub is linked) and GitTerm is the
+committer: the GitHub App's bot account when the deployment uses an app. **Settings →
+Account → Commit attribution** makes the owner both instead, for new workspaces.
+
 GitTerm supplies `GH_TOKEN` only to the invoked CLI process, so there is no stale
 installation token exported into the agent's long-running environment. Explicit
 `GH_TOKEN` or `GITHUB_TOKEN` environment variables override this CLI authentication;

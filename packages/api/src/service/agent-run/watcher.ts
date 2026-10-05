@@ -58,6 +58,7 @@ type TrackedRun = {
   sessionId: string;
   messageId: string;
   submittedAt: Date | null;
+  deadlineAt: Date | null;
   status: string;
   pendingInputs: string;
   sessionError: string | null;
@@ -128,6 +129,7 @@ class WorkspaceWatcher implements RunWatcherHandle {
       sessionId: run.nativeSessionId,
       messageId: run.nativeMessageId,
       submittedAt: run.submittedAt,
+      deadlineAt: run.deadlineAt,
       status: run.status,
       pendingInputs: JSON.stringify(run.pendingInputs),
       sessionError: null,
@@ -330,8 +332,40 @@ class WorkspaceWatcher implements RunWatcherHandle {
       this.stop();
       return;
     }
+    for (const tracked of Array.from(this.tracked.values())) {
+      if (!tracked.deadlineAt || tracked.deadlineAt.getTime() > Date.now()) continue;
+      // Never rely on a bot host's timer for bounding execution/approval waits.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const target = await getRuntimeTargetForWorkspace(this.workspaceId);
+        if (target.kind === "ok") {
+          await Promise.race([
+            getRuntime(target.target).abort(tracked.sessionId),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error("Cancellation timeout")), 2_000);
+            }),
+          ]);
+        }
+      } catch (error) {
+        // Settle anyway: retrying forever would keep the workspace awake past the deadline.
+        log("warn", "deadline cancellation failed; settling the run as cancelled", {
+          runId: tracked.id,
+          error,
+        });
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+      await settleRun(tracked.id, {
+        status: "cancelled",
+        errorMessage: "Execution deadline exceeded",
+      });
+      this.untrack(tracked.id);
+    }
     const working = [...this.tracked.values()].some(
-      (tracked) => tracked.status === "running" || tracked.status === "retrying",
+      (tracked) =>
+        tracked.status === "running" ||
+        tracked.status === "retrying" ||
+        tracked.status === "awaiting_input",
     );
     if (!working) return;
     await recordWorkspaceActivity(this.workspaceId).catch((error) => {

@@ -114,6 +114,7 @@ export const agentRun = pgTable(
     /** IDs/kinds only in persisted rows; question and permission content is read live. */
     pendingInputs: jsonb("pending_inputs").$type<AgentRunInputRequest[]>().notNull().default([]),
     submittedAt: timestamp("submitted_at"),
+    deadlineAt: timestamp("deadline_at"),
     completedAt: timestamp("completed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

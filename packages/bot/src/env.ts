@@ -67,6 +67,18 @@ export function botOptionsFromEnv(env: Env = process.env): Omit<BotOptions, "ada
   const provider = read(env, "GITTERM_BOT_PROVIDER");
   const channels = read(env, "GITTERM_BOT_CHANNELS");
   const options: Omit<BotOptions, "adapter"> = {};
+  const botId = read(env, "GITTERM_BOT_ID");
+  if (botId) options.botId = botId;
+  const allowedChannels = read(env, "GITTERM_BOT_ALLOWED_CHANNELS");
+  if (allowedChannels) options.allowedChannels = list(allowedChannels);
+  const approvers = read(env, "GITTERM_BOT_APPROVERS");
+  if (approvers) options.approvers = list(approvers);
+  if (read(env, "GITTERM_BOT_ALLOW_ALWAYS") === "true") options.allowAlways = true;
+  if (read(env, "GITTERM_BOT_SHARE_CHANNELS") === "true") options.shareChannels = true;
+  const maxPendingRequests = positive(env, "GITTERM_BOT_MAX_PENDING");
+  if (maxPendingRequests) options.maxPendingRequests = maxPendingRequests;
+  const maxPendingPerUser = positive(env, "GITTERM_BOT_MAX_PENDING_PER_USER");
+  if (maxPendingPerUser) options.maxPendingPerUser = maxPendingPerUser;
   const repo = read(env, "GITTERM_BOT_REPO");
   if (repo) options.repo = repo;
   if (channels) options.channels = parseChannels(channels);
@@ -147,7 +159,7 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
 }
 
 /** The environment variables every bot command line reads, for its usage text. */
-export const BOT_ENV_HELP = `  Settings saved for this bot under Bots in GitTerm load at startup; these override them.
+export const BOT_ENV_HELP = `  Saved policy loads at startup; local settings cannot broaden its users, guests, or channels.
 
   GITTERM_API_TOKEN               The bot's GitTerm token (dashboard → Bots creates one)
   GITTERM_SERVER_URL              Self-hosted GitTerm API URL (default: hosted)
@@ -160,6 +172,12 @@ export const BOT_ENV_HELP = `  Settings saved for this bot under Bots in GitTerm
   GITTERM_BOT_GITHUB_TOKEN        Your own GitHub token instead of a GitTerm GitHub connection
   GITTERM_BOT_CONNECTIONS         Tools besides GitHub, by name: Linear,Sentry
   GITTERM_BOT_ALLOWED_USERS       Only these user ids may use the bot: U012,U034
+  GITTERM_BOT_ID                  Names an unsaved bot's sandboxes (saved bots use their own id)
+  GITTERM_BOT_ALLOWED_CHANNELS    Only these channel ids, whatever the repository routing
+  GITTERM_BOT_APPROVERS           Permission approver ids (default: requester only)
+  GITTERM_BOT_ALLOW_ALWAYS        true enables persistent approvals (default: disabled)
+  GITTERM_BOT_SHARE_CHANNELS      true opts equally trusted channels into a shared sandbox
+  GITTERM_BOT_MAX_PENDING[_PER_USER] Queue bounds (defaults: 20 total, 3 per user)
   GITTERM_BOT_ALLOW_GUESTS        true lets guests and external people use the bot
   GITTERM_BOT_INSTRUCTIONS[_FILE] What the agent should know and how to behave
   GITTERM_BOT_SETUP               Command run before the agent starts, e.g. "pnpm install"

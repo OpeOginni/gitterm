@@ -69,6 +69,7 @@ export type GoogleConnectionDetails = {
 };
 
 export type McpConnectionDetails = {
+  revision?: number;
   integration: "mcp" | "executor";
   url: string;
   authType: "none" | "headers";

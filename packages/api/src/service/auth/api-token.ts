@@ -35,22 +35,27 @@ export type ApiTokenMetadata = {
   lastUsedAt: Date | null;
 };
 
-export async function createApiToken(params: {
-  userId: string;
-  name: string;
-  scopes: ApiTokenScope[];
-  expiresInDays?: number | null;
-}): Promise<{ token: string; record: ApiTokenMetadata }> {
+export async function createApiToken(
+  params: {
+    userId: string;
+    name: string;
+    scopes: ApiTokenScope[];
+    expiresInDays?: number | null;
+    botId?: string;
+  },
+  executor: Pick<typeof db, "insert"> = db,
+): Promise<{ token: string; record: ApiTokenMetadata }> {
   const token = `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString("base64url")}`;
 
   const expiresAt = params.expiresInDays
     ? new Date(Date.now() + params.expiresInDays * 24 * 60 * 60 * 1000)
     : null;
 
-  const [record] = await db
+  const [record] = await executor
     .insert(apiToken)
     .values({
       userId: params.userId,
+      botId: params.botId,
       name: params.name,
       tokenHash: hashToken(token),
       tokenPrefix: token.slice(0, DISPLAY_PREFIX_LENGTH),
@@ -82,9 +87,12 @@ export async function createApiToken(params: {
  * Updates `lastUsedAt` fire-and-forget so verification stays a single
  * round-trip on the hot path.
  */
-export async function verifyApiToken(
-  token: string,
-): Promise<{ tokenId: string; userId: string; scopes: ApiTokenScope[] } | null> {
+export async function verifyApiToken(token: string): Promise<{
+  tokenId: string;
+  userId: string;
+  botId: string | null;
+  scopes: ApiTokenScope[];
+} | null> {
   const [record] = await db
     .select()
     .from(apiToken)
@@ -105,6 +113,7 @@ export async function verifyApiToken(
   return {
     tokenId: record.id,
     userId: record.userId,
+    botId: record.botId,
     scopes: record.scopes as ApiTokenScope[],
   };
 }

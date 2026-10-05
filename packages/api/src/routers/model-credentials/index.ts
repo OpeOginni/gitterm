@@ -59,7 +59,17 @@ export const modelCredentialsRouter = router({
     }
 
     const credentials = await credentialsService.listUserCredentials(userId);
-    return { credentials };
+    return {
+      credentials: ctx.botIdentity
+        ? credentials.filter(
+            (credential) =>
+              credential.logicalProviderKey === ctx.botIdentity!.model.split("/")[0] &&
+              (ctx.botIdentity!.credential
+                ? credential.label === ctx.botIdentity!.credential
+                : credential.isDefault),
+          )
+        : credentials,
+    };
   }),
 
   /**

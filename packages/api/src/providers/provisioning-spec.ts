@@ -29,7 +29,7 @@ export function resolveProvisioningSpec(config: WorkspaceConfig): WorkspaceProvi
         checkoutRef:
           config.repositoryCheckoutRef?.trim() || env.REPO_CHECKOUT_REF?.trim() || undefined,
         name: env.REPO_NAME,
-        authUsername: env.GITHUB_APP_TOKEN ? env.USER_GITHUB_USERNAME : undefined,
+        authUsername: env.GITHUB_APP_TOKEN ? "x-access-token" : undefined,
         authToken: env.GITHUB_APP_TOKEN,
       }
     : undefined;

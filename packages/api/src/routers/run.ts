@@ -73,10 +73,16 @@ export const runRouter = router({
           .optional(),
         /** How long to wait for a `pending` workspace to become `running` before failing. */
         startTimeoutMs: z.number().int().min(1_000).max(240_000).optional(),
+        deadlineAt: z.iso.datetime().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) =>
-      translateAgentError(() => createAgentRun(input, ctx.session.user.id)),
+      translateAgentError(() =>
+        createAgentRun(
+          ctx.botIdentity ? { ...input, model: ctx.botIdentity.model } : input,
+          ctx.session.user.id,
+        ),
+      ),
     ),
 
   list: accountProcedure("run:read")

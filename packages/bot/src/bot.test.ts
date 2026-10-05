@@ -70,7 +70,7 @@ function run(id: string, status: AgentRun["status"], extra: Partial<AgentRun> = 
     title: "",
     status,
     error: null,
-    finalText: null,
+    finalText: status === "completed" ? "" : null,
     pendingInputs: [],
     context: { type: "isolated" },
     createdAt: new Date().toISOString(),
@@ -121,7 +121,7 @@ function fakeGitterm(
       },
       ensureRunning: async (id: string) => {
         calls.ensured.push(id);
-        const workspace = workspaces.find((entry) => entry.id === id)!;
+        const workspace = workspaces.find((entry) => entry.id === id) ?? { id, status: "paused" };
         (workspace as { status: string }).status = "running";
         return { workspace, runtime: {} };
       },
@@ -160,6 +160,7 @@ function fakeGitterm(
     },
     credentials: { list: async () => options.credentials ?? [] },
     runs: {
+      get: async (ref: { id: string }) => run(ref.id, "running"),
       create: async (input: Record<string, unknown>) => {
         calls.runs.push(input);
         return run(`run${calls.runs.length}`, "pending");
@@ -177,7 +178,7 @@ function fakeGitterm(
       },
     },
   };
-  return { client: client as unknown as GittermClient, calls, stream: streamFor };
+  return { client: client as unknown as GittermClient, calls, stream: streamFor, workspaces };
 }
 
 function fakeAdapter(history: HistoryMessage[] = [], indicator?: boolean) {
@@ -278,6 +279,151 @@ const docs = {
 const broken = { ...docs, id: "mcp2", status: "error" } as Connection;
 
 describe("createBot", () => {
+  test("stop cancels cold-start preparation and queued work without submitting a late run", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    let resume!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const ensure = gitterm.client.workspaces.ensureRunning;
+    gitterm.client.workspaces.ensureRunning = async (...args) => {
+      await gate;
+      return ensure(...args);
+    };
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    try {
+      await bot.start();
+      chat.send({ id: "100", text: "first" });
+      await until(() => gitterm.calls.created.length === 1);
+      chat.send({ id: "101", text: "queued", inThread: true });
+      chat.send({ id: "102", text: "stop", inThread: true });
+      await until(() => [...chat.log.edits.values()].includes("Stopped by Alice."));
+      // The queued request says so too, rather than leave its 👀 hanging.
+      await until(() => chat.log.posts.includes("Stopped by Alice."), "queued stop reply");
+      expect(chat.log.marks).toContain("101:failed");
+      resume();
+      await tick();
+      expect(gitterm.calls.runs).toHaveLength(0);
+      expect(chat.log.posts).not.toContain("Nothing is running in this thread.");
+    } finally {
+      resume();
+      await bot.stop();
+    }
+  });
+
+  test("one deadline covers preparation, not just the event stream", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    let resume!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const ensure = gitterm.client.workspaces.ensureRunning;
+    gitterm.client.workspaces.ensureRunning = async (...args) => {
+      await gate;
+      return ensure(...args);
+    };
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+      runTimeoutMs: 30,
+    });
+    try {
+      await bot.start();
+      chat.send({ id: "100", text: "first" });
+      await until(() =>
+        [...chat.log.edits.values()].some((text) => text.includes("took too long")),
+      );
+      resume();
+      await tick();
+      expect(gitterm.calls.runs).toHaveLength(0);
+    } finally {
+      resume();
+      await bot.stop();
+    }
+  });
+
+  test("guest history is not forwarded by an authorized request", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter([
+      {
+        id: "guest",
+        author: { id: "guest", name: "Guest", guest: true },
+        fromBot: false,
+        text: "untrusted guest secret",
+        files: [],
+      },
+    ]);
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    try {
+      await bot.start();
+      chat.send({ id: "100", text: "first", inThread: true });
+      await until(() => gitterm.calls.runs.length === 1);
+      expect(gitterm.calls.runs[0]?.prompt).not.toContain("untrusted guest secret");
+    } finally {
+      await bot.stop();
+    }
+  });
+
+  test("persisted partial delivery resumes after restart without discarding the result", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    const file = await stateFile();
+    let attempts = 0;
+    chat.adapter.reply = async (_thread, _text, _footer, delivery) => {
+      attempts++;
+      await delivery!.recordSent(1);
+      throw new Error("chat unavailable");
+    };
+    const options = {
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: file,
+      logger: quiet,
+    };
+    const bot = createBot({ ...options, adapter: chat.adapter });
+    await bot.start();
+    chat.send({ id: "100", text: "work" });
+    await until(() => gitterm.calls.runs.length === 1);
+    gitterm
+      .stream("run1")
+      .push({ type: "run.completed", run: run("run1", "completed", { finalText: "preserved" }) });
+    await until(() => attempts === 1);
+    await bot.stop();
+    const next = fakeAdapter();
+    let resumedAt = -1;
+    next.adapter.reply = async (_thread, text, _footer, delivery) => {
+      resumedAt = delivery!.sent;
+      next.log.replies.push({ markdown: text, footer: "" });
+    };
+    const restarted = createBot({ ...options, adapter: next.adapter });
+    try {
+      await restarted.start();
+      await until(() => next.log.replies.length === 1);
+      expect(resumedAt).toBe(1);
+      expect(next.log.replies[0]?.markdown).toBe("preserved");
+      expect(gitterm.calls.cancelled).toEqual([]);
+    } finally {
+      await restarted.stop();
+    }
+  });
+
   test("creates a tagged sandbox, runs the request, and replies", async () => {
     const gitterm = fakeGitterm({ connections: [github, docs, broken] });
     const chat = fakeAdapter();
@@ -436,6 +582,7 @@ describe("createBot", () => {
     const gitterm = fakeGitterm();
     const chat = fakeAdapter();
     const bot = createBot({
+      allowAlways: true,
       adapter: chat.adapter,
       gitterm: gitterm.client,
       repo: "https://github.com/acme/app",
@@ -515,16 +662,7 @@ describe("createBot", () => {
   });
 
   test("wakes a paused sandbox instead of creating another", async () => {
-    const paused = {
-      id: "ws1",
-      status: "paused",
-      metadata: {
-        "gitterm-bot": "test:T1",
-        "gitterm-bot-repo": "https://github.com/acme/app",
-        "gitterm-bot-space": "shared",
-      },
-    } as unknown as Workspace;
-    const gitterm = fakeGitterm({ workspaces: [paused] });
+    const gitterm = fakeGitterm();
     const chat = fakeAdapter();
     const bot = createBot({
       adapter: chat.adapter,
@@ -536,8 +674,14 @@ describe("createBot", () => {
     await bot.start();
     chat.send({ id: "100", text: "hello" });
     await until(() => gitterm.calls.runs.length === 1);
-    expect(gitterm.calls.created).toEqual([]);
-    expect(gitterm.calls.ensured).toEqual(["ws1"]);
+    gitterm.stream("run1").push({ type: "run.completed", run: run("run1", "completed") });
+    await until(() => chat.log.removed.length === 1);
+    gitterm.workspaces[0]!.status = "paused";
+    chat.send({ id: "101", text: "hello again", inThread: true });
+    await until(() => gitterm.calls.runs.length === 2);
+    expect(gitterm.calls.created).toHaveLength(1);
+    expect(gitterm.calls.ensured).toEqual(["ws1", "ws1"]);
+    await bot.stop();
   });
 
   test("gives a direct conversation its own sandbox", async () => {
@@ -562,8 +706,8 @@ describe("createBot", () => {
     await until(() => gitterm.calls.runs.length === 2, "DM run");
 
     expect(gitterm.calls.created.map((input) => input.metadata)).toEqual([
-      expect.objectContaining({ "gitterm-bot-space": "shared" }),
-      expect.objectContaining({ "gitterm-bot-space": "dm:D1" }),
+      expect.objectContaining({ "gitterm-bot-space": "installation:channel:C1" }),
+      expect.objectContaining({ "gitterm-bot-space": "installation:dm:D1" }),
     ]);
     await bot.stop();
   });
@@ -608,6 +752,99 @@ describe("createBot", () => {
     });
     await until(() => chat.log.replies.length === 1, "recovered reply");
     expect(chat.log.replies[0]?.markdown).toBe("All done");
+  });
+
+  test("a failed reattach after a restart says so and frees the thread", async () => {
+    const file = await stateFile();
+    await writeFile(
+      file,
+      JSON.stringify({
+        sessions: {},
+        inFlight: {
+          "C1:100": {
+            thread,
+            statusId: "s9",
+            requester: alice,
+            repo: "https://github.com/acme/app",
+            run: { workspaceId: "gone", id: "run7" },
+          },
+        },
+      }),
+    );
+    const gitterm = fakeGitterm();
+    gitterm.client.workspaces.ensureRunning = async () => {
+      throw new Error("Workspace was terminated");
+    };
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: file,
+      logger: quiet,
+    });
+    try {
+      await bot.start();
+      await until(() => chat.log.edits.get("s9")?.includes("terminated") ?? false);
+      expect(chat.log.posts.join("\n")).not.toContain("pending delivery");
+    } finally {
+      await bot.stop();
+    }
+  });
+
+  test("a reply that can't be posted is reported once and frees the thread", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    chat.adapter.reply = async () => {
+      throw new Error("chat unavailable");
+    };
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    try {
+      await bot.start();
+      chat.send({ id: "100", text: "work" });
+      await until(() => gitterm.calls.runs.length === 1);
+      gitterm
+        .stream("run1")
+        .push({ type: "run.completed", run: run("run1", "completed", { finalText: "result" }) });
+      // Three tries, a second apart and then two.
+      for (let i = 0; i < 100 && !chat.log.posts.some((text) => text.includes("run1")); i++)
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(chat.log.posts.join("\n")).toContain("couldn't post its reply here");
+      chat.send({ id: "101", text: "more", inThread: true });
+      await until(() => gitterm.calls.runs.length === 2, "next run in the thread");
+    } finally {
+      await bot.stop();
+    }
+  }, 10_000);
+
+  test("reset is only refused by work in the same sandbox", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    try {
+      await bot.start();
+      chat.send({ id: "100", text: "work" });
+      await until(() => gitterm.calls.runs.length === 1);
+      chat.send({ id: "101", text: "reset", inThread: true });
+      await until(() => chat.log.posts.some((text) => text.includes("before resetting")));
+      // Another channel has its own sandbox, so its reset goes ahead.
+      chat.send({ id: "200", text: "reset", thread: { channel: "C2", thread: "200" } });
+      await until(() => chat.log.posts.some((text) => text.includes("no acme/app sandbox yet")));
+    } finally {
+      await bot.stop();
+    }
   });
 
   test("ignores channels without a repository", async () => {

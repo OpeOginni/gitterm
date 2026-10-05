@@ -1,4 +1,5 @@
 import type { GittermClient, ModelCredential, Workspace, WorkspaceModelsInput } from "@gitterm/sdk";
+import { createHash } from "node:crypto";
 import type { StatusText } from "./status.js";
 import type { BotLogger, ModelChoice, RepoTarget, WorkspaceOverrides } from "./types.js";
 
@@ -65,8 +66,11 @@ const RESUME_TIMEOUT_MS = 5 * 60_000;
 export const SHARED_SPACE = "shared";
 
 /** Where a message's sandbox lives: its own per direct conversation, else the shared one. */
-export const spaceOf = (message: { direct?: boolean; thread: { channel: string } }) =>
-  message.direct ? `dm:${message.thread.channel}` : SHARED_SPACE;
+export const spaceOf = (
+  message: { direct?: boolean; tenant?: string; thread: { channel: string } },
+  shareChannels = false,
+) =>
+  `${message.tenant ?? "installation"}:${message.direct ? `dm:${message.thread.channel}` : shareChannels ? SHARED_SPACE : `channel:${message.thread.channel}`}`;
 
 /** Sandboxes are per repository and space (shared channels, or one direct conversation). */
 export type WorkspaceManager = {
@@ -82,6 +86,14 @@ export function createWorkspaceManager(input: {
   gitterm: GittermClient;
   platform: string;
   scope: string;
+  botId?: string;
+  directRetentionMs?: number;
+  identityPolicy?: {
+    allowedUsers?: string[];
+    allowGuests?: boolean;
+    allowedChannels?: string[];
+    shareChannels?: boolean;
+  };
   connections: string[];
   env: Record<string, string>;
   setup: string[];
@@ -91,10 +103,28 @@ export function createWorkspaceManager(input: {
   log: BotLogger;
 }): WorkspaceManager {
   const { gitterm, log } = input;
+  // The sandbox's settings, from this process's options. A sandbox made with other settings is
+  // kept, not silently replaced (it may hold work); `reset` replaces it. Rotated keys and
+  // edited tools reach a sandbox the same way: rotate, then reset.
+  const configVersion = createHash("sha256")
+    .update(
+      JSON.stringify({
+        connections: input.connections.toSorted(),
+        env: input.env,
+        setup: input.setup,
+        model: input.model,
+        instructions: input.instructions,
+        overrides: input.overrides,
+        identityPolicy: input.botId ? undefined : input.identityPolicy,
+        directRetentionMs: input.directRetentionMs ?? 7 * 24 * 60 * 60_000,
+      }),
+    )
+    .digest("hex");
   // The tags are the only record of which sandbox belongs to which repository, so a bot with
   // a lost state file, or on another machine, adopts its sandbox instead of leaking it.
   const tags = (repo: Repo, space: string) => ({
     "gitterm-bot": `${input.platform}:${input.scope}`,
+    "gitterm-bot-id": input.botId ?? "default",
     "gitterm-bot-repo": repoKey(repo),
     "gitterm-bot-space": space,
   });
@@ -112,12 +142,14 @@ export function createWorkspaceManager(input: {
     // Your own GitHub token replaces a GitTerm GitHub connection; the two can't be combined.
     const github = input.overrides?.repositoryCredentials ? [] : await githubFor(gitterm, repo);
     const connections = [...github, ...input.connections];
+    const models =
+      input.overrides?.models ??
+      (input.model
+        ? modelsFor(input.model, input.model.apiKey ? [] : await gitterm.credentials.list())
+        : { inherit: "none" as const });
     const env = { ...input.overrides?.environmentVariables, ...input.env };
     const setup =
       input.overrides?.setup ?? (input.setup.length ? { beforeAgent: input.setup } : undefined);
-    const models =
-      input.overrides?.models ??
-      (input.model ? modelsFor(input.model, await gitterm.credentials.list()) : undefined);
     log.info(`Creating a GitTerm sandbox for ${repoKey(repo)}`, {
       connections,
       model: input.model?.id ?? "dashboard defaults",
@@ -125,13 +157,17 @@ export function createWorkspaceManager(input: {
     const name = repoLabel(repo).split("/").pop() ?? "repo";
     const { workspace } = await gitterm.workspaces.create({
       ...input.overrides,
+      provisioningProfile: "bot",
+      ...(space.includes(":dm:")
+        ? { autoTerminateAfterMs: input.directRetentionMs ?? 7 * 24 * 60 * 60_000 }
+        : {}),
       name: `${input.platform}-bot-${name}`,
       repo: repo.url,
       ...(repo.branch ? { branch: repo.branch } : {}),
       agent: "opencode",
-      metadata: tags(repo, space),
+      metadata: { ...tags(repo, space), "gitterm-bot-config": configVersion },
       connections,
-      ...(models ? { models } : {}),
+      models,
       ...(Object.keys(env).length ? { environmentVariables: env } : {}),
       ...(setup ? { setup } : {}),
       additionalAgentInstructions: [
@@ -148,6 +184,11 @@ export function createWorkspaceManager(input: {
     find,
     async ensure(repo, progress, space = SHARED_SPACE) {
       let workspace = await find(repo, space);
+      if (workspace && workspace.metadata["gitterm-bot-config"] !== configVersion) {
+        throw new Error(
+          "Sandbox settings changed. Finish or stop active work, then use reset to replace the sandbox. Removing a tool does not revoke credentials already delivered; revoke them upstream if needed.",
+        );
+      }
       if (!workspace) {
         progress({
           message: `Creating a sandbox for ${repoLabel(repo)}. The first start takes a few minutes…`,

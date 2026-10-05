@@ -9,6 +9,7 @@ import { BillingSection } from "@/components/dashboard/billing-section";
 import { UsageSection } from "@/components/dashboard/settings/usage-section";
 import { FormCard, FormCardBody, FormCardHeader } from "@/components/ui/form-card";
 import { authClient } from "@/lib/auth-client";
+import { CommitAttributionSection } from "./commit-attribution-section";
 
 type UserPlan = "free" | "starter" | "pro";
 
@@ -94,6 +95,7 @@ export function AccountSection({ currentPlan }: { currentPlan: UserPlan }) {
   return (
     <div className="space-y-6">
       <ProfileCard currentPlan={currentPlan} />
+      <CommitAttributionSection />
       <AccountPart id="usage" label="Usage">
         <UsageSection />
       </AccountPart>

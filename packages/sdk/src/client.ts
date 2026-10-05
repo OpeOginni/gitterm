@@ -188,6 +188,9 @@ export type GittermClient = {
     listProviders(): Promise<ModelProviderInfo[]>;
   };
   bots: {
+    /** Claims (or renews) the right to run this saved bot; one process at a time. */
+    acquireLease(leaseId: string): Promise<{ success: true }>;
+    releaseLease(leaseId: string): Promise<{ success: true }>;
     /** The settings saved for this client's token in the dashboard; null if it isn't a bot's. */
     self(): Promise<SavedBot | null>;
   };
@@ -874,6 +877,8 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
       },
     },
     bots: {
+      acquireLease: (leaseId) => run(() => trpc.bots.acquireLease.mutate({ leaseId })),
+      releaseLease: (leaseId) => run(() => trpc.bots.releaseLease.mutate({ leaseId })),
       self: () => run(async (): Promise<SavedBot | null> => trpc.bots.self.query()),
     },
     credentials: {

@@ -14,11 +14,17 @@ export type ThreadSession = {
 
 /** A request being worked on, so a restarted bot can pick its run up again. */
 export type InFlightRequest = {
+  /** Prevent recovery into a different platform installation after reconfiguration. */
+  scope?: string;
   thread: ChatThread;
   /** The status message; absent when the platform showed a native indicator instead. */
   statusId?: string;
   requester: ChatUser;
   repo: string;
+  /** When the server cancels the run (ms since epoch). */
+  deadline?: number;
+  /** Reply messages already posted, so a retried delivery doesn't repeat them. */
+  deliveredParts?: number;
   /** Set once the run exists; before that a restart can only report the request as lost. */
   run?: { workspaceId: string; id: string };
 };
