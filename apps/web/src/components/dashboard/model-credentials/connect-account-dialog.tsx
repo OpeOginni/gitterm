@@ -211,7 +211,7 @@ function ConnectAccountFlow({
                       {provider.displayName}
                     </span>
                     {provider.description ? (
-                      <span className="mt-0.5 block truncate text-[13px] text-fg-3">
+                      <span className="mt-0.5 block text-[13px] text-fg-3 sm:truncate">
                         {provider.description}
                       </span>
                     ) : null}

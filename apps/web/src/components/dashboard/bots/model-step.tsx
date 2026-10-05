@@ -51,7 +51,7 @@ export function ModelStepBody({
   const active = credentials.filter((candidate) => candidate.isActive);
   const hasOauth = providers.some((provider) => provider.authType === "oauth");
   const addButtons = (
-    <div className="flex flex-wrap justify-center gap-2">
+    <div className="flex justify-center gap-2">
       <Button className="h-9 gap-2" onClick={() => setApiKeyOpen(true)}>
         <Key className="size-3.5" />
         Add API key
@@ -59,7 +59,7 @@ export function ModelStepBody({
       {hasOauth ? (
         <Button variant="outline" className="h-9 gap-2" onClick={() => setConnectOpen(true)}>
           <UserRound className="size-3.5" />
-          Sign in with a subscription
+          Add a subscription
         </Button>
       ) : null}
     </div>

@@ -530,14 +530,20 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
         <Step
           step={behaviorStep}
           number={number(behaviorStep)}
-          hint="Where it answers, who can use it, and what the agent should know."
+          hint={
+            platform
+              ? "Where it answers, who can use it, and what the agent should know."
+              : "Pick a platform first."
+          }
         >
-          <BehaviorStepBody
-            platform={platform}
-            knownChannels={bot?.knownChannels ?? []}
-            behavior={behavior}
-            onChange={(patch) => setBehavior((current) => ({ ...current, ...patch }))}
-          />
+          {platform ? (
+            <BehaviorStepBody
+              platform={platform}
+              knownChannels={bot?.knownChannels ?? []}
+              behavior={behavior}
+              onChange={(patch) => setBehavior((current) => ({ ...current, ...patch }))}
+            />
+          ) : null}
         </Step>
 
         <Step

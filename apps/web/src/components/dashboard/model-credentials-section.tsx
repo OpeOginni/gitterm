@@ -169,10 +169,10 @@ export function ModelCredentialsSection() {
               title="No credentials saved"
               description="Paste an API key from any supported provider, or sign in with an OpenCode Console, Codex, Copilot or SuperGrok subscription."
               action={
-                <div className="flex flex-wrap justify-center gap-2">
+                <div className="flex justify-center gap-2">
                   <Button size="sm" className="gap-2" onClick={() => setApiKeyOpen(true)}>
                     <Key className="h-3.5 w-3.5" />
-                    Paste an API key
+                    Add API key
                   </Button>
                   {hasAccounts ? (
                     <Button
@@ -182,7 +182,7 @@ export function ModelCredentialsSection() {
                       onClick={() => setConnectOpen(true)}
                     >
                       <UserRound className="h-3.5 w-3.5" />
-                      Sign in with a subscription
+                      Add a subscription
                     </Button>
                   ) : null}
                 </div>

@@ -50,7 +50,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-card text-popover-foreground border-line data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border p-5 shadow-[0_30px_120px_-30px_rgba(0,0,0,0.7)] duration-200 sm:max-w-lg overflow-hidden",
+          "bg-card text-popover-foreground border-line data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border p-5 shadow-[0_30px_120px_-30px_rgba(0,0,0,0.7)] duration-200 sm:max-w-lg overflow-hidden",
           className,
         )}
         {...props}
@@ -86,7 +86,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="dialog-footer"
       className={cn(
         // A full-width action bar like the workspace cards: the last action fills the row.
-        "-mx-5 -mb-5 mt-1 flex flex-wrap gap-2 border-t border-line p-4 [&>button]:h-10 [&>button]:text-sm [&>*:last-child]:flex-1",
+        "sticky -bottom-5 z-10 -mx-5 -mb-5 mt-1 flex flex-wrap gap-2 border-t border-line bg-card p-4 [&>button]:h-10 [&>button]:text-sm [&>*:last-child]:flex-1",
         className,
       )}
       {...props}

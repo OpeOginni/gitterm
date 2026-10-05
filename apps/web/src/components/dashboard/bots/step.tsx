@@ -1,7 +1,8 @@
 "use client";
 
 import type React from "react";
-import { Check, Copy } from "lucide-react";
+import { useState } from "react";
+import { Check, ChevronDown, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
@@ -56,6 +57,8 @@ export function SetupSummary({ steps, footer }: { steps: StepInfo[]; footer?: Re
   const required = steps.filter((step) => step.state !== "optional");
   const done = required.filter((step) => step.state === "done").length;
   const next = steps.find((step) => step.state === "todo");
+  // Phones show the progress and the next step; the full list opens on demand.
+  const [open, setOpen] = useState(false);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-card">
@@ -90,7 +93,27 @@ export function SetupSummary({ steps, footer }: { steps: StepInfo[]; footer?: Re
           ))}
         </div>
       </div>
-      <ol className="border-t border-line">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 border-t border-line px-5 py-3 text-left text-sm lg:hidden"
+      >
+        <span className="min-w-0 truncate text-fg-2">
+          {next ? (
+            <>
+              Next: <span className="text-fg">{next.title}</span>
+            </>
+          ) : (
+            "Every required step is done"
+          )}
+        </span>
+        <span className="flex shrink-0 items-center gap-1 text-xs text-fg-4">
+          {open ? "Hide steps" : "All steps"}
+          <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+        </span>
+      </button>
+      <ol className={cn("border-t border-line", !open && "hidden lg:block")}>
         {steps.map((step, index) => (
           <li key={step.id}>
             <a
@@ -143,7 +166,8 @@ export function Step({
   number: number;
   /** What's missing, or a one-line summary. */
   hint?: React.ReactNode;
-  children: React.ReactNode;
+  /** Nothing renders only the header, e.g. a step that waits on an earlier one. */
+  children?: React.ReactNode;
 }) {
   return (
     <SettingsSection
@@ -172,7 +196,9 @@ export function Step({
         )
       }
     >
-      <SettingsSectionBody className="px-5 py-4">{children}</SettingsSectionBody>
+      {children ? (
+        <SettingsSectionBody className="px-5 py-4">{children}</SettingsSectionBody>
+      ) : null}
     </SettingsSection>
   );
 }

@@ -273,7 +273,7 @@ export function GitHubRepositoryBranchField({
       {/* ── Repository (search or paste URL) ── */}
       <div className="grid gap-1.5" ref={repoFieldRef}>
         <Label htmlFor="repo" className="text-sm font-medium">
-          GitHub Repository
+          GitHub repository
         </Label>
         <Popover open={isRepoDropdownOpen} onOpenChange={setIsRepoListOpen}>
           <PopoverAnchor asChild>

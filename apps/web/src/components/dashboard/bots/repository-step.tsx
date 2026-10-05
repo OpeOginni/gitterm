@@ -164,15 +164,19 @@ function AccessRow({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3.5">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-fill-2 text-fg">
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-fg">{title}</p>
-        <div className="mt-0.5 text-[13px] text-fg-3">{detail}</div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3.5">
+      <div className="flex min-w-0 flex-1 items-center gap-3.5">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-fill-2 text-fg">
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-fg">{title}</p>
+          <div className="mt-0.5 text-[13px] text-fg-3">{detail}</div>
+        </div>
       </div>
-      {action}
+      {action ? (
+        <div className="shrink-0 [&>button]:w-full sm:[&>button]:w-auto">{action}</div>
+      ) : null}
     </div>
   );
 }

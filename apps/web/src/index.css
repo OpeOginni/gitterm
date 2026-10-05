@@ -454,19 +454,17 @@ body {
   left: 100%;
 }
 
-@layer components {
-  /* Field labels in dialogs read as quiet mono eyebrows, like the API token dialog. Labels of
-   * checkboxes, switches, and radios stay sentence case. */
-  [data-slot="dialog-content"]
-    [data-slot="label"]:not(:has([role="checkbox"], [role="switch"], [role="radio"])):not(
-      [role="checkbox"] ~ [data-slot="label"],
-      [role="switch"] ~ [data-slot="label"]
-    ) {
-    font-family: var(--font-mono), ui-monospace, monospace;
-    font-size: 11px;
-    font-weight: 400;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--fg-4);
-  }
+/* Field labels in dialogs: plain sentence case, one size and weight, so every form reads the
+ * same. Unlayered on purpose so it wins over per-field utility classes. Labels of checkboxes,
+ * switches, and radios keep their own style. */
+[data-slot="dialog-content"]
+  [data-slot="label"]:not(:has([role="checkbox"], [role="switch"], [role="radio"])):not(
+    [role="checkbox"] ~ [data-slot="label"],
+    [role="switch"] ~ [data-slot="label"]
+  ) {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--fg-2);
 }
