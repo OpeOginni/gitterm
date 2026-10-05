@@ -70,14 +70,11 @@ function OptionTiles<T extends string>({
 /** What a platform's ids look like, so a typo is caught here rather than when nobody can use the bot. */
 function idCheck(platform: Platform | null, kind: "channel" | "user") {
   if (platform === "discord") {
-    return (id: string) =>
-      /^\d{17,20}$/.test(id) ? null : `${id} isn't a Discord ID; those are long numbers.`;
+    return (id: string) => (/^\d{17,20}$/.test(id) ? null : `${id} is an invalid Discord ID.`);
   }
   if (platform === "slack") {
     const pattern = kind === "channel" ? /^[CG][A-Z0-9]{8,}$/ : /^[UW][A-Z0-9]{8,}$/;
-    const example = kind === "channel" ? "C07Q2JH8L3M" : "U07Q2JH8L3M";
-    return (id: string) =>
-      pattern.test(id) ? null : `${id} doesn't look like a Slack ${kind} ID, e.g. ${example}.`;
+    return (id: string) => (pattern.test(id) ? null : `${id} is an invalid Slack ${kind} ID.`);
   }
   return () => null;
 }
