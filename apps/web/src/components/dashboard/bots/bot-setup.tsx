@@ -4,19 +4,32 @@ import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
-import { useQuery } from "@tanstack/react-query";
-import { trpc } from "@/utils/trpc";
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Loader2, Save, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import type { BotSettings } from "@gitterm/schema";
+import { queryClient, trpc } from "@/utils/trpc";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { parseGitHubRepositoryInput } from "../create-instance/github-repository-utils";
 import type { ModelCredential } from "../model-credentials/types";
+import { BehaviorStepBody, type BotBehavior } from "./behavior-step";
 import { connectionRefs, modelProblem, suggestModel, type Platform } from "./config";
-import { ConfigStepBody } from "./config-step";
+import { DeployInstructions } from "./config-step";
 import { ModelStepBody } from "./model-step";
 import { ComputeStepBody, type ComputeOption } from "./compute-step";
 import { RepositoryStepBody, type GitHubAccess } from "./repository-step";
 import { SetupSummary, Step, type StepInfo } from "./step";
+
+/** A saved bot as the edit page loads it. */
+export type SavedBot = BotSettings & {
+  id: string;
+  knownChannels?: Array<{ id: string; name: string }>;
+};
 
 const PLATFORMS: { value: Platform; label: string; description: string; logo: string }[] = [
   {
@@ -33,7 +46,18 @@ const PLATFORMS: { value: Platform; label: string; description: string; logo: st
   },
 ];
 
-export function BotSetup() {
+/** `url#branch` as the repository field takes it: a /tree/ URL keeps the branch. */
+function repoFieldValue(repo: string | undefined): string {
+  if (!repo) return "";
+  const [url = "", branch] = repo.split("#");
+  return branch ? `${url}/tree/${branch}` : url;
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+/** The bot setup flow: creates a bot, or edits a saved one when `bot` is given. */
+export function BotSetup({ bot }: { bot?: SavedBot }) {
+  const router = useRouter();
   const { data: catalog, isLoading: isLoadingCatalog } = useQuery(
     trpc.integrations.list.queryOptions(),
   );
@@ -58,11 +82,19 @@ export function BotSetup() {
     [credentialsData?.credentials],
   );
   const [credentialId, setCredentialId] = useState<string>();
-  const [modelInput, setModelInput] = useState<string | null>(null);
+  const [modelInput, setModelInput] = useState<string | null>(bot?.model ?? null);
   const active = credentials.filter((credential) => credential.isActive);
+  const savedProvider = bot?.model.split("/")[0];
   const firstProvider = active[0]?.logicalProviderKey;
   const credential =
     active.find((candidate) => candidate.id === credentialId) ??
+    (bot
+      ? active.find(
+          (candidate) =>
+            candidate.logicalProviderKey === savedProvider &&
+            (bot.credential ? candidate.label === bot.credential : candidate.isDefault),
+        )
+      : undefined) ??
     active.find(
       (candidate) => candidate.logicalProviderKey === firstProvider && candidate.isDefault,
     ) ??
@@ -72,20 +104,31 @@ export function BotSetup() {
   const modelDone = !!credential && !modelIssue;
 
   // Repository
-  const [githubAccess, setGithubAccess] = useState<GitHubAccess>("connection");
-  const [repoUrl, setRepoUrl] = useState("");
+  const [githubAccess, setGithubAccess] = useState<GitHubAccess>(bot?.githubAccess ?? "connection");
+  const [repoUrl, setRepoUrl] = useState(repoFieldValue(bot?.repo));
   const [branch, setBranch] = useState("");
   const repository = parseGitHubRepositoryInput(repoUrl);
   const repoDone = !!repository;
 
-  // Tools
+  // Tools: a saved bot's references until someone changes the selection.
   const tools = connections.filter(
     (connection) =>
       (connection.integration === "mcp" || connection.integration === "executor") &&
       connection.status === "connected",
   );
-  const [toolIds, setToolIds] = useState<string[]>([]);
-  const selectedTools = tools.filter((tool) => toolIds.includes(tool.id));
+  const [toolIds, setToolIds] = useState<string[] | null>(bot ? null : []);
+  const selectedTools =
+    toolIds === null
+      ? tools.filter((tool) =>
+          bot?.connections.some(
+            (ref) => ref === tool.id || ref.toLowerCase() === tool.name.trim().toLowerCase(),
+          ),
+        )
+      : tools.filter((tool) => toolIds.includes(tool.id));
+  const toggleTool = (id: string, on: boolean) => {
+    const current = selectedTools.map((tool) => tool.id);
+    setToolIds(on ? [...current, id] : current.filter((entry) => entry !== id));
+  };
 
   // Compute: one entry per provider type (AWS has a row per region).
   const { data: providersList } = useQuery(
@@ -104,13 +147,89 @@ export function BotSetup() {
     providersList?.cloudProviders.find((entry) => entry.id === defaultProviderData?.cloudProviderId)
       ?.providerKey ?? null;
   // Nothing is picked until someone clicks a provider; until then sandboxes use the default.
-  const [provider, setProvider] = useState<string | null>(null);
+  const [provider, setProvider] = useState<string | null>(bot?.provider ?? null);
   const providerName = (key: string | null) =>
     computeOptions.find((option) => option.key === key)?.name;
 
-  const [platform, setPlatform] = useState<Platform | null>(null);
+  const [platform, setPlatform] = useState<Platform | null>(bot?.platform ?? null);
 
+  const [behavior, setBehavior] = useState<BotBehavior>({
+    channels: bot?.channels ?? [],
+    allowedUsers: bot?.allowedUsers ?? [],
+    allowGuests: bot?.allowGuests ?? false,
+    instructions: bot?.instructions ?? "",
+    setup: bot?.setup ?? "",
+  });
+
+  // Saving
+  const [name, setName] = useState(bot?.name ?? "");
+  const [savedId, setSavedId] = useState<string | null>(bot?.id ?? null);
   const [token, setToken] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const defaultName = repository ? `${repository.repo} bot` : "Coding agent";
+
+  const settings: BotSettings | null =
+    modelDone && repository && platform
+      ? {
+          name: name.trim() || defaultName,
+          platform,
+          repo: `${repository.normalizedUrl}${branch ? `#${branch}` : ""}`,
+          model: model.trim(),
+          credential: credential && !credential.isDefault ? credential.label : null,
+          connections:
+            toolIds === null && bot ? bot.connections : connectionRefs(selectedTools, connections),
+          provider,
+          githubAccess,
+          channels: behavior.channels,
+          allowedUsers: behavior.allowedUsers,
+          allowGuests: behavior.allowGuests,
+          instructions: behavior.instructions.trim() || null,
+          setup: behavior.setup.trim() || null,
+        }
+      : null;
+
+  const refreshBots = () =>
+    void queryClient.invalidateQueries({ queryKey: trpc.bots.list.queryKey() });
+  const create = useMutation(
+    trpc.bots.create.mutationOptions({
+      onSuccess: (result) => {
+        setSavedId(result.bot.id);
+        setToken(result.token);
+        // Becomes the bot's own page without remounting, so the one-time token stays visible.
+        window.history.replaceState(null, "", `/dashboard/bots/${result.bot.id}`);
+        refreshBots();
+      },
+      onError: (error) => toast.error(`Could not create the bot: ${error.message}`),
+    }),
+  );
+  const update = useMutation(
+    trpc.bots.update.mutationOptions({
+      onSuccess: () => {
+        toast.success("Saved. Restart the bot to apply the changes.");
+        refreshBots();
+      },
+      onError: (error) => toast.error(`Could not save: ${error.message}`),
+    }),
+  );
+  const rotate = useMutation(
+    trpc.bots.rotateToken.mutationOptions({
+      onSuccess: (result) => {
+        setToken(result.token);
+        toast.success("New token created. Update the bot's .env; the old token stopped working.");
+        refreshBots();
+      },
+      onError: (error) => toast.error(`Could not create a token: ${error.message}`),
+    }),
+  );
+  const remove = useMutation(
+    trpc.bots.delete.mutationOptions({
+      onSuccess: () => {
+        refreshBots();
+        router.push("/dashboard/bots" as Route);
+      },
+      onError: (error) => toast.error(`Could not delete the bot: ${error.message}`),
+    }),
+  );
 
   const modelStep: StepInfo = {
     id: "bot-model",
@@ -155,11 +274,23 @@ export function BotSetup() {
       ? PLATFORMS.find((option) => option.value === platform)?.label
       : "Slack or Discord",
   };
-  const configStep: StepInfo = {
-    id: "bot-config",
-    title: "Config",
-    state: token ? "done" : "todo",
-    summary: token ? "Token created" : "Create a bot token",
+  const customised =
+    behavior.channels.length > 0 ||
+    behavior.allowedUsers.length > 0 ||
+    behavior.allowGuests ||
+    !!behavior.instructions.trim() ||
+    !!behavior.setup.trim();
+  const behaviorStep: StepInfo = {
+    id: "bot-behavior",
+    title: "Behavior",
+    state: customised ? "done" : "optional",
+    summary: `${behavior.channels.length ? plural(behavior.channels.length, "channel") : "Every channel"} · ${behavior.allowedUsers.length ? plural(behavior.allowedUsers.length, "person") : "everyone"}`,
+  };
+  const deployStep: StepInfo = {
+    id: "bot-deploy",
+    title: "Deploy",
+    state: savedId ? "done" : "todo",
+    summary: savedId ? (token ? "Token ready to copy" : "Saved") : "Name it and create it",
   };
   const steps = [
     modelStep,
@@ -167,7 +298,8 @@ export function BotSetup() {
     ...(computeStep ? [computeStep] : []),
     ...(toolsStep ? [toolsStep] : []),
     platformStep,
-    configStep,
+    behaviorStep,
+    deployStep,
   ];
   const number = (step: StepInfo) => steps.indexOf(step) + 1;
 
@@ -181,6 +313,9 @@ export function BotSetup() {
     !repoDone && "a repository",
     !platform && "a platform",
   ].filter((item): item is string => !!item);
+  const missingText = missing.length
+    ? `Add ${new Intl.ListFormat("en", { type: "conjunction" }).format(missing)} first.`
+    : null;
 
   if (isLoadingCatalog) {
     return (
@@ -192,10 +327,60 @@ export function BotSetup() {
     );
   }
 
+  const editFooter = savedId ? (
+    <>
+      <Button
+        className="h-9 w-full gap-2"
+        disabled={!settings || update.isPending}
+        onClick={() => settings && update.mutate({ id: savedId, ...settings })}
+      >
+        {update.isPending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Save className="size-4" />
+        )}
+        Save changes
+      </Button>
+      {confirmDelete ? (
+        <div className="flex items-center justify-between gap-2 text-xs text-fg-3">
+          <span>Delete it and revoke its token?</span>
+          <span className="flex gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs"
+              onClick={() => setConfirmDelete(false)}
+            >
+              Keep
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-7 px-2 text-xs"
+              disabled={remove.isPending}
+              onClick={() => remove.mutate({ id: savedId })}
+            >
+              Delete
+            </Button>
+          </span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          className="flex w-full items-center justify-center gap-1.5 text-xs text-fg-4 transition-colors hover:text-destructive"
+        >
+          <Trash2 className="size-3.5" />
+          Delete bot
+        </button>
+      )}
+    </>
+  ) : undefined;
+
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
       <aside className="lg:sticky lg:top-8 lg:order-last">
-        <SetupSummary steps={steps} />
+        <SetupSummary steps={steps} footer={editFooter} />
       </aside>
 
       <div className="space-y-4">
@@ -276,14 +461,8 @@ export function BotSetup() {
                       className="flex cursor-pointer items-center gap-3 py-2.5 text-[13px]"
                     >
                       <Checkbox
-                        checked={toolIds.includes(tool.id)}
-                        onCheckedChange={(checked) =>
-                          setToolIds((ids) =>
-                            checked === true
-                              ? [...ids, tool.id]
-                              : ids.filter((id) => id !== tool.id),
-                          )
-                        }
+                        checked={selectedTools.some((entry) => entry.id === tool.id)}
+                        onCheckedChange={(checked) => toggleTool(tool.id, checked === true)}
                       />
                       <span className="min-w-0 flex-1 truncate text-fg">{tool.name}</span>
                       <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
@@ -346,29 +525,64 @@ export function BotSetup() {
         </Step>
 
         <Step
-          step={configStep}
-          number={number(configStep)}
-          hint="A token for the bot, your .env, and how to run it."
+          step={behaviorStep}
+          number={number(behaviorStep)}
+          hint="Where it answers, who can use it, and what the agent should know."
         >
-          <ConfigStepBody
-            token={token}
-            onToken={setToken}
-            missing={
-              missing.length
-                ? `Add ${new Intl.ListFormat("en", { type: "conjunction" }).format(missing)} first.`
-                : null
-            }
-            config={{
-              // Token creation waits for a platform (see `missing`), so the fallback is never shown.
-              platform: platform ?? "slack",
-              repo: `${repository?.normalizedUrl ?? ""}${branch ? `#${branch}` : ""}`,
-              model: model.trim(),
-              credential: credential && !credential.isDefault ? credential.label : undefined,
-              connections: connectionRefs(selectedTools, connections),
-              githubToken: githubAccess === "token",
-              provider: provider ?? undefined,
-            }}
+          <BehaviorStepBody
+            platform={platform}
+            knownChannels={bot?.knownChannels ?? []}
+            behavior={behavior}
+            onChange={(patch) => setBehavior((current) => ({ ...current, ...patch }))}
           />
+        </Step>
+
+        <Step
+          step={deployStep}
+          number={number(deployStep)}
+          hint="Its token, the .env, and how to run it."
+        >
+          <div className="space-y-6">
+            <div className="grid gap-2 sm:max-w-sm">
+              <label
+                htmlFor="bot-display-name"
+                className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4"
+              >
+                Name in GitTerm
+              </label>
+              <Input
+                id="bot-display-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder={defaultName}
+                maxLength={100}
+              />
+            </div>
+
+            {savedId && platform ? (
+              <DeployInstructions
+                platform={platform}
+                token={token}
+                githubToken={githubAccess === "token"}
+                rotating={rotate.isPending}
+                onRotate={() => rotate.mutate({ id: savedId })}
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-4 py-4 text-center">
+                <p className="text-sm text-fg-2">
+                  {missingText ?? "Saves the bot and creates its GitTerm token, shown once."}
+                </p>
+                <Button
+                  className="gap-2"
+                  disabled={!settings || create.isPending}
+                  onClick={() => settings && create.mutate(settings)}
+                >
+                  {create.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Create bot
+                </Button>
+              </div>
+            )}
+          </div>
         </Step>
       </div>
     </div>

@@ -5,3 +5,4 @@ export * from "./workspace-catalog";
 export * from "./workspace-setup";
 export * from "./aws-access";
 export * from "./workspace-ports";
+export * from "./bots";

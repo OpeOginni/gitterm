@@ -9,9 +9,11 @@ Slack over Socket Mode, so it needs no public URL.
 
 ## Set up in five minutes
 
-1. **Open Bots in the GitTerm dashboard.** One page takes you through a model key, GitHub access,
-   the repository, and optional tools. It then creates an API token with exactly the scopes a bot
-   needs and gives you a ready `.env`.
+1. **Create the bot under Bots in the GitTerm dashboard.** Pick a model, the repository, GitHub
+   access, and optionally tools, where it answers, and who can use it. GitTerm saves these
+   settings (never your tokens) and gives you the bot's API token, shown once, in a ready `.env`
+   that holds only secrets. Come back to the bot's page any time to change its settings; the bot
+   loads them each time it starts.
 
 2. **Create the Slack app** with the page's _Create the Slack app_ button: Slack opens with the
    app already configured. (Or paste `npx @gitterm/slack-bot manifest "Acme Agent"` at
@@ -91,9 +93,11 @@ when a sandbox is created.
 
 ## Configuration
 
-Every setting works from code and from the terminal. In code, pass it to `createSlackBot()`; on
-the command line, set the environment variable (a `.env` file in the working directory is
-loaded) or the flag.
+Settings saved for the bot under Bots in the dashboard load when it starts, found by its API
+token. Every setting below overrides them, from code or from the terminal: in code, pass it to
+`createSlackBot(await withSavedConfig({ ... }))`; on the command line, set the environment
+variable (a `.env` file in the working directory is loaded) or the flag. Without saved settings,
+these are the whole configuration.
 
 | Option                            | Environment variable / flag                                                                 | Meaning                                                                                                                                                     |
 | --------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |

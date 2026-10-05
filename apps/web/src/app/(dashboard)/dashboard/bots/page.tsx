@@ -1,7 +1,11 @@
+import Link from "next/link";
+import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { Plus } from "lucide-react";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import { BotSetup } from "@/components/dashboard/bots/bot-setup";
+import { BotList } from "@/components/dashboard/bots/bot-list";
+import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 
 export default async function BotsPage() {
@@ -23,8 +27,15 @@ export default async function BotsPage() {
       <DashboardHeader
         heading="Bots"
         text="Run a coding agent on your repository from Slack or Discord."
-      />
-      <BotSetup />
+      >
+        <Button asChild className="gap-2">
+          <Link href={"/dashboard/bots/new" as Route}>
+            <Plus className="size-4" />
+            New bot
+          </Link>
+        </Button>
+      </DashboardHeader>
+      <BotList />
     </DashboardShell>
   );
 }

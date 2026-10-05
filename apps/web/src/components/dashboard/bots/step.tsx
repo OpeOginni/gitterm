@@ -41,7 +41,7 @@ const STATE_LABEL: Record<StepState, string> = {
  * The bot so far: progress across the required steps, then each step with what's been chosen.
  * Sticky beside the steps on wide screens, so the choices stay in view while scrolling.
  */
-export function SetupSummary({ steps }: { steps: StepInfo[] }) {
+export function SetupSummary({ steps, footer }: { steps: StepInfo[]; footer?: React.ReactNode }) {
   const required = steps.filter((step) => step.state !== "optional");
   const done = required.filter((step) => step.state === "done").length;
   const next = steps.find((step) => step.state === "todo");
@@ -117,6 +117,7 @@ export function SetupSummary({ steps }: { steps: StepInfo[] }) {
           </li>
         ))}
       </ol>
+      {footer ? <div className="space-y-2 border-t border-line p-4">{footer}</div> : null}
     </div>
   );
 }

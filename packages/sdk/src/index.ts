@@ -77,6 +77,7 @@ export type {
   IntegrationKey,
   IntegrationCategory,
   Connection,
+  SavedBot,
   ConnectionKind,
   ConnectionStatus,
   ConnectionDetails,

@@ -68,7 +68,8 @@ export const accountProcedure = (requiredScope: ApiTokenScope) =>
         ctx: {
           ...ctx,
           session: ctx.session,
-          authMethod: "session" as const,
+          authMethod: "session" as "session" | "apiToken",
+          apiTokenId: undefined as string | undefined,
         },
       });
     }
@@ -94,7 +95,9 @@ export const accountProcedure = (requiredScope: ApiTokenScope) =>
       ctx: {
         ...ctx,
         session: { user: apiUser } as unknown as NonNullable<Context["session"]>,
-        authMethod: "apiToken" as const,
+        authMethod: "apiToken" as "session" | "apiToken",
+        /** The token that made the request; a bot's token identifies the bot. */
+        apiTokenId: verified.tokenId as string | undefined,
       },
     });
   });

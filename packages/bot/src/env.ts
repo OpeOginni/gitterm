@@ -147,7 +147,9 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
 }
 
 /** The environment variables every bot command line reads, for its usage text. */
-export const BOT_ENV_HELP = `  GITTERM_API_TOKEN               GitTerm API token (dashboard → Bots creates one)
+export const BOT_ENV_HELP = `  Settings saved for this bot under Bots in GitTerm load at startup; these override them.
+
+  GITTERM_API_TOKEN               The bot's GitTerm token (dashboard → Bots creates one)
   GITTERM_SERVER_URL              Self-hosted GitTerm API URL (default: hosted)
   GITTERM_BOT_REPO                Repository for every channel: https://github.com/acme/app[#branch]
   GITTERM_BOT_REPOS               More repositories people can name in a thread: url,url

@@ -431,5 +431,24 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         name: { seen: "eyes", done: "white_check_mark", failed: "x" }[state],
       });
     },
+
+    // Public and private channels the bot is a member of, for the dashboard's channel picker.
+    async channels() {
+      const found: Array<{ id: string; name: string }> = [];
+      let cursor: string | undefined;
+      do {
+        const page = await client.users.conversations({
+          types: "public_channel,private_channel",
+          exclude_archived: true,
+          limit: 200,
+          ...(cursor ? { cursor } : {}),
+        });
+        for (const channel of page.channels ?? []) {
+          if (channel.id) found.push({ id: channel.id, name: `#${channel.name ?? channel.id}` });
+        }
+        cursor = page.response_metadata?.next_cursor || undefined;
+      } while (cursor && found.length < 1000);
+      return found;
+    },
   };
 }

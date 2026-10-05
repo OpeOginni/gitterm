@@ -8,6 +8,10 @@ import { splitMessage, tablesToCode } from "./markdown.js";
 import { buildPrompt, interpretPermissionReply, interpretTypedAnswer } from "./prompt.js";
 import type { ChatFile } from "./types.js";
 import { modelsFor, parseRepo, repoLabel } from "./workspaces.js";
+import type { GittermClient, SavedBot } from "@gitterm/sdk";
+import { withSavedConfig } from "./saved.js";
+
+const quietLog = { info() {}, warn() {}, error() {} };
 
 const image = (id: string, size = 100): ChatFile => ({
   id,
@@ -221,5 +225,61 @@ test("env reads a sandbox environment file", () => {
   expect(botOptionsFromEnv({ GITTERM_BOT_SANDBOX_ENV_FILE: file }).env).toEqual({
     DATABASE_URL: "postgres://test",
     STRIPE_KEY: "sk_test",
+  });
+});
+
+describe("withSavedConfig", () => {
+  const saved: SavedBot = {
+    id: "b1",
+    name: "Acme agent",
+    platform: "slack",
+    repo: "https://github.com/acme/app#main",
+    model: "anthropic/claude-sonnet-5-5",
+    credential: "work",
+    connections: ["Linear"],
+    provider: "e2b",
+    githubAccess: "connection",
+    channels: [],
+    allowedUsers: ["U1"],
+    allowGuests: false,
+    instructions: "Be brief.",
+    setup: "pnpm install",
+  };
+  const clientWith = (bot: SavedBot | null) =>
+    ({ runs: {}, bots: { self: async () => bot } }) as unknown as GittermClient;
+
+  test("fills in the saved settings and keeps what is set locally", async () => {
+    const options = await withSavedConfig(
+      { gitterm: clientWith(saved), model: { id: "openai/gpt-6.1-sol" } },
+      "slack",
+      quietLog,
+    );
+    expect(options).toMatchObject({
+      repo: "https://github.com/acme/app#main",
+      model: { id: "openai/gpt-6.1-sol" },
+      connections: ["Linear"],
+      workspace: { provider: { type: "e2b" } },
+      allowedUsers: ["U1"],
+      instructions: "Be brief.",
+      setup: ["pnpm install"],
+    });
+  });
+
+  test("answers only in the picked channels", async () => {
+    const options = await withSavedConfig(
+      { gitterm: clientWith({ ...saved, channels: ["C1", "C2"] }) },
+      "slack",
+      quietLog,
+    );
+    expect(options.repo).toBeUndefined();
+    expect(options.channels).toEqual({ C1: saved.repo, C2: saved.repo });
+  });
+
+  test("leaves options alone without saved settings, and refuses another platform's bot", async () => {
+    const options = { gitterm: clientWith(null), repo: "https://github.com/acme/web" };
+    expect(await withSavedConfig(options, "slack", quietLog)).toEqual(options);
+    await expect(
+      withSavedConfig({ gitterm: clientWith(saved) }, "discord", quietLog),
+    ).rejects.toThrow('belongs to the slack bot "Acme agent"');
   });
 });

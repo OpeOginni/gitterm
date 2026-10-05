@@ -1,18 +1,7 @@
 import env from "@gitterm/env/web";
 import { apiPath } from "@gitterm/schema/url";
-import type { ApiTokenScope } from "@gitterm/schema";
 
 export type Platform = "slack" | "discord";
-
-/** Exactly what a bot needs: find and create its sandboxes, run prompts, and list connections. */
-export const BOT_TOKEN_SCOPES: ApiTokenScope[] = [
-  "identity:read",
-  "workspace:read",
-  "workspace:write",
-  "run:read",
-  "run:write",
-  "integrations:read",
-];
 
 /** A current coding model per provider (models.dev IDs), so the default isn't a stale one. */
 const SUGGESTED_MODELS: Record<string, string> = {
@@ -76,35 +65,22 @@ export function connectionRefs(selected: NamedConnection[], all: NamedConnection
   });
 }
 
-/** Quote a .env value only when it needs it. */
-const envValue = (value: string) => (/[\s#"'\\]/.test(value) ? JSON.stringify(value) : value);
-
-export type BotConfig = {
+/** What the .env needs: secrets only. The bot reads its settings from GitTerm. */
+export type BotEnv = {
   platform: Platform;
-  token: string;
-  repo: string;
-  model: string;
-  /** Saved credential label; only when it isn't the provider's default. */
-  credential?: string;
-  connections: string[];
-  /** The bot uses the person's own GitHub token instead of a GitTerm GitHub connection. */
-  githubToken?: boolean;
-  /** Compute provider key for new sandboxes; the dashboard default when unset. */
-  provider?: string;
+  /** The bot's GitTerm token; null once it's no longer shown (it is shown once). */
+  token: string | null;
+  /** The bot brings its own GitHub token. */
+  githubToken: boolean;
 };
 
-export function envFile(config: BotConfig): string {
+export function envFile(config: BotEnv): string {
   const serverUrl = botServerUrl();
   const lines = [
     ...(serverUrl ? [`GITTERM_SERVER_URL=${serverUrl}`] : []),
-    `GITTERM_API_TOKEN=${config.token}`,
-    `GITTERM_BOT_REPO=${envValue(config.repo)}`,
-    `GITTERM_BOT_MODEL=${envValue(config.model)}`,
-    ...(config.credential ? [`GITTERM_BOT_MODEL_CREDENTIAL=${envValue(config.credential)}`] : []),
-    ...(config.connections.length
-      ? [`GITTERM_BOT_CONNECTIONS=${envValue(config.connections.join(","))}`]
-      : []),
-    ...(config.provider ? [`GITTERM_BOT_PROVIDER=${config.provider}`] : []),
+    ...(config.token
+      ? [`GITTERM_API_TOKEN=${config.token}`]
+      : ["# The bot's GitTerm token. Lost it? New token on this page.", "GITTERM_API_TOKEN="]),
     ...(config.githubToken
       ? [
           "",
@@ -139,37 +115,15 @@ export function dockerCommand(platform: Platform): string {
   ].join("\n");
 }
 
-export function codeSnippet(config: BotConfig): string {
-  const factory = config.platform === "slack" ? "createSlackBot" : "createDiscordBot";
-  const model = config.credential
-    ? `{ id: ${JSON.stringify(config.model)}, credential: ${JSON.stringify(config.credential)} }`
-    : JSON.stringify(config.model);
-  const options = [
-    `  repo: ${JSON.stringify(config.repo)},`,
-    `  model: ${model},`,
-    ...(config.connections.length
-      ? [`  connections: [${config.connections.map((ref) => JSON.stringify(ref)).join(", ")}],`]
-      : []),
-    ...(config.provider || config.githubToken
-      ? [
-          "  workspace: {",
-          ...(config.provider
-            ? [`    provider: { type: ${JSON.stringify(config.provider)} },`]
-            : []),
-          ...(config.githubToken
-            ? ["    repositoryCredentials: { token: process.env.GITTERM_BOT_GITHUB_TOKEN! },"]
-            : []),
-          "  },",
-        ]
-      : []),
-  ];
+export function codeSnippet(platform: Platform): string {
+  const factory = platform === "slack" ? "createSlackBot" : "createDiscordBot";
   return [
-    `import { ${factory} } from "@gitterm/${config.platform}-bot";`,
+    `import { ${factory}, withSavedConfig } from "@gitterm/${platform}-bot";`,
     "",
-    "// Tokens are read from the .env above.",
-    `await ${factory}({`,
-    ...options,
-    "}).start();",
+    "// Settings come from GitTerm (edit them on this page); tokens from the .env.",
+    "// Pass options to withSavedConfig() to override any of them in code.",
+    `const bot = ${factory}(await withSavedConfig());`,
+    "await bot.start();",
     "",
   ].join("\n");
 }

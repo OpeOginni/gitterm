@@ -659,6 +659,11 @@ export function createBot(options: BotOptions): Bot {
         log,
       });
       markReady();
+      // Best effort: the dashboard offers these channels; older servers don't take them.
+      void adapter
+        .channels?.()
+        .then((channels) => gitterm.bots.reportChannels(channels))
+        .catch(noop);
       await recover();
       log.info(
         `GitTerm ${adapter.displayName} bot is running for ${knownRepos.map(repoLabel).join(", ")}.`,

@@ -1,16 +1,13 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, ExternalLink, KeyRound, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { slackManifest } from "@gitterm/slack-bot/manifest";
-import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BOT_TOKEN_SCOPES, codeSnippet, dockerCommand, envFile, type BotConfig } from "./config";
+import { codeSnippet, dockerCommand, envFile, type Platform } from "./config";
 import { CodeBlock } from "./step";
 
 const subheadClass = "font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4";
@@ -99,88 +96,60 @@ function DiscordSetup() {
   );
 }
 
-export function ConfigStepBody({
+/** The deploy instructions: the .env (secrets only), the platform app, and how to run it. */
+export function DeployInstructions({
+  platform,
   token,
-  onToken,
-  config,
-  missing,
+  githubToken,
+  rotating,
+  onRotate,
 }: {
-  /** The created token; shown once, kept only in page state. */
+  platform: Platform;
+  /** Shown once, right after the bot is created or its token replaced. */
   token: string | null;
-  onToken: (token: string) => void;
-  config: Omit<BotConfig, "token">;
-  /** Why the token can't be created yet, if anything is missing. */
-  missing: string | null;
+  githubToken: boolean;
+  rotating: boolean;
+  onRotate: () => void;
 }) {
-  const platformName = config.platform === "slack" ? "Slack" : "Discord";
-  const create = useMutation(
-    trpc.apiTokens.create.mutationOptions({
-      onSuccess: (result) => {
-        onToken(result.token);
-        void queryClient.invalidateQueries({ queryKey: trpc.apiTokens.list.queryKey() });
-      },
-      onError: (error) => toast.error(`Failed to create token: ${error.message}`),
-    }),
-  );
-
-  const createButton = (
-    <Button
-      className="gap-2"
-      disabled={!!missing || create.isPending}
-      onClick={() =>
-        create.mutate({
-          name: `${platformName} bot`,
-          scopes: BOT_TOKEN_SCOPES,
-          expiresInDays: 365,
-        })
-      }
-    >
-      {create.isPending ? (
-        <Loader2 className="size-4 animate-spin" />
-      ) : (
-        <KeyRound className="size-4" />
-      )}
-      Create bot token
-    </Button>
-  );
-
-  if (!token && missing) {
-    // Centred so what's blocking the token is the first thing seen here.
-    return (
-      <div className="flex flex-col items-center gap-4 py-4 text-center">
-        <p className="text-sm text-fg-2">{missing}</p>
-        {createButton}
-      </div>
-    );
-  }
-
-  if (!token) {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="max-w-lg text-[13px] leading-relaxed text-fg-3">
-          {`Creates an API token named "${platformName} bot" with only the permissions a bot needs. It expires in 1 year.`}
-        </p>
-        {createButton}
-      </div>
-    );
-  }
-
-  const full = { ...config, token };
-  const pkg = `@gitterm/${config.platform}-bot`;
+  const platformName = platform === "slack" ? "Slack" : "Discord";
+  const pkg = `@gitterm/${platform}-bot`;
   return (
     <div className="space-y-8">
       <section className="space-y-3">
-        <h4 className={subheadClass}>1 · Save this as .env</h4>
-        <p className="flex items-start gap-2 text-xs text-amber-300">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-          The token is shown only once. Copy the file now.
-        </p>
-        <CodeBlock code={envFile(full)} copyLabel=".env" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h4 className={subheadClass}>1 · Save this as .env</h4>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            onClick={onRotate}
+            disabled={rotating}
+          >
+            {rotating ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <KeyRound className="size-3.5" />
+            )}
+            New token
+          </Button>
+        </div>
+        {token ? (
+          <p className="flex items-start gap-2 text-xs text-amber-300">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            The token is shown only once. Copy the file now.
+          </p>
+        ) : (
+          <p className="text-xs text-fg-4">
+            Only secrets go here; the bot loads everything else from GitTerm when it starts. New
+            token replaces the old one, which stops working.
+          </p>
+        )}
+        <CodeBlock code={envFile({ platform, token, githubToken })} copyLabel=".env" />
       </section>
 
       <section className="space-y-3">
         <h4 className={subheadClass}>2 · Create the {platformName} bot</h4>
-        {config.platform === "slack" ? <SlackSetup /> : <DiscordSetup />}
+        {platform === "slack" ? <SlackSetup /> : <DiscordSetup />}
       </section>
 
       <section className="space-y-3">
@@ -194,10 +163,10 @@ export function ConfigStepBody({
           <TabsContent value="docker" className="space-y-2">
             <p className="text-xs text-fg-4">
               In the folder with the .env. It restarts on its own and keeps its threads in the{" "}
-              <span className={code}>gitterm-{config.platform}-bot</span> volume; follow it with{" "}
-              <span className={code}>docker logs -f gitterm-{config.platform}-bot</span>.
+              <span className={code}>gitterm-{platform}-bot</span> volume; follow it with{" "}
+              <span className={code}>docker logs -f gitterm-{platform}-bot</span>.
             </p>
-            <CodeBlock code={dockerCommand(config.platform)} copyLabel="Command" />
+            <CodeBlock code={dockerCommand(platform)} copyLabel="Command" />
           </TabsContent>
           <TabsContent value="terminal" className="space-y-2">
             <p className="text-xs text-fg-4">In the folder with the .env:</p>
@@ -206,11 +175,14 @@ export function ConfigStepBody({
           <TabsContent value="code" className="space-y-2">
             <p className="text-xs text-fg-4">
               Install <span className={code}>{pkg}</span> and run with{" "}
-              <span className={code}>node --env-file=.env</span>. Tokens come from the .env.
+              <span className={code}>node --env-file=.env</span>.
             </p>
-            <CodeBlock code={codeSnippet(full)} copyLabel="Code" />
+            <CodeBlock code={codeSnippet(platform)} copyLabel="Code" />
           </TabsContent>
         </Tabs>
+        <p className="text-xs text-fg-4">
+          Changes saved here apply the next time the bot starts; restart it after saving.
+        </p>
       </section>
     </div>
   );

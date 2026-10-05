@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { API_TOKEN_SCOPE_DETAILS, API_TOKEN_SCOPES, type ApiTokenScope } from "@gitterm/schema";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BOT_TOKEN_SCOPES } from "@/components/dashboard/bots/config";
+import { BOT_TOKEN_SCOPES } from "@gitterm/schema";
 import { cn } from "@/lib/utils";
 
 /** Most tokens are one of these; Custom keeps per-permission control for the rest. */

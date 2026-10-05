@@ -8,6 +8,7 @@ import type {
   HistoryMessage,
 } from "@gitterm/bot";
 import {
+  ChannelType,
   Client,
   Events,
   GatewayIntentBits,
@@ -296,6 +297,17 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
     async mark(message, state) {
       await recent.get(message.id)?.react({ seen: "👀", done: "✅", failed: "❌" }[state]);
       if (state !== "seen") recent.delete(message.id);
+    },
+
+    // Text channels in the servers the bot is in, for the dashboard's channel picker.
+    async channels() {
+      return [...client.channels.cache.values()]
+        .filter((channel) => channel.type === ChannelType.GuildText)
+        .slice(0, 1000)
+        .map((channel) => ({
+          id: channel.id,
+          name: `${channel.guild.name} / #${channel.name}`,
+        }));
     },
   };
 }
