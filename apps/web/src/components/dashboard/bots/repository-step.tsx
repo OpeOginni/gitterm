@@ -232,8 +232,7 @@ export function RepositoryStepBody({
         detail={
           <>
             Paste it into <span className="font-mono text-fg-2">GITTERM_BOT_GITHUB_TOKEN</span> in
-            the .env: classic with the repo scope, or fine-grained with Contents and Pull requests.
-            GitTerm doesn't save it.
+            the .env. GitTerm doesn't save it.
           </>
         }
       />
