@@ -121,8 +121,8 @@ function GitHubAccounts({
                   height={36}
                   className="size-9 rounded-full border border-line object-cover"
                 />
-                <span className="absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full border-2 border-card bg-fg">
-                  <Github className="size-3 text-background" fill="currentColor" />
+                <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full border-2 border-card bg-fg">
+                  <Github className="size-2.5 text-background" fill="currentColor" />
                 </span>
               </span>
               <span className="min-w-0 flex-1">
