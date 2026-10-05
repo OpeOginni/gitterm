@@ -84,8 +84,7 @@ export function envFile(config: BotEnv): string {
     ...(config.githubToken
       ? [
           "",
-          "# Your GitHub token: classic with the repo scope, or fine-grained with",
-          "# Contents and Pull requests (read and write). Paste it here.",
+          "# Your GitHub token, with read and write access to the repository",
           "GITTERM_BOT_GITHUB_TOKEN=",
         ]
       : []),
@@ -120,8 +119,7 @@ export function codeSnippet(platform: Platform): string {
   return [
     `import { ${factory}, withSavedConfig } from "@gitterm/${platform}-bot";`,
     "",
-    "// Settings come from GitTerm (edit them on this page); tokens from the .env.",
-    "// Pass options to withSavedConfig() to override any of them in code.",
+    "// Settings load from GitTerm; pass options to override them.",
     `const bot = ${factory}(await withSavedConfig());`,
     "await bot.start();",
     "",

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
 import { cn } from "@/lib/utils";
+import { highlight, type CodeLanguage } from "./highlight";
 
 export type StepState = "done" | "todo" | "optional";
 
@@ -203,7 +204,15 @@ export function Step({
   );
 }
 
-export function CodeBlock({ code, copyLabel }: { code: string; copyLabel: string }) {
+export function CodeBlock({
+  code,
+  copyLabel,
+  language,
+}: {
+  code: string;
+  copyLabel: string;
+  language: CodeLanguage;
+}) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
@@ -227,7 +236,9 @@ export function CodeBlock({ code, copyLabel }: { code: string; copyLabel: string
           Copy
         </Button>
       </div>
-      <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed text-fg-2">{code}</pre>
+      <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed text-fg-2">
+        {highlight(code, language)}
+      </pre>
     </div>
   );
 }

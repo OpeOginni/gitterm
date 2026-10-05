@@ -286,6 +286,15 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       !!selectedCloudProvider?.allowUserRegionSelection &&
       availableRegions.length > 0;
 
+  // Agent and Cloud fill the first row; the optional fields pair up after them, and an odd one
+  // out takes the whole row.
+  const halfCells = [
+    shouldShowRegionSelector && "region",
+    availableMachineProfiles.length > 1 && "machine",
+    githubAvailability?.enabled && "github",
+  ].filter(Boolean);
+  const wideCell = halfCells.length % 2 ? halfCells.at(-1) : null;
+
   const availableAgents = useMemo((): AgentType[] => {
     const agents = agentTypesData?.agentTypes ?? [];
     if (!selectedCloudProvider) return agents;
@@ -521,7 +530,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           <div className="grid gap-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Agent</Label>
             <Select value={selectedAgentTypeId} onValueChange={setUserAgentTypeId}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 w-full">
                 {selectedAgent ? (
                   <div className="flex items-center gap-2 min-w-0">
                     <Image
@@ -571,16 +580,14 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </div>
 
           <div className="grid gap-1.5 min-w-0">
-            <Label className="text-xs font-medium text-muted-foreground">
-              {shouldShowRegionSelector ? "Cloud / Region" : "Cloud"}
-            </Label>
+            <Label className="text-xs font-medium text-muted-foreground">Cloud</Label>
             <div className="flex gap-2 min-w-0">
               <Select
                 value={selectedCloudGroupKey}
                 onValueChange={handleCloudGroupChange}
                 disabled={hasNoProviders}
               >
-                <SelectTrigger className="h-9 shrink-0">
+                <SelectTrigger className="h-9 w-full min-w-0">
                   <SelectValue placeholder={hasNoProviders ? "No providers" : "Select cloud"} />
                 </SelectTrigger>
                 {isLoadingCloudProviders ? (
@@ -628,26 +635,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 )}
               </Select>
 
-              {shouldShowRegionSelector ? (
-                <Select
-                  value={selectedRegion}
-                  onValueChange={handleRegionChange}
-                  disabled={availableRegions.length === 0}
-                >
-                  <SelectTrigger className="h-9 min-w-0 [&>span]:truncate">
-                    <SelectValue
-                      placeholder={availableRegions.length > 0 ? "Region" : "No regions"}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableRegions.map((region) => (
-                      <SelectItem key={region.id} value={region.id}>
-                        {region.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
               {hasNoProviders && isAdmin ? (
                 <Link
                   href={"/admin/providers" as Route}
@@ -660,48 +647,42 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             </div>
           </div>
 
-          {isAwsGroup && (
-            <div className="col-span-2 grid gap-1.5">
-              <Label
-                htmlFor="aws-access-profile"
-                className="text-xs font-medium text-muted-foreground"
-              >
-                AWS access
-              </Label>
+          {shouldShowRegionSelector ? (
+            <div
+              className={cn("grid content-start gap-1.5", wideCell === "region" && "sm:col-span-2")}
+            >
+              <Label className="text-xs font-medium text-muted-foreground">Region</Label>
               <Select
-                value={selectedAwsProfileId ?? "default"}
-                onValueChange={(id) =>
-                  setAwsProfileSelection(
-                    id === "default" ? null : { providerId: selectedCloudProviderId, id },
-                  )
-                }
+                value={selectedRegion}
+                onValueChange={handleRegionChange}
+                disabled={availableRegions.length === 0}
               >
-                <SelectTrigger id="aws-access-profile" className="h-9">
-                  <SelectValue />
+                <SelectTrigger className="h-9 w-full min-w-0 [&>span]:truncate">
+                  <SelectValue
+                    placeholder={availableRegions.length > 0 ? "Region" : "No regions"}
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="default">Provider default role</SelectItem>
-                  {awsAccessProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.name}
+                  {availableRegions.map((region) => (
+                    <SelectItem key={region.id} value={region.id}>
+                      {region.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">
-                {awsAccessProfiles.find((profile) => profile.id === selectedAwsProfileId)
-                  ?.description ||
-                  "Use an administrator-added task role with temporary AWS credentials. All listed roles are available to all users."}{" "}
-                The selected role stays with this workspace after pause/resume.
-              </p>
             </div>
-          )}
+          ) : null}
 
           {availableMachineProfiles.length > 1 && (
-            <div className="col-span-2 grid gap-1.5">
+            <div
+              className={cn(
+                "grid content-start gap-1.5",
+                wideCell === "machine" && "sm:col-span-2",
+              )}
+            >
               <Label className="text-xs font-medium text-muted-foreground">Machine</Label>
               <Select value={selectedMachineProfileId} onValueChange={setUserMachineProfileId}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger className="h-9 w-full">
                   <SelectValue placeholder="Select machine size" />
                 </SelectTrigger>
                 <SelectContent>
@@ -727,6 +708,99 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               )}
             </div>
           )}
+
+          {/* ── 3. GitHub Connection ── */}
+          {githubAvailability?.enabled ? (
+            <div
+              className={cn("grid content-start gap-1.5", wideCell === "github" && "sm:col-span-2")}
+            >
+              <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                GitHub repository access
+                <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
+                  <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              </Label>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={selectedGitIntegrationId}
+                  onValueChange={setuserGitIntegrationId}
+                  disabled={!hasIntegrations}
+                >
+                  <SelectTrigger className="h-9 min-w-0 flex-1">
+                    <SelectValue
+                      placeholder={hasIntegrations ? "Select account" : "No connections"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (public repos only)</SelectItem>
+                    {integrations?.map((installation) => (
+                      <SelectItem
+                        key={installation.git_integration.id}
+                        value={`app:${installation.git_integration.id}`}
+                      >
+                        <div className="flex items-center">
+                          <Image
+                            src="/github.svg"
+                            alt="GitHub"
+                            width={16}
+                            height={16}
+                            className="mr-2 h-4 w-4"
+                          />
+                          {installation.git_integration.providerAccountLogin} · GitHub App
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {githubAvailability.mode === "pat" ? (
+                      <SelectItem value="global-pat">
+                        Shared GitHub PAT (@{githubAvailability.accountLogin})
+                      </SelectItem>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+                {/* Help sits beside the picker so it never covers the controls above */}
+                <HelpHint label="What does a GitHub connection do?">
+                  Connect a GitHub account to enable commit, push, fork and private repo access.
+                </HelpHint>
+              </div>
+            </div>
+          ) : null}
+
+          {isAwsGroup && (
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label
+                htmlFor="aws-access-profile"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                AWS access
+              </Label>
+              <Select
+                value={selectedAwsProfileId ?? "default"}
+                onValueChange={(id) =>
+                  setAwsProfileSelection(
+                    id === "default" ? null : { providerId: selectedCloudProviderId, id },
+                  )
+                }
+              >
+                <SelectTrigger id="aws-access-profile" className="h-9 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Provider default role</SelectItem>
+                  {awsAccessProfiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {awsAccessProfiles.find((profile) => profile.id === selectedAwsProfileId)
+                  ?.description ||
+                  "Use an administrator-added task role with temporary AWS credentials. All listed roles are available to all users."}{" "}
+                The selected role stays with this workspace after pause/resume.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* ── 3b. Model providers ── */}
@@ -739,60 +813,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             }
           />
         )}
-
-        {/* ── 3. GitHub Connection ── */}
-        {githubAvailability?.enabled ? (
-          <div className="grid gap-1.5">
-            <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              GitHub repository access
-              <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-                <ArrowUpRight className="h-3 w-3" />
-              </Link>
-            </Label>
-            <div className="flex items-center gap-2">
-              <Select
-                value={selectedGitIntegrationId}
-                onValueChange={setuserGitIntegrationId}
-                disabled={!hasIntegrations}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue
-                    placeholder={hasIntegrations ? "Select account" : "No connections"}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None (public repos only)</SelectItem>
-                  {integrations?.map((installation) => (
-                    <SelectItem
-                      key={installation.git_integration.id}
-                      value={`app:${installation.git_integration.id}`}
-                    >
-                      <div className="flex items-center">
-                        <Image
-                          src="/github.svg"
-                          alt="GitHub"
-                          width={16}
-                          height={16}
-                          className="mr-2 h-4 w-4"
-                        />
-                        {installation.git_integration.providerAccountLogin} · GitHub App
-                      </div>
-                    </SelectItem>
-                  ))}
-                  {githubAvailability.mode === "pat" ? (
-                    <SelectItem value="global-pat">
-                      Shared GitHub PAT (@{githubAvailability.accountLogin})
-                    </SelectItem>
-                  ) : null}
-                </SelectContent>
-              </Select>
-              {/* Help sits beside the picker so it never covers the controls above */}
-              <HelpHint label="What does a GitHub connection do?">
-                Connect a GitHub account to enable commit, push, fork and private repo access.
-              </HelpHint>
-            </div>
-          </div>
-        ) : null}
 
         {/* ── 4b. Optional integrations, folded away until someone wants one ── */}
         {isGoogleCloudAvailable || mcpConnections.length > 0 ? (

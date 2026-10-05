@@ -35,17 +35,9 @@ function SlackSetup({ name }: { name: string }) {
       </Button>
       <Steps
         items={[
+          "Install it to your workspace and copy its two tokens into the .env.",
           <>
-            Install the app to your workspace, then copy the Bot User OAuth Token into{" "}
-            <span className={code}>SLACK_BOT_TOKEN</span>.
-          </>,
-          <>
-            Under Basic Information → App-Level Tokens, create a token with{" "}
-            <span className={code}>connections:write</span> and copy it into{" "}
-            <span className={code}>SLACK_APP_TOKEN</span>.
-          </>,
-          <>
-            Start the bot, then run <span className={code}>/invite @{botName}</span> in a channel.
+            Start the bot, then <span className={code}>/invite @{botName}</span> in a channel.
           </>,
         ]}
       />
@@ -68,11 +60,7 @@ function DiscordSetup() {
       </Button>
       <Steps
         items={[
-          "Create an application and open its Bot page.",
-          <>
-            Reset the token and copy it into <span className={code}>DISCORD_BOT_TOKEN</span>.
-          </>,
-          "On the same page, turn on Message Content Intent.",
+          "Create an application. On its Bot page, reset the token into the .env and turn on Message Content Intent.",
           "Start the bot. It prints the link that adds it to your server.",
         ]}
       />
@@ -127,11 +115,14 @@ export function DeployInstructions({
           </p>
         ) : (
           <p className="text-xs text-fg-4">
-            Only secrets go here; the bot loads everything else from GitTerm when it starts. New
-            token replaces the old one, which stops working.
+            Only secrets. The bot loads everything else from GitTerm.
           </p>
         )}
-        <CodeBlock code={envFile({ platform, token, githubToken })} copyLabel=".env" />
+        <CodeBlock
+          code={envFile({ platform, token, githubToken })}
+          copyLabel=".env"
+          language="env"
+        />
       </section>
 
       <section className="space-y-3">
@@ -149,27 +140,23 @@ export function DeployInstructions({
           </TabsList>
           <TabsContent value="docker" className="space-y-2">
             <p className="text-xs text-fg-4">
-              In the folder with the .env. It restarts on its own and keeps its threads in the{" "}
-              <span className={code}>gitterm-{platform}-bot</span> volume; follow it with{" "}
-              <span className={code}>docker logs -f gitterm-{platform}-bot</span>.
+              Next to the .env. Logs:{" "}
+              <span className={code}>docker logs -f gitterm-{platform}-bot</span>
             </p>
-            <CodeBlock code={dockerCommand(platform)} copyLabel="Command" />
+            <CodeBlock code={dockerCommand(platform)} copyLabel="Command" language="shell" />
           </TabsContent>
           <TabsContent value="terminal" className="space-y-2">
-            <p className="text-xs text-fg-4">In the folder with the .env:</p>
-            <CodeBlock code={`npx ${pkg}`} copyLabel="Command" />
+            <p className="text-xs text-fg-4">Next to the .env.</p>
+            <CodeBlock code={`npx ${pkg}`} copyLabel="Command" language="shell" />
           </TabsContent>
           <TabsContent value="code" className="space-y-2">
             <p className="text-xs text-fg-4">
               Install <span className={code}>{pkg}</span> and run with{" "}
               <span className={code}>node --env-file=.env</span>.
             </p>
-            <CodeBlock code={codeSnippet(platform)} copyLabel="Code" />
+            <CodeBlock code={codeSnippet(platform)} copyLabel="Code" language="ts" />
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-fg-4">
-          Changes saved here apply the next time the bot starts; restart it after saving.
-        </p>
       </section>
     </div>
   );
