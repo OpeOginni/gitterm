@@ -11,11 +11,11 @@ import {
   Lock,
   Plus,
   Search,
+  X,
 } from "lucide-react";
 import { GitHub as Github } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -108,6 +108,8 @@ export function GitHubRepositoryBranchField({
 
   const [isRepoListOpen, setIsRepoListOpen] = useState(false);
   const repoFieldRef = useRef<HTMLDivElement>(null);
+  const repoInputRef = useRef<HTMLInputElement>(null);
+  const focusRepoInputRef = useRef(false);
 
   const branchSourceRef = useRef<"empty" | "default" | "manual" | "url">("empty");
   const repoIdentityRef = useRef("");
@@ -251,6 +253,20 @@ export function GitHubRepositoryBranchField({
   const resolveError = !!integration && !!parsedRepository && repositoryQuery.error;
   const canPickBranch = !!integration && !!resolvedRepository && !branchFromUrl;
   const isRepoDropdownOpen = !!integration && isRepoListOpen && !parsedRepository;
+  // A recognised repo shows as a chip; one GitHub can't find stays editable so it can be fixed.
+  const showRepoChip = !!parsedRepository && !resolveError;
+
+  useEffect(() => {
+    if (showRepoChip || !focusRepoInputRef.current) return;
+    focusRepoInputRef.current = false;
+    repoInputRef.current?.focus();
+  }, [showRepoChip]);
+
+  const clearRepo = () => {
+    focusRepoInputRef.current = true;
+    onRepoUrlChange("");
+    if (integration) setIsRepoListOpen(true);
+  };
 
   return (
     <div className="grid gap-4">
@@ -262,28 +278,55 @@ export function GitHubRepositoryBranchField({
         <Popover open={isRepoDropdownOpen} onOpenChange={setIsRepoListOpen}>
           <PopoverAnchor asChild>
             <div className="relative">
-              <Input
-                id="repo"
-                placeholder={
-                  integration ? "Search your repos or paste a URL" : "https://github.com/owner/repo"
-                }
-                value={repoUrl}
-                onChange={(event) => {
-                  onRepoUrlChange(event.target.value);
-                  if (integration) setIsRepoListOpen(true);
-                }}
-                onClick={() => {
-                  if (integration) setIsRepoListOpen(true);
-                }}
-                onKeyDown={(event) => {
-                  if (integration && event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setIsRepoListOpen(true);
+              {showRepoChip && parsedRepository ? (
+                <div className="flex h-10 w-full min-w-0 items-center gap-2.5 rounded-lg bg-input/70 pr-1.5 pl-3.5 text-sm">
+                  <Github className="size-4 shrink-0 text-fg-2" />
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="text-fg-3">{parsedRepository.owner}/</span>
+                    <span className="font-medium text-fg">{parsedRepository.repo}</span>
+                  </span>
+                  {isResolvingRepo ? (
+                    <Loader2 className="size-3.5 shrink-0 animate-spin text-fg-4" />
+                  ) : resolvedRepository?.private ? (
+                    <Lock className="size-3.5 shrink-0 text-fg-4" aria-label="Private" />
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={clearRepo}
+                    disabled={disabled}
+                    aria-label="Clear repository"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-md text-fg-4 transition-colors hover:bg-fill-2 hover:text-fg"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ) : (
+                <Input
+                  ref={repoInputRef}
+                  id="repo"
+                  placeholder={
+                    integration
+                      ? "Search your repos or paste a URL"
+                      : "https://github.com/owner/repo"
                   }
-                }}
-                disabled={disabled}
-                autoComplete="off"
-              />
+                  value={repoUrl}
+                  onChange={(event) => {
+                    onRepoUrlChange(event.target.value);
+                    if (integration) setIsRepoListOpen(true);
+                  }}
+                  onClick={() => {
+                    if (integration) setIsRepoListOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (integration && event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setIsRepoListOpen(true);
+                    }
+                  }}
+                  disabled={disabled}
+                  autoComplete="off"
+                />
+              )}
             </div>
           </PopoverAnchor>
 
@@ -344,35 +387,23 @@ export function GitHubRepositoryBranchField({
             </div>
           </PopoverContent>
         </Popover>
-        {/* inline validation hint */}
-        <div className="min-h-5 text-xs">
-          {parsedRepository ? (
-            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-              <Github className="h-3 w-3" />
-              {parsedRepository.fullName}
-              {branchFromUrl ? (
-                <Badge
-                  variant="secondary"
-                  className="ml-1 gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0 text-[11px] text-emerald-300"
-                >
-                  <GitBranch className="h-2.5 w-2.5" />
-                  {branchFromUrl}
-                </Badge>
-              ) : null}
-            </span>
-          ) : hasGitHubUrl ? (
-            <span className="inline-flex items-center gap-1 text-amber-400/80">
-              <AlertCircle className="h-3 w-3 text-amber-400 opacity-80" />
-              Enter a valid GitHub URL
-            </span>
-          ) : (
-            <span className="text-muted-foreground/60">
-              {integration
-                ? "Search your connected repos, or paste any GitHub URL"
-                : "Paste a URL — /tree/branch links set the branch automatically"}
-            </span>
-          )}
-        </div>
+        {/* inline validation hint; a recognised repo needs none, the chip shows it */}
+        {showRepoChip ? null : (
+          <div className="min-h-5 text-xs">
+            {parsedRepository ? null : hasGitHubUrl ? (
+              <span className="inline-flex items-center gap-1 text-amber-400/80">
+                <AlertCircle className="h-3 w-3 text-amber-400 opacity-80" />
+                Enter a valid GitHub URL
+              </span>
+            ) : (
+              <span className="text-muted-foreground/60">
+                {integration
+                  ? "Search your connected repos, or paste any GitHub URL"
+                  : "Paste a URL — /tree/branch links set the branch automatically"}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Branch ── */}
