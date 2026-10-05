@@ -313,14 +313,6 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
       {credential.providerDisplayName}.
     </>
   );
-  const missing = [
-    !modelDone && "a model",
-    !repoDone && "a repository",
-    !platform && "a platform",
-  ].filter((item): item is string => !!item);
-  const missingText = missing.length
-    ? `Add ${new Intl.ListFormat("en", { type: "conjunction" }).format(missing)} first.`
-    : null;
 
   if (isLoadingCatalog) {
     return (
@@ -577,7 +569,7 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
               </div>
               {savedId ? null : (
                 <p className="text-xs text-fg-4">
-                  {missingText ?? "Saves the bot and creates its GitTerm token, shown once."}
+                  Saves the bot and creates its GitTerm token, shown once.
                 </p>
               )}
             </div>
