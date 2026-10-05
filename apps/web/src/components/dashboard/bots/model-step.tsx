@@ -121,13 +121,11 @@ export function ModelStepBody({
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className={modelProblem ? "text-xs text-destructive" : "text-xs text-fg-4"}>
-              {modelProblem ?? "OpenCode format: provider/model. Edit it to use any model."}
-            </p>
+            {modelProblem ? <p className="text-xs text-destructive">{modelProblem}</p> : null}
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 gap-1.5 text-xs text-fg-3"
+              className="ml-auto h-7 gap-1.5 text-xs text-fg-3"
               onClick={() => setApiKeyOpen(true)}
             >
               <Plus className="size-3.5" />
