@@ -273,7 +273,7 @@ export function AgentConfigSection() {
         <div className="grid min-h-0 overflow-y-auto sm:grid-cols-[220px_minmax(0,1fr)] sm:overflow-hidden">
           <aside className="min-w-0 border-b border-border bg-fill p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
             <Label className="mb-3 block font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
-              Runtime
+              Agent
             </Label>
             <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-1 sm:overflow-visible sm:px-0 sm:pb-0">
               {AGENT_CONFIG_KINDS.map((kind) => {
