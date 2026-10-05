@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Key, Plus, UserRound } from "lucide-react";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
-import { SettingsEmptyState } from "@/components/ui/form-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -52,15 +51,15 @@ export function ModelStepBody({
   const active = credentials.filter((candidate) => candidate.isActive);
   const hasOauth = providers.some((provider) => provider.authType === "oauth");
   const addButtons = (
-    <div className="flex flex-wrap justify-center gap-2">
-      <Button size="sm" variant="outline" className="gap-2" onClick={() => setApiKeyOpen(true)}>
+    <div className="flex flex-wrap gap-2">
+      <Button className="h-9 gap-2" onClick={() => setApiKeyOpen(true)}>
         <Key className="size-3.5" />
         Add API key
       </Button>
       {hasOauth ? (
-        <Button size="sm" variant="outline" className="gap-2" onClick={() => setConnectOpen(true)}>
+        <Button variant="outline" className="h-9 gap-2" onClick={() => setConnectOpen(true)}>
           <UserRound className="size-3.5" />
-          Connect account
+          Sign in with a subscription
         </Button>
       ) : null}
     </div>
@@ -71,12 +70,12 @@ export function ModelStepBody({
       {isLoading ? (
         <Skeleton className="h-16 w-full bg-fill" />
       ) : active.length === 0 ? (
-        <SettingsEmptyState
-          icon={Key}
-          title="No model credentials yet"
-          description="The bot's agent runs on your own key or subscription."
-          action={addButtons}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="min-w-0 text-[13px] text-fg-3">
+            The agent runs on your own API key or a subscription you already pay for.
+          </p>
+          {addButtons}
+        </div>
       ) : (
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">

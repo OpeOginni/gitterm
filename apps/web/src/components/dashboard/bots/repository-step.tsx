@@ -63,28 +63,19 @@ function ConnectGitHubPrompt() {
     );
   }
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-line bg-fill p-4 sm:flex-row sm:items-center">
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-line bg-fill-2">
-        <Github className="size-5 text-fg" fill="currentColor" />
-      </span>
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <p className="text-[15px] font-medium text-fg">Connect GitHub</p>
-        <p className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-fg-3">
-          {["Private repositories", "Push branches", "Open pull requests"].map((item) => (
-            <span key={item} className="flex items-center gap-1.5">
-              <Check className="size-3.5 text-primary" />
-              {item}
-            </span>
-          ))}
-        </p>
+    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-5">
+      <div className="flex min-w-0 items-center gap-3">
+        <Github className="size-5 shrink-0 text-fg" fill="currentColor" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-fg">Connect GitHub</p>
+          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.14em] text-fg-4">
+            Private repos · Push branches · Pull requests
+          </p>
+        </div>
       </div>
-      <Button className="h-10 gap-2 text-sm" onClick={connect} disabled={connecting}>
-        {connecting ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Github className="size-4" fill="currentColor" />
-        )}
-        Connect GitHub
+      <Button className="h-9 gap-2" onClick={connect} disabled={connecting}>
+        {connecting ? <Loader2 className="size-3.5 animate-spin" /> : null}
+        Connect
       </Button>
     </div>
   );
@@ -122,13 +113,18 @@ function GitHubAccounts({
                   : "border-line hover:border-fg-4 hover:bg-fill",
               )}
             >
-              <Image
-                src={`https://github.com/${login}.png?size=72`}
-                alt=""
-                width={36}
-                height={36}
-                className="size-9 shrink-0 rounded-full border border-line object-cover"
-              />
+              <span className="relative shrink-0">
+                <Image
+                  src={`https://github.com/${login}.png?size=72`}
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="size-9 rounded-full border border-line object-cover"
+                />
+                <span className="absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full border-2 border-card bg-fg">
+                  <Github className="size-3 text-background" fill="currentColor" />
+                </span>
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-fg">@{login}</span>
                 <span className="block text-[13px] text-fg-3">
