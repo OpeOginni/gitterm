@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BOT_TOKEN_SCOPES, codeSnippet, envFile, type BotConfig } from "./config";
+import { BOT_TOKEN_SCOPES, codeSnippet, dockerCommand, envFile, type BotConfig } from "./config";
 import { CodeBlock } from "./step";
 
 const subheadClass = "font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4";
@@ -185,11 +185,20 @@ export function ConfigStepBody({
 
       <section className="space-y-3">
         <h4 className={subheadClass}>3 · Run it</h4>
-        <Tabs defaultValue="terminal">
+        <Tabs defaultValue="docker">
           <TabsList>
+            <TabsTrigger value="docker">Docker</TabsTrigger>
             <TabsTrigger value="terminal">Terminal</TabsTrigger>
             <TabsTrigger value="code">Code</TabsTrigger>
           </TabsList>
+          <TabsContent value="docker" className="space-y-2">
+            <p className="text-xs text-fg-4">
+              In the folder with the .env. It restarts on its own and keeps its threads in the{" "}
+              <span className={code}>gitterm-{config.platform}-bot</span> volume; follow it with{" "}
+              <span className={code}>docker logs -f gitterm-{config.platform}-bot</span>.
+            </p>
+            <CodeBlock code={dockerCommand(config.platform)} copyLabel="Command" />
+          </TabsContent>
           <TabsContent value="terminal" className="space-y-2">
             <p className="text-xs text-fg-4">In the folder with the .env:</p>
             <CodeBlock code={`npx ${pkg}`} copyLabel="Command" />

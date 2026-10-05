@@ -126,6 +126,19 @@ export function envFile(config: BotConfig): string {
   return `${lines.join("\n")}\n`;
 }
 
+/** One image runs either bot; it picks the platform from the token in the .env. */
+export const BOT_IMAGE = "ghcr.io/opeoginni/gitterm-bot";
+
+/** Mounts the .env (Docker's --env-file doesn't read dotenv quoting) and keeps state in a volume. */
+export function dockerCommand(platform: Platform): string {
+  const name = `gitterm-${platform}-bot`;
+  return [
+    `docker run -d --name ${name} --restart unless-stopped \\`,
+    `  -v "$PWD/.env:/data/.env:ro" -v ${name}:/data \\`,
+    `  ${BOT_IMAGE}`,
+  ].join("\n");
+}
+
 export function codeSnippet(config: BotConfig): string {
   const factory = config.platform === "slack" ? "createSlackBot" : "createDiscordBot";
   const model = config.credential

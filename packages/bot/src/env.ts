@@ -124,7 +124,8 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
   command: string | undefined;
   options: Omit<BotOptions, "adapter">;
 } {
-  if (existsSync(".env")) process.loadEnvFile(".env");
+  // Bun loads .env itself and has no process.loadEnvFile; Node needs the call.
+  if (existsSync(".env") && typeof process.loadEnvFile === "function") process.loadEnvFile(".env");
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -132,6 +133,7 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
       repo: { type: "string" },
       model: { type: "string" },
       "instructions-file": { type: "string" },
+      help: { type: "boolean", short: "h" },
     },
   });
   const flags: Env = {
@@ -141,7 +143,7 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
   };
   const env = { ...process.env };
   for (const [name, value] of Object.entries(flags)) if (value) env[name] = value;
-  return { command: positionals[0], options: botOptionsFromEnv(env) };
+  return { command: values.help ? "help" : positionals[0], options: botOptionsFromEnv(env) };
 }
 
 /** The environment variables every bot command line reads, for its usage text. */

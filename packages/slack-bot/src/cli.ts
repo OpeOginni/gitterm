@@ -3,7 +3,7 @@ import { BOT_ENV_HELP, cliOptions, hasRepository } from "@gitterm/bot";
 import { createSlackBot } from "./index.js";
 import { slackManifest } from "./manifest.js";
 
-const USAGE = `Usage: gitterm-slack-bot [--repo <url>[#branch]] [--model <provider/model>]
+const USAGE = `Usage: gitterm-slack-bot [-h] [--repo <url>[#branch]] [--model <provider/model>]
                     [--instructions-file <path>]
        gitterm-slack-bot manifest [name]
 

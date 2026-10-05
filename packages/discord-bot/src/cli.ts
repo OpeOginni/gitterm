@@ -2,7 +2,7 @@
 import { BOT_ENV_HELP, cliOptions, hasRepository } from "@gitterm/bot";
 import { createDiscordBot } from "./index.js";
 
-const USAGE = `Usage: gitterm-discord-bot [--repo <url>[#branch]] [--model <provider/model>]
+const USAGE = `Usage: gitterm-discord-bot [-h] [--repo <url>[#branch]] [--model <provider/model>]
                     [--instructions-file <path>]
 
 Environment (a .env file in the working directory is loaded):
