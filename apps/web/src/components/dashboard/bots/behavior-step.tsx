@@ -183,6 +183,10 @@ export function BehaviorStepBody({
 }) {
   const [someChannels, setSomeChannels] = useState(behavior.channels.length > 0);
   const [somePeople, setSomePeople] = useState(behavior.allowedUsers.length > 0);
+  // Ids set aside when someone picks "every"/"everyone", per platform, so switching back
+  // brings them back instead of starting over.
+  const setAside = useRef<Record<string, { channels: string[]; allowedUsers: string[] }>>({});
+  const aside = () => (setAside.current[platform ?? "none"] ??= { channels: [], allowedUsers: [] });
   const channelName = (id: string) => knownChannels.find((channel) => channel.id === id)?.name;
   const toggleChannel = (id: string) =>
     onChange({
@@ -211,7 +215,12 @@ export function BehaviorStepBody({
           ]}
           onChange={(value) => {
             setSomeChannels(value === "some");
-            if (value === "every") onChange({ channels: [] });
+            if (value === "every") {
+              if (behavior.channels.length) aside().channels = behavior.channels;
+              onChange({ channels: [] });
+            } else if (!behavior.channels.length && aside().channels.length) {
+              onChange({ channels: aside().channels });
+            }
           }}
         />
         {someChannels ? (
@@ -277,7 +286,12 @@ export function BehaviorStepBody({
           ]}
           onChange={(value) => {
             setSomePeople(value === "some");
-            if (value === "everyone") onChange({ allowedUsers: [] });
+            if (value === "everyone") {
+              if (behavior.allowedUsers.length) aside().allowedUsers = behavior.allowedUsers;
+              onChange({ allowedUsers: [] });
+            } else if (!behavior.allowedUsers.length && aside().allowedUsers.length) {
+              onChange({ allowedUsers: aside().allowedUsers });
+            }
           }}
         />
         {somePeople ? (
