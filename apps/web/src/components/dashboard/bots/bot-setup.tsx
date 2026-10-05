@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { useQuery } from "@tanstack/react-query";
@@ -16,9 +17,19 @@ import { ModelStepBody } from "./model-step";
 import { RepositoryStepBody } from "./repository-step";
 import { Step, StepProgress, type StepInfo } from "./step";
 
-const PLATFORMS: { value: Platform; label: string }[] = [
-  { value: "slack", label: "Slack" },
-  { value: "discord", label: "Discord" },
+const PLATFORMS: { value: Platform; label: string; description: string; logo: string }[] = [
+  {
+    value: "slack",
+    label: "Slack",
+    description: "Mention it in a channel or DM",
+    logo: "/slack.svg",
+  },
+  {
+    value: "discord",
+    label: "Discord",
+    description: "Mention it in a server channel",
+    logo: "/discord.svg",
+  },
 ];
 
 export function BotSetup() {
@@ -74,7 +85,7 @@ export function BotSetup() {
   const [toolIds, setToolIds] = useState<string[]>([]);
   const selectedTools = tools.filter((tool) => toolIds.includes(tool.id));
 
-  const [platform, setPlatform] = useState<Platform>("slack");
+  const [platform, setPlatform] = useState<Platform | null>(null);
 
   const [token, setToken] = useState<string | null>(null);
 
@@ -91,7 +102,11 @@ export function BotSetup() {
   const toolsStep: StepInfo | null = toolsEnabled
     ? { id: "bot-tools", title: "Tools", state: selectedTools.length ? "done" : "optional" }
     : null;
-  const platformStep: StepInfo = { id: "bot-platform", title: "Platform", state: "done" };
+  const platformStep: StepInfo = {
+    id: "bot-platform",
+    title: "Platform",
+    state: platform ? "done" : "todo",
+  };
   const configStep: StepInfo = {
     id: "bot-config",
     title: "Config",
@@ -105,7 +120,11 @@ export function BotSetup() {
     : modelIssue
       ? "Enter a valid model ID."
       : `Runs ${model.trim()} with ${credential.providerDisplayName} · ${credential.label}.`;
-  const missing = [!modelDone && "a model", !repoDone && "a repository"].filter(Boolean);
+  const missing = [
+    !modelDone && "a model",
+    !repoDone && "a repository",
+    !platform && "a platform",
+  ].filter((item): item is string => !!item);
 
   if (isLoadingCatalog) {
     return (
@@ -211,7 +230,7 @@ export function BotSetup() {
         number={number(platformStep)}
         hint="Where people talk to the agent."
       >
-        <div className="inline-flex rounded-lg border border-line bg-fill p-1" role="radiogroup">
+        <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
           {PLATFORMS.map((option) => (
             <button
               key={option.value}
@@ -220,11 +239,29 @@ export function BotSetup() {
               aria-checked={platform === option.value}
               onClick={() => setPlatform(option.value)}
               className={cn(
-                "rounded-md px-4 py-1.5 text-sm transition-colors",
-                platform === option.value ? "bg-fill-2 text-fg" : "text-fg-3 hover:text-fg-2",
+                "flex items-center gap-3.5 rounded-xl border px-4 py-3.5 text-left transition-colors",
+                platform === option.value
+                  ? "border-primary/60 bg-fill"
+                  : "border-line hover:border-fg-4 hover:bg-fill",
               )}
             >
-              {option.label}
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-line bg-fill-2">
+                <Image src={option.logo} alt="" width={20} height={20} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-medium text-fg">{option.label}</span>
+                <span className="block truncate text-[13px] text-fg-3">{option.description}</span>
+              </span>
+              <span
+                className={cn(
+                  "flex size-4 shrink-0 items-center justify-center rounded-full border",
+                  platform === option.value ? "border-primary" : "border-fg-4",
+                )}
+              >
+                {platform === option.value ? (
+                  <span className="size-2 rounded-full bg-primary" />
+                ) : null}
+              </span>
             </button>
           ))}
         </div>
@@ -238,9 +275,14 @@ export function BotSetup() {
         <ConfigStepBody
           token={token}
           onToken={setToken}
-          missing={missing.length ? `Add ${missing.join(" and ")} first.` : null}
+          missing={
+            missing.length
+              ? `Add ${new Intl.ListFormat("en", { type: "conjunction" }).format(missing)} first.`
+              : null
+          }
           config={{
-            platform,
+            // Token creation waits for a platform (see `missing`), so the fallback is never shown.
+            platform: platform ?? "slack",
             repo: `${repository?.normalizedUrl ?? ""}${branch ? `#${branch}` : ""}`,
             model: model.trim(),
             credential: credential && !credential.isDefault ? credential.label : undefined,
