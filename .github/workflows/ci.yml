@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build bot packages and dependencies
+        run: bun run build:bots
+
       - name: Test
         run: bun run test
 
