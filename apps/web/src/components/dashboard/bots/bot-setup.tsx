@@ -547,21 +547,39 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
           number={number(deployStep)}
           hint="Its token, the .env, and how to run it."
         >
-          <div className="space-y-6">
-            <div className="grid gap-2 sm:max-w-sm">
+          <div className="space-y-8">
+            <div className="space-y-2">
               <label
                 htmlFor="bot-display-name"
                 className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4"
               >
                 Name in GitTerm
               </label>
-              <Input
-                id="bot-display-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={defaultName}
-                maxLength={100}
-              />
+              <div className="flex flex-wrap gap-3">
+                <Input
+                  id="bot-display-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder={defaultName}
+                  maxLength={100}
+                  className="min-w-56 flex-1"
+                />
+                {savedId ? null : (
+                  <Button
+                    className="h-10 gap-2"
+                    disabled={!settings || create.isPending}
+                    onClick={() => settings && create.mutate(settings)}
+                  >
+                    {create.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Create bot
+                  </Button>
+                )}
+              </div>
+              {savedId ? null : (
+                <p className="text-xs text-fg-4">
+                  {missingText ?? "Saves the bot and creates its GitTerm token, shown once."}
+                </p>
+              )}
             </div>
 
             {savedId && platform ? (
@@ -572,21 +590,7 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
                 rotating={rotate.isPending}
                 onRotate={() => rotate.mutate({ id: savedId })}
               />
-            ) : (
-              <div className="flex flex-col items-center gap-4 py-4 text-center">
-                <p className="text-sm text-fg-2">
-                  {missingText ?? "Saves the bot and creates its GitTerm token, shown once."}
-                </p>
-                <Button
-                  className="gap-2"
-                  disabled={!settings || create.isPending}
-                  onClick={() => settings && create.mutate(settings)}
-                >
-                  {create.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                  Create bot
-                </Button>
-              </div>
-            )}
+            ) : null}
           </div>
         </Step>
       </div>

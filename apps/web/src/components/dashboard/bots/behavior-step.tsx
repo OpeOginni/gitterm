@@ -20,33 +20,49 @@ export type BotBehavior = {
 
 const labelClass = "font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4";
 
-/** Two plain choices, like the access switch on the Repository step. */
-function Choice<T extends string>({
+/** Real choices as tiles with a radio dot, like Platform and Compute. */
+function OptionTiles<T extends string>({
   value,
   options,
   onChange,
 }: {
   value: T;
-  options: ReadonlyArray<readonly [T, string]>;
+  options: ReadonlyArray<{ value: T; title: string; description: string }>;
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-line bg-fill p-0.5" role="radiogroup">
-      {options.map(([option, label]) => (
-        <button
-          key={option}
-          type="button"
-          role="radio"
-          aria-checked={value === option}
-          onClick={() => onChange(option)}
-          className={cn(
-            "rounded-md px-2.5 py-1 text-xs transition-colors",
-            value === option ? "bg-fill-2 text-fg" : "text-fg-4 hover:text-fg-2",
-          )}
-        >
-          {label}
-        </button>
-      ))}
+    <div className="grid gap-2.5 sm:grid-cols-2" role="radiogroup">
+      {options.map((option) => {
+        const selected = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
+              selected
+                ? "border-primary/60 bg-fill"
+                : "border-line hover:border-fg-4 hover:bg-fill",
+            )}
+          >
+            <span
+              className={cn(
+                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
+                selected ? "border-primary" : "border-fg-4",
+              )}
+            >
+              {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-fg">{option.title}</span>
+              <span className="block text-[13px] text-fg-3">{option.description}</span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -101,7 +117,7 @@ function IdList({
         }}
         onBlur={add}
         placeholder={placeholder}
-        className="h-8 w-52 font-mono text-xs"
+        className="h-9 w-60 font-mono text-[13px] placeholder:font-sans"
       />
     </div>
   );
@@ -134,22 +150,27 @@ export function BehaviorStepBody({
   return (
     <div className="divide-y divide-line">
       <section className="space-y-3 pb-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className={labelClass}>Where it answers</p>
-          <Choice
-            value={someChannels ? "some" : "every"}
-            options={[
-              ["every", "Every channel it's in"],
-              ["some", "Only some"],
-            ]}
-            onChange={(value) => {
-              setSomeChannels(value === "some");
-              if (value === "every") onChange({ channels: [] });
-            }}
-          />
-        </div>
+        <p className={labelClass}>Where it answers</p>
+        <OptionTiles
+          value={someChannels ? "some" : "every"}
+          options={[
+            {
+              value: "every",
+              title: "Every channel it's in",
+              description:
+                platform === "slack"
+                  ? "Wherever it's invited, and in DMs."
+                  : "Wherever it's been added.",
+            },
+            { value: "some", title: "Only picked channels", description: "Choose them below." },
+          ]}
+          onChange={(value) => {
+            setSomeChannels(value === "some");
+            if (value === "every") onChange({ channels: [] });
+          }}
+        />
         {someChannels ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5 pt-1">
             {knownChannels.length ? (
               <div className="flex flex-wrap gap-2">
                 {knownChannels.map((channel) => {
@@ -173,12 +194,7 @@ export function BehaviorStepBody({
                   );
                 })}
               </div>
-            ) : (
-              <p className="text-[13px] text-fg-3">
-                Start the bot once and the channels it's in show up here to pick. Until then, paste
-                channel IDs.
-              </p>
-            )}
+            ) : null}
             {/* Pasted ids; picked channels stay as chips above. */}
             <IdList
               ids={unknownChannels}
@@ -187,53 +203,53 @@ export function BehaviorStepBody({
                   channels: [...behavior.channels.filter((id) => channelName(id)), ...ids],
                 })
               }
-              placeholder="Add a channel ID"
+              placeholder="Paste a channel ID"
             />
             <p className="text-xs text-fg-4">
+              {knownChannels.length
+                ? ""
+                : "Its channels show up here to click once it has started. "}
               {platform === "discord"
-                ? "Right-click a channel → Copy Channel ID (turn on Developer Mode first)."
-                : "In Slack: open the channel's details; the ID is at the bottom (C0…)."}
+                ? "Right-click a channel → Copy Channel ID (Developer Mode)."
+                : "A channel's ID is at the bottom of its details (C0…)."}
             </p>
           </div>
-        ) : (
-          <p className="text-[13px] text-fg-3">
-            Anyone can mention it in a channel it's been invited to
-            {platform === "slack" ? ", or DM it" : ""}.
-          </p>
-        )}
+        ) : null}
       </section>
 
       <section className="space-y-3 py-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className={labelClass}>Who can use it</p>
-          <Choice
-            value={somePeople ? "some" : "everyone"}
-            options={[
-              ["everyone", "Everyone"],
-              ["some", "Only some people"],
-            ]}
-            onChange={(value) => {
-              setSomePeople(value === "some");
-              if (value === "everyone") onChange({ allowedUsers: [] });
-            }}
-          />
-        </div>
+        <p className={labelClass}>Who can use it</p>
+        <OptionTiles
+          value={somePeople ? "some" : "everyone"}
+          options={[
+            {
+              value: "everyone",
+              title: "Everyone",
+              description: "Anyone where it answers.",
+            },
+            { value: "some", title: "Only listed people", description: "Add them below." },
+          ]}
+          onChange={(value) => {
+            setSomePeople(value === "some");
+            if (value === "everyone") onChange({ allowedUsers: [] });
+          }}
+        />
         {somePeople ? (
-          <div className="space-y-2">
+          <div className="space-y-2.5 pt-1">
             <IdList
               ids={behavior.allowedUsers}
               onChange={(allowedUsers) => onChange({ allowedUsers })}
-              placeholder={platform === "discord" ? "Add a user ID" : "Add a member ID"}
+              placeholder={platform === "discord" ? "Paste a user ID" : "Paste a member ID"}
             />
             <p className="text-xs text-fg-4">
               {platform === "discord"
-                ? "Right-click a person → Copy User ID (turn on Developer Mode first)."
-                : "In Slack: a person's profile → ⋯ → Copy member ID."}
+                ? "Right-click a person → Copy User ID (Developer Mode)."
+                : "A person's profile → ⋯ → Copy member ID."}
             </p>
           </div>
         ) : null}
         {platform !== "discord" ? (
-          <label className="flex cursor-pointer items-center justify-between gap-4 pt-1">
+          <label className="flex cursor-pointer items-center justify-between gap-4 pt-2">
             <span>
               <span className="block text-sm text-fg">Let guests use it</span>
               <span className="block text-[13px] text-fg-3">
