@@ -77,6 +77,9 @@ export type BotEnv = {
 export function envFile(config: BotEnv): string {
   const serverUrl = botServerUrl();
   const lines = [
+    "# Secrets only. Repo, model, channels and people load from",
+    "# GitTerm when the bot starts. Edit them on this page.",
+    "",
     ...(serverUrl ? [`GITTERM_SERVER_URL=${serverUrl}`] : []),
     ...(config.token
       ? [`GITTERM_API_TOKEN=${config.token}`]

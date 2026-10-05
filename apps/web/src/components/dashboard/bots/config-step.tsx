@@ -113,11 +113,7 @@ export function DeployInstructions({
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
             The token is shown only once. Copy the file now.
           </p>
-        ) : (
-          <p className="text-xs text-fg-4">
-            Only secrets. The bot loads everything else from GitTerm.
-          </p>
-        )}
+        ) : null}
         <CodeBlock
           code={envFile({ platform, token, githubToken })}
           copyLabel=".env"
