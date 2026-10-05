@@ -37,6 +37,8 @@ try {
     workspace,
     idempotencyKey: "review-pr-42",
     prompt: "Review PR #42 and fix the failing tests.",
+    // Optional files for the agent, e.g. a screenshot of the failure.
+    attachments: [{ name: "failure.png", mime: "image/png", data: base64Png }],
   });
   const result = await client.runs.result(run);
   console.log(result.finalText);

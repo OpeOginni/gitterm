@@ -471,6 +471,15 @@ export type AgentRunListResult = {
   pagination: { total: number; limit: number; offset: number; hasMore: boolean };
 };
 
+export type AgentRunAttachment = {
+  /** Shown to the agent so the prompt can refer to the file by name. */
+  name?: string;
+  /** e.g. `image/png`. */
+  mime: string;
+  /** Base64-encoded content. */
+  data: string;
+};
+
 export type AgentRunCreateInput = {
   workspace: WorkspaceRef;
   /**
@@ -480,6 +489,11 @@ export type AgentRunCreateInput = {
    */
   idempotencyKey?: string;
   prompt: string;
+  /**
+   * Files the agent receives together with the prompt, e.g. screenshots for a vision model.
+   * At most 10 per run and 20 MB of base64 in total.
+   */
+  attachments?: AgentRunAttachment[];
   title?: string;
   agent?: string;
   /** OpenCode model in provider/model format. */
