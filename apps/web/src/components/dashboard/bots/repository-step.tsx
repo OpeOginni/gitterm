@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
+import Link from "next/link";
+import type { Route } from "next";
 import { Check, Loader2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
@@ -91,7 +93,6 @@ function GitHubAccounts({
   selectedId: string | undefined;
   onSelect: (id: string) => void;
 }) {
-  const { connecting, connect } = useConnectGitHub();
   return (
     <div className="space-y-2.5">
       <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3" role="radiogroup">
@@ -142,23 +143,21 @@ function GitHubAccounts({
             </button>
           );
         })}
-        <button
-          type="button"
-          onClick={connect}
-          disabled={connecting}
+        <Link
+          href={"/dashboard/integrations" as Route}
           className={cn(
             tileClass,
             "border-dashed border-line text-fg-3 hover:border-fg-4 hover:bg-fill hover:text-fg-2",
           )}
         >
           <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed border-line">
-            {connecting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            <Plus className="size-4" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium">Add account</span>
-            <span className="block truncate text-[13px] text-fg-4">Another user or org</span>
+            <span className="block truncate text-[13px] text-fg-4">In Integrations</span>
           </span>
-        </button>
+        </Link>
       </div>
       <p className="text-xs text-fg-4">
         Pick whose repositories to browse. The bot uses the account that owns the repository.
