@@ -48,14 +48,20 @@ export function SetupSummary({ steps }: { steps: StepInfo[] }) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-card">
-      <div className="space-y-4 p-5">
+      <div className="space-y-3.5 px-5 pt-5 pb-4">
         <div className="flex items-baseline justify-between gap-3">
           <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
             Your bot
           </span>
-          <span className="font-mono text-[11px] tabular-nums text-fg-4">
-            {done}/{required.length} required
-          </span>
+          {next ? (
+            <span className="font-mono text-[11px] tabular-nums text-fg-4">
+              {done}/{required.length} required
+            </span>
+          ) : (
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
+              Ready
+            </span>
+          )}
         </div>
         <div className="flex gap-1">
           {required.map((step) => (
@@ -72,9 +78,6 @@ export function SetupSummary({ steps }: { steps: StepInfo[] }) {
             />
           ))}
         </div>
-        <p className="text-[15px] font-medium text-fg">
-          {next ? `Next: ${next.title.toLowerCase()}` : "Ready to run"}
-        </p>
       </div>
       <ol className="border-t border-line">
         {steps.map((step, index) => (
@@ -82,14 +85,14 @@ export function SetupSummary({ steps }: { steps: StepInfo[] }) {
             <a
               href={`#${step.id}`}
               className={cn(
-                "relative flex items-center gap-3 px-5 py-3 transition-colors hover:bg-fill",
+                "relative flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-fill",
                 step === next && "bg-fill",
               )}
             >
               {step === next ? (
                 <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary" />
               ) : null}
-              <StepMark number={index + 1} state={step.state} />
+              <StepMark number={index + 1} state={step.state} small />
               <span className="min-w-0 flex-1">
                 <span
                   className={cn(
