@@ -14,7 +14,6 @@ CREATE TABLE "bot" (
 	"allow_guests" boolean DEFAULT false NOT NULL,
 	"instructions" text,
 	"setup" text,
-	"known_channels" jsonb,
 	"api_token_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,

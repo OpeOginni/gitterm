@@ -22,9 +22,7 @@ export function slackManifest(name = "GitTerm Agent") {
         bot: [
           "app_mentions:read",
           "channels:history",
-          "channels:read",
           "groups:history",
-          "groups:read",
           "im:history",
           "chat:write",
           "files:read",

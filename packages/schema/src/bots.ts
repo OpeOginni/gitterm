@@ -40,11 +40,3 @@ export const botSettingsSchema = z.object({
 });
 
 export type BotSettings = z.infer<typeof botSettingsSchema>;
-
-/** A channel a running bot reported it's in. */
-export const botChannelSchema = z.object({
-  id: z.string().min(1).max(100),
-  name: z.string().max(200),
-});
-
-export type BotChannel = z.infer<typeof botChannelSchema>;

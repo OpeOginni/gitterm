@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -88,14 +88,11 @@ function IdList({
   onChange,
   placeholder,
   check,
-  nameOf = () => undefined,
 }: {
   ids: string[];
   onChange: (ids: string[]) => void;
   placeholder: string;
   check: (id: string) => string | null;
-  /** A readable name for an id, when the bot has reported one. */
-  nameOf?: (id: string) => string | undefined;
 }) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -126,16 +123,12 @@ function IdList({
         {ids.map((id) => (
           <span
             key={id}
-            title={nameOf(id) ? id : undefined}
-            className={cn(
-              "flex max-w-full items-center gap-1 rounded-md bg-fill-2 py-0.5 pr-0.5 pl-2 text-fg",
-              nameOf(id) ? "text-[13px]" : "font-mono text-xs",
-            )}
+            className="flex max-w-full items-center gap-1 rounded-md bg-fill-2 py-0.5 pr-0.5 pl-2 font-mono text-xs text-fg"
           >
-            <span className="truncate">{nameOf(id) ?? id}</span>
+            <span className="truncate">{id}</span>
             <button
               type="button"
-              aria-label={`Remove ${nameOf(id) ?? id}`}
+              aria-label={`Remove ${id}`}
               onClick={(event) => {
                 event.stopPropagation();
                 onChange(ids.filter((entry) => entry !== id));
@@ -178,13 +171,10 @@ function IdList({
 /** Where the bot answers, who may use it, and what it should know. All optional. */
 export function BehaviorStepBody({
   platform,
-  knownChannels,
   behavior,
   onChange,
 }: {
   platform: Platform | null;
-  /** Channels the running bot reported; empty until it has started once. */
-  knownChannels: Array<{ id: string; name: string }>;
   behavior: BotBehavior;
   onChange: (patch: Partial<BotBehavior>) => void;
 }) {
@@ -194,8 +184,6 @@ export function BehaviorStepBody({
   // brings them back instead of starting over.
   const setAside = useRef<Record<string, { channels: string[]; allowedUsers: string[] }>>({});
   const aside = () => (setAside.current[platform ?? "none"] ??= { channels: [], allowedUsers: [] });
-  const channelName = (id: string) => knownChannels.find((channel) => channel.id === id)?.name;
-  const unpicked = knownChannels.filter((channel) => !behavior.channels.includes(channel.id));
 
   return (
     <div className="divide-y divide-line">
@@ -229,31 +217,10 @@ export function BehaviorStepBody({
             <IdList
               ids={behavior.channels}
               onChange={(channels) => onChange({ channels })}
-              nameOf={channelName}
               placeholder="Paste channel IDs"
               check={idCheck(platform, "channel")}
             />
-            {/* Channels the running bot reported it's in, one click to add. */}
-            {unpicked.length ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="mr-1 text-xs text-fg-4">It's in</span>
-                {unpicked.map((channel) => (
-                  <button
-                    key={channel.id}
-                    type="button"
-                    onClick={() => onChange({ channels: [...behavior.channels, channel.id] })}
-                    className="flex max-w-full items-center gap-1 rounded-md border border-dashed border-line px-2 py-0.5 text-[13px] text-fg-3 transition-colors hover:border-fg-4 hover:text-fg"
-                  >
-                    <Plus className="size-3 shrink-0" />
-                    <span className="truncate">{channel.name}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
             <p className="text-xs text-fg-4">
-              {knownChannels.length
-                ? ""
-                : "Once the bot has started, the channels it's in show up here to add. "}
               {platform === "discord"
                 ? "Right-click a channel → Copy Channel ID (Developer Mode)."
                 : "A channel's ID is at the bottom of its details (C0…)."}

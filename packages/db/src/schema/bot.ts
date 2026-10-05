@@ -1,4 +1,4 @@
-import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { apiToken, user } from "./auth";
 
 /**
@@ -38,8 +38,6 @@ export const bot = pgTable(
     instructions: text("instructions"),
     /** A command run in the checkout before the agent starts in a new sandbox. */
     setup: text("setup"),
-    /** Channels the bot reported it's in, so the dashboard can offer them; not user-edited. */
-    knownChannels: jsonb("known_channels").$type<Array<{ id: string; name: string }>>(),
     /** The token the bot runs with; it identifies the bot when it asks for its settings. */
     apiTokenId: uuid("api_token_id")
       .unique()

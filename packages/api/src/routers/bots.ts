@@ -3,12 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { and, db, desc, eq } from "@gitterm/db";
 import { apiToken } from "@gitterm/db/schema/auth";
 import { bot } from "@gitterm/db/schema/bot";
-import {
-  BOT_TOKEN_SCOPES,
-  botChannelSchema,
-  botSettingsSchema,
-  type BotSettings,
-} from "@gitterm/schema";
+import { BOT_TOKEN_SCOPES, botSettingsSchema, type BotSettings } from "@gitterm/schema";
 import { accountProcedure, router, sessionProcedure } from "../index";
 import { createApiToken, revokeApiToken } from "../service/auth/api-token";
 
@@ -73,7 +68,7 @@ export const botsRouter = router({
 
   get: sessionProcedure.input(z.object({ id: z.uuid() })).query(async ({ ctx, input }) => {
     const row = await ownBot(ctx.session.user.id, input.id);
-    return { ...settingsOf(row), knownChannels: row.knownChannels ?? [] };
+    return settingsOf(row);
   }),
 
   /** Saves the bot and mints its token, returned once. */
@@ -124,19 +119,6 @@ export const botsRouter = router({
     if (row.apiTokenId) await revokeApiToken({ userId, tokenId: row.apiTokenId });
     return { success: true };
   }),
-
-  /** The running bot lists the channels it's in, so the dashboard can offer them as choices. */
-  reportChannels: accountProcedure("identity:read")
-    .input(z.object({ channels: z.array(botChannelSchema).max(1000) }))
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.authMethod !== "apiToken" || !ctx.apiTokenId) return { saved: false };
-      const updated = await db
-        .update(bot)
-        .set({ knownChannels: input.channels })
-        .where(and(eq(bot.apiTokenId, ctx.apiTokenId), eq(bot.userId, ctx.session.user.id)))
-        .returning({ id: bot.id });
-      return { saved: updated.length > 0 };
-    }),
 
   /** The calling bot's settings, found by its API token; null for any other caller. */
   self: accountProcedure("identity:read").query(async ({ ctx }) => {

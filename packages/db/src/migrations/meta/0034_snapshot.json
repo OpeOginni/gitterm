@@ -803,12 +803,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "known_channels": {
-          "name": "known_channels",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "api_token_id": {
           "name": "api_token_id",
           "type": "uuid",

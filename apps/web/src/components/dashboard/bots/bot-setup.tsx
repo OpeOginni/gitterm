@@ -26,10 +26,7 @@ import { RepositoryStepBody, type GitHubAccess } from "./repository-step";
 import { SetupSummary, Step, type StepInfo } from "./step";
 
 /** A saved bot as the edit page loads it. */
-export type SavedBot = BotSettings & {
-  id: string;
-  knownChannels?: Array<{ id: string; name: string }>;
-};
+export type SavedBot = BotSettings & { id: string };
 
 const PLATFORMS: { value: Platform; label: string; description: string; logo: string }[] = [
   {
@@ -539,7 +536,6 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
           {platform ? (
             <BehaviorStepBody
               platform={platform}
-              knownChannels={bot?.knownChannels ?? []}
               behavior={behavior}
               onChange={(patch) => setBehavior((current) => ({ ...current, ...patch }))}
             />

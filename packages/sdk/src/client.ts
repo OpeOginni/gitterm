@@ -190,8 +190,6 @@ export type GittermClient = {
   bots: {
     /** The settings saved for this client's token in the dashboard; null if it isn't a bot's. */
     self(): Promise<SavedBot | null>;
-    /** Tells the dashboard which channels the bot is in, so they can be picked there. */
-    reportChannels(channels: Array<{ id: string; name: string }>): Promise<void>;
   };
   integrations: {
     /** Integrations the admin has enabled for this deployment. */
@@ -877,10 +875,6 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
     },
     bots: {
       self: () => run(async (): Promise<SavedBot | null> => trpc.bots.self.query()),
-      reportChannels: (channels) =>
-        run(async () => {
-          await trpc.bots.reportChannels.mutate({ channels });
-        }),
     },
     credentials: {
       list: () =>

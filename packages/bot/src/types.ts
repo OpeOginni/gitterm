@@ -127,11 +127,6 @@ export interface ChatAdapter {
    * turn), then `done` (✅) or `failed` (❌). Optional.
    */
   mark?(message: ChatMessage, state: "seen" | "done" | "failed"): Promise<void>;
-  /**
-   * The channels the bot is in, reported to GitTerm so the dashboard can offer them when
-   * someone picks where the bot answers. Optional.
-   */
-  channels?(): Promise<Array<{ id: string; name: string }>>;
 }
 
 /** A repository, optionally with a branch: `https://github.com/acme/app` or `…/app#develop`. */
