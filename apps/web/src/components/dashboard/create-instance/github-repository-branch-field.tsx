@@ -387,23 +387,17 @@ export function GitHubRepositoryBranchField({
             </div>
           </PopoverContent>
         </Popover>
-        {/* inline validation hint; a recognised repo needs none, the chip shows it */}
-        {showRepoChip ? null : (
-          <div className="min-h-5 text-xs">
-            {parsedRepository ? null : hasGitHubUrl ? (
-              <span className="inline-flex items-center gap-1 text-amber-400/80">
-                <AlertCircle className="h-3 w-3 text-amber-400 opacity-80" />
-                Enter a valid GitHub URL
-              </span>
-            ) : (
-              <span className="text-muted-foreground/60">
-                {integration
-                  ? "Search your connected repos, or paste any GitHub URL"
-                  : "Paste a URL — /tree/branch links set the branch automatically"}
-              </span>
-            )}
-          </div>
-        )}
+        {/* inline hint; a recognised repo needs none, the chip shows it */}
+        {!parsedRepository && hasGitHubUrl ? (
+          <span className="inline-flex items-center gap-1 text-xs text-amber-400/80">
+            <AlertCircle className="h-3 w-3 text-amber-400 opacity-80" />
+            Enter a valid GitHub URL
+          </span>
+        ) : !parsedRepository && integration ? (
+          <span className="text-xs text-muted-foreground/60">
+            Search your connected repos, or paste any GitHub URL
+          </span>
+        ) : null}
       </div>
 
       {/* ── Branch ── */}

@@ -123,31 +123,44 @@ export function ConfigStepBody({
     }),
   );
 
+  const createButton = (
+    <Button
+      className="gap-2"
+      disabled={!!missing || create.isPending}
+      onClick={() =>
+        create.mutate({
+          name: `${platformName} bot`,
+          scopes: BOT_TOKEN_SCOPES,
+          expiresInDays: 365,
+        })
+      }
+    >
+      {create.isPending ? (
+        <Loader2 className="size-4 animate-spin" />
+      ) : (
+        <KeyRound className="size-4" />
+      )}
+      Create bot token
+    </Button>
+  );
+
+  if (!token && missing) {
+    // Centred so what's blocking the token is the first thing seen here.
+    return (
+      <div className="flex flex-col items-center gap-4 py-4 text-center">
+        <p className="text-sm text-fg-2">{missing}</p>
+        {createButton}
+      </div>
+    );
+  }
+
   if (!token) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="max-w-lg text-[13px] leading-relaxed text-fg-3">
-          {missing ??
-            `Creates an API token named "${platformName} bot" with only the permissions a bot needs. It expires in 1 year.`}
+          {`Creates an API token named "${platformName} bot" with only the permissions a bot needs. It expires in 1 year.`}
         </p>
-        <Button
-          className="gap-2"
-          disabled={!!missing || create.isPending}
-          onClick={() =>
-            create.mutate({
-              name: `${platformName} bot`,
-              scopes: BOT_TOKEN_SCOPES,
-              expiresInDays: 365,
-            })
-          }
-        >
-          {create.isPending ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <KeyRound className="size-4" />
-          )}
-          Create bot token
-        </Button>
+        {createButton}
       </div>
     );
   }
