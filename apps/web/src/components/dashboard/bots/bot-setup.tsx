@@ -284,7 +284,7 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
     id: "bot-behavior",
     title: "Behavior",
     state: customised ? "done" : "optional",
-    summary: `${behavior.channels.length ? plural(behavior.channels.length, "channel") : "Every channel"} · ${behavior.allowedUsers.length ? plural(behavior.allowedUsers.length, "person") : "everyone"}`,
+    summary: `${behavior.channels.length ? plural(behavior.channels.length, "channel") : "Every channel"} · ${behavior.allowedUsers.length ? `${behavior.allowedUsers.length} ${behavior.allowedUsers.length === 1 ? "person" : "people"}` : "everyone"}`,
   };
   const deployStep: StepInfo = {
     id: "bot-deploy",
@@ -491,7 +491,13 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
                 type="button"
                 role="radio"
                 aria-checked={platform === option.value}
-                onClick={() => setPlatform(option.value)}
+                onClick={() => {
+                  // Channel and people ids belong to one platform; they don't carry over.
+                  if (platform && option.value !== platform) {
+                    setBehavior((current) => ({ ...current, channels: [], allowedUsers: [] }));
+                  }
+                  setPlatform(option.value);
+                }}
                 className={cn(
                   "flex items-center gap-3.5 rounded-xl border px-4 py-3.5 text-left transition-colors",
                   platform === option.value

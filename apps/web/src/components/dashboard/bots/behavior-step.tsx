@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -67,58 +67,106 @@ function OptionTiles<T extends string>({
   );
 }
 
-/** Ids as removable chips; type or paste one and press Enter. */
+/** What a platform's ids look like, so a typo is caught here rather than when nobody can use the bot. */
+function idCheck(platform: Platform | null, kind: "channel" | "user") {
+  if (platform === "discord") {
+    return (id: string) =>
+      /^\d{17,20}$/.test(id) ? null : `${id} isn't a Discord ID; those are long numbers.`;
+  }
+  if (platform === "slack") {
+    const pattern = kind === "channel" ? /^[CG][A-Z0-9]{8,}$/ : /^[UW][A-Z0-9]{8,}$/;
+    const example = kind === "channel" ? "C07Q2JH8L3M" : "U07Q2JH8L3M";
+    return (id: string) =>
+      pattern.test(id) ? null : `${id} doesn't look like a Slack ${kind} ID, e.g. ${example}.`;
+  }
+  return () => null;
+}
+
+/**
+ * One field holding ids as chips, like an email To field: type or paste and press Enter (a paste
+ * adds at once), Backspace on an empty field removes the last one.
+ */
 function IdList({
   ids,
   onChange,
   placeholder,
-  nameOf,
+  check,
 }: {
   ids: string[];
   onChange: (ids: string[]) => void;
   placeholder: string;
-  nameOf?: (id: string) => string | undefined;
+  check: (id: string) => string | null;
 }) {
   const [draft, setDraft] = useState("");
-  const add = () => {
-    const next = draft
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const add = (text: string) => {
+    const parts = text
       .split(/[\s,]+/)
       .map((id) => id.trim())
-      .filter((id) => id && !ids.includes(id));
-    if (next.length) onChange([...ids, ...next]);
-    setDraft("");
+      .filter(Boolean);
+    const bad = parts.filter((id) => check(id));
+    const good = parts.filter((id) => !bad.includes(id) && !ids.includes(id));
+    if (good.length) onChange([...ids, ...new Set(good)]);
+    setError(bad[0] ? check(bad[0]) : null);
+    // A rejected id stays in the field to fix.
+    setDraft(bad.join(" "));
   };
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {ids.map((id) => (
-        <span
-          key={id}
-          className="flex items-center gap-1.5 rounded-full border border-line bg-fill py-1 pr-1.5 pl-3 text-[13px] text-fg"
-        >
-          {nameOf?.(id) ?? <span className="font-mono text-xs">{id}</span>}
-          <button
-            type="button"
-            aria-label={`Remove ${id}`}
-            onClick={() => onChange(ids.filter((entry) => entry !== id))}
-            className="flex size-5 items-center justify-center rounded-full text-fg-4 hover:bg-fill-2 hover:text-fg"
+    <div className="space-y-1.5">
+      <div
+        onClick={() => inputRef.current?.focus()}
+        className={cn(
+          "flex min-h-10 w-full cursor-text flex-wrap items-center gap-1.5 rounded-lg bg-input/70 px-2 py-1.5 transition-shadow focus-within:ring-2 focus-within:ring-ring/40",
+          error && "ring-1 ring-amber-400/40",
+        )}
+      >
+        {ids.map((id) => (
+          <span
+            key={id}
+            className="flex max-w-full items-center gap-1 rounded-md bg-fill-2 py-0.5 pr-0.5 pl-2 font-mono text-xs text-fg"
           >
-            <X className="size-3" />
-          </button>
-        </span>
-      ))}
-      <Input
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === ",") {
+            <span className="truncate">{id}</span>
+            <button
+              type="button"
+              aria-label={`Remove ${id}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onChange(ids.filter((entry) => entry !== id));
+              }}
+              className="flex size-5 shrink-0 items-center justify-center rounded text-fg-4 hover:bg-fill hover:text-fg"
+            >
+              <X className="size-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setError(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === ",") {
+              event.preventDefault();
+              add(draft);
+            } else if (event.key === "Backspace" && !draft && ids.length) {
+              onChange(ids.slice(0, -1));
+            }
+          }}
+          onPaste={(event) => {
             event.preventDefault();
-            add();
-          }
-        }}
-        onBlur={add}
-        placeholder={placeholder}
-        className="h-9 w-60 font-mono text-[13px] placeholder:font-sans"
-      />
+            add(`${draft} ${event.clipboardData.getData("text")}`);
+          }}
+          onBlur={() => draft && add(draft)}
+          placeholder={ids.length ? "" : placeholder}
+          className="h-7 min-w-36 flex-1 bg-transparent px-1.5 font-mono text-[13px] text-fg outline-none placeholder:font-sans placeholder:text-fg-4"
+        />
+      </div>
+      {error ? <p className="text-xs text-amber-300">{error}</p> : null}
     </div>
   );
 }
@@ -203,7 +251,8 @@ export function BehaviorStepBody({
                   channels: [...behavior.channels.filter((id) => channelName(id)), ...ids],
                 })
               }
-              placeholder="Paste a channel ID"
+              placeholder="Paste channel IDs"
+              check={idCheck(platform, "channel")}
             />
             <p className="text-xs text-fg-4">
               {knownChannels.length
@@ -239,7 +288,8 @@ export function BehaviorStepBody({
             <IdList
               ids={behavior.allowedUsers}
               onChange={(allowedUsers) => onChange({ allowedUsers })}
-              placeholder={platform === "discord" ? "Paste a user ID" : "Paste a member ID"}
+              placeholder={platform === "discord" ? "Paste user IDs" : "Paste member IDs"}
+              check={idCheck(platform, "user")}
             />
             <p className="text-xs text-fg-4">
               {platform === "discord"
