@@ -17,7 +17,18 @@ export type StepInfo = {
   summary?: string;
 };
 
-function StepMark({ number, state, small }: { number: number; state: StepState; small?: boolean }) {
+function StepMark({
+  number,
+  state,
+  small,
+  numbered,
+}: {
+  number: number;
+  state: StepState;
+  small?: boolean;
+  /** Keep the number when done, for step cards whose check sits on the right. */
+  numbered?: boolean;
+}) {
   return (
     <span
       className={cn(
@@ -26,7 +37,7 @@ function StepMark({ number, state, small }: { number: number; state: StepState; 
         state === "done" ? "border-primary/40 bg-primary/10 text-primary" : "border-line text-fg-3",
       )}
     >
-      {state === "done" ? <Check className={small ? "size-3" : "size-3.5"} /> : number}
+      {state === "done" && !numbered ? <Check className={small ? "size-3" : "size-3.5"} /> : number}
     </span>
   );
 }
@@ -140,20 +151,25 @@ export function Step({
       className="scroll-mt-8"
       title={
         <span className="flex items-center gap-3">
-          <StepMark number={number} state={step.state} />
+          <StepMark number={number} state={step.state} numbered />
           {step.title}
         </span>
       }
       description={hint}
       action={
-        <span
-          className={cn(
-            "font-mono text-[10px] uppercase tracking-[0.16em]",
-            step.state === "done" ? "text-primary" : "text-fg-4",
-          )}
-        >
-          {STATE_LABEL[step.state]}
-        </span>
+        step.state === "done" ? (
+          <span
+            role="img"
+            aria-label="Done"
+            className="flex size-6 items-center justify-center rounded-full bg-primary/15 text-primary"
+          >
+            <Check className="size-3.5" />
+          </span>
+        ) : (
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4">
+            {STATE_LABEL[step.state]}
+          </span>
+        )
       }
     >
       <SettingsSectionBody className="px-5 py-4">{children}</SettingsSectionBody>
