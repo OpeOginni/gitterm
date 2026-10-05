@@ -97,7 +97,16 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
     ) ??
     active[0];
   const model = modelInput ?? suggestModel(credential?.logicalProviderKey);
-  const modelIssue = credential ? modelProblem(model, credential.logicalProviderKey) : null;
+  // A saved bot whose key was removed: say so, rather than blame the model it was saved with.
+  const savedKeyGone =
+    !!bot &&
+    model === bot.model &&
+    !active.some((candidate) => candidate.logicalProviderKey === savedProvider);
+  const modelIssue = !credential
+    ? null
+    : savedKeyGone
+      ? `It was saved with ${savedProvider}, and there's no ${savedProvider} key now. Add one, or change the model to start with ${credential.logicalProviderKey}/.`
+      : modelProblem(model, credential.logicalProviderKey);
   const modelDone = !!credential && !modelIssue;
 
   // Repository
@@ -302,6 +311,8 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
 
   const modelHint = !credential ? (
     "Add a model credential."
+  ) : savedKeyGone ? (
+    "Its model's key was removed."
   ) : modelIssue ? (
     "Enter a valid model ID."
   ) : (
