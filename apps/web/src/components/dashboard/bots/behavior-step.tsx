@@ -189,6 +189,11 @@ export function BehaviorStepBody({
               }
               placeholder="Add a channel ID"
             />
+            <p className="text-xs text-fg-4">
+              {platform === "discord"
+                ? "Right-click a channel → Copy Channel ID (turn on Developer Mode first)."
+                : "In Slack: open the channel's details; the ID is at the bottom (C0…)."}
+            </p>
           </div>
         ) : (
           <p className="text-[13px] text-fg-3">
