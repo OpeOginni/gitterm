@@ -148,9 +148,9 @@ export function DeployInstructions({
           <TabsContent value="code" className="space-y-2">
             <p className="text-xs text-fg-4">
               Install <span className={code}>{pkg}</span> and run with{" "}
-              <span className={code}>node --env-file=.env</span>.
+              <span className={code}>node --env-file=.env index.ts</span>.
             </p>
-            <CodeBlock code={codeSnippet(platform)} copyLabel="Code" language="ts" />
+            <CodeBlock code={codeSnippet(platform)} copyLabel="index.ts" language="ts" />
           </TabsContent>
         </Tabs>
       </section>
