@@ -3,6 +3,7 @@ import {
   Container,
   Cpu,
   Gauge,
+  History,
   Plug,
   Server,
   Settings2,
@@ -46,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Settings",
     items: [
       { href: "/dashboard/settings/account", label: "Account", icon: UserRound },
+      { href: "/dashboard/settings/history", label: "Workspace history", icon: History },
       {
         href: "/dashboard/settings/agent-defaults",
         label: "Agent defaults",
