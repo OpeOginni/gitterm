@@ -213,20 +213,21 @@ export function CodeBlock({ code, copyLabel }: { code: string; copyLabel: string
     }
   };
   return (
-    <div className="relative">
-      <pre className="overflow-x-auto rounded-lg border border-line bg-fill p-4 pr-24 font-mono text-xs leading-relaxed text-fg-2">
-        {code}
-      </pre>
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        onClick={copy}
-        className="absolute top-2.5 right-2.5 h-7 gap-1.5 text-xs"
-      >
-        <Copy className="size-3.5" />
-        Copy
-      </Button>
+    <div className="overflow-hidden rounded-lg border border-line bg-fill">
+      <div className="flex items-center justify-between border-b border-line py-1 pr-1 pl-4">
+        <span className="font-mono text-[11px] text-fg-4">{copyLabel}</span>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={copy}
+          className="h-7 gap-1.5 text-xs text-fg-3"
+        >
+          <Copy className="size-3.5" />
+          Copy
+        </Button>
+      </div>
+      <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed text-fg-2">{code}</pre>
     </div>
   );
 }

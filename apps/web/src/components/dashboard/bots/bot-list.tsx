@@ -65,13 +65,19 @@ export function BotList() {
             <span className="min-w-0 flex-1 space-y-1">
               <span className="block truncate text-[15px] font-medium text-fg">{bot.name}</span>
               <span className="block truncate font-mono text-xs text-fg-3">
-                {repoLabel(bot.repo)} · {bot.model}
+                {repoLabel(bot.repo)}
               </span>
-              <span className="flex items-center gap-1.5 text-xs text-fg-4">
-                <span
-                  className={cn("size-1.5 rounded-full", status.live ? "bg-primary" : "bg-fg-4/60")}
-                />
-                {status.text}
+              <span className="flex items-center gap-3 text-xs text-fg-4">
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      status.live ? "bg-primary" : "bg-fg-4/60",
+                    )}
+                  />
+                  {status.text}
+                </span>
+                <span className="truncate font-mono">{bot.model.split("/").pop()}</span>
               </span>
             </span>
             <ChevronRight className="size-4 shrink-0 text-fg-4 transition-colors group-hover:text-fg-2" />

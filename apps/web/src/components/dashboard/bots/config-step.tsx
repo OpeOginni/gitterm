@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { AlertTriangle, ExternalLink, KeyRound, Loader2 } from "lucide-react";
 import { slackManifest } from "@gitterm/slack-bot/manifest";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { codeSnippet, dockerCommand, envFile, type Platform } from "./config";
 import { CodeBlock } from "./step";
@@ -23,32 +21,18 @@ function Steps({ items }: { items: ReactNode[] }) {
   );
 }
 
-function SlackSetup() {
-  const [name, setName] = useState("GitTerm Agent");
-  const botName = name.trim() || "GitTerm Agent";
+function SlackSetup({ name }: { name: string }) {
+  // Slack caps app and bot user names at 35 characters.
+  const botName = name.slice(0, 35).trim();
   const href = `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(JSON.stringify(slackManifest(botName)))}`;
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="grid gap-2">
-          <Label htmlFor="bot-name" className={subheadClass}>
-            Bot name
-          </Label>
-          <Input
-            id="bot-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            maxLength={35}
-            className="h-9 w-56"
-          />
-        </div>
-        <Button asChild className="h-9 gap-1.5">
-          <a href={href} target="_blank" rel="noopener noreferrer">
-            Create the Slack app
-            <ExternalLink className="size-3.5" />
-          </a>
-        </Button>
-      </div>
+      <Button asChild className="h-9 gap-1.5">
+        <a href={href} target="_blank" rel="noopener noreferrer">
+          Create the Slack app
+          <ExternalLink className="size-3.5" />
+        </a>
+      </Button>
       <Steps
         items={[
           <>
@@ -98,12 +82,15 @@ function DiscordSetup() {
 
 /** The deploy instructions: the .env (secrets only), the platform app, and how to run it. */
 export function DeployInstructions({
+  name,
   platform,
   token,
   githubToken,
   rotating,
   onRotate,
 }: {
+  /** The bot's name, which the Slack app takes too. */
+  name: string;
   platform: Platform;
   /** Shown once, right after the bot is created or its token replaced. */
   token: string | null;
@@ -149,7 +136,7 @@ export function DeployInstructions({
 
       <section className="space-y-3">
         <h4 className={subheadClass}>2 · Create the {platformName} bot</h4>
-        {platform === "slack" ? <SlackSetup /> : <DiscordSetup />}
+        {platform === "slack" ? <SlackSetup name={name} /> : <DiscordSetup />}
       </section>
 
       <section className="space-y-3">

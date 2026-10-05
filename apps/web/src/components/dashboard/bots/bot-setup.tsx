@@ -588,6 +588,7 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
 
             {savedId && platform ? (
               <DeployInstructions
+                name={name.trim() || defaultName}
                 platform={platform}
                 token={token}
                 githubToken={githubAccess === "token"}

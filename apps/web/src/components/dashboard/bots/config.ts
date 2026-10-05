@@ -94,7 +94,7 @@ export function envFile(config: BotEnv): string {
       ? [
           "# OAuth & Permissions → Bot User OAuth Token (xoxb-…)",
           "SLACK_BOT_TOKEN=",
-          "# Basic Information → App-Level Tokens, scope connections:write (xapp-…)",
+          "# Basic Information → App-Level Tokens (xapp-…)",
           "SLACK_APP_TOKEN=",
         ]
       : ["# Developer portal → your app → Bot → Reset Token", "DISCORD_BOT_TOKEN="]),
