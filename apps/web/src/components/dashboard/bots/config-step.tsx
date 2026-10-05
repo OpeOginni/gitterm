@@ -9,7 +9,7 @@ import { codeSnippet, dockerCommand, envFile, type Platform } from "./config";
 import { CodeBlock } from "./step";
 
 const subheadClass = "font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4";
-const code = "rounded bg-fill-2 px-1 py-0.5 font-mono text-[12px] text-fg-2";
+const code = "whitespace-nowrap rounded bg-fill-2 px-1 py-0.5 font-mono text-[12px] text-fg-2";
 
 function Steps({ items }: { items: ReactNode[] }) {
   return (
@@ -128,7 +128,7 @@ export function DeployInstructions({
 
       <section className="space-y-3">
         <h4 className={subheadClass}>3 · Run it</h4>
-        <Tabs defaultValue="docker">
+        <Tabs defaultValue="docker" className="gap-4 pt-1">
           <TabsList>
             <TabsTrigger value="docker">Docker</TabsTrigger>
             <TabsTrigger value="terminal">Terminal</TabsTrigger>
