@@ -1,8 +1,12 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
+import type { Route } from "next";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  ArrowRight,
   Braces,
   CalendarClock,
   ChevronDown,
@@ -23,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { API_TOKEN_SCOPE_DETAILS, API_TOKEN_SCOPES, type ApiTokenScope } from "@gitterm/schema";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -189,7 +194,11 @@ export function ApiTokensSection() {
             {tokens.map((token) => (
               <div key={token.id} className="flex items-start gap-3 px-5 py-4">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
-                  <Braces className="size-4 text-fg-3" />
+                  {token.bot ? (
+                    <Image src={`/${token.bot.platform}.svg`} alt="" width={16} height={16} />
+                  ) : (
+                    <Braces className="size-4 text-fg-3" />
+                  )}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -205,17 +214,32 @@ export function ApiTokensSection() {
                       <CalendarClock className="size-3.5" />
                       {token.expiresAt ? `Expires ${formatDate(token.expiresAt)}` : "No expiry"}
                     </span>
-                    <details className="group">
-                      <summary className="flex cursor-pointer list-none items-center gap-1.5 transition-colors hover:text-fg-2">
+                    <Popover>
+                      <PopoverTrigger className="group flex items-center gap-1.5 transition-colors hover:text-fg-2 data-[state=open]:text-fg-2">
                         <ShieldCheck className="size-3.5" />
                         {accessSummary(token.scopes)}
-                        <ChevronDown className="size-3 transition-transform group-open:rotate-180" />
-                      </summary>
-                      <p className="mt-1.5 font-mono text-[11px] leading-relaxed text-fg-3">
-                        {token.scopes.join(" · ")}
-                        <span className="text-fg-4"> · created {formatDate(token.createdAt)}</span>
-                      </p>
-                    </details>
+                        <ChevronDown className="size-3 transition-transform group-data-[state=open]:rotate-180" />
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-56 p-3">
+                        <ul className="space-y-1 font-mono text-[11px] text-fg-2">
+                          {token.scopes.map((scope) => (
+                            <li key={scope}>{scope}</li>
+                          ))}
+                        </ul>
+                        <p className="mt-2.5 border-t border-line pt-2 text-[11px] text-fg-4">
+                          Created {formatDate(token.createdAt)}
+                        </p>
+                      </PopoverContent>
+                    </Popover>
+                    {token.bot ? (
+                      <Link
+                        href={`/dashboard/bots/${token.bot.id}` as Route}
+                        className="flex items-center gap-1 text-fg-3 transition-colors hover:text-fg"
+                      >
+                        Open bot
+                        <ArrowRight className="size-3" />
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
                 {confirmingId === token.id ? (
