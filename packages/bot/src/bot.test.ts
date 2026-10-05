@@ -324,6 +324,29 @@ describe("createBot", () => {
     await until(() => chat.log.removed.includes("s1"), "status removal");
   });
 
+  test("uses your own GitHub token instead of a GitHub connection", async () => {
+    const gitterm = fakeGitterm({ connections: [github, docs] });
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      connections: ["Docs"],
+      workspace: { repositoryCredentials: { token: "ghp_x" } },
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "fix the login bug" });
+    await until(() => gitterm.calls.created.length === 1, "create");
+
+    expect(gitterm.calls.created[0]).toMatchObject({
+      connections: ["Docs"],
+      repositoryCredentials: { token: "ghp_x" },
+    });
+    await bot.stop();
+  });
+
   test("continues the thread's session with only the messages it has not seen", async () => {
     const gitterm = fakeGitterm();
     const history: HistoryMessage[] = [

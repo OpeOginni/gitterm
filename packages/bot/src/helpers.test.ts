@@ -138,6 +138,13 @@ describe("botOptionsFromEnv", () => {
     });
   });
 
+  test("passes your own GitHub token as repository credentials", () => {
+    expect(
+      botOptionsFromEnv({ GITTERM_BOT_GITHUB_TOKEN: "ghp_x", GITTERM_BOT_PROVIDER: "e2b" })
+        .workspace,
+    ).toEqual({ provider: { type: "e2b" }, repositoryCredentials: { token: "ghp_x" } });
+  });
+
   test("joins inline instructions with an instructions file", () => {
     const file = join(mkdtempSync(join(tmpdir(), "gitterm-bot-")), "bot.md");
     writeFileSync(file, "# Team rules\n\nAnswer in German.\n");

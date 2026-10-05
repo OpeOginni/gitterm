@@ -100,7 +100,9 @@ export function createWorkspaceManager(input: {
   };
 
   const create = async (repo: Repo) => {
-    const connections = [...(await githubFor(gitterm, repo)), ...input.connections];
+    // Your own GitHub token replaces a GitTerm GitHub connection; the two can't be combined.
+    const github = input.overrides?.repositoryCredentials ? [] : await githubFor(gitterm, repo);
+    const connections = [...github, ...input.connections];
     const env = { ...input.overrides?.environmentVariables, ...input.env };
     const setup =
       input.overrides?.setup ?? (input.setup.length ? { beforeAgent: input.setup } : undefined);

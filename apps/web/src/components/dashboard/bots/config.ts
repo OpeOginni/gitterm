@@ -87,6 +87,10 @@ export type BotConfig = {
   /** Saved credential label; only when it isn't the provider's default. */
   credential?: string;
   connections: string[];
+  /** The bot uses the person's own GitHub token instead of a GitTerm GitHub connection. */
+  githubToken?: boolean;
+  /** Compute provider key for new sandboxes; the dashboard default when unset. */
+  provider?: string;
 };
 
 export function envFile(config: BotConfig): string {
@@ -99,6 +103,15 @@ export function envFile(config: BotConfig): string {
     ...(config.credential ? [`GITTERM_BOT_MODEL_CREDENTIAL=${envValue(config.credential)}`] : []),
     ...(config.connections.length
       ? [`GITTERM_BOT_CONNECTIONS=${envValue(config.connections.join(","))}`]
+      : []),
+    ...(config.provider ? [`GITTERM_BOT_PROVIDER=${config.provider}`] : []),
+    ...(config.githubToken
+      ? [
+          "",
+          "# Your GitHub token: classic with the repo scope, or fine-grained with",
+          "# Contents and Pull requests (read and write). Paste it here.",
+          "GITTERM_BOT_GITHUB_TOKEN=",
+        ]
       : []),
     "",
     ...(config.platform === "slack"
@@ -123,6 +136,18 @@ export function codeSnippet(config: BotConfig): string {
     `  model: ${model},`,
     ...(config.connections.length
       ? [`  connections: [${config.connections.map((ref) => JSON.stringify(ref)).join(", ")}],`]
+      : []),
+    ...(config.provider || config.githubToken
+      ? [
+          "  workspace: {",
+          ...(config.provider
+            ? [`    provider: { type: ${JSON.stringify(config.provider)} },`]
+            : []),
+          ...(config.githubToken
+            ? ["    repositoryCredentials: { token: process.env.GITTERM_BOT_GITHUB_TOKEN! },"]
+            : []),
+          "  },",
+        ]
       : []),
   ];
   return [

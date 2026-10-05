@@ -14,7 +14,8 @@ import type { ModelCredential } from "../model-credentials/types";
 import { connectionRefs, modelProblem, suggestModel, type Platform } from "./config";
 import { ConfigStepBody } from "./config-step";
 import { ModelStepBody } from "./model-step";
-import { RepositoryStepBody } from "./repository-step";
+import { ComputeStepBody, type ComputeOption } from "./compute-step";
+import { RepositoryStepBody, type GitHubAccess } from "./repository-step";
 import { SetupSummary, Step, type StepInfo } from "./step";
 
 const PLATFORMS: { value: Platform; label: string; description: string; logo: string }[] = [
@@ -71,6 +72,7 @@ export function BotSetup() {
   const modelDone = !!credential && !modelIssue;
 
   // Repository
+  const [githubAccess, setGithubAccess] = useState<GitHubAccess>("connection");
   const [repoUrl, setRepoUrl] = useState("");
   const [branch, setBranch] = useState("");
   const repository = parseGitHubRepositoryInput(repoUrl);
@@ -84,6 +86,27 @@ export function BotSetup() {
   );
   const [toolIds, setToolIds] = useState<string[]>([]);
   const selectedTools = tools.filter((tool) => toolIds.includes(tool.id));
+
+  // Compute: one entry per provider type (AWS has a row per region).
+  const { data: providersList } = useQuery(
+    trpc.workspace.listCloudProviders.queryOptions({ cloudOnly: true }),
+  );
+  const computeOptions: ComputeOption[] = [
+    ...new Map(
+      (providersList?.cloudProviders ?? []).map((entry) => [
+        entry.providerKey,
+        { key: entry.providerKey, name: entry.providerKey === "aws" ? "AWS" : entry.name },
+      ]),
+    ).values(),
+  ];
+  const { data: defaultProviderData } = useQuery(trpc.user.getDefaultCloudProvider.queryOptions());
+  const defaultKey =
+    providersList?.cloudProviders.find((entry) => entry.id === defaultProviderData?.cloudProviderId)
+      ?.providerKey ?? null;
+  const [providerChoice, setProviderChoice] = useState<string | null>(null);
+  const selectedProvider = providerChoice ?? defaultKey;
+  // Only a provider other than the default is written out; the default may change later.
+  const provider = selectedProvider !== defaultKey ? selectedProvider : null;
 
   const [platform, setPlatform] = useState<Platform | null>(null);
 
@@ -113,6 +136,16 @@ export function BotSetup() {
           : "Optional",
       }
     : null;
+  const computeStep: StepInfo | null =
+    computeOptions.length > 1
+      ? {
+          id: "bot-compute",
+          title: "Compute",
+          state: "optional",
+          summary:
+            computeOptions.find((option) => option.key === selectedProvider)?.name ?? "Default",
+        }
+      : null;
   const platformStep: StepInfo = {
     id: "bot-platform",
     title: "Platform",
@@ -127,7 +160,14 @@ export function BotSetup() {
     state: token ? "done" : "todo",
     summary: token ? "Token created" : "Create a bot token",
   };
-  const steps = [modelStep, repoStep, ...(toolsStep ? [toolsStep] : []), platformStep, configStep];
+  const steps = [
+    modelStep,
+    repoStep,
+    ...(computeStep ? [computeStep] : []),
+    ...(toolsStep ? [toolsStep] : []),
+    platformStep,
+    configStep,
+  ];
   const number = (step: StepInfo) => steps.indexOf(step) + 1;
 
   const modelHint = !credential
@@ -184,6 +224,8 @@ export function BotSetup() {
           }
         >
           <RepositoryStepBody
+            access={githubAccess}
+            onAccessChange={setGithubAccess}
             githubEnabled={githubEnabled}
             repoUrl={repoUrl}
             branch={branch}
@@ -191,6 +233,21 @@ export function BotSetup() {
             onBranchChange={setBranch}
           />
         </Step>
+
+        {computeStep ? (
+          <Step
+            step={computeStep}
+            number={number(computeStep)}
+            hint="Where new sandboxes run. Regions and sizes use the provider's defaults."
+          >
+            <ComputeStepBody
+              options={computeOptions}
+              selected={selectedProvider}
+              defaultKey={defaultKey}
+              onSelect={setProviderChoice}
+            />
+          </Step>
+        ) : null}
 
         {toolsStep ? (
           <Step
@@ -307,6 +364,8 @@ export function BotSetup() {
               model: model.trim(),
               credential: credential && !credential.isDefault ? credential.label : undefined,
               connections: connectionRefs(selectedTools, connections),
+              githubToken: githubAccess === "token",
+              provider: provider ?? undefined,
             }}
           />
         </Step>

@@ -90,15 +90,19 @@ export async function checkSetup(input: {
 
   for (const repo of input.repos) {
     const label = repoLabel(repo);
-    checks.push(
-      gitterm.integrations.connections.resolve(["github"], { repo: repo.url }).then(
-        ([github]) => void ok.push(`${label}: GitHub via ${github?.name ?? "GitHub"}`),
-        (error: unknown) =>
-          void warnings.push(
-            `${label}: no GitHub access (${reason(error)}) Public repositories still work; private ones and pull requests do not.`,
-          ),
-      ),
-    );
+    if (input.overrides?.repositoryCredentials) {
+      ok.push(`${label}: GitHub via your own token`);
+    } else {
+      checks.push(
+        gitterm.integrations.connections.resolve(["github"], { repo: repo.url }).then(
+          ([github]) => void ok.push(`${label}: GitHub via ${github?.name ?? "GitHub"}`),
+          (error: unknown) =>
+            void warnings.push(
+              `${label}: no GitHub access (${reason(error)}) Public repositories still work; private ones and pull requests do not.`,
+            ),
+        ),
+      );
+    }
     if (input.connections.length) {
       checks.push(
         gitterm.integrations.connections.resolve(input.connections, { repo: repo.url }).then(
