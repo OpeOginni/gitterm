@@ -68,16 +68,16 @@ function UsageQuota() {
           </div>
         ) : (
           <>
-            <p className="text-3xl font-semibold tracking-tight text-fg tabular-nums">
-              {usage.minutesRemaining}
-              <span className="text-base font-normal text-fg-4"> min left</span>
-            </p>
-
-            <div className="h-2 w-full overflow-hidden rounded-full bg-fill-2">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                style={{ width: `${percent}%` }}
-              />
+            <div className="flex items-center gap-4">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-fill-2">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+              <p className="shrink-0 font-mono text-[12px] tabular-nums text-fg-3">
+                {usage.minutesRemaining} min left
+              </p>
             </div>
 
             {isExhausted && (

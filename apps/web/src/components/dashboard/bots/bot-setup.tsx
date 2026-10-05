@@ -103,10 +103,10 @@ export function BotSetup() {
   const defaultKey =
     providersList?.cloudProviders.find((entry) => entry.id === defaultProviderData?.cloudProviderId)
       ?.providerKey ?? null;
-  const [providerChoice, setProviderChoice] = useState<string | null>(null);
-  const selectedProvider = providerChoice ?? defaultKey;
-  // Only a provider other than the default is written out; the default may change later.
-  const provider = selectedProvider !== defaultKey ? selectedProvider : null;
+  // Nothing is picked until someone clicks a provider; until then sandboxes use the default.
+  const [provider, setProvider] = useState<string | null>(null);
+  const providerName = (key: string | null) =>
+    computeOptions.find((option) => option.key === key)?.name;
 
   const [platform, setPlatform] = useState<Platform | null>(null);
 
@@ -133,7 +133,7 @@ export function BotSetup() {
         state: selectedTools.length ? "done" : "optional",
         summary: selectedTools.length
           ? selectedTools.map((tool) => tool.name).join(", ")
-          : "Optional",
+          : "MCP servers the agent can use",
       }
     : null;
   const computeStep: StepInfo | null =
@@ -141,9 +141,10 @@ export function BotSetup() {
       ? {
           id: "bot-compute",
           title: "Compute",
-          state: "optional",
-          summary:
-            computeOptions.find((option) => option.key === selectedProvider)?.name ?? "Default",
+          state: provider ? "done" : "optional",
+          summary: provider
+            ? providerName(provider)
+            : `Your default${defaultKey ? ` · ${providerName(defaultKey)}` : ""}`,
         }
       : null;
   const platformStep: StepInfo = {
@@ -242,9 +243,9 @@ export function BotSetup() {
           >
             <ComputeStepBody
               options={computeOptions}
-              selected={selectedProvider}
+              selected={provider}
               defaultKey={defaultKey}
-              onSelect={setProviderChoice}
+              onSelect={setProvider}
             />
           </Step>
         ) : null}
