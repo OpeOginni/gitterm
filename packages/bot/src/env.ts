@@ -144,7 +144,7 @@ export const BOT_ENV_HELP = `  GITTERM_API_TOKEN               GitTerm API token
   GITTERM_BOT_REPO                Repository for every channel: https://github.com/acme/app[#branch]
   GITTERM_BOT_REPOS               More repositories people can name in a thread: url,url
   GITTERM_BOT_CHANNELS            Per-channel repositories: <channel id>=<url>,…
-  GITTERM_BOT_MODEL               provider/model, e.g. anthropic/claude-sonnet-4-5
+  GITTERM_BOT_MODEL               provider/model, e.g. anthropic/claude-sonnet-5-5
   GITTERM_BOT_MODEL_CREDENTIAL    Saved credential label (default: the provider's default)
   GITTERM_BOT_MODEL_API_KEY       Or a model API key for this bot only
   GITTERM_BOT_CONNECTIONS         Tools besides GitHub, by name: Linear,Sentry

@@ -24,9 +24,7 @@ export default async function BotsPage() {
         heading="Bots"
         text="Run a coding agent on your repository from Slack or Discord."
       />
-      <div className="mx-auto max-w-4xl pt-2">
-        <BotSetup />
-      </div>
+      <BotSetup />
     </DashboardShell>
   );
 }

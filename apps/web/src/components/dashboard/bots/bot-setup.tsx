@@ -15,7 +15,7 @@ import { connectionRefs, modelProblem, suggestModel, type Platform } from "./con
 import { ConfigStepBody } from "./config-step";
 import { ModelStepBody } from "./model-step";
 import { RepositoryStepBody } from "./repository-step";
-import { Step, StepProgress, type StepInfo } from "./step";
+import { SetupSummary, Step, type StepInfo } from "./step";
 
 const PLATFORMS: { value: Platform; label: string; description: string; logo: string }[] = [
   {
@@ -93,24 +93,39 @@ export function BotSetup() {
     id: "bot-model",
     title: "Model",
     state: modelDone ? "done" : "todo",
+    summary: modelDone ? model.trim() : credential ? "Enter a model ID" : "Add a model credential",
   };
   const repoStep: StepInfo = {
     id: "bot-repository",
     title: "Repository",
     state: repoDone ? "done" : "todo",
+    summary: repository
+      ? `${repository.fullName}${branch ? `#${branch}` : ""}`
+      : "Pick a repository",
   };
   const toolsStep: StepInfo | null = toolsEnabled
-    ? { id: "bot-tools", title: "Tools", state: selectedTools.length ? "done" : "optional" }
+    ? {
+        id: "bot-tools",
+        title: "Tools",
+        state: selectedTools.length ? "done" : "optional",
+        summary: selectedTools.length
+          ? selectedTools.map((tool) => tool.name).join(", ")
+          : "Optional",
+      }
     : null;
   const platformStep: StepInfo = {
     id: "bot-platform",
     title: "Platform",
     state: platform ? "done" : "todo",
+    summary: platform
+      ? PLATFORMS.find((option) => option.value === platform)?.label
+      : "Slack or Discord",
   };
   const configStep: StepInfo = {
     id: "bot-config",
     title: "Config",
     state: token ? "done" : "todo",
+    summary: token ? "Token created" : "Create a bot token",
   };
   const steps = [modelStep, repoStep, ...(toolsStep ? [toolsStep] : []), platformStep, configStep];
   const number = (step: StepInfo) => steps.indexOf(step) + 1;
@@ -137,159 +152,165 @@ export function BotSetup() {
   }
 
   return (
-    <div className="space-y-6">
-      <StepProgress steps={steps} />
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <aside className="lg:sticky lg:top-8 lg:order-last">
+        <SetupSummary steps={steps} />
+      </aside>
 
-      <Step step={modelStep} number={number(modelStep)} hint={modelHint}>
-        <ModelStepBody
-          isLoading={isLoadingCredentials || isLoadingProviders}
-          providers={providersData?.providers ?? []}
-          credentials={credentials}
-          credential={credential}
-          onCredentialChange={(id) => {
-            setCredentialId(id);
-            setModelInput(null);
-          }}
-          model={model}
-          onModelChange={setModelInput}
-          modelProblem={modelIssue}
-        />
-      </Step>
-
-      <Step
-        step={repoStep}
-        number={number(repoStep)}
-        hint={
-          repository
-            ? `The agent works in ${repository.fullName}${branch ? ` on ${branch}` : ""}.`
-            : "Pick a repository or paste its URL."
-        }
-      >
-        <RepositoryStepBody
-          githubEnabled={githubEnabled}
-          repoUrl={repoUrl}
-          branch={branch}
-          onRepoUrlChange={setRepoUrl}
-          onBranchChange={setBranch}
-        />
-      </Step>
-
-      {toolsStep ? (
-        <Step
-          step={toolsStep}
-          number={number(toolsStep)}
-          hint="MCP servers the agent can use. GitHub is attached automatically."
-        >
-          {tools.length === 0 ? (
-            <p className="text-[13px] text-fg-3">
-              No connected tools.{" "}
-              <Link
-                href={"/dashboard/integrations" as Route}
-                className="text-fg-2 underline underline-offset-2 hover:text-fg"
-              >
-                Add one in Integrations
-              </Link>
-              .
-            </p>
-          ) : (
-            <div className="space-y-3">
-              <div className="divide-y divide-line">
-                {tools.map((tool) => (
-                  <label
-                    key={tool.id}
-                    className="flex cursor-pointer items-center gap-3 py-2.5 text-[13px]"
-                  >
-                    <Checkbox
-                      checked={toolIds.includes(tool.id)}
-                      onCheckedChange={(checked) =>
-                        setToolIds((ids) =>
-                          checked === true ? [...ids, tool.id] : ids.filter((id) => id !== tool.id),
-                        )
-                      }
-                    />
-                    <span className="min-w-0 flex-1 truncate text-fg">{tool.name}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
-                      {tool.integration === "executor" ? "Executor" : "MCP"}
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <Link
-                href={"/dashboard/integrations" as Route}
-                className="inline-block text-xs text-fg-3 underline underline-offset-2 hover:text-fg"
-              >
-                Manage connections
-              </Link>
-            </div>
-          )}
+      <div className="space-y-4">
+        <Step step={modelStep} number={number(modelStep)} hint={modelHint}>
+          <ModelStepBody
+            isLoading={isLoadingCredentials || isLoadingProviders}
+            providers={providersData?.providers ?? []}
+            credentials={credentials}
+            credential={credential}
+            onCredentialChange={(id) => {
+              setCredentialId(id);
+              setModelInput(null);
+            }}
+            model={model}
+            onModelChange={setModelInput}
+            modelProblem={modelIssue}
+          />
         </Step>
-      ) : null}
 
-      <Step
-        step={platformStep}
-        number={number(platformStep)}
-        hint="Where people talk to the agent."
-      >
-        <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
-          {PLATFORMS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={platform === option.value}
-              onClick={() => setPlatform(option.value)}
-              className={cn(
-                "flex items-center gap-3.5 rounded-xl border px-4 py-3.5 text-left transition-colors",
-                platform === option.value
-                  ? "border-primary/60 bg-fill"
-                  : "border-line hover:border-fg-4 hover:bg-fill",
-              )}
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-line bg-fill-2">
-                <Image src={option.logo} alt="" width={20} height={20} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-medium text-fg">{option.label}</span>
-                <span className="block truncate text-[13px] text-fg-3">{option.description}</span>
-              </span>
-              <span
+        <Step
+          step={repoStep}
+          number={number(repoStep)}
+          hint={
+            repository
+              ? `The agent works in ${repository.fullName}${branch ? ` on ${branch}` : ""}.`
+              : "Pick a repository or paste its URL."
+          }
+        >
+          <RepositoryStepBody
+            githubEnabled={githubEnabled}
+            repoUrl={repoUrl}
+            branch={branch}
+            onRepoUrlChange={setRepoUrl}
+            onBranchChange={setBranch}
+          />
+        </Step>
+
+        {toolsStep ? (
+          <Step
+            step={toolsStep}
+            number={number(toolsStep)}
+            hint="MCP servers the agent can use. GitHub is attached automatically."
+          >
+            {tools.length === 0 ? (
+              <p className="text-[13px] text-fg-3">
+                No connected tools.{" "}
+                <Link
+                  href={"/dashboard/integrations" as Route}
+                  className="text-fg-2 underline underline-offset-2 hover:text-fg"
+                >
+                  Add one in Integrations
+                </Link>
+                .
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="divide-y divide-line">
+                  {tools.map((tool) => (
+                    <label
+                      key={tool.id}
+                      className="flex cursor-pointer items-center gap-3 py-2.5 text-[13px]"
+                    >
+                      <Checkbox
+                        checked={toolIds.includes(tool.id)}
+                        onCheckedChange={(checked) =>
+                          setToolIds((ids) =>
+                            checked === true
+                              ? [...ids, tool.id]
+                              : ids.filter((id) => id !== tool.id),
+                          )
+                        }
+                      />
+                      <span className="min-w-0 flex-1 truncate text-fg">{tool.name}</span>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
+                        {tool.integration === "executor" ? "Executor" : "MCP"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <Link
+                  href={"/dashboard/integrations" as Route}
+                  className="inline-block text-xs text-fg-3 underline underline-offset-2 hover:text-fg"
+                >
+                  Manage connections
+                </Link>
+              </div>
+            )}
+          </Step>
+        ) : null}
+
+        <Step
+          step={platformStep}
+          number={number(platformStep)}
+          hint="Where people talk to the agent."
+        >
+          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
+            {PLATFORMS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={platform === option.value}
+                onClick={() => setPlatform(option.value)}
                 className={cn(
-                  "flex size-4 shrink-0 items-center justify-center rounded-full border",
-                  platform === option.value ? "border-primary" : "border-fg-4",
+                  "flex items-center gap-3.5 rounded-xl border px-4 py-3.5 text-left transition-colors",
+                  platform === option.value
+                    ? "border-primary/60 bg-fill"
+                    : "border-line hover:border-fg-4 hover:bg-fill",
                 )}
               >
-                {platform === option.value ? (
-                  <span className="size-2 rounded-full bg-primary" />
-                ) : null}
-              </span>
-            </button>
-          ))}
-        </div>
-      </Step>
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-line bg-fill-2">
+                  <Image src={option.logo} alt="" width={20} height={20} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-medium text-fg">{option.label}</span>
+                  <span className="block truncate text-[13px] text-fg-3">{option.description}</span>
+                </span>
+                <span
+                  className={cn(
+                    "flex size-4 shrink-0 items-center justify-center rounded-full border",
+                    platform === option.value ? "border-primary" : "border-fg-4",
+                  )}
+                >
+                  {platform === option.value ? (
+                    <span className="size-2 rounded-full bg-primary" />
+                  ) : null}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Step>
 
-      <Step
-        step={configStep}
-        number={number(configStep)}
-        hint="A token for the bot, your .env, and how to run it."
-      >
-        <ConfigStepBody
-          token={token}
-          onToken={setToken}
-          missing={
-            missing.length
-              ? `Add ${new Intl.ListFormat("en", { type: "conjunction" }).format(missing)} first.`
-              : null
-          }
-          config={{
-            // Token creation waits for a platform (see `missing`), so the fallback is never shown.
-            platform: platform ?? "slack",
-            repo: `${repository?.normalizedUrl ?? ""}${branch ? `#${branch}` : ""}`,
-            model: model.trim(),
-            credential: credential && !credential.isDefault ? credential.label : undefined,
-            connections: connectionRefs(selectedTools, connections),
-          }}
-        />
-      </Step>
+        <Step
+          step={configStep}
+          number={number(configStep)}
+          hint="A token for the bot, your .env, and how to run it."
+        >
+          <ConfigStepBody
+            token={token}
+            onToken={setToken}
+            missing={
+              missing.length
+                ? `Add ${new Intl.ListFormat("en", { type: "conjunction" }).format(missing)} first.`
+                : null
+            }
+            config={{
+              // Token creation waits for a platform (see `missing`), so the fallback is never shown.
+              platform: platform ?? "slack",
+              repo: `${repository?.normalizedUrl ?? ""}${branch ? `#${branch}` : ""}`,
+              model: model.trim(),
+              credential: credential && !credential.isDefault ? credential.label : undefined,
+              connections: connectionRefs(selectedTools, connections),
+            }}
+          />
+        </Step>
+      </div>
     </div>
   );
 }

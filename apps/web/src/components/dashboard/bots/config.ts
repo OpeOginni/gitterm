@@ -14,11 +14,21 @@ export const BOT_TOKEN_SCOPES: ApiTokenScope[] = [
   "integrations:read",
 ];
 
+/** A current coding model per provider (models.dev IDs), so the default isn't a stale one. */
 const SUGGESTED_MODELS: Record<string, string> = {
-  anthropic: "anthropic/claude-sonnet-4-5",
-  openai: "openai/gpt-5",
-  google: "google/gemini-2.5-pro",
-  opencode: "opencode/big-pickle",
+  anthropic: "anthropic/claude-sonnet-5-5",
+  openai: "openai/gpt-6.1-sol",
+  google: "google/gemini-3.8-flash",
+  opencode: "opencode/deepseek-v4-pro",
+  "opencode-go": "opencode-go/deepseek-v4-pro",
+  "github-copilot": "github-copilot/claude-sonnet-5.5",
+  openrouter: "openrouter/anthropic/claude-sonnet-5.5",
+  xai: "xai/grok-4.7",
+  deepseek: "deepseek/deepseek-v4-pro",
+  moonshotai: "moonshotai/kimi-k3",
+  zai: "zai/glm-5.3",
+  "zai-coding-plan": "zai-coding-plan/glm-5.3",
+  minimax: "minimax/MiniMax-M3",
 };
 
 export function suggestModel(provider: string | undefined): string {

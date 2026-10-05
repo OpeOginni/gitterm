@@ -9,7 +9,13 @@ import { cn } from "@/lib/utils";
 
 export type StepState = "done" | "todo" | "optional";
 
-export type StepInfo = { id: string; title: string; state: StepState };
+export type StepInfo = {
+  id: string;
+  title: string;
+  state: StepState;
+  /** What's chosen so far, or what's still needed. */
+  summary?: string;
+};
 
 function StepMark({ number, state, small }: { number: number; state: StepState; small?: boolean }) {
   return (
@@ -31,24 +37,84 @@ const STATE_LABEL: Record<StepState, string> = {
   optional: "Optional",
 };
 
-export function StepProgress({ steps }: { steps: StepInfo[] }) {
+/**
+ * The bot so far: progress across the required steps, then each step with what's been chosen.
+ * Sticky beside the steps on wide screens, so the choices stay in view while scrolling.
+ */
+export function SetupSummary({ steps }: { steps: StepInfo[] }) {
+  const required = steps.filter((step) => step.state !== "optional");
+  const done = required.filter((step) => step.state === "done").length;
+  const next = steps.find((step) => step.state === "todo");
+
   return (
-    <ol className="flex flex-wrap items-center gap-x-5 gap-y-2">
-      {steps.map((step, index) => (
-        <li key={step.id}>
-          <a
-            href={`#${step.id}`}
-            className={cn(
-              "flex items-center gap-2 text-xs transition-colors hover:text-fg",
-              step.state === "done" ? "text-fg-2" : "text-fg-4",
-            )}
-          >
-            <StepMark number={index + 1} state={step.state} small />
-            {step.title}
-          </a>
-        </li>
-      ))}
-    </ol>
+    <div className="overflow-hidden rounded-2xl border border-line bg-card">
+      <div className="space-y-4 p-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
+            Your bot
+          </span>
+          <span className="font-mono text-[11px] tabular-nums text-fg-4">
+            {done}/{required.length} required
+          </span>
+        </div>
+        <div className="flex gap-1">
+          {required.map((step) => (
+            <span
+              key={step.id}
+              className={cn(
+                "h-1 flex-1 rounded-full transition-colors duration-500",
+                step.state === "done"
+                  ? "bg-primary"
+                  : step === next
+                    ? "bg-primary/30"
+                    : "bg-fill-2",
+              )}
+            />
+          ))}
+        </div>
+        <p className="text-[15px] font-medium text-fg">
+          {next ? `Next: ${next.title.toLowerCase()}` : "Ready to run"}
+        </p>
+      </div>
+      <ol className="border-t border-line">
+        {steps.map((step, index) => (
+          <li key={step.id}>
+            <a
+              href={`#${step.id}`}
+              className={cn(
+                "relative flex items-center gap-3 px-5 py-3 transition-colors hover:bg-fill",
+                step === next && "bg-fill",
+              )}
+            >
+              {step === next ? (
+                <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary" />
+              ) : null}
+              <StepMark number={index + 1} state={step.state} />
+              <span className="min-w-0 flex-1">
+                <span
+                  className={cn(
+                    "block text-sm font-medium",
+                    step.state === "done" || step === next ? "text-fg" : "text-fg-2",
+                  )}
+                >
+                  {step.title}
+                </span>
+                {step.summary ? (
+                  <span
+                    className={cn(
+                      "block truncate text-[13px]",
+                      step.state === "done" ? "font-mono text-fg-3" : "text-fg-4",
+                    )}
+                  >
+                    {step.summary}
+                  </span>
+                ) : null}
+              </span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -67,7 +133,7 @@ export function Step({
   return (
     <SettingsSection
       id={step.id}
-      className="scroll-mt-24"
+      className="scroll-mt-8"
       title={
         <span className="flex items-center gap-3">
           <StepMark number={number} state={step.state} />
@@ -86,7 +152,7 @@ export function Step({
         </span>
       }
     >
-      <SettingsSectionBody>{children}</SettingsSectionBody>
+      <SettingsSectionBody className="px-5 py-4">{children}</SettingsSectionBody>
     </SettingsSection>
   );
 }

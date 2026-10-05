@@ -730,7 +730,7 @@ const { workspace } = await client.workspaces.create({
 
 const run = await client.runs.create({
   workspace,
-  model: "anthropic/claude-sonnet-4-20250514",
+  model: "anthropic/claude-sonnet-5-5",
   prompt: "Record before/after videos of the changes in PR #42",
 });
 ```

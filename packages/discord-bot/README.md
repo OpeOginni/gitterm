@@ -29,7 +29,7 @@ Discord's gateway, so it needs no public URL.
 
    await createDiscordBot({
      repo: "https://github.com/acme/app",
-     model: "anthropic/claude-sonnet-4-5",
+     model: "anthropic/claude-sonnet-5-5",
    }).start(); // tokens from the environment, or token / gitterm: { token }
    ```
 

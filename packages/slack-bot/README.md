@@ -31,7 +31,7 @@ Slack over Socket Mode, so it needs no public URL.
 
    await createSlackBot({
      repo: "https://github.com/acme/app",
-     model: "anthropic/claude-sonnet-4-5",
+     model: "anthropic/claude-sonnet-5-5",
    }).start(); // tokens from the environment, or botToken / appToken / gitterm: { token }
    ```
 
