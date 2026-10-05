@@ -303,11 +303,16 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
   ];
   const number = (step: StepInfo) => steps.indexOf(step) + 1;
 
-  const modelHint = !credential
-    ? "Add a model credential."
-    : modelIssue
-      ? "Enter a valid model ID."
-      : `Runs ${model.trim()} with ${credential.providerDisplayName} · ${credential.label}.`;
+  const modelHint = !credential ? (
+    "Add a model credential."
+  ) : modelIssue ? (
+    "Enter a valid model ID."
+  ) : (
+    <>
+      Runs <span className="font-mono text-[12px] text-fg-2">{model.trim()}</span> with{" "}
+      {credential.providerDisplayName}.
+    </>
+  );
   const missing = [
     !modelDone && "a model",
     !repoDone && "a repository",
