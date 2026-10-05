@@ -729,25 +729,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           )}
         </div>
 
-        {/* ── 3a. Selected agent description card ── */}
-        {selectedAgent?.description && (
-          <div className="flex items-center gap-3.5 rounded-lg border border-border/60 bg-input/20 px-3.5 py-3">
-            <Image
-              src={getIcon(selectedAgent.name) || "/placeholder.svg"}
-              alt={selectedAgent.name}
-              width={32}
-              height={32}
-              className="h-8 w-8 shrink-0 opacity-80"
-            />
-            <div className="min-w-0 flex-1">
-              <span className="text-sm font-medium text-foreground/90">{selectedAgent.name}</span>
-              <p className="mt-0.5 text-[11px] leading-snug text-foreground/65">
-                {selectedAgent.description}
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* ── 3b. Model providers ── */}
         {credentialGroups.length > 0 && (
           <ModelProviderPicker
