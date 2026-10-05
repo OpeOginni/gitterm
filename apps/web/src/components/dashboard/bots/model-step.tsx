@@ -51,7 +51,7 @@ export function ModelStepBody({
   const active = credentials.filter((candidate) => candidate.isActive);
   const hasOauth = providers.some((provider) => provider.authType === "oauth");
   const addButtons = (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap justify-center gap-2">
       <Button className="h-9 gap-2" onClick={() => setApiKeyOpen(true)}>
         <Key className="size-3.5" />
         Add API key
@@ -70,8 +70,8 @@ export function ModelStepBody({
       {isLoading ? (
         <Skeleton className="h-16 w-full bg-fill" />
       ) : active.length === 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <p className="min-w-0 text-[13px] text-fg-3">
+        <div className="flex flex-col items-center gap-4 py-4 text-center">
+          <p className="text-sm text-fg-2">
             The agent runs on your own API key or a subscription you already pay for.
           </p>
           {addButtons}
