@@ -87,12 +87,8 @@ function NavGroups({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: ()
   );
 }
 
-function initials(name: string | undefined): string {
-  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  return (
-    parts.length > 1 ? `${parts[0]![0]}${parts.at(-1)![0]}` : (parts[0]?.slice(0, 2) ?? "?")
-  ).toUpperCase();
-}
+/** One letter, the same as the avatar on the Account page. */
+const initial = (user: SessionUser) => (user.name || user.email || "?").charAt(0).toUpperCase();
 
 function UserMenu({ user, onNavigate }: { user: SessionUser; onNavigate?: () => void }) {
   const router = useRouter();
@@ -100,7 +96,7 @@ function UserMenu({ user, onNavigate }: { user: SessionUser; onNavigate?: () => 
     <DropdownMenu>
       <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors outline-none hover:bg-fill focus-visible:bg-fill">
         <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary/10 font-mono text-[11px] font-semibold text-primary">
-          {initials(user.name)}
+          {initial(user)}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-fg">{user.name}</span>

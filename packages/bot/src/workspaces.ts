@@ -61,13 +61,21 @@ export async function githubFor(gitterm: GittermClient, repo: Repo): Promise<str
 
 const RESUME_TIMEOUT_MS = 5 * 60_000;
 
+/** Channels share one sandbox per repository. */
+export const SHARED_SPACE = "shared";
+
+/** Where a message's sandbox lives: its own per direct conversation, else the shared one. */
+export const spaceOf = (message: { direct?: boolean; thread: { channel: string } }) =>
+  message.direct ? `dm:${message.thread.channel}` : SHARED_SPACE;
+
+/** Sandboxes are per repository and space (shared channels, or one direct conversation). */
 export type WorkspaceManager = {
-  /** The repository's sandbox, found by its tags or created, and running. */
-  ensure(repo: Repo, progress: (status: StatusText) => void): Promise<Workspace>;
-  /** The repository's sandbox, if there is one, without waking it. */
-  find(repo: Repo): Promise<Workspace | null>;
-  /** Terminate the repository's sandbox; the next request creates a fresh one. */
-  reset(repo: Repo): Promise<boolean>;
+  /** The sandbox, found by its tags or created, and running. */
+  ensure(repo: Repo, progress: (status: StatusText) => void, space?: string): Promise<Workspace>;
+  /** The sandbox, if there is one, without waking it. */
+  find(repo: Repo, space?: string): Promise<Workspace | null>;
+  /** Terminate the sandbox; the next request creates a fresh one. */
+  reset(repo: Repo, space?: string): Promise<boolean>;
 };
 
 export function createWorkspaceManager(input: {
@@ -85,21 +93,22 @@ export function createWorkspaceManager(input: {
   const { gitterm, log } = input;
   // The tags are the only record of which sandbox belongs to which repository, so a bot with
   // a lost state file, or on another machine, adopts its sandbox instead of leaking it.
-  const tags = (repo: Repo) => ({
+  const tags = (repo: Repo, space: string) => ({
     "gitterm-bot": `${input.platform}:${input.scope}`,
     "gitterm-bot-repo": repoKey(repo),
+    "gitterm-bot-space": space,
   });
 
-  const find = async (repo: Repo) => {
+  const find = async (repo: Repo, space = SHARED_SPACE) => {
     const { workspaces } = await gitterm.workspaces.list({
       status: "active",
-      metadata: tags(repo),
+      metadata: tags(repo, space),
       limit: 1,
     });
     return workspaces[0] ?? null;
   };
 
-  const create = async (repo: Repo) => {
+  const create = async (repo: Repo, space: string) => {
     // Your own GitHub token replaces a GitTerm GitHub connection; the two can't be combined.
     const github = input.overrides?.repositoryCredentials ? [] : await githubFor(gitterm, repo);
     const connections = [...github, ...input.connections];
@@ -120,7 +129,7 @@ export function createWorkspaceManager(input: {
       repo: repo.url,
       ...(repo.branch ? { branch: repo.branch } : {}),
       agent: "opencode",
-      metadata: tags(repo),
+      metadata: tags(repo, space),
       connections,
       ...(models ? { models } : {}),
       ...(Object.keys(env).length ? { environmentVariables: env } : {}),
@@ -137,14 +146,14 @@ export function createWorkspaceManager(input: {
 
   return {
     find,
-    async ensure(repo, progress) {
-      let workspace = await find(repo);
+    async ensure(repo, progress, space = SHARED_SPACE) {
+      let workspace = await find(repo, space);
       if (!workspace) {
         progress({
           message: `Creating a sandbox for ${repoLabel(repo)}. The first start takes a few minutes…`,
           indicator: `is creating a sandbox for ${repoLabel(repo)} (the first start takes a few minutes)…`,
         });
-        workspace = await create(repo);
+        workspace = await create(repo, space);
       } else if (workspace.status === "paused") {
         progress({ message: "Waking up the sandbox…", indicator: "is waking up the sandbox…" });
       }
@@ -153,8 +162,8 @@ export function createWorkspaceManager(input: {
       });
       return running.workspace;
     },
-    async reset(repo) {
-      const workspace = await find(repo);
+    async reset(repo, space = SHARED_SPACE) {
+      const workspace = await find(repo, space);
       if (!workspace) return false;
       await gitterm.workspaces.terminate(workspace.id);
       return true;

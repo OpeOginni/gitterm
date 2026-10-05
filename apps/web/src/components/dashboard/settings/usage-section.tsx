@@ -50,7 +50,7 @@ function UsageQuota() {
     <SettingsSection
       icon={Clock}
       title="Runtime today"
-      description="Cloud compute minutes used today. Resets daily at midnight UTC."
+      description="Cloud compute minutes left today. Resets daily at midnight UTC."
     >
       <SettingsSectionBody className="space-y-5">
         {isLoading ? (
@@ -68,15 +68,10 @@ function UsageQuota() {
           </div>
         ) : (
           <>
-            <div className="flex items-end justify-between gap-4">
-              <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
-                {usage.minutesUsed}
-                <span className="text-base font-normal text-fg-4"> / {usage.dailyLimit} min</span>
-              </p>
-              <p className="pb-1 font-mono text-[12px] tabular-nums text-fg-3">
-                {usage.minutesRemaining} min left
-              </p>
-            </div>
+            <p className="text-3xl font-semibold tracking-tight text-fg tabular-nums">
+              {usage.minutesRemaining}
+              <span className="text-base font-normal text-fg-4"> min left</span>
+            </p>
 
             <div className="h-2 w-full overflow-hidden rounded-full bg-fill-2">
               <div

@@ -41,6 +41,7 @@ import type {
 } from "./types.js";
 import {
   createWorkspaceManager,
+  spaceOf,
   parseRepo,
   repoKey,
   repoLabel,
@@ -393,8 +394,9 @@ export function createBot(options: BotOptions): Bot {
 
   async function startRun(job: Job, message: ChatMessage) {
     const report = (status: StatusText) => job.status.set(status);
-    const workspace = await lock(`repo:${repoKey(job.repo)}`, () =>
-      workspaces.ensure(job.repo, report),
+    const space = spaceOf(message);
+    const workspace = await lock(`repo:${space}:${repoKey(job.repo)}`, () =>
+      workspaces.ensure(job.repo, report, space),
     );
     report(WORKING);
     const stored = store.session(job.key);
@@ -515,7 +517,10 @@ export function createBot(options: BotOptions): Bot {
       );
     }
     if (name === "reset") {
-      const terminated = await lock(`repo:${repoKey(repo)}`, () => workspaces.reset(repo));
+      const space = spaceOf(message);
+      const terminated = await lock(`repo:${space}:${repoKey(repo)}`, () =>
+        workspaces.reset(repo, space),
+      );
       return say(
         message.thread,
         terminated
@@ -524,7 +529,7 @@ export function createBot(options: BotOptions): Bot {
       );
     }
     // status: what this thread can reach, so people can check before asking.
-    const workspace = await workspaces.find(repo);
+    const workspace = await workspaces.find(repo, spaceOf(message));
     const sandbox = workspace
       ? `${workspace.status}${workspace.status === "paused" ? ", wakes with the next message" : ""}`
       : "created with the next message";
@@ -533,7 +538,9 @@ export function createBot(options: BotOptions): Bot {
       [
         `*${repoLabel(repo)}*${repo.branch ? ` (${repo.branch})` : ""} · sandbox ${sandbox}`,
         `Model: ${model?.id ?? "dashboard default"} · Tools: ${options.connections?.length ? options.connections.join(", ") : "GitHub only"}`,
-        `Who can use me: ${allowedUsers ? `${allowedUsers.size} allowed people` : "everyone in this channel"}${options.allowGuests ? "" : ", no guests"}`,
+        message.direct
+          ? "This conversation has its own sandbox."
+          : `Who can use me: ${allowedUsers ? `${allowedUsers.size} allowed people` : "everyone in this channel"}${options.allowGuests ? "" : ", no guests"}`,
         active.has(key) ? "An agent is working in this thread right now." : "",
       ]
         .filter(Boolean)

@@ -53,6 +53,10 @@ Slack over Socket Mode, so it needs no public URL.
 - **Native progress.** While it works, Slack shows _“Acme Agent is working on it…”_ under the
   thread, the same indicator Slack's AI apps use, with the elapsed time. Workspaces that refuse it
   get a status message the bot keeps up to date instead.
+- **Private DMs.** Message the bot directly, no mention needed. Each DM gets its own sandbox, so
+  the agent there can't see sessions from channels or other people's DMs. Apps created before
+  this need the manifest's `im:history` scope, `message.im` event, and Messages tab; reinstall
+  after updating it.
 - **Pick a repository per thread.** With `repos`, people name one in a thread's first message
   (`@Acme Agent in acme/api, why is login slow?`); a channel without a repository asks which one.
   The thread stays on that repository.
