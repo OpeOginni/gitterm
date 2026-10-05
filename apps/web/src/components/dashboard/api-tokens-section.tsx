@@ -27,7 +27,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { API_TOKEN_SCOPE_DETAILS, API_TOKEN_SCOPES, type ApiTokenScope } from "@gitterm/schema";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -94,6 +93,7 @@ export function ApiTokensSection() {
   const { data, isLoading } = useQuery(trpc.apiTokens.list.queryOptions());
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [scopesOpenId, setScopesOpenId] = useState<string | null>(null);
   const [tokenName, setTokenName] = useState("");
   const [expiry, setExpiry] = useState<string>("90");
   const [preset, setPreset] = useState<PresetId>("full");
@@ -214,23 +214,16 @@ export function ApiTokensSection() {
                       <CalendarClock className="size-3.5" />
                       {token.expiresAt ? `Expires ${formatDate(token.expiresAt)}` : "No expiry"}
                     </span>
-                    <Popover>
-                      <PopoverTrigger className="group flex items-center gap-1.5 transition-colors hover:text-fg-2 data-[state=open]:text-fg-2">
-                        <ShieldCheck className="size-3.5" />
-                        {accessSummary(token.scopes)}
-                        <ChevronDown className="size-3 transition-transform group-data-[state=open]:rotate-180" />
-                      </PopoverTrigger>
-                      <PopoverContent align="start" className="w-56 p-3">
-                        <ul className="space-y-1 font-mono text-[11px] text-fg-2">
-                          {token.scopes.map((scope) => (
-                            <li key={scope}>{scope}</li>
-                          ))}
-                        </ul>
-                        <p className="mt-2.5 border-t border-line pt-2 text-[11px] text-fg-4">
-                          Created {formatDate(token.createdAt)}
-                        </p>
-                      </PopoverContent>
-                    </Popover>
+                    <button
+                      type="button"
+                      aria-expanded={scopesOpenId === token.id}
+                      onClick={() => setScopesOpenId((id) => (id === token.id ? null : token.id))}
+                      className="group flex items-center gap-1.5 transition-colors hover:text-fg-2"
+                    >
+                      <ShieldCheck className="size-3.5" />
+                      {accessSummary(token.scopes)}
+                      <ChevronDown className="size-3 transition-transform group-aria-expanded:rotate-180" />
+                    </button>
                     {token.bot ? (
                       <Link
                         href={`/dashboard/bots/${token.bot.id}` as Route}
@@ -241,6 +234,13 @@ export function ApiTokensSection() {
                       </Link>
                     ) : null}
                   </div>
+                  {/* Under the whole line, so nothing beside the toggle moves. */}
+                  {scopesOpenId === token.id ? (
+                    <p className="mt-1.5 font-mono text-[11px] leading-relaxed text-fg-3">
+                      {token.scopes.join(" · ")}
+                      <span className="text-fg-4"> · created {formatDate(token.createdAt)}</span>
+                    </p>
+                  ) : null}
                 </div>
                 {confirmingId === token.id ? (
                   <div className="flex shrink-0 items-center gap-1.5">
