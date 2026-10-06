@@ -58,6 +58,7 @@ import {
   canCreatePersistentWorkspace,
   canUseProvider,
   getDailyMinuteQuotaAsync,
+  getMachineAccess,
   getWorkspaceLimit,
   type UserPlan,
 } from "../../config/features";
@@ -87,13 +88,12 @@ import { buildAwsRuntimeInstructions } from "../../service/agents/opencode";
 import { T3_PAIRING_CREATE_COMMAND } from "../../service/agents/t3code";
 import {
   configKindsForAgentType,
-  parseProviderMachineOptions,
   providerKeySchema,
+  providerMachineOptionsSchemas,
   workspaceProviderSelectionSchema,
   workspaceSecretFilesSchema,
   workspaceSetupSchema,
   type AgentConfigKind,
-  type ProviderKey,
 } from "@gitterm/schema";
 import {
   deleteAllWorkspaceRouteAccess,
@@ -116,8 +116,16 @@ import {
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
 import { imageSupportsProvider, pickImageForProvider } from "../../providers/image-compat";
 import { RAILWAY_RUNTIME_PORT } from "../../providers/railway";
-import { applyMachineProfile } from "../../providers/machine-profile";
-import type { CloudProviderType, ImageProviderMetadata } from "@gitterm/db/schema/cloud";
+import {
+  applyMachineProfile,
+  getDefaultMachineProfile,
+  getSelectableMachineProfiles,
+} from "../../providers/machine-profile";
+import type {
+  CloudProviderType,
+  ImageProviderMetadata,
+  MachineProfileType,
+} from "@gitterm/db/schema/cloud";
 import { normalizeBaseCommit } from "../../utils/workspace-base-commit";
 import {
   buildWorkspaceRuntimeAccess,
@@ -395,6 +403,11 @@ function matchesRegion(
   );
 }
 
+const enabledMachineProfiles = {
+  where: eq(machineProfile.isEnabled, true),
+  orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
+};
+
 async function resolveWorkspaceCreateIntent(
   rawInput: z.infer<typeof workspaceCreateSchema>,
   userId: string,
@@ -418,10 +431,7 @@ async function resolveWorkspaceCreateIntent(
     where: eq(cloudProvider.isEnabled, true),
     with: {
       regions: { where: eq(region.isEnabled, true), orderBy: [asc(region.name)] },
-      machineProfiles: {
-        where: eq(machineProfile.isEnabled, true),
-        orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
-      },
+      machineProfiles: enabledMachineProfiles,
     },
     orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
   });
@@ -475,36 +485,19 @@ async function resolveWorkspaceCreateIntent(
     throw new TRPCError({ code: "NOT_FOUND", message: "No enabled region matches this request" });
   }
 
+  // Translate the requested machine; resolveMachineSelection enforces policy and plan.
   const requestedMachine = providerSelection?.machine;
-  if (
-    requestedMachine?.type === "custom" &&
-    selectedProvider.machineSelectionPolicy.mode !== "flexible"
-  ) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "This provider does not allow custom machine sizes",
-    });
-  }
-  if (
-    requestedMachine?.type === "profile" &&
-    selectedProvider.machineSelectionPolicy.mode === "standard"
-  ) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "This provider uses its standard machine size",
-    });
-  }
   const selectedMachine =
     requestedMachine?.type === "profile"
       ? selectedProvider.machineProfiles.find(
           (candidate) =>
             candidate.key === requestedMachine.key || candidate.id === requestedMachine.key,
         )
-      : selectedProvider.machineProfiles[0];
+      : undefined;
   if (requestedMachine?.type === "profile" && !selectedMachine) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: `No enabled machine profile matches "${requestedMachine}"`,
+      message: `No enabled machine profile matches "${requestedMachine.key}"`,
     });
   }
 
@@ -517,15 +510,94 @@ async function resolveWorkspaceCreateIntent(
     machineProfileId: selectedMachine?.id,
     awsAccessProfileId:
       providerSelection?.type === "aws" ? providerSelection.accessProfile : undefined,
-    machineOptions:
-      requestedMachine?.type === "custom"
-        ? parseProviderMachineOptions(
-            selectedProvider.providerKey as ProviderKey,
-            requestedMachine.resources,
-          )
-        : undefined,
+    machineOptions: requestedMachine?.type === "custom" ? requestedMachine.resources : undefined,
     persistent: rawInput.persistent ?? selectedProvider.autoPersistent,
   };
+}
+
+/**
+ * The sizes the admin's policy offers on a provider, flagged with whether the
+ * viewer's plan may use them, so locked sizes can be shown as upgrades.
+ */
+function describeMachineProfiles(
+  provider: Pick<CloudProviderType, "machineSelectionPolicy"> & {
+    machineProfiles: MachineProfileType[];
+  },
+  plan: UserPlan,
+) {
+  const mode = provider.machineSelectionPolicy.mode;
+  const selectable = getSelectableMachineProfiles(
+    provider.machineProfiles,
+    mode,
+    getMachineAccess(plan),
+  );
+  const defaultProfile = getDefaultMachineProfile(selectable);
+  return getSelectableMachineProfiles(provider.machineProfiles, mode, "any").map((profile) => ({
+    id: profile.id,
+    key: profile.key,
+    name: profile.name,
+    description: profile.description,
+    vcpus: profile.vcpus,
+    memoryGb: profile.memoryGb,
+    isDefault: profile === defaultProfile,
+    available: selectable.includes(profile),
+  }));
+}
+
+/**
+ * Pick the machine for a new workspace. The admin's selection policy and the
+ * user's plan both apply here, whichever path (dashboard, SDK, bot) created it.
+ */
+async function resolveMachineSelection(
+  provider: CloudProviderType,
+  plan: UserPlan,
+  requested: { machineProfileId?: string; machineOptions?: Record<string, unknown> },
+): Promise<{ profile: MachineProfileType | undefined; machineOptions?: Record<string, unknown> }> {
+  const mode = provider.machineSelectionPolicy.mode;
+  const access = getMachineAccess(plan);
+
+  let machineOptions: Record<string, unknown> | undefined;
+  if (requested.machineOptions) {
+    if (mode !== "flexible" || access !== "any") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Custom machine sizes are not available for this provider on your plan",
+      });
+    }
+    const parsedKey = providerKeySchema.safeParse(provider.providerKey);
+    const parsedOptions = parsedKey.success
+      ? providerMachineOptionsSchemas[parsedKey.data].safeParse(requested.machineOptions)
+      : undefined;
+    if (!parsedOptions?.success) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid machine options" });
+    }
+    machineOptions = parsedOptions.data;
+  }
+
+  const profiles = await db.query.machineProfile.findMany({
+    ...enabledMachineProfiles,
+    where: and(enabledMachineProfiles.where, eq(machineProfile.cloudProviderId, provider.id)),
+  });
+  const selectable = getSelectableMachineProfiles(profiles, mode, access);
+  if (!requested.machineProfileId) {
+    return { profile: getDefaultMachineProfile(selectable), machineOptions };
+  }
+
+  const profile = selectable.find((candidate) => candidate.id === requested.machineProfileId);
+  if (profile) return { profile, machineOptions };
+  if (profiles.some((candidate) => candidate.id === requested.machineProfileId)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        access === "smallest"
+          ? "The Free plan can only use a provider's smallest machine size. Upgrade to use larger machines."
+          : "This provider uses a fixed machine size",
+    });
+  }
+  throw new TRPCError({
+    code: "BAD_REQUEST",
+    message: "Selected machine profile is not available for this provider",
+  });
 }
 
 async function getConfiguredDefaultRegionIdentifier(
@@ -676,15 +748,12 @@ export const workspaceRouter = router({
               where: eq(region.isEnabled, true),
               orderBy: [asc(region.name)],
             },
-            machineProfiles: {
-              where: eq(machineProfile.isEnabled, true),
-              orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
-            },
+            machineProfiles: enabledMachineProfiles,
           },
           orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
         });
 
-        // Plan-based provider gating: free tier only sees E2B (and Local).
+        // Plan-based provider gating: free tier only sees E2B and boat (and Local).
         // Paid plans and self-hosted see everything. Done in-memory so the
         // gating rules live in one place (config/features).
         const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
@@ -740,13 +809,7 @@ export const workspaceRouter = router({
                     )
                   : [],
               regions,
-              machineProfiles: provider.machineProfiles.map((profile) => ({
-                id: profile.id,
-                key: profile.key,
-                name: profile.name,
-                description: profile.description,
-                isDefault: profile.isDefault,
-              })),
+              machineProfiles: describeMachineProfiles(provider, viewerPlan),
               sshAccessSupport: normalizeProvidersshAccessSupport(provider.sshAccessSupport),
             };
           }),
@@ -778,10 +841,7 @@ export const workspaceRouter = router({
         where: eq(cloudProvider.isEnabled, true),
         with: {
           regions: { where: eq(region.isEnabled, true), orderBy: [asc(region.name)] },
-          machineProfiles: {
-            where: eq(machineProfile.isEnabled, true),
-            orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
-          },
+          machineProfiles: enabledMachineProfiles,
         },
         orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
       }),
@@ -882,13 +942,10 @@ export const workspaceRouter = router({
             name: providerRegion.name,
             location: providerRegion.location,
           })),
-          machines: provider.machineProfiles.map((profile) => ({
-            id: profile.id,
-            key: profile.key,
-            name: profile.name,
-            description: profile.description,
-            isDefault: profile.isDefault,
-          })),
+          location: provider.location,
+          machines: describeMachineProfiles(provider, viewerPlan)
+            .filter((profile) => profile.available)
+            .map(({ available: _available, ...profile }) => profile),
           agentKeys,
           ssh: normalizeProvidersshAccessSupport(provider.sshAccessSupport).supported,
           workspaceApiAccess: parsedKey.data === "daytona" ? daytonaWorkspaceApiAccess : true,
@@ -1750,28 +1807,12 @@ export const workspaceRouter = router({
             message: "Selected cloud provider is no longer supported",
           });
         }
-        const selectedMachineProfile = input.machineProfileId
-          ? await db.query.machineProfile.findFirst({
-              where: and(
-                eq(machineProfile.id, input.machineProfileId),
-                eq(machineProfile.cloudProviderId, cloudProviderRecord.id),
-                eq(machineProfile.isEnabled, true),
-              ),
-            })
-          : await db.query.machineProfile.findFirst({
-              where: and(
-                eq(machineProfile.cloudProviderId, cloudProviderRecord.id),
-                eq(machineProfile.isEnabled, true),
-              ),
-              orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
-            });
-
-        if (input.machineProfileId && !selectedMachineProfile) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Selected machine profile is not available for this provider",
-          });
-        }
+        const machineSelection = await resolveMachineSelection(
+          cloudProviderRecord,
+          (fetchedUser.plan || "free") as UserPlan,
+          input,
+        );
+        const selectedMachineProfile = machineSelection.profile;
 
         if (providerKey !== "local") {
           if (!cloudProviderRecord.providerConfigId) {
@@ -1817,7 +1858,7 @@ export const workspaceRouter = router({
         // Determine if this is a local workspace
         const isLocal = providerKey === "local";
 
-        // Plan-based provider gating. Free tier may only use E2B; all paid
+        // Plan-based provider gating. Free tier may only use E2B and boat; all paid
         // plans (and self-hosted) may use any enabled provider. Local
         // workspaces don't consume our managed compute, so they're exempt.
         const planForGating = (fetchedUser.plan || "free") as UserPlan;
@@ -1825,7 +1866,7 @@ export const workspaceRouter = router({
           throw new TRPCError({
             code: "FORBIDDEN",
             message:
-              "The Free plan can only use E2B sandboxes. Upgrade to Starter or Pro to use this provider.",
+              "The Free plan can only use E2B and boat sandboxes. Upgrade to Starter or Pro to use this provider.",
           });
         }
 
@@ -2719,7 +2760,7 @@ export const workspaceRouter = router({
         let imageProviderMetadata = applyMachineProfile(
           imageRecord.providerMetadata,
           providerKey,
-          input.machineOptions ?? selectedMachineProfile?.providerOptions,
+          machineSelection.machineOptions ?? selectedMachineProfile?.providerOptions,
         );
 
         // Bring-your-own image: swap what the provider runs, keep the catalog

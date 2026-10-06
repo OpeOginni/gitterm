@@ -491,8 +491,10 @@ await client.workspaces.create({
 
 `provider` is a discriminated union, so TypeScript only offers `region` for providers
 where GitTerm supports caller-selected placement. Machine keys are configured by admins
-and returned by `client.catalog.workspaceOptions()`; raw CPU, memory, credentials, and
-provider account configuration are never supplied by SDK callers.
+and returned by `client.catalog.workspaceOptions()` with their `vcpus` and `memoryGb`;
+raw CPU, memory, credentials, and provider account configuration are never supplied by SDK
+callers. The catalog lists only the sizes you may use: an admin can pin a provider to its
+default size, and on managed GitTerm the Free plan gets each provider's smallest size.
 
 This makes release automation a normal workspace task: create an OpenCode workspace,
 run UI review or browser capture tools in the sandbox, upload the resulting media, update

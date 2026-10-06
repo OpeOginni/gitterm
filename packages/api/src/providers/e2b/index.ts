@@ -126,7 +126,7 @@ export class E2BProvider implements ComputeProvider {
       throw new Error(`No E2B template ID configured for image ${config.imageId}`);
     }
 
-    return templateId;
+    return `${templateId}${e2bMetadata?.templateSuffix ?? ""}`;
   }
 
   private getRepositoryUrl(repositoryUrl: string): string {

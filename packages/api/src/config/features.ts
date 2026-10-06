@@ -17,6 +17,7 @@
 import env, { getGitHubAuthCredentials } from "@gitterm/env/server";
 import { isSelfHosted, isManaged } from "./deployment";
 import { getFreeTierDailyMinutes } from "../service/config/system-config";
+import type { MachineAccess } from "../providers/machine-profile";
 
 /**
  * Feature flags configuration
@@ -94,7 +95,7 @@ export const shouldMeterUsage = (): boolean => features.usageMetering;
 /**
  * Available user plans
  *
- * - free: Basic trial access. E2B sandbox only, no persistence.
+ * - free: Basic trial access. E2B or boat sandboxes on their smallest size, no persistence.
  * - starter: Entry paid tier. All providers, persistence, higher quotas.
  * - pro: Main paid tier. All providers, persistence, highest quotas, branding.
  *
@@ -138,9 +139,11 @@ export interface PlanLimits {
   customSubdomain: boolean;
   /**
    * Provider keys this plan may use. `null` means "all enabled providers".
-   * Free is intentionally restricted to E2B only.
+   * Free is intentionally restricted to the cheap sandbox providers.
    */
   allowedProviderKeys: string[] | null;
+  /** Machine sizes this plan may use on a provider: all, or only the smallest. */
+  machineAccess: MachineAccess;
 }
 
 export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
@@ -151,7 +154,8 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     retentionDays: 2,
     persistence: false,
     customSubdomain: false,
-    allowedProviderKeys: ["e2b"],
+    allowedProviderKeys: ["e2b", "ascii"],
+    machineAccess: "smallest",
   },
   starter: {
     workspaces: 5,
@@ -161,6 +165,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     persistence: true,
     customSubdomain: true,
     allowedProviderKeys: null,
+    machineAccess: "any",
   },
   pro: {
     workspaces: 15,
@@ -170,6 +175,7 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     persistence: true,
     customSubdomain: true,
     allowedProviderKeys: null,
+    machineAccess: "any",
   },
 };
 
@@ -245,7 +251,7 @@ export const canCreatePersistentWorkspace = (plan: UserPlan | string): boolean =
 /**
  * Get the provider keys a plan is allowed to use.
  * Returns `null` when the plan may use any enabled provider (all paid plans and
- * self-hosted). Free is restricted to E2B only.
+ * self-hosted). Free is restricted to E2B and boat.
  */
 export const getAllowedProviderKeys = (plan: UserPlan | string): string[] | null => {
   if (isSelfHosted()) return null;
@@ -259,6 +265,15 @@ export const canUseProvider = (plan: UserPlan | string, providerKey: string): bo
   const allowed = getAllowedProviderKeys(plan);
   if (allowed === null) return true;
   return allowed.includes(providerKey.toLowerCase());
+};
+
+/**
+ * Get which machine sizes a plan may use. Self-hosted deployments only apply
+ * the admin's per-provider machine selection policy.
+ */
+export const getMachineAccess = (plan: UserPlan | string): MachineAccess => {
+  if (isSelfHosted()) return "any";
+  return getPlanLimits(plan).machineAccess;
 };
 
 /**
@@ -291,16 +306,17 @@ export const getPlanInfo = (
   const planInfo: Record<UserPlan, ReturnType<typeof getPlanInfo>> = {
     free: {
       name: "Free",
-      description: "60 min/day on E2B sandboxes with up to 2 workspaces",
+      description: "60 min/day on small E2B or boat sandboxes with up to 2 workspaces",
     },
     starter: {
       name: "Starter",
-      description: "180 min/day, all providers, persistence, custom subdomains, up to 5 workspaces",
+      description:
+        "180 min/day, all providers and machine sizes, persistence, custom subdomains, up to 5 workspaces",
       badge: "best-value",
     },
     pro: {
       name: "Pro",
-      description: "480 min/day, all providers, persistence, up to 15 workspaces",
+      description: "480 min/day, all providers and machine sizes, persistence, up to 15 workspaces",
       badge: "popular",
     },
   };

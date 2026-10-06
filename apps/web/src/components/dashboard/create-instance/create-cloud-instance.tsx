@@ -26,6 +26,7 @@ import { authClient } from "@/lib/auth-client";
 import { isBillingEnabled } from "@gitterm/env/web";
 import type { Route } from "next";
 import {
+  formatMachineSize,
   getIcon,
   type AgentType,
   type CloudProvider,
@@ -247,13 +248,19 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       ? awsProfileSelection.id
       : undefined;
   const availableMachineProfiles = selectedCloudProvider?.machineProfiles ?? [];
+  const usableMachineProfiles = availableMachineProfiles.filter(
+    (profile) => profile.available !== false,
+  );
   const selectedMachineProfileId =
     (userMachineProfileId &&
-    availableMachineProfiles.some((profile) => profile.id === userMachineProfileId)
+    usableMachineProfiles.some((profile) => profile.id === userMachineProfileId)
       ? userMachineProfileId
       : undefined) ??
-    availableMachineProfiles.find((profile) => profile.isDefault)?.id ??
-    availableMachineProfiles[0]?.id;
+    usableMachineProfiles.find((profile) => profile.isDefault)?.id ??
+    usableMachineProfiles[0]?.id;
+  const selectedMachineProfile = availableMachineProfiles.find(
+    (profile) => profile.id === selectedMachineProfileId,
+  );
 
   // Persistence capability for the selected provider. Some providers (e.g.
   // Cloudflare sandboxes) cannot keep files between sessions at all.
@@ -627,6 +634,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                                 className="mr-2 h-4 w-4"
                               />
                               {cloud.name}
+                              {cloud.location && (
+                                <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">
+                                  {cloud.location}
+                                </span>
+                              )}
                             </div>
                           </SelectItem>
                         ))
@@ -687,25 +699,37 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 </SelectTrigger>
                 <SelectContent>
                   {availableMachineProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
+                    <SelectItem
+                      key={profile.id}
+                      value={profile.id}
+                      disabled={profile.available === false}
+                    >
                       <span>{profile.name}</span>
                       <span className="ml-2 font-mono text-[10px] text-muted-foreground">
-                        {profile.key}
+                        {formatMachineSize(profile) ?? profile.key}
                       </span>
+                      {profile.available === false && (
+                        <span className="ml-2 text-[10px] text-primary">Paid plans</span>
+                      )}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {availableMachineProfiles.find((profile) => profile.id === selectedMachineProfileId)
-                ?.description && (
+              {selectedMachineProfile?.description && (
                 <p className="text-[11px] text-muted-foreground/70">
-                  {
-                    availableMachineProfiles.find(
-                      (profile) => profile.id === selectedMachineProfileId,
-                    )?.description
-                  }
+                  {selectedMachineProfile.description}
                 </p>
               )}
+              {isBillingEnabled() &&
+                usableMachineProfiles.length < availableMachineProfiles.length && (
+                  <Link
+                    href={"/pricing" as Route}
+                    className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:underline"
+                  >
+                    <Sparkles className="h-2.5 w-2.5" />
+                    Upgrade for larger machines
+                  </Link>
+                )}
             </div>
           )}
 

@@ -23,8 +23,8 @@ const PLAN_PRICE: Record<PaidPlan, number> = {
 };
 
 const PLAN_LINE: Record<PaidPlan, string> = {
-  starter: "Every provider, persistent workspaces, 180 minutes a day.",
-  pro: "Every provider, custom subdomains, 480 minutes a day.",
+  starter: "Every provider and machine size, persistent workspaces, 180 minutes a day.",
+  pro: "Every provider and machine size, custom subdomains, 480 minutes a day.",
 };
 
 /** One plan row in the workspace-card style: what you are on, and where to change it. */
@@ -127,7 +127,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
   return (
     <PlanRow
       name="Free"
-      detail="E2B sandboxes and 60 minutes a day. Upgrade for every provider and persistence."
+      detail="Small E2B or boat sandboxes and 60 minutes a day. Upgrade for every provider, larger machines, and persistence."
       action={
         <Button asChild size="sm" className="h-8 gap-1.5 text-xs">
           <Link href={"/pricing" as Route}>

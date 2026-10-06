@@ -253,6 +253,13 @@
       "when": 1791205217235,
       "tag": "0035_commit_attribution",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791281385586,
+      "tag": "0036_machine_sizes",
+      "breakpoints": true
     }
   ]
 }
