@@ -31,6 +31,7 @@ import { workspace } from "@gitterm/db/schema/workspace";
 import { workspaceSetupCommandDefault } from "@gitterm/db/schema/workspace-setup";
 import { workspaceSetupCommandsSchema } from "@gitterm/schema";
 import { getSupportedImageProviders } from "../../providers/image-compat";
+import { getBilling } from "../../billing";
 
 // ============================================================================
 // Input Schemas
@@ -650,10 +651,36 @@ export const infrastructureRouter = router({
   listMachineProfiles: adminProcedure
     .input(z.object({ cloudProviderId: z.uuid() }))
     .query(async ({ input }) => {
-      return db.query.machineProfile.findMany({
+      const profiles = await db.query.machineProfile.findMany({
         where: eq(machineProfile.cloudProviderId, input.cloudProviderId),
         orderBy: (profile, { desc, asc }) => [desc(profile.isDefault), asc(profile.name)],
       });
+      const billing = await getBilling();
+      const prices = await billing.getMachinePrices(profiles.map((profile) => profile.id));
+      return {
+        billingEnabled: billing.enabled,
+        profiles: profiles.map((profile) => ({
+          ...profile,
+          priceMicrosPerHour: prices.get(profile.id) ?? null,
+        })),
+      };
+    }),
+
+  /** Price sessions that start from now on; earlier usage keeps its price. */
+  setMachineProfilePrice: adminProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        microsPerHour: z.number().int().min(0).max(1_000_000_000).nullable(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const billing = await getBilling();
+      if (!billing.enabled) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Billing is not enabled" });
+      }
+      await billing.setMachinePrice(input.id, input.microsPerHour);
+      return { success: true };
     }),
 
   createMachineProfile: adminProcedure

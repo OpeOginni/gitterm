@@ -26,6 +26,7 @@ import { authClient } from "@/lib/auth-client";
 import { isBillingEnabled } from "@gitterm/env/web";
 import type { Route } from "next";
 import {
+  formatHourlyPrice,
   formatMachineSize,
   getIcon,
   type AgentType,
@@ -200,6 +201,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
   const { data: session } = authClient.useSession();
   const { data: billingAccount } = useBillingAccount();
+  const [alwaysOn, setAlwaysOn] = useState(false);
+  const canKeepAlwaysOn = billingAccount?.entitlements.alwaysOn ?? !isBillingEnabled();
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
 
   const defaultGroupKey: CloudGroupKey | "" = useMemo(() => {
@@ -449,6 +452,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           : []),
       ].filter((id): id is string => Boolean(id)),
       persistent: effectivePersistent,
+      alwaysOn: canKeepAlwaysOn && alwaysOn,
       subdomain: subdomain || undefined,
       workspaceProfile,
       models: { inherit: "none", providers: Object.fromEntries(selectedModelCredentials) },
@@ -708,6 +712,9 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                       <span>{profile.name}</span>
                       <span className="ml-2 font-mono text-[10px] text-muted-foreground">
                         {formatMachineSize(profile) ?? profile.key}
+                        {profile.priceMicrosPerHour != null
+                          ? ` · ${formatHourlyPrice(profile.priceMicrosPerHour)}`
+                          : ""}
                       </span>
                       {profile.available === false && (
                         <span className="ml-2 text-[10px] text-primary">Paid plans</span>
@@ -733,6 +740,24 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 )}
             </div>
           )}
+
+          {canKeepAlwaysOn ? (
+            <label className="flex items-start gap-2 text-xs sm:col-span-2">
+              <Checkbox
+                className="mt-0.5"
+                checked={alwaysOn}
+                onCheckedChange={(checked) => setAlwaysOn(checked === true)}
+              />
+              <span>
+                <span className="font-medium text-foreground/90">Keep running when idle</span>
+                <span className="block text-muted-foreground">
+                  {isBillingEnabled()
+                    ? "Always-on workspaces aren't paused for inactivity, so compute keeps accruing while idle."
+                    : "Always-on workspaces aren't paused for inactivity."}
+                </span>
+              </span>
+            </label>
+          ) : null}
 
           {/* ── 3. GitHub Connection ── */}
           {githubAvailability?.enabled ? (

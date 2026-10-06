@@ -65,6 +65,7 @@ const baseSchema = z
     POLAR_ENVIRONMENT: polarEnvironment,
     POLAR_STARTER_PRODUCT_ID: optional,
     POLAR_PRO_PRODUCT_ID: optional,
+    POLAR_GROWTH_PRODUCT_ID: optional,
 
     // Tunnel
     WORKSPACE_JWT_SECRET: optional,
@@ -145,12 +146,6 @@ const baseSchema = z
         errors.push({
           path: "POLAR_PRO_PRODUCT_ID",
           message: "POLAR_PRO_PRODUCT_ID is required in managed mode",
-        });
-      }
-      if (!data.POLAR_STARTER_PRODUCT_ID) {
-        errors.push({
-          path: "POLAR_STARTER_PRODUCT_ID",
-          message: "POLAR_STARTER_PRODUCT_ID is required in managed mode",
         });
       }
     }

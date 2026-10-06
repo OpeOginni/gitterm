@@ -52,6 +52,13 @@ export interface MachineProfile {
   isDefault: boolean;
   /** False when the viewer's plan cannot use this size. */
   available?: boolean;
+  /** Hourly price in millionths of a dollar; null when unpriced or without billing. */
+  priceMicrosPerHour?: number | null;
+}
+
+/** "$0.120/h" from an hourly price in millionths of a dollar. */
+export function formatHourlyPrice(priceMicrosPerHour: number): string {
+  return `$${(priceMicrosPerHour / 1_000_000).toFixed(3)}/h`;
 }
 
 /** "4 vCPU · 8 GB", or null when the admin did not record the size. */

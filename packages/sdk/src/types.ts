@@ -202,6 +202,11 @@ export type WorkspaceCreateInput = {
   connections?: string[];
   /** Defaults from the selected provider. */
   persistent?: boolean;
+  /**
+   * Keep the workspace running while idle instead of pausing it. On managed
+   * GitTerm this needs a paid plan, and spending limits still pause it.
+   */
+  alwaysOn?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
   /** Omit to use dashboard defaults. An explicit block inherits nothing unless requested. */
   models?: WorkspaceModelsInput;
@@ -718,6 +723,8 @@ export type WorkspaceCatalog = {
       description: string | null;
       vcpus: number | null;
       memoryGb: number | null;
+      /** Hourly price in millionths of a dollar on managed GitTerm; null when unpriced. */
+      priceMicrosPerHour: number | null;
       isDefault: boolean;
     }>;
     agentKeys: string[];

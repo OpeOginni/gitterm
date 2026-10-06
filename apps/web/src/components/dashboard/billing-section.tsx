@@ -9,19 +9,23 @@ import { ArrowRight, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 import { track } from "@/lib/analytics";
-import { useCurrentPlan } from "@/lib/billing";
+import { useBillingAccount, useCurrentPlan } from "@/lib/billing";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { trpc } from "@/utils/trpc";
 
-type PaidPlan = "starter" | "pro";
+type CheckoutPlan = "pro" | "growth";
 
-const PLAN_PRICE: Record<PaidPlan, number> = {
-  starter: 10,
-  pro: 25,
-};
+/** Used to suggest Growth when Pro plus pay-as-you-go would cost more. */
+const GROWTH_PRICE_CENTS = 20000;
+const GROWTH_INCLUDED_CENTS = 25000;
+const PRO_PRICE_CENTS = 2500;
+const PRO_INCLUDED_CENTS = 2500;
 
-const PLAN_LINE: Record<PaidPlan, string> = {
-  starter: "Every provider and machine size, persistent workspaces, 180 minutes a day.",
-  pro: "Every provider and machine size, custom subdomains, 480 minutes a day.",
-};
+const dollars = (cents: number) =>
+  `$${(cents / 100).toFixed(cents % 100 === 0 && cents >= 1000 ? 0 : 2)}`;
 
 /** One plan row in the workspace-card style: what you are on, and where to change it. */
 function PlanRow({
@@ -48,7 +52,8 @@ function PlanRow({
 }
 
 export function BillingSection() {
-  const currentPlan = useCurrentPlan();
+  const { data } = useBillingAccount();
+  const account = data?.account ?? null;
   const [isPortalLoading, setIsPortalLoading] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
@@ -68,7 +73,7 @@ export function BillingSection() {
     }
   };
 
-  const handleUpgrade = async (slug: PaidPlan) => {
+  const handleUpgrade = async (slug: CheckoutPlan) => {
     if (isCheckoutLoading) return;
     track("upgrade_initiated", { plan: slug, source: "settings_billing" });
     setIsCheckoutLoading(true);
@@ -81,50 +86,60 @@ export function BillingSection() {
     }
   };
 
-  if (currentPlan === "starter" || currentPlan === "pro") {
+  if (account?.compute) {
     return (
-      <PlanRow
-        name={
-          <>
-            <span className="capitalize">{currentPlan}</span>
-            <span className="ml-2 font-normal text-fg-3">${PLAN_PRICE[currentPlan]} / month</span>
-          </>
-        }
-        detail={PLAN_LINE[currentPlan]}
-        action={
-          <>
-            {currentPlan === "starter" ? (
+      <div className="space-y-3">
+        <PlanRow
+          name={
+            <>
+              {account.planName}
+              <span className="ml-2 font-normal text-fg-3">
+                {dollars(account.priceCents)} / month
+              </span>
+            </>
+          }
+          detail={`Includes ${dollars(account.compute.includedCents)} of compute each billing period, at each machine size's hourly price.`}
+          action={
+            <>
+              {account.plan !== "growth" ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs text-primary"
+                  disabled={isCheckoutLoading}
+                  onClick={() => handleUpgrade("growth")}
+                >
+                  Upgrade to Growth
+                </Button>
+              ) : null}
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="h-8 text-xs text-primary"
-                disabled={isCheckoutLoading}
-                onClick={() => handleUpgrade("pro")}
+                className="h-8 gap-1.5 border-line text-xs"
+                onClick={handleOpenPortal}
+                disabled={isPortalLoading}
               >
-                Upgrade to Pro
+                {isPortalLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                Manage
+                <ExternalLink className="size-3" />
               </Button>
-            ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 border-line text-xs"
-              onClick={handleOpenPortal}
-              disabled={isPortalLoading}
-            >
-              {isPortalLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              Manage
-              <ExternalLink className="size-3" />
-            </Button>
-          </>
-        }
-      />
+            </>
+          }
+        />
+        <ComputeUsageCard
+          plan={account.plan}
+          periodEnd={account.period.end}
+          compute={account.compute}
+          onUpgrade={() => handleUpgrade("growth")}
+        />
+      </div>
     );
   }
 
   return (
     <PlanRow
       name="Free"
-      detail="Small E2B or boat sandboxes and 60 minutes a day. Upgrade for every provider, larger machines, and persistence."
+      detail="Small E2B or boat sandboxes and 60 minutes a day. Upgrade for every provider and machine size, always-on workspaces, and a monthly compute balance."
       action={
         <Button asChild size="sm" className="h-8 gap-1.5 text-xs">
           <Link href={"/pricing" as Route}>
@@ -134,6 +149,123 @@ export function BillingSection() {
         </Button>
       }
     />
+  );
+}
+
+type ComputeUsage = NonNullable<
+  NonNullable<ReturnType<typeof useBillingAccount>["data"]>["account"]
+>["compute"] &
+  object;
+
+/** This period's compute balance, pay-as-you-go settings, and an upgrade hint. */
+function ComputeUsageCard({
+  plan,
+  periodEnd,
+  compute,
+  onUpgrade,
+}: {
+  plan: string;
+  periodEnd: string;
+  compute: ComputeUsage;
+  onUpgrade: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [payAsYouGo, setPayAsYouGo] = useState(compute.payAsYouGo);
+  const [capDollars, setCapDollars] = useState(
+    compute.spendCapCents === null ? "50" : String(compute.spendCapCents / 100),
+  );
+  const saveSettings = useMutation(
+    trpc.billing.updateSettings.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.billing.account.queryKey() });
+        toast.success("Billing settings saved");
+      },
+      onError: (error) => toast.error(error.message),
+    }),
+  );
+
+  const percent = Math.min(100, (compute.usedCents / Math.max(compute.includedCents, 1)) * 100);
+  const resets = new Date(periodEnd).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const capCents = Math.round(Number(capDollars) * 100);
+  const dirty =
+    payAsYouGo !== compute.payAsYouGo || (payAsYouGo && capCents !== (compute.spendCapCents ?? 0));
+  const proBill = PRO_PRICE_CENTS + Math.max(0, compute.projectedCents - PRO_INCLUDED_CENTS);
+  const recommendGrowth = plan === "pro" && proBill > GROWTH_PRICE_CENTS;
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-line bg-card px-5 py-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-sm font-semibold text-fg">Compute this period</p>
+        <p className="font-mono text-[12px] tabular-nums text-fg-3">
+          {dollars(compute.usedCents)} of {dollars(compute.includedCents)} · resets {resets}
+        </p>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-fill-2">
+        <div
+          className={`h-full rounded-full ${percent >= 100 ? "bg-destructive" : percent >= 75 ? "bg-amber-500" : "bg-primary"}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="text-xs text-fg-4">
+        {compute.runningCentsPerHour > 0
+          ? `Running workspaces cost ${dollars(compute.runningCentsPerHour)}/hour right now. `
+          : ""}
+        {compute.overageCents > 0
+          ? `${dollars(compute.overageCents)} pay-as-you-go so far${compute.overageDiscountPercent ? ` (${compute.overageDiscountPercent}% off)` : ""}.`
+          : ""}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
+        <label className="flex items-center gap-2 text-sm text-fg-2">
+          <Switch checked={payAsYouGo} onCheckedChange={setPayAsYouGo} />
+          Keep running past the included compute
+        </label>
+        {payAsYouGo ? (
+          <label className="flex items-center gap-1.5 text-xs text-fg-3">
+            up to $
+            <Input
+              type="number"
+              min={1}
+              className="h-8 w-24"
+              value={capDollars}
+              onChange={(event) => setCapDollars(event.target.value)}
+            />
+            per period
+          </label>
+        ) : null}
+        <Button
+          size="sm"
+          className="ml-auto h-8 text-xs"
+          disabled={!dirty || saveSettings.isPending}
+          onClick={() =>
+            saveSettings.mutate({ payAsYouGo, spendCapCents: payAsYouGo ? capCents : null })
+          }
+        >
+          Save
+        </Button>
+      </div>
+      <p className="text-xs text-fg-4">
+        {payAsYouGo
+          ? "Extra compute is billed at each size's hourly price. Workspaces pause when your limit is reached."
+          : "Workspaces pause when the included compute runs out. Your work is kept."}
+      </p>
+
+      {recommendGrowth ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
+          <p className="min-w-0 flex-1 text-xs text-fg-2">
+            At your current pace you&apos;ll use about {dollars(compute.projectedCents)} of compute
+            this period: about {dollars(proBill)} on Pro. Growth covers up to{" "}
+            {dollars(GROWTH_INCLUDED_CENTS)} for {dollars(GROWTH_PRICE_CENTS)}.
+          </p>
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onUpgrade}>
+            Switch to Growth
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

@@ -186,6 +186,7 @@ export default defineRailway(() => {
       LISTENER_URL: preserve(),
       POLAR_ACCESS_TOKEN: preserve(),
       POLAR_ENVIRONMENT: preserve(),
+      POLAR_GROWTH_PRODUCT_ID: preserve(),
       POLAR_PRO_PRODUCT_ID: preserve(),
       POLAR_STARTER_PRODUCT_ID: preserve(),
       POLAR_WEBHOOK_SECRET: preserve(),

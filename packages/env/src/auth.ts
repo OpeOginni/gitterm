@@ -36,6 +36,7 @@ const schema = z.object({
   POLAR_ENVIRONMENT: polarEnvironment,
   POLAR_STARTER_PRODUCT_ID: optional,
   POLAR_PRO_PRODUCT_ID: optional,
+  POLAR_GROWTH_PRODUCT_ID: optional,
 
   ENABLE_BILLING: boolWithDefault(false),
 });

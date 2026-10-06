@@ -10,6 +10,11 @@ import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { closeUsageSession, getConfiguredIdleTimeout } from "../../utils/metering";
 import { getBilling } from "../../billing";
+import { ALWAYS_ON_LEASE_MS } from "../../service/workspace-timeouts";
+import { renderEmail } from "../../service/email/render";
+import { sendEmail } from "../../service/email/mailer";
+import { BillingNoticeEmail } from "../../service/email/templates/billing-notice";
+import env from "@gitterm/env/server";
 import { isPausedWorkspacePastRetention } from "../../utils/workspace-retention";
 import { getGitHubAppService } from "../../service/github";
 import { logger } from "../../utils/logger";
@@ -50,16 +55,19 @@ export const internalRouter = router({
         cloudProviderId: workspace.cloudProviderId,
         domain: workspace.domain,
         lastActiveAt: workspace.lastActiveAt,
+        alwaysOn: workspace.alwaysOn,
         email: user.email,
       })
       .from(workspace)
       .leftJoin(user, eq(workspace.userId, user.id))
       .where(eq(workspace.status, "running"));
-    const candidates = runningWorkspaces.filter((ws) => !isAnonEmail(ws.email));
-
     const entitlements = await (
       await getBilling()
-    ).getEntitlementsForUsers([...new Set(candidates.map((ws) => ws.userId))]);
+    ).getEntitlementsForUsers([...new Set(runningWorkspaces.map((ws) => ws.userId))]);
+    // Always-on workspaces skip idle pausing while their owner's plan allows it.
+    const candidates = runningWorkspaces.filter(
+      (ws) => !isAnonEmail(ws.email) && !(ws.alwaysOn && entitlements.get(ws.userId)?.alwaysOn),
+    );
     const thresholdFor = (ws: { userId: string }): Date => {
       const timeoutMinutes =
         entitlements.get(ws.userId)?.idleTimeoutMinutes ?? globalIdleTimeoutMinutes;
@@ -72,8 +80,71 @@ export const internalRouter = router({
     );
 
     return idleWorkspaces.map(
-      ({ lastActiveAt: _lastActiveAt, email: _email, ...idleWorkspace }) => idleWorkspace,
+      ({ lastActiveAt: _lastActiveAt, alwaysOn: _alwaysOn, email: _email, ...idleWorkspace }) =>
+        idleWorkspace,
     );
+  }),
+
+  /** Renew provider leases of running always-on workspaces (for worker). */
+  keepAlwaysOnWorkspacesAlive: internalProcedure.mutation(async () => {
+    const workspaces = await db
+      .select({
+        id: workspace.id,
+        userId: workspace.userId,
+        externalInstanceId: workspace.externalInstanceId,
+        cloudProviderId: workspace.cloudProviderId,
+        providerKey: cloudProvider.providerKey,
+      })
+      .from(workspace)
+      .innerJoin(cloudProvider, eq(workspace.cloudProviderId, cloudProvider.id))
+      .where(
+        and(
+          eq(workspace.status, "running"),
+          eq(workspace.hostingType, "cloud"),
+          eq(workspace.alwaysOn, true),
+        ),
+      );
+    const entitlements = await (
+      await getBilling()
+    ).getEntitlementsForUsers([...new Set(workspaces.map((ws) => ws.userId))]);
+
+    let renewed = 0;
+    for (const ws of workspaces) {
+      if (!entitlements.get(ws.userId)?.alwaysOn) continue;
+      try {
+        const provider = await getProviderByCloudProviderId(ws.providerKey, ws.cloudProviderId);
+        if (!provider.keepAliveWorkspace) continue;
+        await provider.keepAliveWorkspace(ws.externalInstanceId, ALWAYS_ON_LEASE_MS);
+        renewed++;
+      } catch (error) {
+        console.error(`[always-on] Failed to renew lease for workspace ${ws.id}`, error);
+      }
+    }
+    return { renewed };
+  }),
+
+  /** Report usage to the payment provider and email usage alerts (for worker). */
+  runBillingTasks: internalProcedure.mutation(async () => {
+    const notices = await (await getBilling()).runPeriodicTasks();
+    const billingUrl = `${env.BASE_URL ?? `https://${env.BASE_DOMAIN}`}/dashboard/settings/account#billing`;
+    let sent = 0;
+    for (const notice of notices) {
+      const [owner] = await db
+        .select({ email: user.email })
+        .from(user)
+        .where(eq(user.id, notice.userId));
+      if (!owner || isAnonEmail(owner.email)) continue;
+      try {
+        await sendEmail({
+          to: owner.email,
+          ...(await renderEmail(notice.subject, BillingNoticeEmail({ ...notice, billingUrl }))),
+        });
+        sent++;
+      } catch (error) {
+        console.error(`[billing] Failed to send usage alert to user ${notice.userId}`, error);
+      }
+    }
+    return { notices: notices.length, sent };
   }),
 
   getQuotaExceededWorkspaces: internalProcedure.query(async () => {
