@@ -14,7 +14,8 @@ import {
 import { agentType, cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
 import { usageSession, workspace } from "@gitterm/db/schema/workspace";
 import { createBilling } from "../index";
-import { syncSubscription } from "../auth";
+import { revokeSubscription, syncSubscription } from "../auth";
+import { getAccount } from "../accounts";
 import { PLANS } from "../plans";
 import { MICROS_PER_CENT } from "../money";
 import { rebuildAccountPeriods } from "./account-periods";
@@ -95,10 +96,16 @@ async function addSession(userId: string, startedAt: Date, stoppedAt: Date | nul
 /** A Polar subscription webhook payload (API 2026-10), with only the fields billing reads. */
 function subscription(
   userId: string,
-  overrides: Partial<{ start: Date; end: Date; productId: string; modifiedAt: Date }> = {},
+  overrides: Partial<{
+    id: string;
+    start: Date;
+    end: Date;
+    productId: string;
+    modifiedAt: Date;
+  }> = {},
 ): models.Subscription {
   return {
-    id: `sub-${userId}`,
+    id: overrides.id ?? `sub-${userId}`,
     status: "active",
     product_id: overrides.productId ?? "pro-product",
     current_period_start: (overrides.start ?? PERIOD.start).toISOString(),
@@ -275,6 +282,38 @@ describe("billing analytics", () => {
       )
       .then((result) => result.rows);
     expect(new Date(account!.period_start).toISOString()).toBe(later.start.toISOString());
+  });
+
+  integration("a replayed earlier event can't undo an upgrade in the same period", async () => {
+    const userId = await createUser();
+    const pro = subscription(userId, { modifiedAt: d("2026-01-10T00:00:00Z") });
+    await syncSubscription(pro);
+    await syncSubscription(
+      subscription(userId, { productId: "growth-product", modifiedAt: d("2026-01-15T00:00:00Z") }),
+    );
+    await syncSubscription(pro); // replay of the original Pro event
+    expect((await getAccount(userId)).plan).toBe("growth");
+  });
+
+  integration("only the current subscription's revocation downgrades", async () => {
+    const userId = await createUser();
+    await syncSubscription(
+      subscription(userId, { id: "sub-current", modifiedAt: d("2026-01-15T00:00:00Z") }),
+    );
+    await revokeSubscription(
+      subscription(userId, { id: "sub-previous", modifiedAt: d("2026-01-20T00:00:00Z") }),
+    );
+    expect((await getAccount(userId)).plan).toBe("pro");
+
+    await revokeSubscription(
+      subscription(userId, { id: "sub-current", modifiedAt: d("2026-01-21T00:00:00Z") }),
+    );
+    expect((await getAccount(userId)).plan).toBe("free");
+    // A late "active" delivery from before the revocation doesn't restore access.
+    await syncSubscription(
+      subscription(userId, { id: "sub-current", modifiedAt: d("2026-01-18T00:00:00Z") }),
+    );
+    expect((await getAccount(userId)).plan).toBe("free");
   });
 
   integration("records pay-as-you-go and cap changes with previous values", async () => {

@@ -2,7 +2,7 @@ import { polar, checkout, portal, webhooks } from "@polar-sh/better-auth";
 import type { BetterAuthPlugin } from "better-auth";
 import type { models } from "@polar-sh/sdk/2026-10";
 import env from "@gitterm/env/auth";
-import { getAccount, recordCancellation, setPlan } from "./accounts";
+import { recordCancellation, setPlan, type SubscriptionEvent } from "./accounts";
 import { recordOrder, recordRefund, type PolarOrder, type PolarRefund } from "./analytics/payments";
 import { getPlanForProduct, polarCheckoutProducts, polarClient } from "./polar";
 
@@ -16,6 +16,16 @@ const subscriptionKey = (kind: string, subscription: PolarSubscription) =>
 const changedAt = (subscription: PolarSubscription, fallback: Date) =>
   subscription.modified_at ? new Date(subscription.modified_at) : fallback;
 
+/** Identity and order of a subscription event; a new subscription orders by creation. */
+const subscriptionEvent = (
+  subscription: PolarSubscription,
+  revocation = false,
+): SubscriptionEvent => ({
+  id: subscription.id,
+  modifiedAt: new Date(subscription.modified_at ?? subscription.created_at),
+  revocation,
+});
+
 /** Mirror a subscription's plan and billing period onto the user's billing account. */
 export async function syncSubscription(subscription: PolarSubscription): Promise<void> {
   const userId = subscription.customer.external_id;
@@ -27,17 +37,6 @@ export async function syncSubscription(subscription: PolarSubscription): Promise
   if (subscription.status !== "active" && subscription.status !== "trialing") return;
 
   const periodStart = new Date(subscription.current_period_start);
-  // A delayed delivery of an earlier period must not roll the account back.
-  const current = await getAccount(userId);
-  if (
-    current.subscriptionId === subscription.id &&
-    current.periodStart &&
-    periodStart < current.periodStart
-  ) {
-    console.warn(`[polar] Ignoring out-of-order subscription update for user=${userId}`);
-    return;
-  }
-
   const plan = getPlanForProduct(subscription.product_id);
   console.log(`[polar] Subscription ${subscription.status}: user=${userId}, plan=${plan}`);
   await setPlan(
@@ -53,6 +52,8 @@ export async function syncSubscription(subscription: PolarSubscription): Promise
       category:
         subscription.status === "trialing" ? "trial" : plan === "starter" ? "legacy" : "paid",
       subscriptionId: subscription.id,
+      // Replays and late deliveries are rejected inside the account lock.
+      subscription: subscriptionEvent(subscription),
       occurredAt: changedAt(subscription, periodStart),
       idempotencyKey: subscriptionKey("sync", subscription),
     },
@@ -78,7 +79,7 @@ async function syncCancellation(
   });
 }
 
-async function revokeSubscription(subscription: PolarSubscription): Promise<void> {
+export async function revokeSubscription(subscription: PolarSubscription): Promise<void> {
   const userId = subscription.customer.external_id;
   if (!userId) {
     console.warn("[polar] Subscription revoked but no external_id (userId)");
@@ -91,6 +92,8 @@ async function revokeSubscription(subscription: PolarSubscription): Promise<void
     actor: "payment_provider",
     category: "free",
     eventType: "access_revoked",
+    // Only the account's current subscription can take its plan away.
+    subscription: subscriptionEvent(subscription, true),
     occurredAt: changedAt(subscription, new Date()),
     idempotencyKey: subscriptionKey("revoked", subscription),
   });

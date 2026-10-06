@@ -847,6 +847,50 @@ describe("createBot", () => {
     }
   });
 
+  test("reset is refused while a run recovered after a restart is still working", async () => {
+    const file = await stateFile();
+    await writeFile(
+      file,
+      JSON.stringify({
+        sessions: {},
+        inFlight: {
+          "C1:100": {
+            thread,
+            statusId: "s9",
+            requester: alice,
+            repo: "https://github.com/acme/app",
+            sandbox: "installation:channel:C1:https://github.com/acme/app",
+            run: { workspaceId: "ws1", id: "run7" },
+          },
+        },
+      }),
+    );
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: file,
+      logger: quiet,
+    });
+    try {
+      await bot.start();
+      chat.send({ id: "300", text: "reset", thread: { channel: "C1", thread: "300" } });
+      await until(() => chat.log.posts.some((text) => text.includes("before resetting")));
+      // Once the recovered run finishes, the sandbox is free again.
+      gitterm.stream("run7").push({
+        type: "run.completed",
+        run: run("run7", "completed", { finalText: "All done" }),
+      });
+      await until(() => chat.log.replies.length === 1, "recovered reply");
+      chat.send({ id: "301", text: "reset", thread: { channel: "C1", thread: "301" } });
+      await until(() => chat.log.posts.some((text) => text.includes("no acme/app sandbox yet")));
+    } finally {
+      await bot.stop();
+    }
+  });
+
   test("ignores channels without a repository", async () => {
     const gitterm = fakeGitterm();
     const chat = fakeAdapter();

@@ -27,7 +27,8 @@ import { deleteSubject } from "./analytics/subjects";
 import { runAnalyticsTasks } from "./analytics/jobs";
 import { getReport } from "./analytics/reports";
 import { simulatePricing } from "./analytics/simulate";
-import { deletePolarCustomer, reportOverage } from "./polar";
+import { deletePolarCustomer } from "./polar";
+import { closeEndedPeriods, recordPeriodOverage, reportUnsettledOverage } from "./overage";
 import { getMachinePrices, setMachinePrice } from "./rates";
 import { getMinutesUsedToday, getRetailUsage, type RetailUsage } from "./usage";
 import { billableOverageCents, MICROS_PER_CENT } from "./money";
@@ -105,7 +106,12 @@ function getComputeUsage(
   };
 }
 
-async function getStandings(userIds: string[], now = new Date()): Promise<Map<string, Standing>> {
+async function getStandings(
+  userIds: string[],
+  now = new Date(),
+  /** Hourly price of compute about to start, reserved like running compute. */
+  startingMicrosPerHour = new Map<string, number>(),
+): Promise<Map<string, Standing>> {
   const accounts = [...(await getAccounts(userIds)).values()];
   const free = accounts.filter((account) => PLANS[account.plan].includedComputeCents === null);
   const paid = accounts.filter((account) => PLANS[account.plan].includedComputeCents !== null);
@@ -147,9 +153,14 @@ async function getStandings(userIds: string[], now = new Date()): Promise<Map<st
   }
   for (const account of paid) {
     const period = periods.get(account.userId)!;
+    const cost = costs.get(account.userId) ?? { micros: 0, runningMicrosPerHour: 0 };
     const { usage, blocked, reserveCents } = getComputeUsage(
       account,
-      costs.get(account.userId) ?? { micros: 0, runningMicrosPerHour: 0 },
+      {
+        ...cost,
+        runningMicrosPerHour:
+          cost.runningMicrosPerHour + (startingMicrosPerHour.get(account.userId) ?? 0),
+      },
       period,
       now,
     );
@@ -281,7 +292,14 @@ export function createBilling(): Billing {
     },
 
     async checkRunAllowance(userId, attempt): Promise<RunAllowance> {
-      const standing = (await getStandings([userId])).get(userId)!;
+      // Reserve the size being started too, so a near-empty balance can't start
+      // compute that overshoots before the next worker pass.
+      const starting = attempt?.machineProfileId
+        ? ((await getMachinePrices([attempt.machineProfileId])).get(attempt.machineProfileId) ?? 0)
+        : 0;
+      const standing = (
+        await getStandings([userId], new Date(), new Map([[userId, starting]]))
+      ).get(userId)!;
       if (!standing.blocked) return { allowed: true };
       // One event per denied attempt; background quota checks don't record.
       if (attempt) {
@@ -424,22 +442,29 @@ export function createBilling(): Billing {
         ...(await getStandings(accounts.map((account) => account.userId))).values(),
       ];
 
+      // Overage is earned per period and settled even after pay-as-you-go is
+      // turned off or the period ends; unaccepted totals retry next pass.
+      await recordPeriodOverage(
+        standings.flatMap(({ account, compute, period }) =>
+          compute
+            ? [
+                {
+                  userId: account.userId,
+                  period,
+                  payAsYouGo: compute.payAsYouGo,
+                  overageCents: compute.overageCents,
+                  includedCents: compute.includedCents,
+                  overageDiscountPercent: compute.overageDiscountPercent,
+                  spendCapCents: compute.spendCapCents,
+                },
+              ]
+            : [],
+        ),
+      );
+      await closeEndedPeriods();
       try {
-        await reportOverage(
-          standings.flatMap(({ account, compute, period }) =>
-            compute?.payAsYouGo && compute.overageCents > 0
-              ? [
-                  {
-                    userId: account.userId,
-                    periodStart: period.start,
-                    totalCents: compute.overageCents,
-                  },
-                ]
-              : [],
-          ),
-        );
+        await reportUnsettledOverage();
       } catch (error) {
-        // Totals are cumulative, so the next pass reports them again.
         console.error("[billing] Failed to report overage to Polar:", error);
       }
 

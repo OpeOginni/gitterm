@@ -42,17 +42,19 @@ export const getPlanForProduct = (productId: string): PlanId =>
 export const OVERAGE_EVENT = "compute_overage";
 
 export async function reportOverage(
-  reports: Array<{ userId: string; periodStart: Date; totalCents: number }>,
-): Promise<void> {
-  if (!polarClient || reports.length === 0) return;
+  reports: Array<{ userId: string; periodStart: Date; totalCents: number; timestamp?: Date }>,
+): Promise<boolean> {
+  if (!polarClient || reports.length === 0) return false;
   await ingestEvents(polarClient)({
     events: reports.map((report) => ({
       name: OVERAGE_EVENT,
       external_customer_id: report.userId,
       external_id: `${report.userId}:${report.periodStart.toISOString()}:${report.totalCents}`,
       metadata: { total_cents: report.totalCents },
+      ...(report.timestamp ? { timestamp: report.timestamp.toISOString() } : {}),
     })),
   });
+  return true;
 }
 
 /** Delete the user's Polar customer. Resolves quietly when it doesn't exist. */

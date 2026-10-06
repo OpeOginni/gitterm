@@ -21,6 +21,8 @@ export type InFlightRequest = {
   statusId?: string;
   requester: ChatUser;
   repo: string;
+  /** The sandbox (space and repository) it works in, so a restart can still guard reset. */
+  sandbox?: string;
   /** When the server cancels the run (ms since epoch). */
   deadline?: number;
   /** Reply messages already posted, so a retried delivery doesn't repeat them. */
