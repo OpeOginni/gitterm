@@ -123,7 +123,7 @@ function CheckoutSuccessContent() {
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
             <Link
-              href="/dashboard/settings/billing"
+              href="/dashboard/settings/account#billing"
               className="inline-flex items-center justify-center rounded-lg border border-line bg-fill px-6 py-2.5 font-mono text-sm text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
             >
               Manage Subscription

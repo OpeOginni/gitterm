@@ -209,14 +209,6 @@ export default function ProvidersPage() {
         text="Manage cloud providers, regions, and credentials. Each AWS region is its own provider."
       >
         <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <Link
-              href={"/admin" as Route}
-              className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-            >
-              Back to Admin
-            </Link>
-          </Button>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button

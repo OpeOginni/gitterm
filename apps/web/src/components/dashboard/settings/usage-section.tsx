@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { Clock, FolderGit2, GitBranch, History, Infinity as InfinityIcon } from "lucide-react";
+import { Clock, FolderGit2, GitBranch, Infinity as InfinityIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,7 +21,7 @@ import { getIcon } from "@/components/dashboard/create-instance/types";
 
 const TERMINATED_PAGE_SIZE = 10;
 const historyTabsListClassName =
-  "inline-flex h-auto w-auto items-center gap-5 rounded-none border-b border-border/60 bg-transparent p-0";
+  "inline-flex h-auto w-auto items-center justify-start gap-5 rounded-none border-b border-border/60 bg-transparent p-0";
 const historyTabsTriggerClassName =
   "group h-auto flex-none rounded-none border-x-0 border-t-0 border-b-2 border-transparent px-0 py-2 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none";
 
@@ -50,7 +50,7 @@ function UsageQuota() {
     <SettingsSection
       icon={Clock}
       title="Runtime today"
-      description="Cloud compute minutes used today. Resets daily at midnight UTC."
+      description="Cloud compute minutes left today. Resets daily at midnight UTC."
     >
       <SettingsSectionBody className="space-y-5">
         {isLoading ? (
@@ -68,21 +68,16 @@ function UsageQuota() {
           </div>
         ) : (
           <>
-            <div className="flex items-end justify-between gap-4">
-              <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
-                {usage.minutesUsed}
-                <span className="text-base font-normal text-fg-4"> / {usage.dailyLimit} min</span>
-              </p>
-              <p className="pb-1 font-mono text-[12px] tabular-nums text-fg-3">
+            <div className="flex items-center gap-4">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-fill-2">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+              <p className="shrink-0 font-mono text-[12px] tabular-nums text-fg-3">
                 {usage.minutesRemaining} min left
               </p>
-            </div>
-
-            <div className="h-2 w-full overflow-hidden rounded-full bg-fill-2">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                style={{ width: `${percent}%` }}
-              />
             </div>
 
             {isExhausted && (
@@ -104,7 +99,7 @@ function UsageQuota() {
 
 /* ─────────────────────────── Workspace History ─────────────────────── */
 
-function WorkspaceHistory() {
+export function WorkspaceHistory() {
   const [terminatedPage, setTerminatedPage] = useState(0);
 
   const { data: activeData, isLoading: isLoadingActive } = useQuery(
@@ -129,86 +124,80 @@ function WorkspaceHistory() {
   const terminatedHasMore = terminatedData?.pagination.hasMore ?? false;
 
   return (
-    <SettingsSection
-      icon={History}
-      title="Workspace history"
-      description="Active and terminated workspaces across all your providers."
-    >
-      <SettingsSectionBody>
-        {isLoadingActive || isLoadingTerminated ? (
-          <div className="space-y-2">
-            <Skeleton className="h-16 w-full bg-fill" />
-            <Skeleton className="h-16 w-full bg-fill" />
-          </div>
-        ) : (
-          <Tabs defaultValue="active" className="w-full">
-            <TabsList className={historyTabsListClassName}>
-              <TabsTrigger value="active" className={historyTabsTriggerClassName}>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
-                    Active
-                  </span>
-                  <span className="rounded-full border border-border/70 bg-background/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors group-data-[state=active]:border-foreground/15 group-data-[state=active]:text-foreground/80">
-                    {activeData?.pagination.total ?? activeWorkspaces.length}
-                  </span>
-                </div>
-              </TabsTrigger>
-              <TabsTrigger value="terminated" className={historyTabsTriggerClassName}>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
-                    Terminated
-                  </span>
-                </div>
-              </TabsTrigger>
-            </TabsList>
+    <>
+      {isLoadingActive || isLoadingTerminated ? (
+        <div className="space-y-2">
+          <Skeleton className="h-16 w-full bg-fill" />
+          <Skeleton className="h-16 w-full bg-fill" />
+        </div>
+      ) : (
+        <Tabs defaultValue="active" className="w-full">
+          <TabsList className={historyTabsListClassName}>
+            <TabsTrigger value="active" className={historyTabsTriggerClassName}>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
+                  Active
+                </span>
+                <span className="rounded-full border border-border/70 bg-background/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors group-data-[state=active]:border-foreground/15 group-data-[state=active]:text-foreground/80">
+                  {activeData?.pagination.total ?? activeWorkspaces.length}
+                </span>
+              </div>
+            </TabsTrigger>
+            <TabsTrigger value="terminated" className={historyTabsTriggerClassName}>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
+                  Terminated
+                </span>
+              </div>
+            </TabsTrigger>
+          </TabsList>
 
-            <TabsContent value="active" className="mt-4">
-              <WorkspaceList
-                workspaces={activeWorkspaces as any[]}
-                emptyMessage="No active workspaces"
-                individualCards
-              />
-            </TabsContent>
+          <TabsContent value="active" className="mt-4">
+            <WorkspaceList
+              workspaces={activeWorkspaces as any[]}
+              emptyMessage="No active workspaces"
+              individualCards
+            />
+          </TabsContent>
 
-            <TabsContent value="terminated" className="mt-4 space-y-3">
-              <WorkspaceList
-                workspaces={terminatedWorkspaces as any[]}
-                emptyMessage="No terminated workspaces"
-                muted={isFetchingTerminated}
-                hideStatus
-                individualCards
-              />
+          <TabsContent value="terminated" className="mt-4 space-y-3">
+            <WorkspaceList
+              workspaces={terminatedWorkspaces as any[]}
+              emptyMessage="No terminated workspaces"
+              muted={isFetchingTerminated}
+              hideStatus
+              individualCards
+            />
 
-              {terminatedTotal > TERMINATED_PAGE_SIZE && (
-                <div className="flex items-center justify-between pt-1">
-                  <p className="text-xs text-muted-foreground">
-                    Page {terminatedPage + 1} of {Math.ceil(terminatedTotal / TERMINATED_PAGE_SIZE)}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={terminatedPage === 0 || isFetchingTerminated}
-                      onClick={() => setTerminatedPage((p) => Math.max(0, p - 1))}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={!terminatedHasMore || isFetchingTerminated}
-                      onClick={() => setTerminatedPage((p) => p + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
+            {terminatedTotal > TERMINATED_PAGE_SIZE && (
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-xs text-muted-foreground">
+                  Page {terminatedPage + 1} of {Math.ceil(terminatedTotal / TERMINATED_PAGE_SIZE)}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={terminatedPage === 0 || isFetchingTerminated}
+                    onClick={() => setTerminatedPage((p) => Math.max(0, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!terminatedHasMore || isFetchingTerminated}
+                    onClick={() => setTerminatedPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
                 </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        )}
-      </SettingsSectionBody>
-    </SettingsSection>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      )}
+    </>
   );
 }
 
@@ -342,10 +331,5 @@ function StatusBadge({ status }: { status: string }) {
 /* ─────────────────────────── Public Export ──────────────────────────── */
 
 export function UsageSection() {
-  return (
-    <div className="space-y-6">
-      <UsageQuota />
-      <WorkspaceHistory />
-    </div>
-  );
+  return <UsageQuota />;
 }

@@ -3,64 +3,13 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import {
-  Users,
-  Server,
-  Image,
-  Globe,
-  ChevronRight,
-  Settings,
-  Loader2,
-  Trash2,
-  Link2,
-} from "lucide-react";
-import Link from "next/link";
+import { Loader2, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
-import type { Route } from "next";
-
-const NAV_ITEMS = [
-  {
-    href: "/admin/users" as Route,
-    icon: Users,
-    title: "User Management",
-    description: "View, manage, and update user accounts and roles.",
-  },
-  {
-    href: "/admin/providers" as Route,
-    icon: Globe,
-    title: "Cloud Providers",
-    description: "Configure cloud providers and regions for workspaces.",
-  },
-  {
-    href: "/admin/integrations" as Route,
-    icon: Link2,
-    title: "Integrations",
-    description: "Enable services, configure Google identity, and set connection policy.",
-  },
-  {
-    href: "/admin/agents" as Route,
-    icon: Server,
-    title: "Agent Types",
-    description: "Configure the types of agents users can deploy.",
-  },
-  {
-    href: "/admin/images" as Route,
-    icon: Image,
-    title: "Container Images",
-    description: "Manage Docker images used for workspaces.",
-  },
-  {
-    href: "/admin/settings" as Route,
-    icon: Settings,
-    title: "System Settings",
-    description: "Configure idle timeout, quotas, and other system settings.",
-  },
-];
 
 function StatCell({
   label,
@@ -138,8 +87,8 @@ export default function AdminPage() {
   return (
     <DashboardShell>
       <DashboardHeader
-        heading="Admin Panel"
-        text="Manage infrastructure, users, and system settings."
+        heading="Overview"
+        text="The deployment at a glance. Everything else is under Admin in the sidebar."
       />
 
       {/* Stats grid */}
@@ -196,28 +145,6 @@ export default function AdminPage() {
           )}
           {cleanupAnonMutation.isPending ? "Sweeping…" : "Sweep now"}
         </Button>
-      </div>
-
-      {/* Nav list */}
-      <div className="space-y-1">
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="group flex items-center justify-between rounded-2xl p-4 transition-colors hover:bg-fill"
-          >
-            <div className="flex items-center gap-4">
-              <div className="rounded-xl bg-fill p-2.5 transition-colors group-hover:bg-fill-2">
-                <item.icon className="h-5 w-5 text-fg-4" />
-              </div>
-              <div>
-                <p className="font-medium text-fg">{item.title}</p>
-                <p className="text-sm text-fg-4">{item.description}</p>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-fg-4 transition-transform group-hover:translate-x-0.5 group-hover:text-fg-4" />
-          </Link>
-        ))}
       </div>
     </DashboardShell>
   );

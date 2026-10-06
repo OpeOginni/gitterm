@@ -47,6 +47,7 @@ import type {
   Integration,
   IntegrationKey,
   Connection,
+  SavedBot,
   ConnectionKind,
   CreateConnectionInput,
   CreateConnectionResult,
@@ -185,6 +186,10 @@ export type GittermClient = {
   credentials: {
     list(): Promise<ModelCredential[]>;
     listProviders(): Promise<ModelProviderInfo[]>;
+  };
+  bots: {
+    /** The settings saved for this client's token in the dashboard; null if it isn't a bot's. */
+    self(): Promise<SavedBot | null>;
   };
   integrations: {
     /** Integrations the admin has enabled for this deployment. */
@@ -867,6 +872,9 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         update: (input) =>
           run(async () => toConnection(await trpc.integrations.mcp.update.mutate(input))),
       },
+    },
+    bots: {
+      self: () => run(async (): Promise<SavedBot | null> => trpc.bots.self.query()),
     },
     credentials: {
       list: () =>

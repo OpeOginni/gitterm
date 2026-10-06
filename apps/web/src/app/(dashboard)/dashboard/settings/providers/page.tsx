@@ -1,13 +1,7 @@
-import { SettingsPage } from "@/components/dashboard/settings/settings-page";
-import { ProvidersSection } from "@/components/dashboard/settings/workspace-section";
+import { redirect } from "next/navigation";
+import type { Route } from "next";
 
+// Providers split into Models and Compute in the dashboard sidebar.
 export default function ProviderSettingsPage() {
-  return (
-    <SettingsPage
-      title="Providers"
-      description="Choose your default cloud and manage the model credentials available to workspaces."
-    >
-      <ProvidersSection />
-    </SettingsPage>
-  );
+  redirect("/dashboard/models" as Route);
 }

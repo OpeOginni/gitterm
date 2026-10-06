@@ -150,6 +150,8 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
 
       app.event("app_mention", async ({ event, context }) => {
         if (!sameTeam(context.teamId) || event.bot_id || !event.user) return;
+        // Direct messages arrive through app.message below.
+        if (event.channel.startsWith("D")) return;
         events.message({
           id: event.ts,
           thread: { channel: event.channel, thread: event.thread_ts ?? event.ts },
@@ -164,9 +166,23 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
       // Plain thread replies only matter as answers to an open question; mentions arrive
       // through app_mention above.
       app.message(async ({ message, context }) => {
-        const reply = message as SlackMessage & { channel: string };
+        const reply = message as SlackMessage & { channel: string; channel_type?: string };
         if (!sameTeam(context.teamId) || fromBot(reply) || !reply.user || !reply.ts) return;
         if (reply.subtype && reply.subtype !== "file_share") return;
+        // In a DM every message is for the bot, no mention needed, and it gets its own sandbox.
+        if (reply.channel_type === "im") {
+          events.message({
+            id: reply.ts,
+            thread: { channel: reply.channel, thread: reply.thread_ts ?? reply.ts },
+            author: await user(reply.user),
+            text: stripMention(reply.text ?? ""),
+            files: (reply.files ?? []).map(file),
+            mentioned: true,
+            inThread: Boolean(reply.thread_ts),
+            direct: true,
+          });
+          return;
+        }
         if (!reply.thread_ts || reply.thread_ts === reply.ts) return;
         if (reply.text?.includes(`<@${botUserId}>`)) return;
         events.message({

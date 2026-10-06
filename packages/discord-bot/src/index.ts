@@ -1,4 +1,4 @@
-import { createBot, type Bot, type BotOptions } from "@gitterm/bot";
+import { createBot, withSavedConfig as loadSaved, type Bot, type BotOptions } from "@gitterm/bot";
 import { createDiscordAdapter, type DiscordAdapterOptions } from "./adapter.js";
 
 export { createDiscordAdapter, type DiscordAdapterOptions } from "./adapter.js";
@@ -22,4 +22,12 @@ export function createDiscordBot(options: DiscordBotOptions): Bot {
     ...bot,
     adapter: createDiscordAdapter({ ...(token ? { token } : {}), ...(client ? { client } : {}) }),
   });
+}
+
+/**
+ * Adds the settings saved for this bot under Bots in the GitTerm dashboard, found by its API
+ * token. Anything you pass wins: `createDiscordBot(await withSavedConfig({ ... }))`.
+ */
+export async function withSavedConfig(options: DiscordBotOptions = {}): Promise<DiscordBotOptions> {
+  return { ...options, ...(await loadSaved(options, "discord", options.logger)) };
 }

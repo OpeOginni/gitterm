@@ -21,9 +21,7 @@ const packages = [
 export function ApiSection() {
   return (
     <div className="space-y-10">
-      <div className="rounded-xl border border-line bg-settings px-4 py-5 sm:px-6 sm:py-6">
-        <ApiTokensSection />
-      </div>
+      <ApiTokensSection />
 
       <section className="space-y-3 border-t border-line pt-6">
         <div>

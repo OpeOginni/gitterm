@@ -1,5 +1,7 @@
 import z from "zod";
 import { TRPCError } from "@trpc/server";
+import { db, eq } from "@gitterm/db";
+import { bot } from "@gitterm/db/schema/bot";
 import { sessionProcedure, router } from "../index";
 import { createApiToken, listApiTokens, revokeApiToken } from "../service/auth/api-token";
 import { apiTokenScopesSchema } from "@gitterm/schema";
@@ -42,7 +44,17 @@ export const apiTokensRouter = router({
 
   list: sessionProcedure.query(async ({ ctx }) => {
     try {
-      return { tokens: await listApiTokens(ctx.session.user.id) };
+      const userId = ctx.session.user.id;
+      const [tokens, bots] = await Promise.all([
+        listApiTokens(userId),
+        db
+          .select({ id: bot.id, platform: bot.platform, apiTokenId: bot.apiTokenId })
+          .from(bot)
+          .where(eq(bot.userId, userId)),
+      ]);
+      // A bot's token links back to the bot it runs.
+      const botOf = new Map(bots.map(({ apiTokenId, ...rest }) => [apiTokenId, rest]));
+      return { tokens: tokens.map((token) => ({ ...token, bot: botOf.get(token.id) ?? null })) };
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",

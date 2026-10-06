@@ -324,6 +324,29 @@ describe("createBot", () => {
     await until(() => chat.log.removed.includes("s1"), "status removal");
   });
 
+  test("uses your own GitHub token instead of a GitHub connection", async () => {
+    const gitterm = fakeGitterm({ connections: [github, docs] });
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      connections: ["Docs"],
+      workspace: { repositoryCredentials: { token: "ghp_x" } },
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "fix the login bug" });
+    await until(() => gitterm.calls.created.length === 1, "create");
+
+    expect(gitterm.calls.created[0]).toMatchObject({
+      connections: ["Docs"],
+      repositoryCredentials: { token: "ghp_x" },
+    });
+    await bot.stop();
+  });
+
   test("continues the thread's session with only the messages it has not seen", async () => {
     const gitterm = fakeGitterm();
     const history: HistoryMessage[] = [
@@ -498,6 +521,7 @@ describe("createBot", () => {
       metadata: {
         "gitterm-bot": "test:T1",
         "gitterm-bot-repo": "https://github.com/acme/app",
+        "gitterm-bot-space": "shared",
       },
     } as unknown as Workspace;
     const gitterm = fakeGitterm({ workspaces: [paused] });
@@ -514,6 +538,34 @@ describe("createBot", () => {
     await until(() => gitterm.calls.runs.length === 1);
     expect(gitterm.calls.created).toEqual([]);
     expect(gitterm.calls.ensured).toEqual(["ws1"]);
+  });
+
+  test("gives a direct conversation its own sandbox", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "in the channel" });
+    await until(() => gitterm.calls.runs.length === 1, "channel run");
+    chat.send({
+      id: "200",
+      text: "in a DM",
+      thread: { channel: "D1", thread: "200" },
+      direct: true,
+    });
+    await until(() => gitterm.calls.runs.length === 2, "DM run");
+
+    expect(gitterm.calls.created.map((input) => input.metadata)).toEqual([
+      expect.objectContaining({ "gitterm-bot-space": "shared" }),
+      expect.objectContaining({ "gitterm-bot-space": "dm:D1" }),
+    ]);
+    await bot.stop();
   });
 
   test("reattaches to runs that were in flight when the bot stopped", async () => {

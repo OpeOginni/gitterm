@@ -1,30 +1,11 @@
 "use client";
 
+import type React from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  FormCard,
-  FormCardBody,
-  FormCardFooter,
-  FormCardHeader,
-  FormCardStatus,
-  SettingsRow,
-  SettingsRowList,
-} from "@/components/ui/form-card";
 import { initiateCheckout, openCustomerPortal, isBillingEnabled } from "@/lib/auth-client";
-import {
-  ArrowRight,
-  Check,
-  Clock,
-  ExternalLink,
-  Globe,
-  Loader2,
-  Server,
-  Settings,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { ArrowRight, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 import { track } from "@/lib/analytics";
@@ -41,73 +22,32 @@ const PLAN_PRICE: Record<PaidPlan, number> = {
   pro: 25,
 };
 
-interface QuotaRow {
-  label: string;
-  icon: typeof Clock;
-  free: string | boolean;
-  starter: string | boolean;
-  pro: string | boolean;
-}
+const PLAN_LINE: Record<PaidPlan, string> = {
+  starter: "Every provider, persistent workspaces, 180 minutes a day.",
+  pro: "Every provider, custom subdomains, 480 minutes a day.",
+};
 
-const QUOTAS: QuotaRow[] = [
-  {
-    label: "Cloud runtime",
-    icon: Clock,
-    free: "60 min / day",
-    starter: "180 min / day",
-    pro: "480 min / day",
-  },
-  {
-    label: "Workspaces",
-    icon: Server,
-    free: "2 max",
-    starter: "5 max",
-    pro: "15 max",
-  },
-  {
-    label: "Idle workspace retention",
-    icon: Clock,
-    free: "2 days",
-    starter: "7 days",
-    pro: "15 days",
-  },
-  {
-    label: "Providers",
-    icon: Globe,
-    free: "E2B only",
-    starter: "All",
-    pro: "All",
-  },
-  {
-    label: "Persistent workspaces",
-    icon: Server,
-    free: false,
-    starter: true,
-    pro: true,
-  },
-  {
-    label: "Custom subdomains",
-    icon: Globe,
-    free: false,
-    starter: true,
-    pro: true,
-  },
-];
-
-function QuotaValue({ value, dim = false }: { value: string | boolean; dim?: boolean }) {
-  if (typeof value === "boolean") {
-    return value ? (
-      <Check className="h-4 w-4 text-primary" />
-    ) : (
-      <X className={`h-4 w-4 ${dim ? "text-fg-4" : "text-fg-4"}`} />
-    );
-  }
+/** One plan row in the workspace-card style: what you are on, and where to change it. */
+function PlanRow({
+  name,
+  detail,
+  action,
+}: {
+  name: React.ReactNode;
+  detail: React.ReactNode;
+  action?: React.ReactNode;
+}) {
   return (
-    <span
-      className={`font-mono text-[11px] leading-tight tabular-nums sm:whitespace-nowrap sm:text-[12px] ${dim ? "text-fg-4" : "text-fg"}`}
-    >
-      {value}
-    </span>
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-card px-5 py-4">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
+        <Sparkles className="size-4 text-primary opacity-80" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-fg">{name}</p>
+        <p className="mt-0.5 text-xs text-fg-4">{detail}</p>
+      </div>
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+    </div>
   );
 }
 
@@ -116,23 +56,7 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
   if (!isBillingEnabled) {
-    return (
-      <FormCard>
-        <FormCardHeader>
-          <span>Plan</span>
-          <FormCardStatus tone="muted">self-hosted</FormCardStatus>
-        </FormCardHeader>
-        <FormCardBody>
-          <h3 className="text-lg font-semibold tracking-tight text-white">
-            All features unlocked.
-          </h3>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-fg-3">
-            You're running GitTerm on your own infrastructure - no quotas, no plans, no Polar. Bring
-            as many keys, workspaces, and subdomains as your cluster can handle.
-          </p>
-        </FormCardBody>
-      </FormCard>
-    );
+    return <PlanRow name="Self-hosted" detail="All features unlocked; no quotas or plans." />;
   }
 
   const handleOpenPortal = async () => {
@@ -160,179 +84,59 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
     }
   };
 
-  // Active paid plan (starter or pro): show the plan's quotas + manage button,
-  // plus an upgrade-to-Pro nudge for Starter customers.
   if (currentPlan === "starter" || currentPlan === "pro") {
-    const planQuotaValue = (row: QuotaRow) => (currentPlan === "pro" ? row.pro : row.starter);
-
     return (
-      <FormCard tone="success">
-        <FormCardHeader>
-          <span>Plan</span>
-          <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-primary">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-            {currentPlan} · active
-          </span>
-        </FormCardHeader>
-
-        <FormCardBody className="space-y-6">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-semibold tracking-tight text-white">
-                  ${PLAN_PRICE[currentPlan]}
-                </span>
-                <span className="text-sm text-fg-4">/ month</span>
-              </div>
-              <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-fg-3">
-                {currentPlan === "pro"
-                  ? "480 minutes/day, all providers, persistence, and custom subdomains. Your AI spending stays with your provider, we never mark it up."
-                  : "180 minutes/day, every provider, and persistent workspaces. Your AI spending stays with your provider, we never mark it up."}
-              </p>
-            </div>
-
+      <PlanRow
+        name={
+          <>
+            <span className="capitalize">{currentPlan}</span>
+            <span className="ml-2 font-normal text-fg-3">${PLAN_PRICE[currentPlan]} / month</span>
+          </>
+        }
+        detail={PLAN_LINE[currentPlan]}
+        action={
+          <>
+            {currentPlan === "starter" ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs text-primary"
+                disabled={isCheckoutLoading}
+                onClick={() => handleUpgrade("pro")}
+              >
+                Upgrade to Pro
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
+              className="h-8 gap-1.5 border-line text-xs"
               onClick={handleOpenPortal}
               disabled={isPortalLoading}
-              className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
             >
-              {isPortalLoading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Settings className="h-3.5 w-3.5" />
-              )}
+              {isPortalLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}
               Manage
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="size-3" />
             </Button>
-          </div>
-
-          <SettingsRowList>
-            {QUOTAS.map((row) => {
-              const Icon = row.icon;
-              return (
-                <SettingsRow key={row.label} className="flex-row items-center py-2.5">
-                  <span className="flex items-center gap-2.5 text-[13px] text-fg-2">
-                    <Icon className="h-3.5 w-3.5 text-fg-4" />
-                    {row.label}
-                  </span>
-                  <QuotaValue value={planQuotaValue(row)} />
-                </SettingsRow>
-              );
-            })}
-          </SettingsRowList>
-
-          {currentPlan === "starter" && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4">
-                Need more? Pro is $25 / month
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                disabled={isCheckoutLoading}
-                onClick={() => handleUpgrade("pro")}
-                className="group gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em]"
-              >
-                {isCheckoutLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3.5 w-3.5" />
-                )}
-                Upgrade to Pro
-              </Button>
-            </div>
-          )}
-        </FormCardBody>
-
-        <FormCardFooter>
-          <span className="truncate">billed monthly · cancel any time in the portal</span>
-        </FormCardFooter>
-      </FormCard>
+          </>
+        }
+      />
     );
   }
 
   return (
-    <FormCard>
-      <FormCardHeader>
-        <span>Plan</span>
-        <FormCardStatus tone="muted">free</FormCardStatus>
-      </FormCardHeader>
-
-      <FormCardBody className="space-y-7">
-        <div>
-          <h3 className="text-xl font-semibold leading-tight tracking-tight text-white">
-            We just <span className="italic text-(--cream)">run</span> the workspaces.
-          </h3>
-          <p className="mt-2.5 max-w-xl text-[13.5px] leading-relaxed text-fg-3">
-            Bring your own AI keys. We don't mark them up. Free runs on E2B sandboxes - upgrade to
-            unlock every provider, persistent workspaces, and more runtime.
-          </p>
-        </div>
-
-        <div className="overflow-hidden rounded-xl border border-line bg-input/40">
-          <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center border-b border-line bg-fill font-mono text-[9px] uppercase tracking-[0.08em] text-fg-4 sm:text-[10px] sm:tracking-[0.18em]">
-            <span className="px-3 py-2.5 sm:px-4" />
-            <span className="px-1.5 py-2.5 text-center sm:px-3">Free</span>
-            <span className="px-1.5 py-2.5 text-center text-primary/80 sm:px-3">Starter</span>
-            <span className="px-1.5 py-2.5 text-center text-primary/80 sm:px-3">Pro</span>
-          </div>
-          {QUOTAS.map((row, idx) => {
-            const Icon = row.icon;
-            return (
-              <div
-                key={row.label}
-                className={`grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center ${
-                  idx % 2 === 1 ? "bg-fill" : ""
-                } ${idx < QUOTAS.length - 1 ? "border-b border-line" : ""}`}
-              >
-                <span className="flex items-center gap-2 px-3 py-3 text-[12px] text-fg-2 sm:gap-2.5 sm:px-4 sm:text-[13px]">
-                  <Icon className="h-3.5 w-3.5 shrink-0 text-fg-4" />
-                  {row.label}
-                </span>
-                <span className="flex justify-center px-1.5 py-3 text-center sm:px-3">
-                  <QuotaValue value={row.free} dim />
-                </span>
-                <span className="flex justify-center px-1.5 py-3 text-center sm:px-3">
-                  <QuotaValue value={row.starter} />
-                </span>
-                <span className="flex justify-center px-1.5 py-3 text-center sm:px-3">
-                  <QuotaValue value={row.pro} />
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            asChild
-            type="button"
-            className="group font-mono text-[12px] font-bold uppercase tracking-[0.18em]"
-          >
-            <Link href={"/pricing" as Route}>
-              <Sparkles className="h-3.5 w-3.5" />
-              Upgrade
-              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          </Button>
-        </div>
-      </FormCardBody>
-
-      <FormCardFooter>
-        <Link href={"/pricing#questions" as Route} className="truncate">
-          questions about plans?
-        </Link>
-        <Link
-          href={"/pricing" as Route}
-          className="inline-flex shrink-0 items-center gap-1.5 text-fg-3 hover:text-fg"
-        >
-          compare all plans
-          <ArrowRight className="h-3 w-3" />
-        </Link>
-      </FormCardFooter>
-    </FormCard>
+    <PlanRow
+      name="Free"
+      detail="E2B sandboxes and 60 minutes a day. Upgrade for every provider and persistence."
+      action={
+        <Button asChild size="sm" className="h-8 gap-1.5 text-xs">
+          <Link href={"/pricing" as Route}>
+            Upgrade
+            <ArrowRight className="size-3" />
+          </Link>
+        </Button>
+      }
+    />
   );
 }
 

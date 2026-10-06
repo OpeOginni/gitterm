@@ -55,7 +55,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
   // ── OAuth accounts ──
   {
     name: "opencode-console",
-    displayName: "OpenCode",
+    displayName: "OpenCode Console",
     logicalProviderKey: "opencode",
     authType: "oauth",
     plugin: "opencode-console",
@@ -66,13 +66,13 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
   },
   {
     name: "openai-oauth",
-    displayName: "ChatGPT",
+    displayName: "Codex",
     logicalProviderKey: "openai",
     authType: "oauth",
     plugin: "oauth",
     refreshedByGitterm: true,
     isRecommended: true,
-    description: "Use your ChatGPT Plus or Pro subscription.",
+    description: "Use your Codex subscription (ChatGPT Plus or Pro).",
   },
   {
     name: "github-copilot",

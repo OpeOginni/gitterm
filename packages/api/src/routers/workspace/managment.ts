@@ -2499,7 +2499,7 @@ export const workspaceRouter = router({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
-              "ChatGPT, OpenCode, and SuperGrok subscriptions need workspace access to the GitTerm API to refresh. Daytona Tier 1/2 blocks that connection; use a Tier 3+ Daytona organization or another provider.",
+              "Codex, OpenCode Console, and SuperGrok subscriptions need workspace access to the GitTerm API to refresh. Daytona Tier 1/2 blocks that connection; use a Tier 3+ Daytona organization or another provider.",
           });
         }
         workspaceCreateLogger.addSecrets(

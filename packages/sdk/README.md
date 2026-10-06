@@ -12,8 +12,8 @@ bun add @gitterm/sdk
 npm install @gitterm/sdk
 ```
 
-Requires Node 22.12+ or Bun. Create an API token in the dashboard under
-**Settings → Developer → API & tokens**, or with `gitterm login`.
+Requires Node 22.12+ or Bun. Create an API token under **API tokens** in the dashboard, or with
+`gitterm login`.
 
 ## Quick start
 
@@ -506,7 +506,7 @@ A workspace has one of four statuses:
 | `terminated` | Gone for good.                                                                            |
 
 Whether `create()` returns `running` or `pending` depends on the provider. Sandbox providers
-(E2B, Daytona, Vercel, Ascii, exe.dev, Cloudflare) settle immediately and return `running`.
+(E2B, Daytona, Vercel, boat, exe.dev, Cloudflare) settle immediately and return `running`.
 Railway settles by webhook and returns `pending` until its deployment reports success, usually
 within a minute. Code that only ever ran against a sandbox provider will see `pending` for the
 first time when it moves to Railway.
@@ -730,7 +730,7 @@ const { workspace } = await client.workspaces.create({
 
 const run = await client.runs.create({
   workspace,
-  model: "anthropic/claude-sonnet-4-20250514",
+  model: "anthropic/claude-sonnet-5-5",
   prompt: "Record before/after videos of the changes in PR #42",
 });
 ```
@@ -844,7 +844,7 @@ await saveConfig({
 ```
 
 Device-code logins produce the same revocable `gt_...` API token as the dashboard;
-they appear in **Settings → Developer → API & tokens** and can be revoked there.
+they appear under **API tokens** in the dashboard and can be revoked there.
 
 ## Direct provider mode
 
@@ -857,7 +857,7 @@ All built-in compute providers use the same provisioning plan and workspace/run 
 | E2B      | OpenCode-compatible template                                   | Yes              | Yes        |
 | Daytona  | Public Gitterm OpenCode server image by default                | Yes              | Yes        |
 | Vercel   | Vercel Sandbox project                                         | Yes              | Yes        |
-| Ascii    | Box API key                                                    | Yes              | Yes        |
+| boat     | boat API key (provider type `ascii`)                           | Yes              | Yes        |
 | exe.dev  | Lifecycle token, or an existing VM with `ls,ssh,share,ssh-key` | Yes              | No         |
 | Railway  | Project/environment and public service domains                 | With a volume    | No         |
 

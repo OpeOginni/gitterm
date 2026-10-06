@@ -167,7 +167,26 @@ export function ModelCredentialsSection() {
             <SettingsEmptyState
               icon={Key}
               title="No credentials saved"
-              description="Connect an OpenCode, ChatGPT, Copilot or SuperGrok subscription, or paste an API key from any supported provider."
+              description="Paste an API key from any supported provider, or sign in with an OpenCode Console, Codex, Copilot or SuperGrok subscription."
+              action={
+                <div className="flex justify-center gap-2">
+                  <Button size="sm" className="gap-2" onClick={() => setApiKeyOpen(true)}>
+                    <Key className="h-3.5 w-3.5" />
+                    Add API key
+                  </Button>
+                  {hasAccounts ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => setConnectOpen(true)}
+                    >
+                      <UserRound className="h-3.5 w-3.5" />
+                      Add a subscription
+                    </Button>
+                  ) : null}
+                </div>
+              }
             />
           ) : (
             <div className="divide-y divide-line">

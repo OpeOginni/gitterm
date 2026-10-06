@@ -67,7 +67,7 @@ export function FeedbackForm() {
           </div>
           <DialogFooter>
             <Button
-              className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+              className="bg-primary text-xs text-primary-foreground hover:bg-primary/85"
               onClick={() => {
                 setShowThankYou(false);
                 setOpen(false);
@@ -82,9 +82,7 @@ export function FeedbackForm() {
           <form className="space-y-4" onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle className="text-white">Feedback</DialogTitle>
-              <DialogDescription className="text-fg-4">
-                Share your thoughts and suggestions with us.
-              </DialogDescription>
+              <DialogDescription>Share your thoughts and suggestions with us.</DialogDescription>
             </DialogHeader>
 
             <div className="flex flex-col gap-4">
@@ -99,7 +97,7 @@ export function FeedbackForm() {
               <Button
                 type="submit"
                 disabled={isPending}
-                className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
+                className="bg-primary text-xs text-primary-foreground hover:bg-primary/85"
               >
                 {isPending ? <Loader2 className="size-4 animate-spin" /> : "Submit Feedback"}
               </Button>

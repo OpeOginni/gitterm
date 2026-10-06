@@ -102,7 +102,13 @@ export function botOptionsFromEnv(env: Env = process.env): Omit<BotOptions, "ada
     .filter(Boolean)
     .join("\n\n");
   if (instructions) options.instructions = instructions;
-  if (provider) options.workspace = { provider: { type: provider } as WorkspaceProviderSelection };
+  const githubToken = read(env, "GITTERM_BOT_GITHUB_TOKEN");
+  if (provider || githubToken) {
+    options.workspace = {
+      ...(provider ? { provider: { type: provider } as WorkspaceProviderSelection } : {}),
+      ...(githubToken ? { repositoryCredentials: { token: githubToken } } : {}),
+    };
+  }
   const stateFile = read(env, "GITTERM_BOT_STATE_FILE");
   if (stateFile) options.stateFile = stateFile;
   const runTimeoutMinutes = positive(env, "GITTERM_BOT_RUN_TIMEOUT_MINUTES");
@@ -118,7 +124,8 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
   command: string | undefined;
   options: Omit<BotOptions, "adapter">;
 } {
-  if (existsSync(".env")) process.loadEnvFile(".env");
+  // Bun loads .env itself and has no process.loadEnvFile; Node needs the call.
+  if (existsSync(".env") && typeof process.loadEnvFile === "function") process.loadEnvFile(".env");
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -126,6 +133,7 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
       repo: { type: "string" },
       model: { type: "string" },
       "instructions-file": { type: "string" },
+      help: { type: "boolean", short: "h" },
     },
   });
   const flags: Env = {
@@ -135,18 +143,21 @@ export function cliOptions(argv: string[] = process.argv.slice(2)): {
   };
   const env = { ...process.env };
   for (const [name, value] of Object.entries(flags)) if (value) env[name] = value;
-  return { command: positionals[0], options: botOptionsFromEnv(env) };
+  return { command: values.help ? "help" : positionals[0], options: botOptionsFromEnv(env) };
 }
 
 /** The environment variables every bot command line reads, for its usage text. */
-export const BOT_ENV_HELP = `  GITTERM_API_TOKEN               GitTerm API token (dashboard → Bots creates one)
+export const BOT_ENV_HELP = `  Settings saved for this bot under Bots in GitTerm load at startup; these override them.
+
+  GITTERM_API_TOKEN               The bot's GitTerm token (dashboard → Bots creates one)
   GITTERM_SERVER_URL              Self-hosted GitTerm API URL (default: hosted)
   GITTERM_BOT_REPO                Repository for every channel: https://github.com/acme/app[#branch]
   GITTERM_BOT_REPOS               More repositories people can name in a thread: url,url
   GITTERM_BOT_CHANNELS            Per-channel repositories: <channel id>=<url>,…
-  GITTERM_BOT_MODEL               provider/model, e.g. anthropic/claude-sonnet-4-5
+  GITTERM_BOT_MODEL               provider/model, e.g. anthropic/claude-sonnet-5-5
   GITTERM_BOT_MODEL_CREDENTIAL    Saved credential label (default: the provider's default)
   GITTERM_BOT_MODEL_API_KEY       Or a model API key for this bot only
+  GITTERM_BOT_GITHUB_TOKEN        Your own GitHub token instead of a GitTerm GitHub connection
   GITTERM_BOT_CONNECTIONS         Tools besides GitHub, by name: Linear,Sentry
   GITTERM_BOT_ALLOWED_USERS       Only these user ids may use the bot: U012,U034
   GITTERM_BOT_ALLOW_GUESTS        true lets guests and external people use the bot

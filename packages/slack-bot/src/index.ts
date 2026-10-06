@@ -1,4 +1,4 @@
-import { createBot, type Bot, type BotOptions } from "@gitterm/bot";
+import { createBot, withSavedConfig as loadSaved, type Bot, type BotOptions } from "@gitterm/bot";
 import { createSlackAdapter, type SlackAdapterOptions } from "./adapter.js";
 
 export { createSlackAdapter, type SlackAdapterOptions } from "./adapter.js";
@@ -27,4 +27,12 @@ export function createSlackBot(options: SlackBotOptions): Bot {
       ...(app ? { app } : {}),
     }),
   });
+}
+
+/**
+ * Adds the settings saved for this bot under Bots in the GitTerm dashboard, found by its API
+ * token. Anything you pass wins: `createSlackBot(await withSavedConfig({ ... }))`.
+ */
+export async function withSavedConfig(options: SlackBotOptions = {}): Promise<SlackBotOptions> {
+  return { ...options, ...(await loadSaved(options, "slack", options.logger)) };
 }

@@ -1,24 +1,23 @@
 import env from "@gitterm/env/web";
 import { apiPath } from "@gitterm/schema/url";
-import type { ApiTokenScope } from "@gitterm/schema";
 
 export type Platform = "slack" | "discord";
 
-/** Exactly what a bot needs: find and create its sandboxes, run prompts, and list connections. */
-export const BOT_TOKEN_SCOPES: ApiTokenScope[] = [
-  "identity:read",
-  "workspace:read",
-  "workspace:write",
-  "run:read",
-  "run:write",
-  "integrations:read",
-];
-
+/** A current coding model per provider (models.dev IDs), so the default isn't a stale one. */
 const SUGGESTED_MODELS: Record<string, string> = {
-  anthropic: "anthropic/claude-sonnet-4-5",
-  openai: "openai/gpt-5",
-  google: "google/gemini-2.5-pro",
-  opencode: "opencode/big-pickle",
+  anthropic: "anthropic/claude-sonnet-5-5",
+  openai: "openai/gpt-6.1-sol",
+  google: "google/gemini-3.8-flash",
+  opencode: "opencode/deepseek-v4-pro",
+  "opencode-go": "opencode-go/deepseek-v4-pro",
+  "github-copilot": "github-copilot/claude-sonnet-5.5",
+  openrouter: "openrouter/anthropic/claude-sonnet-5.5",
+  xai: "xai/grok-4.7",
+  deepseek: "deepseek/deepseek-v4-pro",
+  moonshotai: "moonshotai/kimi-k3",
+  zai: "zai/glm-5.3",
+  "zai-coding-plan": "zai-coding-plan/glm-5.3",
+  minimax: "minimax/MiniMax-M3",
 };
 
 export function suggestModel(provider: string | undefined): string {
@@ -66,36 +65,38 @@ export function connectionRefs(selected: NamedConnection[], all: NamedConnection
   });
 }
 
-/** Quote a .env value only when it needs it. */
-const envValue = (value: string) => (/[\s#"'\\]/.test(value) ? JSON.stringify(value) : value);
-
-export type BotConfig = {
+/** What the .env needs: secrets only. The bot reads its settings from GitTerm. */
+export type BotEnv = {
   platform: Platform;
-  token: string;
-  repo: string;
-  model: string;
-  /** Saved credential label; only when it isn't the provider's default. */
-  credential?: string;
-  connections: string[];
+  /** The bot's GitTerm token; null once it's no longer shown (it is shown once). */
+  token: string | null;
+  /** The bot brings its own GitHub token. */
+  githubToken: boolean;
 };
 
-export function envFile(config: BotConfig): string {
+export function envFile(config: BotEnv): string {
   const serverUrl = botServerUrl();
   const lines = [
+    "# Secrets only. Repo, model, channels and people load from",
+    "# GitTerm when the bot starts. Edit them on this page.",
+    "",
     ...(serverUrl ? [`GITTERM_SERVER_URL=${serverUrl}`] : []),
-    `GITTERM_API_TOKEN=${config.token}`,
-    `GITTERM_BOT_REPO=${envValue(config.repo)}`,
-    `GITTERM_BOT_MODEL=${envValue(config.model)}`,
-    ...(config.credential ? [`GITTERM_BOT_MODEL_CREDENTIAL=${envValue(config.credential)}`] : []),
-    ...(config.connections.length
-      ? [`GITTERM_BOT_CONNECTIONS=${envValue(config.connections.join(","))}`]
+    ...(config.token
+      ? [`GITTERM_API_TOKEN=${config.token}`]
+      : ["# The bot's GitTerm token. Lost it? New token on this page.", "GITTERM_API_TOKEN="]),
+    ...(config.githubToken
+      ? [
+          "",
+          "# Your GitHub token, with read and write access to the repository",
+          "GITTERM_BOT_GITHUB_TOKEN=",
+        ]
       : []),
     "",
     ...(config.platform === "slack"
       ? [
           "# OAuth & Permissions → Bot User OAuth Token (xoxb-…)",
           "SLACK_BOT_TOKEN=",
-          "# Basic Information → App-Level Tokens, scope connections:write (xapp-…)",
+          "# Basic Information → App-Level Tokens (xapp-…)",
           "SLACK_APP_TOKEN=",
         ]
       : ["# Developer portal → your app → Bot → Reset Token", "DISCORD_BOT_TOKEN="]),
@@ -103,25 +104,27 @@ export function envFile(config: BotConfig): string {
   return `${lines.join("\n")}\n`;
 }
 
-export function codeSnippet(config: BotConfig): string {
-  const factory = config.platform === "slack" ? "createSlackBot" : "createDiscordBot";
-  const model = config.credential
-    ? `{ id: ${JSON.stringify(config.model)}, credential: ${JSON.stringify(config.credential)} }`
-    : JSON.stringify(config.model);
-  const options = [
-    `  repo: ${JSON.stringify(config.repo)},`,
-    `  model: ${model},`,
-    ...(config.connections.length
-      ? [`  connections: [${config.connections.map((ref) => JSON.stringify(ref)).join(", ")}],`]
-      : []),
-  ];
+/** One image runs either bot; it picks the platform from the token in the .env. */
+export const BOT_IMAGE = "ghcr.io/opeoginni/gitterm-bot";
+
+/** Mounts the .env (Docker's --env-file doesn't read dotenv quoting) and keeps state in a volume. */
+export function dockerCommand(platform: Platform): string {
+  const name = `gitterm-${platform}-bot`;
   return [
-    `import { ${factory} } from "@gitterm/${config.platform}-bot";`,
+    `docker run -d --name ${name} --restart unless-stopped \\`,
+    `  -v "$PWD/.env:/data/.env:ro" -v ${name}:/data \\`,
+    `  ${BOT_IMAGE}`,
+  ].join("\n");
+}
+
+export function codeSnippet(platform: Platform): string {
+  const factory = platform === "slack" ? "createSlackBot" : "createDiscordBot";
+  return [
+    `import { ${factory}, withSavedConfig } from "@gitterm/${platform}-bot";`,
     "",
-    "// Tokens are read from the .env above.",
-    `await ${factory}({`,
-    ...options,
-    "}).start();",
+    "// Settings load from GitTerm; pass options to override them.",
+    `const bot = ${factory}(await withSavedConfig());`,
+    "await bot.start();",
     "",
   ].join("\n");
 }

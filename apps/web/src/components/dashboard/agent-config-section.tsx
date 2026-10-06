@@ -3,7 +3,11 @@
 import { useState, useEffect } from "react";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
-import { SettingsSection, SettingsSectionBody } from "@/components/ui/form-card";
+import {
+  SettingsEmptyState,
+  SettingsSection,
+  SettingsSectionBody,
+} from "@/components/ui/form-card";
 import {
   Dialog,
   DialogContent,
@@ -242,7 +246,7 @@ export function AgentConfigSection() {
         </Button>
       </DialogTrigger>
       <DialogContent className="grid max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-line bg-settings-dialog p-0 sm:max-w-[760px]">
-        <DialogHeader className="border-b border-line px-5 py-4 text-left sm:px-7 sm:py-5">
+        <DialogHeader className="px-5 pt-5 pb-4">
           <div className="flex items-center gap-3.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fill-2">
               <Image
@@ -254,10 +258,10 @@ export function AgentConfigSection() {
               />
             </span>
             <div className="min-w-0">
-              <DialogTitle className="text-lg font-semibold tracking-[-0.02em]">
+              <DialogTitle>
                 {isEditing ? "Edit configuration" : "New agent configuration"}
               </DialogTitle>
-              <DialogDescription className="mt-1 text-[13px]">
+              <DialogDescription>
                 {isEditing
                   ? `Update the ${selectedMeta.label} configuration.`
                   : selectedMeta.description}
@@ -269,7 +273,7 @@ export function AgentConfigSection() {
         <div className="grid min-h-0 overflow-y-auto sm:grid-cols-[220px_minmax(0,1fr)] sm:overflow-hidden">
           <aside className="min-w-0 border-b border-border bg-fill p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
             <Label className="mb-3 block font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
-              Runtime
+              Agent
             </Label>
             <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-1 sm:overflow-visible sm:px-0 sm:pb-0">
               {AGENT_CONFIG_KINDS.map((kind) => {
@@ -393,7 +397,7 @@ export function AgentConfigSection() {
           </div>
         </div>
 
-        <DialogFooter className="border-t border-line px-5 py-4 sm:px-6">
+        <DialogFooter className="m-0">
           <Button variant="outline" onClick={() => setDialogOpen(false)}>
             Cancel
           </Button>
@@ -402,7 +406,7 @@ export function AgentConfigSection() {
             disabled={
               isPending || !!jsonError || !formData.configJson.trim() || !formData.name.trim()
             }
-            className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
+            className="gap-2"
           >
             {isPending ? (
               <>
@@ -435,13 +439,11 @@ export function AgentConfigSection() {
               <Skeleton className="h-14 w-full bg-fill" />
             </div>
           ) : configurations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl bg-input/40 px-6 py-10 text-center">
-              <Code2 className="mb-3 h-8 w-8 text-fg-4" />
-              <p className="text-sm text-fg-2">No configurations yet</p>
-              <p className="mt-1 text-[12px] text-fg-4">
-                Save OpenCode, Claude Code, or Codex configs to reuse across workspaces.
-              </p>
-            </div>
+            <SettingsEmptyState
+              icon={Code2}
+              title="No configurations yet"
+              description="Save OpenCode, Claude Code, or Codex configs to reuse across workspaces."
+            />
           ) : (
             <div className="space-y-2">
               {configurations.map((config) => (

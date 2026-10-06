@@ -49,7 +49,7 @@ export const AGENT_CONFIG_KIND_META: Record<AgentConfigKind, AgentConfigKindMeta
     example: {
       $schema: "https://opencode.ai/config.json",
       theme: "opencode",
-      model: "opencode/big-pickle",
+      model: "opencode/deepseek-v4-pro",
       autoupdate: true,
     },
   },

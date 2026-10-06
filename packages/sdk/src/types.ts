@@ -720,3 +720,30 @@ export type WorkspaceCatalog = {
     workspaceApiAccess: boolean;
   }>;
 };
+
+/** A chat bot's settings, saved in the dashboard (Bots). Secrets stay in the bot's .env. */
+export type SavedBot = {
+  id: string;
+  name: string;
+  platform: "slack" | "discord";
+  /** Repository URL, with `#branch` when one is picked. */
+  repo: string;
+  /** OpenCode `provider/model`. */
+  model: string;
+  /** Saved credential label; null uses the provider's default credential. */
+  credential: string | null;
+  /** Tool connection references besides GitHub. */
+  connections: string[];
+  /** Compute provider key; null uses your default. */
+  provider: string | null;
+  /** "token": the bot brings its own GITTERM_BOT_GITHUB_TOKEN. */
+  githubAccess: "connection" | "token";
+  /** Channel ids it answers in; empty answers in every channel it's in. */
+  channels: string[];
+  /** User ids allowed to use it; empty allows everyone in the channel. */
+  allowedUsers: string[];
+  allowGuests: boolean;
+  instructions: string | null;
+  /** A command run in the checkout before the agent starts in a new sandbox. */
+  setup: string | null;
+};

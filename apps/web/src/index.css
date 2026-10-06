@@ -36,8 +36,8 @@ body {
   --line-2: rgba(0 0 0 / 0.18);
   --fill: rgba(0 0 0 / 0.035);
   --fill-2: rgba(0 0 0 / 0.06);
-  --settings-surface: #f1f1f3;
-  --settings-dialog: #ffffff;
+  --settings-surface: var(--card);
+  --settings-dialog: var(--card);
 }
 
 .dark {
@@ -55,8 +55,9 @@ body {
   --line-2: rgba(255 255 255 / 0.2);
   --fill: rgba(255 255 255 / 0.045);
   --fill-2: rgba(255 255 255 / 0.08);
-  --settings-surface: #202028;
-  --settings-dialog: #292933;
+  /* Settings cards and dialogs sit on the same surface as workspace cards. */
+  --settings-surface: var(--card);
+  --settings-dialog: var(--card);
 }
 
 :root {
@@ -451,4 +452,19 @@ body {
 .blueprint > .grid::after {
   top: 100%;
   left: 100%;
+}
+
+/* Field labels in dialogs: plain sentence case, one size and weight, so every form reads the
+ * same. Unlayered on purpose so it wins over per-field utility classes. Labels of checkboxes,
+ * switches, and radios keep their own style. */
+[data-slot="dialog-content"]
+  [data-slot="label"]:not(:has([role="checkbox"], [role="switch"], [role="radio"])):not(
+    [role="checkbox"] ~ [data-slot="label"],
+    [role="switch"] ~ [data-slot="label"]
+  ) {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--fg-2);
 }

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowUpRight, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,8 +68,9 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string | null>(null);
   const [googleCloudIntegrationId, setGoogleCloudIntegrationId] = useState("none");
   const [mcpConnectionIds, setMcpConnectionIds] = useState<string[]>([]);
-  const [persistent, setPersistent] = useState(true);
-  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
+  const [showIntegrations, setShowIntegrations] = useState(false);
+  // Editor (SSH) access is no longer offered here; every workspace uses the standard profile.
+  const workspaceProfile: WorkspaceProfile = "standard";
 
   // Data fetching -- staleTime keeps the prefetched cache from refetching on
   // open so the dialog renders fully populated without a flicker or resize.
@@ -112,10 +113,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const defaultCloudProviderId = defaultProviderData?.cloudProviderId ?? null;
   const { data: subdomainPermissions } = useQuery({
     ...trpc.workspace.getSubdomainPermissions.queryOptions(),
-    staleTime: STALE_TIME,
-  });
-  const { data: sshPublicKeyData } = useQuery({
-    ...trpc.user.getSshPublicKey.queryOptions(),
     staleTime: STALE_TIME,
   });
   const { data: credentialsData } = useQuery(
@@ -262,7 +259,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   // Cloudflare sandboxes) cannot keep files between sessions at all.
   const persistenceSupported = selectedCloudProvider?.supportsPersistence !== false;
   const isAutoPersistent = persistenceSupported && !!selectedCloudProvider?.autoPersistent;
-  const effectivePersistent = persistenceSupported ? (isAutoPersistent ? true : persistent) : false;
+  // Storage persists whenever it can: always on providers that force it, and on the others
+  // unless billing limits the plan (free plans cannot opt in).
+  const userPlan = (session?.user as { plan?: string } | undefined)?.plan ?? "free";
+  const canOptInPersistence = !isBillingEnabled() || userPlan !== "free";
+  const effectivePersistent = persistenceSupported && (isAutoPersistent || canOptInPersistence);
 
   const availableRegions = useMemo((): Region[] => {
     if (isAwsGroup) {
@@ -284,6 +285,15 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     : !!selectedCloudProvider?.supportsRegions &&
       !!selectedCloudProvider?.allowUserRegionSelection &&
       availableRegions.length > 0;
+
+  // Agent and Cloud fill the first row; the optional fields pair up after them, and an odd one
+  // out takes the whole row.
+  const halfCells = [
+    shouldShowRegionSelector && "region",
+    availableMachineProfiles.length > 1 && "machine",
+    githubAvailability?.enabled && "github",
+  ].filter(Boolean);
+  const wideCell = halfCells.length % 2 ? halfCells.at(-1) : null;
 
   const availableAgents = useMemo((): AgentType[] => {
     const agents = agentTypesData?.agentTypes ?? [];
@@ -314,14 +324,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     return availableRegions[0]?.id ?? "";
   }, [isAwsGroup, awsProviders, userRegionId, availableRegions]);
 
-  const canEnableSSHAccess =
-    !!selectedCloudProvider?.sshAccessSupport?.supported &&
-    availableAgents.some((agent) => agent.id === selectedAgentTypeId && agent.serverOnly) &&
-    (selectedCloudProvider?.providerKey === "daytona" || sshPublicKeyData?.hasPublicKey === true);
-
-  const requiresUserSshKey = selectedCloudProvider?.providerKey !== "daytona";
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
   const supportsMcp = selectedAgent?.provisionerKey === "opencode";
+  const selectedIntegrations =
+    (googleCloudIntegrationId !== "none" ? 1 : 0) + (supportsMcp ? mcpConnectionIds.length : 0);
 
   const handleCloudGroupChange = (groupKey: CloudGroupKey) => {
     setUserCloudGroupKey(groupKey);
@@ -346,10 +352,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         setUserCloudProviderId(providerId);
       }
     }
-  };
-
-  const handleProfileChange = (enabled: boolean) => {
-    setWorkspaceProfile(enabled ? "ssh-enabled" : "standard");
   };
 
   // Mutation
@@ -445,12 +447,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     });
   };
 
-  useEffect(() => {
-    if (workspaceProfile === "ssh-enabled" && !canEnableSSHAccess) {
-      setWorkspaceProfile("standard");
-    }
-  }, [workspaceProfile, canEnableSSHAccess]);
-
   const integrations = installationsData?.installations;
   const hasIntegrations = !!(integrations?.length || githubAvailability?.mode === "pat");
   const selectedGitIntegrationId =
@@ -529,51 +525,12 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </p>
         </div>
 
-        {/* ── 3d. Google Cloud workload identity (only when the admin has enabled it) ── */}
-        {isGoogleCloudAvailable ? (
-          <div className="grid gap-1.5">
-            <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Google Cloud Identity
-              <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-                <ArrowUpRight className="h-3 w-3" />
-              </Link>
-            </Label>
-            <div className="flex items-center gap-2">
-              <Select
-                value={googleCloudIntegrationId}
-                onValueChange={setGoogleCloudIntegrationId}
-                disabled={googleCloudIntegrations.length === 0}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue
-                    placeholder={
-                      googleCloudIntegrations.length ? "Select service account" : "No integrations"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {googleCloudIntegrations.map((integration) => (
-                    <SelectItem key={integration.id} value={integration.id}>
-                      {integration.name} · {integration.projectId}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <HelpHint label="How is Google Cloud authenticated?">
-                GitTerm exchanges a five-minute workspace identity through Google Workload Identity
-                Federation. No service-account JSON key is stored.
-              </HelpHint>
-            </div>
-          </div>
-        ) : null}
-
         {/* ── 3. Agent + Cloud (+ Region) ── */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Agent</Label>
             <Select value={selectedAgentTypeId} onValueChange={setUserAgentTypeId}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 w-full">
                 {selectedAgent ? (
                   <div className="flex items-center gap-2 min-w-0">
                     <Image
@@ -623,16 +580,14 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </div>
 
           <div className="grid gap-1.5 min-w-0">
-            <Label className="text-xs font-medium text-muted-foreground">
-              {shouldShowRegionSelector ? "Cloud / Region" : "Cloud"}
-            </Label>
+            <Label className="text-xs font-medium text-muted-foreground">Cloud</Label>
             <div className="flex gap-2 min-w-0">
               <Select
                 value={selectedCloudGroupKey}
                 onValueChange={handleCloudGroupChange}
                 disabled={hasNoProviders}
               >
-                <SelectTrigger className="h-9 shrink-0">
+                <SelectTrigger className="h-9 w-full min-w-0">
                   <SelectValue placeholder={hasNoProviders ? "No providers" : "Select cloud"} />
                 </SelectTrigger>
                 {isLoadingCloudProviders ? (
@@ -680,26 +635,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 )}
               </Select>
 
-              {shouldShowRegionSelector ? (
-                <Select
-                  value={selectedRegion}
-                  onValueChange={handleRegionChange}
-                  disabled={availableRegions.length === 0}
-                >
-                  <SelectTrigger className="h-9 min-w-0 [&>span]:truncate">
-                    <SelectValue
-                      placeholder={availableRegions.length > 0 ? "Region" : "No regions"}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableRegions.map((region) => (
-                      <SelectItem key={region.id} value={region.id}>
-                        {region.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
               {hasNoProviders && isAdmin ? (
                 <Link
                   href={"/admin/providers" as Route}
@@ -712,48 +647,42 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             </div>
           </div>
 
-          {isAwsGroup && (
-            <div className="col-span-2 grid gap-1.5">
-              <Label
-                htmlFor="aws-access-profile"
-                className="text-xs font-medium text-muted-foreground"
-              >
-                AWS access
-              </Label>
+          {shouldShowRegionSelector ? (
+            <div
+              className={cn("grid content-start gap-1.5", wideCell === "region" && "sm:col-span-2")}
+            >
+              <Label className="text-xs font-medium text-muted-foreground">Region</Label>
               <Select
-                value={selectedAwsProfileId ?? "default"}
-                onValueChange={(id) =>
-                  setAwsProfileSelection(
-                    id === "default" ? null : { providerId: selectedCloudProviderId, id },
-                  )
-                }
+                value={selectedRegion}
+                onValueChange={handleRegionChange}
+                disabled={availableRegions.length === 0}
               >
-                <SelectTrigger id="aws-access-profile" className="h-9">
-                  <SelectValue />
+                <SelectTrigger className="h-9 w-full min-w-0 [&>span]:truncate">
+                  <SelectValue
+                    placeholder={availableRegions.length > 0 ? "Region" : "No regions"}
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="default">Provider default role</SelectItem>
-                  {awsAccessProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.name}
+                  {availableRegions.map((region) => (
+                    <SelectItem key={region.id} value={region.id}>
+                      {region.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">
-                {awsAccessProfiles.find((profile) => profile.id === selectedAwsProfileId)
-                  ?.description ||
-                  "Use an administrator-added task role with temporary AWS credentials. All listed roles are available to all users."}{" "}
-                The selected role stays with this workspace after pause/resume.
-              </p>
             </div>
-          )}
+          ) : null}
 
           {availableMachineProfiles.length > 1 && (
-            <div className="col-span-2 grid gap-1.5">
+            <div
+              className={cn(
+                "grid content-start gap-1.5",
+                wideCell === "machine" && "sm:col-span-2",
+              )}
+            >
               <Label className="text-xs font-medium text-muted-foreground">Machine</Label>
               <Select value={selectedMachineProfileId} onValueChange={setUserMachineProfileId}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger className="h-9 w-full">
                   <SelectValue placeholder="Select machine size" />
                 </SelectTrigger>
                 <SelectContent>
@@ -779,26 +708,100 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               )}
             </div>
           )}
-        </div>
 
-        {/* ── 3a. Selected agent description card ── */}
-        {selectedAgent?.description && (
-          <div className="flex items-center gap-3.5 rounded-lg border border-border/60 bg-input/20 px-3.5 py-3">
-            <Image
-              src={getIcon(selectedAgent.name) || "/placeholder.svg"}
-              alt={selectedAgent.name}
-              width={32}
-              height={32}
-              className="h-8 w-8 shrink-0 opacity-80"
-            />
-            <div className="min-w-0 flex-1">
-              <span className="text-sm font-medium text-foreground/90">{selectedAgent.name}</span>
-              <p className="mt-0.5 text-[11px] leading-snug text-foreground/65">
-                {selectedAgent.description}
+          {/* ── 3. GitHub Connection ── */}
+          {githubAvailability?.enabled ? (
+            <div
+              className={cn("grid content-start gap-1.5", wideCell === "github" && "sm:col-span-2")}
+            >
+              <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                GitHub repository access
+                <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
+                  <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              </Label>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={selectedGitIntegrationId}
+                  onValueChange={setuserGitIntegrationId}
+                  disabled={!hasIntegrations}
+                >
+                  <SelectTrigger className="h-9 min-w-0 flex-1">
+                    <SelectValue
+                      placeholder={hasIntegrations ? "Select account" : "No connections"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (public repos only)</SelectItem>
+                    {integrations?.map((installation) => (
+                      <SelectItem
+                        key={installation.git_integration.id}
+                        value={`app:${installation.git_integration.id}`}
+                      >
+                        <div className="flex items-center">
+                          <Image
+                            src="/github.svg"
+                            alt="GitHub"
+                            width={16}
+                            height={16}
+                            className="mr-2 h-4 w-4"
+                          />
+                          {installation.git_integration.providerAccountLogin} · GitHub App
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {githubAvailability.mode === "pat" ? (
+                      <SelectItem value="global-pat">
+                        Shared GitHub PAT (@{githubAvailability.accountLogin})
+                      </SelectItem>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+                {/* Help sits beside the picker so it never covers the controls above */}
+                <HelpHint label="What does a GitHub connection do?">
+                  Connect a GitHub account to enable commit, push, fork and private repo access.
+                </HelpHint>
+              </div>
+            </div>
+          ) : null}
+
+          {isAwsGroup && (
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label
+                htmlFor="aws-access-profile"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                AWS access
+              </Label>
+              <Select
+                value={selectedAwsProfileId ?? "default"}
+                onValueChange={(id) =>
+                  setAwsProfileSelection(
+                    id === "default" ? null : { providerId: selectedCloudProviderId, id },
+                  )
+                }
+              >
+                <SelectTrigger id="aws-access-profile" className="h-9 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Provider default role</SelectItem>
+                  {awsAccessProfiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {awsAccessProfiles.find((profile) => profile.id === selectedAwsProfileId)
+                  ?.description ||
+                  "Use an administrator-added task role with temporary AWS credentials. All listed roles are available to all users."}{" "}
+                The selected role stays with this workspace after pause/resume.
               </p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* ── 3b. Model providers ── */}
         {credentialGroups.length > 0 && (
@@ -811,239 +814,152 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           />
         )}
 
-        {/* ── 3. GitHub Connection ── */}
-        {githubAvailability?.enabled ? (
-          <div className="grid gap-1.5">
-            <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              GitHub repository access
-              <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-                <ArrowUpRight className="h-3 w-3" />
-              </Link>
-            </Label>
-            <div className="flex items-center gap-2">
-              <Select
-                value={selectedGitIntegrationId}
-                onValueChange={setuserGitIntegrationId}
-                disabled={!hasIntegrations}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue
-                    placeholder={hasIntegrations ? "Select account" : "No connections"}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None (public repos only)</SelectItem>
-                  {integrations?.map((installation) => (
-                    <SelectItem
-                      key={installation.git_integration.id}
-                      value={`app:${installation.git_integration.id}`}
+        {/* ── 4b. Optional integrations, folded away until someone wants one ── */}
+        {isGoogleCloudAvailable || mcpConnections.length > 0 ? (
+          <div className="rounded-xl border border-dashed border-line">
+            <button
+              type="button"
+              aria-expanded={showIntegrations}
+              onClick={() => setShowIntegrations((value) => !value)}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-fill"
+            >
+              <Plus className="size-3.5 shrink-0 text-fg-4" />
+              <span className="text-xs text-fg-2">Add integrations</span>
+              <span className="truncate text-xs text-fg-4">
+                {[
+                  isGoogleCloudAvailable ? "Google Cloud" : null,
+                  mcpConnections.length ? "MCP servers, Executor" : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
+              </span>
+              <span className="ml-auto flex shrink-0 items-center gap-2">
+                {selectedIntegrations > 0 ? (
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary">
+                    {selectedIntegrations} selected
+                  </span>
+                ) : null}
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 text-fg-4 transition-transform",
+                    showIntegrations && "rotate-180",
+                  )}
+                />
+              </span>
+            </button>
+            {showIntegrations ? (
+              <div className="space-y-4 border-t border-line px-3.5 py-3.5">
+                {isGoogleCloudAvailable ? (
+                  <div className="grid gap-1.5">
+                    <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                      Google Cloud Identity
+                      <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
+                        <ArrowUpRight className="h-3 w-3" />
+                      </Link>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={googleCloudIntegrationId}
+                        onValueChange={setGoogleCloudIntegrationId}
+                        disabled={googleCloudIntegrations.length === 0}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue
+                            placeholder={
+                              googleCloudIntegrations.length
+                                ? "Select service account"
+                                : "No integrations"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {googleCloudIntegrations.map((integration) => (
+                            <SelectItem key={integration.id} value={integration.id}>
+                              {integration.name} · {integration.projectId}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <HelpHint label="How is Google Cloud authenticated?">
+                        GitTerm exchanges a five-minute workspace identity through Google Workload
+                        Identity Federation. No service-account JSON key is stored.
+                      </HelpHint>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      MCP servers and Executor
+                    </Label>
+                    <Link
+                      href={"/dashboard/integrations" as Route}
+                      className="text-xs text-muted-foreground underline underline-offset-2"
                     >
-                      <div className="flex items-center">
-                        <Image
-                          src="/github.svg"
-                          alt="GitHub"
-                          width={16}
-                          height={16}
-                          className="mr-2 h-4 w-4"
-                        />
-                        {installation.git_integration.providerAccountLogin} · GitHub App
-                      </div>
-                    </SelectItem>
-                  ))}
-                  {githubAvailability.mode === "pat" ? (
-                    <SelectItem value="global-pat">
-                      Shared GitHub PAT (@{githubAvailability.accountLogin})
-                    </SelectItem>
+                      Manage connections
+                    </Link>
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {supportsMcp
+                      ? "Choose servers for this workspace. OpenCode connects directly; their credentials will be available to its agent."
+                      : "GitTerm MCP connections require an OpenCode workspace. T3Code is not supported yet."}
+                  </p>
+                  {connectionsError ? (
+                    <p role="alert" className="text-xs text-red-400">
+                      Couldn't load connections. You can create a workspace without MCP tools.
+                    </p>
                   ) : null}
-                </SelectContent>
-              </Select>
-              {/* Help sits beside the picker so it never covers the controls above */}
-              <HelpHint label="What does a GitHub connection do?">
-                Connect a GitHub account to enable commit, push, fork and private repo access.
-              </HelpHint>
-            </div>
+                  {!mcpConnections.length ? (
+                    <p className="text-xs text-muted-foreground">
+                      Connect a remote server or Executor from Integrations first.
+                    </p>
+                  ) : null}
+                  {mcpConnections.map((connection) => (
+                    <label key={connection.id} className="flex items-center gap-2 text-xs">
+                      <Checkbox
+                        disabled={
+                          !supportsMcp ||
+                          connection.status !== "connected" ||
+                          (mcpConnectionIds.length >= 30 &&
+                            !mcpConnectionIds.includes(connection.id))
+                        }
+                        checked={
+                          supportsMcp &&
+                          connection.status === "connected" &&
+                          mcpConnectionIds.includes(connection.id)
+                        }
+                        onCheckedChange={(checked) =>
+                          setMcpConnectionIds((ids) =>
+                            checked === true
+                              ? [...new Set([...ids, connection.id])]
+                              : ids.filter((id) => id !== connection.id),
+                          )
+                        }
+                      />
+                      <span className="min-w-0 flex-1 truncate">{connection.name}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {connection.status === "connected"
+                          ? connection.integration === "executor"
+                            ? "Executor"
+                            : "MCP"
+                          : "Needs attention"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
-
-        {/* ── 4. SSH Editor Access ── */}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="editor-access"
-            checked={workspaceProfile === "ssh-enabled"}
-            onCheckedChange={(checked) => handleProfileChange(checked === true)}
-            disabled={!canEnableSSHAccess}
-            className="data-[state=checked]:bg-primary data-[state=checked]:border-accent disabled:opacity-100 disabled:cursor-not-allowed"
-          />
-          <Label
-            htmlFor="editor-access"
-            className={cn(
-              "group flex flex-1 items-center gap-2 text-xs",
-              canEnableSSHAccess
-                ? "cursor-pointer text-foreground/90"
-                : "cursor-default text-foreground/55",
-            )}
-          >
-            <span>Editor Access (SSH)</span>
-            {canEnableSSHAccess ? (
-              <>
-                <span className="text-muted-foreground/40">&mdash; opens in</span>
-                <span className="flex items-center gap-2 px-1.5 py-0.5 transition-colors">
-                  {[
-                    { src: "/vscode.svg", alt: "VS Code" },
-                    { src: "/cursor.svg", alt: "Cursor" },
-                    { src: "/zed.svg", alt: "Zed" },
-                    { src: "/neovim.svg", alt: "Neovim" },
-                  ].map((editor) => (
-                    <Image
-                      key={editor.src}
-                      src={editor.src}
-                      alt={editor.alt}
-                      width={11}
-                      height={11}
-                      className={cn(
-                        "transition-opacity group-hover:opacity-100",
-                        workspaceProfile === "ssh-enabled" ? "opacity-100" : "opacity-60",
-                      )}
-                    />
-                  ))}
-                </span>
-              </>
-            ) : (
-              <span className="text-foreground/55">
-                &mdash;{" "}
-                {!selectedCloudProvider?.sshAccessSupport?.supported ? (
-                  "not supported by this provider"
-                ) : !selectedAgent?.serverOnly ? (
-                  "requires a server agent type"
-                ) : requiresUserSshKey && !sshPublicKeyData?.hasPublicKey ? (
-                  <Link
-                    href={"/dashboard/settings/ssh" as Route}
-                    onClick={(e) => e.stopPropagation()}
-                    className="font-medium text-amber-300 hover:text-amber-200 hover:underline"
-                  >
-                    add an SSH key in Settings
-                  </Link>
-                ) : (
-                  "unavailable"
-                )}
-              </span>
-            )}
-          </Label>
-        </div>
-
-        <div className="space-y-3 rounded-lg border border-border p-3">
-          <div className="flex items-center justify-between gap-3">
-            <Label className="text-xs font-medium">
-              MCP tools <span className="font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <Link
-              href={"/dashboard/integrations" as Route}
-              className="text-xs text-muted-foreground underline underline-offset-2"
-            >
-              Manage connections
-            </Link>
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {supportsMcp
-              ? "Choose servers for this workspace. OpenCode connects directly; their credentials will be available to its agent."
-              : "GitTerm MCP connections require an OpenCode workspace. T3Code is not supported yet."}
-          </p>
-          {connectionsError ? (
-            <p role="alert" className="text-xs text-red-400">
-              Couldn't load connections. You can create a workspace without MCP tools.
-            </p>
-          ) : null}
-          {!mcpConnections.length ? (
-            <p className="text-xs text-muted-foreground">
-              Connect a remote server or Executor from Integrations first.
-            </p>
-          ) : null}
-          {mcpConnections.map((connection) => (
-            <label key={connection.id} className="flex items-center gap-2 text-xs">
-              <Checkbox
-                disabled={
-                  !supportsMcp ||
-                  connection.status !== "connected" ||
-                  (mcpConnectionIds.length >= 30 && !mcpConnectionIds.includes(connection.id))
-                }
-                checked={
-                  supportsMcp &&
-                  connection.status === "connected" &&
-                  mcpConnectionIds.includes(connection.id)
-                }
-                onCheckedChange={(checked) =>
-                  setMcpConnectionIds((ids) =>
-                    checked === true
-                      ? [...new Set([...ids, connection.id])]
-                      : ids.filter((id) => id !== connection.id),
-                  )
-                }
-              />
-              <span className="min-w-0 flex-1 truncate">{connection.name}</span>
-              <span className="shrink-0 text-muted-foreground">
-                {connection.status === "connected"
-                  ? connection.integration === "executor"
-                    ? "Executor"
-                    : "MCP"
-                  : "Needs attention"}
-              </span>
-            </label>
-          ))}
-        </div>
-
-        {/* ── 5. Persistent storage ── */}
-        {(() => {
-          // Disabled when the provider forces it on (autoPersistent) or can't
-          // persist at all (supportsPersistence === false).
-          const locked = isAutoPersistent || !persistenceSupported;
-          return (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="persistent"
-                checked={effectivePersistent}
-                disabled={locked}
-                onCheckedChange={(checked) => setPersistent(checked as boolean)}
-                className="data-[state=checked]:bg-primary data-[state=checked]:border-accent disabled:opacity-100 disabled:cursor-not-allowed"
-              />
-              <Label
-                htmlFor="persistent"
-                className={cn(
-                  "text-xs",
-                  locked
-                    ? "cursor-not-allowed text-foreground/55"
-                    : "cursor-pointer text-foreground/90",
-                )}
-              >
-                Persistent storage
-                <span className={cn(locked ? "text-foreground/45" : "text-foreground/55")}>
-                  {" "}
-                  &mdash;{" "}
-                  {!persistenceSupported
-                    ? `not supported on ${selectedCloudProvider?.name ?? "this provider"} — commit & push to save work`
-                    : isAutoPersistent
-                      ? `always on for ${selectedCloudProvider?.name ?? "this provider"}`
-                      : "keep files between sessions"}
-                </span>
-              </Label>
-            </div>
-          );
-        })()}
       </div>
 
-      <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button
-          variant="outline"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className="w-full sm:w-auto"
-        >
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={isSubmitting || !isValid}
-          className="w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto"
-        >
+        <Button onClick={handleSubmit} disabled={isSubmitting || !isValid} className="gap-2">
           {isSubmitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />

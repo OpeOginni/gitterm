@@ -8,13 +8,22 @@ export function slackManifest(name = "GitTerm Agent") {
       name,
       description: "A coding agent for your repository, running in a GitTerm sandbox",
     },
-    features: { bot_user: { display_name: name, always_online: true } },
+    features: {
+      bot_user: { display_name: name, always_online: true },
+      // Lets people DM the bot; each DM gets its own sandbox.
+      app_home: {
+        home_tab_enabled: false,
+        messages_tab_enabled: true,
+        messages_tab_read_only_enabled: false,
+      },
+    },
     oauth_config: {
       scopes: {
         bot: [
           "app_mentions:read",
           "channels:history",
           "groups:history",
+          "im:history",
           "chat:write",
           "files:read",
           "reactions:write",
@@ -24,7 +33,7 @@ export function slackManifest(name = "GitTerm Agent") {
     },
     settings: {
       event_subscriptions: {
-        bot_events: ["app_mention", "message.channels", "message.groups"],
+        bot_events: ["app_mention", "message.channels", "message.groups", "message.im"],
       },
       interactivity: { is_enabled: true },
       org_deploy_enabled: false,

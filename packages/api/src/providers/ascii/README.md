@@ -1,6 +1,6 @@
-# Ascii Box Provider
+# boat Provider (provider key `ascii`)
 
-Runs GitTerm workspaces on persistent Ascii Box Linux VMs.
+Runs GitTerm workspaces on persistent [boat](https://boat.dev) Linux VMs (by ASCII, formerly Ascii Box).
 
 ## Config
 

@@ -6,7 +6,6 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Settings2 } from "lucide-react";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -67,16 +66,7 @@ export default function AdminIntegrationsPage() {
     <DashboardHeader
       heading="Integrations"
       text="Control which connections users can set up across this deployment."
-    >
-      <Button asChild variant="outline">
-        <Link
-          href={"/admin" as Route}
-          className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-        >
-          Back to Admin
-        </Link>
-      </Button>
-    </DashboardHeader>
+    ></DashboardHeader>
   );
 
   if (sessionPending || !isAdmin || isPending) {

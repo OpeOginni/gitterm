@@ -34,7 +34,7 @@ function FormCard({
     <div
       data-slot="form-card"
       className={cn(
-        "relative overflow-hidden rounded-xl border bg-settings",
+        "relative overflow-hidden rounded-2xl border bg-card",
         tone === "default" && "border-line",
         tone === "success" && "border-primary/35",
         className,
@@ -143,10 +143,7 @@ function SettingsSection({
   return (
     <section
       data-slot="settings-section"
-      className={cn(
-        "relative overflow-hidden rounded-xl border border-line bg-settings",
-        className,
-      )}
+      className={cn("relative overflow-hidden rounded-2xl border border-line bg-card", className)}
       {...props}
     >
       <header className="space-y-2 border-b border-line px-5 py-4">
@@ -210,27 +207,26 @@ function SettingsEmptyState({
   description?: React.ReactNode;
   action?: React.ReactNode;
 }) {
+  // A quiet row, like the empty API tokens card: icon tile, what is missing, and the next step.
   return (
     <div
       data-slot="settings-empty-state"
       className={cn(
-        "flex flex-col items-center gap-3 rounded-xl border border-dashed border-line bg-fill px-6 py-10 text-center",
+        "flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3.5",
         className,
       )}
       {...props}
     >
       {Icon && (
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fill">
-          <Icon className="h-5 w-5 text-fg-4" />
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
+          <Icon className="size-4 text-fg-4" />
         </span>
       )}
-      <div className="space-y-1">
-        <p className="text-sm text-fg-2">{title}</p>
-        {description && (
-          <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-fg-4">{description}</p>
-        )}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-fg">{title}</p>
+        {description && <p className="mt-0.5 text-xs leading-relaxed text-fg-4">{description}</p>}
       </div>
-      {action}
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }

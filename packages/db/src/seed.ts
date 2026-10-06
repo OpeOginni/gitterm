@@ -27,6 +27,8 @@ const hasSameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === J
 
 const seedCloudProviders: Array<{
   name: string;
+  /** A former name; an existing row with it is renamed instead of duplicated. */
+  renamedFrom?: string;
   providerKey: string;
   isEnabled: boolean;
   isSandbox?: boolean;
@@ -152,7 +154,8 @@ const seedCloudProviders: Array<{
     terminationSettlement: "immediate" as ProviderSettlement,
   },
   {
-    name: "Ascii Box",
+    name: "boat",
+    renamedFrom: "Ascii Box",
     providerKey: "ascii",
     isEnabled: false,
     isSandbox: true,
@@ -380,10 +383,10 @@ const seedMachineProfiles: Array<{
     isDefault: true,
   },
   {
-    providerName: "Ascii Box",
+    providerName: "boat",
     key: "standard",
     name: "Standard",
-    description: "Default Ascii Box.",
+    description: "Default boat sandbox.",
     providerOptions: { size: "default" },
     isDefault: true,
   },
@@ -470,9 +473,15 @@ export async function seedDatabase(): Promise<void> {
   const providerMap = new Map<string, string>(); // name -> id
 
   for (const provider of seedCloudProviders) {
-    const existing = await db.query.cloudProvider.findFirst({
-      where: eq(cloudProvider.name, provider.name),
-    });
+    const existing =
+      (await db.query.cloudProvider.findFirst({
+        where: eq(cloudProvider.name, provider.name),
+      })) ??
+      (provider.renamedFrom
+        ? await db.query.cloudProvider.findFirst({
+            where: eq(cloudProvider.name, provider.renamedFrom),
+          })
+        : undefined);
 
     if (existing) {
       const updates: Partial<typeof cloudProvider.$inferInsert> = {};
@@ -488,6 +497,10 @@ export async function seedDatabase(): Promise<void> {
       const targetProviderTerminationSettlement = provider.terminationSettlement ?? "webhook";
       const targetsshAccessSupport = provider.sshAccessSupport ?? {};
       const targetMachineSelectionPolicy = provider.machineSelectionPolicy ?? { mode: "standard" };
+
+      if (existing.name !== provider.name) {
+        updates.name = provider.name;
+      }
 
       if (existing.providerKey !== provider.providerKey) {
         updates.providerKey = provider.providerKey;

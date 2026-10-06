@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Key, Plus, UserRound } from "lucide-react";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
-import { SettingsEmptyState } from "@/components/ui/form-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -52,15 +51,15 @@ export function ModelStepBody({
   const active = credentials.filter((candidate) => candidate.isActive);
   const hasOauth = providers.some((provider) => provider.authType === "oauth");
   const addButtons = (
-    <div className="flex flex-wrap justify-center gap-2">
-      <Button size="sm" variant="outline" className="gap-2" onClick={() => setApiKeyOpen(true)}>
+    <div className="flex justify-center gap-2">
+      <Button className="h-9 gap-2" onClick={() => setApiKeyOpen(true)}>
         <Key className="size-3.5" />
         Add API key
       </Button>
       {hasOauth ? (
-        <Button size="sm" variant="outline" className="gap-2" onClick={() => setConnectOpen(true)}>
+        <Button variant="outline" className="h-9 gap-2" onClick={() => setConnectOpen(true)}>
           <UserRound className="size-3.5" />
-          Connect account
+          Add a subscription
         </Button>
       ) : null}
     </div>
@@ -71,12 +70,12 @@ export function ModelStepBody({
       {isLoading ? (
         <Skeleton className="h-16 w-full bg-fill" />
       ) : active.length === 0 ? (
-        <SettingsEmptyState
-          icon={Key}
-          title="No model credentials yet"
-          description="The bot's agent runs on your own key or subscription."
-          action={addButtons}
-        />
+        <div className="flex flex-col items-center gap-4 py-4 text-center">
+          <p className="text-sm text-fg-2">
+            The agent runs on your own API key or a subscription you already pay for.
+          </p>
+          {addButtons}
+        </div>
       ) : (
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -122,13 +121,11 @@ export function ModelStepBody({
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className={modelProblem ? "text-xs text-destructive" : "text-xs text-fg-4"}>
-              {modelProblem ?? "OpenCode format: provider/model. Edit it to use any model."}
-            </p>
+            {modelProblem ? <p className="text-xs text-destructive">{modelProblem}</p> : null}
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 gap-1.5 text-xs text-fg-3"
+              className="ml-auto h-7 gap-1.5 text-xs text-fg-3"
               onClick={() => setApiKeyOpen(true)}
             >
               <Plus className="size-3.5" />

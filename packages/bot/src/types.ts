@@ -41,6 +41,11 @@ export type ChatMessage = {
   mentioned: boolean;
   /** The thread existed before this message, so it may hold earlier context. */
   inThread: boolean;
+  /**
+   * A one-to-one conversation with the bot. It gets its own sandbox, so the agent there can't
+   * see the sessions other people run in channels.
+   */
+  direct?: boolean;
 };
 
 /** A message read back from a thread to give a new or continued session its context. */

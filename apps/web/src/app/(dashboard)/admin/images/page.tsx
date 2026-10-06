@@ -27,14 +27,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Route } from "next";
 import { Badge } from "@/components/ui/badge";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { getIcon } from "@/components/dashboard/create-instance/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import Link from "next/link";
 
 const PROVIDER_LABELS: Record<string, string> = {
   aws: "AWS",
@@ -42,7 +40,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   daytona: "Daytona",
   cloudflare: "Cloudflare",
   vercel: "Vercel",
-  ascii: "Ascii",
+  ascii: "boat",
   exedev: "exe.dev",
   railway: "Railway",
 };
@@ -84,7 +82,7 @@ const PROVIDER_DEFINITIONS = [
   },
   {
     key: "ascii",
-    label: "Ascii",
+    label: "boat",
     description: "Box size and agent installation commands.",
     initial: { size: "default", setupCommands: [] },
   },
@@ -363,14 +361,6 @@ export default function ImagesPage() {
         text="Manage the runtime images for each workspace agent. When several images support a provider, the most provider-specific image runs there."
       >
         <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <Link
-              href={"/admin" as Route}
-              className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-            >
-              Back to Admin
-            </Link>
-          </Button>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button
