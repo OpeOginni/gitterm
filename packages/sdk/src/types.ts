@@ -154,6 +154,7 @@ export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";
 export type AgentKey = BuiltInAgentKey | (string & {});
 
 export type WorkspaceCreateInput = {
+  provisioningProfile?: "personal" | "bot";
   idempotencyKey?: string;
   name?: string;
   /**
@@ -271,6 +272,7 @@ export type GoogleConnectionDetails = {
 };
 
 export type McpConnectionDetails = {
+  revision?: number;
   integration: "mcp" | "executor";
   url: string;
   authType: "none" | "headers";
@@ -442,6 +444,8 @@ export type AgentRunReply =
   | { type: "question"; reject: true };
 
 export type AgentRun = {
+  /** A runtime snapshot was read successfully, even if it contained no final text. */
+  outputAvailable?: boolean;
   id: string;
   workspaceId: string;
   title: string;
@@ -484,6 +488,8 @@ export type AgentRunAttachment = {
 };
 
 export type AgentRunCreateInput = {
+  /** Absolute execution deadline enforced by the server, even if the client disconnects. */
+  deadlineAt?: string;
   workspace: WorkspaceRef;
   /**
    * Stable key used to return the same run when a request is retried.

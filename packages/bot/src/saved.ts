@@ -6,6 +6,7 @@ import {
 } from "@gitterm/sdk";
 import { hasRepository } from "./env.js";
 import type { BotLogger, BotOptions } from "./types.js";
+import { parseRepo, repoKey } from "./workspaces.js";
 
 type Options = Omit<BotOptions, "adapter">;
 
@@ -14,7 +15,7 @@ const isClient = (value: Options["gitterm"]): value is GittermClient =>
 
 /**
  * Adds the settings saved for this bot in the GitTerm dashboard (Bots), found by its API token.
- * Anything already set in `options` (code, environment, or flags) wins. Without saved settings,
+ * Routing can be overridden locally; saved authorization is an upper bound. Without saved settings,
  * for example a token that isn't a bot's, the options come back unchanged.
  */
 export async function withSavedConfig(
@@ -26,10 +27,8 @@ export async function withSavedConfig(
     ? options.gitterm
     : createGittermClient(options.gitterm);
   const base: Options = { ...options, gitterm };
-  const saved = await gitterm.bots.self().catch((error: unknown) => {
-    log.warn("Could not load the bot's saved settings from GitTerm", error);
-    return null;
-  });
+  // A failed request is not evidence of an ordinary account token. Never discard saved policy.
+  const saved = await gitterm.bots.self();
   if (!saved) return base;
   if (saved.platform !== platform) {
     throw new Error(
@@ -38,6 +37,28 @@ export async function withSavedConfig(
   }
 
   const merged: Options = { ...base };
+  const localRepos = [
+    options.repo,
+    ...(options.repos ?? []),
+    ...Object.values(options.channels ?? {}),
+  ].filter((repo) => repo !== undefined);
+  if (localRepos.some((repo) => repoKey(parseRepo(repo)) !== repoKey(parseRepo(saved.repo)))) {
+    throw new Error(
+      "Local repository routing exceeds the saved bot policy. Change its repository in GitTerm first.",
+    );
+  }
+  const localModel = typeof options.model === "string" ? options.model : options.model?.id;
+  if (localModel && localModel !== saved.model)
+    throw new Error("Local model exceeds the saved bot policy. Change its model in GitTerm first.");
+  if (options.connections?.some((reference) => !saved.connections.includes(reference))) {
+    throw new Error("Local connections exceed the saved bot policy. Select them in GitTerm first.");
+  }
+  merged.botId = saved.id;
+  if (saved.channels.length) {
+    merged.allowedChannels = options.allowedChannels
+      ? options.allowedChannels.filter((id) => saved.channels.includes(id))
+      : saved.channels;
+  }
   if (!hasRepository(options)) {
     // Picked channels answer only there; otherwise every channel the bot is in.
     if (saved.channels.length) {
@@ -57,8 +78,12 @@ export async function withSavedConfig(
       provider: { type: saved.provider } as WorkspaceProviderSelection,
     };
   }
-  if (saved.allowedUsers.length) merged.allowedUsers ??= saved.allowedUsers;
-  merged.allowGuests ??= saved.allowGuests;
+  if (saved.allowedUsers.length) {
+    merged.allowedUsers = options.allowedUsers
+      ? options.allowedUsers.filter((id) => saved.allowedUsers.includes(id))
+      : saved.allowedUsers;
+  }
+  merged.allowGuests = saved.allowGuests && (options.allowGuests ?? true);
   if (saved.instructions) merged.instructions ??= saved.instructions;
   if (saved.setup) merged.setup ??= [saved.setup];
   if (saved.githubAccess === "token" && !merged.workspace?.repositoryCredentials) {
@@ -67,5 +92,12 @@ export async function withSavedConfig(
     );
   }
   log.info(`Using the settings saved for "${saved.name}" in GitTerm.`);
+  log.info("Effective bot authorization", {
+    botId: saved.id,
+    source: "saved policy, intersected with local restrictions",
+    channels: merged.allowedChannels ?? "all invited channels",
+    users: merged.allowedUsers ?? "channel members",
+    allowGuests: merged.allowGuests,
+  });
   return merged;
 }

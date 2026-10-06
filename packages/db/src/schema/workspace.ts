@@ -73,6 +73,8 @@ export const workspace = pgTable(
   "workspace",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /** Server-assigned identity, not caller-editable metadata. */
+    botId: uuid("bot_id"),
     externalInstanceId: text("external_instance_id").notNull(),
     externalRunningDeploymentId: text("external_running_deployment_id"),
     gitIntegrationId: uuid("git_integration_id").references(() => gitIntegration.id, {

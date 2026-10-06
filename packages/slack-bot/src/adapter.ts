@@ -7,6 +7,7 @@ import type {
   ChatUser,
   HistoryMessage,
 } from "@gitterm/bot";
+import { downloadImage } from "@gitterm/bot";
 import {
   App,
   LogLevel,
@@ -85,7 +86,8 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
     });
   // Its own client, so a supplied app that authorizes per workspace (no default token) works too.
   const client = owned ? app.client : new webApi.WebClient(botToken);
-  const users = new Map<string, ChatUser>();
+  /** Profiles by id, re-read after a minute so guest and membership changes apply. */
+  const users = new Map<string, { user: ChatUser; at: number }>();
   /** Ticked checkboxes of open multi-select questions, submitted with the Submit button. */
   const ticked = new Map<string, number[]>();
   /** Cleared once Slack refuses the native status indicator; status messages are used instead. */
@@ -98,24 +100,27 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
   // Guests (single- and multi-channel) and people from other organisations in shared
   // channels are flagged, so the engine can keep them away unless the bot allows guests.
   const user = async (id: string | undefined): Promise<ChatUser> => {
-    if (!id) return { id: "unknown", name: "someone" };
-    let known = users.get(id);
-    if (!known) {
-      known = await client.users
-        .info({ user: id })
-        .then(({ user: profile }) => ({
-          id,
-          name: profile?.profile?.display_name || profile?.real_name || profile?.name || id,
-          guest: Boolean(
-            profile?.is_restricted ||
-            profile?.is_ultra_restricted ||
-            (profile?.team_id && teamId && profile.team_id !== teamId),
-          ),
-        }))
-        // Unknown means unverified: treat as a guest rather than let them in.
-        .catch(() => ({ id, name: id, guest: true }));
-      users.set(id, known);
-    }
+    if (!id) return { id: "unknown", name: "someone", guest: true };
+    const cached = users.get(id);
+    if (cached && Date.now() - cached.at < 60_000) return cached.user;
+    const known: ChatUser = await client.users
+      .info({ user: id })
+      .then(({ user: profile }) => ({
+        id,
+        name: profile?.profile?.display_name || profile?.real_name || profile?.name || id,
+        guest: Boolean(
+          !profile ||
+          profile.deleted ||
+          profile?.is_restricted ||
+          profile?.is_ultra_restricted ||
+          (profile?.team_id && teamId && profile.team_id !== teamId),
+        ),
+      }))
+      // Unknown means unverified: treat as a guest rather than let them in.
+      .catch(() => ({ id, name: id, guest: true }));
+    users.delete(id);
+    users.set(id, { user: known, at: Date.now() });
+    if (users.size > 2_000) users.delete(users.keys().next().value!);
     return known;
   };
 
@@ -123,18 +128,18 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
     id: entry.id,
     name: entry.name ?? entry.id,
     mime: entry.mimetype ?? "application/octet-stream",
-    size: entry.size ?? 0,
-    async download() {
-      const response = await fetch(entry.url_private_download ?? "", {
+    size: entry.size ?? -1,
+    async download(signal) {
+      return downloadImage(entry.url_private_download ?? "", {
+        hosts: ["files.slack.com", "files-pri.slack.com"],
+        signal,
         headers: { Authorization: `Bearer ${botToken}` },
-      });
-      // Without files:read Slack answers with its HTML login page instead of an error.
-      if (!response.ok || response.headers.get("content-type")?.includes("text/html")) {
+      }).catch((error: unknown) => {
+        // Without files:read Slack answers with its HTML login page instead of an error.
         throw new Error(
-          `Could not download “${entry.name ?? entry.id}” from Slack (HTTP ${response.status}); the app needs the files:read scope`,
+          `Could not download “${entry.name ?? entry.id}” from Slack; the app needs the files:read scope (${error instanceof Error ? error.message : error})`,
         );
-      }
-      return Buffer.from(await response.arrayBuffer()).toString("base64");
+      });
     },
   });
 
@@ -228,9 +233,11 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         if (reply) await respond(reply);
       });
 
-      app.action<BlockCheckboxesAction>(ACTION.toggle, async ({ ack, action }) => {
+      app.action<BlockCheckboxesAction>(ACTION.toggle, async ({ ack, action, body }) => {
         await ack();
         const promptId = promptIdOf(action.block_id);
+        if (promptId && events.canAnswer && !events.canAnswer(promptId, await user(body.user.id)))
+          return;
         if (promptId)
           ticked.set(
             promptId,
@@ -329,12 +336,21 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
     },
 
     async history(thread, after) {
-      const replies = await client.conversations.replies({
-        channel: thread.channel,
-        ts: thread.thread,
-        limit: HISTORY_LIMIT,
-      });
-      const messages = (replies.messages ?? []) as SlackMessage[];
+      const messages: SlackMessage[] = [];
+      let cursor: string | undefined;
+      // Up to 1,000 messages; a continued session only reads what came after its last one.
+      for (let page = 0; page < 5; page++) {
+        const replies = await client.conversations.replies({
+          channel: thread.channel,
+          ts: thread.thread,
+          limit: HISTORY_LIMIT,
+          ...(after ? { oldest: after, inclusive: false } : {}),
+          ...(cursor ? { cursor } : {}),
+        });
+        messages.push(...((replies.messages ?? []) as SlackMessage[]));
+        cursor = replies.response_metadata?.next_cursor?.trim();
+        if (!cursor) break;
+      }
       const result: HistoryMessage[] = [];
       for (const message of messages) {
         if (!message.ts || (after && Number(message.ts) <= Number(after))) continue;
@@ -368,13 +384,15 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
       await client.chat.delete({ channel: thread.channel, ts: messageId });
     },
 
-    async reply(thread, markdown, footer) {
-      for (const message of answerMessages(markdown, footer)) {
+    async reply(thread, markdown, footer, delivery) {
+      const messages = answerMessages(markdown, footer);
+      for (let index = delivery?.sent ?? 0; index < messages.length; index++) {
         await client.chat.postMessage({
           channel: thread.channel,
           thread_ts: thread.thread,
-          ...message,
+          ...messages[index]!,
         });
+        await delivery?.recordSent(index + 1);
       }
     },
 

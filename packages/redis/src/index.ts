@@ -1,6 +1,7 @@
 export { getRedisClient, closeRedisClient, type RedisClient } from "./client";
 export { RedisKeys } from "./keys";
 export { RateLimitRepository } from "./repositories/rate-limit";
+export { CoordinationRepository } from "./repositories/coordination";
 export { DeviceCodeRepository } from "./repositories/device-code";
 export { AnonTryRepository } from "./repositories/anon-try";
 export type { AnonRateLimitConsumeResult } from "./repositories/anon-try";

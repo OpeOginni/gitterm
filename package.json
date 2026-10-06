@@ -58,6 +58,7 @@
     "build:cli": "turbo -F @gitterm/cli build",
     "build:opencode-plugin": "turbo -F @gitterm/opencode-plugin build",
     "build:bots": "turbo -F @gitterm/bot -F @gitterm/slack-bot -F @gitterm/discord-bot build",
+    "test:bot-packages": "bun run build:sdk && bun run build:bots && bun scripts/smoke-bot-packages.ts",
     "version:sdk": "npm version --no-git-tag-version --prefix packages/sdk",
     "version:cli": "npm version --no-git-tag-version --prefix packages/cli",
     "version:opencode-plugin": "npm version --no-git-tag-version --prefix packages/opencode-plugin",

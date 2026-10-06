@@ -6,6 +6,8 @@ import { verifyApiToken } from "./service/auth/api-token";
 import { and, db, eq } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
 import { workspace } from "@gitterm/db/schema/workspace";
+import { bot } from "@gitterm/db/schema/bot";
+import { checkBotRequest, type BotIdentity } from "./service/auth/bot-policy";
 import type { ApiTokenScope } from "@gitterm/schema";
 import type { WorkspaceTokenPurpose } from "./service/auth/workspace-jwt";
 import { WorkspaceLifecycleTRPCError } from "./utils/workspace-lifecycle-error";
@@ -62,7 +64,7 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 
 /** Browser sessions are unrestricted; API tokens require the declared capability. */
 export const accountProcedure = (requiredScope: ApiTokenScope) =>
-  t.procedure.use(async ({ ctx, next }) => {
+  t.procedure.use(async ({ ctx, next, path, getRawInput }) => {
     if (ctx.session) {
       return next({
         ctx: {
@@ -70,6 +72,7 @@ export const accountProcedure = (requiredScope: ApiTokenScope) =>
           session: ctx.session,
           authMethod: "session" as "session" | "apiToken",
           apiTokenId: undefined as string | undefined,
+          botIdentity: null as BotIdentity | null,
         },
       });
     }
@@ -86,6 +89,36 @@ export const accountProcedure = (requiredScope: ApiTokenScope) =>
       });
     }
 
+    let botIdentity: BotIdentity | null = null;
+    if (verified.botId) {
+      const [identity] = await db
+        .select()
+        .from(bot)
+        .where(
+          and(
+            eq(bot.id, verified.botId),
+            eq(bot.userId, verified.userId),
+            eq(bot.apiTokenId, verified.tokenId),
+          ),
+        )
+        .limit(1);
+      if (!identity)
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Bot identity has been revoked" });
+      botIdentity = identity;
+      const workspaceId = checkBotRequest(identity, path, await getRawInput());
+      if (workspaceId) {
+        const record = await db.query.workspace.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(workspace.id, workspaceId),
+            eq(workspace.userId, verified.userId),
+            eq(workspace.botId, identity.id),
+          ),
+        });
+        if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      }
+    }
+
     const [apiUser] = await db.select().from(user).where(eq(user.id, verified.userId)).limit(1);
     if (!apiUser) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
@@ -98,6 +131,7 @@ export const accountProcedure = (requiredScope: ApiTokenScope) =>
         authMethod: "apiToken" as "session" | "apiToken",
         /** The token that made the request; a bot's token identifies the bot. */
         apiTokenId: verified.tokenId as string | undefined,
+        botIdentity,
       },
     });
   });

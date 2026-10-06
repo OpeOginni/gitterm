@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "./workspace-env";
 import { railwayBootstrapEnvironment } from "./workspace-runtime-bundle";
 import type { WorkspaceProvisioningSpec } from "../providers/compute";
+import { resolveGitCommitIdentity } from "./git-commit-identity";
 
 const spec: WorkspaceProvisioningSpec = {
   agent: { files: [], env: {}, usesServerPassword: true },
@@ -108,4 +109,29 @@ test("Railway receives only a revocable bootstrap capability", () => {
   });
   expect(JSON.stringify(bootstrap)).not.toContain("postgres://secret");
   expect(JSON.stringify(bootstrap)).not.toContain("inline-pat");
+});
+
+test("commit attribution is provisioned before credentials, setup, and agent startup", () => {
+  const identity = resolveGitCommitIdentity({
+    name: "Octocat",
+    email: "123+octocat@users.noreply.github.com",
+  });
+  const provision = buildWorkspaceProvisioningSpec({
+    ...spec,
+    gitCommitIdentity: identity,
+    beforeAgentCommand: "git commit --allow-empty -m setup",
+  });
+  expect(provision.beforeAgentCommand).toStartWith(
+    "if command -v git >/dev/null 2>&1; then (\ngit config --global user.name 'Octocat'",
+  );
+  expect(provision.beforeAgentCommand).toContain("git config --local committer.name 'GitTerm'");
+  expect(provision.beforeAgentCommand).toEndWith("git commit --allow-empty -m setup");
+  const env = buildWorkspaceEnv(provision, {
+    ...runtime("railway"),
+    userEmail: identity.author.email,
+    userEnv: { USER_EMAIL: "spoof@example.com" },
+  });
+  expect(env.USER_EMAIL).toBe(identity.author.email);
+  const decoded = Buffer.from(env.WORKSPACE_BEFORE_AGENT_COMMAND_BASE64!, "base64").toString();
+  expect(decoded).toBe(provision.beforeAgentCommand!);
 });

@@ -80,6 +80,7 @@ import {
 } from "../../service/config/provider-config";
 import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooling";
 import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "../../service/workspace-env";
+import { getWorkspaceCommitIdentity } from "../../service/github/commit-identity";
 import { getAgentProvisioner, resolveWorkspaceProviderCredentials } from "../../service/agents";
 import type { AgentConfigByKind } from "../../service/agents/types";
 import { buildAwsRuntimeInstructions } from "../../service/agents/opencode";
@@ -271,6 +272,8 @@ const workspaceCreateBaseSchema = z.strictObject({
   idempotencyKey: z.string().trim().min(1).max(255).optional(),
   /** Caller-owned tags, returned on the workspace and filterable in listWorkspaces. */
   metadata: workspaceMetadataSchema.optional(),
+  /** Bot profile never inherits personal environment or agent configuration. */
+  provisioningProfile: z.enum(["personal", "bot"]).optional(),
   /**
    * Public image to run instead of the catalog image: an OCI reference for
    * registry-backed providers, or a public template id/alias for E2B.
@@ -944,13 +947,16 @@ export const workspaceRouter = router({
                     eq(workspace.status, "paused"),
                   ),
                 );
+        const scopedStatusCondition = ctx.botIdentity
+          ? and(statusOnlyCondition, eq(workspace.botId, ctx.botIdentity.id))
+          : statusOnlyCondition;
         const statusCondition =
           metadata && Object.keys(metadata).length > 0
             ? and(
-                statusOnlyCondition,
+                scopedStatusCondition,
                 sql`${workspace.metadata} @> ${JSON.stringify(metadata)}::jsonb`,
               )
-            : statusOnlyCondition;
+            : scopedStatusCondition;
 
         // Get total count using efficient COUNT query
         const [countResult] = await db
@@ -1631,6 +1637,11 @@ export const workspaceRouter = router({
         });
       }
       const resolvedCheckoutRef = input.checkoutRef?.trim() || null;
+      // Keys are unique per user; a bot's keys get their own namespace.
+      const idempotencyKey =
+        input.idempotencyKey && ctx.botIdentity
+          ? `bot:${ctx.botIdentity.id}:${input.idempotencyKey}`
+          : input.idempotencyKey;
 
       const [fetchedUser] = await db.select().from(user).where(eq(user.id, userId));
 
@@ -1641,11 +1652,12 @@ export const workspaceRouter = router({
         });
       }
 
-      if (input.idempotencyKey) {
+      if (idempotencyKey) {
         const existing = await db.query.workspace.findFirst({
           where: and(
             eq(workspace.userId, userId),
-            eq(workspace.idempotencyKey, input.idempotencyKey),
+            eq(workspace.idempotencyKey, idempotencyKey),
+            ctx.botIdentity ? eq(workspace.botId, ctx.botIdentity.id) : undefined,
           ),
         });
         if (existing) {
@@ -2057,7 +2069,7 @@ export const workspaceRouter = router({
 
         const applicableKinds = configKindsForAgentType(agentTypeRecord.name);
         const agentConfigs: AgentConfigByKind = {};
-        if (applicableKinds.length > 0) {
+        if (applicableKinds.length > 0 && !ctx.botIdentity && input.provisioningProfile !== "bot") {
           const rows = await db
             .select()
             .from(agentWorkspaceConfig)
@@ -2082,9 +2094,12 @@ export const workspaceRouter = router({
               eq(workspaceEnvironmentVariables.agentTypeId, input.agentTypeId),
             ),
           );
-        const savedWorkspaceEnvironment = userWorkspaceEnvironmentVariables
-          ? readWorkspaceEnvironmentRow(userWorkspaceEnvironmentVariables)
-          : undefined;
+        const savedWorkspaceEnvironment =
+          !ctx.botIdentity &&
+          input.provisioningProfile !== "bot" &&
+          userWorkspaceEnvironmentVariables
+            ? readWorkspaceEnvironmentRow(userWorkspaceEnvironmentVariables)
+            : undefined;
         if (savedWorkspaceEnvironment) {
           workspaceCreateLogger.addSecrets(Object.values(savedWorkspaceEnvironment));
         }
@@ -2110,10 +2125,8 @@ export const workspaceRouter = router({
           });
         }
 
-        // Get GitHub username from user.name (set during OAuth)
         const [userRecord] = await db.select().from(user).where(eq(user.id, userId));
-
-        const githubUsername = userRecord?.name ?? undefined;
+        if (!userRecord) throw new TRPCError({ code: "UNAUTHORIZED", message: "User not found" });
 
         // Policy, ownership and PAT availability were validated by resolveWorkspaceConnections.
         if (attached.github && (input.repositoryCredentials || !input.repo)) {
@@ -2636,7 +2649,9 @@ export const workspaceRouter = router({
           encryptedServerPassword = undefined;
         }
 
+        const commitIdentity = await getWorkspaceCommitIdentity(userRecord);
         const provisioningSpec = buildWorkspaceProvisioningSpec({
+          gitCommitIdentity: commitIdentity.identity,
           agent: agentProvisioning,
           repo: input.repo
             ? {
@@ -2647,7 +2662,7 @@ export const workspaceRouter = router({
                 name: repoInfo?.repo,
                 authExpiresAt: githubAppTokenExpiry,
                 ...resolveRepositoryProvisioningAuth(input.repositoryCredentials, {
-                  username: selectedPat ? "x-access-token" : githubUsername,
+                  username: "x-access-token",
                   token: githubAppToken,
                 }),
               }
@@ -2673,7 +2688,8 @@ export const workspaceRouter = router({
             }
           : input.environmentVariables;
         const DEFAULT_DOCKER_ENV_VARS = buildWorkspaceEnv(provisioningSpec, {
-          githubUsername: selectedPat ? "x-access-token" : githubUsername,
+          githubUsername: commitIdentity.githubLogin,
+          userEmail: commitIdentity.identity.author.email,
           githubAppToken,
           githubAppTokenExpiry,
           googleApplicationCredentials: selectedGoogleCloudIntegration
@@ -2761,6 +2777,7 @@ export const workspaceRouter = router({
         workspaceReservedBeforeProvision = true;
         await db.insert(workspace).values({
           id: workspaceId,
+          botId: ctx.botIdentity?.id ?? null,
           externalInstanceId: "",
           userId,
           // The runtime can request a token during provisioning, before the final
@@ -2782,13 +2799,14 @@ export const workspaceRouter = router({
           metadata:
             providerKey === "aws"
               ? {
+                  ...input.metadata,
                   awsProvisioningLeaseExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
                 }
-              : {},
+              : (input.metadata ?? {}),
           startedAt: new Date(),
           updatedAt: new Date(),
           persistent: effectivePersistent,
-          idempotencyKey: input.idempotencyKey ?? null,
+          idempotencyKey: idempotencyKey ?? null,
         });
         if (attached.mcp.length) {
           await db.insert(workspaceMcpConnection).values(
@@ -2910,11 +2928,12 @@ export const workspaceRouter = router({
           hostingType: isLocal ? "local" : "cloud",
           name: input.name || subdomain,
           metadata: input.metadata ?? {},
+          botId: ctx.botIdentity?.id ?? null,
           customImage,
           autoTerminateAt: input.autoTerminateAfterMs
             ? new Date(Date.now() + input.autoTerminateAfterMs)
             : null,
-          idempotencyKey: input.idempotencyKey ?? null,
+          idempotencyKey: idempotencyKey ?? null,
           startedAt: new Date(workspaceInfo.serviceCreatedAt),
           lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),
           updatedAt: new Date(workspaceInfo.serviceCreatedAt),

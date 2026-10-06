@@ -46,6 +46,7 @@ type RunCreateInput = {
   waitForSetup?: boolean;
   setupTimeoutMs?: number;
   startTimeoutMs?: number;
+  deadlineAt?: string;
   context?: { type: "isolated" } | { type: "continue"; runId: string };
 };
 
@@ -256,6 +257,21 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
   const existing = await findRunByIdempotencyKey(input.workspaceId, input.idempotencyKey);
   if (existing) return reuseExistingRun(existing, hash, workspaceRecord.status);
 
+  // Optional: the server cancels the run at this time even if the caller has gone away.
+  const deadlineAt = input.deadlineAt ? new Date(input.deadlineAt) : null;
+  const checkDeadline = () => {
+    if (
+      deadlineAt &&
+      (deadlineAt.getTime() <= Date.now() || deadlineAt.getTime() > Date.now() + 24 * 60 * 60_000)
+    ) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Run deadline must be in the next 24 hours",
+      });
+    }
+  };
+  checkDeadline();
+
   workspaceRecord = await waitForWorkspaceRunning(
     input.workspaceId,
     userId,
@@ -270,6 +286,7 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
     await waitForSetup(input.workspaceId, userId, input.setupTimeoutMs ?? 10 * 60_000);
   }
   await waitForRuntimeReady(target.url);
+  checkDeadline();
   const runtime = getRuntime(target);
 
   const id = randomUUID();
@@ -301,6 +318,7 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       nativeSessionId: parentRun?.nativeSessionId,
       nativeMessageId,
       title: "Agent run",
+      deadlineAt,
     })
     .onConflictDoNothing()
     .returning();
@@ -390,14 +408,20 @@ export async function getAgentRun(workspaceId: string, runId: string, userId: st
   const { run, workspaceStatus } = await getOwnedRun(workspaceId, runId, userId);
   const current = await reconcileRun(run, workspaceStatus);
   const result = publicRun(current);
-  if (workspaceStatus !== "running" || !current.nativeSessionId) return result;
+  if (workspaceStatus !== "running" || !current.nativeSessionId)
+    return { ...result, outputAvailable: false };
   const runtime = getRuntime(await getRuntimeTarget(workspaceId, userId));
   const live = await runtime
     .snapshot(current.nativeSessionId, current.nativeMessageId)
     .catch(() => null);
   return live
-    ? { ...result, finalText: live.finalText, pendingInputs: live.pendingInputs }
-    : result;
+    ? {
+        ...result,
+        finalText: live.finalText,
+        pendingInputs: live.pendingInputs,
+        outputAvailable: true,
+      }
+    : { ...result, outputAvailable: false };
 }
 
 export async function listAgentRuns(

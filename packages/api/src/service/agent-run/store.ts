@@ -51,6 +51,7 @@ export const trackableRunColumns = {
   nativeSessionId: agentRun.nativeSessionId,
   nativeMessageId: agentRun.nativeMessageId,
   submittedAt: agentRun.submittedAt,
+  deadlineAt: agentRun.deadlineAt,
   status: agentRun.status,
   pendingInputs: agentRun.pendingInputs,
 };

@@ -5,7 +5,13 @@ import { join } from "node:path";
 import type { AgentQuestion, ModelCredential } from "@gitterm/sdk";
 import { botOptionsFromEnv } from "./env.js";
 import { splitMessage, tablesToCode } from "./markdown.js";
-import { buildPrompt, interpretPermissionReply, interpretTypedAnswer } from "./prompt.js";
+import {
+  agentInstructions,
+  buildPrompt,
+  interpretPermissionReply,
+  interpretTypedAnswer,
+} from "./prompt.js";
+import { spaceOf } from "./workspaces.js";
 import type { ChatFile } from "./types.js";
 import { modelsFor, parseRepo, repoLabel } from "./workspaces.js";
 import type { GittermClient, SavedBot } from "@gitterm/sdk";
@@ -62,6 +68,44 @@ describe("answers", () => {
 });
 
 describe("buildPrompt", () => {
+  test("budgets aggregate encoded size and prioritizes requester screenshots", () => {
+    const prompt = buildPrompt({
+      platform: "Slack",
+      continued: false,
+      message: {
+        id: "request",
+        thread: { channel: "C", thread: "T" },
+        author: { id: "U", name: "User" },
+        text: "look",
+        files: [image("request", 5_000_000)],
+        mentioned: true,
+        inThread: true,
+      },
+      history: [
+        {
+          id: "earlier",
+          author: { id: "U", name: "User" },
+          fromBot: false,
+          text: "old",
+          files: Array.from({ length: 10 }, (_, i) => image(`old${i}`, 5_000_000)),
+        },
+      ],
+    });
+    expect(prompt.images[0]?.id).toBe("request");
+    expect(
+      prompt.images.reduce((size, file) => size + 4 * Math.ceil(file.size / 3), 0),
+    ).toBeLessThanOrEqual(20_000_000);
+    expect(prompt.images).toHaveLength(2);
+  });
+
+  test("channels, guilds and private conversations are distinct by default", () => {
+    const one = { tenant: "G1", thread: { channel: "C1" } };
+    expect(spaceOf(one)).not.toBe(spaceOf({ ...one, tenant: "G2" }));
+    expect(spaceOf(one)).not.toBe(spaceOf({ ...one, thread: { channel: "C2" } }));
+    expect(spaceOf(one)).not.toBe(spaceOf({ ...one, direct: true }));
+    expect(spaceOf(one, true)).toBe(spaceOf({ ...one, thread: { channel: "C2" } }, true));
+    expect(agentInstructions("Slack", undefined)).toContain("use a separate git worktree");
+  });
   test("quotes unseen thread messages and attaches each image once", () => {
     const prompt = buildPrompt({
       platform: "Slack",
@@ -250,13 +294,13 @@ describe("withSavedConfig", () => {
 
   test("fills in the saved settings and keeps what is set locally", async () => {
     const options = await withSavedConfig(
-      { gitterm: clientWith(saved), model: { id: "openai/gpt-6.1-sol" } },
+      { gitterm: clientWith(saved), model: { id: saved.model, apiKey: "inline" } },
       "slack",
       quietLog,
     );
     expect(options).toMatchObject({
       repo: "https://github.com/acme/app#main",
-      model: { id: "openai/gpt-6.1-sol" },
+      model: { id: saved.model, apiKey: "inline" },
       connections: ["Linear"],
       workspace: { provider: { type: "e2b" } },
       allowedUsers: ["U1"],
@@ -273,6 +317,53 @@ describe("withSavedConfig", () => {
     );
     expect(options.repo).toBeUndefined();
     expect(options.channels).toEqual({ C1: saved.repo, C2: saved.repo });
+  });
+
+  test("a repository override cannot discard saved authorization", async () => {
+    const options = await withSavedConfig(
+      {
+        gitterm: clientWith({ ...saved, channels: ["C1"] }),
+        repo: saved.repo,
+        allowedUsers: ["U1", "U2"],
+        allowGuests: true,
+      },
+      "slack",
+      quietLog,
+    );
+    expect(options.allowedChannels).toEqual(["C1"]);
+    expect(options.allowedUsers).toEqual(["U1"]);
+    expect(options.allowGuests).toBe(false);
+  });
+
+  test("configuration fetch failures abort startup rather than falling back to local policy", async () => {
+    const client = {
+      runs: {},
+      bots: {
+        self: async () => {
+          throw new Error("offline");
+        },
+      },
+    } as unknown as GittermClient;
+    await expect(
+      withSavedConfig({ gitterm: client, repo: saved.repo }, "slack", quietLog),
+    ).rejects.toThrow("offline");
+  });
+
+  test("local overrides may narrow, never broaden, saved capabilities", async () => {
+    await expect(
+      withSavedConfig(
+        { gitterm: clientWith(saved), repo: "https://github.com/acme/private" },
+        "slack",
+        quietLog,
+      ),
+    ).rejects.toThrow("saved bot policy");
+    const options = await withSavedConfig(
+      { gitterm: clientWith(saved), allowedUsers: ["U9"], connections: [] },
+      "slack",
+      quietLog,
+    );
+    expect(options.allowedUsers).toEqual([]);
+    expect(options.connections).toEqual([]);
   });
 
   test("leaves options alone without saved settings, and refuses another platform's bot", async () => {

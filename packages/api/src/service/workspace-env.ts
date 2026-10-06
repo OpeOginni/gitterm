@@ -24,6 +24,7 @@ import {
   type WorkspaceRepoProvisioning,
 } from "../providers/compute";
 import { resolveProjectDirectory } from "./workspace-runtime";
+import { buildGitCommitIdentityCommand, type GitCommitIdentity } from "./git-commit-identity";
 
 function toBase64(json: string): string {
   return Buffer.from(json).toString("base64");
@@ -54,6 +55,7 @@ export interface BuildWorkspaceProvisioningSpecParams {
   editorAccessEnabled: boolean;
   setupCommand?: string;
   beforeAgentCommand?: string;
+  gitCommitIdentity?: GitCommitIdentity;
 }
 
 /**
@@ -81,12 +83,21 @@ export function buildWorkspaceProvisioningSpec(
     editorAccessEnabled: params.editorAccessEnabled,
     setupCommand: params.setupCommand,
     beforeAgentCommand:
-      [github?.setup, params.beforeAgentCommand].filter(Boolean).join("\n") || undefined,
+      [
+        params.gitCommitIdentity
+          ? buildGitCommitIdentityCommand(params.gitCommitIdentity)
+          : undefined,
+        github?.setup,
+        params.beforeAgentCommand,
+      ]
+        .filter(Boolean)
+        .join("\n") || undefined,
   };
 }
 
 export interface BuildWorkspaceEnvRuntimeParams {
   githubUsername?: string;
+  userEmail?: string;
   githubAppToken?: string;
   githubAppTokenExpiry?: string;
   googleApplicationCredentials?: string;
@@ -125,6 +136,7 @@ export function buildWorkspaceEnv(
     REPO_CHECKOUT_REF: spec.repo?.checkoutRef,
     AGENT_FILES_BASE64: encodeAgentFiles(spec.agent.files),
     USER_GITHUB_USERNAME: runtime.githubUsername,
+    USER_EMAIL: runtime.userEmail,
     GITHUB_APP_TOKEN: runtime.githubAppToken,
     GITHUB_APP_TOKEN_EXPIRY: runtime.githubAppTokenExpiry,
     GOOGLE_APPLICATION_CREDENTIALS: runtime.googleApplicationCredentials,

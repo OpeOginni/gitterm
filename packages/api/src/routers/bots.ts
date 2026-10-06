@@ -1,11 +1,13 @@
 import z from "zod";
+import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { and, db, desc, eq } from "@gitterm/db";
 import { apiToken } from "@gitterm/db/schema/auth";
 import { bot } from "@gitterm/db/schema/bot";
 import { BOT_TOKEN_SCOPES, botSettingsSchema, type BotSettings } from "@gitterm/schema";
 import { accountProcedure, router, sessionProcedure } from "../index";
-import { createApiToken, revokeApiToken } from "../service/auth/api-token";
+import { createApiToken } from "../service/auth/api-token";
+import { coordinate } from "../service/coordination";
 
 type BotRow = typeof bot.$inferSelect;
 
@@ -37,14 +39,48 @@ async function ownBot(userId: string, id: string): Promise<BotRow> {
 }
 
 /** A new token for the bot; the plaintext is returned once and never stored. */
-const mintToken = (userId: string, name: string) =>
-  createApiToken({ userId, name: `${name} (bot)`, scopes: BOT_TOKEN_SCOPES, expiresInDays: 365 });
+const mintToken = (
+  userId: string,
+  name: string,
+  botId: string,
+  executor: Pick<typeof db, "insert">,
+) =>
+  createApiToken(
+    { userId, name: `${name} (bot)`, botId, scopes: BOT_TOKEN_SCOPES, expiresInDays: 365 },
+    executor,
+  );
 
 /**
  * Saved chat bots. The dashboard manages them with a session; a running bot reads its own
  * settings with its API token (`self`), so its .env holds only secrets.
  */
 export const botsRouter = router({
+  /** Distributed singleton; renewal is fenced by a random deployment id. */
+  acquireLease: accountProcedure("identity:read")
+    .input(z.object({ leaseId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.botIdentity)
+        throw new TRPCError({ code: "FORBIDDEN", message: "Saved bot token required" });
+      const claimed = await coordinate((repository) =>
+        repository.claimBot(ctx.botIdentity!.id, ctx.apiTokenId!, input.leaseId),
+      );
+      if (!claimed)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Another process owns this bot's runtime lease",
+        });
+      return { success: true as const };
+    }),
+  releaseLease: accountProcedure("identity:read")
+    .input(z.object({ leaseId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.botIdentity)
+        throw new TRPCError({ code: "FORBIDDEN", message: "Saved bot token required" });
+      await coordinate((repository) =>
+        repository.releaseBot(ctx.botIdentity!.id, ctx.apiTokenId!, input.leaseId),
+      );
+      return { success: true as const };
+    }),
   list: sessionProcedure.query(async ({ ctx }) => {
     const rows = await db
       .select({ bot, token: apiToken })
@@ -74,12 +110,15 @@ export const botsRouter = router({
   /** Saves the bot and mints its token, returned once. */
   create: sessionProcedure.input(botSettingsSchema).mutation(async ({ ctx, input }) => {
     const userId = ctx.session.user.id;
-    const { token, record } = await mintToken(userId, input.name);
-    const [row] = await db
-      .insert(bot)
-      .values({ ...input, userId, apiTokenId: record.id })
-      .returning();
-    return { bot: settingsOf(row!), token };
+    return db.transaction(async (tx) => {
+      const id = randomUUID();
+      const { token, record } = await mintToken(userId, input.name, id, tx);
+      const [row] = await tx
+        .insert(bot)
+        .values({ ...input, id, userId, apiTokenId: record.id })
+        .returning();
+      return { bot: settingsOf(row!), token };
+    });
   }),
 
   /** Takes effect when the bot next starts. */
@@ -87,13 +126,13 @@ export const botsRouter = router({
     .input(botSettingsSchema.extend({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...settings } = input;
-      await ownBot(ctx.session.user.id, id);
       const [row] = await db
         .update(bot)
         .set({ ...settings, updatedAt: new Date() })
-        .where(eq(bot.id, id))
+        .where(and(eq(bot.id, id), eq(bot.userId, ctx.session.user.id)))
         .returning();
-      return settingsOf(row!);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
+      return settingsOf(row);
     }),
 
   /** A new token for the bot; the old one stops working. */
@@ -101,23 +140,42 @@ export const botsRouter = router({
     .input(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const row = await ownBot(userId, input.id);
-      const { token, record } = await mintToken(userId, row.name);
-      await db
-        .update(bot)
-        .set({ apiTokenId: record.id, updatedAt: new Date() })
-        .where(eq(bot.id, row.id));
-      if (row.apiTokenId) await revokeApiToken({ userId, tokenId: row.apiTokenId });
-      return { token };
+      const result = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(bot)
+          .where(and(eq(bot.id, input.id), eq(bot.userId, userId)))
+          .for("update");
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
+        await tx.update(apiToken).set({ revokedAt: new Date() }).where(eq(apiToken.botId, row.id));
+        const { token, record } = await mintToken(userId, row.name, row.id, tx);
+        await tx
+          .update(bot)
+          .set({ apiTokenId: record.id, updatedAt: new Date() })
+          .where(eq(bot.id, row.id));
+        return { token, previousTokenId: row.apiTokenId };
+      });
+      if (result.previousTokenId)
+        await coordinate((repository) =>
+          repository.revokeBot(input.id, result.previousTokenId!),
+        ).catch(() => undefined);
+      return { token: result.token };
     }),
 
   /** Deletes the bot and revokes its token. Its sandboxes stay until terminated. */
   delete: sessionProcedure.input(z.object({ id: z.uuid() })).mutation(async ({ ctx, input }) => {
     const userId = ctx.session.user.id;
-    const row = await ownBot(userId, input.id);
-    await db.delete(bot).where(eq(bot.id, row.id));
-    if (row.apiTokenId) await revokeApiToken({ userId, tokenId: row.apiTokenId });
-    return { success: true };
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(bot)
+        .where(and(eq(bot.id, input.id), eq(bot.userId, userId)))
+        .for("update");
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
+      await tx.update(apiToken).set({ revokedAt: new Date() }).where(eq(apiToken.botId, row.id));
+      await tx.delete(bot).where(eq(bot.id, row.id));
+      return { success: true };
+    });
   }),
 
   /** The calling bot's settings, found by its API token; null for any other caller. */

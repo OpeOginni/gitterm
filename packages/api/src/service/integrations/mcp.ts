@@ -14,6 +14,7 @@ import { integrationPolicy } from "./catalog";
 import type { Connection, CreateConnectionResult } from "./connections";
 import type { McpWorkspaceConnection } from "./mcp-config";
 import { McpNetworkError, mcpFetchWithin, resolveMcpEndpoint } from "./mcp-network";
+import { coordinate } from "../coordination";
 
 type McpRow = typeof mcpConnection.$inferSelect;
 export const mcpAuthContext = (id: string) => `gitterm:mcp:${id}:auth`;
@@ -28,6 +29,7 @@ export function mcpPublicConnection(row: McpRow): Connection {
     connectedAt: row.connectedAt,
     details: {
       integration: row.integration,
+      revision: row.revision,
       url: row.url,
       authType: row.authType,
       codemode: row.codemode,
@@ -99,10 +101,17 @@ export async function resolveMcpWorkspaceConnection(
  */
 export async function testMcpConnection(userId: string, id: string) {
   const row = await requireMcpRow(userId, id);
+  const allowed = await coordinate((repository) => repository.allowMcpTest(userId, id));
+  if (!allowed)
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Too many connection tests. Try again in a minute.",
+    });
   const client = new Client({ name: "gitterm-connection-test", version: "1.0.0" });
   let transport: StreamableHTTPClientTransport | undefined;
   let status: "connected" | "needs_auth" | "error" = "connected";
-  let message = "MCP server connected. Workspace connectivity is checked by OpenCode at startup.";
+  let message =
+    "Metadata test succeeded from the GitTerm API host. This does not verify workspace connectivity, tool authorization, or elicitation.";
   let toolCount: number | null = null;
   let serverInfo: McpRow["serverInfo"] = null;
   try {
@@ -212,7 +221,12 @@ export async function createMcpConnection(
       ),
     });
   });
-  const result = await testMcpConnection(userId, id);
+  // The connection is saved either way; a refused or failed test leaves it to test later.
+  const result = await testMcpConnection(userId, id).catch(async (error: unknown) => ({
+    status: "saved" as const,
+    connection: mcpPublicConnection(await requireMcpRow(userId, id)),
+    message: `Saved. ${error instanceof Error ? error.message : "Test it again later."}`,
+  }));
   return {
     status: result.status === "connected" ? "connected" : "saved",
     connection: result.connection,

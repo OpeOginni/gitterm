@@ -11,6 +11,7 @@ export const user = pgTable("user", {
   image: text("image"),
   sshPublicKey: text("ssh_public_key"),
   defaultCloudProviderId: uuid("default_cloud_provider_id"),
+  showGitTermOnCommits: boolean("show_gitterm_on_commits").notNull().default(true),
   allowTrial: boolean("allow_trial").notNull().default(false),
   plan: userPlanEnum("plan").notNull().default("free"),
   role: userRoleEnum("role").notNull().default("user"),
@@ -47,6 +48,8 @@ export const apiToken = pgTable("api_token", {
   name: text("name").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
   tokenPrefix: text("token_prefix").notNull(),
+  /** Permanent delegated identity, retained even after its bot is deleted. */
+  botId: uuid("bot_id"),
   scopes: text("scopes").array().notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   expiresAt: timestamp("expires_at"),

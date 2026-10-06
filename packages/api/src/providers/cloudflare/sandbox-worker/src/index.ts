@@ -249,16 +249,13 @@ export class GittermSandbox extends Sandbox<Env> {
       return;
     }
 
-    // Commit as the authenticated GitHub user, not a generic bot identity.
-    const githubUsername =
-      payload.environmentVariables?.USER_GITHUB_USERNAME?.trim() || repo.authUsername?.trim();
-
-    // Configure git identity + credential helper without putting the token in git config.
+    // Credentials authorize clone/push only. Commit identity is configured by
+    // the shared before-agent provisioning phase, not the credential username.
     if (repo.authToken) {
       const helperPath = "/workspace/.git-credential-helper.sh";
       const tokenPath = "/run/gitterm/repository-token";
       const usernamePath = "/run/gitterm/repository-username";
-      const credentialUsername = repo.authUsername || githubUsername || "x-access-token";
+      const credentialUsername = repo.authUsername || "x-access-token";
       await this.mkdir("/run/gitterm", { recursive: true });
       await this.writeFile(tokenPath, repo.authToken);
       await this.writeFile(usernamePath, credentialUsername);
@@ -278,15 +275,6 @@ export class GittermSandbox extends Sandbox<Env> {
       await this.exec(`chmod +x ${helperPath}`);
       await this.exec(`chmod 600 ${tokenPath} ${usernamePath}`);
       await this.exec(`git config --global credential.helper '${helperPath}'`);
-    }
-
-    if (githubUsername) {
-      // GitHub's privacy-preserving noreply address keeps commits attributed to
-      // the user without exposing a real email.
-      await this.exec(`git config --global user.name '${githubUsername.replace(/'/g, "")}'`);
-      await this.exec(
-        `git config --global user.email '${githubUsername.replace(/'/g, "")}@users.noreply.github.com'`,
-      );
     }
 
     const checkout = await this.gitCheckout(normalizeRepoUrl(repo.url), {

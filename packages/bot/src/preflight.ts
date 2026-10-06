@@ -85,7 +85,9 @@ export async function checkSetup(input: {
       ),
     );
   } else {
-    warnings.push("No model chosen: sandboxes get every saved model credential. Set a model.");
+    warnings.push(
+      "No model chosen: bot sandboxes inherit no saved model credentials. Set an explicit model for authenticated providers.",
+    );
   }
 
   for (const repo of input.repos) {

@@ -26,7 +26,7 @@ export type ChatFile = {
   mime: string;
   size: number;
   /** Base64 content. Called only for files the bot forwards. */
-  download(): Promise<string>;
+  download(signal?: AbortSignal): Promise<string>;
 };
 
 export type ChatMessage = {
@@ -46,6 +46,8 @@ export type ChatMessage = {
    * see the sessions other people run in channels.
    */
   direct?: boolean;
+  /** Tenant boundary (e.g. a Discord guild). */
+  tenant?: string;
 };
 
 /** A message read back from a thread to give a new or continued session its context. */
@@ -85,6 +87,8 @@ export type ChatEvents = {
   answer(promptId: string, answer: ChatAnswer, by: ChatUser): "answered" | "stale" | "forbidden";
   /** The open prompt, e.g. to build a free-text dialog for it; undefined once settled. */
   prompt(promptId: string): ChatPrompt | undefined;
+  /** Authorization check for controls that modify pending answers without submitting them. */
+  canAnswer?(promptId: string, by: ChatUser): boolean;
   /** Whether the bot works in this channel, so adapters do not open threads elsewhere. */
   accepts(channel: string): boolean;
 };
@@ -111,7 +115,12 @@ export interface ChatAdapter {
   edit(thread: ChatThread, messageId: string, text: string): Promise<void>;
   remove(thread: ChatThread, messageId: string): Promise<void>;
   /** The agent's answer as Markdown; the adapter converts and splits it for the platform. */
-  reply(thread: ChatThread, markdown: string, footer: string): Promise<void>;
+  reply(
+    thread: ChatThread,
+    markdown: string,
+    footer: string,
+    delivery?: { sent: number; recordSent(sent: number): Promise<void> },
+  ): Promise<void>;
   /** Show a prompt with controls that call `ChatEvents.answer`; resolves with its message id. */
   ask(thread: ChatThread, prompt: ChatPrompt): Promise<string>;
   /** Replace the prompt's controls with its outcome once it is answered or abandoned. */
@@ -150,6 +159,22 @@ export type WorkspaceOverrides = Omit<
 export type BotLogger = Pick<Console, "info" | "warn" | "error">;
 
 export type BotOptions = {
+  /** Stable deployment identity. Saved configurations supply the immutable bot id. */
+  botId?: string;
+  /** Authorization boundary independent of repository routing. */
+  allowedChannels?: string[];
+  /** Sharing across channels is opt-in and only appropriate for equally trusted participants. */
+  shareChannels?: boolean;
+  /** Direct-conversation sandbox lifetime. Default 7 days; resets start a new lifetime. */
+  directRetentionMs?: number;
+  /** Separate permission approvers. Defaults to the requester only. */
+  approvers?: string[];
+  /** Persistent OpenCode approvals affect future work; disabled unless explicitly enabled. */
+  allowAlways?: boolean;
+  /** Maximum accepted requests, including queued work. Default 20. */
+  maxPendingRequests?: number;
+  /** Maximum accepted requests per platform user. Default 3. */
+  maxPendingPerUser?: number;
   adapter: ChatAdapter;
   /** A client, or options for one. Defaults to `GITTERM_API_TOKEN` / `GITTERM_SERVER_URL`. */
   gitterm?: GittermClient | GittermClientOptions;
@@ -179,7 +204,7 @@ export type BotOptions = {
   /**
    * The model for every run, as OpenCode `provider/model`. Only that provider's credential
    * reaches new sandboxes: its dashboard default, the saved credential labelled `credential`, or
-   * an inline `apiKey`. Without a model, sandboxes get every saved dashboard credential.
+   * an inline `apiKey`. Without a model, sandboxes inherit no saved credentials.
    */
   model?: string | ModelChoice;
   /** What the agent should know and how to behave, after the bot's own rules. New sandboxes. */

@@ -14,6 +14,7 @@ test.each(["completed", "failed", "cancelled"] as const)(
   async (status) => {
     const now = new Date();
     const row: AgentRun = {
+      deadlineAt: null,
       id: "run",
       workspaceId: "workspace",
       nativeSessionId: "session",

@@ -77,6 +77,37 @@ type OpenPrompt = {
   finish(result: { answer: ChatAnswer; by: ChatUser } | null): void;
 };
 
+/** A request from when it is accepted, so stop and the deadline cover every step of it. */
+type PendingJob = {
+  controller: AbortController;
+  requester: ChatUser;
+  /** The sandbox it works in (space and repository), so reset can tell what is busy. */
+  sandbox: string;
+  /** Set when the request starts: waiting behind the thread's earlier request doesn't count. */
+  deadline?: number;
+  timer?: ReturnType<typeof setTimeout>;
+  run?: RunRef;
+  stoppedBy?: ChatUser;
+};
+
+/** Stop waiting promptly, while the underlying operation may still need to clean up. */
+async function cancellable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  let onAbort!: () => void;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        onAbort = () => reject(signal.reason);
+        signal.addEventListener("abort", onAbort, { once: true });
+        if (signal.aborted) onAbort();
+      }),
+    ]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 const threadKeyOf = (thread: ChatThread) => `${thread.channel}:${thread.thread}`;
 const noop = () => undefined;
 const isClient = (value: BotOptions["gitterm"]): value is GittermClient =>
@@ -102,16 +133,19 @@ function describeFailure(
   return `Something went wrong: ${message.slice(0, ERROR_PREVIEW)}`;
 }
 
-async function attachmentsFor(files: ChatFile[]) {
-  return Promise.all(
-    files.map(
-      async (file): Promise<AgentRunAttachment> => ({
-        name: file.name,
-        mime: file.mime,
-        data: await file.download(),
-      }),
-    ),
-  );
+async function attachmentsFor(files: ChatFile[], signal: AbortSignal) {
+  const attachments: AgentRunAttachment[] = [];
+  let total = 0;
+  // Sequential downloads bound peak memory; check actual encoded size too, not just metadata.
+  for (const file of files) {
+    const data = await cancellable(file.download(signal), signal);
+    if (data.length > 4 * Math.ceil(5_000_000 / 3) || total + data.length > 20_000_000) {
+      throw new Error("Downloaded attachments exceed the image budget");
+    }
+    total += data.length;
+    attachments.push({ name: file.name, mime: file.mime, data });
+  }
+  return attachments;
 }
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -139,6 +173,15 @@ export function createBot(options: BotOptions): Bot {
     : createGittermClient(options.gitterm);
   const runTimeoutMs = options.runTimeoutMs ?? 60 * 60_000;
   const inputTimeoutMs = options.inputTimeoutMs ?? 30 * 60_000;
+  for (const [name, value, maximum] of [
+    ["runTimeoutMs", runTimeoutMs, 24 * 60 * 60_000],
+    ["inputTimeoutMs", inputTimeoutMs, 24 * 60 * 60_000],
+    ["maxPendingRequests", options.maxPendingRequests ?? 20, 1_000],
+    ["maxPendingPerUser", options.maxPendingPerUser ?? 3, 1_000],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value <= 0 || value > maximum)
+      throw new Error(`${name} must be a positive integer no greater than ${maximum}`);
+  }
   const defaultRepo = options.repo ? parseRepo(options.repo) : undefined;
   const extraRepos = (options.repos ?? []).map(parseRepo);
   const allowedUsers = options.allowedUsers ? new Set(options.allowedUsers) : undefined;
@@ -160,20 +203,37 @@ export function createBot(options: BotOptions): Bot {
   const lock = createLocks();
   const fresh = recentIds(RECENT_MESSAGES);
   /** Runs in progress by thread, with who asked to stop them. */
-  const active = new Map<string, { run: RunRef; stoppedBy?: ChatUser }>();
+  const active = new Map<string, PendingJob>();
+  const pending = new Map<string, Set<PendingJob>>();
   const prompts = new Map<string, OpenPrompt>();
   const threadPrompts = new Map<string, string>();
   let store: StateStore;
   let workspaces: WorkspaceManager;
   let scope = "";
   let ready = Promise.resolve();
+  let running = false;
+  let leaseTimer: ReturnType<typeof setInterval> | undefined;
+  let leaseId: string | undefined;
+  const tasks = new Set<Promise<unknown>>();
+  const trackTask = (task: Promise<unknown>) => {
+    tasks.add(task);
+    void task.finally(() => tasks.delete(task)).catch(noop);
+  };
   /** Aborted by `stop()`: run observers detach and leave their runs to the next `start()`. */
   let shutdown = new AbortController();
 
   const allowed = (user: ChatUser) =>
     (!user.guest || options.allowGuests === true) && (!allowedUsers || allowedUsers.has(user.id));
+  const canAnswer = (prompt: ChatPrompt, user: ChatUser) =>
+    prompt.kind === "permission"
+      ? (!user.guest || options.allowGuests === true) &&
+        (options.approvers
+          ? options.approvers.includes(user.id)
+          : allowed(user) && user.id === prompt.requester.id)
+      : allowed(user);
   const servesChannel = (channel: string) =>
-    channelRepos.has(channel) || Boolean(defaultRepo) || extraRepos.length > 0;
+    (!options.allowedChannels || options.allowedChannels.includes(channel)) &&
+    (channelRepos.has(channel) || Boolean(defaultRepo) || extraRepos.length > 0);
 
   /**
    * A thread's repository: the one its session already works on, else one the message names
@@ -195,6 +255,14 @@ export function createBot(options: BotOptions): Bot {
     return named ?? channelRepos.get(message.thread.channel) ?? defaultRepo;
   }
   const say = (thread: ChatThread, text: string) => adapter.post(thread, text).catch(noop);
+  /** Starts a request's clock; it then covers waking the sandbox, submitting, and the run. */
+  const startClock = (job: PendingJob, deadline = Date.now() + runTimeoutMs) => {
+    job.deadline = deadline;
+    job.timer = setTimeout(
+      () => job.controller.abort("deadline"),
+      Math.max(0, deadline - Date.now()),
+    );
+  };
 
   // ── Prompts (questions and permissions) ───────────────────────────────────────────────────
 
@@ -225,6 +293,17 @@ export function createBot(options: BotOptions): Bot {
       : signal.aborted
         ? String(signal.reason)
         : `No answer within ${minutes(inputTimeoutMs)} min, so the agent moved on.`;
+    if (result)
+      log.info("Agent input answered", {
+        botId: options.botId,
+        platform: adapter.platform,
+        requesterId: job.requester.id,
+        responderId: result.by.id,
+        runId: active.get(job.key)?.run?.id,
+        workspaceId: active.get(job.key)?.run?.workspaceId,
+        kind: prompt.kind,
+        ...(result.answer.kind === "permission" ? { response: result.answer.response } : {}),
+      });
     await adapter.settle(job.thread, messageId, prompt, outcome).catch(noop);
     return result?.answer ?? null;
   }
@@ -234,11 +313,19 @@ export function createBot(options: BotOptions): Bot {
     const promptId = threadPrompts.get(key);
     const open = promptId ? prompts.get(promptId) : undefined;
     if (!open) return false;
+    if (!canAnswer(open.prompt, message.author)) return false;
     if (!message.mentioned && message.author.id !== open.prompt.requester.id) return false;
     if (open.prompt.kind === "permission") {
       const response = interpretPermissionReply(message.text);
       if (!response) {
         void say(message.thread, "Reply *yes*, *always*, or *no*, or use the buttons above.");
+        return true;
+      }
+      if (response === "always" && !options.allowAlways) {
+        void say(
+          message.thread,
+          "Persistent approvals are disabled. Reply yes for this request only, or no.",
+        );
         return true;
       }
       open.finish({ answer: { kind: "permission", response }, by: message.author });
@@ -295,14 +382,19 @@ export function createBot(options: BotOptions): Bot {
     return { type: "question", answers };
   }
 
-  async function follow(job: Job, run: RunRef): Promise<void> {
+  async function follow(
+    job: Job,
+    run: RunRef,
+    entry: PendingJob,
+    completedRun?: AgentRun,
+  ): Promise<void> {
     const { status } = job;
     const stopping = shutdown.signal;
-    const entry: { run: RunRef; stoppedBy?: ChatUser } = { run };
+    const working = AbortSignal.any([shutdown.signal, entry.controller.signal]);
+    entry.run = run;
     active.set(job.key, entry);
-    const startedAt = Date.now();
-    const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), runTimeoutMs);
+    let executionCompleted = false;
+    let delivered = false;
     // Prompts are relayed concurrently with the event stream, so the run ending or a request
     // being answered elsewhere closes the prompt in the thread right away.
     const relays = new Map<string, AbortController>();
@@ -329,12 +421,10 @@ export function createBot(options: BotOptions): Bot {
 
     const seen = new Set<string>();
     try {
-      let completed: AgentRun | undefined;
+      let completed: AgentRun | undefined = completedRun;
       for (let attempt = 0; !completed; attempt++) {
         try {
-          for await (const event of gitterm.runs.events(run, {
-            signal: AbortSignal.any([timeout.signal, shutdown.signal]),
-          })) {
+          for await (const event of gitterm.runs.events(run, { signal: working })) {
             if (event.type === "input.required" && !seen.has(event.request.id)) {
               seen.add(event.request.id);
               void relay(event.request);
@@ -353,21 +443,62 @@ export function createBot(options: BotOptions): Bot {
         } catch (error) {
           // The event stream can drop (server deploy, network); the run itself carries on.
           const dropped = error instanceof GittermError && error.code === "NETWORK";
-          if (!dropped || attempt >= NETWORK_RETRIES || entry.stoppedBy) throw error;
-          await new Promise((resolve) => setTimeout(resolve, 2_000 * (attempt + 1)));
+          if (!dropped || attempt >= NETWORK_RETRIES || working.aborted) throw error;
+          await cancellable(
+            new Promise((resolve) => setTimeout(resolve, 2_000 * (attempt + 1))),
+            working,
+          );
         }
       }
-      await adapter.reply(
-        job.thread,
-        completed.finalText?.trim() || "Done. The agent finished without a written reply.",
-        `${repoLabel(job.repo)} · ${minutes(Date.now() - startedAt)} min · GitTerm`,
-      );
+      executionCompleted = true;
+      try {
+        if (completed.outputAvailable === false && completed.finalText === null)
+          throw new Error("The run's output is unavailable");
+        for (let attempt = 0; ; attempt++) {
+          const request = store.inFlight()[job.key];
+          try {
+            await adapter.reply(
+              job.thread,
+              completed.finalText?.trim() || "Done. The agent finished without a written reply.",
+              `${repoLabel(job.repo)} · GitTerm`,
+              {
+                sent: request?.deliveredParts ?? 0,
+                async recordSent(sent) {
+                  if (request)
+                    await store.setInFlight(job.key, { ...request, deliveredParts: sent });
+                },
+              },
+            );
+            break;
+          } catch (error) {
+            if (attempt >= 2) throw error;
+            await cancellable(
+              new Promise((resolve) => setTimeout(resolve, 1_000 * (attempt + 1))),
+              stopping,
+            );
+          }
+        }
+      } catch (error) {
+        // Stopping keeps the result for the next start; otherwise say so once and move on,
+        // rather than hold the thread until a restart.
+        if (stopping.aborted) throw error;
+        log.error("Could not post the agent's reply", { thread: job.key, run: run.id }, error);
+        await say(
+          job.thread,
+          `The agent finished, but I couldn't post its reply here. Open run ${run.id} in GitTerm to see it.`,
+        );
+      }
+      delivered = true;
       await status.remove();
       if (job.message) await adapter.mark?.(job.message, "done").catch(noop);
     } catch (error) {
       // Stopped: the run carries on in GitTerm and stays in the state file for the next start.
       if (stopping.aborted) return;
-      const timedOut = timeout.signal.aborted;
+      if (executionCompleted) {
+        log.error("Could not finish up after a run", { thread: job.key, run: run.id }, error);
+        return;
+      }
+      const timedOut = entry.controller.signal.reason === "deadline";
       // A failed or cancelled run is already over; anything else would leave it running unseen.
       if (!(error instanceof AgentRunError)) await gitterm.runs.cancel(run).catch(noop);
       if (!entry.stoppedBy && !timedOut) {
@@ -376,7 +507,7 @@ export function createBot(options: BotOptions): Bot {
       await status.finish(describeFailure(error, { stoppedBy: entry.stoppedBy, timedOut }));
       if (job.message) await adapter.mark?.(job.message, "failed").catch(noop);
     } finally {
-      clearTimeout(timer);
+      clearTimeout(entry.timer);
       for (const controller of relays.values()) {
         controller.abort(
           stopping.aborted
@@ -386,27 +517,32 @@ export function createBot(options: BotOptions): Bot {
       }
       status.stop();
       active.delete(job.key);
-      if (!stopping.aborted) await store.setInFlight(job.key, undefined);
+      if (!stopping.aborted && (!executionCompleted || delivered))
+        await store.setInFlight(job.key, undefined);
     }
   }
 
   // ── Requests ─────────────────────────────────────────────────────────────────────────────
 
-  async function startRun(job: Job, message: ChatMessage) {
+  async function startRun(job: Job, message: ChatMessage, pendingJob: PendingJob) {
+    const signal = AbortSignal.any([pendingJob.controller.signal, shutdown.signal]);
+    signal.throwIfAborted();
     const report = (status: StatusText) => job.status.set(status);
-    const space = spaceOf(message);
-    const workspace = await lock(`repo:${space}:${repoKey(job.repo)}`, () =>
-      workspaces.ensure(job.repo, report, space),
+    const space = spaceOf(message, options.shareChannels);
+    const workspace = await cancellable(
+      lock(`repo:${space}:${repoKey(job.repo)}`, () => workspaces.ensure(job.repo, report, space)),
+      signal,
     );
     report(WORKING);
     const stored = store.session(job.key);
     // A session from a sandbox that has since been reset cannot be continued.
     const session = stored?.workspaceId === workspace.id ? stored : undefined;
     const history = message.inThread
-      ? (await adapter.history(job.thread, session?.lastMessageId)).filter(
+      ? (await cancellable(adapter.history(job.thread, session?.lastMessageId), signal)).filter(
           (entry) =>
             entry.id !== message.id &&
             entry.id !== job.status.messageId &&
+            (entry.fromBot || allowed(entry.author)) &&
             (!session || !entry.fromBot),
         )
       : [];
@@ -416,9 +552,11 @@ export function createBot(options: BotOptions): Bot {
       history,
       continued: Boolean(session),
     });
-    const attachments = await attachmentsFor(prompt.images);
+    const attachments = await attachmentsFor(prompt.images, signal);
+    signal.throwIfAborted();
     const input = {
       workspace: workspace.id,
+      deadlineAt: new Date(pendingJob.deadline!).toISOString(),
       idempotencyKey: `${adapter.platform}:${scope}:${job.key}:${message.id}`,
       prompt: prompt.text,
       ...(attachments.length ? { attachments } : {}),
@@ -433,14 +571,27 @@ export function createBot(options: BotOptions): Bot {
           }
         : {}),
     };
-    const run = await gitterm.runs.create(input).catch(async (error: unknown) => {
+    const submission = gitterm.runs.create(input).catch(async (error: unknown) => {
       // The sandbox can pause again between waking it and submitting; wake it once more.
       if (!(error instanceof WorkspaceLifecycleError) || error.code !== "WORKSPACE_NOT_RUNNING") {
         throw error;
       }
       await gitterm.workspaces.ensureRunning(workspace.id);
+      signal.throwIfAborted();
       return gitterm.runs.create(input);
     });
+    // If cancellation wins while submission is in flight, cancel its late-created run too.
+    void submission
+      .then(async (created) => {
+        if (signal.aborted) await gitterm.runs.cancel(created).catch(noop);
+      })
+      .catch(noop);
+    const run = await cancellable(submission, signal);
+    pendingJob.run = run;
+    if (signal.aborted) {
+      await gitterm.runs.cancel(run).catch(noop);
+      signal.throwIfAborted();
+    }
     await store.setSession(job.key, {
       repo: repoKey(job.repo),
       workspaceId: workspace.id,
@@ -450,8 +601,17 @@ export function createBot(options: BotOptions): Bot {
     return run;
   }
 
-  async function handleRequest(message: ChatMessage, repo: Repo) {
+  async function handleRequest(message: ChatMessage, repo: Repo, pendingJob: PendingJob) {
     const key = threadKeyOf(message.thread);
+    if (shutdown.signal.aborted) return;
+    // Stopped while waiting behind the thread's earlier request.
+    if (pendingJob.controller.signal.aborted) {
+      await say(message.thread, describeFailure(null, { stoppedBy: pendingJob.stoppedBy }));
+      await adapter.mark?.(message, "failed").catch(noop);
+      return;
+    }
+    startClock(pendingJob);
+    active.set(key, pendingJob);
     const status = await openStatusLine(adapter, message.thread);
     const job: Job = {
       key,
@@ -462,25 +622,51 @@ export function createBot(options: BotOptions): Bot {
       message,
     };
     const request: InFlightRequest = {
+      scope,
       thread: job.thread,
       ...(status.messageId ? { statusId: status.messageId } : {}),
       requester: job.requester,
       repo: repoKey(repo),
+      deadline: pendingJob.deadline!,
     };
     await store.setInFlight(key, request);
     let run: AgentRun;
     try {
-      run = await startRun(job, message);
+      run = await startRun(job, message, pendingJob);
     } catch (error) {
       log.error("Could not start an agent run", { thread: key }, error);
-      await status.finish(describeFailure(error));
+      if (pendingJob.run) await gitterm.runs.cancel(pendingJob.run).catch(noop);
+      await status.finish(
+        describeFailure(error, {
+          stoppedBy: pendingJob.stoppedBy,
+          timedOut: pendingJob.controller.signal.reason === "deadline",
+        }),
+      );
+      status.stop();
+      active.delete(key);
       await adapter.mark?.(message, "failed").catch(noop);
       await store.setInFlight(key, undefined);
       return;
     }
-    await store.setInFlight(key, { ...request, run: { workspaceId: run.workspaceId, id: run.id } });
-    log.info("Agent run started", { thread: key, run: run.id, repo: repoKey(repo) });
-    await follow(job, run);
+    try {
+      await store.setInFlight(key, {
+        ...request,
+        run: { workspaceId: run.workspaceId, id: run.id },
+      });
+    } catch (error) {
+      await gitterm.runs.cancel(run).catch(noop);
+      status.stop();
+      throw error;
+    }
+    log.info("Agent run started", {
+      botId: options.botId,
+      platform: adapter.platform,
+      requesterId: message.author.id,
+      workspaceId: run.workspaceId,
+      runId: run.id,
+      repo: repoKey(repo),
+    });
+    await follow(job, run, pendingJob);
   }
 
   const askForRepo = (thread: ChatThread) =>
@@ -492,10 +678,17 @@ export function createBot(options: BotOptions): Bot {
   async function command(name: string, message: ChatMessage, repo: Repo | undefined) {
     const key = threadKeyOf(message.thread);
     if (name === "stop") {
+      const jobs = pending.get(key);
       const current = active.get(key);
-      if (!current) return say(message.thread, "Nothing is running in this thread.");
-      current.stoppedBy = message.author;
-      await gitterm.runs.cancel(current.run);
+      if (!jobs?.size && !current) return say(message.thread, "Nothing is running in this thread.");
+      const stopping = new Set([...(jobs ?? []), ...(current ? [current] : [])]);
+      for (const job of stopping) {
+        job.stoppedBy = message.author;
+        job.controller.abort("stopped");
+      }
+      await Promise.all(
+        [...stopping].map((job) => (job.run ? gitterm.runs.cancel(job.run).catch(noop) : null)),
+      );
       return;
     }
     if (name === "help" || !repo) {
@@ -517,7 +710,11 @@ export function createBot(options: BotOptions): Bot {
       );
     }
     if (name === "reset") {
-      const space = spaceOf(message);
+      const space = spaceOf(message, options.shareChannels);
+      const sandbox = `${space}:${repoKey(repo)}`;
+      if ([...pending.values()].some((jobs) => [...jobs].some((job) => job.sandbox === sandbox))) {
+        return say(message.thread, "Stop or finish the work in this sandbox before resetting it.");
+      }
       const terminated = await lock(`repo:${space}:${repoKey(repo)}`, () =>
         workspaces.reset(repo, space),
       );
@@ -529,7 +726,7 @@ export function createBot(options: BotOptions): Bot {
       );
     }
     // status: what this thread can reach, so people can check before asking.
-    const workspace = await workspaces.find(repo, spaceOf(message));
+    const workspace = await workspaces.find(repo, spaceOf(message, options.shareChannels));
     const sandbox = workspace
       ? `${workspace.status}${workspace.status === "paused" ? ", wakes with the next message" : ""}`
       : "created with the next message";
@@ -549,9 +746,11 @@ export function createBot(options: BotOptions): Bot {
   }
 
   function onMessage(message: ChatMessage) {
+    if (shutdown.signal.aborted) return;
     const key = threadKeyOf(message.thread);
     if (!servesChannel(message.thread.channel) || !fresh(`${key}:${message.id}`)) return;
     if (!allowed(message.author)) {
+      if (answerTyped(key, message)) return;
       if (message.mentioned) {
         void say(message.thread, "Sorry, I only take requests from people my admin allowed.");
       }
@@ -581,15 +780,58 @@ export function createBot(options: BotOptions): Bot {
       return;
     }
     void adapter.mark?.(message, "seen").catch(noop);
+    const all = [...pending.values()].flatMap((jobs) => [...jobs]);
+    if (
+      all.length >= (options.maxPendingRequests ?? 20) ||
+      all.filter((job) => job.requester.id === message.author.id).length >=
+        (options.maxPendingPerUser ?? 3)
+    ) {
+      void say(
+        message.thread,
+        "The request queue is full. Please try again after existing work finishes.",
+      );
+      return;
+    }
+    const pendingJob: PendingJob = {
+      controller: new AbortController(),
+      requester: message.author,
+      sandbox: `${spaceOf(message, options.shareChannels)}:${repoKey(repo)}`,
+    };
+    if (!pending.has(key)) pending.set(key, new Set());
+    pending.get(key)!.add(pendingJob);
     // Threads run concurrently in the sandbox; messages within one thread wait their turn.
-    void lock(key, () => handleRequest(message, repo)).catch((error: unknown) =>
-      log.error("Request failed", { thread: key }, error),
+    trackTask(
+      lock(key, () => handleRequest(message, repo, pendingJob))
+        .catch((error: unknown) => log.error("Request failed", { thread: key }, error))
+        .finally(() => {
+          if (active.get(key) === pendingJob) active.delete(key);
+          clearTimeout(pendingJob.timer);
+          pending.get(key)?.delete(pendingJob);
+          if (!pending.get(key)?.size) pending.delete(key);
+        }),
     );
   }
 
   /** Requests a previous process left behind: reattach to their runs, or say they were lost. */
   async function recover() {
     for (const [key, request] of Object.entries(store.inFlight())) {
+      if (request.scope && request.scope !== scope) {
+        // Left by a different workspace or server; its thread can't be reached from here.
+        log.warn("Dropping a request from a different platform installation", {
+          runId: request.run?.id,
+        });
+        await store.setInFlight(key, undefined);
+        continue;
+      }
+      if (
+        !allowed(request.requester) ||
+        !servesChannel(request.thread.channel) ||
+        !knownRepos.some((repo) => repoKey(repo) === request.repo)
+      ) {
+        if (request.run) await gitterm.runs.cancel(request.run).catch(noop);
+        await store.setInFlight(key, undefined);
+        continue;
+      }
       const repo = parseRepo(request.repo);
       if (!request.run) {
         const lost = "I restarted before this started. Please mention me again.";
@@ -609,66 +851,176 @@ export function createBot(options: BotOptions): Bot {
         repo,
       };
       log.info("Reattaching to an agent run after a restart", { thread: key, run: request.run.id });
-      void lock(key, () => follow(job, request.run as RunRef)).catch((error: unknown) =>
-        log.error("Reattaching failed", { thread: key }, error),
+      trackTask(
+        lock(key, async () => {
+          const pendingJob: PendingJob = {
+            controller: new AbortController(),
+            requester: request.requester,
+            sandbox: "",
+          };
+          startClock(pendingJob, request.deadline);
+          let snapshot: AgentRun;
+          try {
+            // Output lives in the workspace. Wake it before reading terminal results.
+            await gitterm.workspaces.ensureRunning(request.run!.workspaceId, {
+              signal: shutdown.signal,
+            });
+            snapshot = await gitterm.runs.get(request.run!);
+          } catch (error) {
+            clearTimeout(pendingJob.timer);
+            if (shutdown.signal.aborted) return;
+            // E.g. the sandbox was terminated: say so and free the thread.
+            log.error("Reattaching failed", { thread: key }, error);
+            await job.status.finish(describeFailure(error));
+            job.status.stop();
+            await store.setInFlight(key, undefined);
+            return;
+          }
+          await follow(
+            job,
+            request.run as RunRef,
+            pendingJob,
+            snapshot.status === "completed" ? snapshot : undefined,
+          );
+        }).catch((error: unknown) => log.error("Reattaching failed", { thread: key }, error)),
       );
     }
   }
 
-  return {
+  /**
+   * One process per saved bot. A restart waits out the previous process's claim (it expires
+   * 90 s after its last renewal); losing the claim later stops this process with exit code 1,
+   * so a supervisor restarts it.
+   */
+  async function claimLease(id: string) {
+    for (let waited = 0; ; waited += 5_000) {
+      try {
+        await gitterm.bots.acquireLease(id);
+        return;
+      } catch (error) {
+        if (!(error instanceof GittermError && error.code === "CONFLICT") || waited >= 100_000)
+          throw error;
+        if (waited === 0) log.warn("Another process is running this bot; waiting for it to stop…");
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+      }
+    }
+  }
+
+  const bot: Bot = {
     async start() {
+      if (running) throw new Error("The bot is already started");
+      running = true;
       shutdown = new AbortController();
-      store = await openStateStore(
-        resolvePath(options.stateFile ?? `.gitterm-bot/${adapter.platform}.json`),
-      );
-      // Fail here, with what to fix, rather than at the first mention.
-      await checkSetup({
-        gitterm,
-        repos: knownRepos,
-        connections: options.connections ?? [],
-        model,
-        overrides: options.workspace,
-        log,
-      });
-      let markReady = noop as () => void;
-      ready = new Promise<void>((resolve) => (markReady = resolve));
-      const started = await adapter.start({
-        // Messages that arrive while the bot finishes starting wait for it.
-        message: (message) => void ready.then(() => onMessage(message)),
-        answer(promptId, answer, by) {
-          const open = prompts.get(promptId);
-          if (!open || open.prompt.kind !== answer.kind) return "stale";
-          if (!allowed(by)) return "forbidden";
-          open.finish({ answer, by });
-          return "answered";
-        },
-        prompt: (promptId) => prompts.get(promptId)?.prompt,
-        accepts: servesChannel,
-      });
-      scope = started.scope;
-      workspaces = createWorkspaceManager({
-        gitterm,
-        platform: adapter.platform,
-        scope,
-        connections: options.connections ?? [],
-        env: options.env ?? {},
-        setup: options.setup ?? [],
-        model,
-        instructions: agentInstructions(adapter.displayName, options.instructions),
-        overrides: options.workspace,
-        log,
-      });
-      markReady();
-      await recover();
-      log.info(
-        `GitTerm ${adapter.displayName} bot is running for ${knownRepos.map(repoLabel).join(", ")}.`,
-      );
+      try {
+        store = await openStateStore(
+          resolvePath(options.stateFile ?? `.gitterm-bot/${adapter.platform}.json`),
+        );
+        const savedIdentity = gitterm.bots ? await gitterm.bots.self() : null;
+        if (savedIdentity && savedIdentity.id !== options.botId) {
+          throw new Error(
+            "Load the saved configuration with withSavedConfig() before starting a saved bot",
+          );
+        }
+        if (savedIdentity) {
+          const id = randomUUID();
+          await claimLease(id);
+          leaseId = id;
+          let failures = 0;
+          let renewing = false;
+          leaseTimer = setInterval(() => {
+            if (renewing || shutdown.signal.aborted) return;
+            renewing = true;
+            void gitterm.bots
+              .acquireLease(id)
+              .then(() => (failures = 0))
+              .catch((error: unknown) => {
+                // A blip is fine (the claim lasts 90 s); losing it to another process is not.
+                const lost = error instanceof GittermError && error.code === "CONFLICT";
+                if (!lost && ++failures < 2) return;
+                log.error("Lost this bot's runtime claim; stopping", error);
+                process.exitCode = 1;
+                void bot.stop().catch(noop);
+              })
+              .finally(() => (renewing = false));
+          }, 30_000);
+        }
+        // Fail here, with what to fix, rather than at the first mention.
+        await checkSetup({
+          gitterm,
+          repos: knownRepos,
+          connections: options.connections ?? [],
+          model,
+          overrides: options.workspace,
+          log,
+        });
+        let markReady = noop as () => void;
+        ready = new Promise<void>((resolve) => (markReady = resolve));
+        const started = await adapter.start({
+          // Messages that arrive while the bot finishes starting wait for it.
+          message: (message) => void ready.then(() => onMessage(message)),
+          answer(promptId, answer, by) {
+            const open = prompts.get(promptId);
+            if (!open || open.prompt.kind !== answer.kind) return "stale";
+            if (
+              !canAnswer(open.prompt, by) ||
+              (answer.kind === "permission" && answer.response === "always" && !options.allowAlways)
+            )
+              return "forbidden";
+            open.finish({ answer, by });
+            return "answered";
+          },
+          prompt: (promptId) => prompts.get(promptId)?.prompt,
+          canAnswer(promptId, by) {
+            const open = prompts.get(promptId);
+            return Boolean(open && canAnswer(open.prompt, by));
+          },
+          accepts: servesChannel,
+        });
+        scope = started.scope;
+        workspaces = createWorkspaceManager({
+          gitterm,
+          platform: adapter.platform,
+          scope,
+          botId: options.botId,
+          directRetentionMs: options.directRetentionMs,
+          identityPolicy: {
+            allowedUsers: options.allowedUsers,
+            allowGuests: options.allowGuests,
+            allowedChannels: options.allowedChannels,
+            shareChannels: options.shareChannels,
+          },
+          connections: options.connections ?? [],
+          env: options.env ?? {},
+          setup: options.setup ?? [],
+          model,
+          instructions: agentInstructions(adapter.displayName, options.instructions),
+          overrides: options.workspace,
+          log,
+        });
+        // Recovered runs take their threads' locks first, so new messages queue behind them.
+        await recover();
+        markReady();
+        log.info(
+          `GitTerm ${adapter.displayName} bot is running for ${knownRepos.map(repoLabel).join(", ")}.`,
+        );
+      } catch (error) {
+        await bot.stop();
+        throw error;
+      }
     },
     // Runs keep going in GitTerm and stay in the state file; the next start reattaches to them
     // and asks open questions again.
     async stop() {
+      if (!running) return;
+      running = false;
       shutdown.abort();
-      await adapter.stop();
+      if (leaseTimer) clearInterval(leaseTimer);
+      leaseTimer = undefined;
+      await adapter.stop().catch(noop);
+      await Promise.allSettled(tasks);
+      if (leaseId) await gitterm.bots.releaseLease(leaseId).catch(noop);
+      leaseId = undefined;
     },
   };
+  return bot;
 }

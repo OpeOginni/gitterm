@@ -23,6 +23,7 @@ import {
   workloadIdentityIssuer,
 } from "../service/workload-identity/google";
 import { integrationPolicy } from "../service/integrations/catalog";
+import { botConnections, botRepo } from "../service/auth/bot-policy";
 import {
   testMcpConnection,
   updateMcpConnection,
@@ -67,7 +68,19 @@ export const integrationsRouter = router({
           })
           .optional(),
       )
-      .query(({ ctx, input }) => listConnections(ctx.session.user.id, input)),
+      .query(async ({ ctx, input }) => {
+        if (!ctx.botIdentity) return listConnections(ctx.session.user.id, input);
+        const permitted = await resolveConnectionReferences(
+          ctx.session.user.id,
+          botConnections(ctx.botIdentity),
+          { repo: botRepo(ctx.botIdentity).url },
+        );
+        return permitted.filter(
+          (row) =>
+            (!input?.integration || row.integration === input.integration) &&
+            (!input?.kind || row.kind === input.kind),
+        );
+      }),
 
     get: accountProcedure("integrations:read")
       .input(z.object({ id: z.string().min(1) }))
