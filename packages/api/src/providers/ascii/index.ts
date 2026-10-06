@@ -64,6 +64,23 @@ function getTokenAccess(token: string): UpstreamAccess {
   return { headers: { "X-GitTerm-Ascii-Token": token } };
 }
 
+/**
+ * The generated client rejects every failed call with "Response returned an
+ * error code"; surface boat's own code and message instead (e.g. an API key
+ * missing the `exec` permission), so provisioning errors say what to fix.
+ */
+async function rejectWithBoatError({ response }: { response: Response }): Promise<void> {
+  if (response.ok) return;
+  const body = (await response.json().catch(() => null)) as {
+    code?: string;
+    message?: string;
+  } | null;
+  const detail = body?.message ?? body?.code ?? response.statusText;
+  throw new Error(
+    `boat API error ${response.status}${body?.code ? ` (${body.code})` : ""}: ${detail}`,
+  );
+}
+
 export class AsciiProvider implements ComputeProvider {
   readonly name = "ascii";
 
@@ -84,6 +101,7 @@ export class AsciiProvider implements ComputeProvider {
       new Configuration({
         basePath: "https://ascii.dev/api/box/v1",
         accessToken: apiKey,
+        middleware: [{ post: rejectWithBoatError }],
       }),
     );
   }
