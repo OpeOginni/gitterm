@@ -186,6 +186,20 @@ describe("managed billing", () => {
     expect((await billing.getAccount(userId))?.compute?.runningCentsPerHour).toBe(600);
   });
 
+  integration("reserves the size being started, not only what's running", async () => {
+    const userId = await createUser();
+    await subscribe(userId, "pro");
+    // 50 cents left; 15 reserved minutes of the $6/hour size cost $1.50.
+    await addSession(userId, minutesFor(proIncluded - 50), 0);
+    expect((await billing.checkRunAllowance(userId)).allowed).toBe(true);
+    const starting = await billing.checkRunAllowance(userId, {
+      action: "create",
+      machineProfileId: profileId,
+    });
+    expect(starting.allowed).toBe(false);
+    expect(starting.allowed ? null : starting.code).toBe("allowance_reserved");
+  });
+
   integration("an unclosed session stops costing when its workspace stopped", async () => {
     const userId = await createUser();
     await subscribe(userId, "pro");

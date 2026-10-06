@@ -1953,7 +1953,10 @@ export const workspaceRouter = router({
 
         // Check quota only for cloud workspaces (local doesn't use our resources)
         if (!isLocal) {
-          const allowance = await billing.checkRunAllowance(userId, { action: "create" });
+          const allowance = await billing.checkRunAllowance(userId, {
+            action: "create",
+            machineProfileId: selectedMachineProfile?.id,
+          });
           if (!allowance.allowed) {
             throw new TRPCError({ code: "FORBIDDEN", message: allowance.reason });
           }
@@ -3484,6 +3487,7 @@ export const workspaceRouter = router({
           ).checkRunAllowance(userId, {
             action: "resume",
             workspaceId: input.workspaceId,
+            machineProfileId: existingWorkspace.machineProfileId,
           });
           if (!allowance.allowed) {
             await updateWorkspaceByIdAndInvalidate(
@@ -3876,17 +3880,6 @@ export const workspaceRouter = router({
       const userId = ctx.session.user.id;
 
       try {
-        // Check quota first
-        const allowance = await (
-          await getBilling()
-        ).checkRunAllowance(userId, {
-          action: "restart",
-          workspaceId: input.workspaceId,
-        });
-        if (!allowance.allowed) {
-          throw new TRPCError({ code: "FORBIDDEN", message: allowance.reason });
-        }
-
         // Verify workspace belongs to user
         const [existingWorkspace] = await db
           .select()
@@ -3905,6 +3898,18 @@ export const workspaceRouter = router({
             code: "BAD_REQUEST",
             message: "Workspace is not paused",
           });
+        }
+
+        // Check quota, reserving this workspace's size as it starts.
+        const allowance = await (
+          await getBilling()
+        ).checkRunAllowance(userId, {
+          action: "restart",
+          workspaceId: input.workspaceId,
+          machineProfileId: existingWorkspace.machineProfileId,
+        });
+        if (!allowance.allowed) {
+          throw new TRPCError({ code: "FORBIDDEN", message: allowance.reason });
         }
 
         // Get the cloud provider name

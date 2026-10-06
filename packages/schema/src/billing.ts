@@ -61,6 +61,8 @@ export type RunAllowance =
 export interface RunAttempt {
   action: "create" | "resume" | "restart";
   workspaceId?: string;
+  /** Size about to start; its price is reserved with what's already running. */
+  machineProfileId?: string | null;
 }
 
 /**
