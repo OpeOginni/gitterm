@@ -6,6 +6,19 @@
  * built-in unlimited implementation; managed deployments load `@gitterm/billing`.
  */
 
+import type {
+  AnalyticsReport,
+  AnalyticsReportRequest,
+  PricingScenario,
+  PricingSimulation,
+} from "./billing-analytics";
+export type {
+  AnalyticsReport,
+  AnalyticsReportRequest,
+  PricingScenario,
+  PricingSimulation,
+} from "./billing-analytics";
+
 /** Which of a provider's machine sizes a user may use: all of them, or only the smallest. */
 export type MachineAccess = "any" | "smallest";
 
@@ -29,7 +42,55 @@ export interface Entitlements {
   retentionDays: number | null;
 }
 
-export type RunAllowance = { allowed: true } | { allowed: false; reason: string };
+/**
+ * Why compute may not run. `*_reserved` means the balance or cap is not yet
+ * used up, but would be within the reserved minutes of running compute.
+ */
+export type RunDenialCode =
+  | "daily_runtime_limit"
+  | "allowance_exhausted"
+  | "allowance_reserved"
+  | "spend_cap_reached"
+  | "spend_cap_reserved";
+
+export type RunAllowance =
+  | { allowed: true }
+  | { allowed: false; code: RunDenialCode; reason: string };
+
+/** A customer attempt that billing admits or denies. */
+export interface RunAttempt {
+  action: "create" | "resume" | "restart";
+  workspaceId?: string;
+}
+
+/**
+ * Runtime observations core reports to billing for analytics. Billing
+ * records them only in managed deployments; failures never affect the
+ * operation being observed.
+ */
+export type BillingObservation =
+  | {
+      type: "workspace_paused_for_spending";
+      userId: string;
+      workspaceId: string;
+    }
+  | {
+      type: "provision_result" | "resume_result";
+      userId: string;
+      workspaceId: string | null;
+      providerKey: string;
+      outcome: "success" | "failure";
+      latencyMs: number;
+      /** Structured, e.g. "provider_error" or "quota"; never a raw error body. */
+      reasonCode?: string;
+    }
+  | {
+      type: "alert_delivery";
+      noticeKey: string;
+      userId: string;
+      outcome: "sent" | "failed" | "skipped";
+      reasonCode?: string;
+    };
 
 /** Monthly compute for paid plans. Amounts are in cents. */
 export interface ComputeUsage {
@@ -69,6 +130,8 @@ export interface BillingSettings {
 
 /** A usage alert for core to deliver (e.g. by email). */
 export interface BillingNotice {
+  /** Identifies the alert, so its delivery can be recorded. */
+  key: string;
   userId: string;
   subject: string;
   message: string;
@@ -80,8 +143,8 @@ export interface Billing {
   readonly plans: readonly string[];
   getEntitlements(userId: string): Promise<Entitlements>;
   getEntitlementsForUsers(userIds: string[]): Promise<Map<string, Entitlements>>;
-  /** Whether the user may start or resume cloud compute now. */
-  checkRunAllowance(userId: string): Promise<RunAllowance>;
+  /** Whether the user may start or resume cloud compute now. Denied attempts are recorded. */
+  checkRunAllowance(userId: string, attempt?: RunAttempt): Promise<RunAllowance>;
   /** Which of these users have used up their allowance, so their running workspaces stop. */
   getUsersOverAllowance(userIds: string[]): Promise<Set<string>>;
   getAccount(userId: string): Promise<BillingAccount | null>;
@@ -90,14 +153,27 @@ export interface Billing {
   getMachinePrices(machineProfileIds: string[]): Promise<Map<string, number>>;
   /** Admin: price new sessions on this machine profile; null removes the price. */
   setMachinePrice(machineProfileId: string, microsPerHour: number | null): Promise<void>;
-  /** Admin override of a user's plan. */
-  setPlan(userId: string, plan: string): Promise<void>;
+  /**
+   * Admin override of a user's plan. Recorded as admin-assigned (or the given
+   * category), never as a payment.
+   */
+  setPlan(
+    userId: string,
+    plan: string,
+    options?: { category?: "admin_assigned" | "complimentary" | "trial" },
+  ): Promise<void>;
   /** Number of users on each plan, for the admin overview. */
   countUsersByPlan(): Promise<Record<string, number>>;
   /** Clean up billing records before the user is deleted. */
   onUserDeleted(userId: string): Promise<void>;
   /** Report usage to the payment provider and return alerts to deliver. Run by the worker. */
   runPeriodicTasks(): Promise<BillingNotice[]>;
+  /** Record a runtime observation for analytics. Never throws. */
+  recordObservation(observation: BillingObservation): Promise<void>;
+  /** Read-only analytics reports; null when billing is off. */
+  getReport(request: AnalyticsReportRequest): Promise<AnalyticsReport | null>;
+  /** Read-only pricing simulation over historical usage; null when billing is off. */
+  simulatePricing(scenario: PricingScenario): Promise<PricingSimulation | null>;
 }
 
 export const UNLIMITED_ENTITLEMENTS: Entitlements = {

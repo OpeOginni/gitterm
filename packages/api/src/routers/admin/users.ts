@@ -256,6 +256,10 @@ export const usersRouter = router({
         });
       }
 
+      // Same billing cleanup as self-service deletion: keep pseudonymous usage
+      // facts, drop the analytics link, and remove the payment customer.
+      await (await getBilling()).onUserDeleted(input.id);
+
       const [deleted] = await db
         .delete(user)
         .where(and(eq(user.id, input.id), excludeAnonUsers))

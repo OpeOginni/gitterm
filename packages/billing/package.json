@@ -12,7 +12,8 @@
     }
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "billing:analytics": "bun run ./src/cli.ts"
   },
   "dependencies": {
     "@gitterm/db": "workspace:*",
@@ -21,7 +22,8 @@
     "@polar-sh/better-auth": "^1.6.3",
     "@polar-sh/sdk": "^0.42.1",
     "better-auth": "catalog:",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@gitterm/config": "workspace:*",

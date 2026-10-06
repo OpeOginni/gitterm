@@ -44,22 +44,26 @@ export async function getMinutesUsedToday(
   );
 }
 
-export interface ComputeCost {
-  /** Cost this period at list prices, in millionths of a dollar. */
+/**
+ * Retail value of compute consumed: what the customer's usage is worth at
+ * our list prices. Not our provider cost, and not cash collected.
+ */
+export interface RetailUsage {
+  /** Retail value this period, in millionths of a dollar. */
   micros: number;
-  /** Hourly price of the sessions running now, in millionths of a dollar. */
+  /** Hourly retail price of the sessions running now, in millionths of a dollar. */
   runningMicrosPerHour: number;
 }
 
 /**
- * Compute each user has used since their period start, priced at the machine
+ * Retail compute value each user has used since their period start, priced at the machine
  * size's rate in effect when each session started. Running sessions count up
  * to now. Sizes without a price cost nothing.
  */
-export async function getComputeCosts(
+export async function getRetailUsage(
   periods: Array<{ userId: string; start: Date }>,
   now = new Date(),
-): Promise<Map<string, ComputeCost>> {
+): Promise<Map<string, RetailUsage>> {
   if (periods.length === 0) return new Map();
   const nowAt = sql`${now.toISOString()}::timestamp`;
   const result = await db.execute<{
@@ -94,7 +98,7 @@ export async function getComputeCosts(
     group by s.user_id
   `);
 
-  const costs = new Map<string, ComputeCost>(
+  const costs = new Map<string, RetailUsage>(
     periods.map((period) => [period.userId, { micros: 0, runningMicrosPerHour: 0 }]),
   );
   for (const row of result.rows) {

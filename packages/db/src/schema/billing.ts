@@ -12,6 +12,14 @@ export const billingAccount = pgTable("billing_account", {
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
   plan: text("plan").notNull(),
+  /**
+   * How the account got its plan: free | paid (Polar subscription) | legacy |
+   * admin_assigned | complimentary | trial | unknown (predates tracking).
+   * An admin-assigned plan is not evidence of payment.
+   */
+  commercialCategory: text("commercial_category").notNull().default("unknown"),
+  /** Polar subscription id, when the plan comes from one. */
+  subscriptionId: text("subscription_id"),
   /** The subscription's current billing period; null falls back to the calendar month. */
   periodStart: timestamp("period_start"),
   periodEnd: timestamp("period_end"),

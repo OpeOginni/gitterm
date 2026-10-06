@@ -1764,6 +1764,7 @@ export const workspaceRouter = router({
       let selectedProviderName = "unknown provider";
       let selectedProviderKey = "unknown";
       let workspaceReservedBeforeProvision = false;
+      let provisionStartedAt = 0;
       try {
         // Get cloud provider info first to determine if local
         const [cloudProviderRecord] = await db
@@ -1890,7 +1891,7 @@ export const workspaceRouter = router({
 
         // Check quota only for cloud workspaces (local doesn't use our resources)
         if (!isLocal) {
-          const allowance = await billing.checkRunAllowance(userId);
+          const allowance = await billing.checkRunAllowance(userId, { action: "create" });
           if (!allowance.allowed) {
             throw new TRPCError({ code: "FORBIDDEN", message: allowance.reason });
           }
@@ -2793,6 +2794,7 @@ export const workspaceRouter = router({
         // Providers that call back during boot need their identity and encrypted
         // runtime bundle reserved before any remote resources exist.
         workspaceReservedBeforeProvision = true;
+        provisionStartedAt = Date.now();
         await db.insert(workspace).values({
           id: workspaceId,
           botId: ctx.botIdentity?.id ?? null,
@@ -3056,6 +3058,17 @@ export const workspaceRouter = router({
           providerKey,
         });
 
+        if (!isLocal) {
+          void billing.recordObservation({
+            type: "provision_result",
+            userId,
+            workspaceId,
+            providerKey,
+            outcome: "success",
+            latencyMs: Date.now() - provisionStartedAt,
+          });
+        }
+
         return {
           success: true,
           message: "Workspace created successfully",
@@ -3064,6 +3077,23 @@ export const workspaceRouter = router({
           runtime,
         };
       } catch (error) {
+        // Only failures after provisioning began; validation errors aren't reliability events.
+        if (workspaceReservedBeforeProvision) {
+          void (await getBilling()).recordObservation({
+            type: "provision_result",
+            userId,
+            workspaceId,
+            providerKey: selectedProviderKey,
+            outcome: "failure",
+            latencyMs: Date.now() - provisionStartedAt,
+            reasonCode:
+              error instanceof AwsPermissionError
+                ? "provider_permission"
+                : error instanceof BeforeAgentSetupError
+                  ? "setup_failed"
+                  : "provider_error",
+          });
+        }
         console.error(
           "createWorkspace failed",
           workspaceCreateLogger.redact({
@@ -3386,7 +3416,12 @@ export const workspaceRouter = router({
           existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
         } else {
           existingWorkspace = claimedWorkspace;
-          const allowance = await (await getBilling()).checkRunAllowance(userId);
+          const allowance = await (
+            await getBilling()
+          ).checkRunAllowance(userId, {
+            action: "resume",
+            workspaceId: input.workspaceId,
+          });
           if (!allowance.allowed) {
             await updateWorkspaceByIdAndInvalidate(
               input.workspaceId,
@@ -3434,6 +3469,17 @@ export const workspaceRouter = router({
             provider.id,
           );
           let resumeResult: void | { upstreamUrl?: string };
+          const resumeStartedAt = Date.now();
+          const recordResume = async (outcome: "success" | "failure") =>
+            (await getBilling()).recordObservation({
+              type: "resume_result",
+              userId,
+              workspaceId: input.workspaceId,
+              providerKey: provider.providerKey,
+              outcome,
+              latencyMs: Date.now() - resumeStartedAt,
+              reasonCode: outcome === "failure" ? "provider_error" : undefined,
+            });
           try {
             resumeResult = await computeProvider.resumeWorkspace(
               existingWorkspace.externalInstanceId,
@@ -3441,7 +3487,9 @@ export const workspaceRouter = router({
               existingWorkspace.externalRunningDeploymentId ?? undefined,
             );
             await relaunchWorkspaceSetup(computeProvider, claimedWorkspace, provider.providerKey);
+            void recordResume("success");
           } catch (error) {
+            void recordResume("failure");
             await updateWorkspaceByIdAndInvalidate(
               input.workspaceId,
               {
@@ -3766,7 +3814,12 @@ export const workspaceRouter = router({
 
       try {
         // Check quota first
-        const allowance = await (await getBilling()).checkRunAllowance(userId);
+        const allowance = await (
+          await getBilling()
+        ).checkRunAllowance(userId, {
+          action: "restart",
+          workspaceId: input.workspaceId,
+        });
         if (!allowance.allowed) {
           throw new TRPCError({ code: "FORBIDDEN", message: allowance.reason });
         }
@@ -3833,13 +3886,26 @@ export const workspaceRouter = router({
           existingWorkspace.subdomain,
         );
         let resumeResult: void | { upstreamUrl?: string };
+        const resumeStartedAt = Date.now();
+        const recordResume = async (outcome: "success" | "failure") =>
+          (await getBilling()).recordObservation({
+            type: "resume_result",
+            userId,
+            workspaceId: input.workspaceId,
+            providerKey: provider.providerKey,
+            outcome,
+            latencyMs: Date.now() - resumeStartedAt,
+            reasonCode: outcome === "failure" ? "provider_error" : undefined,
+          });
         try {
           resumeResult = await computeProvider.resumeWorkspace(
             existingWorkspace.externalInstanceId,
             workspaceRegion?.externalRegionIdentifier,
             existingWorkspace.externalRunningDeploymentId ?? undefined,
           );
+          void recordResume("success");
         } catch (error) {
+          void recordResume("failure");
           await updateWorkspaceByIdAndInvalidate(
             input.workspaceId,
             {

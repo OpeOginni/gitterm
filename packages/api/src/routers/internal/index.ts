@@ -126,22 +126,38 @@ export const internalRouter = router({
   /** Report usage to the payment provider and email usage alerts (for worker). */
   runBillingTasks: internalProcedure.mutation(async () => {
     const notices = await (await getBilling()).runPeriodicTasks();
+    // Billing records the threshold; delivery is recorded below, per attempt.
     const billingUrl = `${env.BASE_URL ?? `https://${env.BASE_DOMAIN}`}/dashboard/settings/account#billing`;
     let sent = 0;
+    const billing = await getBilling();
     for (const notice of notices) {
+      const delivery = (outcome: "sent" | "failed" | "skipped", reasonCode?: string) =>
+        billing.recordObservation({
+          type: "alert_delivery",
+          noticeKey: notice.key,
+          userId: notice.userId,
+          outcome,
+          reasonCode,
+        });
       const [owner] = await db
         .select({ email: user.email })
         .from(user)
         .where(eq(user.id, notice.userId));
-      if (!owner || isAnonEmail(owner.email)) continue;
+      if (!owner || isAnonEmail(owner.email)) {
+        await delivery("skipped", "no_recipient");
+        continue;
+      }
       try {
         await sendEmail({
           to: owner.email,
           ...(await renderEmail(notice.subject, BillingNoticeEmail({ ...notice, billingUrl }))),
         });
+        // "sent" means the mail provider accepted it, not that the customer read it.
+        await delivery("sent");
         sent++;
       } catch (error) {
         console.error(`[billing] Failed to send usage alert to user ${notice.userId}`, error);
+        await delivery("failed", "email_provider_error");
       }
     }
     return { notices: notices.length, sent };
@@ -250,6 +266,15 @@ export const internalRouter = router({
         input.workspaceId,
         input.stopSource as SessionStopSource,
       );
+      if (input.stopSource === "quota_exhausted") {
+        await (
+          await getBilling()
+        ).recordObservation({
+          type: "workspace_paused_for_spending",
+          userId: ws.userId,
+          workspaceId: input.workspaceId,
+        });
+      }
 
       // Update workspace status
       const now = new Date();

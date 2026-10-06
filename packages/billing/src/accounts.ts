@@ -1,10 +1,26 @@
 import { db, eq, inArray, ne, sql } from "@gitterm/db";
 import { billingAccount } from "@gitterm/db/schema/billing";
+import { billingAccountEvent } from "@gitterm/db/schema/billing-analytics";
+import { ensureSubject } from "./analytics/subjects";
+import { currentPlanTerms, ensurePlanVersion } from "./analytics/plan-versions";
+import { getFreeDailyMinuteLimit } from "./free-limit";
 import { toPlanId, type PlanId } from "./plans";
+
+/** How an account got its plan. An admin-assigned plan is not evidence of payment. */
+export type CommercialCategory =
+  | "free"
+  | "paid"
+  | "legacy"
+  | "admin_assigned"
+  | "complimentary"
+  | "trial"
+  | "unknown";
 
 export interface Account {
   userId: string;
   plan: PlanId;
+  commercialCategory: CommercialCategory;
+  subscriptionId: string | null;
   periodStart: Date | null;
   periodEnd: Date | null;
   payAsYouGo: boolean;
@@ -16,6 +32,8 @@ export interface Account {
 const freeAccount = (userId: string): Account => ({
   userId,
   plan: "free",
+  commercialCategory: "free",
+  subscriptionId: null,
   periodStart: null,
   periodEnd: null,
   payAsYouGo: false,
@@ -27,6 +45,8 @@ const freeAccount = (userId: string): Account => ({
 const toAccount = (row: typeof billingAccount.$inferSelect): Account => ({
   userId: row.userId,
   plan: toPlanId(row.plan),
+  commercialCategory: row.commercialCategory as CommercialCategory,
+  subscriptionId: row.subscriptionId,
   periodStart: row.periodStart,
   periodEnd: row.periodEnd,
   payAsYouGo: row.payAsYouGo,
@@ -55,37 +75,190 @@ export async function listPaidAccounts(): Promise<Account[]> {
   return rows.map(toAccount);
 }
 
-/** Change a user's plan. A null period bills by calendar month (e.g. admin-assigned plans). */
+// ============================================================================
+// Commercial history
+// ============================================================================
+
+export type AccountEventType =
+  | "account_snapshot"
+  | "plan_changed"
+  | "period_started"
+  | "payg_changed"
+  | "cancellation_requested"
+  | "cancellation_withdrawn"
+  | "access_revoked";
+
+/** Bump when the meaning of account event fields changes. */
+const ACCOUNT_EVENT_SCHEMA_VERSION = 1;
+
+/** Who changed the account, and how to deduplicate the change. */
+export interface AccountChangeSource {
+  source: "polar_webhook" | "admin" | "customer" | "system" | "backfill";
+  actor: "customer" | "admin" | "payment_provider" | "system";
+  /** When the change happened at its source (e.g. Polar's modified time). */
+  occurredAt?: Date;
+  /** Required for replayable sources such as webhooks. */
+  idempotencyKey?: string;
+  provenance?: "observed" | "reconstructed" | "inferred";
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function insertAccountEvent(
+  tx: Tx,
+  analyticsId: string,
+  eventType: AccountEventType,
+  before: Account | null,
+  after: Account,
+  change: AccountChangeSource,
+): Promise<void> {
+  const now = new Date();
+  const terms = currentPlanTerms(
+    after.plan,
+    after.plan === "free" ? await getFreeDailyMinuteLimit() : null,
+  );
+  const planVersionId = await ensurePlanVersion(terms);
+  await tx
+    .insert(billingAccountEvent)
+    .values({
+      analyticsId,
+      eventType,
+      schemaVersion: ACCOUNT_EVENT_SCHEMA_VERSION,
+      occurredAt: change.occurredAt ?? now,
+      effectiveAt: change.occurredAt ?? now,
+      recordedAt: now,
+      source: change.source,
+      actor: change.actor,
+      commercialCategory: after.commercialCategory,
+      planVersionId,
+      previousPlan: before?.plan ?? null,
+      plan: after.plan,
+      previousPayAsYouGo: before?.payAsYouGo ?? null,
+      payAsYouGo: after.payAsYouGo,
+      previousSpendCapCents: before?.spendCapCents ?? null,
+      spendCapCents: after.spendCapCents,
+      periodStart: after.periodStart,
+      periodEnd: after.periodEnd,
+      subscriptionId: after.subscriptionId,
+      provenance: change.provenance ?? "observed",
+      idempotencyKey:
+        change.idempotencyKey ??
+        `${change.source}:${analyticsId}:${eventType}:${now.toISOString()}`,
+      metadata: change.metadata ?? null,
+    })
+    .onConflictDoNothing({ target: billingAccountEvent.idempotencyKey });
+}
+
+async function lockAccount(tx: Tx, userId: string): Promise<Account | null> {
+  const [row] = await tx
+    .select()
+    .from(billingAccount)
+    .where(eq(billingAccount.userId, userId))
+    .for("update");
+  return row ? toAccount(row) : null;
+}
+
+/**
+ * Change a user's plan and record why. A null period bills by calendar month
+ * (e.g. admin-assigned plans). The event type is derived from what changed
+ * unless given.
+ */
 export async function setPlan(
   userId: string,
   plan: PlanId,
-  period: { start: Date; end: Date | null } | null = null,
+  period: { start: Date; end: Date | null } | null,
+  change: AccountChangeSource & {
+    category: CommercialCategory;
+    subscriptionId?: string | null;
+    eventType?: AccountEventType;
+  },
 ): Promise<void> {
-  const now = new Date();
-  const values = {
-    plan,
-    periodStart: period?.start ?? null,
-    periodEnd: period?.end ?? null,
-    updatedAt: now,
-  };
-  await db
-    .insert(billingAccount)
-    .values({ userId, ...values, createdAt: now })
-    .onConflictDoUpdate({ target: billingAccount.userId, set: values });
+  const analyticsId = await ensureSubject(userId);
+  await db.transaction(async (tx) => {
+    const before = await lockAccount(tx, userId);
+    const now = new Date();
+    const values = {
+      plan,
+      commercialCategory: change.category,
+      subscriptionId: change.subscriptionId ?? null,
+      periodStart: period?.start ?? null,
+      periodEnd: period?.end ?? null,
+      updatedAt: now,
+    };
+    const [row] = await tx
+      .insert(billingAccount)
+      .values({ userId, ...values, createdAt: now })
+      .onConflictDoUpdate({ target: billingAccount.userId, set: values })
+      .returning();
+    const after = toAccount(row!);
+    if (!analyticsId) return;
+
+    const eventType =
+      change.eventType ??
+      (!before ||
+      before.plan !== after.plan ||
+      before.commercialCategory !== after.commercialCategory
+        ? "plan_changed"
+        : before.periodStart?.getTime() !== after.periodStart?.getTime()
+          ? "period_started"
+          : null);
+    if (eventType) await insertAccountEvent(tx, analyticsId, eventType, before, after, change);
+  });
 }
 
 export async function updateSettings(
   userId: string,
   settings: { payAsYouGo: boolean; spendCapCents: number | null },
+  change: AccountChangeSource,
 ): Promise<void> {
-  const now = new Date();
-  await db
-    .insert(billingAccount)
-    .values({ userId, plan: "free", ...settings, createdAt: now, updatedAt: now })
-    .onConflictDoUpdate({
-      target: billingAccount.userId,
-      set: { ...settings, updatedAt: now },
+  const analyticsId = await ensureSubject(userId);
+  await db.transaction(async (tx) => {
+    const before = await lockAccount(tx, userId);
+    const now = new Date();
+    const [row] = await tx
+      .insert(billingAccount)
+      .values({ userId, plan: "free", ...settings, createdAt: now, updatedAt: now })
+      .onConflictDoUpdate({ target: billingAccount.userId, set: { ...settings, updatedAt: now } })
+      .returning();
+    const after = toAccount(row!);
+    const changed =
+      before?.payAsYouGo !== after.payAsYouGo || before?.spendCapCents !== after.spendCapCents;
+    if (analyticsId && changed) {
+      await insertAccountEvent(tx, analyticsId, "payg_changed", before, after, change);
+    }
+  });
+}
+
+/** Record a cancellation request or its withdrawal. Access ends separately, on revocation. */
+export async function recordCancellation(
+  userId: string,
+  eventType: "cancellation_requested" | "cancellation_withdrawn",
+  change: AccountChangeSource,
+): Promise<void> {
+  const analyticsId = await ensureSubject(userId);
+  if (!analyticsId) return;
+  await db.transaction(async (tx) => {
+    const account = (await lockAccount(tx, userId)) ?? freeAccount(userId);
+    await insertAccountEvent(tx, analyticsId, eventType, account, account, change);
+  });
+}
+
+/** Snapshot the current state once, so history has a known starting point. */
+export async function recordAccountSnapshot(
+  userId: string,
+  change: AccountChangeSource,
+): Promise<boolean> {
+  const analyticsId = await ensureSubject(userId);
+  if (!analyticsId) return false;
+  const account = await getAccount(userId);
+  await db.transaction(async (tx) => {
+    await insertAccountEvent(tx, analyticsId, "account_snapshot", null, account, {
+      ...change,
+      idempotencyKey: change.idempotencyKey ?? `snapshot:${analyticsId}`,
     });
+  });
+  return true;
 }
 
 export async function recordAlerts(

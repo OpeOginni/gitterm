@@ -28,6 +28,10 @@ export const unlimitedBilling: Billing = {
   countUsersByPlan: async () => ({}),
   onUserDeleted: async () => {},
   runPeriodicTasks: async () => [],
+  // Self-hosted deployments collect no billing analytics.
+  recordObservation: async () => {},
+  getReport: async () => null,
+  simulatePricing: async () => null,
 };
 
 let billing: Promise<Billing> | undefined;

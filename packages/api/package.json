@@ -14,9 +14,6 @@
     "./config/*": {
       "default": "./src/config/*.ts"
     },
-    "./billing": {
-      "default": "./src/billing/index.ts"
-    },
     "./routers/*": {
       "default": "./src/routers/*.ts"
     },
