@@ -13,13 +13,11 @@
     "check-types": "tsc -b"
   },
   "dependencies": {
+    "@gitterm/billing": "workspace:*",
     "@gitterm/db": "workspace:*",
     "@gitterm/env": "workspace:*",
-    "@polar-sh/better-auth": "^1.6.3",
-    "@polar-sh/sdk": "^0.42.1",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
-    "drizzle-orm": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

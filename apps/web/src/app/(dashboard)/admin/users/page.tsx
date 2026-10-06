@@ -36,7 +36,6 @@ import { trpcClient } from "@/utils/trpc";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-type UserPlan = "free" | "starter" | "pro";
 type UserRole = "user" | "admin";
 
 interface CreateUserForm {
@@ -44,7 +43,8 @@ interface CreateUserForm {
   password: string;
   name: string;
   role: UserRole;
-  plan: UserPlan;
+  /** Billing plan id; only sent when billing is enabled. */
+  plan: string;
 }
 
 const initialCreateForm: CreateUserForm = {
@@ -96,8 +96,10 @@ export default function UsersPage() {
       }),
   });
 
+  const billingPlans = data?.plans ?? [];
+
   const updateUser = useMutation({
-    mutationFn: (params: { id: string; plan?: UserPlan; role?: UserRole }) =>
+    mutationFn: (params: { id: string; plan?: string; role?: UserRole }) =>
       trpcClient.admin.users.update.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
@@ -200,9 +202,11 @@ export default function UsersPage() {
                       <th className="h-10 px-6 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
                         User
                       </th>
-                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
-                        Plan
-                      </th>
+                      {billingPlans.length > 0 && (
+                        <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+                          Plan
+                        </th>
+                      )}
                       <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
                         Role
                       </th>
@@ -226,23 +230,27 @@ export default function UsersPage() {
                             <div className="text-sm text-fg-4">{user.email}</div>
                           </div>
                         </td>
-                        <td className="px-4 py-4">
-                          <Select
-                            value={(user as any).plan || "free"}
-                            onValueChange={(value: UserPlan) => {
-                              updateUser.mutate({ id: user.id, plan: value });
-                            }}
-                          >
-                            <SelectTrigger className="w-28 h-8 text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="free">Free</SelectItem>
-                              <SelectItem value="starter">Starter</SelectItem>
-                              <SelectItem value="pro">Pro</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </td>
+                        {billingPlans.length > 0 && (
+                          <td className="px-4 py-4">
+                            <Select
+                              value={user.plan ?? "free"}
+                              onValueChange={(value) => {
+                                updateUser.mutate({ id: user.id, plan: value });
+                              }}
+                            >
+                              <SelectTrigger className="w-28 h-8 text-sm capitalize">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {billingPlans.map((plan) => (
+                                  <SelectItem key={plan} value={plan} className="capitalize">
+                                    {plan}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                        )}
                         <td className="px-4 py-4">
                           <Select
                             value={(user as any).role || "user"}
@@ -402,24 +410,26 @@ export default function UsersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="plan">Plan</Label>
-                  <Select
-                    value={createForm.plan}
-                    onValueChange={(value: UserPlan) =>
-                      setCreateForm((f) => ({ ...f, plan: value }))
-                    }
-                  >
-                    <SelectTrigger id="plan">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="free">Free</SelectItem>
-                      <SelectItem value="starter">Starter</SelectItem>
-                      <SelectItem value="pro">Pro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {billingPlans.length > 0 && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="plan">Plan</Label>
+                    <Select
+                      value={createForm.plan}
+                      onValueChange={(value) => setCreateForm((f) => ({ ...f, plan: value }))}
+                    >
+                      <SelectTrigger id="plan" className="capitalize">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {billingPlans.map((plan) => (
+                          <SelectItem key={plan} value={plan} className="capitalize">
+                            {plan}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </div>
             <DialogFooter>

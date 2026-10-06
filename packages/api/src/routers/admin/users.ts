@@ -12,6 +12,7 @@ import { user } from "@gitterm/db/schema/auth";
 import { workspace, usageSession } from "@gitterm/db/schema/workspace";
 import { isGitHubAuthEnabled, isEmailAuthEnabled } from "@gitterm/env/server";
 import { auth } from "@gitterm/auth";
+import { getBilling } from "../../billing";
 
 /**
  * Synthetic anon "try gitterm" users live on this email domain - see
@@ -35,7 +36,8 @@ const listUsersSchema = z.object({
 
 const updateUserSchema = z.object({
   id: z.string().min(1),
-  plan: z.enum(["free", "starter", "pro"]).optional(),
+  /** Billing plan id; only accepted when billing is enabled. */
+  plan: z.string().min(1).optional(),
   role: z.enum(["user", "admin"]).optional(),
 });
 
@@ -44,7 +46,7 @@ const createUserSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   name: z.string().min(1, "Name is required"),
   role: z.enum(["user", "admin"]).default("user"),
-  plan: z.enum(["free", "starter", "pro"]).default("free"),
+  plan: z.string().min(1).optional(),
 });
 
 // ============================================================================
@@ -85,11 +87,15 @@ export const usersRouter = router({
       .from(user)
       .where(whereClause);
 
+    const billing = await getBilling();
+    const entitlements = await billing.getEntitlementsForUsers(users.map((row) => row.id));
+
     return {
-      users,
+      users: users.map((row) => ({ ...row, plan: entitlements.get(row.id)?.plan ?? null })),
       total: Number(countResult?.count ?? 0),
       limit,
       offset,
+      plans: billing.plans,
     };
   }),
 
@@ -145,17 +151,19 @@ export const usersRouter = router({
       });
     }
 
-    // Update user with role, plan, and auto-verify email
+    // Update user with role and auto-verify email
     const [createdUser] = await db
       .update(user)
       .set({
         role,
-        plan,
         emailVerified: true, // Auto-verify admin-created users
         updatedAt: new Date(),
       })
       .where(eq(user.id, result.user.id))
       .returning();
+
+    const billing = await getBilling();
+    if (plan && billing.enabled) await billing.setPlan(result.user.id, plan);
 
     return createdUser;
   }),
@@ -182,8 +190,11 @@ export const usersRouter = router({
       .from(usageSession)
       .where(eq(usageSession.userId, input.id));
 
+    const { plan } = await (await getBilling()).getEntitlements(foundUser.id);
+
     return {
       ...foundUser,
+      plan,
       workspaces,
       stats: {
         workspaceCount: workspaces.length,
@@ -197,10 +208,10 @@ export const usersRouter = router({
    * Update user plan or role
    */
   update: adminProcedure.input(updateUserSchema).mutation(async ({ input, ctx }) => {
-    const { id, ...updates } = input;
+    const { id, plan, role } = input;
 
     // Don't allow admin to remove their own admin role
-    if (updates.role === "user" && ctx.session.user.id === id) {
+    if (role === "user" && ctx.session.user.id === id) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Cannot remove your own admin role",
@@ -210,7 +221,7 @@ export const usersRouter = router({
     const [updated] = await db
       .update(user)
       .set({
-        ...updates,
+        ...(role ? { role } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(user.id, id), excludeAnonUsers))
@@ -218,6 +229,14 @@ export const usersRouter = router({
 
     if (!updated) {
       throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+    }
+
+    if (plan) {
+      const billing = await getBilling();
+      if (!billing.enabled || !billing.plans.includes(plan)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Unknown plan "${plan}"` });
+      }
+      await billing.setPlan(id, plan);
     }
 
     return updated;
@@ -313,8 +332,6 @@ export const usersRouter = router({
       .select({
         total: sql<number>`count(*)`,
         admins: sql<number>`count(*) FILTER (WHERE ${user.role} = 'admin')`,
-        freeUsers: sql<number>`count(*) FILTER (WHERE ${user.plan} = 'free')`,
-        paidUsers: sql<number>`count(*) FILTER (WHERE ${user.plan} != 'free')`,
       })
       .from(user)
       .where(excludeAnonUsers);
@@ -331,12 +348,17 @@ export const usersRouter = router({
       .innerJoin(user, eq(workspace.userId, user.id))
       .where(excludeAnonUsers);
 
+    const planCounts = await (await getBilling()).countUsersByPlan();
+    const paidUsers = Object.entries(planCounts)
+      .filter(([plan]) => plan !== "free")
+      .reduce((sum, [, count]) => sum + count, 0);
+
     return {
       users: {
         total: Number(userStats?.total ?? 0),
         admins: Number(userStats?.admins ?? 0),
-        free: Number(userStats?.freeUsers ?? 0),
-        paid: Number(userStats?.paidUsers ?? 0),
+        free: Number(userStats?.total ?? 0) - paidUsers,
+        paid: paidUsers,
       },
       workspaces: {
         total: Number(workspaceStats?.total ?? 0),

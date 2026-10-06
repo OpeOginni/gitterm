@@ -115,7 +115,6 @@ const baseSchema = z
     SMTP_PASS: optional,
 
     // Feature flags (for self-hosted customization)
-    ENABLE_QUOTA_ENFORCEMENT: boolWithDefault(false),
     ENABLE_IDLE_REAPING: boolWithDefault(true),
     ENABLE_USAGE_METERING: boolWithDefault(false),
     // Managed-mode switches; self-hosted always uses email login instead.

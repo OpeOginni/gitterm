@@ -9,13 +9,9 @@ import { ArrowRight, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 import { track } from "@/lib/analytics";
+import { useCurrentPlan } from "@/lib/billing";
 
-type UserPlan = "free" | "starter" | "pro";
 type PaidPlan = "starter" | "pro";
-
-interface BillingSectionProps {
-  currentPlan: UserPlan;
-}
 
 const PLAN_PRICE: Record<PaidPlan, number> = {
   starter: 10,
@@ -51,7 +47,8 @@ function PlanRow({
   );
 }
 
-export function BillingSection({ currentPlan }: BillingSectionProps) {
+export function BillingSection() {
+  const currentPlan = useCurrentPlan();
   const [isPortalLoading, setIsPortalLoading] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
@@ -143,7 +140,8 @@ export function BillingSection({ currentPlan }: BillingSectionProps) {
 /**
  * Plan badge for display in navigation/header
  */
-export function PlanBadge({ plan }: { plan: UserPlan | string }) {
+export function PlanBadge() {
+  const plan = useCurrentPlan();
   if (!isBillingEnabled || plan === "free") {
     return null;
   }

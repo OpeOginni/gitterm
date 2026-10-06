@@ -3,12 +3,9 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@gitterm/db";
 import * as schema from "@gitterm/db/schema/auth";
 import { nextCookies } from "better-auth/next-js";
-import { Polar } from "@polar-sh/sdk";
-import { polar, checkout, portal, usage, webhooks } from "@polar-sh/better-auth";
-import { eq } from "drizzle-orm";
 import env, {
+  isManaged,
   isProduction,
-  isBillingEnabled as checkBillingEnabled,
   isGitHubAuthEnabled,
   getGitHubAuthCredentials,
 } from "@gitterm/env/auth";
@@ -36,71 +33,10 @@ function inferBaseUrlOrigin(): string {
   return `${isLocal ? "http" : "https"}://${env.BASE_DOMAIN}`;
 }
 
-// ============================================================================
-// Plan Types and Product Mapping
-// ============================================================================
-
-type UserPlan = "free" | "starter" | "pro";
-
-/**
- * Maps Polar product IDs to plan names (for subscriptions)
- */
-const PRODUCT_TO_PLAN: Record<string, UserPlan> = {
-  ...(env.POLAR_STARTER_PRODUCT_ID ? { [env.POLAR_STARTER_PRODUCT_ID]: "starter" as const } : {}),
-  ...(env.POLAR_PRO_PRODUCT_ID ? { [env.POLAR_PRO_PRODUCT_ID]: "pro" as const } : {}),
-};
-
-/**
- * Get plan from product ID
- */
-const getPlanFromProductId = (productId: string): UserPlan => {
-  return PRODUCT_TO_PLAN[productId] ?? "free";
-};
-
-// ============================================================================
-// Polar Client (only if billing is enabled)
-// ============================================================================
-
-const polarClient = checkBillingEnabled()
-  ? new Polar({
-      accessToken: env.POLAR_ACCESS_TOKEN!,
-      server: env.POLAR_ENVIRONMENT === "sandbox" ? "sandbox" : "production",
-    })
-  : null;
-
-// Product configurations for checkout
-const POLAR_PRODUCTS = [
-  ...(env.POLAR_STARTER_PRODUCT_ID
-    ? [{ productId: env.POLAR_STARTER_PRODUCT_ID, slug: "starter" as const }]
-    : []),
-  ...(env.POLAR_PRO_PRODUCT_ID
-    ? [{ productId: env.POLAR_PRO_PRODUCT_ID, slug: "pro" as const }]
-    : []),
-];
-
-// ============================================================================
-// Database Helpers for Plan Updates
-// ============================================================================
-
-/**
- * Update user's plan in the database
- */
-const updateUserPlan = async (userId: string, plan: UserPlan): Promise<void> => {
-  try {
-    await db
-      .update(schema.user)
-      .set({
-        plan,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.user.id, userId));
-
-    console.log(`[polar] Updated user ${userId} to plan: ${plan}`);
-  } catch (error) {
-    console.error(`[polar] Failed to update user ${userId} plan:`, error);
-    throw error;
-  }
-};
+// Managed deployments add billing's Polar plugins; other deployments never load billing.
+const billingPlugins = isManaged()
+  ? (await import("@gitterm/billing/auth")).createBillingAuthPlugins()
+  : [];
 
 // ============================================================================
 // Better Auth Configuration
@@ -134,12 +70,6 @@ export const auth = betterAuth({
     : undefined,
   user: {
     additionalFields: {
-      plan: {
-        type: ["free", "starter", "pro"],
-        required: false,
-        defaultValue: "free",
-        input: false, // don't allow user to set plan
-      },
       role: {
         type: ["user", "admin"],
         required: false,
@@ -164,83 +94,8 @@ export const auth = betterAuth({
         },
   },
   plugins: [
-    // Polar billing plugin (only if enabled)
-    ...(polarClient
-      ? [
-          polar({
-            client: polarClient,
-            createCustomerOnSignUp: true,
-            use: [
-              checkout({
-                authenticatedUsersOnly: true,
-                successUrl: "/checkout/success?checkout_id={CHECKOUT_ID}",
-                products: POLAR_PRODUCTS,
-              }),
-              portal(),
-              usage(),
-              ...(env.POLAR_WEBHOOK_SECRET
-                ? [
-                    webhooks({
-                      secret: env.POLAR_WEBHOOK_SECRET,
-                      onPayload: async (payload) => {
-                        console.log("[polar] Webhook received:", payload.type);
-                      },
-                      onSubscriptionActive: async (payload) => {
-                        const userId = payload.data.customer.externalId;
-                        const productId = payload.data.productId;
-
-                        if (!userId) {
-                          console.warn("[polar] Subscription active but no externalId (userId)");
-                          return;
-                        }
-
-                        const plan = getPlanFromProductId(productId);
-                        console.log(
-                          `[polar] Subscription active: user=${userId}, product=${productId}, plan=${plan}`,
-                        );
-
-                        await updateUserPlan(userId, plan);
-                      },
-                      onSubscriptionCanceled: async (payload) => {
-                        const userId = payload.data.customer.externalId;
-
-                        if (!userId) {
-                          console.warn("[polar] Subscription canceled but no externalId (userId)");
-                          return;
-                        }
-                      },
-                      onSubscriptionRevoked: async (payload) => {
-                        const userId = payload.data.customer.externalId;
-
-                        if (!userId) {
-                          console.warn("[polar] Subscription revoked but no externalId (userId)");
-                          return;
-                        }
-
-                        console.log(
-                          `[polar] Subscription revoked: user=${userId} - downgrading to free`,
-                        );
-
-                        // Access has ended - downgrade to free plan
-                        await updateUserPlan(userId, "free");
-                      },
-                    }),
-                  ]
-                : []),
-            ],
-          }) as any, // Type cast needed due to better-auth peer dependency version mismatch
-        ]
-      : []),
+    ...billingPlugins,
     // nextCookies must be last
     nextCookies(),
   ],
 });
-
-// ============================================================================
-// Exports
-// ============================================================================
-
-export { polarClient };
-export const isBillingEnabled = polarClient !== null;
-export const availableProducts = POLAR_PRODUCTS;
-export type { UserPlan };

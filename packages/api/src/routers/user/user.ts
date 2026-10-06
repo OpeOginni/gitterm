@@ -14,7 +14,7 @@ import { sendAdminMessage } from "../../utils/discord";
 import { closeUsageSession } from "../../utils/metering";
 import { getProviderByCloudProviderId } from "../../providers";
 import { agentConfigKindSchema, validateAgentConfig } from "@gitterm/schema";
-import { polarClient, isBillingEnabled } from "@gitterm/auth";
+import { getBilling } from "../../billing";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { updateWorkspaceByIdAndInvalidate } from "../../service/workspace-mutations";
 import { isValidSshPublicKey, normalizeSshPublicKey } from "../../utils/ssh-public-key";
@@ -272,23 +272,7 @@ export const userRouter = router({
         }
       }
 
-      if (isBillingEnabled && polarClient) {
-        try {
-          await polarClient.customers.deleteExternal({ externalId: userId });
-          console.log(`[polar] Deleted customer for user ${userId}`);
-        } catch (error) {
-          const statusCode =
-            typeof error === "object" && error !== null && "statusCode" in error
-              ? Number((error as { statusCode?: number }).statusCode)
-              : undefined;
-
-          if (statusCode === 404) {
-            console.warn(`[polar] No customer found for user ${userId}, skipping delete`);
-          } else {
-            throw error;
-          }
-        }
-      }
+      await (await getBilling()).onUserDeleted(userId);
 
       // Finally, delete the user (this will cascade delete related records)
       await db.delete(user).where(eq(user.id, userId));

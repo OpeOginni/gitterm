@@ -14,6 +14,9 @@
     "./config/*": {
       "default": "./src/config/*.ts"
     },
+    "./billing": {
+      "default": "./src/billing/index.ts"
+    },
     "./routers/*": {
       "default": "./src/routers/*.ts"
     },
@@ -111,6 +114,7 @@
     "@daytonaio/sdk": "^0.207.0",
     "@gitterm/agent-runtime": "workspace:*",
     "@gitterm/auth": "workspace:*",
+    "@gitterm/billing": "workspace:*",
     "@gitterm/db": "workspace:*",
     "@gitterm/env": "workspace:*",
     "@gitterm/redis": "workspace:*",

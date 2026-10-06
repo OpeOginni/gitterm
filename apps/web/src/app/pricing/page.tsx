@@ -10,6 +10,7 @@ import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
 import { GitHub } from "@/components/logos/Github";
+import { useCurrentPlan } from "@/lib/billing";
 
 type UserPlan = "free" | "starter" | "pro";
 type CheckoutPlanSlug = "starter" | "pro";
@@ -257,6 +258,7 @@ function PricingPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<CheckoutPlanSlug | null>(null);
   const { data: session } = authClient.useSession();
+  const currentPlan = useCurrentPlan() as UserPlan;
   const router = useRouter();
   const searchParams = useSearchParams();
   const pricingEnabled = isBillingEnabled;
@@ -296,8 +298,6 @@ function PricingPageContent() {
   if (!pricingEnabled) {
     return null;
   }
-
-  const currentPlan: UserPlan = session?.user?.plan ?? "free";
 
   const handleUpgrade = async (slug: CheckoutPlanSlug) => {
     if (!isBillingEnabled) {

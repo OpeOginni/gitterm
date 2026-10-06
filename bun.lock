@@ -191,6 +191,7 @@
         "@daytonaio/sdk": "^0.207.0",
         "@gitterm/agent-runtime": "workspace:*",
         "@gitterm/auth": "workspace:*",
+        "@gitterm/billing": "workspace:*",
         "@gitterm/db": "workspace:*",
         "@gitterm/env": "workspace:*",
         "@gitterm/redis": "workspace:*",
@@ -238,13 +239,11 @@
     "packages/auth": {
       "name": "@gitterm/auth",
       "dependencies": {
+        "@gitterm/billing": "workspace:*",
         "@gitterm/db": "workspace:*",
         "@gitterm/env": "workspace:*",
-        "@polar-sh/better-auth": "^1.6.3",
-        "@polar-sh/sdk": "^0.42.1",
         "better-auth": "catalog:",
         "dotenv": "catalog:",
-        "drizzle-orm": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -252,6 +251,24 @@
       },
       "peerDependencies": {
         "typescript": "^5",
+      },
+    },
+    "packages/billing": {
+      "name": "@gitterm/billing",
+      "version": "0.0.0",
+      "dependencies": {
+        "@gitterm/db": "workspace:*",
+        "@gitterm/env": "workspace:*",
+        "@gitterm/schema": "workspace:*",
+        "@polar-sh/better-auth": "^1.6.3",
+        "@polar-sh/sdk": "^0.42.1",
+        "better-auth": "catalog:",
+        "drizzle-orm": "catalog:",
+      },
+      "devDependencies": {
+        "@gitterm/config": "workspace:*",
+        "@types/bun": "^1.2.6",
+        "typescript": "catalog:",
       },
     },
     "packages/bot": {
@@ -783,6 +800,8 @@
     "@gitterm/api": ["@gitterm/api@workspace:packages/api"],
 
     "@gitterm/auth": ["@gitterm/auth@workspace:packages/auth"],
+
+    "@gitterm/billing": ["@gitterm/billing@workspace:packages/billing"],
 
     "@gitterm/bot": ["@gitterm/bot@workspace:packages/bot"],
 
@@ -3162,6 +3181,8 @@
 
     "@gitterm/auth/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
 
+    "@gitterm/billing/@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
+
     "@gitterm/bot/@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
 
     "@gitterm/cli/@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
@@ -3669,6 +3690,8 @@
     "@esbuild-kit/core-utils/esbuild/@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.18.20", "", { "os": "win32", "cpu": "ia32" }, "sha512-Wv7QBi3ID/rROT08SABTS7eV4hX26sVduqDOTe1MvGMjNd3EjOz4b7zeexIR62GTIEKrfJXKL9LFxTYgkyeu7g=="],
 
     "@esbuild-kit/core-utils/esbuild/@esbuild/win32-x64": ["@esbuild/win32-x64@0.18.20", "", { "os": "win32", "cpu": "x64" }, "sha512-kTdfRcSiDfQca/y9QIkng02avJ+NCaQvrMejlsB3RRv5sE9rRoeBPISaZpKxHELzRxZyLvNts1P27W3wV+8geQ=="],
+
+    "@gitterm/billing/@types/bun/bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
 
     "@gitterm/bot/@types/bun/bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
 
