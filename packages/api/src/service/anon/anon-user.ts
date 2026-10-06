@@ -87,7 +87,6 @@ export async function getOrCreateAnonUser(ipHash: string): Promise<AnonUser> {
       email,
       name: `Anonymous · ${ipHash.slice(0, 8)}`,
       emailVerified: false,
-      plan: "free",
       role: "user",
       createdAt: now,
       updatedAt: now,
