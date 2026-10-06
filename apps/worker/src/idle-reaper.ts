@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { getInternalClient } from "@gitterm/api/client/internal";
-import { features } from "@gitterm/api/config";
+import env from "@gitterm/env/worker";
 
 /**
  * Idle Reaper Worker
@@ -54,7 +54,7 @@ async function runOnce() {
     // ========================================================================
     // 1. Pause idle workspaces (controlled by ENABLE_IDLE_REAPING)
     // ========================================================================
-    if (features.idleReaping) {
+    if (env.ENABLE_IDLE_REAPING) {
       console.log("[idle-reaper] Checking for idle workspaces...");
       const idleWorkspaces = await internalClient.internal.getIdleWorkspaces.query();
 
@@ -150,7 +150,7 @@ async function runOnce() {
     // ========================================================================
     // 3. Terminate workspaces that remained paused for the full retention window.
     // ========================================================================
-    if (features.idleReaping) {
+    if (env.ENABLE_IDLE_REAPING) {
       console.log(
         "[idle-reaper] Checking for workspaces inactive beyond their plan's retention window...",
       );
@@ -224,7 +224,7 @@ async function runOnce() {
 
 async function main() {
   console.log("[idle-reaper] Starting workspace reaper...");
-  console.log(`[idle-reaper] Idle reaping: ${features.idleReaping ? "enabled" : "disabled"}`);
+  console.log(`[idle-reaper] Idle reaping: ${env.ENABLE_IDLE_REAPING ? "enabled" : "disabled"}`);
 
   // Run-once mode for external schedulers (Railway Cron).
   if (REAP_INTERVAL_MINUTES <= 0) {
