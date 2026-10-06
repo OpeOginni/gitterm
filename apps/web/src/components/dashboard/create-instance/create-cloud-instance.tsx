@@ -6,7 +6,7 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowUpRight, ChevronDown, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowUpRight, Blocks, ChevronDown, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +36,7 @@ import {
   type WorkspaceProfile,
 } from "./types";
 import { GitHubRepositoryBranchField } from "./github-repository-branch-field";
-import { ModelProviderPicker } from "./model-provider-picker";
+import { ModelProviderEmpty, ModelProviderPicker } from "./model-provider-picker";
 import { useBillingAccount } from "@/lib/billing";
 import { normalizeGitHubRepositoryUrl } from "./github-repository-utils";
 
@@ -102,13 +102,54 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     ...trpc.googleCloud.availability.queryOptions(),
     staleTime: STALE_TIME,
   });
-  const isGoogleCloudAvailable = googleCloudAvailability?.available === true;
+  const { data: integrationCatalog } = useQuery({
+    ...trpc.integrations.list.queryOptions(),
+    staleTime: STALE_TIME,
+  });
+  const isIntegrationEnabled = (key: string) =>
+    integrationCatalog?.some((integration) => integration.key === key && integration.enabled) ===
+    true;
+  const canAddGoogleCloud =
+    isIntegrationEnabled("google") && googleCloudAvailability?.available === true;
+  // The picker shows only once the user has an identity to pick.
+  const isGoogleCloudAvailable = canAddGoogleCloud && googleCloudIntegrations.length > 0;
   const { data: connections = [], error: connectionsError } = useQuery(
     trpc.integrations.connections.list.queryOptions(),
   );
   const mcpConnections = connections.filter(
     (connection) => connection.integration === "mcp" || connection.integration === "executor",
   );
+  const hasConnection = (key: string) =>
+    connections.some((connection) => connection.integration === key);
+  // Enabled integrations the user hasn't set up yet; each links to Integrations.
+  const integrationSetups = [
+    {
+      key: "google",
+      name: "Google Cloud",
+      description: "Keyless gcloud access",
+      icon: <Image src="/google-cloud.svg" alt="" width={16} height={16} />,
+      show: canAddGoogleCloud && !isGoogleCloudAvailable,
+    },
+    {
+      key: "executor",
+      name: "Executor",
+      description: "Your Executor tool catalog through one connection",
+      icon: <Image src="/executor.png" alt="" width={16} height={16} />,
+      show: isIntegrationEnabled("executor") && !connectionsError && !hasConnection("executor"),
+    },
+    {
+      key: "mcp",
+      name: "MCP servers",
+      description: "Remote MCP tools your agent connects to directly",
+      icon: <Blocks className="size-4 text-fg-2" />,
+      show: isIntegrationEnabled("mcp") && !connectionsError && !hasConnection("mcp"),
+    },
+  ].filter((setup) => setup.show);
+  const integrationTypes = [
+    canAddGoogleCloud ? "Google Cloud" : null,
+    isIntegrationEnabled("executor") || hasConnection("executor") ? "Executor" : null,
+    isIntegrationEnabled("mcp") || hasConnection("mcp") ? "MCP servers" : null,
+  ].filter(Boolean);
   const { data: defaultProviderData } = useQuery({
     ...trpc.user.getDefaultCloudProvider.queryOptions(),
     staleTime: STALE_TIME,
@@ -703,24 +744,34 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   <SelectValue placeholder="Select machine size" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableMachineProfiles.map((profile) => (
-                    <SelectItem
-                      key={profile.id}
-                      value={profile.id}
-                      disabled={profile.available === false}
-                    >
-                      <span>{profile.name}</span>
-                      <span className="ml-2 font-mono text-[10px] text-muted-foreground">
-                        {formatMachineSize(profile) ?? profile.key}
-                        {profile.priceMicrosPerHour != null
-                          ? ` · ${formatHourlyPrice(profile.priceMicrosPerHour)}`
-                          : ""}
-                      </span>
-                      {profile.available === false && (
-                        <span className="ml-2 text-[10px] text-primary">Paid plans</span>
-                      )}
-                    </SelectItem>
-                  ))}
+                  {/* Sizes the plan allows come first; locked ones follow, in their usual order. */}
+                  {availableMachineProfiles
+                    .toSorted(
+                      (a, b) => Number(a.available === false) - Number(b.available === false),
+                    )
+                    .map((profile) => (
+                      <SelectItem
+                        key={profile.id}
+                        value={profile.id}
+                        disabled={profile.available === false}
+                      >
+                        {/* Fixed columns so name, size and price line up across rows. */}
+                        <span className="grid grid-cols-[4.25rem_6rem_3.75rem] items-baseline gap-x-2">
+                          <span className="truncate">{profile.name}</span>
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {formatMachineSize(profile) ?? profile.key}
+                          </span>
+                          <span className="text-right font-mono text-[10px] text-muted-foreground">
+                            {profile.priceMicrosPerHour != null
+                              ? formatHourlyPrice(profile.priceMicrosPerHour)
+                              : ""}
+                          </span>
+                        </span>
+                        {profile.available === false && (
+                          <span className="ml-3 text-[10px] text-primary">Paid plans</span>
+                        )}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               {selectedMachineProfile?.description && (
@@ -854,7 +905,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         </div>
 
         {/* ── 3b. Model providers ── */}
-        {credentialGroups.length > 0 && (
+        {credentialGroups.length > 0 ? (
           <ModelProviderPicker
             groups={credentialGroups}
             selections={credentialSelections}
@@ -862,27 +913,22 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               setCredentialSelections((current) => ({ ...current, [key]: credentialId }))
             }
           />
-        )}
+        ) : credentialsData ? (
+          <ModelProviderEmpty />
+        ) : null}
 
         {/* ── 4b. Optional integrations, folded away until someone wants one ── */}
-        {isGoogleCloudAvailable || mcpConnections.length > 0 ? (
-          <div className="rounded-xl border border-dashed border-line">
+        {isGoogleCloudAvailable || mcpConnections.length > 0 || integrationSetups.length > 0 ? (
+          <div className="min-w-0 rounded-xl border border-dashed border-line">
             <button
               type="button"
               aria-expanded={showIntegrations}
               onClick={() => setShowIntegrations((value) => !value)}
-              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-fill"
+              className="flex w-full min-w-0 items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-fill"
             >
               <Plus className="size-3.5 shrink-0 text-fg-4" />
               <span className="text-xs text-fg-2">Add integrations</span>
-              <span className="truncate text-xs text-fg-4">
-                {[
-                  isGoogleCloudAvailable ? "Google Cloud" : null,
-                  mcpConnections.length ? "MCP servers, Executor" : null,
-                ]
-                  .filter(Boolean)
-                  .join(", ")}
-              </span>
+              <span className="truncate text-xs text-fg-4">{integrationTypes.join(", ")}</span>
               <span className="ml-auto flex shrink-0 items-center gap-2">
                 {selectedIntegrations > 0 ? (
                   <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary">
@@ -911,16 +957,9 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                       <Select
                         value={googleCloudIntegrationId}
                         onValueChange={setGoogleCloudIntegrationId}
-                        disabled={googleCloudIntegrations.length === 0}
                       >
                         <SelectTrigger className="h-9">
-                          <SelectValue
-                            placeholder={
-                              googleCloudIntegrations.length
-                                ? "Select service account"
-                                : "No integrations"
-                            }
-                          />
+                          <SelectValue placeholder="Select service account" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
@@ -939,66 +978,94 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   </div>
                 ) : null}
 
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <Label className="text-xs font-medium text-muted-foreground">
-                      MCP servers and Executor
-                    </Label>
-                    <Link
-                      href={"/dashboard/integrations" as Route}
-                      className="text-xs text-muted-foreground underline underline-offset-2"
-                    >
-                      Manage connections
-                    </Link>
+                {mcpConnections.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label className="text-xs font-medium text-muted-foreground">
+                        MCP servers and Executor
+                      </Label>
+                      <Link
+                        href={"/dashboard/integrations" as Route}
+                        className="text-xs text-muted-foreground underline underline-offset-2"
+                      >
+                        Manage connections
+                      </Link>
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {supportsMcp
+                        ? "Choose servers for this workspace. OpenCode connects directly; their credentials will be available to its agent."
+                        : "GitTerm MCP connections require an OpenCode workspace. T3Code is not supported yet."}
+                    </p>
+                    {connectionsError ? (
+                      <p role="alert" className="text-xs text-red-400">
+                        Couldn't load connections. You can create a workspace without MCP tools.
+                      </p>
+                    ) : null}
+                    {mcpConnections.map((connection) => (
+                      <label key={connection.id} className="flex items-center gap-2 text-xs">
+                        <Checkbox
+                          disabled={
+                            !supportsMcp ||
+                            connection.status !== "connected" ||
+                            (mcpConnectionIds.length >= 30 &&
+                              !mcpConnectionIds.includes(connection.id))
+                          }
+                          checked={
+                            supportsMcp &&
+                            connection.status === "connected" &&
+                            mcpConnectionIds.includes(connection.id)
+                          }
+                          onCheckedChange={(checked) =>
+                            setMcpConnectionIds((ids) =>
+                              checked === true
+                                ? [...new Set([...ids, connection.id])]
+                                : ids.filter((id) => id !== connection.id),
+                            )
+                          }
+                        />
+                        <span className="min-w-0 flex-1 truncate">{connection.name}</span>
+                        <span className="shrink-0 text-muted-foreground">
+                          {connection.status === "connected"
+                            ? connection.integration === "executor"
+                              ? "Executor"
+                              : "MCP"
+                            : "Needs attention"}
+                        </span>
+                      </label>
+                    ))}
                   </div>
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {supportsMcp
-                      ? "Choose servers for this workspace. OpenCode connects directly; their credentials will be available to its agent."
-                      : "GitTerm MCP connections require an OpenCode workspace. T3Code is not supported yet."}
-                  </p>
-                  {connectionsError ? (
-                    <p role="alert" className="text-xs text-red-400">
-                      Couldn't load connections. You can create a workspace without MCP tools.
-                    </p>
-                  ) : null}
-                  {!mcpConnections.length ? (
-                    <p className="text-xs text-muted-foreground">
-                      Connect a remote server or Executor from Integrations first.
-                    </p>
-                  ) : null}
-                  {mcpConnections.map((connection) => (
-                    <label key={connection.id} className="flex items-center gap-2 text-xs">
-                      <Checkbox
-                        disabled={
-                          !supportsMcp ||
-                          connection.status !== "connected" ||
-                          (mcpConnectionIds.length >= 30 &&
-                            !mcpConnectionIds.includes(connection.id))
-                        }
-                        checked={
-                          supportsMcp &&
-                          connection.status === "connected" &&
-                          mcpConnectionIds.includes(connection.id)
-                        }
-                        onCheckedChange={(checked) =>
-                          setMcpConnectionIds((ids) =>
-                            checked === true
-                              ? [...new Set([...ids, connection.id])]
-                              : ids.filter((id) => id !== connection.id),
-                          )
-                        }
-                      />
-                      <span className="min-w-0 flex-1 truncate">{connection.name}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {connection.status === "connected"
-                          ? connection.integration === "executor"
-                            ? "Executor"
-                            : "MCP"
-                          : "Needs attention"}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                ) : null}
+
+                {integrationSetups.length > 0 ? (
+                  <div className="space-y-2">
+                    {isGoogleCloudAvailable || mcpConnections.length > 0 ? (
+                      <Label className="text-xs font-medium text-muted-foreground">Add more</Label>
+                    ) : null}
+                    <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+                      {integrationSetups.map((setup) => (
+                        <Link
+                          key={setup.key}
+                          href={"/dashboard/integrations" as Route}
+                          className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-fill"
+                        >
+                          <span className="flex size-5 shrink-0 items-center justify-center">
+                            {setup.icon}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs text-fg-2">{setup.name}</span>
+                            <span className="block truncate text-xs text-fg-4">
+                              {setup.description}
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1 text-xs text-primary">
+                            Set up
+                            <ArrowUpRight className="size-3" />
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

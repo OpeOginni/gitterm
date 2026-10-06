@@ -20,9 +20,6 @@ import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
 import { useCurrentPlan } from "@/lib/billing";
-import { useQuery } from "@tanstack/react-query";
-import { trpc } from "@/utils/trpc";
-import { formatMachineSize } from "@/components/dashboard/create-instance/types";
 
 type UserPlan = "free" | "pro" | "growth" | "starter";
 type CheckoutPlanSlug = "pro" | "growth";
@@ -48,7 +45,6 @@ const PLANS: PlanCard[] = [
     features: [
       "**60 min** of compute a day",
       "**Small** machines · 2 vCPU, 4 GB",
-      "boat (EU) or E2B (US)",
       "**2** workspaces · **2-day** retention",
     ],
     cta: "Start free",
@@ -61,7 +57,7 @@ const PLANS: PlanCard[] = [
     tagline: "For builders who ship every day.",
     features: [
       "**$25** of compute every month",
-      "**Every** provider and machine size",
+      "**Every** machine size",
       "**Always-on** workspaces, no daily limit",
       "Pay-as-you-go with **your** spending cap",
       "**15** workspaces · **15-day** retention",
@@ -78,7 +74,7 @@ const PLANS: PlanCard[] = [
     features: [
       "**$250** of compute every month",
       "**10% off** pay-as-you-go",
-      "**Every** provider and machine size",
+      "**Every** machine size",
       "**Always-on** workspaces, no daily limit",
       "**50** workspaces · **30-day** retention",
       "Custom subdomains and persistence",
@@ -103,7 +99,6 @@ const COMPARISON_ROWS: Array<{
   { label: "Pay-as-you-go", free: false, pro: "List price", growth: "**10% off**" },
   { label: "Daily runtime limit", free: "60 min", pro: "None", growth: "None" },
   { label: "Machine sizes", free: "Small", pro: "All", growth: "All" },
-  { label: "Providers", free: "boat, E2B", pro: "All", growth: "All" },
   { label: "Always-on workspaces", free: false, pro: true, growth: true },
   { label: "Workspaces", free: "**2**", pro: "**15**", growth: "**50**" },
   { label: "Idle retention", free: "2 days", pro: "15 days", growth: "30 days" },
@@ -263,62 +258,6 @@ function PlanCardView({
   );
 }
 
-/** Hourly price of every machine size, from the billing rate card. */
-function RateCard() {
-  const { data: rates } = useQuery(trpc.billing.rates.queryOptions());
-  if (!rates || rates.length === 0) return null;
-
-  return (
-    <section className="mt-16 sm:mt-24">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="marker">Compute rates</p>
-          <h2 className="mt-3 font-display text-2xl font-light tracking-tight text-fg md:text-3xl">
-            What your balance buys.
-          </h2>
-        </div>
-        <p className="max-w-md text-sm leading-relaxed text-fg-3">
-          Per running hour, metered by the second. Free plans run on the smallest sizes.
-        </p>
-      </div>
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-line bg-fill">
-        <table className="w-full min-w-[560px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-line font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
-              <th className="px-5 py-3 text-left font-medium">Provider</th>
-              <th className="px-4 py-3 text-left font-medium">Size</th>
-              <th className="px-4 py-3 text-left font-medium">Machine</th>
-              <th className="px-5 py-3 text-right font-medium">Per hour</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rates.map((rate) => (
-              <tr
-                key={`${rate.provider}-${rate.name}`}
-                className="border-b border-line last:border-b-0"
-              >
-                <td className="px-5 py-3 text-fg-2">
-                  {rate.provider}
-                  {rate.location ? (
-                    <span className="ml-2 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-fg-4">
-                      {rate.location}
-                    </span>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3 text-fg-3">{rate.name}</td>
-                <td className="px-4 py-3 text-fg-4">{formatMachineSize(rate) ?? "—"}</td>
-                <td className="px-5 py-3 text-right font-mono font-semibold tabular-nums text-fg">
-                  ${(rate.priceMicrosPerHour / 1_000_000).toFixed(3)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
 function PricingPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<CheckoutPlanSlug | null>(null);
@@ -474,8 +413,6 @@ function PricingPageContent() {
               Workspaces count every cloud workspace you keep, running or paused.
             </p>
           </section>
-
-          <RateCard />
 
           {/* Closing */}
           <section className="mt-16 grid gap-8 border-t border-line pt-12 sm:mt-24 md:grid-cols-2 md:items-center">

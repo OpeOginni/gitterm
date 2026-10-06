@@ -115,10 +115,10 @@ function ProviderLogo({
  *
  * Cards sit side by side on one baseline, overlapping like a fanned hand held
  * flat. At rest they overlap heavily so the deck stays compact; on hover they
- * slide apart and tilt a touch so each mark is mostly visible. The slot itself
- * widens with the fan (animated), so the deck pushes the label over instead of
- * spilling across it. Pure CSS: rest and fan values live in custom properties
- * and `group-hover` swaps between them.
+ * slide apart and tilt a touch so each mark is mostly visible. The slot is
+ * always as wide as the fan and the resting deck sits centred in it, so hovering
+ * moves only the cards, never the surrounding layout. Pure CSS: rest and fan
+ * values live in custom properties and `group-hover` swaps between them.
  */
 const CARD = 28;
 /** Horizontal step between cards when squared up (heavy overlap). */
@@ -168,23 +168,20 @@ function LogoDeck({ groups }: { groups: ProviderGroup[] }) {
   if (n === 1) return <>{cards[0].node}</>;
 
   const mid = (n - 1) / 2;
-  const slotStyle = {
-    height: CARD,
-    "--rest-w": `${CARD + (n - 1) * REST_STEP}px`,
-    "--fan-w": `${CARD + (n - 1) * FAN_STEP}px`,
-  } as CSSProperties;
+  // Centres the resting deck in the fan-width slot.
+  const restInset = ((n - 1) * (FAN_STEP - REST_STEP)) / 2;
 
   return (
     <span
-      style={slotStyle}
-      className="relative block shrink-0 [width:var(--rest-w)] transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:[width:var(--fan-w)] motion-reduce:transition-none"
+      style={{ width: CARD + (n - 1) * FAN_STEP, height: CARD }}
+      className="relative block shrink-0"
     >
       {cards.map((card, i) => {
         const offset = i - mid;
         const style = {
           zIndex: n - i,
           transformOrigin: "50% 120%",
-          "--rest": `translateX(${i * REST_STEP}px)`,
+          "--rest": `translateX(${restInset + i * REST_STEP}px)`,
           "--fan": `translateX(${i * FAN_STEP}px) rotate(${offset * 4}deg)`,
         } as CSSProperties;
         return (
@@ -198,6 +195,35 @@ function LogoDeck({ groups }: { groups: ProviderGroup[] }) {
         );
       })}
     </span>
+  );
+}
+
+const SUGGESTED_PROVIDERS: ProviderGroup[] = [
+  { key: "opencode-go", name: "OpenCode Go", credentials: [] },
+  { key: "openai", name: "OpenAI", credentials: [] },
+  { key: "anthropic", name: "Anthropic", credentials: [] },
+  { key: "openrouter", name: "OpenRouter", credentials: [] },
+];
+
+/** Shown instead of the picker when the user has no saved model credentials. */
+export function ModelProviderEmpty() {
+  return (
+    <Link
+      href={"/dashboard/models" as Route}
+      className="group flex w-full min-w-0 items-center gap-3 rounded-xl border border-dashed border-line px-3 py-2.5 text-left transition-colors hover:border-line-2 hover:bg-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+    >
+      <LogoDeck groups={SUGGESTED_PROVIDERS} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-medium text-fg">Model providers</span>
+        <span className="block text-[11px] leading-snug text-fg-3">
+          Add an OpenCode Go, OpenAI, Anthropic or OpenRouter key to use your own models
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1 text-xs text-primary">
+        Add
+        <ChevronRight className="h-3.5 w-3.5" />
+      </span>
+    </Link>
   );
 }
 
