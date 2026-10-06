@@ -72,3 +72,21 @@ describe("boat webhook payloads", () => {
     expect(asciiWebhookBoxId(box)).toBe("bx_box");
   });
 });
+
+const parsesWithCreatedAt = (createdAt: string) =>
+  asciiWebhookSchema.safeParse({
+    id: "evt_3",
+    type: "sandbox.archived",
+    createdAt,
+    data: { sandbox: { id: "bx_1" } },
+  }).success;
+
+describe("boat webhook timestamps", () => {
+  test("accepts offset and fractional timestamps, rejects non-dates", () => {
+    const event = parsesWithCreatedAt;
+    expect(event("2026-10-06T22:31:10.401Z")).toBe(true);
+    expect(event("2026-10-06T22:31:10.401+00:00")).toBe(true);
+    expect(event("2026-10-06T22:31:10.401123456Z")).toBe(true);
+    expect(event("not a date")).toBe(false);
+  });
+});

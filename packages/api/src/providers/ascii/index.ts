@@ -162,12 +162,26 @@ export class AsciiProvider implements ComputeProvider {
         : file.path.startsWith("~/")
           ? file.path.slice(2)
           : file.path;
+      const quoted = `'${path.replace(/'/g, `'"'"'`)}'`;
+      // boat's file API only writes under the work directory (/home/user) or /tmp.
+      // Runtime secrets like /run/gitterm/... go through a user-owned directory
+      // created with sudo, as the box user runs commands without root.
+      if (path.startsWith("/") && !/^\/(home\/user|tmp)(\/|$)/.test(path)) {
+        const dir = path.slice(0, path.lastIndexOf("/")) || "/";
+        const quotedDir = `'${dir.replace(/'/g, `'"'"'`)}'`;
+        await this.runCommand(
+          client,
+          boxId,
+          `sudo -n mkdir -p ${quotedDir} && sudo -n chown "$(id -u):$(id -g)" ${quotedDir} && chmod 700 ${quotedDir} && printf %s '${file.contentBase64}' | base64 -d > ${quoted}${file.mode ? ` && chmod ${file.mode.toString(8)} ${quoted}` : ""}`,
+        );
+        continue;
+      }
       await client.writeFile({
         boxId,
         fileWriteRequest: { path, content: file.contentBase64, encoding: "base64" },
       });
       if (file.mode)
-        await this.runCommand(client, boxId, `chmod ${file.mode.toString(8)} '${path}'`);
+        await this.runCommand(client, boxId, `chmod ${file.mode.toString(8)} ${quoted}`);
     }
   }
 

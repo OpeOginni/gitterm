@@ -26,7 +26,7 @@ const asciiSubject = z.looseObject({ id: z.string() });
 export const asciiWebhookSchema = z.looseObject({
   id: z.string(),
   type: asciiEventType,
-  createdAt: z.iso.datetime(),
+  createdAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date"),
   data: z.looseObject({
     sandbox: asciiSubject.optional(),
     box: asciiSubject.optional(),
