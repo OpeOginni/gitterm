@@ -1,6 +1,7 @@
 "use client";
 
 import { trpc, trpcClient, queryClient } from "@/utils/trpc";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Loader2,
@@ -26,6 +27,7 @@ import {
   KeyRound,
   SquareArrowOutUpRight,
   Lock,
+  Infinity as InfinityIcon,
 } from "lucide-react";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
@@ -211,6 +213,24 @@ export function InstanceCard({
       },
       onError: (error) => {
         toast.error(`Failed to pause workspace: ${error.message}`);
+      },
+    }),
+  );
+
+  const setAlwaysOnMutation = useMutation(
+    trpc.workspace.setAlwaysOn.mutationOptions({
+      onSuccess: (data) => {
+        toast.success(
+          data.alwaysOn
+            ? "Workspace stays on when idle. Spending limits still apply."
+            : "Workspace pauses when idle again",
+        );
+        queryClient.invalidateQueries({
+          queryKey: trpc.workspace.listWorkspaces.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
       },
     }),
   );
@@ -1129,6 +1149,36 @@ export function InstanceCard({
                 <PlayCircle className="h-3.5 w-3.5" />
               )}
               Restart
+            </Button>
+          )}
+
+          {workspace.hostingType === "cloud" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-9 px-3 text-xs",
+                workspace.alwaysOn && "border-primary/40 bg-primary/10 text-primary",
+              )}
+              title={
+                workspace.alwaysOn
+                  ? "Always on: click to pause when idle"
+                  : "Keep running when idle"
+              }
+              aria-pressed={workspace.alwaysOn}
+              disabled={setAlwaysOnMutation.isPending}
+              onClick={() =>
+                setAlwaysOnMutation.mutate({
+                  workspaceId: workspace.id,
+                  alwaysOn: !workspace.alwaysOn,
+                })
+              }
+            >
+              {setAlwaysOnMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <InfinityIcon className="h-3.5 w-3.5" />
+              )}
             </Button>
           )}
 

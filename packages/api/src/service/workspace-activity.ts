@@ -23,6 +23,7 @@ async function keepProviderWorkspaceAlive(workspaceId: string): Promise<void> {
       .select({
         externalInstanceId: workspace.externalInstanceId,
         userId: workspace.userId,
+        alwaysOn: workspace.alwaysOn,
         providerKey: cloudProvider.providerKey,
         email: user.email,
       })
@@ -45,7 +46,7 @@ async function keepProviderWorkspaceAlive(workspaceId: string): Promise<void> {
 
     await provider.keepAliveWorkspace(
       ws.externalInstanceId,
-      await getWorkspaceIdleTimeoutMs(ws.userId),
+      await getWorkspaceIdleTimeoutMs(ws.userId, ws.alwaysOn),
     );
   } catch (error) {
     logActivityCacheError("provider keep-alive", error);

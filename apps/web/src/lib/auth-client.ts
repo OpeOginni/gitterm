@@ -68,17 +68,17 @@ export const authClient: AppAuthClient = (isBillingEnabled
 /**
  * Checkout slug types
  */
-type CheckoutSlug = "starter" | "pro";
+type CheckoutSlug = "pro" | "growth";
 
 /**
  * Initiate checkout for a subscription plan
  * Redirects to Polar checkout page
  *
- * @param slug - Product slug ("starter", "pro")
+ * @param slug - Product slug ("pro", "growth")
  *
  * @example
- * await initiateCheckout("starter");
  * await initiateCheckout("pro");
+ * await initiateCheckout("growth");
  */
 export async function initiateCheckout(slug: CheckoutSlug) {
   if (!isBillingEnabled) {

@@ -245,13 +245,25 @@ export default function ProviderSettingsPage() {
     enabled: !!providerId,
   });
 
-  const { data: machineProfiles } = useQuery({
+  const { data: machineProfileData } = useQuery({
     queryKey: ["admin", "machineProfiles", providerId],
     queryFn: () =>
       trpcClient.admin.infrastructure.listMachineProfiles.query({
         cloudProviderId: providerId as string,
       }),
     enabled: !!providerId,
+  });
+  const machineProfiles = machineProfileData?.profiles;
+  const billingEnabled = machineProfileData?.billingEnabled ?? false;
+
+  const setMachineProfilePrice = useMutation({
+    mutationFn: (params: { id: string; microsPerHour: number | null }) =>
+      trpcClient.admin.infrastructure.setMachineProfilePrice.mutate(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "machineProfiles", providerId] });
+      toast.success("Price updated for new sessions");
+    },
+    onError: (error) => toast.error(error.message),
   });
 
   const updateProvider = useMutation({
@@ -1169,6 +1181,9 @@ export default function ProviderSettingsPage() {
                             {formatMachineSize(profile)}
                           </span>
                         )}
+                        {billingEnabled && profile.priceMicrosPerHour === null && (
+                          <Badge variant="destructive">No price: usage is free</Badge>
+                        )}
                       </div>
                       <p className="truncate font-mono text-[11px] text-muted-foreground">
                         {Object.keys(profile.providerOptions).length > 0
@@ -1177,6 +1192,35 @@ export default function ProviderSettingsPage() {
                       </p>
                     </div>
                     <div className="flex items-center justify-end gap-2">
+                      {billingEnabled && (
+                        <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                          $
+                          <Input
+                            key={profile.priceMicrosPerHour ?? "unpriced"}
+                            type="number"
+                            min={0}
+                            step="0.001"
+                            className="h-8 w-20"
+                            aria-label={`${profile.name} price per hour`}
+                            placeholder="0.12"
+                            defaultValue={
+                              profile.priceMicrosPerHour === null
+                                ? ""
+                                : profile.priceMicrosPerHour / 1_000_000
+                            }
+                            onBlur={(event) => {
+                              const value = event.target.value.trim();
+                              const microsPerHour =
+                                value === "" ? null : Math.round(Number(value) * 1_000_000);
+                              if (microsPerHour !== null && !Number.isFinite(microsPerHour)) return;
+                              if (microsPerHour !== profile.priceMicrosPerHour) {
+                                setMachineProfilePrice.mutate({ id: profile.id, microsPerHour });
+                              }
+                            }}
+                          />
+                          /h
+                        </label>
+                      )}
                       {!profile.isDefault && profile.isEnabled && (
                         <Button
                           type="button"

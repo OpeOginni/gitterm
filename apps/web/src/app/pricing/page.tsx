@@ -11,9 +11,12 @@ import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
 import { GitHub } from "@/components/logos/Github";
 import { useCurrentPlan } from "@/lib/billing";
+import { useQuery } from "@tanstack/react-query";
+import { trpc } from "@/utils/trpc";
+import { formatMachineSize } from "@/components/dashboard/create-instance/types";
 
-type UserPlan = "free" | "starter" | "pro";
-type CheckoutPlanSlug = "starter" | "pro";
+type UserPlan = "free" | "pro" | "growth" | "starter";
+type CheckoutPlanSlug = "pro" | "growth";
 
 interface PlanTier {
   name: string;
@@ -29,7 +32,7 @@ const PLAN_TIERS: PlanTier[] = [
   {
     name: "Free",
     price: 0,
-    description: "Try agentic coding on E2B or boat sandboxes. No card required",
+    description: "Try agentic coding on small E2B or boat sandboxes. No card required",
     features: [
       "60 minutes/day cloud runtime",
       "2 workspaces",
@@ -40,98 +43,113 @@ const PLAN_TIERS: PlanTier[] = [
     actionLabel: "Get Started",
   },
   {
-    name: "Starter",
-    slug: "starter",
-    price: 10,
-    description: "For occasional builders who want every provider and persistence",
-    features: [
-      "180 minutes/day cloud runtime",
-      "5 workspaces",
-      "7-day idle workspace retention",
-      "All providers and machine sizes",
-      "Custom Subdomains",
-    ],
-    actionLabel: "Choose Starter",
-  },
-  {
     name: "Pro",
     slug: "pro",
     price: 25,
-    description: "For serious solo builders who live in their workspaces",
+    description: "Every provider and machine size, billed by the second against a monthly balance",
     features: [
-      "480 minutes/day cloud runtime",
-      "15 workspaces",
-      "15-day idle workspace retention",
-      "All providers and machine sizes",
-      "Custom Subdomains",
+      "$25 of compute included every month",
+      "No daily runtime limit",
+      "Always-on workspaces",
+      "Optional pay-as-you-go with a spending limit",
+      "15 workspaces, 15-day retention",
+      "Custom subdomains and persistence",
     ],
     popular: true,
     actionLabel: "Go Pro",
+  },
+  {
+    name: "Growth",
+    slug: "growth",
+    price: 200,
+    description: "For teams and heavy users who run workspaces all month",
+    features: [
+      "$250 of compute included every month",
+      "10% off pay-as-you-go compute",
+      "Always-on workspaces",
+      "50 workspaces, 30-day retention",
+      "Everything in Pro",
+    ],
+    actionLabel: "Choose Growth",
   },
 ];
 
 const COMPARISON_ROWS: Array<{
   label: string;
   free: string | boolean;
-  starter: string | boolean;
   pro: string | boolean;
+  growth: string | boolean;
   selfHosted: string | boolean;
 }> = [
   {
-    label: "Daily cloud runtime",
-    free: "60 min",
-    starter: "180 min",
-    pro: "480 min",
+    label: "Included compute",
+    free: "60 min/day",
+    pro: "$25/month",
+    growth: "$250/month",
     selfHosted: "Unlimited",
+  },
+  {
+    label: "Pay-as-you-go",
+    free: false,
+    pro: "List price",
+    growth: "10% off",
+    selfHosted: "—",
+  },
+  {
+    label: "Daily runtime limit",
+    free: "60 min",
+    pro: "None",
+    growth: "None",
+    selfHosted: "None",
+  },
+  {
+    label: "Always-on workspaces",
+    free: false,
+    pro: true,
+    growth: true,
+    selfHosted: true,
   },
   {
     label: "Existing workspaces",
     free: "2",
-    starter: "5",
     pro: "15",
+    growth: "50",
     selfHosted: "Unlimited",
   },
   {
     label: "Idle workspace retention",
     free: "2 days",
-    starter: "7 days",
     pro: "15 days",
+    growth: "30 days",
     selfHosted: "Unlimited",
   },
   {
-    label: "Provider access",
+    label: "Providers",
     free: "E2B and boat",
-    starter: "All managed",
     pro: "All managed",
+    growth: "All managed",
     selfHosted: "Self-managed",
   },
   {
     label: "Machine sizes",
     free: "Small",
-    starter: "All",
     pro: "All",
+    growth: "All",
     selfHosted: "Admin-managed",
   },
   {
     label: "Persistent workspaces",
     free: false,
-    starter: true,
     pro: true,
+    growth: true,
     selfHosted: true,
   },
   {
     label: "Custom subdomains",
     free: false,
-    starter: true,
     pro: true,
+    growth: true,
     selfHosted: true,
-  },
-  {
-    label: "Priority provisioning",
-    free: false,
-    starter: false,
-    pro: true,
-    selfHosted: false,
   },
 ];
 
@@ -254,6 +272,58 @@ function PricingCard({
   );
 }
 
+/** Hourly price of every machine size, from the billing rate card. */
+function RateCard() {
+  const { data: rates } = useQuery(trpc.billing.rates.queryOptions());
+  if (!rates || rates.length === 0) return null;
+
+  return (
+    <div className="mt-12 overflow-hidden rounded-2xl border border-line bg-fill sm:mt-16">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line px-5 py-5 sm:px-6">
+        <h2 className="font-display text-2xl font-light tracking-tight text-white md:text-3xl">
+          Compute rates.
+        </h2>
+        <p className="max-w-md text-sm leading-relaxed text-fg-4">
+          Paid plans spend their monthly balance at these prices, metered by the second. Stopped
+          workspaces cost nothing.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-line font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+              <th className="px-5 py-3 text-left font-medium">Provider</th>
+              <th className="px-4 py-3 text-left font-medium">Size</th>
+              <th className="px-4 py-3 text-left font-medium">Machine</th>
+              <th className="px-4 py-3 text-right font-medium">Per hour</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rates.map((rate) => (
+              <tr
+                key={`${rate.provider}-${rate.name}`}
+                className="border-b border-line last:border-b-0"
+              >
+                <td className="px-5 py-3 text-fg-2">
+                  {rate.provider}
+                  {rate.location ? (
+                    <span className="ml-2 font-mono text-[10px] text-fg-4">{rate.location}</span>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3 text-fg-3">{rate.name}</td>
+                <td className="px-4 py-3 text-fg-4">{formatMachineSize(rate) ?? "—"}</td>
+                <td className="px-4 py-3 text-right font-mono tabular-nums text-fg-2">
+                  ${(rate.priceMicrosPerHour / 1_000_000).toFixed(3)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function PricingPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<CheckoutPlanSlug | null>(null);
@@ -273,7 +343,7 @@ function PricingPageContent() {
     const planParam = searchParams.get("plan");
     if (
       planParam &&
-      (planParam === "pro" || planParam === "starter") &&
+      (planParam === "pro" || planParam === "growth") &&
       session?.user &&
       !isLoading
     ) {
@@ -409,8 +479,8 @@ function PricingPageContent() {
                 </h2>
               </div>
               <p className="max-w-md text-sm leading-relaxed text-fg-4">
-                Workspace counts mean existing cloud workspaces, whether paused or live. Runtime is
-                only consumed while managed workspaces are active.
+                Workspace counts mean existing cloud workspaces, whether paused or live. Compute is
+                billed by the second, only while a workspace is running.
               </p>
             </div>
 
@@ -420,8 +490,8 @@ function PricingPageContent() {
                   <tr className="border-b border-line bg-fill font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
                     <th className="px-5 py-3 text-left font-medium">Feature</th>
                     <th className="px-4 py-3 text-center font-medium">Free</th>
-                    <th className="px-4 py-3 text-center font-medium">Starter</th>
                     <th className="px-4 py-3 text-center font-medium text-primary">Pro</th>
+                    <th className="px-4 py-3 text-center font-medium">Growth</th>
                     <th className="px-4 py-3 text-center font-medium">Self-hosted</th>
                   </tr>
                 </thead>
@@ -432,11 +502,11 @@ function PricingPageContent() {
                       <td className="px-4 py-4 text-center">
                         <ComparisonValue value={row.free} />
                       </td>
-                      <td className="px-4 py-4 text-center">
-                        <ComparisonValue value={row.starter} />
-                      </td>
                       <td className="bg-primary/2.5 px-4 py-4 text-center">
                         <ComparisonValue value={row.pro} />
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <ComparisonValue value={row.growth} />
                       </td>
                       <td className="px-4 py-4 text-center">
                         <ComparisonValue value={row.selfHosted} />
@@ -447,6 +517,8 @@ function PricingPageContent() {
               </table>
             </div>
           </div>
+
+          <RateCard />
 
           {/* BYOK explainer */}
           <div className="mt-12 max-w-2xl border-t border-line pt-10 sm:mt-16 sm:pt-12">

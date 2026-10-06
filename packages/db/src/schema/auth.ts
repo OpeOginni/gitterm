@@ -1,6 +1,5 @@
 import { pgTable, text, timestamp, boolean, pgEnum, uuid } from "drizzle-orm/pg-core";
 
-export const userPlanEnum = pgEnum("user_plan", ["free", "starter", "pro"] as const);
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"] as const);
 
 export const user = pgTable("user", {
@@ -13,8 +12,6 @@ export const user = pgTable("user", {
   defaultCloudProviderId: uuid("default_cloud_provider_id"),
   showGitTermOnCommits: boolean("show_gitterm_on_commits").notNull().default(true),
   allowTrial: boolean("allow_trial").notNull().default(false),
-  /** Superseded by billing_account; kept until every server reads plans from there. */
-  plan: userPlanEnum("plan").notNull().default("free"),
   role: userRoleEnum("role").notNull().default("user"),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),

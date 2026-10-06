@@ -35,7 +35,7 @@ function CheckoutSuccessContent() {
 
   const userPlan = checkoutPlan || currentPlan;
   const planName = userPlan.charAt(0).toUpperCase() + userPlan.slice(1);
-  const isPaidPlan = userPlan === "pro" || userPlan === "starter";
+  const isPaidPlan = userPlan !== "free";
 
   return (
     <div className="flex min-h-screen flex-col bg-background landing-grid dark">

@@ -131,6 +131,23 @@ async function runOnce() {
     }
 
     // ========================================================================
+    // 2b. Keep always-on workspaces' provider leases fresh, then run billing:
+    //     report usage and email usage alerts (no-ops without billing).
+    // ========================================================================
+    try {
+      const { renewed } = await internalClient.internal.keepAlwaysOnWorkspacesAlive.mutate();
+      if (renewed > 0) console.log(`[idle-reaper] Renewed ${renewed} always-on workspace lease(s)`);
+    } catch (error) {
+      console.error("[idle-reaper] Failed to renew always-on workspace leases:", error);
+    }
+    try {
+      const { notices, sent } = await internalClient.internal.runBillingTasks.mutate();
+      if (notices > 0) console.log(`[idle-reaper] Billing alerts: ${sent}/${notices} sent`);
+    } catch (error) {
+      console.error("[idle-reaper] Billing tasks failed:", error);
+    }
+
+    // ========================================================================
     // 3. Terminate workspaces that remained paused for the full retention window.
     // ========================================================================
     if (features.idleReaping) {

@@ -8,6 +8,10 @@
 import { UNLIMITED_ENTITLEMENTS, type Billing, type Entitlements } from "@gitterm/schema/billing";
 import { isManaged } from "../config/deployment";
 
+const billingDisabled = async (): Promise<never> => {
+  throw new Error("Billing is not enabled on this deployment");
+};
+
 export const unlimitedBilling: Billing = {
   enabled: false,
   plans: [],
@@ -17,11 +21,13 @@ export const unlimitedBilling: Billing = {
   checkRunAllowance: async () => ({ allowed: true }),
   getUsersOverAllowance: async () => new Set(),
   getAccount: async () => null,
-  setPlan: async () => {
-    throw new Error("Billing is not enabled on this deployment");
-  },
+  updateSettings: billingDisabled,
+  getMachinePrices: async () => new Map(),
+  setMachinePrice: billingDisabled,
+  setPlan: billingDisabled,
   countUsersByPlan: async () => ({}),
   onUserDeleted: async () => {},
+  runPeriodicTasks: async () => [],
 };
 
 let billing: Promise<Billing> | undefined;

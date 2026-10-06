@@ -6,7 +6,6 @@ import {
   uuid,
   pgEnum,
   integer,
-  date,
   boolean,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -136,6 +135,8 @@ export const workspace = pgTable(
 
     // Workspace hosting configuration
     hostingType: workspaceHostingTypeEnum("hosting_type").notNull().default("cloud"),
+    /** Never paused for inactivity; spending limits still apply. */
+    alwaysOn: boolean("always_on").notNull().default(false),
     name: text("name"), // Display name for the workspace
     idempotencyKey: text("idempotency_key"),
     /** Caller-owned key/value tags (e.g. tenant or channel ids), filterable in list. */
@@ -190,17 +191,6 @@ export const usageSession = pgTable("usage_session", {
   durationMinutes: integer("duration_minutes"),
   stopSource: sessionStopSourceEnum("stop_source"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-// No longer written: billing derives daily usage from usage_session. Dropped once
-// every server runs that code.
-export const dailyUsage = pgTable("daily_usage", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
-  date: date("date").notNull(),
-  minutesUsed: integer("minutes_used").notNull().default(0),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const agentConfigKindEnum = pgEnum("agent_config_kind", [
@@ -296,6 +286,4 @@ export type AgentWorkspaceConfig = typeof agentWorkspaceConfig.$inferSelect;
 export type WorkspaceEnvironmentVariables = typeof workspaceEnvironmentVariables.$inferSelect;
 export type NewUsageSession = typeof usageSession.$inferInsert;
 export type UsageSession = typeof usageSession.$inferSelect;
-export type NewDailyUsage = typeof dailyUsage.$inferInsert;
-export type DailyUsage = typeof dailyUsage.$inferSelect;
 export type SessionStopSource = (typeof sessionStopSourceEnum.enumValues)[number];

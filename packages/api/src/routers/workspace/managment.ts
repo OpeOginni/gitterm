@@ -16,6 +16,7 @@ import { workspaceSetup } from "@gitterm/db/schema/workspace-setup";
 import { TRPCError } from "@trpc/server";
 import { closeUsageSession, createUsageSession } from "../../utils/metering";
 import { canUseProvider, getBilling } from "../../billing";
+import { ALWAYS_ON_LEASE_MS } from "../../service/workspace-timeouts";
 import type { Entitlements } from "@gitterm/schema/billing";
 import {
   getProviderByCloudProviderId,
@@ -317,6 +318,8 @@ const workspaceCreateBaseSchema = z.strictObject({
   connections: z.array(z.string().min(1)).max(32).optional(),
   repositoryCredentials: repositoryCredentialsSchema.optional(),
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
+  /** Keep the workspace running while idle. Spending limits still apply. */
+  alwaysOn: z.boolean().optional(),
   /** Per-provider selection: inline apiKey, dashboard credential by label, or dashboard default. */
   models: workspaceModelsSchema.optional(),
   /** Injected into this workspace only; never stored as dashboard environment settings. */
@@ -512,6 +515,8 @@ function describeMachineProfiles(
     machineProfiles: MachineProfileType[];
   },
   entitlements: Entitlements,
+  /** Hourly price per profile id in millionths of a dollar; empty without billing. */
+  prices: Map<string, number>,
 ) {
   const mode = provider.machineSelectionPolicy.mode;
   const selectable = getSelectableMachineProfiles(
@@ -527,6 +532,7 @@ function describeMachineProfiles(
     description: profile.description,
     vcpus: profile.vcpus,
     memoryGb: profile.memoryGb,
+    priceMicrosPerHour: prices.get(profile.id) ?? null,
     isDefault: profile === defaultProfile,
     available: selectable.includes(profile),
   }));
@@ -730,8 +736,14 @@ export const workspaceRouter = router({
           orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
         });
 
-        // Billing decides which providers and sizes the viewer may use.
-        const entitlements = await (await getBilling()).getEntitlements(ctx.session.user.id);
+        // Billing decides which providers and sizes the viewer may use, and prices them.
+        const billing = await getBilling();
+        const [entitlements, prices] = await Promise.all([
+          billing.getEntitlements(ctx.session.user.id),
+          billing.getMachinePrices(
+            providers.flatMap((provider) => provider.machineProfiles.map((profile) => profile.id)),
+          ),
+        ]);
         const planVisibleProviders = providers.filter((provider) => {
           const providerKey = (provider.providerKey ?? "local").toLowerCase();
           return (
@@ -784,7 +796,7 @@ export const workspaceRouter = router({
                     )
                   : [],
               regions,
-              machineProfiles: describeMachineProfiles(provider, entitlements),
+              machineProfiles: describeMachineProfiles(provider, entitlements, prices),
               sshAccessSupport: normalizeProvidersshAccessSupport(provider.sshAccessSupport),
             };
           }),
@@ -805,7 +817,8 @@ export const workspaceRouter = router({
     }),
 
   getWorkspaceCatalog: accountProcedure("workspace:read").query(async ({ ctx }) => {
-    const entitlements = await (await getBilling()).getEntitlements(ctx.session.user.id);
+    const billing = await getBilling();
+    const entitlements = await billing.getEntitlements(ctx.session.user.id);
     const [currentUser, agents, providers, images] = await Promise.all([
       db.query.user.findFirst({ where: eq(user.id, ctx.session.user.id) }),
       db.query.agentType.findMany({
@@ -870,6 +883,9 @@ export const workspaceRouter = router({
           ),
       ),
     );
+    const prices = await billing.getMachinePrices(
+      providers.flatMap((provider) => provider.machineProfiles.map((profile) => profile.id)),
+    );
     const catalogProviders = providers.flatMap((provider) => {
       const parsedKey = providerKeySchema.safeParse(provider.providerKey);
       if (
@@ -918,7 +934,7 @@ export const workspaceRouter = router({
             location: providerRegion.location,
           })),
           location: provider.location,
-          machines: describeMachineProfiles(provider, entitlements)
+          machines: describeMachineProfiles(provider, entitlements, prices)
             .filter((profile) => profile.available)
             .map(({ available: _available, ...profile }) => profile),
           agentKeys,
@@ -1832,6 +1848,13 @@ export const workspaceRouter = router({
 
         // Determine if this is a local workspace
         const isLocal = providerKey === "local";
+
+        if (input.alwaysOn && !isLocal && !entitlements.alwaysOn) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Always-on workspaces require a paid plan.",
+          });
+        }
 
         // Local workspaces don't consume managed compute, so they're exempt.
         if (!isLocal && !canUseProvider(entitlements, providerKey)) {
@@ -2921,6 +2944,7 @@ export const workspaceRouter = router({
           upstreamUrl: workspaceInfo.upstreamUrl,
           status: initialWorkspaceStatus,
           hostingType: isLocal ? "local" : "cloud",
+          alwaysOn: !isLocal && !!input.alwaysOn,
           name: input.name || subdomain,
           metadata: input.metadata ?? {},
           botId: ctx.botIdentity?.id ?? null,
@@ -3557,6 +3581,55 @@ export const workspaceRouter = router({
     }),
 
   // Pause a running workspace (compute down, recoverable)
+  /** Keep a workspace running while idle. Spending limits still pause it. */
+  setAlwaysOn: accountProcedure("workspace:write")
+    .input(z.object({ workspaceId: z.uuid(), alwaysOn: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      if (input.alwaysOn && !(await (await getBilling()).getEntitlements(userId)).alwaysOn) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Always-on workspaces require a paid plan.",
+        });
+      }
+
+      const [updated] = await db
+        .update(workspace)
+        .set({ alwaysOn: input.alwaysOn, updatedAt: new Date() })
+        .where(
+          and(
+            eq(workspace.id, input.workspaceId),
+            eq(workspace.userId, userId),
+            eq(workspace.hostingType, "cloud"),
+            ne(workspace.status, "terminated"),
+          ),
+        )
+        .returning({
+          status: workspace.status,
+          externalInstanceId: workspace.externalInstanceId,
+          cloudProviderId: workspace.cloudProviderId,
+        });
+      if (!updated) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      }
+
+      // Extend the provider's lease now rather than waiting for the worker.
+      if (input.alwaysOn && updated.status === "running") {
+        const [provider] = await db
+          .select({ providerKey: cloudProvider.providerKey })
+          .from(cloudProvider)
+          .where(eq(cloudProvider.id, updated.cloudProviderId));
+        const computeProvider = provider
+          ? await getProviderByCloudProviderId(provider.providerKey, updated.cloudProviderId)
+          : null;
+        await computeProvider
+          ?.keepAliveWorkspace?.(updated.externalInstanceId, ALWAYS_ON_LEASE_MS)
+          .catch((error) => console.error("[always-on] Failed to extend provider lease", error));
+      }
+
+      return { alwaysOn: input.alwaysOn };
+    }),
+
   pauseWorkspace: accountProcedure("workspace:write")
     .input(
       z.object({
