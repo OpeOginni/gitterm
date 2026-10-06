@@ -1,4 +1,5 @@
 import { polar, checkout, portal, webhooks } from "@polar-sh/better-auth";
+import type { BetterAuthPlugin } from "better-auth";
 import type { models } from "@polar-sh/sdk/2026-10";
 import env from "@gitterm/env/auth";
 import { getAccount, recordCancellation, setPlan } from "./accounts";
@@ -110,8 +111,10 @@ const saveRefund = (refund: PolarRefund) => recordRefund(refund, "webhook", null
  * Polar's legacy and Standard Webhooks signatures. Polar's `usage()`
  * extension is intentionally not installed: it would let signed-in users
  * ingest their own usage events, and only the server reports usage.
+ *
+ * Typed as plain plugins so Polar's types never leak into the auth instance.
  */
-export function createBillingAuthPlugins() {
+export function createBillingAuthPlugins(): BetterAuthPlugin[] {
   if (!polarClient) return [];
   return [
     polar({
