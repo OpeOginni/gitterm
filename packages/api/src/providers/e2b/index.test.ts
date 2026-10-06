@@ -3,6 +3,32 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } fr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentFile } from "../compute";
+import { applyMachineProfile } from "../machine-profile";
+
+test("E2B selects owner-qualified templates for every agent, size and SSH mode", async () => {
+  const { E2BProvider } = await import(".");
+  const provider = new E2BProvider() as any;
+  const opencode = {
+    e2b: {
+      templateId: "brightoginni123/gitterm-opencode-server",
+      sshTemplateId: "brightoginni123/gitterm-opencode-server-with-ssh",
+    },
+  };
+  const t3code = { e2b: { templateId: "brightoginni123/gitterm-t3code-server" } };
+  for (const suffix of ["-sm", "", "-lg"]) {
+    const opencodeMetadata = applyMachineProfile(opencode, "e2b", { templateSuffix: suffix });
+    const t3codeMetadata = applyMachineProfile(t3code, "e2b", { templateSuffix: suffix });
+    expect(provider.getTemplateId({ imageProviderMetadata: opencodeMetadata }, false)).toBe(
+      `brightoginni123/gitterm-opencode-server${suffix}`,
+    );
+    expect(provider.getTemplateId({ imageProviderMetadata: opencodeMetadata }, true)).toBe(
+      `brightoginni123/gitterm-opencode-server-with-ssh${suffix}`,
+    );
+    expect(provider.getTemplateId({ imageProviderMetadata: t3codeMetadata }, false)).toBe(
+      `brightoginni123/gitterm-t3code-server${suffix}`,
+    );
+  }
+});
 
 test("E2B writes home-relative agent config/auth to HOME, not a literal tilde directory", async () => {
   const { E2BProvider } = await import(".");

@@ -262,8 +262,10 @@ const seedImages = [
     providerMetadata: {
       railway: {},
       e2b: {
-        templateId: "gitterm-opencode-server",
-        sshTemplateId: "gitterm-opencode-server-with-ssh",
+        // Use public, owner-qualified aliases so machine profiles can append -sm/-lg.
+        // Raw template IDs are not aliases and cannot have size suffixes appended.
+        templateId: "brightoginni123/gitterm-opencode-server",
+        sshTemplateId: "brightoginni123/gitterm-opencode-server-with-ssh",
       },
       daytona: {
         image: "opeoginni/gitterm-opencode-server:latest",
@@ -300,7 +302,7 @@ const seedImages = [
       railway: {},
       // Built by the E2B template job in Publish Workspace Runtime Images.
       e2b: {
-        templateId: "gitterm-t3code-server",
+        templateId: "brightoginni123/gitterm-t3code-server",
       },
       daytona: {
         image: "opeoginni/gitterm-t3code-server:latest",
