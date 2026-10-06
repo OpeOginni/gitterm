@@ -106,48 +106,14 @@ export type ProviderKey =
 type ProviderSelectionBase = {
   /** Select a specific provider installation. Usually omitted. */
   providerId?: string;
-  /** An admin-defined profile or flexible resources within the provider's allowed limits. */
+  /** An admin-defined machine size, by key. */
   machine?: { type: "profile"; key: string };
 };
 
-type FlexibleMachine<T> = { type: "profile"; key: string } | { type: "custom"; resources: T };
-
-type AwsResources = {
-  cpu?: number;
-  memory?: number;
-  ephemeralStorageGiB?: number;
-  architecture?: "X86_64" | "ARM64";
-};
-type DaytonaResources = {
-  resources?: { cpu?: number; memory?: number; disk?: number };
-  editorResources?: { cpu?: number; memory?: number; disk?: number };
-};
-type VercelResources = { vcpus?: number };
-type ExeDevResources = { cpu?: number; memory?: string; disk?: string };
-/** E2B fixes CPU/RAM per template, so resources select a template build. */
-type E2bResources = { templateId?: string; sshTemplateId?: string };
-
 export type WorkspaceProviderSelection =
   | { type: "railway"; providerId?: string; region?: string }
-  | ({ type: "aws"; region?: string; accessProfile?: string } & Omit<
-      ProviderSelectionBase,
-      "machine"
-    > & {
-        machine?: FlexibleMachine<AwsResources>;
-      })
-  | ({ type: "daytona" } & Omit<ProviderSelectionBase, "machine"> & {
-        machine?: FlexibleMachine<DaytonaResources>;
-      })
-  | ({ type: "vercel" } & Omit<ProviderSelectionBase, "machine"> & {
-        machine?: FlexibleMachine<VercelResources>;
-      })
-  | ({ type: "exedev" } & Omit<ProviderSelectionBase, "machine"> & {
-        machine?: FlexibleMachine<ExeDevResources>;
-      })
-  | ({ type: "e2b" } & Omit<ProviderSelectionBase, "machine"> & {
-        machine?: FlexibleMachine<E2bResources>;
-      })
-  | ({ type: "ascii" } & ProviderSelectionBase)
+  | ({ type: "aws"; region?: string; accessProfile?: string } & ProviderSelectionBase)
+  | ({ type: "daytona" | "vercel" | "exedev" | "e2b" | "ascii" } & ProviderSelectionBase)
   | { type: "cloudflare"; providerId?: string };
 
 export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";

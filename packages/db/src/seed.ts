@@ -35,7 +35,7 @@ const seedCloudProviders: Array<{
   preferredDefault?: boolean;
   autoPersistent?: boolean;
   supportsPersistence?: boolean;
-  machineSelectionPolicy?: { mode: "standard" | "profiles" | "flexible" };
+  machineSelectionPolicy?: { mode: "standard" | "profiles" };
   supportsRegions: boolean;
   allowUserRegionSelection?: boolean;
   supportServerOnly?: boolean;
@@ -95,7 +95,7 @@ const seedCloudProviders: Array<{
     providerKey: "e2b",
     isEnabled: false,
     isSandbox: true,
-    preferredDefault: true,
+    preferredDefault: false,
     autoPersistent: true,
     supportsRegions: false,
     machineSelectionPolicy: { mode: "profiles" },
@@ -161,6 +161,8 @@ const seedCloudProviders: Array<{
     providerKey: "ascii",
     isEnabled: false,
     isSandbox: true,
+    // The default provider when a user hasn't picked one: cheapest for users and for us.
+    preferredDefault: true,
     autoPersistent: true,
     supportsRegions: false,
     machineSelectionPolicy: { mode: "profiles" },

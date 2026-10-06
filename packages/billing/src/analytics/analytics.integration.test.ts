@@ -18,7 +18,8 @@ import { syncSubscription } from "../auth";
 import { PLANS } from "../plans";
 import { MICROS_PER_CENT } from "../money";
 import { rebuildAccountPeriods } from "./account-periods";
-import { recordOrder, type PolarOrderLike } from "./payments";
+import { recordOrder, type PolarOrder } from "./payments";
+import type { models } from "@polar-sh/sdk/2026-10";
 import { importProviderCosts, providerCostImportSchema } from "./provider-costs";
 import { getReport, readOnly } from "./reports";
 import { simulatePricing } from "./simulate";
@@ -91,44 +92,57 @@ async function addSession(userId: string, startedAt: Date, stoppedAt: Date | nul
   return { workspaceId: created!.id, sessionId: session!.id };
 }
 
+/** A Polar subscription webhook payload (API 2026-10), with only the fields billing reads. */
 function subscription(
   userId: string,
   overrides: Partial<{ start: Date; end: Date; productId: string; modifiedAt: Date }> = {},
-) {
+): models.Subscription {
   return {
     id: `sub-${userId}`,
     status: "active",
-    productId: overrides.productId ?? "pro-product",
-    currentPeriodStart: overrides.start ?? PERIOD.start,
-    currentPeriodEnd: overrides.end ?? PERIOD.end,
-    modifiedAt: overrides.modifiedAt ?? overrides.start ?? PERIOD.start,
-    customer: { externalId: userId },
-  };
+    product_id: overrides.productId ?? "pro-product",
+    current_period_start: (overrides.start ?? PERIOD.start).toISOString(),
+    current_period_end: (overrides.end ?? PERIOD.end).toISOString(),
+    modified_at: (overrides.modifiedAt ?? overrides.start ?? PERIOD.start).toISOString(),
+    customer_cancellation_reason: null,
+    customer: { external_id: userId },
+  } as unknown as models.Subscription;
 }
 
-function order(userId: string, overrides: Partial<PolarOrderLike> = {}): PolarOrderLike {
+/** A Polar order (API 2026-10), with only the fields billing reads. */
+function order(
+  userId: string,
+  overrides: Partial<{
+    status: string;
+    paid: boolean;
+    modifiedAt: Date;
+    refundedAmount: number;
+    refundedTaxAmount: number;
+  }> = {},
+): PolarOrder {
   return {
     id: `order-${userId}`,
-    createdAt: d("2026-01-10T00:05:00Z"),
-    modifiedAt: d("2026-01-10T00:05:00Z"),
-    status: "paid",
-    paid: true,
-    subtotalAmount: 2500,
-    discountAmount: 0,
-    netAmount: 2500,
-    taxAmount: 500,
-    totalAmount: 3000,
-    refundedAmount: 0,
-    refundedTaxAmount: 0,
-    platformFeeAmount: 175,
-    platformFeeCurrency: "usd",
+    created_at: "2026-01-10T00:05:00.000Z",
+    modified_at: (overrides.modifiedAt ?? d("2026-01-10T00:05:00Z")).toISOString(),
+    status: overrides.status ?? "paid",
+    paid: overrides.paid ?? true,
+    subtotal_amount: 2500,
+    discount_amount: 0,
+    net_amount: 2500,
+    tax_amount: 500,
+    total_amount: 3000,
+    refunded_amount: overrides.refundedAmount ?? 0,
+    refunded_tax_amount: overrides.refundedTaxAmount ?? 0,
+    platform_fee_amount: 175,
+    platform_fee_currency: "usd",
     currency: "usd",
-    billingReason: "subscription_create",
-    customerId: `cus-${userId}`,
-    subscriptionId: `sub-${userId}`,
-    customer: { externalId: userId },
-    ...overrides,
-  };
+    billing_reason: "subscription_create",
+    customer_id: `cus-${userId}`,
+    product_id: null,
+    subscription_id: `sub-${userId}`,
+    customer: { external_id: userId },
+    items: [],
+  } as unknown as PolarOrder;
 }
 
 async function periodOf(userId: string) {

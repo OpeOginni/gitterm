@@ -1,48 +1,11 @@
 import { db } from "@gitterm/db";
 import { billingPaymentEvent } from "@gitterm/db/schema/billing-analytics";
+import type { models } from "@polar-sh/sdk/2026-10";
 import { ensureSubject } from "./subjects";
 
-/**
- * The fields of a Polar order or refund this ledger reads. Polar sends them
- * in webhooks and returns them from its API; amounts are in minor units.
- */
-export interface PolarOrderLike {
-  id: string;
-  createdAt: Date | string;
-  modifiedAt?: Date | string | null;
-  status: string;
-  paid?: boolean;
-  subtotalAmount: number;
-  discountAmount: number;
-  netAmount: number;
-  taxAmount: number;
-  totalAmount: number;
-  refundedAmount: number;
-  refundedTaxAmount: number;
-  platformFeeAmount?: number | null;
-  platformFeeCurrency?: string | null;
-  currency: string;
-  billingReason: string;
-  customerId: string;
-  productId?: string | null;
-  subscriptionId?: string | null;
-  customer?: { externalId?: string | null } | null;
-  items?: Array<{ amount: number; productPriceId?: string | null }>;
-}
-
-export interface PolarRefundLike {
-  id: string;
-  createdAt: Date | string;
-  modifiedAt?: Date | string | null;
-  status: string;
-  amount: number;
-  taxAmount: number;
-  currency: string;
-  orderId: string;
-  subscriptionId?: string | null;
-  customerId: string;
-  dispute?: unknown | null;
-}
+/** Polar orders and refunds (API version 2026-10), as sent in webhooks and returned by the API. */
+export type PolarOrder = models.Order;
+export type PolarRefund = models.Refund;
 
 const toDate = (value: Date | string) => (value instanceof Date ? value : new Date(value));
 
@@ -54,10 +17,10 @@ const overagePriceIds = new Set(
     .filter(Boolean),
 );
 
-export function orderOverageCents(order: PolarOrderLike): number | null {
-  if (overagePriceIds.size === 0 || !order.items) return null;
+export function orderOverageCents(order: PolarOrder): number | null {
+  if (overagePriceIds.size === 0) return null;
   return order.items
-    .filter((item) => item.productPriceId && overagePriceIds.has(item.productPriceId))
+    .filter((item) => item.product_price_id && overagePriceIds.has(item.product_price_id))
     .reduce((sum, item) => sum + item.amount, 0);
 }
 
@@ -66,71 +29,71 @@ export function orderOverageCents(order: PolarOrderLike): number | null {
  * ignored; a newer state adds a row, so earlier states stay auditable.
  */
 export async function recordOrder(
-  order: PolarOrderLike,
+  order: PolarOrder,
   source: "webhook" | "api_backfill",
   externalUserId: string | null,
 ): Promise<void> {
   const analyticsId = externalUserId ? await ensureSubject(externalUserId) : null;
-  const occurredAt = toDate(order.modifiedAt ?? order.createdAt);
+  const occurredAt = toDate(order.modified_at ?? order.created_at);
   await db
     .insert(billingPaymentEvent)
     .values({
       analyticsId,
       provider: "polar",
-      providerCustomerId: order.customerId,
+      providerCustomerId: order.customer_id,
       kind: "order",
       providerObjectId: order.id,
       orderId: order.id,
-      subscriptionId: order.subscriptionId ?? null,
-      productId: order.productId ?? null,
+      subscriptionId: order.subscription_id,
+      productId: order.product_id,
       status: order.status,
-      billingReason: order.billingReason,
+      billingReason: order.billing_reason,
       currency: order.currency.toUpperCase(),
-      subtotalCents: order.subtotalAmount,
-      discountCents: order.discountAmount,
-      netCents: order.netAmount,
-      taxCents: order.taxAmount,
-      totalCents: order.totalAmount,
+      subtotalCents: order.subtotal_amount,
+      discountCents: order.discount_amount,
+      netCents: order.net_amount,
+      taxCents: order.tax_amount,
+      totalCents: order.total_amount,
       overageCents: orderOverageCents(order),
-      refundedCents: order.refundedAmount,
-      refundedTaxCents: order.refundedTaxAmount,
-      platformFeeCents: order.platformFeeAmount ?? null,
-      platformFeeCurrency: order.platformFeeCurrency?.toUpperCase() ?? null,
-      paid: order.paid ?? order.status !== "pending",
-      objectCreatedAt: toDate(order.createdAt),
+      refundedCents: order.refunded_amount,
+      refundedTaxCents: order.refunded_tax_amount,
+      platformFeeCents: order.platform_fee_amount,
+      platformFeeCurrency: order.platform_fee_currency?.toUpperCase() ?? null,
+      paid: order.paid,
+      objectCreatedAt: toDate(order.created_at),
       occurredAt,
       receivedAt: new Date(),
       source,
-      idempotencyKey: `polar:order:${order.id}:${order.status}:${order.refundedAmount}:${occurredAt.toISOString()}`,
+      idempotencyKey: `polar:order:${order.id}:${order.status}:${order.refunded_amount}:${occurredAt.toISOString()}`,
     })
     .onConflictDoNothing({ target: billingPaymentEvent.idempotencyKey });
 }
 
 /** Record one observed state of a refund, including disputes (chargebacks). */
 export async function recordRefund(
-  refund: PolarRefundLike,
+  refund: PolarRefund,
   source: "webhook" | "api_backfill",
   externalUserId: string | null,
 ): Promise<void> {
   const analyticsId = externalUserId ? await ensureSubject(externalUserId) : null;
-  const occurredAt = toDate(refund.modifiedAt ?? refund.createdAt);
+  const occurredAt = toDate(refund.modified_at ?? refund.created_at);
   await db
     .insert(billingPaymentEvent)
     .values({
       analyticsId,
       provider: "polar",
-      providerCustomerId: refund.customerId,
+      providerCustomerId: refund.customer_id,
       kind: "refund",
       providerObjectId: refund.id,
-      orderId: refund.orderId,
-      subscriptionId: refund.subscriptionId ?? null,
+      orderId: refund.order_id,
+      subscriptionId: refund.subscription_id,
       status: refund.status,
       currency: refund.currency.toUpperCase(),
       // Polar reports refund tax separately, as it does for orders.
       refundedCents: refund.amount,
-      refundedTaxCents: refund.taxAmount,
+      refundedTaxCents: refund.tax_amount,
       isDispute: refund.dispute != null,
-      objectCreatedAt: toDate(refund.createdAt),
+      objectCreatedAt: toDate(refund.created_at),
       occurredAt,
       receivedAt: new Date(),
       source,

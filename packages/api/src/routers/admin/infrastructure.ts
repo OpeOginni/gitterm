@@ -57,11 +57,8 @@ const updateCloudProviderSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => (value === "" ? null : value)),
-  // "standard" pins the default size; "profiles" lets users pick one;
-  // "flexible" also accepts custom provider resources.
-  machineSelectionPolicy: z
-    .object({ mode: z.enum(["standard", "profiles", "flexible"]) })
-    .optional(),
+  // "standard" pins the default size; "profiles" lets users pick one.
+  machineSelectionPolicy: z.object({ mode: z.enum(["standard", "profiles"]) }).optional(),
 });
 
 const createRegionSchema = z.object({

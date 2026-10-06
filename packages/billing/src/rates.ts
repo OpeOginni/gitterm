@@ -32,5 +32,8 @@ export async function setMachinePrice(
   machineProfileId: string,
   microsPerHour: number | null,
 ): Promise<void> {
-  await db.insert(billingMachineRate).values({ machineProfileId, microsPerHour });
+  // Stamp with the app clock, which getMachinePrices and billing compare against.
+  await db
+    .insert(billingMachineRate)
+    .values({ machineProfileId, microsPerHour, effectiveFrom: new Date() });
 }

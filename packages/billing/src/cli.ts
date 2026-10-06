@@ -19,7 +19,7 @@ import { recordOrder, recordRefund } from "./analytics/payments";
 import { importProviderCosts, providerCostImportSchema } from "./analytics/provider-costs";
 import { syncSubjects } from "./analytics/subjects";
 import { syncUsageIntervals } from "./analytics/usage-intervals";
-import { polarClient } from "./polar";
+import { listAllOrders, listAllRefunds } from "./polar";
 
 const DAY_MS = 86_400_000;
 
@@ -130,20 +130,15 @@ async function backfill(flags: Map<string, string | true>, dryRun: boolean) {
 
   // 4. Optional: orders and refunds from Polar's API.
   if (flags.get("polar")) {
-    if (!polarClient) throw new Error("Polar is not configured (POLAR_ACCESS_TOKEN)");
     let orders = 0;
-    for await (const page of await polarClient.orders.list({ limit: 100 })) {
-      for (const order of page.result.items) {
-        orders++;
-        if (!dryRun) await recordOrder(order, "api_backfill", order.customer?.externalId ?? null);
-      }
+    for await (const order of listAllOrders()) {
+      orders++;
+      if (!dryRun) await recordOrder(order, "api_backfill", order.customer.external_id ?? null);
     }
     let refunds = 0;
-    for await (const page of await polarClient.refunds.list({ limit: 100 })) {
-      for (const refund of page.result.items) {
-        refunds++;
-        if (!dryRun) await recordRefund(refund, "api_backfill", null);
-      }
+    for await (const refund of listAllRefunds()) {
+      refunds++;
+      if (!dryRun) await recordRefund(refund, "api_backfill", null);
     }
     console.log(`[backfill] Polar orders: ${orders}, refunds: ${refunds}`);
   }

@@ -78,7 +78,6 @@ import { T3_PAIRING_CREATE_COMMAND } from "../../service/agents/t3code";
 import {
   configKindsForAgentType,
   providerKeySchema,
-  providerMachineOptionsSchemas,
   workspaceProviderSelectionSchema,
   workspaceSecretFilesSchema,
   workspaceSetupSchema,
@@ -364,7 +363,6 @@ const legacyWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
   cloudProviderId: z.string(),
   regionId: z.string().optional(),
   machineProfileId: z.uuid().optional(),
-  machineOptions: z.record(z.string(), z.unknown()).optional(),
   awsAccessProfileId: z.uuid().optional(),
   persistent: z.boolean(),
 });
@@ -454,11 +452,9 @@ async function resolveWorkspaceCreateIntent(
     const savedDefault = eligibleProviders.find(
       (candidate) => candidate.id === currentUser?.defaultCloudProviderId,
     );
-    const e2bDefault = eligibleProviders.find(
-      (candidate) => candidate.providerKey.toLowerCase() === "e2b",
-    );
+    // The user's saved choice, else the deployment's preferred provider (boat by default).
     const preferredDefault = eligibleProviders.find((candidate) => candidate.preferredDefault);
-    const effectiveDefault = savedDefault ?? e2bDefault ?? preferredDefault;
+    const effectiveDefault = savedDefault ?? preferredDefault;
     candidates = effectiveDefault ? [effectiveDefault] : eligibleProviders;
   }
 
@@ -501,7 +497,6 @@ async function resolveWorkspaceCreateIntent(
     machineProfileId: selectedMachine?.id,
     awsAccessProfileId:
       providerSelection?.type === "aws" ? providerSelection.accessProfile : undefined,
-    machineOptions: requestedMachine?.type === "custom" ? requestedMachine.resources : undefined,
     persistent: rawInput.persistent ?? selectedProvider.autoPersistent,
   };
 }
@@ -545,28 +540,10 @@ function describeMachineProfiles(
 async function resolveMachineSelection(
   provider: CloudProviderType,
   entitlements: Entitlements,
-  requested: { machineProfileId?: string; machineOptions?: Record<string, unknown> },
-): Promise<{ profile: MachineProfileType | undefined; machineOptions?: Record<string, unknown> }> {
+  requested: { machineProfileId?: string },
+): Promise<MachineProfileType | undefined> {
   const mode = provider.machineSelectionPolicy.mode;
   const access = entitlements.machineAccess;
-
-  let machineOptions: Record<string, unknown> | undefined;
-  if (requested.machineOptions) {
-    if (mode !== "flexible" || access !== "any") {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Custom machine sizes are not available for this provider on your plan",
-      });
-    }
-    const parsedKey = providerKeySchema.safeParse(provider.providerKey);
-    const parsedOptions = parsedKey.success
-      ? providerMachineOptionsSchemas[parsedKey.data].safeParse(requested.machineOptions)
-      : undefined;
-    if (!parsedOptions?.success) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid machine options" });
-    }
-    machineOptions = parsedOptions.data;
-  }
 
   const profiles = await db.query.machineProfile.findMany({
     ...enabledMachineProfiles,
@@ -574,11 +551,11 @@ async function resolveMachineSelection(
   });
   const selectable = getSelectableMachineProfiles(profiles, mode, access);
   if (!requested.machineProfileId) {
-    return { profile: getDefaultMachineProfile(selectable), machineOptions };
+    return getDefaultMachineProfile(selectable);
   }
 
   const profile = selectable.find((candidate) => candidate.id === requested.machineProfileId);
-  if (profile) return { profile, machineOptions };
+  if (profile) return profile;
   if (profiles.some((candidate) => candidate.id === requested.machineProfileId)) {
     throw new TRPCError({
       code: "FORBIDDEN",
@@ -860,7 +837,6 @@ export const workspaceRouter = router({
       eligibleDefaultProviders.find(
         (provider) => provider.id === currentUser?.defaultCloudProviderId,
       ) ??
-      eligibleDefaultProviders.find((provider) => provider.providerKey.toLowerCase() === "e2b") ??
       eligibleDefaultProviders.find((provider) => provider.preferredDefault) ??
       eligibleDefaultProviders[0];
 
@@ -1799,12 +1775,11 @@ export const workspaceRouter = router({
             message: "Selected cloud provider is no longer supported",
           });
         }
-        const machineSelection = await resolveMachineSelection(
+        const selectedMachineProfile = await resolveMachineSelection(
           cloudProviderRecord,
           entitlements,
           input,
         );
-        const selectedMachineProfile = machineSelection.profile;
 
         if (providerKey !== "local") {
           if (!cloudProviderRecord.providerConfigId) {
@@ -2742,7 +2717,7 @@ export const workspaceRouter = router({
         let imageProviderMetadata = applyMachineProfile(
           imageRecord.providerMetadata,
           providerKey,
-          machineSelection.machineOptions ?? selectedMachineProfile?.providerOptions,
+          selectedMachineProfile?.providerOptions,
         );
 
         // Bring-your-own image: swap what the provider runs, keep the catalog

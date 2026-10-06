@@ -3,13 +3,12 @@
 import type React from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { initiateCheckout, openCustomerPortal, isBillingEnabled } from "@/lib/auth-client";
 import { ArrowRight, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 import { track } from "@/lib/analytics";
-import { useBillingAccount, useCurrentPlan } from "@/lib/billing";
+import { useBillingAccount } from "@/lib/billing";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,7 +33,7 @@ function PlanRow({
   action,
 }: {
   name: React.ReactNode;
-  detail: React.ReactNode;
+  detail?: React.ReactNode;
   action?: React.ReactNode;
 }) {
   return (
@@ -44,7 +43,7 @@ function PlanRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-fg">{name}</p>
-        <p className="mt-0.5 text-xs text-fg-4">{detail}</p>
+        {detail ? <p className="mt-0.5 text-xs text-fg-4">{detail}</p> : null}
       </div>
       {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
     </div>
@@ -98,7 +97,6 @@ export function BillingSection() {
               </span>
             </>
           }
-          detail={`Includes ${dollars(account.compute.includedCents)} of compute each billing period, at each machine size's hourly price.`}
           action={
             <>
               {account.plan !== "growth" ? (
@@ -126,12 +124,7 @@ export function BillingSection() {
             </>
           }
         />
-        <ComputeUsageCard
-          plan={account.plan}
-          periodEnd={account.period.end}
-          compute={account.compute}
-          onUpgrade={() => handleUpgrade("growth")}
-        />
+        <PayAsYouGoSettings compute={account.compute} />
       </div>
     );
   }
@@ -157,18 +150,113 @@ type ComputeUsage = NonNullable<
 >["compute"] &
   object;
 
-/** This period's compute balance, pay-as-you-go settings, and an upgrade hint. */
-function ComputeUsageCard({
-  plan,
-  periodEnd,
-  compute,
-  onUpgrade,
-}: {
-  plan: string;
-  periodEnd: string;
-  compute: ComputeUsage;
-  onUpgrade: () => void;
-}) {
+function UsageBar({ percent }: { percent: number }) {
+  return (
+    <div className="h-2 overflow-hidden rounded-full bg-fill-2">
+      <div
+        className={`h-full rounded-full ${percent >= 100 ? "bg-destructive" : percent >= 75 ? "bg-amber-500" : "bg-primary"}`}
+        style={{ width: `${Math.min(100, percent)}%` }}
+      />
+    </div>
+  );
+}
+
+/** Paid plans: included compute and pay-as-you-go spend this period, with an upgrade hint. */
+export function ComputeUsageCard() {
+  const { data } = useBillingAccount();
+  const account = data?.account;
+  const compute = account?.compute;
+  if (!account || !compute) return null;
+
+  const resets = new Date(account.period.end).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const proBill = PRO_PRICE_CENTS + Math.max(0, compute.projectedCents - PRO_INCLUDED_CENTS);
+  const recommendGrowth = account.plan === "pro" && proBill > GROWTH_PRICE_CENTS;
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-line bg-card px-5 py-4">
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-sm font-semibold text-fg">Included compute</p>
+          <p className="font-mono text-[12px] tabular-nums text-fg-3">
+            {dollars(compute.usedCents)} of {dollars(compute.includedCents)} · resets {resets}
+          </p>
+        </div>
+        <UsageBar percent={(compute.usedCents / Math.max(compute.includedCents, 1)) * 100} />
+        {compute.runningCentsPerHour > 0 ? (
+          <p className="text-xs text-fg-4">
+            Running workspaces cost {dollars(compute.runningCentsPerHour)}/hour right now.
+          </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-3 border-t border-line pt-4">
+        <div className={`space-y-3 ${compute.payAsYouGo ? "" : "opacity-50"}`}>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-semibold text-fg">
+              Pay-as-you-go
+              {compute.payAsYouGo ? (
+                compute.overageDiscountPercent ? (
+                  <span className="ml-2 font-normal text-fg-4">
+                    {compute.overageDiscountPercent}% off
+                  </span>
+                ) : null
+              ) : (
+                <span className="ml-2 rounded-full border border-line px-2 py-0.5 font-mono text-[10px] font-normal uppercase tracking-[0.16em] text-fg-4">
+                  Off
+                </span>
+              )}
+            </p>
+            <p className="font-mono text-[12px] tabular-nums text-fg-3">
+              {dollars(compute.overageCents)}
+              {compute.spendCapCents !== null ? ` of ${dollars(compute.spendCapCents)} limit` : ""}
+            </p>
+          </div>
+          {compute.payAsYouGo && compute.spendCapCents !== null ? (
+            <UsageBar percent={(compute.overageCents / Math.max(compute.spendCapCents, 1)) * 100} />
+          ) : (
+            <div className="h-2 rounded-full bg-fill-2" />
+          )}
+        </div>
+        {compute.payAsYouGo ? null : (
+          <p className="text-xs text-fg-4">
+            Workspaces pause when the included compute runs out.{" "}
+            <Link href={"#billing" as Route} className="text-primary hover:underline">
+              Turn on pay-as-you-go
+            </Link>{" "}
+            to keep them running.
+          </p>
+        )}
+      </div>
+
+      {recommendGrowth ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
+          <p className="min-w-0 flex-1 text-xs text-fg-2">
+            At your current pace you&apos;ll use about {dollars(compute.projectedCents)} of compute
+            this period: about {dollars(proBill)} on Pro. Growth covers up to{" "}
+            {dollars(GROWTH_INCLUDED_CENTS)} for {dollars(GROWTH_PRICE_CENTS)}.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs"
+            onClick={() => {
+              track("upgrade_initiated", { plan: "growth", source: "settings_usage" });
+              void initiateCheckout("growth");
+            }}
+          >
+            Switch to Growth
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Whether to keep running past the included compute, and up to what limit. */
+function PayAsYouGoSettings({ compute }: { compute: ComputeUsage }) {
   const queryClient = useQueryClient();
   const [payAsYouGo, setPayAsYouGo] = useState(compute.payAsYouGo);
   const [capDollars, setCapDollars] = useState(
@@ -184,41 +272,13 @@ function ComputeUsageCard({
     }),
   );
 
-  const percent = Math.min(100, (compute.usedCents / Math.max(compute.includedCents, 1)) * 100);
-  const resets = new Date(periodEnd).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
   const capCents = Math.round(Number(capDollars) * 100);
   const dirty =
     payAsYouGo !== compute.payAsYouGo || (payAsYouGo && capCents !== (compute.spendCapCents ?? 0));
-  const proBill = PRO_PRICE_CENTS + Math.max(0, compute.projectedCents - PRO_INCLUDED_CENTS);
-  const recommendGrowth = plan === "pro" && proBill > GROWTH_PRICE_CENTS;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-line bg-card px-5 py-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-sm font-semibold text-fg">Compute this period</p>
-        <p className="font-mono text-[12px] tabular-nums text-fg-3">
-          {dollars(compute.usedCents)} of {dollars(compute.includedCents)} · resets {resets}
-        </p>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-fill-2">
-        <div
-          className={`h-full rounded-full ${percent >= 100 ? "bg-destructive" : percent >= 75 ? "bg-amber-500" : "bg-primary"}`}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <p className="text-xs text-fg-4">
-        {compute.runningCentsPerHour > 0
-          ? `Running workspaces cost ${dollars(compute.runningCentsPerHour)}/hour right now. `
-          : ""}
-        {compute.overageCents > 0
-          ? `${dollars(compute.overageCents)} pay-as-you-go so far${compute.overageDiscountPercent ? ` (${compute.overageDiscountPercent}% off)` : ""}.`
-          : ""}
-      </p>
-
-      <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
+    <div className="space-y-3 rounded-2xl border border-line bg-card px-5 py-4">
+      <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm text-fg-2">
           <Switch checked={payAsYouGo} onCheckedChange={setPayAsYouGo} />
           Keep running past the included compute
@@ -252,39 +312,7 @@ function ComputeUsageCard({
           ? "Extra compute is billed at each size's hourly price. Workspaces pause when your limit is reached."
           : "Workspaces pause when the included compute runs out. Your work is kept."}
       </p>
-
-      {recommendGrowth ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
-          <p className="min-w-0 flex-1 text-xs text-fg-2">
-            At your current pace you&apos;ll use about {dollars(compute.projectedCents)} of compute
-            this period: about {dollars(proBill)} on Pro. Growth covers up to{" "}
-            {dollars(GROWTH_INCLUDED_CENTS)} for {dollars(GROWTH_PRICE_CENTS)}.
-          </p>
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onUpgrade}>
-            Switch to Growth
-          </Button>
-        </div>
-      ) : null}
     </div>
-  );
-}
-
-/**
- * Plan badge for display in navigation/header
- */
-export function PlanBadge() {
-  const plan = useCurrentPlan();
-  if (!isBillingEnabled || plan === "free") {
-    return null;
-  }
-
-  return (
-    <Badge
-      variant="default"
-      className="capitalize text-xs border-primary/30 bg-primary/10 text-primary"
-    >
-      {plan}
-    </Badge>
   );
 }
 

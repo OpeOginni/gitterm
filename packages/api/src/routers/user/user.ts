@@ -29,11 +29,11 @@ async function resolveDefaultCloudProviderId(storedId?: string | null): Promise<
   const storedProvider = availableProviders.find((provider) => provider.id === storedId);
   if (storedProvider) return storedProvider.id;
 
-  // E2B is the product default. An explicit user preference still wins, but a
-  // missing or disabled preference should behave consistently across the API
-  // and UI instead of depending on alphabetical provider ordering.
+  // The deployment's preferred provider (seeded as boat) is the default. An
+  // explicit user preference still wins; without one, every surface (API and
+  // UI) falls back the same way instead of depending on provider ordering.
   return (
-    availableProviders.find((provider) => provider.providerKey.toLowerCase() === "e2b")?.id ??
+    availableProviders.find((provider) => provider.preferredDefault)?.id ??
     availableProviders[0]?.id ??
     null
   );
