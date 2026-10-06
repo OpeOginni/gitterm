@@ -61,9 +61,9 @@ const awsSelection: WorkspaceProviderSelection = {
 // @ts-expect-error E2B placement does not accept a caller-selected region.
 const invalidE2bSelection: WorkspaceProviderSelection = { type: "e2b", region: "us-east-1" };
 
-const invalidE2bMachine: WorkspaceProviderSelection = {
-  type: "e2b",
-  // @ts-expect-error E2B templates are profile-only; custom CPU/RAM is unsupported.
+const invalidCustomMachine: WorkspaceProviderSelection = {
+  type: "aws",
+  // @ts-expect-error Only admin-defined machine sizes can be selected.
   machine: { type: "custom", resources: { cpu: 4 } },
 };
 
@@ -73,7 +73,7 @@ test("provider selections retain their discriminated fields", () => {
     "33333333-3333-4333-8333-333333333333",
   );
   expect(invalidE2bSelection.type).toBe("e2b");
-  expect(invalidE2bMachine.type).toBe("e2b");
+  expect(invalidCustomMachine.type).toBe("aws");
 });
 
 const phasedSetup: WorkspaceCreateInput = {

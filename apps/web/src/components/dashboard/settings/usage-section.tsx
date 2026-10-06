@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/utils/trpc";
 import { useBillingAccount } from "@/lib/billing";
 import { getIcon } from "@/components/dashboard/create-instance/types";
+import { ComputeUsageCard } from "@/components/dashboard/billing-section";
 
 const TERMINATED_PAGE_SIZE = 10;
 const historyTabsListClassName =
@@ -30,8 +31,6 @@ const historyTabsTriggerClassName =
 
 function UsageQuota() {
   const { data, isLoading } = useQuery(trpc.workspace.getDailyUsage.queryOptions());
-  const { data: billing } = useBillingAccount();
-
   const usage = data || { minutesUsed: 0, minutesRemaining: 60, dailyLimit: 60 };
 
   const minutesRemaining = usage.minutesRemaining ?? Infinity;
@@ -44,9 +43,6 @@ function UsageQuota() {
   const isExhausted = !isUnlimited && minutesRemaining === 0;
   const isLow = !isUnlimited && !isExhausted && minutesRemaining < 15;
   const barColor = isExhausted ? "bg-destructive" : isLow ? "bg-amber-500" : "bg-primary";
-
-  // Paid plans have no daily limit; their compute balance shows under billing.
-  if (billing?.account?.compute) return null;
 
   return (
     <SettingsSection
@@ -333,5 +329,6 @@ function StatusBadge({ status }: { status: string }) {
 /* ─────────────────────────── Public Export ──────────────────────────── */
 
 export function UsageSection() {
-  return <UsageQuota />;
+  const { data: billing } = useBillingAccount();
+  return billing?.account?.compute ? <ComputeUsageCard /> : <UsageQuota />;
 }

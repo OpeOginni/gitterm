@@ -230,49 +230,58 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
     }
   }
 
+  const addButton = (
+    <Button
+      type="button"
+      size="sm"
+      onClick={() => setAdding((value) => !value)}
+      disabled={!isAvailable || isLoadingAvailability}
+      className="h-9 shrink-0 gap-1.5 px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]"
+    >
+      {adding ? <X className="size-3.5" /> : <Plus className="size-3.5" />}
+      {adding ? "Cancel" : "Add identity"}
+    </Button>
+  );
+  // Embedded with nothing yet: the button sits inside the empty state instead of its own row.
+  const addInEmptyState =
+    embedded && !adding && !isLoading && !isLoadingAvailability && integrations.length === 0;
+
   return (
     <section className="space-y-5">
-      <header
-        className={cn(
-          "flex flex-col gap-4 sm:flex-row sm:items-center",
-          embedded ? "sm:justify-end" : "sm:justify-between",
-        )}
-      >
-        {embedded ? null : (
-          <div className="flex items-center gap-3">
-            <Image
-              src="/google-cloud.svg"
-              alt=""
-              width={28}
-              height={28}
-              className="size-7 shrink-0"
-            />
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-base font-semibold tracking-tight text-fg">Google Cloud</h2>
-                {integrations.length ? (
-                  <span className="font-mono text-[10px] text-fg-4">
-                    {integrations.length} identities
-                  </span>
-                ) : null}
-              </div>
-              <p className="mt-0.5 text-[12.5px] text-fg-3">
-                Keyless gcloud access through Workload Identity Federation.
-              </p>
-            </div>
-          </div>
-        )}
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => setAdding((value) => !value)}
-          disabled={!isAvailable || isLoadingAvailability}
-          className="h-9 gap-1.5 px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]"
+      {addInEmptyState ? null : (
+        <header
+          className={cn(
+            "flex flex-col gap-4 sm:flex-row sm:items-center",
+            embedded ? "sm:justify-end" : "sm:justify-between",
+          )}
         >
-          {adding ? <X className="size-3.5" /> : <Plus className="size-3.5" />}
-          {adding ? "Cancel" : "Add identity"}
-        </Button>
-      </header>
+          {embedded ? null : (
+            <div className="flex items-center gap-3">
+              <Image
+                src="/google-cloud.svg"
+                alt=""
+                width={28}
+                height={28}
+                className="size-7 shrink-0"
+              />
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-base font-semibold tracking-tight text-fg">Google Cloud</h2>
+                  {integrations.length ? (
+                    <span className="font-mono text-[10px] text-fg-4">
+                      {integrations.length} identities
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-0.5 text-[12.5px] text-fg-3">
+                  Keyless gcloud access through Workload Identity Federation.
+                </p>
+              </div>
+            </div>
+          )}
+          {addButton}
+        </header>
+      )}
 
       {adding && isAvailable ? (
         <form
@@ -516,10 +525,13 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
           ))}
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-line px-4 py-3 text-[13px] text-fg-3">
-          <span className="text-fg-2">No Google Cloud identity yet.</span> Connect a narrowly scoped
-          service account without storing a JSON key.
-        </p>
+        <div className="flex flex-col gap-3 rounded-lg border border-dashed border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[13px] text-fg-3">
+            <span className="text-fg-2">No Google Cloud identity yet.</span> Connect a narrowly
+            scoped service account without storing a JSON key.
+          </p>
+          {addInEmptyState ? addButton : null}
+        </div>
       )}
     </section>
   );

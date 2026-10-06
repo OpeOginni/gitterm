@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PlanBadge } from "@/components/dashboard/billing-section";
+import { useBillingAccount } from "@/lib/billing";
 import { ADMIN_GROUP, NAV_GROUPS, activeHref, type NavGroup } from "./nav-config";
 import { SetupChecklist } from "./setup-checklist";
 
@@ -92,6 +92,9 @@ const initial = (user: SessionUser) => (user.name || user.email || "?").charAt(0
 
 function UserMenu({ user, onNavigate }: { user: SessionUser; onNavigate?: () => void }) {
   const router = useRouter();
+  const account = useBillingAccount().data?.account;
+  // Paid plans show in place of the email (which stays in the menu below).
+  const paidPlan = account && account.plan !== "free" ? account.planName : null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors outline-none hover:bg-fill focus-visible:bg-fill">
@@ -100,14 +103,17 @@ function UserMenu({ user, onNavigate }: { user: SessionUser; onNavigate?: () => 
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-fg">{user.name}</span>
-          <span className="block truncate text-[11px] text-fg-4">{user.email}</span>
+          {paidPlan ? (
+            <span className="block truncate text-[11px] text-primary">{paidPlan} plan</span>
+          ) : (
+            <span className="block truncate text-[11px] text-fg-4">{user.email}</span>
+          )}
         </span>
         <ChevronsUpDown className="size-3.5 shrink-0 text-fg-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56 border-line bg-popover">
-        <DropdownMenuLabel className="flex items-center justify-between gap-2 font-normal">
-          <span className="truncate text-xs text-fg-3">{user.email}</span>
-          <PlanBadge />
+        <DropdownMenuLabel className="truncate text-xs font-normal text-fg-3">
+          {user.email}
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-fill-2" />
         <DropdownMenuItem

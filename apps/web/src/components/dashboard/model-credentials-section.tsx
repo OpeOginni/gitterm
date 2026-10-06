@@ -120,18 +120,18 @@ export function ModelCredentialsSection() {
         className="w-[var(--radix-dropdown-menu-trigger-width)] border-line p-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
       >
         <DropdownMenuItem
-          onSelect={() => setConnectOpen(true)}
-          className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-xs font-medium text-fg-2 focus:bg-fill-2 focus:text-fg"
-        >
-          <UserRound className="h-4 w-4 text-fg-3" />
-          Connect with OAuth
-        </DropdownMenuItem>
-        <DropdownMenuItem
           onSelect={() => setApiKeyOpen(true)}
           className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-xs font-medium text-fg-2 focus:bg-fill-2 focus:text-fg"
         >
           <Key className="h-4 w-4 text-fg-3" />
           Add API key
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => setConnectOpen(true)}
+          className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-xs font-medium text-fg-2 focus:bg-fill-2 focus:text-fg"
+        >
+          <UserRound className="h-4 w-4 text-fg-3" />
+          Add a subscription
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

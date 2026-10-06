@@ -1,6 +1,5 @@
 "use client";
 
-import type React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
@@ -10,7 +9,7 @@ import { UsageSection } from "@/components/dashboard/settings/usage-section";
 import { FormCard, FormCardBody, FormCardHeader } from "@/components/ui/form-card";
 import { authClient, isBillingEnabled } from "@/lib/auth-client";
 import { useBillingAccount } from "@/lib/billing";
-import { CommitAttributionSection } from "./commit-attribution-section";
+import { SettingsPart } from "./settings-page";
 
 function memberSince(createdAt: Date | string | undefined): string | null {
   if (!createdAt) return null;
@@ -75,35 +74,16 @@ function ProfileCard() {
   );
 }
 
-/** A part of the account page, reachable by its anchor (e.g. from the plan badge). */
-function AccountPart({
-  id,
-  label,
-  children,
-}: {
-  id: string;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className="scroll-mt-8 space-y-3 pt-4">
-      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">{label}</p>
-      {children}
-    </section>
-  );
-}
-
 export function AccountSection() {
   return (
     <div className="space-y-6">
       <ProfileCard />
-      <CommitAttributionSection />
-      <AccountPart id="usage" label="Usage">
+      <SettingsPart id="usage" label="Usage">
         <UsageSection />
-      </AccountPart>
-      <AccountPart id="billing" label="Plan and billing">
+      </SettingsPart>
+      <SettingsPart id="billing" label="Plan and billing">
         <BillingSection />
-      </AccountPart>
+      </SettingsPart>
       <DeleteAccountSection />
     </div>
   );

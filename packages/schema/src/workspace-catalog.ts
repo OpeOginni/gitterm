@@ -91,12 +91,8 @@ export function parseProviderMachineOptions<K extends ProviderKey>(
 const providerSelectionBase = {
   providerId: z.uuid().optional(),
   machine: z
-    .union([
-      z.object({ type: z.literal("profile"), key: z.string().trim().min(1) }).strict(),
-      z
-        .object({ type: z.literal("custom"), resources: z.record(z.string(), z.unknown()) })
-        .strict(),
-    ])
+    .object({ type: z.literal("profile"), key: z.string().trim().min(1) })
+    .strict()
     .optional(),
 };
 

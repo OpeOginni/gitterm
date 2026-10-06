@@ -27,7 +27,7 @@ import { deleteSubject } from "./analytics/subjects";
 import { runAnalyticsTasks } from "./analytics/jobs";
 import { getReport } from "./analytics/reports";
 import { simulatePricing } from "./analytics/simulate";
-import { polarClient, reportOverage } from "./polar";
+import { deletePolarCustomer, reportOverage } from "./polar";
 import { getMachinePrices, setMachinePrice } from "./rates";
 import { getMinutesUsedToday, getRetailUsage, type RetailUsage } from "./usage";
 import { billableOverageCents, MICROS_PER_CENT } from "./money";
@@ -370,19 +370,7 @@ export function createBilling(): Billing {
     countUsersByPlan,
 
     async onUserDeleted(userId) {
-      if (polarClient) {
-        try {
-          await polarClient.customers.deleteExternal({ externalId: userId });
-          console.log(`[polar] Deleted customer for user ${userId}`);
-        } catch (error) {
-          const statusCode =
-            typeof error === "object" && error !== null && "statusCode" in error
-              ? Number((error as { statusCode?: number }).statusCode)
-              : undefined;
-          if (statusCode !== 404) throw error;
-          console.warn(`[polar] No customer found for user ${userId}, skipping delete`);
-        }
-      }
+      await deletePolarCustomer(userId);
       // Keep the user's usage as pseudonymous facts before their sessions
       // cascade away; deleting the subject below removes the link to them.
       await syncUsageIntervals({ userId, provenance: "observed" });

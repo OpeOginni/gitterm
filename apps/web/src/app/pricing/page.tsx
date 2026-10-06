@@ -3,74 +3,84 @@
 import { LandingHeader } from "@/components/landing/header";
 import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
-import { Check, X, Terminal, ArrowRight, Loader2, Mail } from "lucide-react";
+import {
+  Check,
+  X,
+  Terminal,
+  ArrowRight,
+  Loader2,
+  Mail,
+  Gauge,
+  Pause,
+  ShieldCheck,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
-import { GitHub } from "@/components/logos/Github";
 import { useCurrentPlan } from "@/lib/billing";
-import { useQuery } from "@tanstack/react-query";
-import { trpc } from "@/utils/trpc";
-import { formatMachineSize } from "@/components/dashboard/create-instance/types";
 
 type UserPlan = "free" | "pro" | "growth" | "starter";
 type CheckoutPlanSlug = "pro" | "growth";
 
-interface PlanTier {
+interface PlanCard {
+  id: "free" | "pro" | "growth";
   name: string;
   slug?: CheckoutPlanSlug;
-  price?: number;
-  description: string;
+  price: number;
+  tagline: string;
+  /** `**text**` renders bold. The first line is the included compute. */
   features: string[];
-  popular?: boolean;
-  actionLabel: string;
+  cta: string;
+  featured?: boolean;
 }
 
-const PLAN_TIERS: PlanTier[] = [
+const PLANS: PlanCard[] = [
   {
+    id: "free",
     name: "Free",
     price: 0,
-    description: "Try agentic coding on small E2B or boat sandboxes. No card required",
+    tagline: "Try GitTerm. No card needed.",
     features: [
-      "60 minutes/day cloud runtime",
-      "2 workspaces",
-      "2-day idle workspace retention",
-      "E2B (US) or boat (EU) sandboxes",
-      "Small machines (2 vCPU · 4 GB)",
+      "**60 min** of compute a day",
+      "**Small** machines · 2 vCPU, 4 GB",
+      "**2** workspaces · **2-day** retention",
     ],
-    actionLabel: "Get Started",
+    cta: "Start free",
   },
   {
+    id: "pro",
     name: "Pro",
     slug: "pro",
     price: 25,
-    description: "Every provider and machine size, billed by the second against a monthly balance",
+    tagline: "For builders who ship every day.",
     features: [
-      "$25 of compute included every month",
-      "No daily runtime limit",
-      "Always-on workspaces",
-      "Optional pay-as-you-go with a spending limit",
-      "15 workspaces, 15-day retention",
+      "**$25** of compute every month",
+      "**Every** machine size",
+      "**Always-on** workspaces, no daily limit",
+      "Pay-as-you-go with **your** spending cap",
+      "**15** workspaces · **15-day** retention",
       "Custom subdomains and persistence",
     ],
-    popular: true,
-    actionLabel: "Go Pro",
+    cta: "Get Pro",
   },
   {
+    id: "growth",
     name: "Growth",
     slug: "growth",
     price: 200,
-    description: "For teams and heavy users who run workspaces all month",
+    tagline: "For teams running workspaces all month.",
     features: [
-      "$250 of compute included every month",
-      "10% off pay-as-you-go compute",
-      "Always-on workspaces",
-      "50 workspaces, 30-day retention",
-      "Everything in Pro",
+      "**$250** of compute every month",
+      "**10% off** pay-as-you-go",
+      "**Every** machine size",
+      "**Always-on** workspaces, no daily limit",
+      "**50** workspaces · **30-day** retention",
+      "Custom subdomains and persistence",
     ],
-    actionLabel: "Choose Growth",
+    cta: "Get Growth",
+    featured: true,
   },
 ];
 
@@ -79,247 +89,171 @@ const COMPARISON_ROWS: Array<{
   free: string | boolean;
   pro: string | boolean;
   growth: string | boolean;
-  selfHosted: string | boolean;
 }> = [
   {
-    label: "Included compute",
-    free: "60 min/day",
-    pro: "$25/month",
-    growth: "$250/month",
-    selfHosted: "Unlimited",
+    label: "Compute included",
+    free: "**60 min**/day",
+    pro: "**$25**/month",
+    growth: "**$250**/month",
+  },
+  { label: "Pay-as-you-go", free: false, pro: "List price", growth: "**10% off**" },
+  { label: "Daily runtime limit", free: "60 min", pro: "None", growth: "None" },
+  { label: "Machine sizes", free: "Small", pro: "All", growth: "All" },
+  { label: "Always-on workspaces", free: false, pro: true, growth: true },
+  { label: "Workspaces", free: "**2**", pro: "**15**", growth: "**50**" },
+  { label: "Idle retention", free: "2 days", pro: "15 days", growth: "30 days" },
+  { label: "Persistent workspaces", free: false, pro: true, growth: true },
+  { label: "Custom subdomains", free: false, pro: true, growth: true },
+];
+
+const HOW_BILLING_WORKS = [
+  {
+    icon: Gauge,
+    title: "Billed by the second",
+    body: "Running workspaces draw from your balance at each machine's hourly rate.",
   },
   {
-    label: "Pay-as-you-go",
-    free: false,
-    pro: "List price",
-    growth: "10% off",
-    selfHosted: "—",
+    icon: Pause,
+    title: "Stopped costs nothing",
+    body: "Paused workspaces keep your files and use no compute.",
   },
   {
-    label: "Daily runtime limit",
-    free: "60 min",
-    pro: "None",
-    growth: "None",
-    selfHosted: "None",
-  },
-  {
-    label: "Always-on workspaces",
-    free: false,
-    pro: true,
-    growth: true,
-    selfHosted: true,
-  },
-  {
-    label: "Existing workspaces",
-    free: "2",
-    pro: "15",
-    growth: "50",
-    selfHosted: "Unlimited",
-  },
-  {
-    label: "Idle workspace retention",
-    free: "2 days",
-    pro: "15 days",
-    growth: "30 days",
-    selfHosted: "Unlimited",
-  },
-  {
-    label: "Providers",
-    free: "E2B and boat",
-    pro: "All managed",
-    growth: "All managed",
-    selfHosted: "Self-managed",
-  },
-  {
-    label: "Machine sizes",
-    free: "Small",
-    pro: "All",
-    growth: "All",
-    selfHosted: "Admin-managed",
-  },
-  {
-    label: "Persistent workspaces",
-    free: false,
-    pro: true,
-    growth: true,
-    selfHosted: true,
-  },
-  {
-    label: "Custom subdomains",
-    free: false,
-    pro: true,
-    growth: true,
-    selfHosted: true,
+    icon: ShieldCheck,
+    title: "You set the cap",
+    body: "Stop at your balance, or turn on pay-as-you-go with a monthly limit.",
   },
 ];
 
-function FeatureItem({ text }: { text: string }) {
+/** Renders `**bold**` segments as emphasised text. */
+function Rich({ text }: { text: string }) {
   return (
-    <div className="flex items-start gap-2.5">
-      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-      <span className="text-sm leading-relaxed text-fg-3">{text}</span>
-    </div>
+    <>
+      {text.split(/(\*\*[^*]+\*\*)/).map((part, index) =>
+        part.startsWith("**") ? (
+          <strong key={index} className="font-semibold text-fg">
+            {part.slice(2, -2)}
+          </strong>
+        ) : (
+          part
+        ),
+      )}
+    </>
   );
 }
 
 function ComparisonValue({ value }: { value: string | boolean }) {
   if (typeof value === "boolean") {
     return value ? (
-      <Check className="mx-auto h-4 w-4 text-primary" />
+      <Check className="mx-auto h-4 w-4 text-primary" aria-label="Included" />
     ) : (
-      <X className="mx-auto h-4 w-4 text-fg-4" />
+      <X className="mx-auto h-4 w-4 text-fg-4" aria-label="Not included" />
     );
   }
-
-  return <span className="text-fg-3">{value}</span>;
+  return (
+    <span className="text-fg-3">
+      <Rich text={value} />
+    </span>
+  );
 }
 
-function PricingCard({
+function PlanCardView({
   plan,
   currentPlan,
   onUpgrade,
   isLoading,
   loadingPlan,
 }: {
-  plan: PlanTier;
+  plan: PlanCard;
   currentPlan?: UserPlan;
   onUpgrade: (slug: CheckoutPlanSlug) => void;
   isLoading: boolean;
   loadingPlan?: CheckoutPlanSlug | null;
 }) {
-  const isCurrentPlan = plan.slug && currentPlan === plan.slug;
-  const isFreeCurrentPlan = plan.name === "Free" && currentPlan === "free";
+  const isCurrent = currentPlan === plan.id;
   const isThisPlanLoading = isLoading && loadingPlan === plan.slug;
+  const buttonClass = cn(
+    "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-colors",
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    "disabled:cursor-not-allowed disabled:opacity-70",
+  );
 
   return (
     <div
       className={cn(
-        "relative flex w-full max-w-[420px] flex-col justify-between rounded-2xl border p-5 transition-colors sm:p-6 md:max-w-none",
-        plan.popular ? "border-primary/30 bg-primary/[0.04]" : "border-line bg-fill",
+        "relative flex flex-col rounded-2xl border p-6 sm:p-7",
+        plan.featured
+          ? "border-primary/60 bg-primary/[0.06] shadow-[0_0_60px_-20px] shadow-primary/40"
+          : "border-line bg-fill",
       )}
     >
-      <div>
-        <div className="mb-5 flex items-center justify-between">
-          <span className="font-mono text-xs uppercase tracking-[0.2em] text-fg-4">
-            {plan.name}
-          </span>
-          {plan.popular && (
-            <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
-              Popular
-            </span>
-          )}
-        </div>
+      {plan.featured ? (
+        <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-primary-foreground">
+          Best value
+        </span>
+      ) : null}
 
-        <div className="mb-2 flex items-baseline gap-1">
-          <span className="text-4xl font-bold text-white">
-            {plan.price !== undefined ? `$${plan.price}` : "Free"}
-          </span>
-          {plan.price !== undefined && plan.price > 0 && (
-            <span className="text-sm text-fg-4">/month</span>
-          )}
-        </div>
+      <h2 className="text-lg font-semibold text-fg">{plan.name}</h2>
+      <p className="mt-1 text-sm text-fg-3">{plan.tagline}</p>
 
-        <p className="mb-6 min-h-[40px] text-sm leading-relaxed text-fg-4">{plan.description}</p>
-
-        <div className="flex flex-col gap-3">
-          {plan.features.map((feature) => (
-            <FeatureItem key={feature} text={feature} />
-          ))}
-        </div>
+      <div className="mt-6 flex items-baseline gap-1.5">
+        <span className="text-5xl font-semibold tracking-tight text-fg tabular-nums">
+          ${plan.price}
+        </span>
+        <span className="text-sm text-fg-4">/month</span>
       </div>
 
-      <div className="mt-8">
-        {isCurrentPlan || isFreeCurrentPlan ? (
-          <span className="inline-flex w-full items-center justify-center rounded-lg border border-line px-6 py-2.5 font-mono text-sm text-fg-4">
-            Current Plan
-          </span>
+      <div className="mt-6">
+        {isCurrent ? (
+          <span className={cn(buttonClass, "border border-line text-fg-4")}>Current plan</span>
         ) : plan.slug ? (
           <button
+            type="button"
             onClick={() => onUpgrade(plan.slug!)}
             disabled={isLoading}
             className={cn(
-              "inline-flex w-full cursor-pointer items-center justify-center rounded-lg px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-wider transition-all",
-              "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background",
-              "disabled:cursor-not-allowed disabled:opacity-70",
-              plan.popular
+              buttonClass,
+              "cursor-pointer",
+              plan.featured
                 ? "bg-primary text-primary-foreground hover:bg-primary/85"
-                : "bg-white/90 text-primary-foreground hover:bg-white/80",
+                : "bg-fg text-background hover:bg-fg-2",
             )}
           >
             {isThisPlanLoading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Processing…
               </>
             ) : (
               <>
-                {plan.actionLabel}
-                <ArrowRight className="ml-2 h-4 w-4" />
+                {plan.cta}
+                <ArrowRight className="h-4 w-4" />
               </>
             )}
           </button>
         ) : (
           <Link
             href="/dashboard"
-            className="inline-flex w-full items-center justify-center rounded-lg border border-line bg-fill px-6 py-2.5 font-mono text-sm font-medium text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
+            className={cn(
+              buttonClass,
+              "border border-line bg-fill text-fg-2 hover:border-line-2 hover:text-fg",
+            )}
           >
-            {plan.actionLabel}
-            <ArrowRight className="ml-2 h-4 w-4" />
+            {plan.cta}
+            <ArrowRight className="h-4 w-4" />
           </Link>
         )}
       </div>
-    </div>
-  );
-}
 
-/** Hourly price of every machine size, from the billing rate card. */
-function RateCard() {
-  const { data: rates } = useQuery(trpc.billing.rates.queryOptions());
-  if (!rates || rates.length === 0) return null;
-
-  return (
-    <div className="mt-12 overflow-hidden rounded-2xl border border-line bg-fill sm:mt-16">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line px-5 py-5 sm:px-6">
-        <h2 className="font-display text-2xl font-light tracking-tight text-white md:text-3xl">
-          Compute rates.
-        </h2>
-        <p className="max-w-md text-sm leading-relaxed text-fg-4">
-          Paid plans spend their monthly balance at these prices, metered by the second. Stopped
-          workspaces cost nothing.
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-line font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
-              <th className="px-5 py-3 text-left font-medium">Provider</th>
-              <th className="px-4 py-3 text-left font-medium">Size</th>
-              <th className="px-4 py-3 text-left font-medium">Machine</th>
-              <th className="px-4 py-3 text-right font-medium">Per hour</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rates.map((rate) => (
-              <tr
-                key={`${rate.provider}-${rate.name}`}
-                className="border-b border-line last:border-b-0"
-              >
-                <td className="px-5 py-3 text-fg-2">
-                  {rate.provider}
-                  {rate.location ? (
-                    <span className="ml-2 font-mono text-[10px] text-fg-4">{rate.location}</span>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3 text-fg-3">{rate.name}</td>
-                <td className="px-4 py-3 text-fg-4">{formatMachineSize(rate) ?? "—"}</td>
-                <td className="px-4 py-3 text-right font-mono tabular-nums text-fg-2">
-                  ${(rate.priceMicrosPerHour / 1_000_000).toFixed(3)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ul className="mt-6 flex flex-col gap-3">
+        {plan.features.map((feature) => (
+          <li key={feature} className="flex items-start gap-2.5 text-sm text-fg-3">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <span>
+              <Rich text={feature} />
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -395,29 +329,30 @@ function PricingPageContent() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-white dark landing-grid grain">
+    <main className="min-h-screen bg-background text-fg dark landing-grid grain">
       <LandingHeader />
 
-      <section className="pt-24 pb-16 sm:pt-32 sm:pb-24 md:pt-44 md:pb-32">
-        <div className="mx-auto max-w-[1320px] px-4 sm:px-6">
+      <section className="pt-24 pb-16 sm:pt-32 sm:pb-24 md:pt-40 md:pb-32">
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-6">
           {/* Header */}
-          <div className="mb-10 sm:mb-16">
-            <h1 className="font-display text-[clamp(2rem,7vw,5rem)] font-light leading-[1] tracking-tight text-white sm:leading-[0.98]">
-              We just <span className="font-display-accent text-[color:var(--cream)]">run</span> the
-              workspaces.
+          <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
+            <p className="marker">Pricing</p>
+            <h1 className="mt-4 font-display text-[clamp(2.25rem,7vw,4.5rem)] font-light leading-[1] tracking-tight text-fg">
+              Pay for the{" "}
+              <span className="font-display-accent text-[color:var(--cream)]">compute</span>.
+              Nothing else.
             </h1>
-            <p className="mt-5 max-w-2xl text-[15px] leading-[1.6] text-fg-3 sm:mt-6 sm:text-[17px] sm:leading-[1.65]">
-              You bring your model API keys. We don't resell them. GitTerm only charges for the
-              cloud workspace itself (compute, storage, and networking) so your AI bill stays with
-              your provider, not us.
+            <p className="mt-5 text-[15px] leading-[1.6] text-fg-3 sm:text-[17px]">
+              Every paid plan is a monthly compute balance, billed by the second. Bring your own
+              model keys: we never mark up AI.
             </p>
           </div>
 
           {/* Plan cards */}
-          <div className="mx-auto grid max-w-[420px] grid-cols-1 gap-5 md:max-w-none md:grid-cols-3 md:items-stretch">
-            {PLAN_TIERS.map((plan) => (
-              <PricingCard
-                key={plan.name}
+          <div className="mx-auto grid max-w-[440px] grid-cols-1 gap-6 md:max-w-none md:grid-cols-3 md:items-stretch">
+            {PLANS.map((plan) => (
+              <PlanCardView
+                key={plan.id}
                 plan={plan}
                 currentPlan={session ? currentPlan : undefined}
                 onUpgrade={handleUpgrade}
@@ -427,138 +362,97 @@ function PricingPageContent() {
             ))}
           </div>
 
-          {/* Self-hosted option */}
-          <div className="mx-auto mt-5 flex max-w-[420px] flex-col gap-4 rounded-2xl border border-line bg-fill p-4 sm:px-5 sm:py-4 md:max-w-none md:flex-row md:items-center md:justify-between md:px-6">
-            <div className="max-w-2xl">
-              <div className="mb-1 flex items-center gap-3">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary/80">
-                  Open Source
-                </span>
-                <span className="h-px w-8 bg-primary/25" />
+          {/* How billing works */}
+          <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-3">
+            {HOW_BILLING_WORKS.map(({ icon: Icon, title, body }) => (
+              <div key={title} className="bg-background p-6">
+                <Icon className="h-5 w-5 text-primary" />
+                <p className="mt-3 text-sm font-semibold text-fg">{title}</p>
+                <p className="mt-1 text-sm leading-relaxed text-fg-3">{body}</p>
               </div>
-              <h2 className="font-display text-xl font-light tracking-tight text-white sm:text-2xl">
-                Get all of GitTerm, free.
-              </h2>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-fg-3 sm:text-sm">
-                Self-host the complete stack on your own infrastructure. Deploy it in one click or
-                fork the MIT-licensed source and run it anywhere.
-              </p>
-            </div>
-
-            <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
-              <Link
-                href="https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <img
-                  src="https://railway.com/button.svg"
-                  alt="Deploy on Railway"
-                  height={40}
-                  className="h-10 opacity-90 transition-opacity hover:opacity-100"
-                />
-              </Link>
-              <Link
-                href="https://github.com/OpeOginni/gitterm"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center rounded-lg border border-line bg-fill px-5 py-2.5 font-mono text-xs font-medium text-fg-2 transition-colors hover:border-line-2 hover:bg-fill-2 hover:text-fg"
-              >
-                <GitHub className="mr-2 h-4 w-4" />
-                View on GitHub
-              </Link>
-            </div>
+            ))}
           </div>
 
           {/* Plan comparison */}
-          <div className="mt-12 overflow-hidden rounded-2xl border border-line bg-fill sm:mt-16">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line px-5 py-5 sm:px-6">
-              <div>
-                <h2 className="font-display text-2xl font-light tracking-tight text-white md:text-3xl">
-                  Same shape, different ceilings.
-                </h2>
-              </div>
-              <p className="max-w-md text-sm leading-relaxed text-fg-4">
-                Workspace counts mean existing cloud workspaces, whether paused or live. Compute is
-                billed by the second, only while a workspace is running.
-              </p>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] border-collapse text-sm">
+          <section className="mt-16 sm:mt-24">
+            <p className="marker">Compare plans</p>
+            <h2 className="mt-3 font-display text-2xl font-light tracking-tight text-fg md:text-3xl">
+              Same product, bigger balance.
+            </h2>
+            <div className="mt-6 overflow-x-auto rounded-2xl border border-line bg-fill">
+              <table className="w-full border-collapse text-xs sm:text-sm">
                 <thead>
-                  <tr className="border-b border-line bg-fill font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
-                    <th className="px-5 py-3 text-left font-medium">Feature</th>
-                    <th className="px-4 py-3 text-center font-medium">Free</th>
-                    <th className="px-4 py-3 text-center font-medium text-primary">Pro</th>
-                    <th className="px-4 py-3 text-center font-medium">Growth</th>
-                    <th className="px-4 py-3 text-center font-medium">Self-hosted</th>
+                  <tr className="border-b border-line font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+                    <th className="px-3 py-3 text-left font-medium sm:px-5">Feature</th>
+                    <th className="px-2 py-3 text-center font-medium sm:px-4">Free</th>
+                    <th className="px-2 py-3 text-center font-medium sm:px-4">Pro</th>
+                    <th className="bg-primary/[0.08] px-2 py-3 text-center font-medium text-primary sm:px-4">
+                      Growth
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {COMPARISON_ROWS.map((row) => (
                     <tr key={row.label} className="border-b border-line last:border-b-0">
-                      <td className="px-5 py-4 text-fg-2">{row.label}</td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="px-3 py-3.5 text-fg-2 sm:px-5">{row.label}</td>
+                      <td className="px-2 py-3.5 text-center sm:px-4">
                         <ComparisonValue value={row.free} />
                       </td>
-                      <td className="bg-primary/2.5 px-4 py-4 text-center">
+                      <td className="px-2 py-3.5 text-center sm:px-4">
                         <ComparisonValue value={row.pro} />
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="bg-primary/[0.08] px-2 py-3.5 text-center sm:px-4">
                         <ComparisonValue value={row.growth} />
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <ComparisonValue value={row.selfHosted} />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-
-          <RateCard />
-
-          {/* BYOK explainer */}
-          <div className="mt-12 max-w-2xl border-t border-line pt-10 sm:mt-16 sm:pt-12">
-            <h3 className="mb-3 font-display text-xl font-light tracking-tight text-white">
-              No AI markup. No middleman.
-            </h3>
-            <p className="text-sm leading-relaxed text-fg-3">
-              You bring your own Model Provider keys/subscriptions. <br /> Paid plans only cover the
-              cloud workspace itself: compute, storage, and multi-cloud orchestration.
+            <p className="mt-3 text-xs text-fg-4">
+              Workspaces count every cloud workspace you keep, running or paused.
             </p>
-          </div>
+          </section>
 
-          {/* Questions */}
-          <section
-            id="questions"
-            className="mt-16 border-t border-line pt-12 text-center sm:mt-24 sm:pt-16"
-          >
-            <h2 className="mb-3 font-display text-2xl font-light tracking-tight text-white">
-              Questions?
-            </h2>
-            <p className="mb-8 text-sm text-fg-4">
-              Need help choosing the right plan? Reach out by email.
-            </p>
-            <div className="flex flex-wrap justify-center gap-3">
+          {/* Closing */}
+          <section className="mt-16 grid gap-8 border-t border-line pt-12 sm:mt-24 md:grid-cols-2 md:items-center">
+            <div>
+              <h2 className="font-display text-2xl font-light tracking-tight text-fg">
+                No AI markup. No middleman.
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-fg-3">
+                Your model keys and subscriptions stay yours. Plans only cover the workspace:
+                compute, storage, and orchestration.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 md:justify-end">
               <Link
                 href="mailto:help@gitterm.dev"
-                className="inline-flex items-center justify-center rounded-lg border border-line bg-fill px-6 py-2.5 font-mono text-sm text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-line bg-fill px-5 text-sm font-medium text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
               >
-                Reach out by email
-                <Mail className="ml-2 h-4 w-4" />
+                Questions? Email us
+                <Mail className="h-4 w-4" />
               </Link>
               <Link
                 href="/dashboard"
-                className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-[0.16em] text-primary-foreground transition-colors hover:bg-primary/85"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/85"
               >
-                Get Started Free
-                <ArrowRight className="ml-2 h-4 w-4" />
+                Start free
+                <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
           </section>
+
+          <p className="mt-12 text-center text-sm text-fg-3">
+            Want to run GitTerm on your own infra?{" "}
+            <Link
+              href="/self-host"
+              className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Self-host it
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </p>
         </div>
       </section>
 

@@ -5,7 +5,7 @@ import { DashboardShell } from "@/components/dashboard/shell";
 export function SettingsShell({ children }: { children: ReactNode }) {
   return (
     <DashboardShell>
-      <div className="max-w-4xl">{children}</div>
+      <div className="mx-auto max-w-4xl">{children}</div>
     </DashboardShell>
   );
 }

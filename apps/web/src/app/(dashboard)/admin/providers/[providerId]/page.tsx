@@ -139,7 +139,6 @@ function mergePreservedEncryptedFields(
 const MACHINE_SELECTION_MODES = [
   { value: "standard", label: "Default size only" },
   { value: "profiles", label: "Users pick a size" },
-  { value: "flexible", label: "Users pick or customize" },
 ] as const;
 
 function getMachineProfileKey(name: string) {
@@ -1164,94 +1163,124 @@ export default function ProviderSettingsPage() {
               )}
 
               <div className="mt-4 space-y-3">
-                {machineProfiles?.map((profile) => (
-                  <div
-                    key={profile.id}
-                    className="grid gap-3 rounded-xl border border-border/70 bg-foreground/[0.01] p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-foreground/90">{profile.name}</p>
-                        <code className="rounded bg-foreground/[0.05] px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          {profile.key}
-                        </code>
-                        {profile.isDefault && <Badge variant="secondary">Default</Badge>}
-                        {formatMachineSize(profile) && (
-                          <span className="text-xs text-muted-foreground">
-                            {formatMachineSize(profile)}
-                          </span>
-                        )}
-                        {billingEnabled && profile.priceMicrosPerHour === null && (
-                          <Badge variant="destructive">No price: usage is free</Badge>
-                        )}
-                      </div>
-                      <p className="truncate font-mono text-[11px] text-muted-foreground">
-                        {Object.keys(profile.providerOptions).length > 0
-                          ? JSON.stringify(profile.providerOptions)
-                          : "Provider-managed resources"}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-end gap-2">
-                      {billingEnabled && (
-                        <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                          $
-                          <Input
-                            key={profile.priceMicrosPerHour ?? "unpriced"}
-                            type="number"
-                            min={0}
-                            step="0.001"
-                            className="h-8 w-20"
-                            aria-label={`${profile.name} price per hour`}
-                            placeholder="0.12"
-                            defaultValue={
-                              profile.priceMicrosPerHour === null
-                                ? ""
-                                : profile.priceMicrosPerHour / 1_000_000
-                            }
-                            onBlur={(event) => {
-                              const value = event.target.value.trim();
-                              const microsPerHour =
-                                value === "" ? null : Math.round(Number(value) * 1_000_000);
-                              if (microsPerHour !== null && !Number.isFinite(microsPerHour)) return;
-                              if (microsPerHour !== profile.priceMicrosPerHour) {
-                                setMachineProfilePrice.mutate({ id: profile.id, microsPerHour });
-                              }
-                            }}
-                          />
-                          /h
-                        </label>
-                      )}
-                      {!profile.isDefault && profile.isEnabled && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            updateMachineProfile.mutate({ id: profile.id, isDefault: true })
-                          }
+                {machineProfiles && machineProfiles.length > 0 ? (
+                  <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+                    {machineProfiles.map((profile) => {
+                      const unpriced = billingEnabled && profile.priceMicrosPerHour === null;
+                      const options = Object.entries(profile.providerOptions)
+                        .map(
+                          ([key, value]) =>
+                            `${key}=${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
+                        )
+                        .join(" ");
+                      return (
+                        <div
+                          key={profile.id}
+                          className="flex flex-col gap-3 px-4 py-3.5 md:flex-row md:items-center"
                         >
-                          Make default
-                        </Button>
-                      )}
-                      <Switch
-                        checked={profile.isEnabled}
-                        onCheckedChange={(isEnabled) =>
-                          updateMachineProfile.mutate({ id: profile.id, isEnabled })
-                        }
-                        aria-label={`${profile.isEnabled ? "Disable" : "Enable"} ${profile.name}`}
-                      />
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => deleteMachineProfile.mutate(profile.id)}
-                        aria-label={`Delete ${profile.name}`}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
+                          <div
+                            className={`min-w-0 flex-1 space-y-1 ${profile.isEnabled ? "" : "opacity-50"}`}
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-medium text-fg">{profile.name}</p>
+                              <code className="rounded bg-fill px-1.5 py-0.5 font-mono text-[10px] text-fg-3">
+                                {profile.key}
+                              </code>
+                              {profile.isDefault && (
+                                <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.16em] text-primary">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <p className="truncate text-xs text-fg-4">
+                              {[formatMachineSize(profile), options || "Provider-managed resources"]
+                                .filter(Boolean)
+                                .join(" · ")}
+                              {unpriced && (
+                                <span className="text-amber-400">
+                                  {" "}
+                                  · No price set, usage is free
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center justify-end gap-3">
+                            {billingEnabled && (
+                              <div className="relative w-28">
+                                <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-xs text-fg-4">
+                                  $
+                                </span>
+                                <Input
+                                  key={profile.priceMicrosPerHour ?? "unpriced"}
+                                  type="number"
+                                  min={0}
+                                  step="0.001"
+                                  className={`h-8 pl-6 pr-8 font-mono text-xs tabular-nums ${unpriced ? "border-amber-500/40" : ""}`}
+                                  aria-label={`${profile.name} price per hour`}
+                                  placeholder="—"
+                                  defaultValue={
+                                    profile.priceMicrosPerHour === null
+                                      ? ""
+                                      : profile.priceMicrosPerHour / 1_000_000
+                                  }
+                                  onBlur={(event) => {
+                                    const value = event.target.value.trim();
+                                    const microsPerHour =
+                                      value === "" ? null : Math.round(Number(value) * 1_000_000);
+                                    if (microsPerHour !== null && !Number.isFinite(microsPerHour))
+                                      return;
+                                    if (microsPerHour !== profile.priceMicrosPerHour) {
+                                      setMachineProfilePrice.mutate({
+                                        id: profile.id,
+                                        microsPerHour,
+                                      });
+                                    }
+                                  }}
+                                />
+                                <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-fg-4">
+                                  /h
+                                </span>
+                              </div>
+                            )}
+                            {/* Fixed slot so the switches line up whether or not a row is the default. */}
+                            <div className="flex w-24 justify-end">
+                              {!profile.isDefault && profile.isEnabled && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-xs text-fg-3 hover:text-fg"
+                                  onClick={() =>
+                                    updateMachineProfile.mutate({ id: profile.id, isDefault: true })
+                                  }
+                                >
+                                  Make default
+                                </Button>
+                              )}
+                            </div>
+                            <Switch
+                              checked={profile.isEnabled}
+                              onCheckedChange={(isEnabled) =>
+                                updateMachineProfile.mutate({ id: profile.id, isEnabled })
+                              }
+                              aria-label={`${profile.isEnabled ? "Disable" : "Enable"} ${profile.name}`}
+                            />
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="size-8 text-fg-4 hover:text-red-400"
+                              onClick={() => deleteMachineProfile.mutate(profile.id)}
+                              aria-label={`Delete ${profile.name}`}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
+                ) : null}
 
                 {machineFields.length > 0 ? (
                   <div className="rounded-xl border border-dashed border-foreground/[0.12] p-4">

@@ -1,12 +1,22 @@
-import { Polar } from "@polar-sh/sdk";
+import { createPolarCore } from "@polar-sh/sdk/2026-10";
+import { deleteExternalCustomers } from "@polar-sh/sdk/2026-10/services/customers";
+import { ingestEvents } from "@polar-sh/sdk/2026-10/services/events";
+import { iterListOrders } from "@polar-sh/sdk/2026-10/services/orders";
+import { iterListRefunds } from "@polar-sh/sdk/2026-10/services/refunds";
 import env, { isBillingEnabled } from "@gitterm/env/auth";
 import type { PlanId } from "./plans";
 
-/** Null when no Polar access token is configured (e.g. local managed-mode development). */
+/**
+ * Polar core client, pinned to API version 2026-10 (Polar's current stable
+ * version). The core client has no service properties: import each
+ * operation from `@polar-sh/sdk/2026-10/services/*` and pass it the client.
+ * Null when no Polar access token is configured (e.g. local managed-mode
+ * development).
+ */
 export const polarClient = isBillingEnabled()
-  ? new Polar({
+  ? createPolarCore({
       accessToken: env.POLAR_ACCESS_TOKEN!,
-      server: env.POLAR_ENVIRONMENT === "sandbox" ? "sandbox" : "production",
+      environment: env.POLAR_ENVIRONMENT === "sandbox" ? "sandbox" : "production",
     })
   : null;
 
@@ -35,12 +45,39 @@ export async function reportOverage(
   reports: Array<{ userId: string; periodStart: Date; totalCents: number }>,
 ): Promise<void> {
   if (!polarClient || reports.length === 0) return;
-  await polarClient.events.ingest({
+  await ingestEvents(polarClient)({
     events: reports.map((report) => ({
       name: OVERAGE_EVENT,
-      externalCustomerId: report.userId,
-      externalId: `${report.userId}:${report.periodStart.toISOString()}:${report.totalCents}`,
+      external_customer_id: report.userId,
+      external_id: `${report.userId}:${report.periodStart.toISOString()}:${report.totalCents}`,
       metadata: { total_cents: report.totalCents },
     })),
   });
+}
+
+/** Delete the user's Polar customer. Resolves quietly when it doesn't exist. */
+export async function deletePolarCustomer(userId: string): Promise<void> {
+  if (!polarClient) return;
+  try {
+    await deleteExternalCustomers(polarClient)(userId);
+    console.log(`[polar] Deleted customer for user ${userId}`);
+  } catch (error) {
+    const statusCode =
+      typeof error === "object" && error !== null && "statusCode" in error
+        ? Number((error as { statusCode?: number }).statusCode)
+        : undefined;
+    if (statusCode !== 404) throw error;
+    console.warn(`[polar] No customer found for user ${userId}, skipping delete`);
+  }
+}
+
+/** Every order and refund in the organization, for the analytics backfill. */
+export function listAllOrders() {
+  if (!polarClient) throw new Error("Polar is not configured (POLAR_ACCESS_TOKEN)");
+  return iterListOrders(polarClient)({ limit: 100 });
+}
+
+export function listAllRefunds() {
+  if (!polarClient) throw new Error("Polar is not configured (POLAR_ACCESS_TOKEN)");
+  return iterListRefunds(polarClient)({ limit: 100 });
 }

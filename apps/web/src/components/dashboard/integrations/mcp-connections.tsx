@@ -130,6 +130,10 @@ function authentication(current: Form): McpAuthentication | undefined {
   return { type: "headers", headers: headers as Record<string, string> };
 }
 
+/** Matches the add buttons on the other integration rows. */
+const ADD_BUTTON_CLASS =
+  "h-9 gap-1.5 px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]";
+
 export function McpConnections({
   allowCustom,
   allowExecutor,
@@ -364,49 +368,57 @@ export function McpConnections({
   ) : null;
   // Editing replaces the connection's own card so there is one source of truth on screen.
   const editingId = form?.id ?? null;
+  const addButtons = (
+    <div className="flex shrink-0 flex-wrap gap-2">
+      {allowExecutor ? (
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => setForm(emptyForm("executor"))}
+          disabled={saving || busyId !== null}
+          className={ADD_BUTTON_CLASS}
+        >
+          <Plus className="size-3.5" />
+          Connect Executor
+        </Button>
+      ) : null}
+      {allowCustom ? (
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => setForm(emptyForm("mcp"))}
+          disabled={saving || busyId !== null}
+          className={ADD_BUTTON_CLASS}
+        >
+          <Plus className="size-3.5" />
+          Add MCP server
+        </Button>
+      ) : null}
+    </div>
+  );
+  // Embedded with nothing yet: the buttons sit inside the empty state instead of their own row.
+  const addInEmptyState = embedded && !form && !isLoading && !error && connections.length === 0;
 
   return (
     <section className="space-y-5">
-      <header
-        className={`flex flex-wrap items-start gap-4 ${embedded ? "justify-end" : "justify-between"}`}
-      >
-        {embedded ? null : (
-          <div>
-            <h2 className="text-base font-semibold tracking-tight text-fg">Tools for your agent</h2>
-            <p className="mt-1 max-w-lg text-[12.5px] leading-relaxed text-fg-3">
-              Connect a remote MCP server, or bring your tool catalog through Executor. OpenCode
-              connects directly—GitTerm stays out of the tool traffic.
-            </p>
-          </div>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {allowExecutor ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setForm(emptyForm("executor"))}
-              disabled={saving || busyId !== null}
-              className="gap-2"
-            >
-              <Image src="/executor.png" width={16} height={16} alt="" />
-              Connect Executor
-            </Button>
-          ) : null}
-          {allowCustom ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setForm(emptyForm("mcp"))}
-              disabled={saving || busyId !== null}
-              className="gap-1.5"
-            >
-              <Plus className="size-3.5" />
-              Add MCP server
-            </Button>
-          ) : null}
-        </div>
-      </header>
+      {addInEmptyState ? null : (
+        <header
+          className={`flex flex-wrap items-start gap-4 ${embedded ? "justify-end" : "justify-between"}`}
+        >
+          {embedded ? null : (
+            <div>
+              <h2 className="text-base font-semibold tracking-tight text-fg">
+                Tools for your agent
+              </h2>
+              <p className="mt-1 max-w-lg text-[12.5px] leading-relaxed text-fg-3">
+                Connect a remote MCP server, or bring your tool catalog through Executor. OpenCode
+                connects directly—GitTerm stays out of the tool traffic.
+              </p>
+            </div>
+          )}
+          {addButtons}
+        </header>
+      )}
 
       {form && !editingId ? connectionForm : null}
 
@@ -417,107 +429,119 @@ export function McpConnections({
       ) : null}
       {isLoading ? <p className="text-xs text-fg-4">Loading connections…</p> : null}
       {!isLoading && !error && !connections.length ? (
-        <p className="rounded-lg border border-dashed border-line px-4 py-3 text-[13px] text-fg-3">
-          {allowCustom ? (
-            <>
-              <span className="text-fg-2">No MCP servers yet.</span> Start with a documentation
-              server, or any public HTTPS MCP endpoint.
-            </>
-          ) : (
-            <>
-              <span className="text-fg-2">No Executor catalog yet.</span> Connect your Executor
-              organization once and every tool in it reaches your agents.
-            </>
-          )}
-        </p>
+        <div className="flex flex-col gap-3 rounded-lg border border-dashed border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[13px] text-fg-3">
+            {allowCustom ? (
+              <>
+                <span className="text-fg-2">No MCP servers yet.</span> Start with a documentation
+                server, or any public HTTPS MCP endpoint.
+              </>
+            ) : (
+              <>
+                <span className="text-fg-2">No Executor catalog yet.</span> Connect your Executor
+                organization once and every tool in it reaches your agents.
+              </>
+            )}
+          </p>
+          {addInEmptyState ? addButtons : null}
+        </div>
       ) : null}
-      <div className="space-y-3">
-        {connections.map((connection) => {
-          const details = connection.details;
-          if (details.integration !== "mcp" && details.integration !== "executor") return null;
-          if (connection.id === editingId) {
-            return <div key={connection.id}>{connectionForm}</div>;
-          }
-          return (
-            <article key={connection.id} className="rounded-xl border border-line bg-settings p-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-3">
-                  <Image
-                    src={connection.integration === "executor" ? "/executor.png" : "/mcp.svg"}
-                    width={24}
-                    height={24}
-                    alt=""
-                    className="mt-0.5 shrink-0"
-                  />
-                  <div className="min-w-0">
-                    <h3 className="break-words text-sm font-medium text-fg">{connection.name}</h3>
-                    <p className="mt-1 break-all font-mono text-[11px] text-fg-4">{details.url}</p>
-                    <p className="mt-2 text-xs text-fg-3">
-                      <span
-                        className={
-                          connection.status === "connected" ? "text-emerald-400" : "text-amber-400"
-                        }
-                      >
-                        {statusLabels[connection.status]}
-                      </span>
-                      {details.toolCount !== null ? ` · ${details.toolCount} tools` : ""} ·{" "}
-                      {details.authType === "none" ? "No auth" : "Encrypted headers"}
-                    </p>
+      {connections.length ? (
+        <div className="space-y-3">
+          {connections.map((connection) => {
+            const details = connection.details;
+            if (details.integration !== "mcp" && details.integration !== "executor") return null;
+            if (connection.id === editingId) {
+              return <div key={connection.id}>{connectionForm}</div>;
+            }
+            return (
+              <article
+                key={connection.id}
+                className="rounded-xl border border-line bg-settings p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Image
+                      src={connection.integration === "executor" ? "/executor.png" : "/mcp.svg"}
+                      width={24}
+                      height={24}
+                      alt=""
+                      className="mt-0.5 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <h3 className="break-words text-sm font-medium text-fg">{connection.name}</h3>
+                      <p className="mt-1 break-all font-mono text-[11px] text-fg-4">
+                        {details.url}
+                      </p>
+                      <p className="mt-2 text-xs text-fg-3">
+                        <span
+                          className={
+                            connection.status === "connected"
+                              ? "text-emerald-400"
+                              : "text-amber-400"
+                          }
+                        >
+                          {statusLabels[connection.status]}
+                        </span>
+                        {details.toolCount !== null ? ` · ${details.toolCount} tools` : ""} ·{" "}
+                        {details.authType === "none" ? "No auth" : "Encrypted headers"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {busyId === connection.id ? (
+                      <Loader2 className="mr-2 size-3.5 animate-spin text-fg-3" />
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busyId !== null || saving}
+                      onClick={() => action(connection.id, "test")}
+                    >
+                      Test
+                    </Button>
+                    <CopyConnectionId id={connection.id} name={connection.name} />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      disabled={saving || busyId !== null}
+                      aria-label={`Edit ${connection.name}`}
+                      className="text-fg-3 hover:bg-fill-2 hover:text-fg"
+                      onClick={() =>
+                        setForm({
+                          ...emptyForm(connection.integration as "mcp" | "executor"),
+                          id: connection.id,
+                          name: connection.name,
+                          url: details.url,
+                          originalUrl: details.url,
+                          originalAuthType: details.authType,
+                          authMode: details.authType,
+                          codemode: details.codemode,
+                        })
+                      }
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      disabled={busyId !== null || saving}
+                      aria-label={`Remove ${connection.name}`}
+                      className="text-red-400/80 hover:bg-red-400/10 hover:text-red-300"
+                      onClick={() => action(connection.id, "remove")}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {busyId === connection.id ? (
-                    <Loader2 className="mr-2 size-3.5 animate-spin text-fg-3" />
-                  ) : null}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={busyId !== null || saving}
-                    onClick={() => action(connection.id, "test")}
-                  >
-                    Test
-                  </Button>
-                  <CopyConnectionId id={connection.id} name={connection.name} />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    disabled={saving || busyId !== null}
-                    aria-label={`Edit ${connection.name}`}
-                    className="text-fg-3 hover:bg-fill-2 hover:text-fg"
-                    onClick={() =>
-                      setForm({
-                        ...emptyForm(connection.integration as "mcp" | "executor"),
-                        id: connection.id,
-                        name: connection.name,
-                        url: details.url,
-                        originalUrl: details.url,
-                        originalAuthType: details.authType,
-                        authMode: details.authType,
-                        codemode: details.codemode,
-                      })
-                    }
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    disabled={busyId !== null || saving}
-                    aria-label={`Remove ${connection.name}`}
-                    className="text-red-400/80 hover:bg-red-400/10 hover:text-red-300"
-                    onClick={() => action(connection.id, "remove")}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
     </section>
   );
 }

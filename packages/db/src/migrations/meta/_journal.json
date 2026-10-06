@@ -281,6 +281,13 @@
       "when": 1791286221110,
       "tag": "0039_billing_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791290893266,
+      "tag": "0040_drop_flexible_machine_mode",
+      "breakpoints": true
     }
   ]
 }
