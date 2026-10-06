@@ -22,6 +22,11 @@ import {
   workloadIdentityIssuer,
 } from "../service/workload-identity/google";
 import { integrationPolicy } from "../service/integrations/catalog";
+import {
+  testMcpConnection,
+  updateMcpConnection,
+  updateMcpConnectionInput,
+} from "../service/integrations/mcp";
 
 const integrationKey = z.enum(Object.keys(INTEGRATIONS) as [IntegrationKey, ...IntegrationKey[]]);
 
@@ -77,6 +82,15 @@ export const integrationsRouter = router({
         await removeConnection(ctx.session.user.id, input.id);
         return { success: true as const };
       }),
+  }),
+
+  mcp: router({
+    test: accountProcedure("integrations:write")
+      .input(z.object({ id: z.uuid() }))
+      .mutation(({ ctx, input }) => testMcpConnection(ctx.session.user.id, input.id)),
+    update: accountProcedure("integrations:write")
+      .input(updateMcpConnectionInput)
+      .mutation(({ ctx, input }) => updateMcpConnection(ctx.session.user.id, input)),
   }),
 
   github: router({

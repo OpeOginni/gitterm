@@ -4,7 +4,7 @@ import { workspaceCredentialAudit } from "@gitterm/db/schema/credential-security
 export async function recordCredentialAudit(input: {
   workspaceId: string;
   userId: string;
-  credentialKind: "github" | "google" | "runtime_bundle" | "model";
+  credentialKind: "github" | "google" | "runtime_bundle" | "model" | "mcp";
   integrationId?: string | null;
   action: "issued" | "read";
   expiresAt?: string;

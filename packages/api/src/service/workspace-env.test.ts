@@ -81,6 +81,18 @@ test("Google integration identity variables cannot be overridden by user env", (
   expect(env.CLOUDSDK_CORE_PROJECT).toBe("trusted-project");
 });
 
+test("MCP credential environment variables are reserved and stay inside Railway's runtime bundle", () => {
+  const full = buildWorkspaceEnv(
+    { ...spec, agent: { ...spec.agent, env: { GITTERM_MCP_connection_H0: "upstream-token" } } },
+    {
+      ...runtime("railway"),
+      userEnv: { GITTERM_MCP_connection_H0: "override" },
+    },
+  );
+  expect(full.GITTERM_MCP_connection_H0).toBe("upstream-token");
+  expect(railwayBootstrapEnvironment(full)).not.toHaveProperty("GITTERM_MCP_connection_H0");
+});
+
 test("Railway receives only a revocable bootstrap capability", () => {
   const full = buildWorkspaceEnv(spec, {
     ...runtime("railway"),

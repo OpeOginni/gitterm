@@ -87,6 +87,15 @@ export const adminIntegrationsRouter = router({
           message: "Google Cloud currently supports personal connections only",
         });
       }
+      if (
+        (input.key === "mcp" || input.key === "executor") &&
+        (!input.allowPersonal || input.allowShared)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "MCP connections currently support personal access only",
+        });
+      }
       if (input.key === "github") {
         const mode = await githubRepositoryMode();
         if (input.enabled && !mode) {

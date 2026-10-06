@@ -23,6 +23,7 @@ export interface AgentType {
   name: string;
   description?: string | null;
   serverOnly: boolean;
+  provisionerKey?: string;
 }
 
 export interface CloudProvider {

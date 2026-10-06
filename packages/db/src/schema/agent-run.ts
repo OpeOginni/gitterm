@@ -106,10 +106,12 @@ export const agentRun = pgTable(
     nativeMessageId: text("native_message_id").notNull(),
     status: agentRunStatusEnum("status").notNull().default("pending"),
     title: text("title").notNull(),
+    /** Generic lifecycle errors only; never persist runtime error bodies. */
     errorMessage: text("error_message"),
+    /** Legacy compatibility columns; new writes must remain null/empty. */
     finalText: text("final_text"),
     messages: jsonb("messages").$type<AgentRunMessageSnapshot[]>().notNull().default([]),
-    /** Prompts the agent is blocked on; non-empty exactly while `awaiting_input`. */
+    /** IDs/kinds only in persisted rows; question and permission content is read live. */
     pendingInputs: jsonb("pending_inputs").$type<AgentRunInputRequest[]>().notNull().default([]),
     submittedAt: timestamp("submitted_at"),
     completedAt: timestamp("completed_at"),

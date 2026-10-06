@@ -72,10 +72,10 @@ const env = parseEnv(schema, rawEnv);
 export default env;
 
 export const isBillingEnabled = () => env.NEXT_PUBLIC_ENABLE_BILLING;
-export const isEmailAuthEnabled = () =>
-  env.NEXT_PUBLIC_DEPLOYMENT_MODE === "self-hosted" || env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH;
-export const isGitHubAuthEnabled = () =>
-  env.NEXT_PUBLIC_DEPLOYMENT_MODE === "managed" && env.NEXT_PUBLIC_ENABLE_GITHUB_AUTH;
+export const isEmailAuthEnabled = (config: WebEnv = env) =>
+  config.NEXT_PUBLIC_DEPLOYMENT_MODE === "self-hosted" || config.NEXT_PUBLIC_ENABLE_EMAIL_AUTH;
+export const isGitHubAuthEnabled = (config: WebEnv = env) =>
+  config.NEXT_PUBLIC_DEPLOYMENT_MODE === "managed" && config.NEXT_PUBLIC_ENABLE_GITHUB_AUTH;
 export const isAnonTryEnabled = () => env.NEXT_PUBLIC_ENABLE_ANON_TRY;
 
 export { schema as webEnvSchema };

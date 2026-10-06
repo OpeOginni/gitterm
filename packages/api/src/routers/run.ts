@@ -23,8 +23,7 @@ async function translateAgentError<T>(operation: () => Promise<T>): Promise<T> {
     if (error instanceof TRPCError) throw error;
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: error instanceof Error ? error.message : "Agent request failed",
-      cause: error,
+      message: "Agent request failed",
     });
   }
 }
@@ -144,8 +143,13 @@ export const runRouter = router({
         if (isTerminalRunStatus(run.status)) return;
 
         for await (const [event] of iterable) {
-          yield event;
-          if (isTerminalRunStatus(event.run.status)) return;
+          // Redis carries metadata only. Hydrate content directly from the
+          // workspace for this authenticated subscriber, never the event bus.
+          const current = await translateAgentError(() =>
+            getAgentRun(input.workspaceId, input.runId, ctx.session.user.id),
+          );
+          yield { ...event, run: current };
+          if (isTerminalRunStatus(current.status)) return;
         }
       } finally {
         await iterable.return?.();

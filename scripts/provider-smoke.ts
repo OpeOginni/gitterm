@@ -6,9 +6,11 @@ import {
   type WorkspaceProviderSelection,
 } from "../packages/sdk/src/index.ts";
 import { smokeConnections } from "./smoke-connections";
+import { createSmokeMcp, getSmokeMcp, runSmokeMcp, smokeMcpConnectionId } from "./smoke-mcp";
 
 // Optionally set GITTERM_E2E_CONNECTION_IDS to comma-separated IDs from the SDK connection list.
-// Omit it to exercise discovery without attaching credentials to smoke workspaces.
+// A selected Context7 MCP is tested instead of creating a temporary connection.
+// --integration-id (or GITTERM_E2E_MCP_CONNECTION_ID) selects just the MCP smoke target.
 dotenv.config({ path: join(import.meta.dir, ".env") });
 
 const PROVIDERS = [
@@ -165,7 +167,7 @@ async function runCli(args: string[]): Promise<unknown> {
   }
 }
 
-async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
+async function runProvider(provider: ProviderKey, selectedMcpId?: string): Promise<ProviderResult> {
   const serverUrl = requiredEnv("GITTERM_SERVER_URL");
   const token = requiredEnv("GITTERM_API_TOKEN");
   const repo = requiredEnv("GITTERM_E2E_REPO");
@@ -195,16 +197,25 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
   const client = createGittermClient({ serverUrl, token });
   const result: ProviderResult = { provider, steps: [], cleanup: "not-needed" };
   let workspaceId: string | undefined;
+  let temporaryMcpConnectionId: string | undefined;
   let terminated = false;
 
   console.log(`\n${provider}`);
   try {
     await step(result.steps, "authenticate SDK", () => client.auth.status());
-    const connections = (
-      await step(result.steps, "validate SDK integration connections", () =>
-        smokeConnections(client),
-      )
-    ).map((connection) => connection.id);
+    const selectedConnections = await step(
+      result.steps,
+      "validate SDK integration connections",
+      () => smokeConnections(client),
+    );
+    const attachedMcp = selectedConnections.find((connection) => connection.integration === "mcp");
+    if (selectedMcpId && attachedMcp && selectedMcpId !== attachedMcp.id) {
+      throw new Error(
+        "The selected integration ID conflicts with the MCP in GITTERM_E2E_CONNECTION_IDS; choose one MCP smoke target",
+      );
+    }
+    const mcpId = selectedMcpId ?? attachedMcp?.id;
+    const connections = selectedConnections.map((connection) => connection.id);
     const savedCredentials = await step(
       result.steps,
       "select saved model credentials",
@@ -270,6 +281,18 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
         "  note: provider org is below Tier 3 (no workspace API access) - scoped CLI checks skipped",
       );
     }
+
+    const mcp = await step(
+      result.steps,
+      mcpId ? "test saved Context7 MCP connection" : "create and test Context7 MCP connection",
+      () =>
+        mcpId
+          ? getSmokeMcp(client, mcpId)
+          : createSmokeMcp(client, `${provider}-${runId}`, (id) => {
+              temporaryMcpConnectionId = id;
+            }),
+    );
+    if (!connections.includes(mcp.id)) connections.push(mcp.id);
 
     const created = await step(result.steps, "create workspace with SDK", () =>
       client.workspaces.create({
@@ -398,6 +421,14 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
       );
     }
 
+    const verifyMcp = () =>
+      runSmokeMcp(client, workspaceId!, mcp.id, {
+        model,
+        setupTimeoutMs: timeoutMs,
+        runTimeoutMs,
+      });
+    await step(result.steps, "verify Context7 MCP tool execution", verifyMcp);
+
     await step(result.steps, "pause with account CLI", () =>
       runCli(["workspace", "pause", workspaceId!]),
     );
@@ -409,6 +440,7 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
         timeoutMs: ensureRunningTimeoutMs,
       }),
     );
+    await step(result.steps, "verify Context7 MCP after restart", verifyMcp);
     await step(result.steps, "terminate with account CLI", () =>
       runCli(["workspace", "terminate", workspaceId!, "--yes"]),
     );
@@ -435,6 +467,15 @@ async function runProvider(provider: ProviderKey): Promise<ProviderResult> {
         result.error = `${result.error ?? "Provider test failed"}\nCleanup failed: ${errorMessage(cleanupError)}`;
       }
     }
+    if (temporaryMcpConnectionId) {
+      try {
+        await step(result.steps, "remove temporary Context7 connection", () =>
+          client.integrations.connections.remove(temporaryMcpConnectionId!),
+        );
+      } catch (cleanupError) {
+        result.error = `${result.error ?? "MCP cleanup failed"}\nConnection cleanup failed: ${errorMessage(cleanupError)}`;
+      }
+    }
   }
 
   return result;
@@ -445,16 +486,17 @@ async function main() {
   requiredEnv("GITTERM_API_TOKEN");
   requiredEnv("GITTERM_E2E_REPO");
   const providers = selectedProviders();
+  const mcpId = smokeMcpConnectionId(process.argv.slice(2));
   const results: ProviderResult[] = [];
 
   console.log(`Running provider smoke tests sequentially: ${providers.join(", ")}`);
-  for (const provider of providers) results.push(await runProvider(provider));
+  for (const provider of providers) results.push(await runProvider(provider, mcpId));
 
   console.log("\nProvider smoke summary");
   for (const result of results) {
     const durationMs = result.steps.reduce((total, current) => total + current.durationMs, 0);
     console.log(
-      `${result.error ? "FAIL" : "PASS"} ${result.provider} (${(durationMs / 1000).toFixed(1)}s, cleanup: ${result.cleanup})`,
+      `${result.error ? "FAIL" : "PASS"} ${result.provider} (${(durationMs / 1000).toFixed(1)}s, cleanup: ${result.cleanup}, workspace: ${result.workspaceId ?? "not created"})`,
     );
     if (result.error) console.error(result.error);
   }

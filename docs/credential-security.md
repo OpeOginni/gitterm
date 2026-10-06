@@ -31,6 +31,13 @@ claiming secrets are inaccessible to an authorized workspace.
   result. Only running or starting workspaces that were created with the credential can ask.
   GitHub Copilot tokens do not rotate and are still refreshed inside the workspace. T3Code
   workspaces run OpenCode 1.x, which has no plugin hook, so they still receive the refresh token.
+- **MCP and Executor:** personal connection headers are envelope-encrypted with a connection-specific
+  authenticated context. Selected workspaces receive their values as `GITTERM_MCP_*` environment
+  variables; OpenCode config contains environment references, not literal secrets. OpenCode connects
+  directly to the endpoint: GitTerm is not a tool relay or OAuth broker. The workspace agent can
+  read these values, including an Executor PAT. Executor may keep underlying service credentials
+  behind its gateway, but the PAT still grants the workspace access to the gateway's allowed tools.
+  Use narrowly scoped credentials and verify the gateway's actual policy and approval behavior.
 - **Caller secret files:** encrypted in transit/provider storage and materialized under
   `/run/gitterm/secrets/<workspace>`. A repository path is a git-excluded symlink only.
 - **Railway:** raw runtime values are envelope-encrypted in `workspace_runtime_bundle`. Railway gets
@@ -83,6 +90,9 @@ master key is configured.
 - Paused workspaces cannot fetch runtime bundles or mint GitHub/Google/model credentials.
 - Revoking or deleting a model credential stops every workspace from getting new access tokens
   for it; tokens already issued last until they expire.
+- Removing or disabling an MCP connection prevents future attachments, not existing direct
+  access. Existing workspaces retain their configuration and credentials. Revoke the credential
+  at the MCP provider/Executor to invalidate those copies; updates apply to newly created workspaces.
 - Runtime bundles are deleted on failed provisioning and termination.
 - Incrementing `workspace.authVersion` revokes all tokens for that workspace. The workspace must be
   reprovisioned because its runtime no longer has a valid identity.
@@ -96,7 +106,7 @@ Google. Third-party credentials issued from it are short-lived.
 
 Railway's brokered bootstrap requires a matching canonical image:
 
-1. Apply migrations through `0032_integrations_catalog_and_connections` before deploying the integration-policy API.
+1. Apply migrations through `0033_mcp_connections` before deploying the integration API.
 2. Configure the encryption master key. Generate the Google workload-identity signing key in
    **Admin → Integrations** after deploying the API, or retain the legacy env key during migration.
 3. Build and publish all canonical agent images from this revision; verify they contain

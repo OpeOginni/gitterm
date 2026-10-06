@@ -17,6 +17,10 @@ import {
   googleCloudIntegration,
 } from "@gitterm/db/schema/integrations";
 import { z } from "zod";
+import { mcpConnectionInput } from "@gitterm/schema/mcp";
+import { mcpConnection } from "@gitterm/db/schema/mcp";
+import { createMcpConnection, listMcpConnections, resolveMcpWorkspaceConnection } from "./mcp";
+import type { McpWorkspaceConnection } from "./mcp-config";
 import env from "@gitterm/env/server";
 import { apiPath } from "@gitterm/schema/url";
 import { githubGlobalPat, githubRepositoryMode } from "../github/config";
@@ -35,7 +39,7 @@ import {
 } from "./catalog";
 
 export type ConnectionKind = "personal" | "shared";
-export type ConnectionStatus = "connected" | "suspended";
+export type ConnectionStatus = "connected" | "suspended" | "untested" | "needs_auth" | "error";
 
 export type GitHubConnectionDetails = {
   integration: "github";
@@ -63,7 +67,20 @@ export type GoogleConnectionDetails = {
   };
 };
 
-export type ConnectionDetails = GitHubConnectionDetails | GoogleConnectionDetails;
+export type McpConnectionDetails = {
+  integration: "mcp" | "executor";
+  url: string;
+  authType: "none" | "headers";
+  codemode: boolean;
+  toolCount: number | null;
+  serverInfo: { name: string; version: string } | null;
+  lastCheckedAt: Date | null;
+};
+
+export type ConnectionDetails =
+  | GitHubConnectionDetails
+  | GoogleConnectionDetails
+  | McpConnectionDetails;
 
 export type Connection = {
   id: string;
@@ -228,12 +245,18 @@ export async function listConnections(
   filter?: { integration?: IntegrationKey; kind?: ConnectionKind },
 ): Promise<Connection[]> {
   const wanted = (key: IntegrationKey) => !filter?.integration || filter.integration === key;
-  const [githubPersonal, githubShared, google] = await Promise.all([
+  const [githubPersonal, githubShared, google, mcp] = await Promise.all([
     wanted("github") ? githubPersonalConnections(userId) : [],
     wanted("github") ? githubSharedConnection() : null,
     wanted("google") ? googlePersonalConnections(userId) : [],
+    !filter?.integration || wanted("mcp") || wanted("executor") ? listMcpConnections(userId) : [],
   ]);
-  const all = [...githubPersonal, ...(githubShared ? [githubShared] : []), ...google];
+  const all = [
+    ...githubPersonal,
+    ...(githubShared ? [githubShared] : []),
+    ...google,
+    ...mcp.filter((connection) => wanted(connection.integration)),
+  ];
   return filter?.kind ? all.filter((connection) => connection.kind === filter.kind) : all;
 }
 
@@ -242,11 +265,12 @@ export async function getConnection(userId: string, id: string): Promise<Connect
   if (shared === "github") return githubSharedConnection();
   if (shared) return null;
   if (!UUID_PATTERN.test(id)) return null;
-  const [github, google] = await Promise.all([
+  const [github, google, mcp] = await Promise.all([
     githubPersonalConnections(userId),
     googlePersonalConnections(userId),
+    listMcpConnections(userId),
   ]);
-  return [...github, ...google].find((connection) => connection.id === id) ?? null;
+  return [...github, ...google, ...mcp].find((connection) => connection.id === id) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -258,28 +282,39 @@ export type ResolvedWorkspaceConnections = {
     | { kind: "personal"; connectionId: string; gitIntegration: typeof gitIntegration.$inferSelect }
     | { kind: "shared"; connectionId: string; pat: string };
   google?: { connectionId: string; integration: typeof googleCloudIntegration.$inferSelect };
+  mcp: McpWorkspaceConnection[];
 };
 
 /**
  * Validate a workspace's requested connection ids: each must exist, be usable by this user
- * under the current admin policy, and at most one connection per integration may be attached.
+ * under the current admin policy. MCP allows multiple connections; repository/cloud identity
+ * selection remains single-valued.
  */
 export async function resolveWorkspaceConnections(
   userId: string,
   ids: readonly string[],
 ): Promise<ResolvedWorkspaceConnections> {
-  const resolved: ResolvedWorkspaceConnections = {};
+  const resolved: ResolvedWorkspaceConnections = { mcp: [] };
   const seen = new Set<IntegrationKey>();
+  // Resolve the catalog once, rather than doing a full listing for each MCP attachment.
+  const requestedIds = new Set(ids);
+  const available = requestedIds.size
+    ? new Map((await listConnections(userId)).map((connection) => [connection.id, connection]))
+    : new Map<string, Connection>();
 
-  for (const id of new Set(ids)) {
-    const connection = await requireConnection(userId, id);
+  for (const id of requestedIds) {
+    const connection = available.get(id) ?? (await requireConnection(userId, id));
     if (connection.status !== "connected") {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: `Connection ${connection.name} is ${connection.status}`,
       });
     }
-    if (seen.has(connection.integration)) {
+    if (
+      seen.has(connection.integration) &&
+      connection.integration !== "mcp" &&
+      connection.integration !== "executor"
+    ) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: `Only one ${INTEGRATIONS[connection.integration].name} connection can be attached`,
@@ -287,7 +322,9 @@ export async function resolveWorkspaceConnections(
     }
     seen.add(connection.integration);
 
-    if (connection.integration === "github") {
+    if (connection.integration === "mcp" || connection.integration === "executor") {
+      resolved.mcp.push(await resolveMcpWorkspaceConnection(userId, connection.id));
+    } else if (connection.integration === "github") {
       if (connection.kind === "shared") {
         const pat = await githubGlobalPat();
         if (!pat) {
@@ -355,16 +392,19 @@ export const githubConnectionInput = z.object({
 export const createConnectionInput = z.discriminatedUnion("integration", [
   googleConnectionInput,
   githubConnectionInput,
+  mcpConnectionInput,
 ]);
 
 export type CreateConnectionInput = z.infer<typeof createConnectionInput>;
 
 export type CreateConnectionResult =
   | {
-      status: "connected";
+      status: "connected" | "saved";
       connection: Connection;
       /** Commands the user still has to run outside GitTerm (e.g. Google IAM binding). */
       nextSteps: Array<{ label: string; command: string }>;
+      /** Safe diagnostic when a connection was saved but is not ready to attach. */
+      message?: string;
     }
   | {
       /** The provider needs a browser step; poll `listConnections` until it appears. */
@@ -387,6 +427,10 @@ export async function createConnection(
       code: "FORBIDDEN",
       message: `${INTEGRATIONS[input.integration].name} personal connections are not enabled by an admin`,
     });
+  }
+
+  if (input.integration === "mcp" || input.integration === "executor") {
+    return createMcpConnection(userId, input);
   }
 
   if (input.integration === "google") {
@@ -446,6 +490,13 @@ export async function removeConnection(userId: string, id: string): Promise<void
   }
   const connection = await getConnection(userId, id);
   if (!connection) throw new TRPCError({ code: "NOT_FOUND", message: "Connection not found" });
+
+  if (connection.integration === "mcp" || connection.integration === "executor") {
+    await db
+      .delete(mcpConnection)
+      .where(and(eq(mcpConnection.id, id), eq(mcpConnection.userId, userId)));
+    return;
+  }
 
   if (connection.integration === "google") {
     await db

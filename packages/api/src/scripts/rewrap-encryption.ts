@@ -4,6 +4,8 @@ import { providerConfig } from "@gitterm/db/schema/provider-config";
 import { workspace, workspaceEnvironmentVariables } from "@gitterm/db/schema/workspace";
 import { workspaceRouteAccess } from "@gitterm/db/schema/workspace-route-access";
 import { workspaceRuntimeBundle } from "@gitterm/db/schema/credential-security";
+import { mcpConnection } from "@gitterm/db/schema/mcp";
+import { mcpAuthContext } from "../service/integrations/mcp";
 import { getEncryptionService } from "../service/encryption";
 
 const apply = process.argv.includes("--apply");
@@ -92,6 +94,15 @@ for (const row of await db.select().from(workspaceEnvironmentVariables)) {
         .update(workspaceEnvironmentVariables)
         .set({ environmentVariables: { version: 1, ciphertext }, updatedAt: new Date() })
         .where(eq(workspaceEnvironmentVariables.id, row.id)),
+  });
+}
+
+for (const row of await db.select().from(mcpConnection)) {
+  await rewrapText({
+    value: row.encryptedAuth,
+    context: mcpAuthContext(row.id),
+    update: (encryptedAuth) =>
+      db.update(mcpConnection).set({ encryptedAuth }).where(eq(mcpConnection.id, row.id)),
   });
 }
 

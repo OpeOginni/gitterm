@@ -67,6 +67,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   } | null>(null);
   const [userGitIntegrationId, setuserGitIntegrationId] = useState<string | null>(null);
   const [googleCloudIntegrationId, setGoogleCloudIntegrationId] = useState("none");
+  const [mcpConnectionIds, setMcpConnectionIds] = useState<string[]>([]);
   const [persistent, setPersistent] = useState(true);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile>("standard");
 
@@ -98,6 +99,12 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     staleTime: STALE_TIME,
   });
   const isGoogleCloudAvailable = googleCloudAvailability?.available === true;
+  const { data: connections = [], error: connectionsError } = useQuery(
+    trpc.integrations.connections.list.queryOptions(),
+  );
+  const mcpConnections = connections.filter(
+    (connection) => connection.integration === "mcp" || connection.integration === "executor",
+  );
   const { data: defaultProviderData } = useQuery({
     ...trpc.user.getDefaultCloudProvider.queryOptions(),
     staleTime: STALE_TIME,
@@ -314,6 +321,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
   const requiresUserSshKey = selectedCloudProvider?.providerKey !== "daytona";
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
+  const supportsMcp = selectedAgent?.provisionerKey === "opencode";
 
   const handleCloudGroupChange = (groupKey: CloudGroupKey) => {
     setUserCloudGroupKey(groupKey);
@@ -422,6 +430,13 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         isGoogleCloudAvailable && googleCloudIntegrationId !== "none"
           ? googleCloudIntegrationId
           : null,
+        ...(supportsMcp
+          ? mcpConnectionIds.filter((id) =>
+              mcpConnections.some(
+                (connection) => connection.id === id && connection.status === "connected",
+              ),
+            )
+          : []),
       ].filter((id): id is string => Boolean(id)),
       persistent: effectivePersistent,
       subdomain: subdomain || undefined,
@@ -914,6 +929,66 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               </span>
             )}
           </Label>
+        </div>
+
+        <div className="space-y-3 rounded-lg border border-border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-xs font-medium">
+              MCP tools <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Link
+              href={"/dashboard/integrations" as Route}
+              className="text-xs text-muted-foreground underline underline-offset-2"
+            >
+              Manage connections
+            </Link>
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {supportsMcp
+              ? "Choose servers for this workspace. OpenCode connects directly; their credentials will be available to its agent."
+              : "GitTerm MCP connections require an OpenCode workspace. T3Code is not supported yet."}
+          </p>
+          {connectionsError ? (
+            <p role="alert" className="text-xs text-red-400">
+              Couldn't load connections. You can create a workspace without MCP tools.
+            </p>
+          ) : null}
+          {!mcpConnections.length ? (
+            <p className="text-xs text-muted-foreground">
+              Connect a remote server or Executor from Integrations first.
+            </p>
+          ) : null}
+          {mcpConnections.map((connection) => (
+            <label key={connection.id} className="flex items-center gap-2 text-xs">
+              <Checkbox
+                disabled={
+                  !supportsMcp ||
+                  connection.status !== "connected" ||
+                  (mcpConnectionIds.length >= 30 && !mcpConnectionIds.includes(connection.id))
+                }
+                checked={
+                  supportsMcp &&
+                  connection.status === "connected" &&
+                  mcpConnectionIds.includes(connection.id)
+                }
+                onCheckedChange={(checked) =>
+                  setMcpConnectionIds((ids) =>
+                    checked === true
+                      ? [...new Set([...ids, connection.id])]
+                      : ids.filter((id) => id !== connection.id),
+                  )
+                }
+              />
+              <span className="min-w-0 flex-1 truncate">{connection.name}</span>
+              <span className="shrink-0 text-muted-foreground">
+                {connection.status === "connected"
+                  ? connection.integration === "executor"
+                    ? "Executor"
+                    : "MCP"
+                  : "Needs attention"}
+              </span>
+            </label>
+          ))}
         </div>
 
         {/* ── 5. Persistent storage ── */}

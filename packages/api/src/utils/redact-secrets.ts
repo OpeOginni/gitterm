@@ -40,3 +40,12 @@ export function redactSensitiveText(value: string, secrets: readonly string[] = 
       REDACTED,
     );
 }
+
+/** Remote errors can echo headers or signed URLs; sanitize before truncation. */
+export function redactRemoteErrorText(value: string, secrets: readonly string[] = []): string {
+  return redactSensitiveText(value, secrets)
+    .replace(/\b(Bearer|Basic)\s+[^\s,;"'}]+/gi, "$1 [REDACTED]")
+    .replace(/["']?\b(Authorization|Cookie|Set-Cookie)["']?\s*[:=]\s*[^\r\n]+/gi, "$1: [REDACTED]")
+    .replace(/https?:\/\/[^\s"'<>]+/gi, "[URL REDACTED]")
+    .slice(0, 1000);
+}

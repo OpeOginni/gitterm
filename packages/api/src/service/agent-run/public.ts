@@ -4,11 +4,11 @@ export function publicRun(run: AgentRun) {
   return {
     id: run.id,
     workspaceId: run.workspaceId,
-    title: run.title,
+    title: "Agent run",
     status: run.status,
-    error: run.errorMessage,
-    finalText: run.finalText,
-    pendingInputs: run.pendingInputs,
+    error: run.errorMessage ? "Agent run failed or was interrupted" : null,
+    finalText: null as string | null,
+    pendingInputs: [] as typeof run.pendingInputs,
     context: run.parentRunId
       ? { type: "continued" as const, runId: run.parentRunId }
       : { type: "isolated" as const },

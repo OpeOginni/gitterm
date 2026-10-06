@@ -15,6 +15,7 @@
 import { githubAuthProvisioning, githubAuthCommand } from "@gitterm/agent-runtime/github-auth";
 import {
   RESERVED_WORKSPACE_ENV_KEYS,
+  isReservedWorkspaceEnvKey,
   type AgentFile,
   type AgentProvisioning,
   type SystemWorkspaceEnv,
@@ -179,7 +180,7 @@ function mergeEnv(
 
   if (userEnv) {
     for (const [key, value] of Object.entries(userEnv)) {
-      if (RESERVED_WORKSPACE_ENV_KEYS.has(key)) {
+      if (isReservedWorkspaceEnvKey(key)) {
         continue;
       }
       merged[key] = value;
