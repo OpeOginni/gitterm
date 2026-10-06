@@ -85,7 +85,8 @@ export function createAsciiDirectProvider(
   async function deleteBox(boxId: string): Promise<void> {
     const response = await fetch(`https://ascii.dev/api/box/v1/boxes/${boxId}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${config.apiKey}` },
+      // boat requires the target id as an explicit delete confirmation (409 without it).
+      headers: { Authorization: `Bearer ${config.apiKey}`, "X-Ascii-Confirm-Delete": boxId },
     });
     if (!response.ok && response.status !== 404) {
       throw new Error(`Ascii Box deletion failed (${response.status})`);

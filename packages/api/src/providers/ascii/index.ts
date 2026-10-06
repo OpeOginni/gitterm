@@ -359,10 +359,12 @@ export class AsciiProvider implements ComputeProvider {
   async terminateWorkspace(externalId: string): Promise<void> {
     const handle = parseHandle(externalId);
     const { apiKey } = await this.getConfig();
+    // boat requires the target id as an explicit delete confirmation (409 without it).
     const response = await fetch(`https://ascii.dev/api/box/v1/boxes/${handle.boxId}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: { Authorization: `Bearer ${apiKey}`, "X-Ascii-Confirm-Delete": handle.boxId },
     });
+    // 404: the box is already gone, so the workspace can be marked terminated.
     if (!response.ok && response.status !== 404) {
       throw new Error(`Ascii Box deletion failed (${response.status}).`);
     }
