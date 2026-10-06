@@ -25,6 +25,8 @@ import {
 } from "./target";
 import { ensureWorkspaceWatcher, stoppedWorkspaceMessage, untrackRun } from "./watcher";
 import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-error";
+import { logger } from "../../utils/logger";
+import { redactSensitiveText } from "../../utils/redact-secrets";
 
 export { publicRun, type PublicAgentRun } from "./public";
 export { startRunWatcherSweep } from "./watcher";
@@ -384,7 +386,13 @@ export async function createAgentRun(input: RunCreateInput, userId: string) {
       await cancelNativeRun(runtime, nativeSessionId).catch(() => undefined);
     }
     return publicRun(current);
-  } catch {
+  } catch (error) {
+    // Callers only see a generic failure, so keep the cause for operators.
+    logger.warn("Agent run could not be started", {
+      workspaceId: input.workspaceId,
+      records: { runId: inserted.id },
+      error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
+    });
     untrackRun(input.workspaceId, inserted.id);
     if (nativeSessionId) {
       await cancelNativeRun(runtime, nativeSessionId).catch(() => undefined);

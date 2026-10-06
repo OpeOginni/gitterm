@@ -1,4 +1,5 @@
 import { Sandbox } from "@vercel/sandbox";
+import { isOpencodeServeCommand } from "@gitterm/agent-runtime/opencode-service";
 import env from "@gitterm/env/server";
 import type { VercelImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
@@ -290,11 +291,7 @@ export class VercelProvider implements ComputeProvider {
         sandbox.runCommand("mkdir", ["-p", repoDir]),
       );
       await logger.step("setup-agent", () =>
-        this.setupAgent(
-          sandbox,
-          metadata.setupCommands,
-          serve.command.trim().startsWith("opencode "),
-        ),
+        this.setupAgent(sandbox, metadata.setupCommands, isOpencodeServeCommand(serve.command)),
       );
       if (spec?.repo) {
         const repo = spec.repo;

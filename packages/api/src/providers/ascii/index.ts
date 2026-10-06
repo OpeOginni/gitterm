@@ -164,7 +164,7 @@ export class AsciiProvider implements ComputeProvider {
   }
 
   private async startAgentServer(client: BoxApi, handle: AsciiHandle): Promise<void> {
-    const escaped = handle.serve.command.replace(/'/g, `"'"'`);
+    const escaped = handle.serve.command.replace(/'/g, `'"'"'`);
     await this.runCommand(
       client,
       handle.boxId,

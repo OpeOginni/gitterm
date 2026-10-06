@@ -71,8 +71,10 @@
 
 		# Cloud workspaces: route to containers using dynamic host/port from headers
 		route @cloud_workspace {
+			# boat private ports authenticate with the _port_auth cookie. A ?_token= query
+			# is only exchanged for that cookie via a redirect, which proxied API calls can't follow.
 			@ascii_private header X-GitTerm-Ascii-Token *
-			uri @ascii_private query _token {header.X-GitTerm-Ascii-Token}
+			request_header @ascii_private Cookie "{header.Cookie}; _port_auth={header.X-GitTerm-Ascii-Token}"
 			handle @cloud_workspace_https {
 				reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
 					# Standard proxy headers
