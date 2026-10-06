@@ -1,4 +1,13 @@
-import { boolean, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { machineProfile } from "./cloud";
 
@@ -60,3 +69,36 @@ export const billingMachineRate = pgTable(
 );
 
 export type BillingAccountRow = typeof billingAccount.$inferSelect;
+
+/**
+ * Pay-as-you-go overage per billing period, settled with Polar independently of
+ * the account's current settings. Earned only grows; a period is reported until
+ * Polar has accepted its earned total, including after the period ends.
+ */
+export const billingOverage = pgTable(
+  "billing_overage",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    periodStart: timestamp("period_start").notNull(),
+    periodEnd: timestamp("period_end").notNull(),
+    /** Overage earned while pay-as-you-go was on, in cents. Never decreases. */
+    earnedCents: integer("earned_cents").notNull().default(0),
+    /** Highest cumulative total Polar has accepted for this period, in cents. */
+    reportedCents: integer("reported_cents").notNull().default(0),
+    /** Plan terms and cap while earning, for the final count once the period ends. */
+    includedCents: integer("included_cents").notNull(),
+    overageDiscountPercent: integer("overage_discount_percent").notNull(),
+    spendCapCents: integer("spend_cap_cents"),
+    /** Whether pay-as-you-go was on at the last pass; only then is the final count billable. */
+    payAsYouGo: boolean("pay_as_you_go").notNull().default(true),
+    /** Set once the ended period's final usage has been counted. */
+    closedAt: timestamp("closed_at"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.periodStart] }),
+    index("billing_overage_unsettled_idx").on(table.closedAt),
+  ],
+);

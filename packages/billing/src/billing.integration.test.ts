@@ -2,13 +2,14 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { db, eq } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
-import { billingMachineRate } from "@gitterm/db/schema/billing";
+import { billingMachineRate, billingOverage } from "@gitterm/db/schema/billing";
 import { agentType, cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
 import { usageSession, workspace } from "@gitterm/db/schema/workspace";
 import { createBilling } from "./index";
 import { PLANS, type PlanId } from "./plans";
 import { setPlan } from "./accounts";
 import { getMinutesUsedToday } from "./usage";
+import { closeEndedPeriods } from "./overage";
 
 // Opt-in: runs only against an explicit, disposable database.
 const testUrl = process.env.BILLING_DATABASE_TEST_URL;
@@ -220,6 +221,43 @@ describe("managed billing", () => {
     await expect(
       billing.updateSettings(userId, { payAsYouGo: true, spendCapCents: null }),
     ).rejects.toThrow();
+  });
+
+  integration("keeps earned overage owed after pay-as-you-go is turned off", async () => {
+    const userId = await createUser();
+    await subscribe(userId, "pro");
+    await billing.updateSettings(userId, { payAsYouGo: true, spendCapCents: 500 });
+    await addSession(userId, minutesFor(proIncluded + 200), 0); // $2 over
+    await billing.runPeriodicTasks();
+    await billing.updateSettings(userId, { payAsYouGo: false, spendCapCents: null });
+    await billing.runPeriodicTasks();
+
+    const [row] = await db.select().from(billingOverage).where(eq(billingOverage.userId, userId));
+    // Polar isn't configured in tests, so it stays unreported and is retried.
+    expect(row).toMatchObject({ reportedCents: 0, payAsYouGo: false, closedAt: null });
+    expect(Math.abs(row!.earnedCents - 200)).toBeLessThanOrEqual(2);
+  });
+
+  integration("counts an ended period's final usage once, within the period", async () => {
+    const userId = await createUser();
+    const end = new Date(Date.now() - minutes(30));
+    await db.insert(billingOverage).values({
+      userId,
+      periodStart: new Date(end.getTime() - 24 * minutes(60)),
+      periodEnd: end,
+      earnedCents: 100,
+      includedCents: proIncluded,
+      overageDiscountPercent: 0,
+      spendCapCents: 1000,
+    });
+    // $3 over by the period end; the session after it belongs to the next period.
+    await addSession(userId, 30 + minutesFor(proIncluded + 300), 30);
+    await addSession(userId, 20, 0);
+
+    await closeEndedPeriods();
+    const [row] = await db.select().from(billingOverage).where(eq(billingOverage.userId, userId));
+    expect(row!.closedAt).not.toBeNull();
+    expect(Math.abs(row!.earnedCents - 300)).toBeLessThanOrEqual(2);
   });
 
   integration("discounts Growth overage and keeps earlier usage at its old price", async () => {

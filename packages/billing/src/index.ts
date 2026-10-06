@@ -27,7 +27,8 @@ import { deleteSubject } from "./analytics/subjects";
 import { runAnalyticsTasks } from "./analytics/jobs";
 import { getReport } from "./analytics/reports";
 import { simulatePricing } from "./analytics/simulate";
-import { deletePolarCustomer, reportOverage } from "./polar";
+import { deletePolarCustomer } from "./polar";
+import { closeEndedPeriods, recordPeriodOverage, reportUnsettledOverage } from "./overage";
 import { getMachinePrices, setMachinePrice } from "./rates";
 import { getMinutesUsedToday, getRetailUsage, type RetailUsage } from "./usage";
 import { billableOverageCents, MICROS_PER_CENT } from "./money";
@@ -424,22 +425,29 @@ export function createBilling(): Billing {
         ...(await getStandings(accounts.map((account) => account.userId))).values(),
       ];
 
+      // Overage is earned per period and settled even after pay-as-you-go is
+      // turned off or the period ends; unaccepted totals retry next pass.
+      await recordPeriodOverage(
+        standings.flatMap(({ account, compute, period }) =>
+          compute
+            ? [
+                {
+                  userId: account.userId,
+                  period,
+                  payAsYouGo: compute.payAsYouGo,
+                  overageCents: compute.overageCents,
+                  includedCents: compute.includedCents,
+                  overageDiscountPercent: compute.overageDiscountPercent,
+                  spendCapCents: compute.spendCapCents,
+                },
+              ]
+            : [],
+        ),
+      );
+      await closeEndedPeriods();
       try {
-        await reportOverage(
-          standings.flatMap(({ account, compute, period }) =>
-            compute?.payAsYouGo && compute.overageCents > 0
-              ? [
-                  {
-                    userId: account.userId,
-                    periodStart: period.start,
-                    totalCents: compute.overageCents,
-                  },
-                ]
-              : [],
-          ),
-        );
+        await reportUnsettledOverage();
       } catch (error) {
-        // Totals are cumulative, so the next pass reports them again.
         console.error("[billing] Failed to report overage to Polar:", error);
       }
 

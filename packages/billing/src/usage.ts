@@ -66,7 +66,8 @@ export interface RetailUsage {
  * to now. Sizes without a price cost nothing.
  */
 export async function getRetailUsage(
-  periods: Array<{ userId: string; start: Date }>,
+  /** `end` bounds an ended period; without it usage counts up to now. */
+  periods: Array<{ userId: string; start: Date; end?: Date }>,
   now = new Date(),
 ): Promise<Map<string, RetailUsage>> {
   if (periods.length === 0) return new Map();
@@ -76,19 +77,20 @@ export async function getRetailUsage(
     micros: string | null;
     running_micros_per_hour: string | null;
   }>(sql`
-    with periods (user_id, period_start) as (
+    with periods (user_id, period_start, period_end) as (
       select * from unnest(
         ${sql.param(periods.map((period) => period.userId))}::text[],
-        ${sql.param(periods.map((period) => period.start.toISOString()))}::timestamp[]
+        ${sql.param(periods.map((period) => period.start.toISOString()))}::timestamp[],
+        ${sql.param(periods.map((period) => (period.end && period.end < now ? period.end : now).toISOString()))}::timestamp[]
       )
     )
     select
       s.user_id,
       sum(
-        greatest(0, extract(epoch from (${sessionEnd(nowAt)} - greatest(s.started_at, p.period_start))))
+        greatest(0, extract(epoch from (least(${sessionEnd(nowAt)}, p.period_end) - greatest(s.started_at, p.period_start))))
         * coalesce(rate.micros_per_hour, 0) / 3600
       ) as micros,
-      sum(case when ${sessionRunning} then coalesce(rate.micros_per_hour, 0) else 0 end)
+      sum(case when ${sessionRunning} and p.period_end = ${nowAt} then coalesce(rate.micros_per_hour, 0) else 0 end)
         as running_micros_per_hour
     from usage_session s
     join periods p on p.user_id = s.user_id
@@ -99,7 +101,7 @@ export async function getRetailUsage(
       order by r.effective_from desc
       limit 1
     ) rate on true
-    where s.started_at < ${nowAt} and ${sessionEnd(nowAt)} > p.period_start
+    where s.started_at < p.period_end and ${sessionEnd(nowAt)} > p.period_start
     group by s.user_id
   `);
 
