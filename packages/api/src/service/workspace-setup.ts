@@ -130,6 +130,8 @@ export function buildWorkspaceSetupCommand(
     "trap 'rm -rf \"$SETUP_DIR/claim\"' EXIT HUP INT TERM",
     'printf "waiting\\n" > "$SETUP_DIR/state"',
     ...readiness,
+    // Register OpenCode's server first, so `opencode` commands in setup reuse it.
+    'if [ -n "${SETUP_PORT:-}" ] && [ -f "$HOME/.gitterm/opencode/register-service.sh" ]; then sh "$HOME/.gitterm/opencode/register-service.sh" "$SETUP_PORT" 10 >/dev/null 2>&1 || true; fi',
     'printf "running\\n" > "$SETUP_DIR/state"',
     'date -u +%Y-%m-%dT%H:%M:%SZ > "$SETUP_DIR/started-at"',
     'SETUP_STARTED=$(cat "$SETUP_DIR/started-at"); report_setup running null "\\"$SETUP_STARTED\\"" null "" || true',

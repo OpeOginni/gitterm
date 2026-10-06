@@ -98,7 +98,12 @@ async function testSmokeMcp(
   id: string,
   authType: "headers" | "none",
 ): Promise<Connection> {
-  const tested = await client.integrations.mcp.test(id);
+  const tested = await client.integrations.mcp.test(id).catch(async (error: unknown) => {
+    // The API allows one test per connection every 30s; wait it out once instead of failing.
+    if (!(error instanceof Error) || !/Too many connection tests/i.test(error.message)) throw error;
+    await Bun.sleep(31_000);
+    return client.integrations.mcp.test(id);
+  });
   if (tested.status !== "connected") {
     throw new Error(`Context7 connection test failed (${tested.status}): ${tested.message}`);
   }
@@ -206,9 +211,22 @@ export async function runSmokeMcp(
     });
     run = await client.runs.wait(run, { timeoutMs: options.runTimeoutMs });
     if (run.status !== "completed") {
+      // The run's error is generic; the tool calls it made say what actually broke.
+      let evidence = "";
+      try {
+        const messages = await client.runs.messages(run);
+        const agentErrors = messages
+          .filter((message) => message.role === "assistant" && message.error)
+          .map((message) => smokeMcpErrorText(message.error!));
+        if (agentErrors.length) evidence += `\nAgent errors:\n${agentErrors.join("\n")}`;
+        assertSmokeMcpMessages(messages, connectionId);
+      } catch (detail) {
+        evidence += `\n${detail instanceof Error ? detail.message : String(detail)}`;
+      }
       throw new Error(
         `Context7 MCP run ${run.id} finished with ${run.status}` +
-          (run.error ? `: ${smokeMcpErrorText(run.error)}` : ""),
+          (run.error ? `: ${smokeMcpErrorText(run.error)}` : "") +
+          evidence,
       );
     }
     assertSmokeMcpMessages(await client.runs.messages(run), connectionId);

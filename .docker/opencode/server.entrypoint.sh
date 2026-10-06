@@ -332,6 +332,13 @@ if [ -n "$WORKSPACE_SETUP_COMMAND_BASE64" ] && [ "$GITTERM_DIRECT_PROVIDER" != "
     nohup /usr/local/bin/gitterm-workspace-setup "$REPO_DIR" >/dev/null 2>&1 &
 fi
 
+# Register the agent server as OpenCode's background service so `opencode` CLI
+# commands reuse it instead of starting a second server on the same data.
+# exec below keeps this shell's PID, which the registrar reads from /api/info.
+if [ -f "$HOME/.gitterm/opencode/register-service.sh" ]; then
+    nohup sh "$HOME/.gitterm/opencode/register-service.sh" 7681 >/dev/null 2>&1 &
+fi
+
 export PATH="$HOME/.gitterm/bin:$PATH"
 if [ -f "$HOME/.gitterm/github/runtime.cjs" ]; then
     node "$HOME/.gitterm/github/runtime.cjs" setup

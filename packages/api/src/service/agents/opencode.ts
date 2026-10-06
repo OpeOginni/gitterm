@@ -9,6 +9,11 @@ import {
 } from "@gitterm/agent-runtime/opencode-credentials";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 import { withMcpConnections } from "../integrations/mcp-config";
+import {
+  OPENCODE_SERVICE_REGISTRAR_PATH,
+  OPENCODE_SERVICE_REGISTRAR_SCRIPT,
+  opencodeServeCommand,
+} from "@gitterm/agent-runtime/opencode-service";
 
 export const OPENCODE_CONFIG_PATH = "~/.config/opencode/opencode.json";
 export const OPENCODE_TUI_CONFIG_PATH = "~/.config/opencode/tui.json";
@@ -210,6 +215,10 @@ export const opencodeProvisioner: AgentProvisioner = {
           path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,
           contentBase64: toBase64(buildGittermInstructions(ctx.additionalAgentInstructions)),
         },
+        {
+          path: OPENCODE_SERVICE_REGISTRAR_PATH,
+          contentBase64: toBase64(OPENCODE_SERVICE_REGISTRAR_SCRIPT),
+        },
         ...(ctx.opencode?.skills ?? []).map((skill) => ({
           path: `~/.config/opencode/skills/${skill.name}/SKILL.md`,
           contentBase64: toBase64(skill.content),
@@ -217,7 +226,7 @@ export const opencodeProvisioner: AgentProvisioner = {
       ],
       env,
       serve: {
-        command: `opencode serve --hostname 0.0.0.0 --port ${OPENCODE_SERVE_PORT}`,
+        command: opencodeServeCommand(OPENCODE_SERVE_PORT),
         port: OPENCODE_SERVE_PORT,
       },
       usesServerPassword: true,

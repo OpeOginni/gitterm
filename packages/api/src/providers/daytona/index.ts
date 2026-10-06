@@ -1,5 +1,6 @@
 import env from "@gitterm/env/server";
 import { Daytona, Image } from "@daytonaio/sdk";
+import { isOpencodeServeCommand } from "@gitterm/agent-runtime/opencode-service";
 import type { DaytonaImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import path from "path";
 import { getProviderConfigService } from "../../service/config/provider-config";
@@ -361,7 +362,7 @@ export class DaytonaProvider implements ComputeProvider {
     // the registry image is rebuilt. Give OpenCode workspaces an explicit install
     // layer so the snapshot definition and runtime major are deterministic.
     const image = (
-      serve.command.trim().startsWith("opencode ")
+      isOpencodeServeCommand(serve.command)
         ? Image.base(imageRef).runCommands(DAYTONA_OPENCODE_SETUP)
         : Image.base(imageRef)
     ).entrypoint(["sleep", "infinity"]);

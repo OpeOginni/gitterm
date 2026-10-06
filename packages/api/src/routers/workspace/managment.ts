@@ -9,6 +9,7 @@ import {
   workspaceEnvironmentVariables,
   workspace,
   volume,
+  usageSession,
 } from "@gitterm/db/schema/workspace";
 import { agentType, image, cloudProvider, machineProfile, region } from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
@@ -1610,6 +1611,87 @@ export const workspaceRouter = router({
       });
     }
   }),
+
+  /**
+   * Runtime from usage sessions: minutes per UTC day for the window, and totals per
+   * workspace. An open session counts up to now only while its workspace is live, so
+   * a session that was never closed doesn't grow forever.
+   */
+  getUsageHistory: protectedProcedure
+    .input(z.object({ days: z.number().int().min(7).max(90).default(30) }).default({ days: 30 }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const sessions = sql`
+        select s.workspace_id, s.started_at,
+          coalesce(s.stopped_at,
+            case when w.status in ('running', 'pending') then now() at time zone 'utc'
+            else s.started_at end) as ended_at
+        from ${usageSession} s
+        join ${workspace} w on w.id = s.workspace_id
+        where s.user_id = ${userId}`;
+
+      const [daily, perWorkspace] = await Promise.all([
+        db.execute<{ day: string; minutes: number }>(sql`
+          with sessions as (${sessions}),
+          days as (
+            select generate_series(
+              date_trunc('day', now() at time zone 'utc') - make_interval(days => ${input.days - 1}),
+              date_trunc('day', now() at time zone 'utc'),
+              interval '1 day') as day
+          )
+          select to_char(d.day, 'YYYY-MM-DD') as day,
+            -- least/greatest skip NULLs, so days without sessions must be filtered out.
+            coalesce(sum(extract(epoch from
+              least(s.ended_at, d.day + interval '1 day') - greatest(s.started_at, d.day)
+            ) / 60) filter (where s.started_at is not null), 0)::float8 as minutes
+          from days d
+          left join sessions s
+            on s.started_at < d.day + interval '1 day' and s.ended_at > d.day
+          group by d.day
+          order by d.day`),
+        db.execute<{
+          workspace_id: string;
+          name: string | null;
+          subdomain: string;
+          provider: string | null;
+          sessions: number;
+          minutes: number;
+          recent_minutes: number;
+          last_active_at: string;
+        }>(sql`
+          with sessions as (${sessions}),
+          window_start as (
+            select date_trunc('day', now() at time zone 'utc')
+              - make_interval(days => ${input.days - 1}) as at
+          )
+          select s.workspace_id, w.name, w.subdomain, c.name as provider,
+            count(*)::int as sessions,
+            sum(extract(epoch from s.ended_at - s.started_at) / 60)::float8 as minutes,
+            -- The part of each session inside the window, for the 30-day breakdown.
+            sum(extract(epoch from greatest(
+              s.ended_at - greatest(s.started_at, window_start.at), interval '0'
+            )) / 60)::float8 as recent_minutes,
+            to_char(max(s.ended_at), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as last_active_at
+          from sessions s
+          cross join window_start
+          join ${workspace} w on w.id = s.workspace_id
+          left join ${cloudProvider} c on c.id = w.cloud_provider_id
+          group by s.workspace_id, w.name, w.subdomain, c.name`),
+      ]);
+
+      return {
+        days: daily.rows.map((row) => ({ day: row.day, minutes: Math.round(row.minutes) })),
+        workspaces: perWorkspace.rows.map((row) => ({
+          workspaceId: row.workspace_id,
+          name: row.name ?? row.subdomain,
+          provider: row.provider,
+          sessions: row.sessions,
+          minutes: Math.round(row.minutes),
+          recentMinutes: Math.round(row.recent_minutes),
+          lastActiveAt: row.last_active_at,
+        })),
+      };
+    }),
 
   // Create a new workspace. ID-based input remains supported for the web app;
   // integrations can submit stable provider and agent intent instead.

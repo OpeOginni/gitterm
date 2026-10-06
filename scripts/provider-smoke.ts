@@ -31,6 +31,8 @@ const HOSTED_PROVIDERS = [
   "vercel",
 ] as const satisfies readonly ProviderKey[];
 const MAX_ENSURE_RUNNING_TIMEOUT_MS = 360_000;
+// The API rate-limits connection tests, so a saved connection is tested once per smoke run.
+let savedMcpTest: ReturnType<typeof getSmokeMcp> | undefined;
 const DEFAULT_MODEL = "opencode/gpt-5.6-luna";
 
 type StepResult = {
@@ -278,7 +280,7 @@ async function runProvider(provider: ProviderKey, selectedMcpId?: string): Promi
     const workspaceApiAccess = catalogProvider.workspaceApiAccess !== false;
     if (!workspaceApiAccess) {
       console.log(
-        "  note: provider org is below Tier 3 (no workspace API access) - scoped CLI checks skipped",
+        "  note: provider org is below Tier 3 (no workspace API access, restricted egress) - scoped CLI and Context7 MCP checks skipped",
       );
     }
 
@@ -287,7 +289,7 @@ async function runProvider(provider: ProviderKey, selectedMcpId?: string): Promi
       mcpId ? "test saved Context7 MCP connection" : "create and test Context7 MCP connection",
       () =>
         mcpId
-          ? getSmokeMcp(client, mcpId)
+          ? (savedMcpTest ??= getSmokeMcp(client, mcpId))
           : createSmokeMcp(client, `${provider}-${runId}`, (id) => {
               temporaryMcpConnectionId = id;
             }),
@@ -427,7 +429,10 @@ async function runProvider(provider: ProviderKey, selectedMcpId?: string): Promi
         setupTimeoutMs: timeoutMs,
         runTimeoutMs,
       });
-    await step(result.steps, "verify Context7 MCP tool execution", verifyMcp);
+    // Below Tier 3 the sandbox can't reach the MCP server, so there's nothing to verify.
+    if (workspaceApiAccess) {
+      await step(result.steps, "verify Context7 MCP tool execution", verifyMcp);
+    }
 
     await step(result.steps, "pause with account CLI", () =>
       runCli(["workspace", "pause", workspaceId!]),
@@ -440,7 +445,9 @@ async function runProvider(provider: ProviderKey, selectedMcpId?: string): Promi
         timeoutMs: ensureRunningTimeoutMs,
       }),
     );
-    await step(result.steps, "verify Context7 MCP after restart", verifyMcp);
+    if (workspaceApiAccess) {
+      await step(result.steps, "verify Context7 MCP after restart", verifyMcp);
+    }
     await step(result.steps, "terminate with account CLI", () =>
       runCli(["workspace", "terminate", workspaceId!, "--yes"]),
     );
@@ -456,7 +463,15 @@ async function runProvider(provider: ProviderKey, selectedMcpId?: string): Promi
   } catch (error) {
     result.error = errorMessage(error);
   } finally {
-    if (workspaceId && !terminated) {
+    // GITTERM_E2E_KEEP_ON_FAILURE=1 leaves a failed workspace running for inspection.
+    if (
+      workspaceId &&
+      !terminated &&
+      result.error &&
+      process.env.GITTERM_E2E_KEEP_ON_FAILURE === "1"
+    ) {
+      console.log(`  kept failed workspace ${workspaceId} for inspection; terminate it when done`);
+    } else if (workspaceId && !terminated) {
       try {
         await step(result.steps, "cleanup workspace", () =>
           client.workspaces.terminate(workspaceId!),
