@@ -21,6 +21,8 @@ export interface Account {
   plan: PlanId;
   commercialCategory: CommercialCategory;
   subscriptionId: string | null;
+  /** Modified time of the last subscription event applied to this account. */
+  subscriptionModifiedAt: Date | null;
   periodStart: Date | null;
   periodEnd: Date | null;
   payAsYouGo: boolean;
@@ -34,6 +36,7 @@ const freeAccount = (userId: string): Account => ({
   plan: "free",
   commercialCategory: "free",
   subscriptionId: null,
+  subscriptionModifiedAt: null,
   periodStart: null,
   periodEnd: null,
   payAsYouGo: false,
@@ -47,6 +50,7 @@ const toAccount = (row: typeof billingAccount.$inferSelect): Account => ({
   plan: toPlanId(row.plan),
   commercialCategory: row.commercialCategory as CommercialCategory,
   subscriptionId: row.subscriptionId,
+  subscriptionModifiedAt: row.subscriptionModifiedAt,
   periodStart: row.periodStart,
   periodEnd: row.periodEnd,
   payAsYouGo: row.payAsYouGo,
@@ -159,10 +163,46 @@ async function lockAccount(tx: Tx, userId: string): Promise<Account | null> {
   return row ? toAccount(row) : null;
 }
 
+/** A subscription event, so out-of-order and replayed deliveries can be rejected. */
+export interface SubscriptionEvent {
+  id: string;
+  /** Polar's modified time of the subscription in this event. */
+  modifiedAt: Date;
+  /** Revocations only apply to the account's current subscription. */
+  revocation?: boolean;
+}
+
+/**
+ * Why a subscription event must not change the account, or null to apply it.
+ * Checked on the locked row, so concurrent deliveries can't both pass.
+ */
+function staleSubscriptionEvent(
+  before: Account | null,
+  event: SubscriptionEvent,
+  periodStart: Date | null,
+): string | null {
+  if (!before) return event.revocation ? "no current subscription" : null;
+  if (before.subscriptionModifiedAt && event.modifiedAt < before.subscriptionModifiedAt) {
+    return "older than the last applied event";
+  }
+  if (event.revocation && before.subscriptionId !== event.id) {
+    return "not the current subscription";
+  }
+  if (
+    before.subscriptionId === event.id &&
+    before.periodStart &&
+    periodStart &&
+    periodStart < before.periodStart
+  ) {
+    return "an earlier billing period";
+  }
+  return null;
+}
+
 /**
  * Change a user's plan and record why. A null period bills by calendar month
  * (e.g. admin-assigned plans). The event type is derived from what changed
- * unless given.
+ * unless given. Returns false when a subscription event was stale and ignored.
  */
 export async function setPlan(
   userId: string,
@@ -171,17 +211,28 @@ export async function setPlan(
   change: AccountChangeSource & {
     category: CommercialCategory;
     subscriptionId?: string | null;
+    subscription?: SubscriptionEvent;
     eventType?: AccountEventType;
   },
-): Promise<void> {
+): Promise<boolean> {
   const analyticsId = await ensureSubject(userId);
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const before = await lockAccount(tx, userId);
+    if (change.subscription) {
+      const stale = staleSubscriptionEvent(before, change.subscription, period?.start ?? null);
+      if (stale) {
+        console.warn(`[billing] Ignored subscription event for user=${userId}: ${stale}`);
+        return false;
+      }
+    }
     const now = new Date();
     const values = {
       plan,
       commercialCategory: change.category,
       subscriptionId: change.subscriptionId ?? null,
+      // Non-subscription changes keep it, so older subscription events stay rejected.
+      subscriptionModifiedAt:
+        change.subscription?.modifiedAt ?? before?.subscriptionModifiedAt ?? null,
       periodStart: period?.start ?? null,
       periodEnd: period?.end ?? null,
       updatedAt: now,
@@ -192,7 +243,7 @@ export async function setPlan(
       .onConflictDoUpdate({ target: billingAccount.userId, set: values })
       .returning();
     const after = toAccount(row!);
-    if (!analyticsId) return;
+    if (!analyticsId) return true;
 
     const eventType =
       change.eventType ??
@@ -204,6 +255,7 @@ export async function setPlan(
           ? "period_started"
           : null);
     if (eventType) await insertAccountEvent(tx, analyticsId, eventType, before, after, change);
+    return true;
   });
 }
 

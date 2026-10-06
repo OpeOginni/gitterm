@@ -288,6 +288,13 @@
       "when": 1791290893266,
       "tag": "0040_drop_flexible_machine_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791322131415,
+      "tag": "0041_billing_subscription_modified_at",
+      "breakpoints": true
     }
   ]
 }

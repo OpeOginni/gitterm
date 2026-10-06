@@ -1,0 +1,1 @@
+ALTER TABLE "billing_account" ADD COLUMN "subscription_modified_at" timestamp;

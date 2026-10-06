@@ -20,6 +20,11 @@ export const billingAccount = pgTable("billing_account", {
   commercialCategory: text("commercial_category").notNull().default("unknown"),
   /** Polar subscription id, when the plan comes from one. */
   subscriptionId: text("subscription_id"),
+  /**
+   * Polar's modified time of the last subscription event applied. Older events
+   * (replays, late deliveries) must not overwrite a newer state.
+   */
+  subscriptionModifiedAt: timestamp("subscription_modified_at"),
   /** The subscription's current billing period; null falls back to the calendar month. */
   periodStart: timestamp("period_start"),
   periodEnd: timestamp("period_end"),
