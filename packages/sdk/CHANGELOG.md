@@ -4,6 +4,18 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## Unreleased
+
+### Added
+
+- `workspaces.create({ connections })` accepts integration keys and connection names besides ids.
+  `"github"` attaches the GitHub connection that covers the repository's owner (or the
+  deployment's shared one); `"google"`, `"mcp"`, and `"executor"` attach the only connection of
+  that kind; names match case-insensitively. Ambiguous keys and names are rejected with the
+  candidates' ids. Hosted users need the API redeployed.
+- `integrations.connections.resolve(references, { repo })` shows what those references would
+  attach without creating a workspace (`integrations:read`).
+
 ## 0.8.0
 
 ### Added

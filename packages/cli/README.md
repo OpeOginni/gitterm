@@ -53,7 +53,7 @@ Env vars override the saved config (useful for CI or one-off commands):
 
 ```bash
 export GITTERM_SERVER_URL=https://gitterm.example.com
-export GITTERM_API_TOKEN=gt_...   # from Settings → Account → API tokens
+export GITTERM_API_TOKEN=gt_...   # from Settings → Developer → API & tokens
 
 gitterm auth status
 gitterm workspace list
@@ -98,7 +98,7 @@ code, you approve the device in your browser, and the CLI receives a user API to
 - Credentials are stored in `~/.config/gitterm/cli.json`
 - The same token works with [`@gitterm/sdk`](https://www.npmjs.com/package/@gitterm/sdk)
   and other GitTerm integrations
-- Create revocable tokens in the dashboard under **Settings → Account → API tokens**
+- Create revocable tokens in the dashboard under **Settings → Developer → API & tokens**
   and pass them via `GITTERM_API_TOKEN` (with optional `GITTERM_SERVER_URL`)
 
 ## Inside a GitTerm workspace

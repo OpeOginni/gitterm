@@ -191,9 +191,12 @@ export type WorkspaceCreateInput = {
   /** Inline Git/gh credentials for validation, cloning, and runtime operations. Not auto-renewed. */
   repositoryCredentials?: { username?: string; token: string };
   /**
-   * Connection ids to attach, from `client.integrations.connections.list()`. At most one per
-   * integration. A GitHub connection renews Git/gh credentials automatically; a Google connection
-   * injects keyless ADC/gcloud auth. Cannot be combined with `repositoryCredentials` for GitHub.
+   * Connections to attach. Each is a connection id from `client.integrations.connections.list()`,
+   * an integration key, or a connection name (case-insensitive; ambiguous names are rejected).
+   * `"github"` attaches the connection that covers the repository's owner, or the deployment's
+   * shared one. At most one GitHub and one Google connection; any number of MCP/Executor ones.
+   * A GitHub connection renews Git/gh credentials automatically; a Google connection injects
+   * keyless ADC/gcloud auth. Cannot be combined with `repositoryCredentials` for GitHub.
    */
   connections?: string[];
   /** Defaults from the selected provider. */

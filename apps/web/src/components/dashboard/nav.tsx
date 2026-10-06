@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Bot,
   Terminal,
   LayoutDashboard,
   Link2,
@@ -34,6 +35,7 @@ type UserPlan = "free" | "starter" | "pro";
 const navItems = [
   { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
   { href: "/dashboard/integrations", label: "Integrations", icon: Link2 },
+  { href: "/dashboard/bots", label: "Bots", icon: Bot },
 ];
 
 export function DashboardNav() {

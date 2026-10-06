@@ -221,6 +221,31 @@ the deployment secret manager so integration secrets in the database are encrypt
 The complete storage, broker, rotation, audit, and provider threat model is documented in
 [`docs/credential-security.md`](docs/credential-security.md).
 
+## Slack and Discord bots
+
+[`@gitterm/slack-bot`](packages/slack-bot) and [`@gitterm/discord-bot`](packages/discord-bot)
+put an OpenCode agent on a repository behind a chat bot you host yourself, with no public URL:
+
+```sh
+SLACK_BOT_TOKEN=xoxb-… SLACK_APP_TOKEN=xapp-… GITTERM_API_TOKEN=gt_… \
+  npx @gitterm/slack-bot --repo https://github.com/acme/app
+```
+
+or from code, standalone or added to a Slack/Discord bot you already run:
+
+```ts
+import { createSlackBot } from "@gitterm/slack-bot";
+
+await createSlackBot({ repo: "https://github.com/acme/app" }).start();
+```
+
+Set one up from **Bots** in the dashboard: it walks through a model key, GitHub, the repository,
+and tools, creates a correctly scoped token, and hands you the `.env` (and, for Slack, a
+one-click app). Each repository gets one sandbox that pauses when idle and wakes on the next
+message; each chat thread is one agent session. Agent questions and tool approvals become buttons
+in the thread. GitHub access is attached automatically; tools (MCP, Executor) are attached by
+name. The shared engine, [`@gitterm/bot`](packages/bot), can drive other chat platforms.
+
 ## Development
 
 See `CONTRIBUTING.md` for local setup and service URLs.

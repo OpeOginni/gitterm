@@ -310,8 +310,9 @@ const workspaceCreateBaseSchema = z.strictObject({
     ])
     .optional(),
   /**
-   * Connection ids from `integrations.connections.list` to attach. MCP supports multiple;
-   * repository and cloud identities retain single-selection semantics.
+   * Connections to attach, each an id from `integrations.connections.list`, an integration key
+   * (`github` picks the connection covering the repository's owner), or a connection name.
+   * MCP supports multiple; repository and cloud identities retain single-selection semantics.
    * Personal connections are row ids; shared ones are `<integration>:shared`, e.g. `github:shared`.
    */
   connections: z.array(z.string().min(1)).max(32).optional(),
@@ -1675,7 +1676,9 @@ export const workspaceRouter = router({
 
       // An idempotent retry returns the existing workspace even if a connection has since been
       // removed or disabled. Only new workspaces need their connections resolved.
-      const attached = await resolveWorkspaceConnections(userId, input.connections ?? []);
+      const attached = await resolveWorkspaceConnections(userId, input.connections ?? [], {
+        repo: input.repo,
+      });
       workspaceCreateLogger.addSecrets(
         attached.mcp.flatMap((connection) => Object.values(connection.headers)),
       );

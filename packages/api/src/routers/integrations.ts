@@ -13,6 +13,7 @@ import {
   listConnections,
   removeConnection,
   requireConnection,
+  resolveConnectionReferences,
   userIntegrationCatalog,
   type GitHubConnectionDetails,
 } from "../service/integrations/connections";
@@ -71,6 +72,18 @@ export const integrationsRouter = router({
     get: accountProcedure("integrations:read")
       .input(z.object({ id: z.string().min(1) }))
       .query(({ ctx, input }) => requireConnection(ctx.session.user.id, input.id)),
+
+    /** What `workspaces.create({ connections })` would attach for these references, without creating anything. */
+    resolve: accountProcedure("integrations:read")
+      .input(
+        z.object({
+          references: z.array(z.string().trim().min(1)).max(32),
+          repo: z.string().optional(),
+        }),
+      )
+      .query(({ ctx, input }) =>
+        resolveConnectionReferences(ctx.session.user.id, input.references, { repo: input.repo }),
+      ),
 
     create: accountProcedure("integrations:write")
       .input(createConnectionInput)
