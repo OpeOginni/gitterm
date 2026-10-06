@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@gitterm/api": "workspace:*",
+    "@gitterm/env": "workspace:*",
     "dotenv": "catalog:"
   },
   "devDependencies": {

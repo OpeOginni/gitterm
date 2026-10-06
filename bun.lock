@@ -27,6 +27,7 @@
       "name": "anon-reaper",
       "dependencies": {
         "@gitterm/api": "workspace:*",
+        "@gitterm/env": "workspace:*",
         "dotenv": "catalog:",
       },
       "devDependencies": {

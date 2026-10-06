@@ -1,9 +1,9 @@
 import "dotenv/config";
 import { getInternalClient } from "@gitterm/api/client/internal";
-import { deploymentConfig } from "@gitterm/api/config";
+import { isManaged } from "@gitterm/env/worker";
 
 async function main() {
-  if (!deploymentConfig.isManaged) {
+  if (!isManaged()) {
     console.log("[anon-reaper] Skipping outside managed deployments");
     return;
   }
