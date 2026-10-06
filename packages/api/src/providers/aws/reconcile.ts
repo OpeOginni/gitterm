@@ -3,6 +3,7 @@ import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { AwsProvider, type AwsCleanupFailure } from ".";
 import { updateWorkspaceRoutingAndInvalidate } from "../../service/workspace-mutations";
+import { closeOpenUsageSessions } from "../../utils/metering";
 
 export interface AwsSweepResult {
   retriedWorkspaces: number;
@@ -49,7 +50,7 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
   for (const attempt of pending) {
     const lease = attempt.metadata?.awsProvisioningLeaseExpiresAt;
     if (lease && Date.parse(lease) < Date.now()) {
-      await db
+      const terminated = await db
         .update(workspace)
         .set({ status: "terminated", updatedAt: new Date() })
         .where(
@@ -58,7 +59,12 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
             eq(workspace.status, "pending"),
             eq(workspace.updatedAt, attempt.updatedAt),
           ),
-        );
+        )
+        .returning({ id: workspace.id });
+      await closeOpenUsageSessions(
+        terminated.map((row) => row.id),
+        "error",
+      );
     }
   }
 

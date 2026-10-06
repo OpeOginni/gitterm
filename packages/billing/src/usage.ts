@@ -1,5 +1,16 @@
-import { and, db, gt, inArray, isNull, lt, or, sql } from "@gitterm/db";
-import { usageSession } from "@gitterm/db/schema/workspace";
+import { db, sql, type SQL } from "@gitterm/db";
+
+/**
+ * When session `s` (joined to its workspace `w`) ends, capped at `now`. An open
+ * session only runs while its workspace is live; on a stopped workspace (an
+ * orphan nobody closed) it ends when the workspace stopped.
+ */
+const sessionEnd = (now: SQL) => sql`least(${now}, coalesce(s.stopped_at,
+  case when w.status in ('running', 'pending') then ${now}
+  else greatest(s.started_at, coalesce(w.terminated_at, w.paused_at, w.updated_at)) end))`;
+
+/** Whether session `s` still accrues: open, on a live workspace. */
+const sessionRunning = sql`(s.stopped_at is null and w.status in ('running', 'pending'))`;
 
 const startOfUtcDay = (date: Date) =>
   new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -19,27 +30,21 @@ export async function getMinutesUsedToday(
   const nowAt = sql`${now.toISOString()}::timestamp`;
   const dayStartAt = sql`${dayStart.toISOString()}::timestamp`;
 
-  const rows = await db
-    .select({
-      userId: usageSession.userId,
-      seconds: sql<string>`sum(extract(epoch from (
-        least(coalesce(${usageSession.stoppedAt}, ${nowAt}), ${nowAt})
-        - greatest(${usageSession.startedAt}, ${dayStartAt})
-      )))`,
-    })
-    .from(usageSession)
-    .where(
-      and(
-        inArray(usageSession.userId, userIds),
-        lt(usageSession.startedAt, now),
-        or(isNull(usageSession.stoppedAt), gt(usageSession.stoppedAt, dayStart)),
-      ),
-    )
-    .groupBy(usageSession.userId);
+  const result = await db.execute<{ user_id: string | null; seconds: string | null }>(sql`
+    select s.user_id,
+      sum(greatest(0, extract(epoch from (${sessionEnd(nowAt)} - greatest(s.started_at, ${dayStartAt}))))) as seconds
+    from usage_session s
+    join workspace w on w.id = s.workspace_id
+    where s.user_id = any(${sql.param(userIds)}::text[])
+      and s.started_at < ${nowAt}
+      and ${sessionEnd(nowAt)} > ${dayStartAt}
+    group by s.user_id`);
 
   return new Map(
-    rows.flatMap((row) =>
-      row.userId ? [[row.userId, Math.ceil(Math.max(0, Number(row.seconds)) / 60)] as const] : [],
+    result.rows.flatMap((row) =>
+      row.user_id
+        ? [[row.user_id, Math.ceil(Math.max(0, Number(row.seconds ?? 0)) / 60)] as const]
+        : [],
     ),
   );
 }
@@ -80,10 +85,10 @@ export async function getRetailUsage(
     select
       s.user_id,
       sum(
-        extract(epoch from (least(coalesce(s.stopped_at, ${nowAt}), ${nowAt}) - greatest(s.started_at, p.period_start)))
+        greatest(0, extract(epoch from (${sessionEnd(nowAt)} - greatest(s.started_at, p.period_start))))
         * coalesce(rate.micros_per_hour, 0) / 3600
       ) as micros,
-      sum(case when s.stopped_at is null then coalesce(rate.micros_per_hour, 0) else 0 end)
+      sum(case when ${sessionRunning} then coalesce(rate.micros_per_hour, 0) else 0 end)
         as running_micros_per_hour
     from usage_session s
     join periods p on p.user_id = s.user_id
@@ -94,7 +99,7 @@ export async function getRetailUsage(
       order by r.effective_from desc
       limit 1
     ) rate on true
-    where s.started_at < ${nowAt} and (s.stopped_at is null or s.stopped_at > p.period_start)
+    where s.started_at < ${nowAt} and ${sessionEnd(nowAt)} > p.period_start
     group by s.user_id
   `);
 

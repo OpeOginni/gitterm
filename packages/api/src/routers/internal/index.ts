@@ -8,7 +8,11 @@ import { user } from "@gitterm/db/schema/auth";
 import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
-import { closeUsageSession, getConfiguredIdleTimeout } from "../../utils/metering";
+import {
+  closeOrphanedUsageSessions,
+  closeUsageSession,
+  getConfiguredIdleTimeout,
+} from "../../utils/metering";
 import { getBilling } from "../../billing";
 import { ALWAYS_ON_LEASE_MS } from "../../service/workspace-timeouts";
 import { renderEmail } from "../../service/email/render";
@@ -125,6 +129,13 @@ export const internalRouter = router({
 
   /** Report usage to the payment provider and email usage alerts (for worker). */
   runBillingTasks: internalProcedure.mutation(async () => {
+    // Repair sessions a status change left open before billing reads usage.
+    const orphanedSessions = await closeOrphanedUsageSessions();
+    if (orphanedSessions > 0) {
+      console.warn(
+        `[billing] Closed ${orphanedSessions} usage session(s) left open on stopped workspaces`,
+      );
+    }
     const notices = await (await getBilling()).runPeriodicTasks();
     // Billing records the threshold; delivery is recorded below, per attempt.
     const billingUrl = `${env.BASE_URL ?? `https://${env.BASE_DOMAIN}`}/dashboard/settings/account#billing`;
@@ -160,7 +171,7 @@ export const internalRouter = router({
         await delivery("failed", "email_provider_error");
       }
     }
-    return { notices: notices.length, sent };
+    return { notices: notices.length, sent, orphanedSessions };
   }),
 
   getQuotaExceededWorkspaces: internalProcedure.query(async () => {
@@ -374,6 +385,8 @@ export const internalRouter = router({
         ws.externalInstanceId,
         persistedVolume?.externalVolumeId,
       );
+      // Lifetime expiry and inactivity cleanup stop the compute, so stop metering it.
+      await closeUsageSession(input.workspaceId, "provider_auto");
 
       if (persistedVolume) {
         await db.delete(volume).where(eq(volume.workspaceId, input.workspaceId));

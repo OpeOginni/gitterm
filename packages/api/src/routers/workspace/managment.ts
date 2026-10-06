@@ -15,7 +15,11 @@ import { agentType, image, cloudProvider, machineProfile, region } from "@gitter
 import { user } from "@gitterm/db/schema/auth";
 import { workspaceSetup } from "@gitterm/db/schema/workspace-setup";
 import { TRPCError } from "@trpc/server";
-import { closeUsageSession, createUsageSession } from "../../utils/metering";
+import {
+  closeOpenUsageSessions,
+  closeUsageSession,
+  createUsageSession,
+} from "../../utils/metering";
 import { canUseProvider, getBilling } from "../../billing";
 import { ALWAYS_ON_LEASE_MS } from "../../service/workspace-timeouts";
 import type { Entitlements } from "@gitterm/schema/billing";
@@ -1614,8 +1618,8 @@ export const workspaceRouter = router({
 
   /**
    * Runtime from usage sessions: minutes per UTC day for the window, and totals per
-   * workspace. An open session counts up to now only while its workspace is live, so
-   * a session that was never closed doesn't grow forever.
+   * workspace. An open session counts up to now only while its workspace is live;
+   * an unclosed one on a stopped workspace ends when the workspace stopped.
    */
   getUsageHistory: protectedProcedure
     .input(z.object({ days: z.number().int().min(7).max(90).default(30) }).default({ days: 30 }))
@@ -1623,9 +1627,10 @@ export const workspaceRouter = router({
       const userId = ctx.session.user.id;
       const sessions = sql`
         select s.workspace_id, s.started_at,
-          coalesce(s.stopped_at,
+          least(now() at time zone 'utc', coalesce(s.stopped_at,
             case when w.status in ('running', 'pending') then now() at time zone 'utc'
-            else s.started_at end) as ended_at
+            else greatest(s.started_at, coalesce(w.terminated_at, w.paused_at, w.updated_at))
+            end)) as ended_at
         from ${usageSession} s
         join ${workspace} w on w.id = s.workspace_id
         where s.user_id = ${userId}`;
@@ -3187,6 +3192,7 @@ export const workspaceRouter = router({
                     },
             })
             .where(eq(workspace.id, workspaceId));
+          await closeOpenUsageSessions([workspaceId], "error");
           await db
             .delete(workspaceRuntimeBundle)
             .where(eq(workspaceRuntimeBundle.workspaceId, workspaceId));

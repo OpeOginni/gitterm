@@ -74,7 +74,11 @@ async function subscribe(userId: string, plan: PlanId) {
 }
 
 /** A session that ran from `startedAgo` to `stoppedAgo` minutes ago (null = still running). */
-async function addSession(userId: string, startedAgo: number, stoppedAgo: number | null) {
+async function addSession(
+  userId: string,
+  startedAgo: number,
+  stoppedAgo: number | null,
+): Promise<string> {
   const workspaceId = await createWorkspace(userId);
   const now = Date.now();
   await db.insert(usageSession).values({
@@ -83,6 +87,7 @@ async function addSession(userId: string, startedAgo: number, stoppedAgo: number
     startedAt: new Date(now - minutes(startedAgo)),
     stoppedAt: stoppedAgo === null ? null : new Date(now - minutes(stoppedAgo)),
   });
+  return workspaceId;
 }
 
 describe("managed billing", () => {
@@ -178,6 +183,23 @@ describe("managed billing", () => {
     const blocked = await billing.checkRunAllowance(userId);
     expect(blocked.allowed).toBe(false);
     expect((await billing.getAccount(userId))?.compute?.runningCentsPerHour).toBe(600);
+  });
+
+  integration("an unclosed session stops costing when its workspace stopped", async () => {
+    const userId = await createUser();
+    await subscribe(userId, "pro");
+    // Ran 30 minutes, then the workspace was terminated an hour ago without closing it.
+    const workspaceId = await addSession(userId, 90, null);
+    await db
+      .update(workspace)
+      .set({ status: "terminated", terminatedAt: new Date(Date.now() - minutes(60)) })
+      .where(eq(workspace.id, workspaceId));
+
+    const compute = (await billing.getAccount(userId))?.compute;
+    expect(Math.abs(compute!.usedCents - 30 * CENTS_PER_MINUTE)).toBeLessThanOrEqual(2);
+    expect(compute!.runningCentsPerHour).toBe(0);
+    const today = (await getMinutesUsedToday([userId])).get(userId) ?? 0;
+    expect(today).toBeLessThanOrEqual(31);
   });
 
   integration("pay-as-you-go continues up to the spend cap", async () => {
