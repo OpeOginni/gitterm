@@ -232,6 +232,9 @@ const seedAgentTypes = [
   },
 ];
 
+/** E2B-only 4 vCPU template, superseded by the `-sm`/`-lg` size templates. */
+const RETIRED_IMAGE_NAMES = ["gitterm-opencode-server-lg"];
+
 const seedImages = [
   {
     name: "gitterm-opencode",
@@ -286,17 +289,6 @@ const seedImages = [
       },
       ascii: {
         setupCommands: ["npm install -g @opencode/cli@2 @gitterm/cli --no-audit --fund=false"],
-      },
-    },
-  },
-  {
-    name: "gitterm-opencode-server-lg",
-    imageId: "brightoginni123/gitterm-opencode-server-lg",
-    agentTypeName: "OpenCode",
-    // E2B template only (4 vCPU / 8 GB); no `railway` key because the imageId is not a registry image.
-    providerMetadata: {
-      e2b: {
-        templateId: "8q4c6rxkpsuq6fuo6l6l",
       },
     },
   },
@@ -755,6 +747,17 @@ export async function seedDatabase(): Promise<void> {
   // Seed Images
   // =========================================================================
   console.log("[seed] Seeding images...");
+
+  // Images replaced by per-size templates. An E2B-only image would win image
+  // selection on E2B (fewest providers), so existing rows are disabled, not kept.
+  for (const name of RETIRED_IMAGE_NAMES) {
+    const retired = await db
+      .update(image)
+      .set({ isEnabled: false, updatedAt: new Date() })
+      .where(and(eq(image.name, name), eq(image.isEnabled, true)))
+      .returning({ id: image.id });
+    if (retired.length) console.log(`[seed]   Retired image "${name}"`);
+  }
   const imageMap = new Map<string, string>();
 
   for (const img of seedImages) {
