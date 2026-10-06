@@ -627,6 +627,7 @@ export function createBot(options: BotOptions): Bot {
       ...(status.messageId ? { statusId: status.messageId } : {}),
       requester: job.requester,
       repo: repoKey(repo),
+      sandbox: pendingJob.sandbox,
       deadline: pendingJob.deadline!,
     };
     await store.setInFlight(key, request);
@@ -712,7 +713,17 @@ export function createBot(options: BotOptions): Bot {
     if (name === "reset") {
       const space = spaceOf(message, options.shareChannels);
       const sandbox = `${space}:${repoKey(repo)}`;
-      if ([...pending.values()].some((jobs) => [...jobs].some((job) => job.sandbox === sandbox))) {
+      const jobs = [...pending.values()].flatMap((entries) => [...entries]);
+      // Recovered runs from before sandbox keys were saved match by workspace instead.
+      const current = jobs.some((job) => !job.sandbox && job.run)
+        ? await workspaces.find(repo, space)
+        : null;
+      if (
+        jobs.some(
+          (job) =>
+            job.sandbox === sandbox || (current !== null && job.run?.workspaceId === current.id),
+        )
+      ) {
         return say(message.thread, "Stop or finish the work in this sandbox before resetting it.");
       }
       const terminated = await lock(`repo:${space}:${repoKey(repo)}`, () =>
@@ -851,13 +862,17 @@ export function createBot(options: BotOptions): Bot {
         repo,
       };
       log.info("Reattaching to an agent run after a restart", { thread: key, run: request.run.id });
+      // Counted like any queued request, so reset and the queue limits see it.
+      const pendingJob: PendingJob = {
+        controller: new AbortController(),
+        requester: request.requester,
+        sandbox: request.sandbox ?? "",
+        run: request.run,
+      };
+      if (!pending.has(key)) pending.set(key, new Set());
+      pending.get(key)!.add(pendingJob);
       trackTask(
         lock(key, async () => {
-          const pendingJob: PendingJob = {
-            controller: new AbortController(),
-            requester: request.requester,
-            sandbox: "",
-          };
           startClock(pendingJob, request.deadline);
           let snapshot: AgentRun;
           try {
@@ -882,7 +897,14 @@ export function createBot(options: BotOptions): Bot {
             pendingJob,
             snapshot.status === "completed" ? snapshot : undefined,
           );
-        }).catch((error: unknown) => log.error("Reattaching failed", { thread: key }, error)),
+        })
+          .catch((error: unknown) => log.error("Reattaching failed", { thread: key }, error))
+          .finally(() => {
+            if (active.get(key) === pendingJob) active.delete(key);
+            clearTimeout(pendingJob.timer);
+            pending.get(key)?.delete(pendingJob);
+            if (!pending.get(key)?.size) pending.delete(key);
+          }),
       );
     }
   }
