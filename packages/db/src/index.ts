@@ -24,6 +24,7 @@ import * as credentialSecuritySchema from "./schema/credential-security";
 import * as mcpSchema from "./schema/mcp";
 import * as botSchema from "./schema/bot";
 import * as billingSchema from "./schema/billing";
+import * as billingAnalyticsSchema from "./schema/billing-analytics";
 
 export const db = drizzle(process.env.DATABASE_URL || "", {
   schema: {
@@ -40,6 +41,7 @@ export const db = drizzle(process.env.DATABASE_URL || "", {
     ...mcpSchema,
     ...botSchema,
     ...billingSchema,
+    ...billingAnalyticsSchema,
   },
 });
 

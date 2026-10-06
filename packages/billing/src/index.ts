@@ -1,11 +1,11 @@
-import { db, eq } from "@gitterm/db";
-import { systemConfig } from "@gitterm/db/schema/auth";
+import { getFreeDailyMinuteLimit } from "./free-limit";
 import type {
   Billing,
   BillingNotice,
   ComputeUsage,
   Entitlements,
   RunAllowance,
+  RunDenialCode,
 } from "@gitterm/schema/billing";
 import {
   countUsersByPlan,
@@ -19,12 +19,19 @@ import {
   updateSettings,
   type Account,
 } from "./accounts";
-import { getPlanEntitlements, isPlanId, PLAN_IDS, PLANS } from "./plans";
+import { getPlanEntitlements, isPlanId, PLAN_IDS, PLANS, type PlanId } from "./plans";
+import { currentPlanTerms, ensurePlanVersion } from "./analytics/plan-versions";
+import { recordProductEvent } from "./analytics/product-events";
+import { syncUsageIntervals } from "./analytics/usage-intervals";
+import { deleteSubject } from "./analytics/subjects";
+import { runAnalyticsTasks } from "./analytics/jobs";
+import { getReport } from "./analytics/reports";
+import { simulatePricing } from "./analytics/simulate";
 import { polarClient, reportOverage } from "./polar";
 import { getMachinePrices, setMachinePrice } from "./rates";
-import { getComputeCosts, getMinutesUsedToday, type ComputeCost } from "./usage";
+import { getMinutesUsedToday, getRetailUsage, type RetailUsage } from "./usage";
+import { billableOverageCents, MICROS_PER_CENT } from "./money";
 
-const MICROS_PER_CENT = 10_000;
 /**
  * Running compute reserved when checking balances, so the worker (every ~10
  * minutes) stops workspaces before the balance or spend cap is overshot.
@@ -35,31 +42,23 @@ const MAX_SPEND_CAP_CENTS = 1_000_000;
 
 const formatDollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-/** Free runtime is admin-tunable from the system settings page; 0 means unlimited. */
-async function getFreeDailyMinuteLimit(): Promise<number | null> {
-  const [row] = await db
-    .select({ value: systemConfig.value })
-    .from(systemConfig)
-    .where(eq(systemConfig.key, "free_tier_daily_minutes"));
-  const configured = row ? Number.parseInt(row.value, 10) : PLANS.free.dailyMinutes;
-  return configured && Number.isFinite(configured) && configured > 0 ? configured : null;
-}
-
 interface Standing {
   account: Account;
   period: { start: Date; end: Date };
   compute: ComputeUsage | null;
   dailyMinutes: { used: number; limit: number | null } | null;
   /** Why the user may not run compute now; null when they may. */
-  blockedReason: string | null;
+  blocked: { code: RunDenialCode; reason: string } | null;
+  /** Running compute reserved by the balance check, in cents. */
+  reserveCents: number | null;
 }
 
 function getComputeUsage(
   account: Account,
-  cost: ComputeCost,
+  cost: RetailUsage,
   period: { start: Date; end: Date },
   now: Date,
-): { usage: ComputeUsage; blockedReason: string | null } {
+): { usage: ComputeUsage; blocked: Standing["blocked"]; reserveCents: number } {
   const plan = PLANS[account.plan];
   const includedCents = plan.includedComputeCents ?? 0;
   const usedCents = cost.micros / MICROS_PER_CENT;
@@ -72,26 +71,37 @@ function getComputeUsage(
   const elapsedMs = Math.max(now.getTime() - period.start.getTime(), 24 * 60 * 60 * 1000);
   const periodMs = period.end.getTime() - period.start.getTime();
 
-  let blockedReason: string | null = null;
+  // `*_reserved`: not used up yet, but would be within the reserved running minutes.
+  let blocked: Standing["blocked"] = null;
   if (!payAsYouGo && usedCents + reserveCents >= includedCents) {
-    blockedReason =
-      "You've used this period's included compute. Turn on pay-as-you-go in billing settings, or upgrade, to keep running workspaces.";
+    blocked = {
+      code: usedCents >= includedCents ? "allowance_exhausted" : "allowance_reserved",
+      reason:
+        "You've used this period's included compute. Turn on pay-as-you-go in billing settings, or upgrade, to keep running workspaces.",
+    };
   } else if (payAsYouGo && overageFor(usedCents + reserveCents) >= account.spendCapCents!) {
-    blockedReason = `You've reached your ${formatDollars(account.spendCapCents!)} pay-as-you-go limit for this billing period. Raise it in billing settings to keep running workspaces.`;
+    blocked = {
+      code:
+        overageFor(usedCents) >= account.spendCapCents!
+          ? "spend_cap_reached"
+          : "spend_cap_reserved",
+      reason: `You've reached your ${formatDollars(account.spendCapCents!)} pay-as-you-go limit for this billing period. Raise it in billing settings to keep running workspaces.`,
+    };
   }
 
   return {
     usage: {
       includedCents,
       usedCents: Math.round(usedCents),
-      overageCents: Math.floor(overageFor(usedCents)),
+      overageCents: billableOverageCents(cost.micros, includedCents, plan.overageDiscountPercent),
       overageDiscountPercent: plan.overageDiscountPercent,
       payAsYouGo,
       spendCapCents: payAsYouGo ? account.spendCapCents : null,
       projectedCents: Math.round((usedCents * periodMs) / Math.min(elapsedMs, periodMs)),
       runningCentsPerHour: Math.round(cost.runningMicrosPerHour / MICROS_PER_CENT),
     },
-    blockedReason,
+    blocked,
+    reserveCents,
   };
 }
 
@@ -107,7 +117,7 @@ async function getStandings(userIds: string[], now = new Date()): Promise<Map<st
       now,
     ),
     free.length > 0 ? getFreeDailyMinuteLimit() : Promise.resolve(null),
-    getComputeCosts(
+    getRetailUsage(
       paid.map((account) => ({
         userId: account.userId,
         start: periods.get(account.userId)!.start,
@@ -124,15 +134,20 @@ async function getStandings(userIds: string[], now = new Date()): Promise<Map<st
       period: periods.get(account.userId)!,
       compute: null,
       dailyMinutes: { used, limit: dailyLimit },
-      blockedReason:
+      blocked:
         dailyLimit !== null && used >= dailyLimit
-          ? "Daily cloud runtime limit reached. It resets at midnight UTC, or upgrade for more runtime."
+          ? {
+              code: "daily_runtime_limit",
+              reason:
+                "Daily cloud runtime limit reached. It resets at midnight UTC, or upgrade for more runtime.",
+            }
           : null,
+      reserveCents: null,
     });
   }
   for (const account of paid) {
     const period = periods.get(account.userId)!;
-    const { usage, blockedReason } = getComputeUsage(
+    const { usage, blocked, reserveCents } = getComputeUsage(
       account,
       costs.get(account.userId) ?? { micros: 0, runningMicrosPerHour: 0 },
       period,
@@ -143,10 +158,31 @@ async function getStandings(userIds: string[], now = new Date()): Promise<Map<st
       period,
       compute: usage,
       dailyMinutes: null,
-      blockedReason,
+      blocked,
+      reserveCents,
     });
   }
   return standings;
+}
+
+/** Policy state recorded with friction events, so a block can be interpreted later. */
+function policyOf(standing: Standing) {
+  const compute = standing.compute;
+  return {
+    includedCents: compute?.includedCents ?? null,
+    usedCents: compute?.usedCents ?? null,
+    reserveCents: standing.reserveCents == null ? null : Math.round(standing.reserveCents),
+    overageCents: compute?.overageCents ?? null,
+    spendCapCents: compute?.spendCapCents ?? null,
+    payAsYouGo: compute?.payAsYouGo ?? null,
+  };
+}
+
+/** Version id of the terms a plan gives today. */
+async function currentPlanVersionId(plan: PlanId): Promise<string> {
+  return ensurePlanVersion(
+    currentPlanTerms(plan, plan === "free" ? await getFreeDailyMinuteLimit() : null),
+  );
 }
 
 const INCLUDED_ALERTS = [75, 90, 100] as const;
@@ -174,12 +210,28 @@ async function collectNotice(standing: Standing): Promise<BillingNotice | null> 
   if (fresh.length === 0) return null;
   await recordAlerts(account.userId, period.start, [...new Set([...alreadySent, ...reached])]);
 
+  // Crossing a threshold is recorded separately from delivering the email.
+  const periodKey = `${account.userId}:${period.start.toISOString()}`;
+  const planVersionId = await currentPlanVersionId(account.plan);
+  for (const key of fresh) {
+    await recordProductEvent({
+      userId: account.userId,
+      eventType: "alert_threshold_reached",
+      reasonCode: key,
+      planVersionId,
+      policy: policyOf(standing),
+      dedupeKey: `alert:${periodKey}:${key}`,
+    });
+  }
+
   // Cap alerts outrank balance alerts; within a kind, the highest threshold wins.
   const capAlert = fresh.filter((key) => key.startsWith("cap-")).at(-1);
   const includedAlert = fresh.filter((key) => key.startsWith("included-")).at(-1);
+  const key = `${periodKey}:${capAlert ?? includedAlert}`;
   const included = formatDollars(compute.includedCents);
   if (capAlert === "cap-100") {
     return {
+      key,
       userId: account.userId,
       subject: "Your GitTerm pay-as-you-go limit is reached",
       message: `Your workspaces have used your ${formatDollars(compute.spendCapCents!)} pay-as-you-go limit for this billing period, so running workspaces are paused and new ones won't start. Raise the limit in billing settings to keep working.`,
@@ -187,6 +239,7 @@ async function collectNotice(standing: Standing): Promise<BillingNotice | null> 
   }
   if (capAlert) {
     return {
+      key,
       userId: account.userId,
       subject: "You're close to your GitTerm pay-as-you-go limit",
       message: `You've used ${formatDollars(compute.overageCents)} of your ${formatDollars(compute.spendCapCents!)} pay-as-you-go limit this billing period. Workspaces pause when the limit is reached.`,
@@ -194,6 +247,7 @@ async function collectNotice(standing: Standing): Promise<BillingNotice | null> 
   }
   if (includedAlert === "included-100") {
     return {
+      key,
       userId: account.userId,
       subject: "Your included GitTerm compute is used up",
       message: compute.payAsYouGo
@@ -203,6 +257,7 @@ async function collectNotice(standing: Standing): Promise<BillingNotice | null> 
   }
   const percent = includedAlert?.replace("included-", "");
   return {
+    key,
     userId: account.userId,
     subject: `You've used ${percent}% of your included GitTerm compute`,
     message: `You've used ${formatDollars(compute.usedCents)} of the ${included} of compute included in your plan this billing period.${compute.payAsYouGo ? "" : " Workspaces pause when it runs out unless pay-as-you-go is on."}`,
@@ -225,15 +280,32 @@ export function createBilling(): Billing {
       );
     },
 
-    async checkRunAllowance(userId): Promise<RunAllowance> {
-      const reason = (await getStandings([userId])).get(userId)?.blockedReason;
-      return reason ? { allowed: false, reason } : { allowed: true };
+    async checkRunAllowance(userId, attempt): Promise<RunAllowance> {
+      const standing = (await getStandings([userId])).get(userId)!;
+      if (!standing.blocked) return { allowed: true };
+      // One event per denied attempt; background quota checks don't record.
+      if (attempt) {
+        await recordProductEvent({
+          userId,
+          eventType: "run_denied",
+          workspaceId: attempt.workspaceId ?? null,
+          reasonCode: standing.blocked.code,
+          planVersionId: await currentPlanVersionId(standing.account.plan),
+          policy: policyOf(standing),
+          metadata: {
+            action: attempt.action,
+            dailyMinutesUsed: standing.dailyMinutes?.used ?? null,
+            dailyMinuteLimit: standing.dailyMinutes?.limit ?? null,
+          },
+        });
+      }
+      return { allowed: false, ...standing.blocked };
     },
 
     async getUsersOverAllowance(userIds) {
       const standings = await getStandings(userIds);
       return new Set(
-        [...standings].flatMap(([userId, standing]) => (standing.blockedReason ? [userId] : [])),
+        [...standings].flatMap(([userId, standing]) => (standing.blocked ? [userId] : [])),
       );
     },
 
@@ -266,10 +338,14 @@ export function createBilling(): Billing {
           );
         }
       }
-      await updateSettings(userId, {
-        payAsYouGo: settings.payAsYouGo,
-        spendCapCents: settings.payAsYouGo ? settings.spendCapCents : null,
-      });
+      await updateSettings(
+        userId,
+        {
+          payAsYouGo: settings.payAsYouGo,
+          spendCapCents: settings.payAsYouGo ? settings.spendCapCents : null,
+        },
+        { source: "customer", actor: "customer" },
+      );
     },
 
     getMachinePrices: (machineProfileIds) => getMachinePrices(machineProfileIds),
@@ -281,9 +357,14 @@ export function createBilling(): Billing {
       await setMachinePrice(machineProfileId, microsPerHour);
     },
 
-    async setPlan(userId, plan) {
+    async setPlan(userId, plan, options) {
       if (!isPlanId(plan)) throw new Error(`Unknown plan "${plan}"`);
-      await setPlan(userId, plan);
+      await setPlan(userId, plan, null, {
+        source: "admin",
+        actor: "admin",
+        // Admin-assigned plans are never evidence of payment.
+        category: plan === "free" ? "free" : (options?.category ?? "admin_assigned"),
+      });
     },
 
     countUsersByPlan,
@@ -302,8 +383,52 @@ export function createBilling(): Billing {
           console.warn(`[polar] No customer found for user ${userId}, skipping delete`);
         }
       }
+      // Keep the user's usage as pseudonymous facts before their sessions
+      // cascade away; deleting the subject below removes the link to them.
+      await syncUsageIntervals({ userId, provenance: "observed" });
       await deleteAccount(userId);
+      await deleteSubject(userId);
     },
+
+    async recordObservation(observation) {
+      try {
+        if (observation.type === "workspace_paused_for_spending") {
+          const standing = (await getStandings([observation.userId])).get(observation.userId)!;
+          await recordProductEvent({
+            userId: observation.userId,
+            eventType: "workspace_paused_for_spending",
+            workspaceId: observation.workspaceId,
+            reasonCode: standing.blocked?.code ?? "allowance_cleared_before_pause",
+            planVersionId: await currentPlanVersionId(standing.account.plan),
+            policy: policyOf(standing),
+          });
+        } else if (observation.type === "alert_delivery") {
+          await recordProductEvent({
+            userId: observation.userId,
+            eventType: "alert_delivery",
+            outcome: observation.outcome,
+            reasonCode: observation.reasonCode ?? null,
+            dedupeKey: `delivery:${observation.noticeKey}`,
+            metadata: { notice: observation.noticeKey },
+          });
+        } else {
+          await recordProductEvent({
+            userId: observation.userId,
+            eventType: observation.type,
+            workspaceId: observation.workspaceId,
+            outcome: observation.outcome,
+            reasonCode: observation.reasonCode ?? null,
+            latencyMs: observation.latencyMs,
+            providerKey: observation.providerKey,
+          });
+        }
+      } catch (error) {
+        console.error(`[billing] Failed to record ${observation.type}`, error);
+      }
+    },
+
+    getReport: (request) => getReport(request),
+    simulatePricing: (scenario) => simulatePricing(scenario),
 
     async runPeriodicTasks() {
       const accounts = await listPaidAccounts();
@@ -334,6 +459,16 @@ export function createBilling(): Billing {
       for (const standing of standings) {
         const notice = await collectNotice(standing);
         if (notice) notices.push(notice);
+      }
+
+      try {
+        const analytics = await runAnalyticsTasks();
+        console.log(
+          `[billing] Analytics: ${analytics.intervals} intervals synced, ${analytics.periods} periods rebuilt, ${analytics.purged} events purged`,
+        );
+      } catch (error) {
+        // Analytics never blocks billing; the next pass catches up from the watermark.
+        console.error("[billing] Analytics tasks failed:", error);
       }
       return notices;
     },

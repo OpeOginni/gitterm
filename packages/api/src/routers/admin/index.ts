@@ -18,6 +18,7 @@ import { settingsRouter } from "./settings";
 import { awsRouter } from "../aws";
 import { cloudflareRouter } from "../cloudflare";
 import { adminIntegrationsRouter } from "./integrations";
+import { analyticsRouter } from "./analytics";
 import { isGitHubAuthEnabled, isEmailAuthEnabled } from "@gitterm/env/server";
 
 export const adminRouter = router({
@@ -27,6 +28,7 @@ export const adminRouter = router({
   users: usersRouter,
   settings: settingsRouter,
   integrations: adminIntegrationsRouter,
+  analytics: analyticsRouter,
 
   /**
    * Get system configuration for the admin panel.

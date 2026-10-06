@@ -65,10 +65,12 @@ async function createWorkspace(userId: string): Promise<string> {
 /** Subscribe with a period that started ten days ago, so long test sessions fit inside it. */
 async function subscribe(userId: string, plan: PlanId) {
   const day = 24 * minutes(60);
-  await setPlan(userId, plan, {
-    start: new Date(Date.now() - 10 * day),
-    end: new Date(Date.now() + 20 * day),
-  });
+  await setPlan(
+    userId,
+    plan,
+    { start: new Date(Date.now() - 10 * day), end: new Date(Date.now() + 20 * day) },
+    { source: "system", actor: "system", category: "paid" },
+  );
 }
 
 /** A session that ran from `startedAgo` to `stoppedAgo` minutes ago (null = still running). */

@@ -17,7 +17,6 @@ import "dotenv/config";
 import { auth } from "@gitterm/auth";
 import { db, eq } from "@gitterm/db";
 import * as schema from "@gitterm/db/schema/auth";
-import { getBilling } from "@gitterm/api/billing";
 
 const adminEmail = process.env.ADMIN_EMAIL;
 const adminPassword = process.env.ADMIN_PASSWORD;
@@ -82,9 +81,6 @@ async function seedAdmin(): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(schema.user.id, result.user.id));
-
-    const billing = await getBilling();
-    if (billing.enabled) await billing.setPlan(result.user.id, "pro");
 
     console.log(`[seed-admin] Created admin user: ${adminEmail} (${result.user.id})`);
     console.log("[seed-admin] Admin seeding completed");
