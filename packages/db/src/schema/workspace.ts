@@ -192,7 +192,8 @@ export const usageSession = pgTable("usage_session", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// Tracks daily usage per user for free-tier enforcement
+// No longer written: billing derives daily usage from usage_session. Dropped once
+// every server runs that code.
 export const dailyUsage = pgTable("daily_usage", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").references(() => user.id, { onDelete: "set null" }),

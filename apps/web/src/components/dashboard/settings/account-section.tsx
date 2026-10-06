@@ -8,10 +8,9 @@ import { DeleteAccountSection } from "@/components/dashboard/delete-account";
 import { BillingSection } from "@/components/dashboard/billing-section";
 import { UsageSection } from "@/components/dashboard/settings/usage-section";
 import { FormCard, FormCardBody, FormCardHeader } from "@/components/ui/form-card";
-import { authClient } from "@/lib/auth-client";
+import { authClient, isBillingEnabled } from "@/lib/auth-client";
+import { useBillingAccount } from "@/lib/billing";
 import { CommitAttributionSection } from "./commit-attribution-section";
-
-type UserPlan = "free" | "starter" | "pro";
 
 function memberSince(createdAt: Date | string | undefined): string | null {
   if (!createdAt) return null;
@@ -21,8 +20,9 @@ function memberSince(createdAt: Date | string | undefined): string | null {
 }
 
 /** Identity card: who is signed in, at a glance. */
-function ProfileCard({ currentPlan }: { currentPlan: UserPlan }) {
+function ProfileCard() {
   const { data: session } = authClient.useSession();
+  const planName = useBillingAccount().data?.account?.planName ?? "Free";
   const user = session?.user;
 
   const initial = (user?.name || user?.email || "?").charAt(0).toUpperCase();
@@ -55,18 +55,20 @@ function ProfileCard({ currentPlan }: { currentPlan: UserPlan }) {
             </h3>
             <p className="truncate text-sm text-fg-3">{user?.email ?? ""}</p>
           </div>
-          <Link
-            href={"/dashboard/settings/account#billing" as Route}
-            aria-label="Manage current plan"
-            className="group flex items-center gap-3 border-l border-line pl-4"
-          >
-            <div>
-              <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-fg-4">
-                Current plan
-              </p>
-              <p className="mt-0.5 text-sm font-medium capitalize text-primary">{currentPlan}</p>
-            </div>
-          </Link>
+          {isBillingEnabled && (
+            <Link
+              href={"/dashboard/settings/account#billing" as Route}
+              aria-label="Manage current plan"
+              className="group flex items-center gap-3 border-l border-line pl-4"
+            >
+              <div>
+                <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-fg-4">
+                  Current plan
+                </p>
+                <p className="mt-0.5 text-sm font-medium text-primary">{planName}</p>
+              </div>
+            </Link>
+          )}
         </div>
       </FormCardBody>
     </FormCard>
@@ -91,16 +93,16 @@ function AccountPart({
   );
 }
 
-export function AccountSection({ currentPlan }: { currentPlan: UserPlan }) {
+export function AccountSection() {
   return (
     <div className="space-y-6">
-      <ProfileCard currentPlan={currentPlan} />
+      <ProfileCard />
       <CommitAttributionSection />
       <AccountPart id="usage" label="Usage">
         <UsageSection />
       </AccountPart>
       <AccountPart id="billing" label="Plan and billing">
-        <BillingSection currentPlan={currentPlan} />
+        <BillingSection />
       </AccountPart>
       <DeleteAccountSection />
     </div>

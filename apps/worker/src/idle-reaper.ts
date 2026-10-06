@@ -18,7 +18,6 @@ import { features } from "@gitterm/api/config";
  *
  * Feature flags (controlled via environment):
  * - ENABLE_IDLE_REAPING: Controls idle workspace reaping (default: true)
- * - ENABLE_QUOTA_ENFORCEMENT: Controls quota checking (default: true in managed mode)
  * - REAP_INTERVAL_MINUTES: Minutes between passes, 0 = run once (default: 0)
  */
 
@@ -87,9 +86,9 @@ async function runOnce() {
     }
 
     // ========================================================================
-    // 2. Pause workspaces for users who exceeded quota (managed mode only)
+    // 2. Pause workspaces for users who exceeded quota (none without billing)
     // ========================================================================
-    if (features.quotaEnforcement) {
+    {
       console.log("[idle-reaper] Checking for quota-exceeded workspaces...");
 
       try {
@@ -129,10 +128,6 @@ async function runOnce() {
         console.error("[idle-reaper] Error checking quota-exceeded workspaces:", error);
         // Don't fail the entire job if quota check fails
       }
-    } else {
-      console.log(
-        "[idle-reaper] Quota enforcement disabled (self-hosted mode or ENABLE_QUOTA_ENFORCEMENT=false)",
-      );
     }
 
     // ========================================================================
@@ -213,9 +208,6 @@ async function runOnce() {
 async function main() {
   console.log("[idle-reaper] Starting workspace reaper...");
   console.log(`[idle-reaper] Idle reaping: ${features.idleReaping ? "enabled" : "disabled"}`);
-  console.log(
-    `[idle-reaper] Quota enforcement: ${features.quotaEnforcement ? "enabled" : "disabled"}`,
-  );
 
   // Run-once mode for external schedulers (Railway Cron).
   if (REAP_INTERVAL_MINUTES <= 0) {

@@ -36,6 +36,7 @@ import {
 } from "./types";
 import { GitHubRepositoryBranchField } from "./github-repository-branch-field";
 import { ModelProviderPicker } from "./model-provider-picker";
+import { useBillingAccount } from "@/lib/billing";
 import { normalizeGitHubRepositoryUrl } from "./github-repository-utils";
 
 interface CreateCloudInstanceProps {
@@ -198,6 +199,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const hasNoProviders = !isLoadingCloudProviders && cloudProviders.length === 0;
 
   const { data: session } = authClient.useSession();
+  const { data: billingAccount } = useBillingAccount();
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
 
   const defaultGroupKey: CloudGroupKey | "" = useMemo(() => {
@@ -267,9 +269,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const persistenceSupported = selectedCloudProvider?.supportsPersistence !== false;
   const isAutoPersistent = persistenceSupported && !!selectedCloudProvider?.autoPersistent;
   // Storage persists whenever it can: always on providers that force it, and on the others
-  // unless billing limits the plan (free plans cannot opt in).
-  const userPlan = (session?.user as { plan?: string } | undefined)?.plan ?? "free";
-  const canOptInPersistence = !isBillingEnabled() || userPlan !== "free";
+  // unless the plan does not include persistence.
+  const canOptInPersistence = billingAccount?.entitlements.persistence ?? !isBillingEnabled();
   const effectivePersistent = persistenceSupported && (isAutoPersistent || canOptInPersistence);
 
   const availableRegions = useMemo((): Region[] => {

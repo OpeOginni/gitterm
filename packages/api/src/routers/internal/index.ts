@@ -1,12 +1,7 @@
 import z from "zod";
 import { internalProcedure, router } from "../../index";
 import { db, eq, and, sql, lt, or, isNull, inArray } from "@gitterm/db";
-import {
-  workspace,
-  dailyUsage,
-  type SessionStopSource,
-  volume,
-} from "@gitterm/db/schema/workspace";
+import { workspace, type SessionStopSource, volume } from "@gitterm/db/schema/workspace";
 import { githubAppInstallation } from "@gitterm/db/schema/integrations";
 import { cloudProvider, region } from "@gitterm/db/schema/cloud";
 import { user } from "@gitterm/db/schema/auth";
@@ -14,13 +9,7 @@ import { TRPCError } from "@trpc/server";
 import { getProviderByCloudProviderId } from "../../providers";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { closeUsageSession, getConfiguredIdleTimeout } from "../../utils/metering";
-import {
-  getIdleTimeoutMinutesForPlan,
-  getRetentionDaysForPlan,
-  getDailyMinuteQuotaAsync,
-  PLAN_LIMITS,
-  type UserPlan,
-} from "../../config/features";
+import { getBilling } from "../../billing";
 import { isPausedWorkspacePastRetention } from "../../utils/workspace-retention";
 import { getGitHubAppService } from "../../service/github";
 import { logger } from "../../utils/logger";
@@ -51,16 +40,8 @@ export const internalRouter = router({
     const globalIdleTimeoutMinutes = await getConfiguredIdleTimeout();
     const now = Date.now();
 
-    // Pre-filter with the TIGHTEST timeout across all plans so aggressively
-    // reaped plans (e.g. free = 10m) are never missed; the precise per-plan
-    // threshold is applied in memory below.
-    const planTimeouts = (Object.keys(PLAN_LIMITS) as UserPlan[])
-      .map((plan) => getIdleTimeoutMinutesForPlan(plan))
-      .filter((value): value is number => value !== null);
-    const minCandidateMinutes = Math.min(globalIdleTimeoutMinutes, ...planTimeouts);
-    const candidateThreshold = new Date(now - minCandidateMinutes * 60 * 1000);
-
-    const idleCandidates = await db
+    // Running workspaces are few; each owner's idle timeout is applied below.
+    const runningWorkspaces = await db
       .select({
         id: workspace.id,
         externalInstanceId: workspace.externalInstanceId,
@@ -69,40 +50,38 @@ export const internalRouter = router({
         cloudProviderId: workspace.cloudProviderId,
         domain: workspace.domain,
         lastActiveAt: workspace.lastActiveAt,
-        plan: user.plan,
         email: user.email,
       })
       .from(workspace)
       .leftJoin(user, eq(workspace.userId, user.id))
-      .where(and(eq(workspace.status, "running"), lt(workspace.lastActiveAt, candidateThreshold)));
+      .where(eq(workspace.status, "running"));
+    const candidates = runningWorkspaces.filter((ws) => !isAnonEmail(ws.email));
 
-    // Resolve the precise idle threshold per workspace based on its owner's
-    // plan. Self-hosted returns null -> fall back to the global value.
-    const thresholdFor = (ws: { plan: string | null }): Date => {
-      const planTimeout = getIdleTimeoutMinutesForPlan((ws.plan ?? "free") as UserPlan);
-      const timeoutMinutes = planTimeout ?? globalIdleTimeoutMinutes;
+    const entitlements = await (
+      await getBilling()
+    ).getEntitlementsForUsers([...new Set(candidates.map((ws) => ws.userId))]);
+    const thresholdFor = (ws: { userId: string }): Date => {
+      const timeoutMinutes =
+        entitlements.get(ws.userId)?.idleTimeoutMinutes ?? globalIdleTimeoutMinutes;
       return new Date(now - timeoutMinutes * 60 * 1000);
     };
 
     const idleWorkspaces = await filterIdleWorkspacesByRedisActivityWith(
-      idleCandidates,
+      candidates.filter((ws) => ws.lastActiveAt && ws.lastActiveAt < thresholdFor(ws)),
       thresholdFor,
     );
 
-    return idleWorkspaces
-      .filter((workspace) => !isAnonEmail(workspace.email))
-      .map(
-        ({ lastActiveAt: _lastActiveAt, plan: _plan, email: _email, ...idleWorkspace }) =>
-          idleWorkspace,
-      );
+    return idleWorkspaces.map(
+      ({ lastActiveAt: _lastActiveAt, email: _email, ...idleWorkspace }) => idleWorkspace,
+    );
   }),
 
   getQuotaExceededWorkspaces: internalProcedure.query(async () => {
-    const today = new Date().toISOString().split("T")[0]!;
+    const billing = await getBilling();
+    if (!billing.enabled) return [];
 
-    // Get all running cloud workspaces with their users' daily usage + plan.
-    // Local workspaces don't count towards quota since they don't use our resources
-    const workspacesWithUsage = await db
+    // Local workspaces don't use our compute, so only cloud workspaces stop.
+    const runningWorkspaces = await db
       .select({
         id: workspace.id,
         externalInstanceId: workspace.externalInstanceId,
@@ -110,55 +89,22 @@ export const internalRouter = router({
         regionId: workspace.regionId,
         cloudProviderId: workspace.cloudProviderId,
         domain: workspace.domain,
-        minutesUsed: dailyUsage.minutesUsed,
-        plan: user.plan,
         email: user.email,
       })
       .from(workspace)
       .leftJoin(user, eq(workspace.userId, user.id))
-      .leftJoin(
-        dailyUsage,
-        and(eq(workspace.userId, dailyUsage.userId), eq(dailyUsage.date, today)),
-      )
-      .where(and(eq(workspace.status, "running")));
-
-    // Resolve each plan's daily minute quota once (free reads DB config). A
-    // non-finite quota (self-hosted) means "never exceeded".
-    const planQuotaCache = new Map<UserPlan, number>();
-    const quotaForPlan = async (plan: UserPlan): Promise<number> => {
-      const cached = planQuotaCache.get(plan);
-      if (cached !== undefined) return cached;
-      const quota = await getDailyMinuteQuotaAsync(plan);
-      planQuotaCache.set(plan, quota);
-      return quota;
-    };
-
-    // Filter workspaces where the user has exceeded their plan's daily quota.
-    // If no usage record exists (null), they haven't exceeded (0 minutes used).
-    const exceededChecks = await Promise.all(
-      workspacesWithUsage.map(async (ws) => {
-        if (isAnonEmail(ws.email)) return null;
-        const quota = await quotaForPlan((ws.plan ?? "free") as UserPlan);
-        if (!Number.isFinite(quota)) return null;
-        return (ws.minutesUsed ?? 0) >= quota ? ws : null;
-      }),
-    );
-    const quotaExceededWorkspaces = exceededChecks.filter(
-      (ws): ws is (typeof workspacesWithUsage)[number] => ws !== null,
-    );
+      .where(and(eq(workspace.status, "running"), eq(workspace.hostingType, "cloud")));
+    const candidates = runningWorkspaces.filter((ws) => !isAnonEmail(ws.email));
+    const overAllowance = await billing.getUsersOverAllowance([
+      ...new Set(candidates.map((ws) => ws.userId)),
+    ]);
+    const quotaExceededWorkspaces = candidates.filter((ws) => overAllowance.has(ws.userId));
 
     logger.info(`Found ${quotaExceededWorkspaces.length} workspaces with exceeded quota`, {
       action: "quota_check",
     });
 
-    return quotaExceededWorkspaces.map((ws) => ({
-      id: ws.id,
-      externalInstanceId: ws.externalInstanceId,
-      userId: ws.userId,
-      regionId: ws.regionId,
-      cloudProviderId: ws.cloudProviderId,
-      domain: ws.domain,
-    }));
+    return quotaExceededWorkspaces.map(({ email: _email, ...ws }) => ws);
   }),
 
   // Pause a workspace (for worker)
@@ -414,24 +360,12 @@ export const internalRouter = router({
   }),
 
   getLongTermInactiveWorkspaces: internalProcedure.query(async () => {
+    const billing = await getBilling();
+    // Without billing, paused workspaces are kept until their owner deletes them.
+    if (!billing.enabled) return [];
+
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
-
-    // Pre-filter with the LONGEST retention across all plans so we never miss a
-    // workspace; the precise per-plan threshold is applied in memory below.
-    // Self-hosted returns null for every plan -> nothing is reaped.
-    const planRetentions = (Object.keys(PLAN_LIMITS) as UserPlan[])
-      .map((plan) => getRetentionDaysForPlan(plan))
-      .filter((value): value is number => value !== null);
-
-    if (planRetentions.length === 0) {
-      // Self-hosted (or no managed plans): never terminate on inactivity.
-      return [];
-    }
-
-    const maxRetentionDays = Math.max(...planRetentions);
-    const candidateThreshold = new Date(now - maxRetentionDays * dayMs);
-
     const candidates = await db
       .select({
         id: workspace.id,
@@ -444,34 +378,24 @@ export const internalRouter = router({
         hostingType: workspace.hostingType,
         lastActiveAt: workspace.lastActiveAt,
         pausedAt: workspace.pausedAt,
-        plan: user.plan,
       })
       .from(workspace)
-      .leftJoin(user, eq(workspace.userId, user.id))
-      .where(
-        and(
-          eq(workspace.status, "paused"),
-          eq(workspace.hostingType, "cloud"),
-          lt(workspace.lastActiveAt, candidateThreshold),
-          lt(workspace.pausedAt, candidateThreshold),
-        ),
-      );
+      .where(and(eq(workspace.status, "paused"), eq(workspace.hostingType, "cloud")));
 
-    // Apply the precise per-plan retention window for each workspace. A null
-    // retention (self-hosted) means the workspace is never terminated.
-    const longTermInactiveWorkspaces = candidates.filter((ws) => {
-      const retentionDays = getRetentionDaysForPlan((ws.plan ?? "free") as UserPlan);
+    // Apply each owner's retention window. A null retention keeps the workspace.
+    const entitlements = await billing.getEntitlementsForUsers([
+      ...new Set(candidates.map((ws) => ws.userId)),
+    ]);
+    return candidates.filter((ws) => {
+      const retentionDays = entitlements.get(ws.userId)?.retentionDays ?? null;
       if (retentionDays === null) return false;
-      const threshold = new Date(now - retentionDays * dayMs);
       return isPausedWorkspacePastRetention({
         status: ws.status,
         lastActiveAt: ws.lastActiveAt,
         pausedAt: ws.pausedAt,
-        threshold,
+        threshold: new Date(now - retentionDays * dayMs),
       });
     });
-
-    return longTermInactiveWorkspaces.map(({ plan: _plan, ...ws }) => ws);
   }),
 
   // ============================================================================

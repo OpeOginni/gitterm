@@ -5,13 +5,15 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Terminal, Check, ArrowRight } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { useCurrentPlan } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
   const checkoutId = searchParams.get("checkout_id");
-  const { data: session, isPending } = authClient.useSession();
+  const { isPending } = authClient.useSession();
+  const currentPlan = useCurrentPlan();
   const [showPing, setShowPing] = useState(true);
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
 
@@ -31,7 +33,7 @@ function CheckoutSuccessContent() {
     }
   }, []);
 
-  const userPlan = checkoutPlan || (session?.user as any)?.plan || "free";
+  const userPlan = checkoutPlan || currentPlan;
   const planName = userPlan.charAt(0).toUpperCase() + userPlan.slice(1);
   const isPaidPlan = userPlan === "pro" || userPlan === "starter";
 

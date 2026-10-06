@@ -23,7 +23,6 @@ const schema = z.object({
   INTERNAL_API_KEY: optional,
 
   ENABLE_IDLE_REAPING: boolWithDefault(true),
-  ENABLE_QUOTA_ENFORCEMENT: boolWithDefault(false),
 
   // Minutes between reap passes. 0 = run once and exit (Railway Cron mode).
   // Any positive value = loop forever, sleeping between passes (self-host/Docker mode).
@@ -37,6 +36,5 @@ export default env;
 
 export const isManaged = () => env.DEPLOYMENT_MODE === "managed";
 export const shouldReapIdleWorkspaces = () => env.ENABLE_IDLE_REAPING;
-export const shouldEnforceQuotas = () => env.ENABLE_QUOTA_ENFORCEMENT || isManaged();
 
 export { schema as workerEnvSchema };

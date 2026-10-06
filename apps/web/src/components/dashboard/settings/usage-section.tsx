@@ -32,18 +32,15 @@ function UsageQuota() {
 
   const usage = data || { minutesUsed: 0, minutesRemaining: 60, dailyLimit: 60 };
 
-  const isUnlimited =
-    usage.minutesRemaining === null ||
-    usage.dailyLimit === null ||
-    usage.minutesRemaining === Infinity ||
-    usage.dailyLimit === Infinity;
+  const minutesRemaining = usage.minutesRemaining ?? Infinity;
+  const isUnlimited = minutesRemaining === Infinity || usage.dailyLimit === null;
 
   const percent =
     isUnlimited || !usage.dailyLimit
       ? 0
       : Math.min(100, (usage.minutesUsed / usage.dailyLimit) * 100);
-  const isExhausted = !isUnlimited && usage.minutesRemaining === 0;
-  const isLow = !isUnlimited && !isExhausted && usage.minutesRemaining < 15;
+  const isExhausted = !isUnlimited && minutesRemaining === 0;
+  const isLow = !isUnlimited && !isExhausted && minutesRemaining < 15;
   const barColor = isExhausted ? "bg-destructive" : isLow ? "bg-amber-500" : "bg-primary";
 
   return (

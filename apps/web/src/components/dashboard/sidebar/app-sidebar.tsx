@@ -107,7 +107,7 @@ function UserMenu({ user, onNavigate }: { user: SessionUser; onNavigate?: () => 
       <DropdownMenuContent side="top" align="start" className="w-56 border-line bg-popover">
         <DropdownMenuLabel className="flex items-center justify-between gap-2 font-normal">
           <span className="truncate text-xs text-fg-3">{user.email}</span>
-          <PlanBadge plan={user.plan ?? "free"} />
+          <PlanBadge />
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-fill-2" />
         <DropdownMenuItem

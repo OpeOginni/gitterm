@@ -1,4 +1,5 @@
 import type { ImageProviderMetadata, MachineSelectionPolicy } from "@gitterm/db/schema/cloud";
+import type { MachineAccess } from "@gitterm/schema/billing";
 
 export function applyMachineProfile(
   metadata: ImageProviderMetadata,
@@ -15,9 +16,6 @@ export function applyMachineProfile(
     },
   };
 }
-
-/** Which of a provider's sizes a plan may use: all of them, or only the smallest. */
-export type MachineAccess = "any" | "smallest";
 
 interface MachineProfileLike {
   id: string;

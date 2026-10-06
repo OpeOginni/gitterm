@@ -13,6 +13,7 @@ export const user = pgTable("user", {
   defaultCloudProviderId: uuid("default_cloud_provider_id"),
   showGitTermOnCommits: boolean("show_gitterm_on_commits").notNull().default(true),
   allowTrial: boolean("allow_trial").notNull().default(false),
+  /** Superseded by billing_account; kept until every server reads plans from there. */
   plan: userPlanEnum("plan").notNull().default("free"),
   role: userRoleEnum("role").notNull().default("user"),
   createdAt: timestamp("created_at").notNull(),

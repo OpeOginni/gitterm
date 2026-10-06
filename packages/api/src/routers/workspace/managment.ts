@@ -14,12 +14,9 @@ import { agentType, image, cloudProvider, machineProfile, region } from "@gitter
 import { user } from "@gitterm/db/schema/auth";
 import { workspaceSetup } from "@gitterm/db/schema/workspace-setup";
 import { TRPCError } from "@trpc/server";
-import {
-  getOrCreateDailyUsage,
-  hasRemainingQuota,
-  closeUsageSession,
-  createUsageSession,
-} from "../../utils/metering";
+import { closeUsageSession, createUsageSession } from "../../utils/metering";
+import { canUseProvider, getBilling } from "../../billing";
+import type { Entitlements } from "@gitterm/schema/billing";
 import {
   getProviderByCloudProviderId,
   isProviderImplemented,
@@ -53,15 +50,6 @@ import {
   encryptWorkspacePassword,
 } from "../../utils/workspace-password";
 import { getWorkspaceDomain } from "../../utils/routing";
-import {
-  canUseCustomCloudSubdomain,
-  canCreatePersistentWorkspace,
-  canUseProvider,
-  getDailyMinuteQuotaAsync,
-  getMachineAccess,
-  getWorkspaceLimit,
-  type UserPlan,
-} from "../../config/features";
 
 function decryptServerPasswordSafe(
   encrypted: string | null | undefined,
@@ -411,7 +399,7 @@ const enabledMachineProfiles = {
 async function resolveWorkspaceCreateIntent(
   rawInput: z.infer<typeof workspaceCreateSchema>,
   userId: string,
-  viewerPlan: UserPlan,
+  entitlements: Entitlements,
 ): Promise<ResolvedWorkspaceCreateInput> {
   if ("agentTypeId" in rawInput) return rawInput;
 
@@ -437,7 +425,7 @@ async function resolveWorkspaceCreateIntent(
   });
   const eligibleProviders = providerRows.filter(
     (candidate) =>
-      canUseProvider(viewerPlan, candidate.providerKey.toLowerCase()) &&
+      canUseProvider(entitlements, candidate.providerKey) &&
       (candidate.providerKey.toLowerCase() === "local" ||
         isProviderImplemented(candidate.providerKey)),
   );
@@ -523,13 +511,13 @@ function describeMachineProfiles(
   provider: Pick<CloudProviderType, "machineSelectionPolicy"> & {
     machineProfiles: MachineProfileType[];
   },
-  plan: UserPlan,
+  entitlements: Entitlements,
 ) {
   const mode = provider.machineSelectionPolicy.mode;
   const selectable = getSelectableMachineProfiles(
     provider.machineProfiles,
     mode,
-    getMachineAccess(plan),
+    entitlements.machineAccess,
   );
   const defaultProfile = getDefaultMachineProfile(selectable);
   return getSelectableMachineProfiles(provider.machineProfiles, mode, "any").map((profile) => ({
@@ -550,11 +538,11 @@ function describeMachineProfiles(
  */
 async function resolveMachineSelection(
   provider: CloudProviderType,
-  plan: UserPlan,
+  entitlements: Entitlements,
   requested: { machineProfileId?: string; machineOptions?: Record<string, unknown> },
 ): Promise<{ profile: MachineProfileType | undefined; machineOptions?: Record<string, unknown> }> {
   const mode = provider.machineSelectionPolicy.mode;
-  const access = getMachineAccess(plan);
+  const access = entitlements.machineAccess;
 
   let machineOptions: Record<string, unknown> | undefined;
   if (requested.machineOptions) {
@@ -590,7 +578,7 @@ async function resolveMachineSelection(
       code: "FORBIDDEN",
       message:
         access === "smallest"
-          ? "The Free plan can only use a provider's smallest machine size. Upgrade to use larger machines."
+          ? "Your plan can only use a provider's smallest machine size. Upgrade to use larger machines."
           : "This provider uses a fixed machine size",
     });
   }
@@ -663,19 +651,8 @@ export const workspaceRouter = router({
    * Used by the frontend to conditionally show subdomain input fields.
    */
   getSubdomainPermissions: protectedProcedure.query(async ({ ctx }) => {
-    const userPlan = ctx.session.user.plan;
-
-    if (!userPlan) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "User not authenticated",
-      });
-    }
-
-    return {
-      canUseCustomCloudSubdomain: canUseCustomCloudSubdomain(userPlan as UserPlan),
-      userPlan,
-    };
+    const entitlements = await (await getBilling()).getEntitlements(ctx.session.user.id);
+    return { canUseCustomCloudSubdomain: entitlements.customSubdomain };
   }),
 
   // List all agent types
@@ -753,15 +730,13 @@ export const workspaceRouter = router({
           orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
         });
 
-        // Plan-based provider gating: free tier only sees E2B and boat (and Local).
-        // Paid plans and self-hosted see everything. Done in-memory so the
-        // gating rules live in one place (config/features).
-        const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
+        // Billing decides which providers and sizes the viewer may use.
+        const entitlements = await (await getBilling()).getEntitlements(ctx.session.user.id);
         const planVisibleProviders = providers.filter((provider) => {
           const providerKey = (provider.providerKey ?? "local").toLowerCase();
           return (
             (providerKey === "local" || isProviderImplemented(providerKey)) &&
-            (providerKey === "local" || canUseProvider(viewerPlan, providerKey))
+            (providerKey === "local" || canUseProvider(entitlements, providerKey))
           );
         });
 
@@ -809,7 +784,7 @@ export const workspaceRouter = router({
                     )
                   : [],
               regions,
-              machineProfiles: describeMachineProfiles(provider, viewerPlan),
+              machineProfiles: describeMachineProfiles(provider, entitlements),
               sshAccessSupport: normalizeProvidersshAccessSupport(provider.sshAccessSupport),
             };
           }),
@@ -830,7 +805,7 @@ export const workspaceRouter = router({
     }),
 
   getWorkspaceCatalog: accountProcedure("workspace:read").query(async ({ ctx }) => {
-    const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
+    const entitlements = await (await getBilling()).getEntitlements(ctx.session.user.id);
     const [currentUser, agents, providers, images] = await Promise.all([
       db.query.user.findFirst({ where: eq(user.id, ctx.session.user.id) }),
       db.query.agentType.findMany({
@@ -865,7 +840,7 @@ export const workspaceRouter = router({
       return (
         parsedKey.success &&
         isProviderImplemented(parsedKey.data) &&
-        canUseProvider(viewerPlan, parsedKey.data)
+        canUseProvider(entitlements, parsedKey.data)
       );
     });
     const effectiveDefaultProvider =
@@ -900,7 +875,7 @@ export const workspaceRouter = router({
       if (
         !parsedKey.success ||
         !isProviderImplemented(parsedKey.data) ||
-        !canUseProvider(viewerPlan, parsedKey.data)
+        !canUseProvider(entitlements, parsedKey.data)
       )
         return [];
 
@@ -943,7 +918,7 @@ export const workspaceRouter = router({
             location: providerRegion.location,
           })),
           location: provider.location,
-          machines: describeMachineProfiles(provider, viewerPlan)
+          machines: describeMachineProfiles(provider, entitlements)
             .filter((profile) => profile.available)
             .map(({ available: _available, ...profile }) => profile),
           agentKeys,
@@ -1627,14 +1602,13 @@ export const workspaceRouter = router({
     }
 
     try {
-      const plan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
-      const usage = await getOrCreateDailyUsage(userId, plan);
-      const dailyQuota = await getDailyMinuteQuotaAsync(plan);
+      const account = await (await getBilling()).getAccount(userId);
+      const { used, limit } = account?.dailyMinutes ?? { used: 0, limit: null };
       return {
         success: true,
-        minutesUsed: usage.minutesUsed,
-        minutesRemaining: usage.minutesRemaining,
-        dailyLimit: Number.isFinite(dailyQuota) ? dailyQuota : null,
+        minutesUsed: used,
+        minutesRemaining: limit === null ? null : Math.max(0, limit - used),
+        dailyLimit: limit,
       };
     } catch (error) {
       throw new TRPCError({
@@ -1674,8 +1648,9 @@ export const workspaceRouter = router({
         });
       }
 
-      const viewerPlan = ((ctx.session.user as { plan?: UserPlan }).plan ?? "free") as UserPlan;
-      const input = await resolveWorkspaceCreateIntent(rawInput, userId, viewerPlan);
+      const billing = await getBilling();
+      const entitlements = await billing.getEntitlements(userId);
+      const input = await resolveWorkspaceCreateIntent(rawInput, userId, entitlements);
 
       if (input.repositoryCredentials && !input.repo) {
         throw new TRPCError({
@@ -1809,7 +1784,7 @@ export const workspaceRouter = router({
         }
         const machineSelection = await resolveMachineSelection(
           cloudProviderRecord,
-          (fetchedUser.plan || "free") as UserPlan,
+          entitlements,
           input,
         );
         const selectedMachineProfile = machineSelection.profile;
@@ -1858,15 +1833,11 @@ export const workspaceRouter = router({
         // Determine if this is a local workspace
         const isLocal = providerKey === "local";
 
-        // Plan-based provider gating. Free tier may only use E2B and boat; all paid
-        // plans (and self-hosted) may use any enabled provider. Local
-        // workspaces don't consume our managed compute, so they're exempt.
-        const planForGating = (fetchedUser.plan || "free") as UserPlan;
-        if (!isLocal && !canUseProvider(planForGating, providerKey)) {
+        // Local workspaces don't consume managed compute, so they're exempt.
+        if (!isLocal && !canUseProvider(entitlements, providerKey)) {
           throw new TRPCError({
             code: "FORBIDDEN",
-            message:
-              "The Free plan can only use E2B and boat sandboxes. Upgrade to Starter or Pro to use this provider.",
+            message: "Your plan can't use this provider. Upgrade to use it.",
           });
         }
 
@@ -1896,15 +1867,9 @@ export const workspaceRouter = router({
 
         // Check quota only for cloud workspaces (local doesn't use our resources)
         if (!isLocal) {
-          const hasQuota = await hasRemainingQuota(userId, planForGating);
-          if (!hasQuota) {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message:
-                planForGating === "pro"
-                  ? "Daily cloud runtime limit reached. It resets at midnight UTC."
-                  : "Daily cloud runtime limit reached. It resets at midnight UTC, or upgrade for more runtime.",
-            });
+          const allowance = await billing.checkRunAllowance(userId);
+          if (!allowance.allowed) {
+            throw new TRPCError({ code: "FORBIDDEN", message: allowance.reason });
           }
         }
 
@@ -1923,21 +1888,15 @@ export const workspaceRouter = router({
           );
 
         // Check workspace limit based on plan
-        const userPlanForLimit = (fetchedUser.plan || "free") as UserPlan;
-        const workspaceLimit = getWorkspaceLimit(userPlanForLimit);
-
-        if (runningWorkspaces.length >= workspaceLimit) {
-          const upgradeHint =
-            userPlanForLimit === "free"
-              ? ` Upgrade to Starter (5) or Pro (15) for more.`
-              : userPlanForLimit === "starter"
-                ? ` Upgrade to Pro for up to 15.`
-                : "";
+        const workspaceLimit = entitlements.maxWorkspaces;
+        if (workspaceLimit !== null && runningWorkspaces.length >= workspaceLimit) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message:
               `You've reached your plan limit of ${workspaceLimit} workspaces.` +
-              (upgradeHint || " Delete some workspaces to create new ones."),
+              (billing.enabled
+                ? " Delete some workspaces or upgrade for more."
+                : " Delete some workspaces to create new ones."),
           });
         }
 
@@ -2401,7 +2360,6 @@ export const workspaceRouter = router({
 
         // Generate or validate subdomain
         let subdomain: string;
-        const userPlan = (fetchedUser.plan || "free") as UserPlan;
 
         if (input.subdomain) {
           // User wants a custom subdomain
@@ -2414,10 +2372,10 @@ export const workspaceRouter = router({
             });
           }
 
-          if (!canUseCustomCloudSubdomain(userPlan)) {
+          if (!entitlements.customSubdomain) {
             throw new TRPCError({
               code: "FORBIDDEN",
-              message: "Custom cloud subdomains require a Pro plan.",
+              message: "Custom cloud subdomains require a paid plan.",
             });
           }
 
@@ -2792,15 +2750,11 @@ export const workspaceRouter = router({
         // every plan. We only block opt-in persistence on providers that don't
         // force it on; otherwise free users couldn't use auto-persistent
         // providers at all.
-        if (
-          input.persistent &&
-          !cloudProviderRecord.autoPersistent &&
-          !canCreatePersistentWorkspace(planForGating)
-        ) {
+        if (input.persistent && !cloudProviderRecord.autoPersistent && !entitlements.persistence) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message:
-              "Persistent workspaces require a Starter or Pro plan. Upgrade to keep your workspace state.",
+              "Persistent workspaces require a paid plan. Upgrade to keep your workspace state.",
           });
         }
 
@@ -3408,17 +3362,14 @@ export const workspaceRouter = router({
           existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
         } else {
           existingWorkspace = claimedWorkspace;
-          const hasQuota = await hasRemainingQuota(userId);
-          if (!hasQuota) {
+          const allowance = await (await getBilling()).checkRunAllowance(userId);
+          if (!allowance.allowed) {
             await updateWorkspaceByIdAndInvalidate(
               input.workspaceId,
               { status: "paused", updatedAt: new Date() },
               existingWorkspace.subdomain,
             );
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: "Daily free tier limit reached. Please try again tomorrow.",
-            });
+            throw new TRPCError({ code: "FORBIDDEN", message: allowance.reason });
           }
 
           const [provider] = await db
@@ -3742,12 +3693,9 @@ export const workspaceRouter = router({
 
       try {
         // Check quota first
-        const hasQuota = await hasRemainingQuota(userId);
-        if (!hasQuota) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Daily free tier limit reached. Please try again tomorrow.",
-          });
+        const allowance = await (await getBilling()).checkRunAllowance(userId);
+        if (!allowance.allowed) {
+          throw new TRPCError({ code: "FORBIDDEN", message: allowance.reason });
         }
 
         // Verify workspace belongs to user

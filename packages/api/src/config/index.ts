@@ -4,7 +4,7 @@
  * Re-exports all configuration modules for easy importing.
  *
  * Usage:
- *   import { deploymentConfig, features, shouldEnforceQuota } from '@gitterm/api/config';
+ *   import { deploymentConfig, features } from '@gitterm/api/config';
  */
 
 export * from "./deployment";

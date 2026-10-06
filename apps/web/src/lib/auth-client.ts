@@ -7,13 +7,11 @@ import { apiPath } from "@gitterm/schema/url";
 // Mirror the server's `user.additionalFields` (packages/auth/src/index.ts) so
 // the client infers them on `session.user`. We use the runtime-config form of
 // `inferAdditionalFields` (not the `<typeof auth>` generic) to avoid importing
-// @gitterm/auth, which carries server-side database dependencies. The enum
-// `type` arrays produce literal unions (e.g. `"free" | "starter" | "pro"`),
-// matching the server config exactly.
+// @gitterm/auth, which carries server-side database dependencies. Plans come
+// from the billing API (`useBillingAccount`), not the session.
 const additionalFields = () =>
   inferAdditionalFields({
     user: {
-      plan: { type: ["free", "starter", "pro"], input: false },
       role: { type: ["user", "admin"], input: false },
     },
   });
@@ -50,7 +48,7 @@ const createBillingAuthClient = () =>
   });
 
 // Both factories register `inferAdditionalFields<AuthAdditionalFields>()`, so
-// either client resolves `session.user.plan`/`role`. We pin the export to a
+// either client resolves `session.user.role`. We pin the export to a
 // single concrete client type (instead of a `A | B` union of the two
 // factories) so TypeScript can actually infer the additional fields on
 // `useSession()`/`getSession()` - a union collapses them back to the base
