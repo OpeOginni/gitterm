@@ -14,38 +14,30 @@ async function main() {
   console.log(`[e2b-template] pinning opencode version ${opencodeVersion}`);
   console.log(`[e2b-template] pinning t3 version ${t3Version}`);
 
-  const templates: Array<{
-    name: string;
-    template: TemplateClass;
-    cpuCount: number;
-    memoryMB: number;
-  }> = [
-    {
-      name: "gitterm-opencode-server",
-      template: createOpencodeServerTemplate(opencodeVersion),
-      cpuCount: 4,
-      memoryMB: 8192,
-    },
-    // Higher-CPU variant, capped at the account's maximum supported memory.
-    {
-      name: "gitterm-opencode-server-lg",
-      template: createOpencodeServerTemplate(opencodeVersion),
-      cpuCount: 8,
-      memoryMB: 8192,
-    },
+  const baseTemplates: Array<{ name: string; template: TemplateClass }> = [
+    { name: "gitterm-opencode-server", template: createOpencodeServerTemplate(opencodeVersion) },
     {
       name: "gitterm-opencode-server-with-ssh",
       template: createOpencodeServerWithSSHTemplate(opencodeVersion),
-      cpuCount: 4,
-      memoryMB: 8192,
     },
-    {
-      name: "gitterm-t3code-server",
-      template: createT3CodeServerTemplate(t3Version),
-      cpuCount: 4,
-      memoryMB: 8192,
-    },
+    { name: "gitterm-t3code-server", template: createT3CodeServerTemplate(t3Version) },
   ];
+  // E2B fixes resources per template, so each machine profile size is its own
+  // template named `<base><suffix>`. Must match the E2B machine profiles in the seed.
+  // Large is capped at the account's maximum supported memory.
+  const sizes = [
+    { suffix: "-sm", cpuCount: 2, memoryMB: 4096 },
+    { suffix: "", cpuCount: 4, memoryMB: 8192 },
+    { suffix: "-lg", cpuCount: 8, memoryMB: 8192 },
+  ];
+  const templates = baseTemplates.flatMap((base) =>
+    sizes.map((size) => ({
+      name: `${base.name}${size.suffix}`,
+      template: base.template,
+      cpuCount: size.cpuCount,
+      memoryMB: size.memoryMB,
+    })),
+  );
 
   // `bun run e2b:build [name...]` — no args builds everything.
   const requested = process.argv.slice(2);

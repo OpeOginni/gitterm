@@ -3,6 +3,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -51,6 +52,11 @@ export const cloudProvider = pgTable("cloud_provider", {
   supportsRegions: boolean("supports_regions").notNull().default(true),
   allowUserRegionSelection: boolean("allow_user_region_selection").notNull().default(true),
   supportServerOnly: boolean("support_server_only").notNull().default(false),
+  /**
+   * Where a provider without region selection runs workspaces, shown to users
+   * (e.g. "EU", "US"). Region-capable providers show their regions instead.
+   */
+  location: text("location"),
   machineSelectionPolicy: jsonb("machine_selection_policy")
     .$type<MachineSelectionPolicy>()
     .notNull()
@@ -149,6 +155,9 @@ export const machineProfile = pgTable(
     key: text("key").notNull(),
     name: text("name").notNull(),
     description: text("description"),
+    /** Provisioned size, shown to users and used to find a provider's smallest machine. */
+    vcpus: real("vcpus"),
+    memoryGb: real("memory_gb"),
     providerOptions: jsonb("provider_options")
       .$type<Record<string, unknown>>()
       .notNull()
@@ -310,6 +319,8 @@ export interface ImageProviderMetadata {
   e2b?: {
     templateId?: string;
     sshTemplateId?: string;
+    /** Size variant suffix set by a machine profile, appended to the template name. */
+    templateSuffix?: string;
   };
   daytona?: DaytonaImageProviderMetadata;
   aws?: AwsImageProviderMetadata;

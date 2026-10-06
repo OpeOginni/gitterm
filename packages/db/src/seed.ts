@@ -39,6 +39,7 @@ const seedCloudProviders: Array<{
   supportsRegions: boolean;
   allowUserRegionSelection?: boolean;
   supportServerOnly?: boolean;
+  location?: string;
   sshAccessSupport?: CloudProvidersshAccessSupport;
   creationSettlement?: ProviderSettlement;
   stopSettlement?: ProviderSettlement;
@@ -99,6 +100,7 @@ const seedCloudProviders: Array<{
     supportsRegions: false,
     machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
+    location: "US",
     sshAccessSupport: {
       supported: true,
       transportKind: "proxycommand-ssh",
@@ -163,6 +165,7 @@ const seedCloudProviders: Array<{
     supportsRegions: false,
     machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
+    location: "EU",
     sshAccessSupport: {
       supported: true,
       transportKind: "direct-ssh",
@@ -342,19 +345,36 @@ const seedImages = [
   },
 ];
 
+/**
+ * Each provider's machine sizes. `vcpus`/`memoryGb` must match what the provider
+ * actually provisions for `providerOptions`: users see them, and managed free
+ * plans are limited to a provider's smallest enabled size.
+ */
 const seedMachineProfiles: Array<{
   providerName: string;
   key: string;
   name: string;
-  description: string;
+  vcpus: number;
+  memoryGb: number;
   providerOptions: Record<string, unknown>;
   isDefault: boolean;
 }> = [
+  // E2B fixes resources per template; build.ts builds each template at every size.
+  {
+    providerName: "E2B",
+    key: "small",
+    name: "Small",
+    vcpus: 2,
+    memoryGb: 4,
+    providerOptions: { templateSuffix: "-sm" },
+    isDefault: false,
+  },
   {
     providerName: "E2B",
     key: "standard",
     name: "Standard",
-    description: "4 vCPU and 8 GB memory.",
+    vcpus: 4,
+    memoryGb: 8,
     providerOptions: {},
     isDefault: true,
   },
@@ -362,42 +382,75 @@ const seedMachineProfiles: Array<{
     providerName: "E2B",
     key: "large",
     name: "Large",
-    description: "8 vCPU and 16 GB memory.",
-    providerOptions: { templateId: "gitterm-opencode-server-lg" },
+    vcpus: 8,
+    memoryGb: 8,
+    providerOptions: { templateSuffix: "-lg" },
     isDefault: false,
   },
   {
-    providerName: "Daytona",
-    key: "standard",
-    name: "Standard",
-    description: "2 CPU and 4 GB memory.",
-    providerOptions: { resources: { cpu: 2, memory: 4 } },
-    isDefault: true,
-  },
-  {
-    providerName: "Vercel Sandbox",
-    key: "standard",
-    name: "Standard",
-    description: "1 vCPU Vercel Sandbox.",
-    providerOptions: { vcpus: 1 },
-    isDefault: true,
+    providerName: "boat",
+    key: "small",
+    name: "Small",
+    vcpus: 2,
+    memoryGb: 4,
+    providerOptions: { size: "small" },
+    isDefault: false,
   },
   {
     providerName: "boat",
     key: "standard",
     name: "Standard",
-    description: "Default boat sandbox.",
+    vcpus: 4,
+    memoryGb: 8,
     providerOptions: { size: "default" },
     isDefault: true,
   },
   {
-    providerName: "exe.dev",
-    key: "standard",
-    name: "Standard",
-    description: "2 CPU, 4 GB memory, and 20 GB disk.",
-    providerOptions: { cpu: 2, memory: "4GB", disk: "20GB" },
-    isDefault: true,
+    providerName: "boat",
+    key: "large",
+    name: "Large",
+    vcpus: 8,
+    memoryGb: 16,
+    providerOptions: { size: "large" },
+    isDefault: false,
   },
+  ...(
+    [
+      ["small", "Small", 1, 2, false],
+      ["standard", "Standard", 2, 4, true],
+      ["large", "Large", 4, 8, false],
+    ] as const
+  ).flatMap(([key, name, cpu, memory, isDefault]) => [
+    {
+      providerName: "Daytona",
+      key,
+      name,
+      vcpus: cpu,
+      memoryGb: memory,
+      // SSH workspaces use editorResources; keep them the same size.
+      providerOptions: { resources: { cpu, memory }, editorResources: { cpu, memory } },
+      isDefault,
+    },
+    {
+      providerName: "Vercel Sandbox",
+      key,
+      name,
+      vcpus: cpu,
+      // Vercel allocates 2 GB per vCPU.
+      memoryGb: cpu * 2,
+      providerOptions: { vcpus: cpu },
+      isDefault,
+    },
+    {
+      providerName: "exe.dev",
+      key,
+      name,
+      vcpus: cpu,
+      memoryGb: memory,
+      providerOptions: { cpu, memory: `${memory}GB`, disk: "20GB" },
+      isDefault,
+    },
+  ]),
 ];
 
 const seedProviderTypes = PROVIDER_DEFINITIONS;
@@ -496,7 +549,6 @@ export async function seedDatabase(): Promise<void> {
       const targetProviderRestartSettlement = provider.restartSettlement ?? "webhook";
       const targetProviderTerminationSettlement = provider.terminationSettlement ?? "webhook";
       const targetsshAccessSupport = provider.sshAccessSupport ?? {};
-      const targetMachineSelectionPolicy = provider.machineSelectionPolicy ?? { mode: "standard" };
 
       if (existing.name !== provider.name) {
         updates.name = provider.name;
@@ -557,8 +609,9 @@ export async function seedDatabase(): Promise<void> {
         updates.sshAccessSupport = targetsshAccessSupport;
       }
 
-      if (!hasSameJson(existing.machineSelectionPolicy, targetMachineSelectionPolicy)) {
-        updates.machineSelectionPolicy = targetMachineSelectionPolicy;
+      // Machine selection policy is admin-owned once the provider exists.
+      if (existing.location === null && provider.location) {
+        updates.location = provider.location;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -590,6 +643,7 @@ export async function seedDatabase(): Promise<void> {
           supportsRegions: provider.supportsRegions,
           allowUserRegionSelection: provider.allowUserRegionSelection ?? true,
           supportServerOnly: provider.supportServerOnly ?? false,
+          location: provider.location ?? null,
           sshAccessSupport: provider.sshAccessSupport ?? {},
           machineSelectionPolicy: provider.machineSelectionPolicy ?? { mode: "standard" },
           creationSettlement: provider.creationSettlement ?? "webhook",
@@ -610,7 +664,9 @@ export async function seedDatabase(): Promise<void> {
     const profileValues = {
       key: profile.key,
       name: profile.name,
-      description: profile.description,
+      description: null,
+      vcpus: profile.vcpus,
+      memoryGb: profile.memoryGb,
       providerOptions: profile.providerOptions,
     };
     const existing = await db.query.machineProfile.findFirst({
@@ -620,14 +676,10 @@ export async function seedDatabase(): Promise<void> {
       ),
     });
     if (existing) {
+      // Default and enablement are admin-owned; only refresh the size definition.
       await db
         .update(machineProfile)
-        .set({
-          ...profileValues,
-          isDefault: profile.isDefault,
-          isEnabled: true,
-          updatedAt: new Date(),
-        })
+        .set({ ...profileValues, updatedAt: new Date() })
         .where(eq(machineProfile.id, existing.id));
     } else {
       await db.insert(machineProfile).values({

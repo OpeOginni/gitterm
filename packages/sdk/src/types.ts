@@ -708,11 +708,16 @@ export type WorkspaceCatalog = {
     regionSelection: "none" | "user" | "admin";
     regions: Array<{ id: string; key: string; name: string; location: string }>;
     accessProfiles?: Array<{ id: string; name: string; description: string; roleArn: string }>;
+    /** Where the provider runs workspaces (e.g. "EU", "US"); null when not set. */
+    location: string | null;
+    /** Sizes you may pick on this provider; `isDefault` is used when none is requested. */
     machines: Array<{
       id: string;
       key: string;
       name: string;
       description: string | null;
+      vcpus: number | null;
+      memoryGb: number | null;
       isDefault: boolean;
     }>;
     agentKeys: string[];

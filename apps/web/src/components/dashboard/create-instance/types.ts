@@ -34,6 +34,8 @@ export interface CloudProvider {
   allowUserRegionSelection: boolean;
   autoPersistent?: boolean;
   supportsPersistence?: boolean;
+  /** Where the provider runs workspaces, e.g. "EU". */
+  location?: string | null;
   regions?: Region[];
   machineProfiles?: MachineProfile[];
   awsAccessProfiles?: Array<{ id: string; name: string; description: string; roleArn: string }>;
@@ -45,7 +47,23 @@ export interface MachineProfile {
   key: string;
   name: string;
   description?: string | null;
+  vcpus?: number | null;
+  memoryGb?: number | null;
   isDefault: boolean;
+  /** False when the viewer's plan cannot use this size. */
+  available?: boolean;
+}
+
+/** "4 vCPU · 8 GB", or null when the admin did not record the size. */
+export function formatMachineSize(profile: {
+  vcpus?: number | null;
+  memoryGb?: number | null;
+}): string | null {
+  const parts = [
+    profile.vcpus != null && `${profile.vcpus} vCPU`,
+    profile.memoryGb != null && `${profile.memoryGb} GB`,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 export interface Region {

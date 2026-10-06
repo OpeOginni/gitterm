@@ -37,6 +37,12 @@ export const providerMachineOptionsSchemas = {
     .object({
       templateId: z.string().trim().min(1).optional(),
       sshTemplateId: z.string().trim().min(1).optional(),
+      /** Appended to the image's template names to pick a size variant, e.g. "-lg". */
+      templateSuffix: z
+        .string()
+        .trim()
+        .regex(/^-[a-z0-9-]+$/)
+        .optional(),
     })
     .strict(),
   daytona: z

@@ -50,6 +50,7 @@ import { strToU8, zipSync } from "fflate";
 import { awsRoleSelectionSchema, awsAccessProfileSchema } from "@gitterm/schema";
 import { AwsSetupGuide } from "../_components/aws-setup-guide";
 import { ProviderWebhookGuide } from "../_components/provider-webhook-guide";
+import { formatMachineSize } from "@/components/dashboard/create-instance/types";
 import {
   AwsAccessProfiles,
   AwsRoleInput,
@@ -90,6 +91,7 @@ const MACHINE_FIELDS: Record<string, MachineField[]> = {
   e2b: [
     { path: "templateId", label: "Template ID", placeholder: "gitterm-opencode" },
     { path: "sshTemplateId", label: "SSH template ID", placeholder: "Optional" },
+    { path: "templateSuffix", label: "Template size suffix", placeholder: "-lg" },
   ],
   daytona: [
     { path: "resources.cpu", label: "CPU", type: "number", placeholder: "2" },
@@ -133,6 +135,12 @@ function mergePreservedEncryptedFields(
 
   return merged;
 }
+
+const MACHINE_SELECTION_MODES = [
+  { value: "standard", label: "Default size only" },
+  { value: "profiles", label: "Users pick a size" },
+  { value: "flexible", label: "Users pick or customize" },
+] as const;
 
 function getMachineProfileKey(name: string) {
   return name
@@ -179,11 +187,14 @@ export default function ProviderSettingsPage() {
     location: "",
     externalRegionIdentifier: "",
   });
-  const [newMachineProfile, setNewMachineProfile] = useState({
+  const emptyMachineProfile = {
     name: "",
+    vcpus: "",
+    memoryGb: "",
     providerOptions: {} as Record<string, any>,
     isDefault: false,
-  });
+  };
+  const [newMachineProfile, setNewMachineProfile] = useState(emptyMachineProfile);
   const [setupAgentTypeId, setSetupAgentTypeId] = useState("all");
   const [setupScript, setSetupScript] = useState("");
 
@@ -253,6 +264,20 @@ export default function ProviderSettingsPage() {
     }) => trpcClient.admin.infrastructure.updateProvider.mutate(params),
   });
 
+  // Saved immediately, like machine profile changes; not part of the credentials form.
+  const updateMachineSettings = useMutation({
+    mutationFn: (params: {
+      id: string;
+      location?: string | null;
+      machineSelectionPolicy?: { mode: (typeof MACHINE_SELECTION_MODES)[number]["value"] };
+    }) => trpcClient.admin.infrastructure.updateProvider.mutate(params),
+    onSuccess: () => {
+      refreshProviderQueries();
+      toast.success("Provider updated");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
   const toggleProvider = useMutation({
     mutationFn: (params: { id: string; isEnabled: boolean }) =>
       trpcClient.admin.infrastructure.toggleProvider.mutate(params),
@@ -299,12 +324,14 @@ export default function ProviderSettingsPage() {
     mutationFn: (params: {
       cloudProviderId: string;
       name: string;
+      vcpus: number | null;
+      memoryGb: number | null;
       providerOptions: Record<string, unknown>;
       isDefault: boolean;
     }) => trpcClient.admin.infrastructure.createMachineProfile.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "machineProfiles", providerId] });
-      setNewMachineProfile({ name: "", providerOptions: {}, isDefault: false });
+      setNewMachineProfile(emptyMachineProfile);
       toast.success("Machine profile created");
     },
     onError: (error) => toast.error(error.message),
@@ -1059,7 +1086,7 @@ export default function ProviderSettingsPage() {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Name provider-specific compute settings once, then expose the stable key to the
-                    SDK.
+                    SDK. On managed plans, Free users get the smallest enabled size.
                   </p>
                 </div>
                 <Badge
@@ -1069,6 +1096,60 @@ export default function ProviderSettingsPage() {
                   {machineProfiles?.length ?? 0} profiles
                 </Badge>
               </div>
+
+              {provider && (
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Machine size choice</Label>
+                    <Select
+                      value={provider.machineSelectionPolicy.mode}
+                      onValueChange={(mode) =>
+                        updateMachineSettings.mutate({
+                          id: provider.id,
+                          machineSelectionPolicy: {
+                            mode: mode as (typeof MACHINE_SELECTION_MODES)[number]["value"],
+                          },
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MACHINE_SELECTION_MODES.map((mode) => (
+                          <SelectItem key={mode.value} value={mode.value}>
+                            {mode.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      &ldquo;Default size only&rdquo; runs every workspace on the default profile.
+                    </p>
+                  </div>
+                  {/* Region-capable providers show their regions instead. */}
+                  {!provider.supportsRegions && (
+                    <div className="space-y-2">
+                      <Label htmlFor="provider-location">Location shown to users</Label>
+                      <Input
+                        key={provider.location ?? ""}
+                        id="provider-location"
+                        defaultValue={provider.location ?? ""}
+                        placeholder="e.g., EU"
+                        onBlur={(event) => {
+                          const location = event.target.value.trim() || null;
+                          if (location !== provider.location) {
+                            updateMachineSettings.mutate({ id: provider.id, location });
+                          }
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Optional, e.g. where your provider account runs sandboxes.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="mt-4 space-y-3">
                 {machineProfiles?.map((profile) => (
@@ -1083,6 +1164,11 @@ export default function ProviderSettingsPage() {
                           {profile.key}
                         </code>
                         {profile.isDefault && <Badge variant="secondary">Default</Badge>}
+                        {formatMachineSize(profile) && (
+                          <span className="text-xs text-muted-foreground">
+                            {formatMachineSize(profile)}
+                          </span>
+                        )}
                       </div>
                       <p className="truncate font-mono text-[11px] text-muted-foreground">
                         {Object.keys(profile.providerOptions).length > 0
@@ -1149,6 +1235,41 @@ export default function ProviderSettingsPage() {
                             A profile named {duplicateMachineProfile.name} already exists.
                           </p>
                         )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="machine-vcpus">vCPUs</Label>
+                          <Input
+                            id="machine-vcpus"
+                            type="number"
+                            value={newMachineProfile.vcpus}
+                            placeholder="4"
+                            onChange={(event) =>
+                              setNewMachineProfile((current) => ({
+                                ...current,
+                                vcpus: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="machine-memory">Memory (GB)</Label>
+                          <Input
+                            id="machine-memory"
+                            type="number"
+                            value={newMachineProfile.memoryGb}
+                            placeholder="8"
+                            onChange={(event) =>
+                              setNewMachineProfile((current) => ({
+                                ...current,
+                                memoryGb: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <p className="col-span-2 text-xs text-muted-foreground">
+                          What the provider actually provisions; shown to users.
+                        </p>
                       </div>
                       {machineFields.map((field) => {
                         const [parent, child] = field.path.split(".");
@@ -1231,6 +1352,8 @@ export default function ProviderSettingsPage() {
                           createMachineProfile.mutate({
                             cloudProviderId: provider.id,
                             ...newMachineProfile,
+                            vcpus: Number(newMachineProfile.vcpus) || null,
+                            memoryGb: Number(newMachineProfile.memoryGb) || null,
                           })
                         }
                       >

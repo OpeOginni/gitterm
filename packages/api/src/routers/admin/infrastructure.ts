@@ -49,6 +49,18 @@ const updateCloudProviderSchema = z.object({
   providerConfigId: z.uuid().nullable().optional(),
   supportsRegions: z.boolean().optional(),
   allowUserRegionSelection: z.boolean().optional(),
+  location: z
+    .string()
+    .trim()
+    .max(40)
+    .nullable()
+    .optional()
+    .transform((value) => (value === "" ? null : value)),
+  // "standard" pins the default size; "profiles" lets users pick one;
+  // "flexible" also accepts custom provider resources.
+  machineSelectionPolicy: z
+    .object({ mode: z.enum(["standard", "profiles", "flexible"]) })
+    .optional(),
 });
 
 const createRegionSchema = z.object({
@@ -112,6 +124,8 @@ const machineProfileFields = {
     .regex(/^[a-z0-9-]+$/),
   name: z.string().trim().min(1),
   description: z.string().trim().max(500).nullable().optional(),
+  vcpus: z.number().positive().max(512).nullable().optional(),
+  memoryGb: z.number().positive().max(4096).nullable().optional(),
   providerOptions: z.record(z.string(), z.unknown()).default({}),
   isDefault: z.boolean().default(false),
   isEnabled: z.boolean().default(true),
@@ -121,6 +135,8 @@ const createMachineProfileSchema = z.object({
   cloudProviderId: z.uuid(),
   name: machineProfileFields.name,
   description: machineProfileFields.description,
+  vcpus: machineProfileFields.vcpus,
+  memoryGb: machineProfileFields.memoryGb,
   providerOptions: machineProfileFields.providerOptions,
   isDefault: machineProfileFields.isDefault,
   isEnabled: machineProfileFields.isEnabled,
@@ -131,6 +147,8 @@ const updateMachineProfileSchema = z.object({
   key: machineProfileFields.key.optional(),
   name: machineProfileFields.name.optional(),
   description: machineProfileFields.description,
+  vcpus: machineProfileFields.vcpus,
+  memoryGb: machineProfileFields.memoryGb,
   providerOptions: machineProfileFields.providerOptions.optional(),
   isDefault: z.boolean().optional(),
   isEnabled: z.boolean().optional(),
@@ -682,6 +700,8 @@ export const infrastructureRouter = router({
             key,
             name: input.name,
             description: input.description ?? null,
+            vcpus: input.vcpus ?? null,
+            memoryGb: input.memoryGb ?? null,
             providerOptions,
             isDefault: input.isDefault,
             isEnabled: input.isEnabled,
