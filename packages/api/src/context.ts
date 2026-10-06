@@ -33,8 +33,17 @@ export async function createContext({ context }: CreateContextOptions) {
   const hasDaytonaWebhook =
     !!daytonaWebhookId && !!daytonaWebhookTimestamp && !!daytonaWebhookSignature;
 
+  // boat signs deliveries with an HMAC over `delivery.timestamp.raw_body`.
+  const asciiWebhookDelivery = context.req.raw.headers.get("x-ascii-delivery");
+  const asciiWebhookTimestamp = context.req.raw.headers.get("x-ascii-timestamp");
+  const asciiWebhookSignature = context.req.raw.headers.get("x-ascii-signature");
+  const hasAsciiWebhook =
+    !!asciiWebhookDelivery && !!asciiWebhookTimestamp && !!asciiWebhookSignature;
+
   const rawBody =
-    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook ? await context.req.text() : "";
+    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook || hasAsciiWebhook
+      ? await context.req.text()
+      : "";
 
   // Resolve the originating client IP (proxy hops). Falls back to the socket
   // address for local development. Used by the anonymous "try gitterm" flow
@@ -53,6 +62,9 @@ export async function createContext({ context }: CreateContextOptions) {
     daytonaWebhookId,
     daytonaWebhookTimestamp,
     daytonaWebhookSignature,
+    asciiWebhookDelivery,
+    asciiWebhookTimestamp,
+    asciiWebhookSignature,
     clientIp,
     // The raw Hono context is exposed so a small set of procedures (e.g. the
     // anonymous try-gitterm flow) can append `Set-Cookie` headers. Most
@@ -109,8 +121,17 @@ export async function createListenerContext({ context }: CreateContextOptions) {
   const hasDaytonaWebhook =
     !!daytonaWebhookId && !!daytonaWebhookTimestamp && !!daytonaWebhookSignature;
 
+  // boat signs deliveries with an HMAC over `delivery.timestamp.raw_body`.
+  const asciiWebhookDelivery = context.req.raw.headers.get("x-ascii-delivery");
+  const asciiWebhookTimestamp = context.req.raw.headers.get("x-ascii-timestamp");
+  const asciiWebhookSignature = context.req.raw.headers.get("x-ascii-signature");
+  const hasAsciiWebhook =
+    !!asciiWebhookDelivery && !!asciiWebhookTimestamp && !!asciiWebhookSignature;
+
   const rawBody =
-    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook ? await context.req.text() : "";
+    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook || hasAsciiWebhook
+      ? await context.req.text()
+      : "";
 
   return {
     session,
@@ -124,6 +145,9 @@ export async function createListenerContext({ context }: CreateContextOptions) {
     daytonaWebhookId,
     daytonaWebhookTimestamp,
     daytonaWebhookSignature,
+    asciiWebhookDelivery,
+    asciiWebhookTimestamp,
+    asciiWebhookSignature,
     clientIp: null as string | null,
     honoContext: context,
   };

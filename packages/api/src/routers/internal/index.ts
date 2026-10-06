@@ -26,6 +26,12 @@ import { railwayWebhookSchema } from "../railway/webhook";
 import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { daytonaWebhookSchema, verifyDaytonaWebhookSignature } from "../daytona/webhook";
 import type { DaytonaConfig } from "../../providers/daytona/types";
+import {
+  asciiWebhookBoxId,
+  asciiWebhookSchema,
+  verifyAsciiWebhookSignature,
+} from "../ascii/webhook";
+import type { AsciiConfig } from "../../providers/ascii/types";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import {
@@ -883,6 +889,99 @@ export const internalRouter = router({
       }
 
       return { updated: [] };
+    }),
+
+  processAsciiWebhook: internalProcedure
+    .input(
+      asciiWebhookSchema.extend({
+        rawBody: z.string(),
+        delivery: z.string(),
+        timestamp: z.string(),
+        signature: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const config = (await getProviderConfigService().getProviderConfigForUse("ascii")) as
+        | AsciiConfig
+        | undefined;
+      if (!config?.webhookSecret) {
+        console.error("boat webhookSecret is not configured.");
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "boat webhook secret is not configured.",
+        });
+      }
+      const verified =
+        !!input.delivery &&
+        !!input.timestamp &&
+        !!input.signature &&
+        verifyAsciiWebhookSignature(config.webhookSecret, input.rawBody, {
+          delivery: input.delivery,
+          timestamp: input.timestamp,
+          signature: input.signature,
+        });
+      if (!verified) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "boat webhook signature verification failed",
+        });
+      }
+
+      // Only boat stopping a box itself matters: GitTerm's own pauses are already
+      // reflected, and ready/hydrated/degraded don't change what the user can run.
+      const event = input.type.replace(/^(sandbox|box)\./, "");
+      const boxId = asciiWebhookBoxId(input);
+      if ((event !== "archived" && event !== "error") || !boxId) return { updated: [] };
+
+      // boat retries deliveries with a fresh signature timestamp. The event itself
+      // can still predate a resume or newer activity, so guard on its creation time
+      // in the UPDATE as well as the candidate query (a resume can race this lookup).
+      const eventDate = new Date(input.createdAt);
+      const eventIsCurrent = sql`coalesce(${workspace.lastActiveAt}, ${workspace.startedAt}) <= ${eventDate.toISOString()}::timestamp`;
+
+      const [asciiProvider] = await db
+        .select({ id: cloudProvider.id })
+        .from(cloudProvider)
+        .where(eq(cloudProvider.providerKey, "ascii"));
+      if (!asciiProvider) return { updated: [] };
+
+      // The workspace keeps its box in a JSON handle; narrow by text, confirm by parsing.
+      const candidates = await db
+        .select({ id: workspace.id, externalInstanceId: workspace.externalInstanceId })
+        .from(workspace)
+        .where(
+          and(
+            eq(workspace.cloudProviderId, asciiProvider.id),
+            eq(workspace.status, "running"),
+            eventIsCurrent,
+            sql`${workspace.externalInstanceId} like ${`%${boxId}%`}`,
+          ),
+        );
+      const ids = candidates
+        .filter((candidate) => {
+          try {
+            return JSON.parse(candidate.externalInstanceId).boxId === boxId;
+          } catch {
+            return false;
+          }
+        })
+        .map((candidate) => candidate.id);
+      if (ids.length === 0) return { updated: [] };
+
+      const updated = await updateWorkspaceStatusAndInvalidate(
+        and(inArray(workspace.id, ids), eq(workspace.status, "running"), eventIsCurrent),
+        { status: "paused", pausedAt: eventDate, updatedAt: new Date() },
+      );
+      await Promise.all(
+        updated.map((updatedWorkspace) =>
+          Promise.all([
+            closeUsageSession(updatedWorkspace.id, event === "error" ? "error" : "provider_auto"),
+            deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
+          ]),
+        ),
+      );
+      return { updated };
     }),
 
   /**

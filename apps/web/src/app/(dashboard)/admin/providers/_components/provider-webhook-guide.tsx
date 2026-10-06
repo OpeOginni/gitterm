@@ -37,6 +37,13 @@ const WEBHOOK_SETUPS: Record<string, WebhookSetup> = {
     events: ["sandbox.created", "sandbox.state.updated"],
     secret: "Paste Daytona's signing secret into Webhook Signing Secret below. Required.",
   },
+  ascii: {
+    route: "ascii.handleWebhook",
+    where: "boat dashboard → Webhooks",
+    events: ["Ready", "Error", "Archived", "Hydrated"],
+    secret:
+      "boat shows the whsec_ secret once; paste it into Webhook Signing Secret below. Required.",
+  },
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

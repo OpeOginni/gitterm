@@ -261,6 +261,17 @@ export const daytonaWebhookProcedure = t.procedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+export const asciiWebhookProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.asciiWebhookDelivery || !ctx.asciiWebhookTimestamp || !ctx.asciiWebhookSignature) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "boat webhook signature headers required",
+    });
+  }
+
+  return next({ ctx });
+});
+
 export const cloudflareWebhookProcedure = t.procedure.use(({ ctx, next }) => {
   const token = ctx.bearerToken;
 

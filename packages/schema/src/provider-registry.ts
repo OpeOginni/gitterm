@@ -409,6 +409,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     category: "sandbox",
     configSchema: z.object({
       apiKey: z.string().min(1, "API key is required"),
+      webhookSecret: z.string().optional(),
     }),
     fields: [
       {
@@ -418,6 +419,14 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         isRequired: true,
         isEncrypted: true,
         sortOrder: 1,
+      },
+      {
+        fieldName: "webhookSecret",
+        fieldLabel: "Webhook Signing Secret",
+        fieldType: "password",
+        isRequired: false,
+        isEncrypted: true,
+        sortOrder: 2,
       },
     ],
   },
