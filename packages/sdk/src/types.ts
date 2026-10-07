@@ -246,7 +246,7 @@ export type McpConnectionDetails = {
   revision?: number;
   integration: "mcp" | "executor";
   url: string;
-  authType: "none" | "headers";
+  authType: "none" | "bearer" | "headers";
   codemode: boolean;
   toolCount: number | null;
   serverInfo: { name: string; version: string } | null;

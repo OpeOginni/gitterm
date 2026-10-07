@@ -19,6 +19,15 @@ import { coordinate } from "../coordination";
 type McpRow = typeof mcpConnection.$inferSelect;
 export const mcpAuthContext = (id: string) => `gitterm:mcp:${id}:auth`;
 
+/** Bearer tokens are stored as an Authorization header; label them so the edit form can tell. */
+function mcpAuthType(auth: McpAuthentication): McpRow["authType"] {
+  if (auth.type === "none") return "none";
+  const names = Object.keys(auth.headers);
+  return names.length === 1 && /^Bearer \S/.test(auth.headers.Authorization ?? "")
+    ? "bearer"
+    : "headers";
+}
+
 export function mcpPublicConnection(row: McpRow): Connection {
   return {
     id: row.id,
@@ -143,6 +152,7 @@ export async function testMcpConnection(userId: string, id: string) {
       }
     }
   } catch (error) {
+    console.warn(`[mcp] connection test failed for ${row.id}:`, error);
     status =
       error instanceof StreamableHTTPError && [401, 403].includes(error.code ?? 0)
         ? "needs_auth"
@@ -213,7 +223,7 @@ export async function createMcpConnection(
       integration: input.integration,
       name: input.name,
       url: input.url,
-      authType: input.authentication.type,
+      authType: mcpAuthType(input.authentication),
       codemode: input.codemode,
       encryptedAuth: getEncryptionService().encrypt(
         JSON.stringify(input.authentication),
@@ -269,7 +279,7 @@ export async function updateMcpConnection(
         updatedAt: new Date(),
         ...(input.authentication
           ? {
-              authType: input.authentication.type,
+              authType: mcpAuthType(input.authentication),
               encryptedAuth: getEncryptionService().encrypt(
                 JSON.stringify(input.authentication),
                 mcpAuthContext(row.id),

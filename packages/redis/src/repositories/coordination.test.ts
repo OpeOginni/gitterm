@@ -50,9 +50,9 @@ integration("a connection is tested at most once per cooldown", async () => {
   expect(await repository!.allowMcpTest(randomUUID(), connection)).toBe(false);
 });
 
-integration("an owner gets six tests a minute across connections", async () => {
+integration("an owner gets twenty tests a minute across connections", async () => {
   const user = randomUUID();
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 20; i++) {
     expect(await repository!.allowMcpTest(user, randomUUID())).toBe(true);
   }
   expect(await repository!.allowMcpTest(user, randomUUID())).toBe(false);

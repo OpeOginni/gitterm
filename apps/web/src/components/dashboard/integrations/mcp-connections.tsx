@@ -106,11 +106,12 @@ function Field({
 }
 
 function authentication(current: Form): McpAuthentication | undefined {
-  const type = current.authMode === "bearer" ? "headers" : current.authMode;
   const keep =
-    current.id && current.url === current.originalUrl && type === current.originalAuthType;
+    current.id &&
+    current.url === current.originalUrl &&
+    current.authMode === current.originalAuthType;
   if (keep && !current.token && !current.headers) return undefined;
-  if (type === "none") return { type: "none" };
+  if (current.authMode === "none") return { type: "none" };
   if (current.authMode === "bearer") {
     if (!current.token.trim()) throw new Error("Enter a bearer token");
     return { type: "headers", headers: { Authorization: `Bearer ${current.token.trim()}` } };
@@ -487,7 +488,11 @@ export function McpConnections({
                           {statusLabels[connection.status]}
                         </span>
                         {details.toolCount !== null ? ` · ${details.toolCount} tools` : ""} ·{" "}
-                        {details.authType === "none" ? "No auth" : "Encrypted headers"}
+                        {details.authType === "none"
+                          ? "No auth"
+                          : details.authType === "bearer"
+                            ? "Bearer token"
+                            : "Encrypted headers"}
                       </p>
                     </div>
                   </div>

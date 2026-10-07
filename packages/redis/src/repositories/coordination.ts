@@ -22,7 +22,7 @@ const ALLOW_MCP_TEST = `
 if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
 local count = redis.call('INCR', KEYS[2])
 if count == 1 then redis.call('PEXPIRE', KEYS[2], 60000) end
-if count > 6 then return 0 end
+if count > 20 then return 0 end
 redis.call('SET', KEYS[1], '1', 'PX', ARGV[1])
 return 1`;
 
@@ -30,7 +30,7 @@ return 1`;
 export class CoordinationRepository {
   constructor(
     private readonly redis: Pick<RedisClient, "eval"> = getRedisClient(),
-    private readonly timing = { botLeaseMs: 90_000, mcpCooldownMs: 30_000 },
+    private readonly timing = { botLeaseMs: 90_000, mcpCooldownMs: 5_000 },
   ) {}
   async claimBot(botId: string, tokenId: string, leaseId: string): Promise<boolean> {
     return (
