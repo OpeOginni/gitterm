@@ -126,5 +126,10 @@ export function codeSnippet(platform: Platform): string {
     `const bot = ${factory}(await withSavedConfig());`,
     "await bot.start();",
     "",
+    "// Stopping releases the bot's claim, so the next start doesn't wait for it to expire.",
+    "const shutdown = () => void bot.stop().finally(() => process.exit(0));",
+    'process.once("SIGINT", shutdown);',
+    'process.once("SIGTERM", shutdown);',
+    "",
   ].join("\n");
 }
