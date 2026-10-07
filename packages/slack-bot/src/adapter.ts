@@ -117,7 +117,13 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         ),
       }))
       // Unknown means unverified: treat as a guest rather than let them in.
-      .catch(() => ({ id, name: id, guest: true }));
+      .catch((error: unknown) => {
+        console.warn(
+          `Could not look up Slack user ${id}, so they are treated as a guest (the app needs users:read):`,
+          error instanceof Error ? error.message : error,
+        );
+        return { id, name: id, guest: true };
+      });
     users.delete(id);
     users.set(id, { user: known, at: Date.now() });
     if (users.size > 2_000) users.delete(users.keys().next().value!);
@@ -443,6 +449,8 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
     },
 
     async mark(message, state) {
+      // Only a message that starts a thread gets reactions; inside one, the replies say enough.
+      if (message.inThread) return;
       await client.reactions.add({
         channel: message.thread.channel,
         timestamp: message.id,

@@ -58,11 +58,16 @@ export async function openStatusLine(
     const ms = Date.now() - startedAt;
     return ms >= TICK_MS ? ` (${minutes(ms)} min)` : "";
   };
-  const render = () => {
-    if (id) return adapter.edit(thread, id, `${current.message}${elapsed()}`).catch(noop);
-    const text = current.indicator && `${current.indicator}${elapsed()}`;
-    return adapter.indicate?.(thread, text).catch(noop);
-  };
+  // Updates go out one at a time, so a late "working" can't land after the final line.
+  let queue: Promise<unknown> = Promise.resolve();
+  const send = (update: () => Promise<unknown> | undefined) =>
+    (queue = queue.then(update).catch(noop));
+  const render = () =>
+    send(() => {
+      if (id) return adapter.edit(thread, id, `${current.message}${elapsed()}`);
+      const text = current.indicator && `${current.indicator}${elapsed()}`;
+      return adapter.indicate?.(thread, text);
+    });
   const timer = setInterval(() => {
     if (id || current.indicator) void render();
   }, TICK_MS);
@@ -82,16 +87,15 @@ export async function openStatusLine(
     async finish(text) {
       end();
       if (id) {
-        await adapter.edit(thread, id, text).catch(noop);
+        await send(() => adapter.edit(thread, id, text));
         return;
       }
-      await adapter.indicate?.(thread, "").catch(noop);
+      await send(() => adapter.indicate?.(thread, ""));
       await adapter.post(thread, text).catch(noop);
     },
     async remove() {
       end();
-      if (id) await adapter.remove(thread, id).catch(noop);
-      else await adapter.indicate?.(thread, "").catch(noop);
+      await send(() => (id ? adapter.remove(thread, id) : adapter.indicate?.(thread, "")));
     },
     stop: end,
   };

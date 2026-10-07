@@ -128,5 +128,13 @@ export function agentInstructions(platform: string, extra: string | undefined): 
     `- Use the question tool only when a decision genuinely blocks you; the person answers with buttons in ${platform}. Do not ask for confirmation of routine steps.`,
     `- You cannot send files to ${platform}; describe results or link to them instead.`,
   ];
-  return [lines.join("\n"), extra?.trim()].filter(Boolean).join("\n\n");
+  const owner = extra?.trim();
+  if (!owner) return lines.join("\n");
+  // Said outright: otherwise a model may follow a default above that the owner's text contradicts.
+  return [
+    lines.join("\n"),
+    "## Instructions from this bot's owner",
+    "These take precedence over the defaults above.",
+    owner,
+  ].join("\n\n");
 }

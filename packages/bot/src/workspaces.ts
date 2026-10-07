@@ -60,7 +60,8 @@ export async function githubFor(gitterm: GittermClient, repo: Repo): Promise<str
   );
 }
 
-const RESUME_TIMEOUT_MS = 5 * 60_000;
+/** The server caps ensureRunning waits at 4 minutes. */
+const RESUME_TIMEOUT_MS = 4 * 60_000;
 
 /** Channels share one sandbox per repository. */
 export const SHARED_SPACE = "shared";

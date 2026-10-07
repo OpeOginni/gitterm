@@ -105,6 +105,11 @@ describe("buildPrompt", () => {
     expect(spaceOf(one)).not.toBe(spaceOf({ ...one, direct: true }));
     expect(spaceOf(one, true)).toBe(spaceOf({ ...one, thread: { channel: "C2" } }, true));
     expect(agentInstructions("Slack", undefined)).toContain("use a separate git worktree");
+    const owned = agentInstructions("Slack", "  Always ask how they are.  ");
+    expect(owned).toEndWith(
+      "## Instructions from this bot's owner\n\nThese take precedence over the defaults above.\n\nAlways ask how they are.",
+    );
+    expect(agentInstructions("Slack", "   ")).toBe(agentInstructions("Slack", undefined));
   });
   test("quotes unseen thread messages and attaches each image once", () => {
     const prompt = buildPrompt({

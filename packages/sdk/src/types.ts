@@ -54,6 +54,7 @@ export type WorkspaceRef = string | { id: string };
 export type RunRef = { workspaceId: string; id: string };
 
 export type WaitOptions = {
+  /** For `ensureRunning` the server maximum is 240000 (4 minutes). */
   timeoutMs?: number;
   pollIntervalMs?: number;
   /** Abort the wait early; the promise rejects with code `ABORTED`. */
