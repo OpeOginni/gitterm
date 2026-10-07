@@ -94,7 +94,7 @@ export default uploadSourceMaps
       sourcemaps: {
         enabled: true,
         releaseName: "gitterm-web",
-        releaseVersion: process.env.POSTHOG_RELEASE_VERSION,
+        releaseVersion: process.env.POSTHOG_RELEASE_VERSION ?? process.env.RAILWAY_GIT_COMMIT_SHA,
         deleteAfterUpload: true,
       },
     })

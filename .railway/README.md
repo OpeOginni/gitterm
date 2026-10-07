@@ -110,6 +110,30 @@ command reports the API error without falling back to a configuration apply.
 
 ## Notes
 
+### PostHog source maps
+
+The managed `web` service uploads source maps during its production build when
+`NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`, and `POSTHOG_API_KEY` are set.
+Set the personal API key in Railway's `web` service variables (seal it); never put
+its value in `.railway/railway.ts`. Give it **Error Tracking: Write** access and
+restrict it to the **Gitterm** project. No other scopes are needed for uploads.
+
+The IaC sets `POSTHOG_PROJECT_ID=186242` and
+`POSTHOG_API_HOST=https://eu.posthog.com`. The browser ingestion host is
+`https://eu.i.posthog.com`. Releases use Railway's `RAILWAY_GIT_COMMIT_SHA`
+automatically; `POSTHOG_RELEASE_VERSION` can override this outside Railway.
+Turbo forwards the private upload key and disables web-build caching so uploads
+run for the build being deployed. Uploaded maps are removed from build output.
+
+Review `railway config plan` before applying the IaC, then rebuild/redeploy `web`.
+Verify uploads in PostHog **Error Tracking → Configuration → Symbol sets** and
+look for source-map processing/upload messages in Railway's build logs.
+This uploads Next.js maps only, not the separate `Server` service's bundles.
+Only the `Server` service uses the preserved `POSTHOG_ERROR_TRACKING_ENABLED`,
+`POSTHOG_PROJECT_KEY`, and `POSTHOG_HOST` variables for optional runtime reporting.
+The `web` service has browser error tracking and source-map uploads only; it does
+not initialize server-side error reporting.
+
 - `railway config plan` is safe and does not change Railway.
 - `railway config apply` previews changes and asks before applying unless you pass `--yes`.
 - Destructive changes in non-interactive or agent sessions require `railway config apply --confirm-destructive` after reviewing the plan.

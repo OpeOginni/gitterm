@@ -84,6 +84,7 @@ export default defineRailway(() => {
       buildCommand: "turbo build --filter=web",
       watchPatterns: [
         "apps/web/**/*",
+        "packages/analytics/**/*",
         "packages/api/**/*",
         "packages/auth/**/*",
         "packages/config/**/*",
@@ -113,6 +114,10 @@ export default defineRailway(() => {
       NEXT_PUBLIC_LISTENER_URL: preserve(),
       NEXT_PUBLIC_POSTHOG_HOST: preserve(),
       NEXT_PUBLIC_POSTHOG_KEY: preserve(),
+      // Personal key for build-time source-map uploads; set/seal its value in Railway.
+      POSTHOG_API_KEY: preserve(),
+      POSTHOG_PROJECT_ID: "186242",
+      POSTHOG_API_HOST: "https://eu.posthog.com",
       NEXT_PUBLIC_ROUTING_MODE: preserve(),
       NEXT_PUBLIC_SERVER_URL: preserve(),
       NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY: preserve(),
@@ -139,6 +144,7 @@ export default defineRailway(() => {
       buildCommand: "turbo build --filter=server",
       watchPatterns: [
         "apps/server/**/*",
+        "packages/analytics/**/*",
         "packages/agent-runtime/**/*",
         "packages/api/**/*",
         "packages/auth/**/*",
@@ -190,6 +196,9 @@ export default defineRailway(() => {
       POLAR_PRO_PRODUCT_ID: preserve(),
       POLAR_STARTER_PRODUCT_ID: preserve(),
       POLAR_WEBHOOK_SECRET: preserve(),
+      POSTHOG_ERROR_TRACKING_ENABLED: preserve(),
+      POSTHOG_PROJECT_KEY: preserve(),
+      POSTHOG_HOST: preserve(),
       REDIS_URL: preserve(),
       ROUTING_MODE: preserve(),
       WORKLOAD_IDENTITY_ISSUER: preserve(),

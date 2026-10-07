@@ -7,6 +7,19 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**"]
     },
+    "web#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "cache": false,
+      "env": [
+        "POSTHOG_PROJECT_ID",
+        "POSTHOG_API_HOST",
+        "POSTHOG_RELEASE_VERSION",
+        "RAILWAY_GIT_COMMIT_SHA"
+      ],
+      "passThroughEnv": ["POSTHOG_API_KEY"]
+    },
     "check-types": {
       "dependsOn": ["^build", "^check-types"]
     },
