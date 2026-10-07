@@ -26,6 +26,9 @@ import {
   type RuntimeTarget,
 } from "./types";
 
+/** How long a prompt waits for a freshly started OpenCode to list its model. */
+const MODEL_READY_MS = 30_000;
+
 /** OpenCode 2 through `@opencode/client` (`{ id, type, data }` events, questions as forms). */
 export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
   const client = createOpencodeClient(target);
@@ -42,6 +45,26 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
       );
     }
     if (agent) await call(client.session.switchAgent({ sessionID, agent }, options()));
+  }
+
+  /**
+   * OpenCode fills its model catalog asynchronously after it starts. A prompt that arrives first
+   * never runs (it logs "Model unavailable" and doesn't retry), so wait until the model is listed.
+   */
+  async function modelReady(model: { providerID: string; modelID: string }) {
+    const deadline = Date.now() + MODEL_READY_MS;
+    for (;;) {
+      const { data } = await call(
+        client.model.list({ location: { directory: target.directory } }, options()),
+      );
+      if (data.some((entry) => entry.providerID === model.providerID && entry.id === model.modelID))
+        return;
+      if (Date.now() >= deadline)
+        throw new Error(
+          `OpenCode does not offer ${model.providerID}/${model.modelID}; check the model ID and its credential`,
+        );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
   }
 
   return {
@@ -62,6 +85,8 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
     },
 
     async prompt(input) {
+      const modelRef = parseModelRef(input.model);
+      if (modelRef) await modelReady(modelRef);
       await switchSessionOptions(input.sessionId, input.agent, input.model);
       await call(
         client.session.prompt(

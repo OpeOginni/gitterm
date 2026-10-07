@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { formRequest, normalizeMessage, parseV2Signal, selectRunMessages } from "./v2";
+import {
+  createV2Runtime,
+  formRequest,
+  normalizeMessage,
+  parseV2Signal,
+  selectRunMessages,
+} from "./v2";
 
 // Payloads captured from `opencode2 serve` 0.0.0-beta-19059 (`GET /api/event`).
 const permissionAsked = {
@@ -292,5 +298,43 @@ describe("v2 message snapshots", () => {
       ],
       error: null,
     });
+  });
+});
+
+describe("prompt", () => {
+  test("waits for a freshly started OpenCode to list the model before prompting", async () => {
+    const requests: string[] = [];
+    let listed = 0;
+    // The catalog fills in after startup: the model appears on the third look.
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const { pathname } = new URL(request.url);
+        requests.push(`${request.method} ${pathname}`);
+        if (pathname !== "/api/model") return new Response(null, { status: 204 });
+        const data = ++listed < 3 ? [] : [{ id: "glm", modelID: "glm", providerID: "opencode" }];
+        return Response.json({ location: { directory: "/w" }, data });
+      },
+    });
+    try {
+      const runtime = createV2Runtime({
+        url: `http://localhost:${server.port}`,
+        password: null,
+        directory: "/w",
+      });
+      // The fake doesn't model prompt responses; what matters is when the prompt is sent.
+      await runtime
+        .prompt({ sessionId: "ses_1", messageId: "msg_1", prompt: "hi", model: "opencode/glm" })
+        .catch(() => undefined);
+    } finally {
+      await server.stop(true);
+    }
+    expect(requests).toEqual([
+      "GET /api/model",
+      "GET /api/model",
+      "GET /api/model",
+      "POST /api/session/ses_1/model",
+      "POST /api/session/ses_1/prompt",
+    ]);
   });
 });

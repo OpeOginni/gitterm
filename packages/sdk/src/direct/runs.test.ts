@@ -94,6 +94,8 @@ describe("direct run interaction", () => {
         }
         return new Response(null, { status: 204 });
       }
+      if (path === "/api/model")
+        return Response.json({ data: [{ id: "test", modelID: "test", providerID: "openai" }] });
       if (path === "/api/session/ses_test") return Response.json({ data: { id: "ses_test" } });
       if (path === "/api/session/active")
         return Response.json({ data: phase === "done" ? {} : { ses_test: {} } });
