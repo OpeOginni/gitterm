@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type CodeLanguage = "env" | "shell" | "ts";
+export type CodeLanguage = "env" | "json" | "shell" | "ts";
 
 /**
  * Just enough to read the snippets on the bot page: one pattern per language, each capture group
@@ -8,6 +8,7 @@ export type CodeLanguage = "env" | "shell" | "ts";
  */
 const PATTERNS: Record<CodeLanguage, { pattern: RegExp; kinds: string[] }> = {
   env: { pattern: /(#.*)|(^[A-Z0-9_]+)(?==)/gm, kinds: ["comment", "key"] },
+  json: { pattern: /("[^"]*")(?=:)|("[^"]*")/g, kinds: ["key", "string"] },
   shell: {
     pattern: /(#.*)|("[^"]*"|'[^']*')|(^(?:docker|npx|bunx|node)\b)|(\s--?[a-zA-Z][\w-]*)|(\\$)/gm,
     kinds: ["comment", "string", "command", "flag", "punct"],

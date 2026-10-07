@@ -24,7 +24,8 @@ function Steps({ items }: { items: ReactNode[] }) {
 function SlackSetup({ name }: { name: string }) {
   // Slack caps app and bot user names at 35 characters.
   const botName = name.slice(0, 35).trim();
-  const href = `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(JSON.stringify(slackManifest(botName)))}`;
+  const manifest = JSON.stringify(slackManifest(botName), null, 2);
+  const href = `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(manifest)}`;
   return (
     <div className="space-y-4">
       <Button asChild className="h-9 gap-1.5">
@@ -35,12 +36,26 @@ function SlackSetup({ name }: { name: string }) {
       </Button>
       <Steps
         items={[
-          "Install it to your workspace and copy its two tokens into the .env.",
+          <>
+            If Slack doesn't fill in the manifest, choose <em>Create New App → From a manifest</em>,
+            pick your workspace and paste the one below. For an app you already made, paste it under{" "}
+            <em>App Manifest</em> and reinstall.
+          </>,
+          <>
+            <em>Install to Workspace</em>, then copy the <em>Bot User OAuth Token</em> into{" "}
+            <span className={code}>SLACK_BOT_TOKEN</span>.
+          </>,
+          <>
+            Under <em>Basic Information → App-Level Tokens</em>, generate one with{" "}
+            <span className={code}>connections:write</span> into{" "}
+            <span className={code}>SLACK_APP_TOKEN</span>.
+          </>,
           <>
             Start the bot, then <span className={code}>/invite @{botName}</span> in a channel.
           </>,
         ]}
       />
+      <CodeBlock code={manifest} copyLabel="Manifest" language="json" collapsible />
     </div>
   );
 }

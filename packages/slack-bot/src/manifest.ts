@@ -11,11 +11,7 @@ export function slackManifest(name = "GitTerm Agent") {
     features: {
       bot_user: { display_name: name, always_online: true },
       // Lets people DM the bot; each DM gets its own sandbox.
-      app_home: {
-        home_tab_enabled: false,
-        messages_tab_enabled: true,
-        messages_tab_read_only_enabled: false,
-      },
+      app_home: { messages_tab_enabled: true },
     },
     oauth_config: {
       scopes: {
@@ -36,9 +32,7 @@ export function slackManifest(name = "GitTerm Agent") {
         bot_events: ["app_mention", "message.channels", "message.groups", "message.im"],
       },
       interactivity: { is_enabled: true },
-      org_deploy_enabled: false,
       socket_mode_enabled: true,
-      token_rotation_enabled: false,
     },
   };
 }

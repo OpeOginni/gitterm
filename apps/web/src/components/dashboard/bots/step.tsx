@@ -208,11 +208,14 @@ export function CodeBlock({
   code,
   copyLabel,
   language,
+  collapsible = false,
 }: {
   code: string;
   copyLabel: string;
   language: CodeLanguage;
+  collapsible?: boolean;
 }) {
+  const [open, setOpen] = useState(!collapsible);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
@@ -223,22 +226,44 @@ export function CodeBlock({
   };
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-fill">
-      <div className="flex items-center justify-between border-b border-line py-1 pr-1 pl-4">
+      <div
+        className={cn(
+          "flex items-center justify-between py-1 pr-1 pl-4",
+          open && "border-b border-line",
+        )}
+      >
         <span className="font-mono text-[11px] text-fg-4">{copyLabel}</span>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={copy}
-          className="h-7 gap-1.5 text-xs text-fg-3"
-        >
-          <Copy className="size-3.5" />
-          Copy
-        </Button>
+        <div className="flex items-center">
+          {collapsible ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              aria-expanded={open}
+              onClick={() => setOpen((value) => !value)}
+              className="h-7 gap-1.5 text-xs text-fg-3"
+            >
+              {open ? "Hide" : "Show"}
+              <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={copy}
+            className="h-7 gap-1.5 text-xs text-fg-3"
+          >
+            <Copy className="size-3.5" />
+            Copy
+          </Button>
+        </div>
       </div>
-      <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed text-fg-2">
-        {highlight(code, language)}
-      </pre>
+      {open ? (
+        <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed text-fg-2">
+          {highlight(code, language)}
+        </pre>
+      ) : null}
     </div>
   );
 }
