@@ -69,6 +69,7 @@ export default defineRailway(() => {
     replicas: { "us-east4-eqdc4a": 1 },
     networking: { privateNetworkEndpoint: "idle-instance-reaper" },
     env: {
+      DEPLOYMENT_MODE: preserve(),
       ENABLE_IDLE_REAPING: preserve(),
       ENABLE_QUOTA_ENFORCEMENT: preserve(),
       INTERNAL_API_KEY: preserve(),
@@ -228,6 +229,7 @@ export default defineRailway(() => {
     replicas: { "europe-west4-drams3a": 1 },
     networking: { privateNetworkEndpoint: "anon-instance-reaper" },
     env: {
+      DEPLOYMENT_MODE: preserve(),
       ENABLE_IDLE_REAPING: preserve(),
       ENABLE_QUOTA_ENFORCEMENT: preserve(),
       INTERNAL_API_KEY: preserve(),
