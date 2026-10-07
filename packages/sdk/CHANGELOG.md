@@ -4,7 +4,35 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
-## Unreleased
+## 0.11.0
+
+### Added
+
+- `SavedBot.updatedAt` and `bots.acquireLease()`'s `updatedAt`: when a bot's saved settings last
+  changed, so a running bot can pick up dashboard edits. Hosted users need the API redeployed.
+
+## 0.10.0
+
+### Breaking
+
+- When the API answers with an error, `GittermError.cause` is no longer the internal tRPC client
+  error, which printed the raw HTTP response (and, against a development server, its stack trace).
+  Use `code`, `status`, and `message`. `NETWORK` errors still carry the underlying fetch failure as
+  `cause`.
+
+### Added
+
+- `GittermError.status`: the HTTP status of the API response, `undefined` when the server never
+  answered.
+
+### Changed
+
+- `UNAUTHORIZED` errors no longer repeat themselves ("Authentication failed: Authentication
+  required"); they keep the server's message and point at the API token. The API now reports a
+  rejected token as "Invalid, expired or revoked API token" and invalid input as readable lines
+  instead of JSON; hosted users need the API redeployed.
+
+## 0.9.0
 
 ### Added
 

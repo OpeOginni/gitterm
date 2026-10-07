@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/bot",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Chat-platform-agnostic engine for GitTerm agent bots: one sandbox per repository, one agent session per thread",
   "keywords": [
     "agent",
@@ -33,7 +33,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@gitterm/sdk": "workspace:^0.9.0"
+    "@gitterm/sdk": "workspace:^0.11.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.6",

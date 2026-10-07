@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/discord-bot",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Discord bot that runs a coding agent on your repository in a GitTerm sandbox",
   "keywords": [
     "agent",
@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@gitterm/bot": "workspace:^",
-    "@gitterm/sdk": "workspace:^0.9.0",
+    "@gitterm/sdk": "workspace:^0.11.0",
     "discord.js": "^14.27.0"
   },
   "devDependencies": {
