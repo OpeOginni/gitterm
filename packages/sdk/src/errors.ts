@@ -41,13 +41,18 @@ export const WORKSPACE_LIFECYCLE_ERROR_CODES: readonly WorkspaceLifecycleErrorCo
 
 export class GittermError extends Error {
   readonly code: GittermErrorCode;
-  readonly cause?: unknown;
+  /** HTTP status of the API response; undefined when the server never answered. */
+  readonly status: number | undefined;
 
-  constructor(code: GittermErrorCode, message: string, options: { cause?: unknown } = {}) {
-    super(message);
+  constructor(
+    code: GittermErrorCode,
+    message: string,
+    options: { cause?: unknown; status?: number } = {},
+  ) {
+    super(message, "cause" in options ? { cause: options.cause } : undefined);
     this.name = "GittermError";
     this.code = code;
-    this.cause = options.cause;
+    this.status = options.status;
   }
 }
 
@@ -57,7 +62,7 @@ export class WorkspaceLifecycleError extends GittermError {
   constructor(
     code: WorkspaceLifecycleErrorCode,
     message: string,
-    options: { cause?: unknown } = {},
+    options: { cause?: unknown; status?: number } = {},
   ) {
     super(code, message, options);
     this.name = "WorkspaceLifecycleError";

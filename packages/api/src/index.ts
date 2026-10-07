@@ -1,4 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
+import { z } from "zod";
 import type { Context } from "./context";
 import { workspaceJWT } from "./service/auth/workspace-jwt";
 import env from "@gitterm/env/server";
@@ -19,6 +20,8 @@ export const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {
     return {
       ...shape,
+      // Invalid input otherwise arrives as the JSON of every issue.
+      message: error.cause instanceof z.ZodError ? z.prettifyError(error.cause) : shape.message,
       data: {
         ...shape.data,
         workspaceLifecycleCode:
@@ -80,7 +83,10 @@ export const accountProcedure = (requiredScope: ApiTokenScope) =>
     const token = ctx.bearerToken;
     const verified = token ? await verifyApiToken(token) : null;
     if (!verified) {
-      throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: token ? "Invalid, expired or revoked API token" : "Authentication required",
+      });
     }
     if (!verified.scopes.includes(requiredScope)) {
       throw new TRPCError({

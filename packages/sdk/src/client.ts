@@ -411,38 +411,40 @@ function toGittermError(serverUrl: string, error: unknown): GittermError {
   if (error instanceof GittermError) return error;
 
   if (error instanceof TRPCClientError) {
-    const data = error.data as { code?: string; workspaceLifecycleCode?: unknown } | undefined;
-    const trpcCode = data?.code;
+    const data = error.data as
+      | { code?: string; httpStatus?: number; workspaceLifecycleCode?: unknown }
+      | undefined;
     // No error envelope means the request never produced a tRPC response
     // (connection refused, DNS failure, non-tRPC proxy error, ...).
-    if (!error.data) {
+    if (!data) {
       return new GittermError("NETWORK", `Could not reach the GitTerm server at ${serverUrl}`, {
-        cause: error,
+        cause: error.cause ?? error,
       });
     }
-    const code = mapTrpcCode(trpcCode);
+    // The server answered: its code, status and message are the whole story, so the
+    // transport error is not attached (it would print the raw response).
+    const status = { status: data.httpStatus };
     const structuredLifecycleCode = WORKSPACE_LIFECYCLE_ERROR_CODES.find(
-      (candidate) => candidate === data?.workspaceLifecycleCode,
+      (candidate) => candidate === data.workspaceLifecycleCode,
     );
     if (structuredLifecycleCode) {
-      return new WorkspaceLifecycleError(structuredLifecycleCode, error.message, { cause: error });
+      return new WorkspaceLifecycleError(structuredLifecycleCode, error.message, status);
     }
     if (error.message.startsWith("INPUT_NOT_PENDING:"))
-      return new GittermError("INPUT_NOT_PENDING", error.message, { cause: error });
+      return new GittermError("INPUT_NOT_PENDING", error.message, status);
     const credentialCode = credentialErrorCode(error.message);
-    if (credentialCode) return new GittermError(credentialCode, error.message, { cause: error });
+    if (credentialCode) return new GittermError(credentialCode, error.message, status);
     const lifecycleCode = WORKSPACE_LIFECYCLE_ERROR_CODES.find((candidate) =>
       error.message.startsWith(`${candidate}:`),
     );
-    if (lifecycleCode) {
-      return new WorkspaceLifecycleError(lifecycleCode, error.message, { cause: error });
-    }
+    if (lifecycleCode) return new WorkspaceLifecycleError(lifecycleCode, error.message, status);
+    const code = mapTrpcCode(data.code);
     return new GittermError(
       code,
       code === "UNAUTHORIZED"
-        ? `Authentication failed: ${error.message}. Check that the API token is valid and has not expired.`
+        ? `${error.message}. Check your GitTerm API token, or create a new one in the dashboard.`
         : error.message,
-      { cause: error },
+      status,
     );
   }
 
