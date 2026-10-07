@@ -6,11 +6,20 @@ export type McpWorkspaceConnection = {
   headers: Record<string, string>;
 };
 
-export function workspaceMcpServerName(connectionId: string): string {
-  return `gitterm_${connectionId.replace(/-/g, "_")}`;
+/**
+ * The name the user saved, so it is recognisable in OpenCode, in the characters OpenCode allows.
+ * Capped because tool names are `<server>_<tool>` and providers limit those to 64 characters.
+ * A name that is empty or already taken gets the start of the connection id appended.
+ */
+function serverName(connection: McpWorkspaceConnection, taken: (name: string) => boolean) {
+  const base = connection.name
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32);
+  if (base && !taken(base)) return base;
+  return `${base || "mcp"}_${connection.connectionId.slice(0, 8)}`;
 }
 
-/** Connection IDs, rather than display names, prevent normalization collisions. */
 export function withMcpConnections(
   config: Record<string, unknown> | null | undefined,
   connections: McpWorkspaceConnection[],
@@ -26,9 +35,10 @@ export function withMcpConnections(
     : {};
   // V2 explicitly supports mixed members inside mcp. Leave legacy entries intact so
   // OpenCode can normalize all their OAuth/timeout fields without a partial migration.
+  const taken = (candidate: string) => candidate in servers || candidate in mcp;
   for (const connection of connections) {
-    const name = workspaceMcpServerName(connection.connectionId);
-    if (name in servers || name in mcp)
+    const name = serverName(connection, taken);
+    if (taken(name))
       throw new Error(`GitTerm MCP server name conflicts with user configuration: ${name}`);
     const headers: Record<string, string> = {};
     Object.entries(connection.headers).forEach(([header, value], index) => {

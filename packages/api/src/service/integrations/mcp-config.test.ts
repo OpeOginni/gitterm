@@ -48,11 +48,29 @@ test("preserves legacy definitions, including OAuth, alongside new V2 entries", 
   const { config } = withMcpConnections({ mcp: { old } }, connections);
   expect((config!.mcp as any).old).toEqual(old);
 });
+test("servers are named as the user saved them, suffixed only when a name is taken", () => {
+  const { config } = withMcpConnections(undefined, [
+    { ...connections[0]!, name: "Context7" },
+    { ...connections[1]!, name: "Context7" },
+    { ...connections[0]!, connectionId: "33333333-3333-4333-8333-333333333333", name: "!!" },
+  ]);
+  expect(Object.keys((config!.mcp as any).servers)).toEqual([
+    "Context7",
+    "Context7_22222222",
+    "mcp_33333333",
+  ]);
+  expect(
+    Object.keys((withMcpConnections(undefined, connections).config!.mcp as any).servers),
+  ).toEqual(["same_name", "same_name_22222222"]);
+});
 test("never silently overwrites a conflicting server name", () => {
-  const name = `gitterm_${connections[0]!.connectionId.replace(/-/g, "_")}`;
-  expect(() => withMcpConnections({ mcp: { servers: { [name]: {} } } }, connections)).toThrow(
-    "conflicts",
-  );
+  const user = { type: "remote", url: "https://mine.example/mcp" };
+  const { config } = withMcpConnections({ mcp: { servers: { same_name: user } } }, connections);
+  const servers = (config!.mcp as any).servers;
+  expect(servers.same_name).toBe(user);
+  expect(servers.same_name_11111111.url).toBe(connections[0]!.url);
+  const taken = { same_name_11111111: {}, same_name: {} };
+  expect(() => withMcpConnections({ mcp: { servers: taken } }, connections)).toThrow("conflicts");
 });
 test("OpenCode gets credentials through isolated environment substitutions, not literal config", () => {
   const result = opencodeProvisioner.provision({
