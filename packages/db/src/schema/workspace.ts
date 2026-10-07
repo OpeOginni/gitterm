@@ -179,6 +179,16 @@ export const volume = pgTable("volume", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/** Durable teardown intent. Kept until provider and local cleanup both succeed. */
+export const workspaceTermination = pgTable("workspace_termination", {
+  workspaceId: uuid("workspace_id")
+    .primaryKey()
+    .references(() => workspace.id, { onDelete: "cascade" }),
+  generation: uuid("generation").notNull().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  leaseUntil: timestamp("lease_until"),
+});
+
 // Tracks each usage session (start → stop) for billing
 export const usageSession = pgTable("usage_session", {
   id: uuid("id").primaryKey().defaultRandom(),

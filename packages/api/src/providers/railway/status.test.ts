@@ -73,3 +73,56 @@ describe("Railway deployment status", () => {
     }
   });
 });
+
+describe("Railway teardown retries", () => {
+  test("an already-deleted service does not prevent deleting its remaining volume", async () => {
+    const provider = new RailwayProvider();
+    const volumes: string[] = [];
+    const railway = {
+      ServiceDelete: async () => {
+        throw new Error("Service not found");
+      },
+      VolumeDelete: async ({ id }: { id: string }) => {
+        volumes.push(id);
+        return { volumeDelete: true };
+      },
+    };
+    const client = spyOn(
+      provider as RailwayProvider & { getClient(): Promise<typeof railway> },
+      "getClient",
+    ).mockResolvedValue(railway);
+    try {
+      await provider.terminateWorkspace("deleted-service", "remaining-volume");
+      expect(volumes).toEqual(["remaining-volume"]);
+    } finally {
+      client.mockRestore();
+    }
+  });
+
+  test("an already-deleted volume is a successful retry, but provider failures still reject", async () => {
+    const provider = new RailwayProvider();
+    const railway = {
+      ServiceDelete: async () => ({ serviceDelete: true }),
+      VolumeDelete: async () => {
+        throw new Error("Volume not found");
+      },
+    };
+    const client = spyOn(
+      provider as RailwayProvider & { getClient(): Promise<typeof railway> },
+      "getClient",
+    ).mockResolvedValue(railway);
+    const logs = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await provider.terminateWorkspace("service", "deleted-volume");
+      railway.ServiceDelete = async () => {
+        throw new Error("Permission denied");
+      };
+      await expect(provider.terminateWorkspace("service", "volume")).rejects.toThrow(
+        "Permission denied",
+      );
+    } finally {
+      client.mockRestore();
+      logs.mockRestore();
+    }
+  });
+});

@@ -12,6 +12,14 @@ import { botSettingsSchema, type BotSettings } from "@gitterm/schema";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -56,6 +64,7 @@ const settingsKey = (settings: BotSettings) =>
   JSON.stringify(settings, Object.keys(botSettingsSchema.shape));
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+const sandboxes = (count: number) => `${count} ${count === 1 ? "sandbox" : "sandboxes"}`;
 
 /** The bot setup flow: creates a bot, or edits a saved one when `bot` is given. */
 export function BotSetup({ bot }: { bot?: SavedBot }) {
@@ -238,10 +247,23 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
       onError: (error) => toast.error(`Could not create a token: ${error.message}`),
     }),
   );
+  // Counted only while the dialog is open: the sandboxes deleting the bot terminates.
+  const { data: sandboxCount, isLoading: isCountingSandboxes } = useQuery({
+    ...trpc.bots.sandboxCount.queryOptions({ id: savedId ?? "" }),
+    enabled: confirmDelete && !!savedId,
+  });
   const remove = useMutation(
     trpc.bots.delete.mutationOptions({
-      onSuccess: () => {
+      onSuccess: (result) => {
+        toast.success(
+          `Bot deleted${result.terminated ? `, with ${sandboxes(result.terminated)}` : ""}.`,
+        );
+        if (result.failed)
+          toast.warning(
+            `${sandboxes(result.failed)} still need cleanup. GitTerm will retry automatically.`,
+          );
         refreshBots();
+        void queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
         router.push("/dashboard/bots" as Route);
       },
       onError: (error) => toast.error(`Could not delete the bot: ${error.message}`),
@@ -363,41 +385,55 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
         )}
         Save changes
       </Button>
-      {confirmDelete ? (
-        <div className="space-y-2">
-          <p className="whitespace-nowrap text-center text-xs text-fg-3">
-            Delete it and revoke its token?
-          </p>
-          <div className="grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        onClick={() => setConfirmDelete(true)}
+        className="flex w-full items-center justify-center gap-1.5 text-xs text-fg-4 transition-colors hover:text-destructive"
+      >
+        <Trash2 className="size-3.5" />
+        Delete bot
+      </button>
+      <Dialog
+        open={confirmDelete}
+        onOpenChange={(open) => !remove.isPending && setConfirmDelete(open)}
+      >
+        <DialogContent className="border-line bg-settings-dialog sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Delete {name.trim() || defaultName}?</DialogTitle>
+            <DialogDescription>
+              Its token stops working, and{" "}
+              {isCountingSandboxes
+                ? "every sandbox it created"
+                : sandboxCount
+                  ? `its ${sandboxes(sandboxCount)}`
+                  : "any sandbox it created"}{" "}
+              will be terminated. Work that wasn&apos;t pushed is lost. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
             <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 text-xs"
+              variant="outline"
               onClick={() => setConfirmDelete(false)}
+              disabled={remove.isPending}
             >
-              Keep
+              Cancel
             </Button>
             <Button
-              size="sm"
               variant="destructive"
-              className="h-8 text-xs"
+              className="gap-2"
               disabled={remove.isPending}
               onClick={() => remove.mutate({ id: savedId })}
             >
-              Delete
+              {remove.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              Delete bot
             </Button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(true)}
-          className="flex w-full items-center justify-center gap-1.5 text-xs text-fg-4 transition-colors hover:text-destructive"
-        >
-          <Trash2 className="size-3.5" />
-          Delete bot
-        </button>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   ) : undefined;
 

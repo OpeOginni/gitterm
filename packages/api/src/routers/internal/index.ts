@@ -44,6 +44,7 @@ import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { ANON_WORKSPACE_TTL_SECONDS } from "../../service/anon/anon-lifetime";
 import { isAnonEmail } from "../../service/anon/anon-user";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
+import { retryWorkspaceTerminations } from "../../service/workspace-termination";
 
 /**
  * Internal router for service-to-service communication
@@ -423,6 +424,8 @@ export const internalRouter = router({
       return { success: true };
     }),
 
+  retryWorkspaceTerminations: internalProcedure.mutation(() => retryWorkspaceTerminations()),
+
   sweepAwsResourcesInternal: internalProcedure.mutation(async () => {
     const sweepResult = await runAwsCleanupSweep();
     return {
@@ -578,6 +581,8 @@ export const internalRouter = router({
           and(
             eq(workspace.cloudProviderId, railwayProvider.id),
             eq(workspace.externalInstanceId, serviceId),
+            // A late failure webhook must not undo explicit deletion.
+            sql`${workspace.status} <> 'terminated'`,
           ),
           {
             status: "paused",

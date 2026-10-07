@@ -51,6 +51,17 @@ async function runOnce() {
 
   try {
     const internalClient = getInternalClient();
+    // Explicit deletion is durable and independent of idle-reaping or billing settings.
+    try {
+      const cleanup = await internalClient.internal.retryWorkspaceTerminations.mutate();
+      totalTransitions += cleanup.terminated;
+      if (cleanup.terminated || cleanup.failed)
+        console.log(
+          `[idle-reaper] Queued cleanup: ${cleanup.terminated} completed, ${cleanup.failed} pending`,
+        );
+    } catch (error) {
+      console.error("[idle-reaper] Failed to retry queued workspace cleanup:", error);
+    }
     // ========================================================================
     // 1. Pause idle workspaces (controlled by ENABLE_IDLE_REAPING)
     // ========================================================================

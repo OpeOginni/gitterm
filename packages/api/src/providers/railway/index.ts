@@ -20,6 +20,7 @@ import {
 } from "../ssh-access";
 import type { RailwayConfig } from "./types";
 import { DeploymentStatus } from "./graphql/generated/railway";
+import { isProviderResourceNotFound } from "../resource-not-found";
 export type { RailwayConfig } from "./types";
 
 const BASE_DOMAIN = env.BASE_DOMAIN;
@@ -470,12 +471,14 @@ export class RailwayProvider implements ComputeProvider {
   async terminateWorkspace(externalServiceId: string, externalVolumeId?: string): Promise<void> {
     const railway = await this.getClient();
     await railway.ServiceDelete({ id: externalServiceId }).catch((error) => {
+      if (isProviderResourceNotFound(error)) return;
       console.error("Railway API Error (ServiceDelete):", error);
       throw new Error(`Railway API Error (ServiceDelete): ${error.message}`);
     });
 
     if (externalVolumeId) {
       await railway.VolumeDelete({ id: externalVolumeId }).catch((error) => {
+        if (isProviderResourceNotFound(error)) return;
         console.error("Railway API Error (VolumeDelete):", error);
         throw new Error(`Railway API Error (VolumeDelete): ${error.message}`);
       });

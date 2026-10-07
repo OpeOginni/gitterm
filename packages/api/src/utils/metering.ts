@@ -23,13 +23,14 @@ export async function getConfiguredIdleTimeout(): Promise<number> {
 export async function createUsageSession(
   workspaceId: string,
   userId: string,
+  executor: Pick<typeof db, "insert"> = db,
 ): Promise<string | null> {
   // Skip if metering is disabled
   if (!shouldMeterUsage()) {
     return null;
   }
 
-  const [session] = await db
+  const [session] = await executor
     .insert(usageSession)
     .values({
       workspaceId,

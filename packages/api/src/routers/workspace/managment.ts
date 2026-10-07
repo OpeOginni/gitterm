@@ -8,7 +8,6 @@ import {
   agentWorkspaceConfig,
   workspaceEnvironmentVariables,
   workspace,
-  volume,
   usageSession,
 } from "@gitterm/db/schema/workspace";
 import { agentType, image, cloudProvider, machineProfile, region } from "@gitterm/db/schema/cloud";
@@ -89,13 +88,11 @@ import {
   type AgentConfigKind,
 } from "@gitterm/schema";
 import {
-  deleteAllWorkspaceRouteAccess,
   deleteWorkspaceRouteAccess,
   upsertWorkspaceRouteAccess,
 } from "../../service/workspace-route-access";
 import {
   updateWorkspaceByIdAndInvalidate,
-  updateWorkspaceByIdReturningAndInvalidate,
   updateWorkspaceRoutingAndInvalidate,
   updateWorkspaceStatusAndInvalidate,
   invalidateWorkspaceCacheAfterMutation,
@@ -165,6 +162,57 @@ import {
   railwayBootstrapEnvironment,
   storeWorkspaceRuntimeBundle,
 } from "../../service/workspace-runtime-bundle";
+import {
+  terminateWorkspace,
+  processWorkspaceTermination,
+} from "../../service/workspace-termination";
+import {
+  reserveWorkspace,
+  settleWorkspaceProvisioning,
+} from "../../service/workspace-provisioning";
+
+async function completeWorkspaceRestart(
+  record: typeof workspace.$inferSelect,
+  status: "pending" | "running",
+  result: void | { upstreamUrl?: string },
+  identity: Parameters<typeof settleWorkspaceProvisioning>[2],
+) {
+  const now = new Date();
+  const settled = await settleWorkspaceProvisioning(
+    {
+      id: record.id,
+      userId: record.userId,
+      externalInstanceId: record.externalInstanceId,
+      status,
+      pausedAt: null,
+      lastActiveAt: now,
+      updatedAt: now,
+      ...(result?.upstreamUrl ? { upstreamUrl: result.upstreamUrl } : {}),
+    },
+    null,
+    identity,
+    async (tx) => {
+      await createUsageSession(record.id, record.userId, tx);
+    },
+  );
+  if (settled.cancelled) {
+    await processWorkspaceTermination(record.userId, record.id).catch((error) =>
+      console.error("Late restart cleanup will be retried:", error),
+    );
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Workspace restart was cancelled by deletion",
+    });
+  }
+  await invalidateWorkspaceCacheAfterMutation(record.id, record.subdomain);
+  WORKSPACE_EVENTS.emitStatus({
+    workspaceId: record.id,
+    status,
+    updatedAt: now,
+    userId: record.userId,
+    workspaceDomain: record.domain,
+  });
+}
 
 function readWorkspaceEnvironmentRow(row: {
   environmentVariables: unknown;
@@ -2858,41 +2906,44 @@ export const workspaceRouter = router({
 
         // Providers that call back during boot need their identity and encrypted
         // runtime bundle reserved before any remote resources exist.
-        workspaceReservedBeforeProvision = true;
         provisionStartedAt = Date.now();
-        await db.insert(workspace).values({
-          id: workspaceId,
-          botId: ctx.botIdentity?.id ?? null,
-          externalInstanceId: "",
-          userId,
-          // The runtime can request a token during provisioning, before the final
-          // workspace update below. Authorize only the credentials selected for it.
-          modelCredentialIds: credentials
-            .map((credential) => credential.credentialId)
-            .filter((id): id is string => id !== null),
-          imageId: imageRecord.id,
-          cloudProviderId: input.cloudProviderId,
-          regionId: regionRecord?.id,
-          // Inline credentials win over an App ID; never later refresh an unused App token.
-          gitIntegrationId: input.repositoryCredentials ? null : (gitIntegrationId ?? null),
-          sharedGitConnectionId,
-          googleCloudIntegrationId: googleCloudIntegrationId ?? null,
-          repositoryUrl: input.repo ?? null,
-          domain,
-          subdomain,
-          status: "pending",
-          metadata:
-            providerKey === "aws"
-              ? {
-                  ...input.metadata,
-                  awsProvisioningLeaseExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
-                }
-              : (input.metadata ?? {}),
-          startedAt: new Date(),
-          updatedAt: new Date(),
-          persistent: effectivePersistent,
-          idempotencyKey: idempotencyKey ?? null,
-        });
+        await reserveWorkspace(
+          {
+            id: workspaceId,
+            botId: ctx.botIdentity?.id ?? null,
+            externalInstanceId: "",
+            userId,
+            // The runtime can request a token during provisioning, before the final
+            // workspace update below. Authorize only the credentials selected for it.
+            modelCredentialIds: credentials
+              .map((credential) => credential.credentialId)
+              .filter((id): id is string => id !== null),
+            imageId: imageRecord.id,
+            cloudProviderId: input.cloudProviderId,
+            regionId: regionRecord?.id,
+            // Inline credentials win over an App ID; never later refresh an unused App token.
+            gitIntegrationId: input.repositoryCredentials ? null : (gitIntegrationId ?? null),
+            sharedGitConnectionId,
+            googleCloudIntegrationId: googleCloudIntegrationId ?? null,
+            repositoryUrl: input.repo ?? null,
+            domain,
+            subdomain,
+            status: "pending",
+            metadata:
+              providerKey === "aws"
+                ? {
+                    ...input.metadata,
+                    awsProvisioningLeaseExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+                  }
+                : (input.metadata ?? {}),
+            startedAt: new Date(),
+            updatedAt: new Date(),
+            persistent: effectivePersistent,
+            idempotencyKey: idempotencyKey ?? null,
+          },
+          ctx.botIdentity,
+        );
+        workspaceReservedBeforeProvision = true;
         if (attached.mcp.length) {
           await db.insert(workspaceMcpConnection).values(
             attached.mcp.map((connection) => ({
@@ -3024,65 +3075,62 @@ export const workspaceRouter = router({
           lastActiveAt: new Date(workspaceInfo.serviceCreatedAt),
           updatedAt: new Date(workspaceInfo.serviceCreatedAt),
         } satisfies typeof workspace.$inferInsert;
-        const [newWorkspace] = await db
-          .update(workspace)
-          .set(workspaceValues)
-          .where(eq(workspace.id, workspaceId))
-          .returning();
-
-        if (!newWorkspace) {
+        const persistentInfo = effectivePersistent
+          ? (workspaceInfo as PersistentWorkspaceInfo)
+          : null;
+        const settled = await settleWorkspaceProvisioning(
+          workspaceValues,
+          persistentInfo
+            ? {
+                workspaceId,
+                userId,
+                cloudProviderId: input.cloudProviderId,
+                regionId: regionRecord?.id,
+                externalVolumeId: persistentInfo.externalVolumeId,
+                mountPath: "/workspace",
+                createdAt: new Date(persistentInfo.volumeCreatedAt),
+                updatedAt: new Date(persistentInfo.volumeCreatedAt),
+              }
+            : null,
+          ctx.botIdentity,
+          async (tx) => {
+            if (setupRequested && setupExecutionId) {
+              await tx.insert(workspaceSetup).values({
+                workspaceId,
+                executionId: setupExecutionId,
+                command: runtimeSetupCommand ?? "",
+                status: runtimeSetupCommand ? "waiting" : "succeeded",
+                ...(runtimeSetupCommand
+                  ? {}
+                  : { exitCode: 0, startedAt: new Date(), finishedAt: new Date() }),
+              });
+            }
+            if (workspaceInfo.upstreamAccess?.headers)
+              await upsertWorkspaceRouteAccess(
+                workspaceId,
+                null,
+                workspaceInfo.upstreamAccess.headers,
+                tx,
+              );
+            if (!isLocal) await createUsageSession(workspaceId, userId, tx);
+          },
+        );
+        if (settled.cancelled) {
+          // The resources are persisted and queued even if immediate teardown fails.
+          await processWorkspaceTermination(userId, workspaceId).catch((error) =>
+            console.error("Late provisioning cleanup will be retried:", error),
+          );
           throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to create workspace record",
+            code: "CONFLICT",
+            message: "Workspace creation was cancelled by deletion",
           });
         }
-
-        if (setupRequested && setupExecutionId) {
-          await db.insert(workspaceSetup).values({
-            workspaceId,
-            executionId: setupExecutionId,
-            command: runtimeSetupCommand ?? "",
-            status: runtimeSetupCommand ? "waiting" : "succeeded",
-            // Only a blocking phase was requested and it already ran during provisioning.
-            ...(runtimeSetupCommand
-              ? {}
-              : { exitCode: 0, startedAt: new Date(), finishedAt: new Date() }),
-          });
-        }
-
+        const newWorkspace = settled.workspace;
+        const newVolume = settled.volume;
         workspaceCreateLogger.log(
           `workspace-record-created provider=${providerKey} persistent=${effectivePersistent}`,
         );
-
-        if (workspaceInfo.upstreamAccess?.headers) {
-          await upsertWorkspaceRouteAccess(workspaceId, null, workspaceInfo.upstreamAccess.headers);
-        }
         await invalidateWorkspaceCacheAfterMutation(workspaceId, subdomain);
-
-        // Create volume record (only for persistent workspaces)
-        let newVolume = null;
-        if (effectivePersistent) {
-          const persistentInfo = workspaceInfo as PersistentWorkspaceInfo;
-          const [volumeRecord] = await db
-            .insert(volume)
-            .values({
-              workspaceId: workspaceId,
-              userId: userId,
-              cloudProviderId: input.cloudProviderId,
-              regionId: regionRecord?.id,
-              externalVolumeId: persistentInfo.externalVolumeId,
-              mountPath: "/workspace",
-              createdAt: new Date(persistentInfo.volumeCreatedAt),
-              updatedAt: new Date(persistentInfo.volumeCreatedAt),
-            })
-            .returning();
-          newVolume = volumeRecord;
-        }
-
-        // Create usage session for billing (only for remote workspaces)
-        if (!isLocal) {
-          await createUsageSession(workspaceId, userId);
-        }
 
         // Emit status event
         WORKSPACE_EVENTS.emitStatus({
@@ -3574,28 +3622,12 @@ export const workspaceRouter = router({
 
           const restartWorkspaceStatus =
             provider.restartSettlement === "immediate" ? "running" : "pending";
-          const now = new Date();
-          await updateWorkspaceByIdAndInvalidate(
-            input.workspaceId,
-            {
-              status: restartWorkspaceStatus,
-              pausedAt: null,
-              lastActiveAt: now,
-              updatedAt: now,
-              ...(resumeResult?.upstreamUrl ? { upstreamUrl: resumeResult.upstreamUrl } : {}),
-            },
-            existingWorkspace.subdomain,
+          await completeWorkspaceRestart(
+            existingWorkspace,
+            restartWorkspaceStatus,
+            resumeResult,
+            ctx.botIdentity,
           );
-
-          await createUsageSession(input.workspaceId, userId);
-
-          WORKSPACE_EVENTS.emitStatus({
-            workspaceId: input.workspaceId,
-            status: restartWorkspaceStatus,
-            updatedAt: now,
-            userId,
-            workspaceDomain: existingWorkspace.domain,
-          });
 
           existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
         }
@@ -3948,11 +3980,12 @@ export const workspaceRouter = router({
           provider.providerKey,
           provider.id,
         );
-        await updateWorkspaceByIdAndInvalidate(
-          input.workspaceId,
+        const [claimed] = await updateWorkspaceStatusAndInvalidate(
+          and(eq(workspace.id, input.workspaceId), eq(workspace.status, "paused")),
           { status: "pending", updatedAt: new Date() },
-          existingWorkspace.subdomain,
         );
+        if (!claimed)
+          throw new TRPCError({ code: "CONFLICT", message: "Workspace is no longer paused" });
         let resumeResult: void | { upstreamUrl?: string };
         const resumeStartedAt = Date.now();
         const recordResume = async (outcome: "success" | "failure") =>
@@ -3987,30 +4020,12 @@ export const workspaceRouter = router({
         await relaunchWorkspaceSetup(computeProvider, existingWorkspace, provider.providerKey);
         const restartWorkspaceStatus =
           provider.restartSettlement === "immediate" ? "running" : "pending";
-        // Update workspace status
-        const now = new Date();
-        await updateWorkspaceByIdAndInvalidate(
-          input.workspaceId,
-          {
-            status: restartWorkspaceStatus,
-            pausedAt: null,
-            lastActiveAt: now,
-            updatedAt: now,
-            ...(resumeResult?.upstreamUrl ? { upstreamUrl: resumeResult.upstreamUrl } : {}),
-          },
-          existingWorkspace.subdomain,
+        await completeWorkspaceRestart(
+          existingWorkspace,
+          restartWorkspaceStatus,
+          resumeResult,
+          ctx.botIdentity,
         );
-
-        await createUsageSession(input.workspaceId, userId);
-
-        // Emit status event
-        WORKSPACE_EVENTS.emitStatus({
-          workspaceId: input.workspaceId,
-          status: restartWorkspaceStatus,
-          updatedAt: now,
-          userId,
-          workspaceDomain: existingWorkspace.domain,
-        });
 
         return {
           success: true,
@@ -4034,141 +4049,7 @@ export const workspaceRouter = router({
   // Delete a workspace
   deleteWorkspace: accountProcedure("workspace:write")
     .input(z.object({ workspaceId: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      const userId = ctx.session.user.id;
-
-      const fetchedWorkspace = await db.query.workspace.findFirst({
-        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
-        with: {
-          volume: true,
-        },
-      });
-
-      if (!fetchedWorkspace) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Workspace not found",
-        });
-      }
-
-      // Close usage session if workspace was running
-      if (fetchedWorkspace.status === "running" || fetchedWorkspace.status === "pending") {
-        await closeUsageSession(input.workspaceId, "manual");
-      }
-
-      // Get the cloud provider name
-      const [provider] = await db
-        .select()
-        .from(cloudProvider)
-        .where(eq(cloudProvider.id, fetchedWorkspace.cloudProviderId));
-
-      if (!provider) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Cloud provider not found",
-        });
-      }
-
-      // Get compute provider and terminate the workspace
-      const computeProvider = await getProviderByCloudProviderId(provider.providerKey, provider.id);
-      await finalizeWorkspaceAgentRuns(input.workspaceId, userId);
-      const terminateInBackground = provider.providerKey === "aws";
-      // A workspace that failed during provisioning has no volume row and may have no
-      // provider handle yet; there is nothing remote to tear down in that case.
-      const externalVolumeId = fetchedWorkspace.persistent
-        ? fetchedWorkspace.volume?.externalVolumeId
-        : undefined;
-      const terminatedAt = new Date();
-
-      const runTerminationCleanup = async () => {
-        if (!fetchedWorkspace.externalInstanceId) return;
-        if (fetchedWorkspace.sshConnection) {
-          await computeProvider
-            .revokeWorkspaceSSHAccess({
-              workspaceId: fetchedWorkspace.id,
-              externalServiceId: fetchedWorkspace.externalInstanceId,
-              connection: fetchedWorkspace.sshConnection,
-            })
-            .catch((error) => {
-              console.warn("Failed to revoke workspace editor access during delete:", error);
-            });
-        }
-
-        for (const exposedPort of Object.values(fetchedWorkspace.exposedPorts ?? {})) {
-          if (exposedPort?.externalPortDomainId) {
-            await computeProvider.removeExposedPortDomain(exposedPort.externalPortDomainId);
-          }
-        }
-
-        await computeProvider.terminateWorkspace(
-          fetchedWorkspace.externalInstanceId,
-          externalVolumeId,
-        );
-
-        await updateWorkspaceRoutingAndInvalidate(
-          fetchedWorkspace.id,
-          {
-            externalInstanceId: "",
-            externalRunningDeploymentId: null,
-            upstreamUrl: null,
-            exposedPorts: null,
-            updatedAt: new Date(),
-          },
-          fetchedWorkspace.subdomain,
-        );
-      };
-
-      if (!terminateInBackground) {
-        await runTerminationCleanup();
-      }
-
-      const [updatedWorkspace] = await updateWorkspaceByIdReturningAndInvalidate(
-        input.workspaceId,
-        {
-          status: "terminated",
-          authVersion: fetchedWorkspace.authVersion + 1,
-          pausedAt: terminatedAt,
-          terminatedAt,
-          exposedPorts: null,
-          sshConnection: null,
-          updatedAt: terminatedAt,
-        },
-      );
-
-      await deleteAllWorkspaceRouteAccess(input.workspaceId);
-      await db
-        .delete(workspaceRuntimeBundle)
-        .where(eq(workspaceRuntimeBundle.workspaceId, input.workspaceId));
-
-      // Delete volume record
-      if (fetchedWorkspace.volume) {
-        await db.delete(volume).where(eq(volume.id, fetchedWorkspace.volume.id));
-      }
-
-      // Emit status event
-      WORKSPACE_EVENTS.emitStatus({
-        workspaceId: input.workspaceId,
-        status: "terminated",
-        updatedAt: terminatedAt,
-        userId,
-        workspaceDomain: fetchedWorkspace.domain,
-      });
-
-      if (terminateInBackground) {
-        void runTerminationCleanup().catch((error) => {
-          console.error(
-            `Failed to finish background termination for workspace ${fetchedWorkspace.id}:`,
-            error,
-          );
-        });
-      }
-
-      return {
-        workspace: updatedWorkspace,
-        success: true,
-        cleanupInBackground: terminateInBackground,
-      };
-    }),
+    .mutation(({ input, ctx }) => terminateWorkspace(ctx.session.user.id, input.workspaceId)),
 
   openWorkspacePort: protectedProcedure
     .input(

@@ -12,23 +12,25 @@ const api = Bun.serve({
     const results = procedures.map((procedure) => {
       requests.push(procedure);
       const data =
-        procedure === "internal.keepAlwaysOnWorkspacesAlive"
-          ? { renewed: 0 }
-          : procedure === "internal.runBillingTasks"
-            ? { notices: 0, sent: 0 }
-            : procedure === "internal.sweepAwsResourcesInternal"
-              ? {
-                  retriedWorkspaces: 0,
-                  runtimeSecretsDeleted: 0,
-                  servicesDeleted: 0,
-                  taskDefinitionsDeregistered: 0,
-                  rulesDeleted: 0,
-                  targetGroupsDeleted: 0,
-                  accessPointsDeleted: 0,
-                  cleanupFailures: [],
-                  unresolvedCleanupCount: 0,
-                }
-              : [];
+        procedure === "internal.retryWorkspaceTerminations"
+          ? { terminated: 0, failed: 0 }
+          : procedure === "internal.keepAlwaysOnWorkspacesAlive"
+            ? { renewed: 0 }
+            : procedure === "internal.runBillingTasks"
+              ? { notices: 0, sent: 0 }
+              : procedure === "internal.sweepAwsResourcesInternal"
+                ? {
+                    retriedWorkspaces: 0,
+                    runtimeSecretsDeleted: 0,
+                    servicesDeleted: 0,
+                    taskDefinitionsDeregistered: 0,
+                    rulesDeleted: 0,
+                    targetGroupsDeleted: 0,
+                    accessPointsDeleted: 0,
+                    cleanupFailures: [],
+                    unresolvedCleanupCount: 0,
+                  }
+                : [];
       return { result: { data } };
     });
     return Response.json(results);
@@ -82,6 +84,7 @@ test("managed idle reaper starts without API server or Polar credentials", async
   expect(stdout).toContain("Pass completed. Lifecycle transitions: 0");
   expect(requests).toContain("internal.getIdleWorkspaces");
   expect(requests).toContain("internal.runBillingTasks");
+  expect(requests).toContain("internal.retryWorkspaceTerminations");
 });
 
 test("idle reaping can be disabled without disabling billing and cleanup", async () => {
@@ -92,4 +95,5 @@ test("idle reaping can be disabled without disabling billing and cleanup", async
   expect(called).not.toContain("internal.getLongTermInactiveWorkspaces");
   expect(called).toContain("internal.runBillingTasks");
   expect(called).toContain("internal.getAutoTerminateDueWorkspaces");
+  expect(called).toContain("internal.retryWorkspaceTerminations");
 });

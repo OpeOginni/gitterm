@@ -1,15 +1,25 @@
 import z from "zod";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { and, db, desc, eq } from "@gitterm/db";
+import { and, db, desc, eq, ne, sql } from "@gitterm/db";
 import { apiToken } from "@gitterm/db/schema/auth";
 import { bot } from "@gitterm/db/schema/bot";
+import { workspace } from "@gitterm/db/schema/workspace";
 import { BOT_TOKEN_SCOPES, botSettingsSchema, type BotSettings } from "@gitterm/schema";
 import { accountProcedure, router, sessionProcedure } from "../index";
 import { createApiToken } from "../service/auth/api-token";
 import { coordinate } from "../service/coordination";
+import { requestBotDeletion } from "../service/bot-deletion";
+import {
+  processWorkspaceTerminations,
+  WORKSPACE_TERMINATION_BATCH_SIZE,
+} from "../service/workspace-termination";
 
 type BotRow = typeof bot.$inferSelect;
+
+/** A bot's live sandboxes, by the server-assigned `botId` (metadata tags are caller-editable). */
+const botSandboxes = (userId: string, botId: string) =>
+  and(eq(workspace.userId, userId), eq(workspace.botId, botId), ne(workspace.status, "terminated"));
 
 const settingsOf = (row: BotRow): BotSettings & { id: string } => ({
   id: row.id,
@@ -163,20 +173,27 @@ export const botsRouter = router({
       return { token: result.token };
     }),
 
-  /** Deletes the bot and revokes its token. Its sandboxes stay until terminated. */
+  /** How many live sandboxes deleting the bot would terminate. */
+  sandboxCount: sessionProcedure.input(z.object({ id: z.uuid() })).query(async ({ ctx, input }) => {
+    const [row] = await db
+      .select({ total: sql<number>`count(*)` })
+      .from(workspace)
+      .where(botSandboxes(ctx.session.user.id, input.id));
+    return Number(row?.total ?? 0);
+  }),
+
+  /** Deletes the bot, revokes its token, and terminates every sandbox it created. */
   delete: sessionProcedure.input(z.object({ id: z.uuid() })).mutation(async ({ ctx, input }) => {
     const userId = ctx.session.user.id;
-    return db.transaction(async (tx) => {
-      const [row] = await tx
-        .select()
-        .from(bot)
-        .where(and(eq(bot.id, input.id), eq(bot.userId, userId)))
-        .for("update");
-      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
-      await tx.update(apiToken).set({ revokedAt: new Date() }).where(eq(apiToken.botId, row.id));
-      await tx.delete(bot).where(eq(bot.id, row.id));
-      return { success: true };
-    });
+    const ids = await requestBotDeletion(userId, input.id);
+    // A large bot must not hold the browser request for many provider cleanup batches.
+    const immediate = ids.slice(0, WORKSPACE_TERMINATION_BATCH_SIZE);
+    const result = await processWorkspaceTerminations(immediate.map((id) => ({ id, userId })));
+    return {
+      success: true,
+      terminated: result.terminated,
+      failed: result.failed + ids.length - immediate.length,
+    };
   }),
 
   /** The calling bot's settings, found by its API token; null for any other caller. */

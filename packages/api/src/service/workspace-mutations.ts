@@ -1,10 +1,17 @@
 import type { SQL } from "drizzle-orm";
-import { db, eq } from "@gitterm/db";
+import { and, db, eq, ne } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { invalidateProxyCacheForWorkspace } from "./proxy-cache";
 import { closeOpenUsageSessions } from "../utils/metering";
 
 type WorkspaceUpdate = Partial<typeof workspace.$inferInsert>;
+
+/** Termination is terminal, including for late provider webhooks and in-flight pauses/restarts. */
+function fenceTerminated(where: SQL | undefined, set: WorkspaceUpdate) {
+  return set.status && set.status !== "terminated"
+    ? and(where, ne(workspace.status, "terminated"))
+    : where;
+}
 
 export type WorkspaceStatusUpdateResult = {
   id: string;
@@ -44,7 +51,10 @@ export async function updateWorkspaceByIdAndInvalidate(
   set: WorkspaceUpdate,
   subdomain?: string | null,
 ) {
-  await db.update(workspace).set(set).where(eq(workspace.id, workspaceId));
+  await db
+    .update(workspace)
+    .set(set)
+    .where(fenceTerminated(eq(workspace.id, workspaceId), set));
   await closeUsageIfStopped([workspaceId], set);
   await invalidateProxyCacheForWorkspace({ workspaceId, subdomain });
 }
@@ -56,7 +66,7 @@ export async function updateWorkspaceByIdReturningAndInvalidate(
   const updatedWorkspaces = await db
     .update(workspace)
     .set(set)
-    .where(eq(workspace.id, workspaceId))
+    .where(fenceTerminated(eq(workspace.id, workspaceId), set))
     .returning();
 
   await closeUsageIfStopped(
@@ -71,14 +81,18 @@ export async function updateWorkspaceStatusAndInvalidate(
   where: SQL | undefined,
   set: WorkspaceUpdate,
 ) {
-  const updatedWorkspaces = await db.update(workspace).set(set).where(where).returning({
-    id: workspace.id,
-    status: workspace.status,
-    updatedAt: workspace.updatedAt,
-    userId: workspace.userId,
-    workspaceDomain: workspace.domain,
-    subdomain: workspace.subdomain,
-  });
+  const updatedWorkspaces = await db
+    .update(workspace)
+    .set(set)
+    .where(fenceTerminated(where, set))
+    .returning({
+      id: workspace.id,
+      status: workspace.status,
+      updatedAt: workspace.updatedAt,
+      userId: workspace.userId,
+      workspaceDomain: workspace.domain,
+      subdomain: workspace.subdomain,
+    });
 
   await closeUsageIfStopped(
     updatedWorkspaces.map((row) => row.id),
