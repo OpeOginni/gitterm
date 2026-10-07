@@ -1,4 +1,4 @@
-FROM oven/bun:1.3 AS builder
+FROM oven/bun:1.3.14 AS builder
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ ENV NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY=__NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY__
 
 RUN bun run turbo build --filter=web
 
-FROM oven/bun:1.3-slim AS runner
+FROM oven/bun:1.3.14-slim AS runner
 
 WORKDIR /app
 

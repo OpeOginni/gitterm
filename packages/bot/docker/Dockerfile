@@ -1,6 +1,6 @@
 # One image for both chat bots. Build from the repository root:
 #   docker build -f packages/bot/docker/Dockerfile -t gitterm-bot .
-FROM oven/bun:1.3 AS builder
+FROM oven/bun:1.3.14 AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ RUN cd packages/bot && bun build src/index.ts --outdir dist --target node --form
 RUN bun build packages/slack-bot/src/cli.ts --target bun --outfile /out/slack.js \
   && bun build packages/discord-bot/src/cli.ts --target bun --outfile /out/discord.js
 
-FROM oven/bun:1.3-slim
+FROM oven/bun:1.3.14-slim
 
 COPY --from=builder /out /app
 COPY packages/bot/docker/entrypoint.sh /usr/local/bin/gitterm-bot

@@ -143,9 +143,9 @@ export const mcpFetch: FetchLike = async (input, init) => {
       () => req.destroy(new McpNetworkError("MCP server did not respond within 30 seconds")),
       30_000,
     );
-    req.on("error", () => {
+    req.on("error", (error) => {
       clearTimeout(headerTimeout);
-      reject(new McpNetworkError("Could not reach the MCP server securely"));
+      reject(new McpNetworkError("Could not reach the MCP server securely", { cause: error }));
     });
     if (body !== undefined) req.write(body);
     req.end();
