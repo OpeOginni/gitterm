@@ -157,7 +157,7 @@ function ConnectAccountFlow({
           });
         }
         if (!live()) return;
-        track("api_key_saved", { provider: providerName, auth_type: "oauth" });
+        track("model_provider_connected", { provider: providerName, auth_type: "oauth" });
         toast.success(`${selected.displayName} connected`);
         onConnected();
         onClose();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
@@ -21,7 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn, getWorkspaceDisplayUrl } from "@/lib/utils";
-import { track, AnalyticsEvent } from "@/lib/analytics";
+import { track } from "@/lib/analytics";
+import { analyticsErrorCode, type WorkspaceProperties } from "@gitterm/analytics/policy";
 import { authClient } from "@/lib/auth-client";
 import { isBillingEnabled } from "@gitterm/env/web";
 import type { Route } from "next";
@@ -407,22 +408,33 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   };
 
   // Mutation
+  const createAttempt = useRef<{ startedAt: number; properties: WorkspaceProperties } | null>(null);
   const { mutateAsync: createWorkspace, isPending: isSubmitting } = useMutation(
     trpc.workspace.createWorkspace.mutationOptions({
       onSuccess: (data) => {
         queryClient.invalidateQueries(trpc.workspace.listWorkspaces.queryOptions());
-        track(AnalyticsEvent.WorkspaceCreate, {
-          provider: selectedCloudProvider?.providerKey,
-          persistent: effectivePersistent,
-          profile: workspaceProfile,
-        });
+        if (createAttempt.current) {
+          track("workspace_create_succeeded", {
+            ...createAttempt.current.properties,
+            duration_ms: Math.round(performance.now() - createAttempt.current.startedAt),
+          });
+        }
         onSuccess({
           type: "workspace",
           workspaceId: data.workspace.id,
           userId: data.workspace.userId,
+          provider: createAttempt.current?.properties.provider ?? "unknown",
+          agent: createAttempt.current?.properties.agent ?? "unknown",
         });
       },
       onError: (error) => {
+        if (createAttempt.current) {
+          track("workspace_create_failed", {
+            ...createAttempt.current.properties,
+            duration_ms: Math.round(performance.now() - createAttempt.current.startedAt),
+            error_code: analyticsErrorCode(error),
+          });
+        }
         console.error(error);
         toast.error(`Failed to create workspace: ${error.message}`);
       },
@@ -437,6 +449,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   );
 
   const handleSubmit = async () => {
+    if (isSubmitting || createAttempt.current) return;
     if (!isValid) {
       toast.error("Please fill in all required fields.");
       return;
@@ -465,39 +478,56 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
       resolvedRegionId = selectedRegion;
     }
 
-    await createWorkspace({
-      name: normalizedRepoUrl.split("/").pop() || "new-workspace",
-      repo: normalizedRepoUrl,
-      branch: trimmedBranch || undefined,
-      agentTypeId: selectedAgentTypeId,
-      cloudProviderId: resolvedCloudProviderId,
-      regionId: resolvedRegionId,
-      machineProfileId: selectedMachineProfileId,
-      awsAccessProfileId: isAwsGroup ? selectedAwsProfileId : undefined,
-      connections: [
-        githubAvailability?.enabled && selectedGitIntegrationId.startsWith("app:")
-          ? selectedGitIntegrationId.slice(4)
-          : null,
-        githubAvailability?.enabled && selectedGitIntegrationId === "global-pat"
-          ? "github:shared"
-          : null,
-        isGoogleCloudAvailable && googleCloudIntegrationId !== "none"
-          ? googleCloudIntegrationId
-          : null,
-        ...(supportsMcp
-          ? mcpConnectionIds.filter((id) =>
-              mcpConnections.some(
-                (connection) => connection.id === id && connection.status === "connected",
-              ),
-            )
-          : []),
-      ].filter((id): id is string => Boolean(id)),
+    const workspaceConnections = [
+      githubAvailability?.enabled && selectedGitIntegrationId.startsWith("app:")
+        ? selectedGitIntegrationId.slice(4)
+        : null,
+      githubAvailability?.enabled && selectedGitIntegrationId === "global-pat"
+        ? "github:shared"
+        : null,
+      isGoogleCloudAvailable && googleCloudIntegrationId !== "none"
+        ? googleCloudIntegrationId
+        : null,
+      ...(supportsMcp
+        ? mcpConnectionIds.filter((id) =>
+            mcpConnections.some(
+              (connection) => connection.id === id && connection.status === "connected",
+            ),
+          )
+        : []),
+    ].filter((id): id is string => Boolean(id));
+    const properties: WorkspaceProperties = {
+      provider: selectedCloudProvider?.providerKey ?? "unknown",
+      agent: selectedAgent?.provisionerKey ?? "unknown",
       persistent: effectivePersistent,
-      alwaysOn: canKeepAlwaysOn && alwaysOn,
-      subdomain: subdomain || undefined,
-      workspaceProfile,
-      models: { inherit: "none", providers: Object.fromEntries(selectedModelCredentials) },
-    });
+      always_on: canKeepAlwaysOn && alwaysOn,
+      model_provider_count: selectedModelCredentials.length,
+      integration_count: workspaceConnections.length,
+    };
+    createAttempt.current = { startedAt: performance.now(), properties };
+    track("workspace_create_started", properties);
+    try {
+      await createWorkspace({
+        name: normalizedRepoUrl.split("/").pop() || "new-workspace",
+        repo: normalizedRepoUrl,
+        branch: trimmedBranch || undefined,
+        agentTypeId: selectedAgentTypeId,
+        cloudProviderId: resolvedCloudProviderId,
+        regionId: resolvedRegionId,
+        machineProfileId: selectedMachineProfileId,
+        awsAccessProfileId: isAwsGroup ? selectedAwsProfileId : undefined,
+        connections: workspaceConnections,
+        persistent: effectivePersistent,
+        alwaysOn: canKeepAlwaysOn && alwaysOn,
+        subdomain: subdomain || undefined,
+        workspaceProfile,
+        models: { inherit: "none", providers: Object.fromEntries(selectedModelCredentials) },
+      });
+    } catch {
+      // onError reports the failure to the user and records its safe category.
+    } finally {
+      createAttempt.current = null;
+    }
   };
 
   const integrations = installationsData?.installations;

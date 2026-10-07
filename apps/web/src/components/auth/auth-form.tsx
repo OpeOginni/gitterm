@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { Loader2 } from "lucide-react";
 import { isEmailAuthEnabled, isGitHubAuthEnabled } from "@gitterm/env/web";
-import posthog from "posthog-js";
-import { ANALYTICS_ENABLED } from "@/lib/analytics";
+import { clearAuthAttempt, trackAuthStarted } from "@/lib/analytics";
 
 interface AuthFormProps {
   redirectUrl?: string;
@@ -31,6 +30,9 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
 
   const emailAuthEnabled = isEmailAuthEnabled();
   const githubAuthEnabled = isGitHubAuthEnabled();
+  useEffect(() => {
+    if (authError) clearAuthAttempt();
+  }, [authError]);
 
   const getCallbackURL = () => {
     // Use the origin the user actually visited, not a potentially stale build-time domain.
@@ -45,6 +47,7 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
+    trackAuthStarted("email");
 
     try {
       const result = await authClient.signIn.email({
@@ -53,14 +56,12 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
         callbackURL: getCallbackURL(),
       });
       if (result.error) {
+        clearAuthAttempt();
         setError(result.error.message || "Failed to sign in");
         return;
       }
-      if (ANALYTICS_ENABLED) {
-        posthog.identify(email, { email });
-        posthog.capture("sign_in", { method: "email" });
-      }
     } catch (err) {
+      clearAuthAttempt();
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
@@ -68,9 +69,7 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
   };
 
   const handleGitHubAuth = () => {
-    if (ANALYTICS_ENABLED) {
-      posthog.capture("github_sign_in_initiated");
-    }
+    trackAuthStarted("github");
     authClient.signIn.social({
       provider: "github",
       callbackURL: getCallbackURL(),

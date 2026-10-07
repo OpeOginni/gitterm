@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { NextConfig } from "next";
+import { withPostHogConfig } from "@posthog/nextjs-config";
 
 // Set by apps/web/Dockerfile. Emits a self-contained server (.next/standalone) so
 // the image ships only traced runtime dependencies instead of the whole monorepo
@@ -7,6 +8,9 @@ import type { NextConfig } from "next";
 // root, which breaks Tailwind's `@import "tailwindcss"` resolution in `next dev`
 // (vercel/next.js#98023).
 const standalone = process.env.NEXT_STANDALONE === "1";
+const analyticsConfigured =
+  !!process.env.NEXT_PUBLIC_POSTHOG_KEY && !!process.env.NEXT_PUBLIC_POSTHOG_HOST;
+const analyticsNoop = "@gitterm/analytics/noop";
 
 const nextConfig: NextConfig = {
   ...(standalone
@@ -14,6 +18,18 @@ const nextConfig: NextConfig = {
     : {}),
   typedRoutes: true,
   reactCompiler: true,
+  // Self-hosted builds without analytics configuration omit the SDK entirely,
+  // rather than merely hiding it behind a lazy chunk. Configured builds still
+  // download that chunk only after consent. Public env changes require a rebuild.
+  turbopack: {
+    resolveAlias: analyticsConfigured ? {} : { "@gitterm/analytics/adapter": analyticsNoop },
+  },
+  webpack(config) {
+    if (!analyticsConfigured) {
+      config.resolve.alias["@gitterm/analytics/adapter$"] = analyticsNoop;
+    }
+    return config;
+  },
   typescript: {
     // We run type checking separately
     ignoreBuildErrors: false,
@@ -65,4 +81,21 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Upload only the exact build being deployed, with CI secrets (never NEXT_PUBLIC).
+// Unconfigured/self-hosted builds do not generate or upload browser source maps.
+const uploadSourceMaps =
+  analyticsConfigured && !!process.env.POSTHOG_API_KEY && !!process.env.POSTHOG_PROJECT_ID;
+
+export default uploadSourceMaps
+  ? withPostHogConfig(nextConfig, {
+      personalApiKey: process.env.POSTHOG_API_KEY!,
+      projectId: process.env.POSTHOG_PROJECT_ID!,
+      host: process.env.POSTHOG_API_HOST ?? "https://eu.posthog.com",
+      sourcemaps: {
+        enabled: true,
+        releaseName: "gitterm-web",
+        releaseVersion: process.env.POSTHOG_RELEASE_VERSION,
+        deleteAfterUpload: true,
+      },
+    })
+  : nextConfig;

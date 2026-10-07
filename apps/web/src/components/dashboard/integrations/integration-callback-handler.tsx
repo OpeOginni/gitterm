@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { trackIntegrationAdded } from "@/lib/analytics";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { toast } from "sonner";
@@ -13,11 +14,14 @@ import { GITHUB_RETURN_TO_KEY } from "@/components/dashboard/github-connection";
 export function IntegrationCallbackHandler() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const handledCallback = useRef(false);
 
   useEffect(() => {
     const success = searchParams.get("success");
     const error = searchParams.get("error");
     if (!success && !error) return;
+    if (handledCallback.current) return;
+    handledCallback.current = true;
 
     // A page that started the install (e.g. bot setup) asked to get the user back.
     const returnTo = sessionStorage.getItem(GITHUB_RETURN_TO_KEY);
@@ -28,6 +32,7 @@ export function IntegrationCallbackHandler() {
         : window.history.replaceState({}, "", "/dashboard/integrations");
 
     if (success === "github_connected") {
+      trackIntegrationAdded("github");
       toast.success("GitHub App connected successfully!", {
         description: "You can now use git operations in your workspaces",
       });

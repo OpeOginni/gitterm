@@ -3,8 +3,9 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { listenerTrpc, queryClient, trpc } from "@/utils/trpc";
 import { toast } from "sonner";
+import { track } from "@/lib/analytics";
 
-type WatchParams = { workspaceId: string };
+type WatchParams = { workspaceId: string; provider: string; agent: string };
 
 type SubscriptionHandle = { unsubscribe: () => void };
 
@@ -26,12 +27,13 @@ export function WorkspaceStatusWatcherProvider({ children }: { children: React.R
     }
   }, []);
 
-  const watchWorkspaceStatus = useCallback(({ workspaceId }: WatchParams) => {
+  const watchWorkspaceStatus = useCallback(({ workspaceId, provider, agent }: WatchParams) => {
     // Ensure only one active subscription per workspace.
     if (subsRef.current.has(workspaceId)) return;
 
     let isInitialEvent = true;
     let lastStatus: string | null = null;
+    const startedAt = performance.now();
 
     const sub = listenerTrpc.workspace.status.subscribe(
       { workspaceId },
@@ -52,6 +54,11 @@ export function WorkspaceStatusWatcherProvider({ children }: { children: React.R
           }
 
           if (payload.status === "running") {
+            track("workspace_ready", {
+              provider,
+              agent,
+              wait_ms: Math.round(performance.now() - startedAt),
+            });
             toast.success(
               isInitialStatus ? "Workspace created successfully" : "Your Workspace is ready",
             );

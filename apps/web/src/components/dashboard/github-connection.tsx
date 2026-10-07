@@ -19,7 +19,6 @@ import {
 import { apiPath } from "@gitterm/schema/url";
 import { GitHub as Github } from "@/components/logos/Github";
 import { Button } from "@/components/ui/button";
-import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { queryClient, trpc } from "@/utils/trpc";
 import env from "@gitterm/env/web";
@@ -321,7 +320,6 @@ export function GitHubConnection() {
 
   function handleConnect() {
     if (!appAvailability?.enabled || !appAvailability.configured) return;
-    track("github_connected");
     setIsConnecting(true);
     window.location.href = githubInstallUrl(appAvailability.slug);
   }
@@ -342,7 +340,6 @@ export function GitHubConnection() {
     setDisconnectingId(integrationId);
     try {
       await disconnectMutation.mutateAsync({ integrationId });
-      track("github_disconnected");
       toast.success("Disconnect requested. It takes effect shortly.");
       await queryClient.invalidateQueries({
         queryKey: trpc.github.getInstallationStatus.queryKey(),

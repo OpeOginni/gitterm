@@ -16,7 +16,6 @@ import { CliCommandDisplay } from "./cli-command-display";
 import { CreateCloudInstance } from "./create-cloud-instance";
 import { usePrefetchCreateInstanceData } from "./use-prefetch-create-instance-data";
 import type { CreateInstanceResult } from "./types";
-import { track } from "@/lib/analytics";
 
 const DIALOG_DESCRIPTION = "Deploy a new development workspace from a GitHub repository.";
 
@@ -36,6 +35,8 @@ export function CreateInstanceDialog() {
         case "workspace":
           watchWorkspaceStatus({
             workspaceId: result.workspaceId,
+            provider: result.provider,
+            agent: result.agent,
           });
           setOpen(false);
           break;
@@ -61,9 +62,6 @@ export function CreateInstanceDialog() {
   }, [open]);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
-    if (nextOpen) {
-      track("create_instance_dialog_opened");
-    }
     setOpen(nextOpen);
   }, []);
 

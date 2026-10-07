@@ -1,13 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Terminal, Check, ArrowRight } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useCurrentPlan } from "@/lib/billing";
 import { cn } from "@/lib/utils";
-import { track } from "@/lib/analytics";
+import { track, useAnalyticsReady } from "@/lib/analytics";
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
@@ -16,6 +16,8 @@ function CheckoutSuccessContent() {
   const currentPlan = useCurrentPlan();
   const [showPing, setShowPing] = useState(true);
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+  const analyticsReady = useAnalyticsReady();
+  const trackedReturn = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowPing(false), 3000);
@@ -28,10 +30,17 @@ function CheckoutSuccessContent() {
       if (storedPlan) {
         setCheckoutPlan(storedPlan);
         sessionStorage.removeItem("checkout_plan");
-        track("checkout_completed", { plan: storedPlan });
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!analyticsReady || trackedReturn.current || !checkoutId) return;
+    if (checkoutPlan !== "pro" && checkoutPlan !== "growth") return;
+    trackedReturn.current = true;
+    // This is a browser return, not proof of a paid subscription. Revenue belongs to webhooks.
+    track("checkout_returned", { plan: checkoutPlan });
+  }, [analyticsReady, checkoutId, checkoutPlan]);
 
   const userPlan = checkoutPlan || currentPlan;
   const planName = userPlan.charAt(0).toUpperCase() + userPlan.slice(1);

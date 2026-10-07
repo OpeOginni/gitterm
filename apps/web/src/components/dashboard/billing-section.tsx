@@ -61,7 +61,6 @@ export function BillingSection() {
   }
 
   const handleOpenPortal = async () => {
-    track("customer_portal_opened");
     setIsPortalLoading(true);
     try {
       await openCustomerPortal();
@@ -74,7 +73,7 @@ export function BillingSection() {
 
   const handleUpgrade = async (slug: CheckoutPlan) => {
     if (isCheckoutLoading) return;
-    track("upgrade_initiated", { plan: slug, source: "settings_billing" });
+    track("checkout_started", { plan: slug, source: "settings_billing" });
     setIsCheckoutLoading(true);
     try {
       await initiateCheckout(slug);
@@ -243,7 +242,7 @@ export function ComputeUsageCard() {
             variant="outline"
             className="h-8 text-xs"
             onClick={() => {
-              track("upgrade_initiated", { plan: "growth", source: "settings_usage" });
+              track("checkout_started", { plan: "growth", source: "settings_usage" });
               void initiateCheckout("growth");
             }}
           >

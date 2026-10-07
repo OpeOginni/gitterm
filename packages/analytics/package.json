@@ -1,0 +1,24 @@
+{
+  "name": "@gitterm/analytics",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/client.ts",
+    "./policy": "./src/policy.ts",
+    "./adapter": "./src/posthog.ts",
+    "./noop": "./src/noop.ts",
+    "./server": "./src/server.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "posthog-js": "^1.438.2",
+    "posthog-node": "^5.55.0"
+  },
+  "devDependencies": {
+    "@gitterm/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

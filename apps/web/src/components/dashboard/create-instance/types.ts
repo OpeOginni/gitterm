@@ -11,7 +11,13 @@ export interface sshAccessSupport {
 }
 
 // Result types for form submissions
-export type CreateInstanceResult = { type: "workspace"; workspaceId: string; userId: string };
+export type CreateInstanceResult = {
+  type: "workspace";
+  workspaceId: string;
+  userId: string;
+  provider: string;
+  agent: string;
+};
 
 export interface CreateInstanceFormProps {
   onSuccess: (result: CreateInstanceResult) => void;

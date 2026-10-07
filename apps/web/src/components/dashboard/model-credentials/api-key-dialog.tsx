@@ -241,7 +241,10 @@ function ApiKeyForm({
   const storeApiKey = useMutation(
     trpc.modelCredentials.storeApiKey.mutationOptions({
       onSuccess: () => {
-        track("api_key_saved", { provider: provider?.name, auth_type: "api_key" });
+        track("model_provider_connected", {
+          provider: provider?.name ?? "unknown",
+          auth_type: "api_key",
+        });
         toast.success(`${provider?.displayName ?? "API"} key saved`);
         onSaved();
         onClose();

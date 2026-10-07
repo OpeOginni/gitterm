@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",
+    "@gitterm/analytics": "workspace:*",
     "@gitterm/api": "workspace:*",
     "@gitterm/auth": "workspace:*",
     "@gitterm/env": "workspace:*",
@@ -45,7 +46,6 @@
     "lucide-react": "^1.7.0",
     "next": "^16.2.6",
     "next-themes": "^0.4.6",
-    "posthog-js": "^1.376.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
@@ -56,6 +56,7 @@
   },
   "devDependencies": {
     "@gitterm/config": "workspace:*",
+    "@posthog/nextjs-config": "^1.11.1",
     "@tailwindcss/postcss": "^4.1.10",
     "@tanstack/react-query-devtools": "^5.85.5",
     "@types/node": "^20",

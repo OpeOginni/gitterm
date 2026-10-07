@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { queryClient, trpc } from "@/utils/trpc";
+import { track } from "@/lib/analytics";
 
 const DOCS = {
   guide: "https://github.com/OpeOginni/gitterm/blob/main/docs/google-workload-identity.md",
@@ -207,6 +208,7 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
         workloadIdentityProvider: provider,
         serviceAccountEmail: form.serviceAccountEmail,
       });
+      track("integration_added", { integration_type: "google" });
       setForm(EMPTY_FORM);
       setShowAdvanced(false);
       setAdding(false);

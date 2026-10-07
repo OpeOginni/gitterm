@@ -57,6 +57,7 @@ import {
   isOpencodeAgent,
 } from "@/lib/utils";
 import { getIcon } from "@/components/dashboard/create-instance/types";
+import { track } from "@/lib/analytics";
 
 const PROVIDER_LOGOS: Record<string, string> = {
   aws: "/ECS.svg",
@@ -238,6 +239,12 @@ export function InstanceCard({
   const restartWorkspaceMutation = useMutation(
     trpc.workspace.restartWorkspace.mutationOptions({
       onSuccess: (data) => {
+        track("workspace_restarted", {
+          provider:
+            providers.find((provider) => provider.id === workspace.cloudProviderId)?.providerKey ??
+            "unknown",
+          agent: workspace.image.agentType.provisionerKey,
+        });
         toast.success(
           data.status === "pending"
             ? "Workspace restarting..."
@@ -384,6 +391,13 @@ export function InstanceCard({
   };
 
   const regionInfo = getRegionInfo();
+  const trackConnection = (method: "browser" | "desktop" | "cli" | "editor") => {
+    track("workspace_connection_requested", {
+      provider: regionInfo.providerKey ?? "unknown",
+      agent: workspace.image.agentType.provisionerKey,
+      method,
+    });
+  };
   const isRunning = workspace.status === "running";
   const isPaused = workspace.status === "paused";
   const isPending = workspace.status === "pending";
@@ -560,6 +574,7 @@ export function InstanceCard({
               <a
                 key={editor.protocol}
                 href={buildEditorUri(editor.protocol, remoteTarget, access.projectPathHint)}
+                onClick={() => trackConnection("editor")}
                 className="flex items-center gap-3 rounded-lg border border-border/40 bg-secondary/20 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/40 hover:border-border/60"
               >
                 <Image
@@ -1053,6 +1068,7 @@ export function InstanceCard({
                     onClick={async () => {
                       const credential = await revealAccessCredential();
                       if (credential && workspace.subdomain) {
+                        trackConnection("desktop");
                         window.location.href = getT3DesktopPairingUrl(
                           workspace.subdomain,
                           credential,
@@ -1075,7 +1091,8 @@ export function InstanceCard({
                           workspace.image.agentType.name,
                           credential,
                         );
-                        navigator.clipboard.writeText(command);
+                        await navigator.clipboard.writeText(command);
+                        trackConnection("cli");
                         toast.success("Attach command copied to clipboard!");
                       }
                     }}
@@ -1104,6 +1121,7 @@ export function InstanceCard({
                     onClick={async () => {
                       const credential = await revealAccessCredential();
                       if (credential && workspace.subdomain) {
+                        trackConnection("browser");
                         window.location.href = getT3PairingUrl(workspace.subdomain, credential);
                       }
                     }}
@@ -1118,7 +1136,12 @@ export function InstanceCard({
                     title="Open workspace in browser"
                     asChild
                   >
-                    <a href={workspaceUrl} target="_blank" rel="noreferrer">
+                    <a
+                      href={workspaceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => trackConnection("browser")}
+                    >
                       <Monitor className="h-3.5 w-3.5" />
                     </a>
                   </Button>
@@ -1130,7 +1153,12 @@ export function InstanceCard({
                 className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
                 asChild
               >
-                <a href={workspaceUrl} target="_blank" rel="noreferrer">
+                <a
+                  href={workspaceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => trackConnection("browser")}
+                >
                   <ExternalLink className="h-3.5 w-3.5" />
                   Open Workspace
                 </a>

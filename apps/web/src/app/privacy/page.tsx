@@ -64,8 +64,8 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong className="text-fg">Product analytics.</strong> If you consent, we record
-                anonymous events (such as page views and feature clicks) so we can understand how
-                the product is used. See section 4.
+                pseudonymous events (such as page views, workspace outcomes, and connection
+                requests) so we can understand how the product is used. See section 4.
               </li>
               <li>
                 <strong className="text-fg">Logs.</strong> Our servers automatically log requests
@@ -82,8 +82,8 @@ export default function PrivacyPage() {
               <li>To process payments and manage your subscription.</li>
               <li>To communicate service-critical messages (e.g. account, billing, security).</li>
               <li>
-                To improve the product through aggregate, anonymous usage analytics, but only with
-                your consent.
+                To improve the product through aggregate, pseudonymous usage analytics, but only
+                with your consent.
               </li>
               <li>To comply with legal obligations.</li>
             </ul>
@@ -127,7 +127,7 @@ export default function PrivacyPage() {
                   />
                   <Row
                     name="Analytics cookies"
-                    purpose="Set only if you accept analytics. Track anonymous product usage."
+                    purpose="Set only if you accept analytics. Track pseudonymous product usage."
                     category="Optional"
                   />
                 </tbody>
@@ -148,11 +148,25 @@ export default function PrivacyPage() {
             <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
               <li>only create user profiles for signed-in users,</li>
               <li>not auto-capture form inputs or session recordings,</li>
+              <li>use an internal user identifier, not your email, for signed-in analytics,</li>
+              <li>
+                exclude query strings, repository URLs, prompts, code, credentials, and raw errors,
+              </li>
+              <li>
+                report unexpected browser errors only with consent, using redacted messages and
+                compiled stack locations; console logs, local variables, and error breadcrumbs are
+                not collected,
+              </li>
               <li>only run when you have given consent.</li>
             </ul>
             <p>
               If you reject analytics, we do not initialize the analytics SDK and no analytics
               events are sent from your browser.
+            </p>
+            <p>
+              When operational error reporting is enabled by the deployment operator, unexpected
+              server errors are reported without user identifiers or request content. These reports
+              help diagnose service failures and are separate from optional browser analytics.
             </p>
           </Section>
 

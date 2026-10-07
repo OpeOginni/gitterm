@@ -12,6 +12,7 @@
     "db:seed-admin:prod": "bun run dist/scripts/seed-admin.mjs"
   },
   "dependencies": {
+    "@gitterm/analytics": "workspace:*",
     "@gitterm/api": "workspace:*",
     "@gitterm/auth": "workspace:*",
     "@gitterm/db": "workspace:*",

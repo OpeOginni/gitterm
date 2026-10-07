@@ -1,5 +1,6 @@
 import "dotenv/config";
 import env from "@gitterm/env/server";
+import { createServerErrorTracking } from "@gitterm/analytics/server";
 import { trpcServer } from "@hono/trpc-server";
 import { createContext } from "@gitterm/api/context";
 import { appRouter, proxyResolverRouter } from "@gitterm/api/routers/index";
@@ -22,9 +23,25 @@ import { recordCredentialAudit } from "@gitterm/api/service/credential-audit";
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 
 const app = new Hono();
 const deviceCodeService = new DeviceCodeService();
+const errorTracking = createServerErrorTracking({
+  enabled: env.NODE_ENV === "production" && env.POSTHOG_ERROR_TRACKING_ENABLED,
+  key: env.POSTHOG_PROJECT_KEY,
+  host: env.POSTHOG_HOST,
+});
+
+app.onError((error, context) => {
+  // Preserve Hono's HTTP error responses; client/auth/validation failures are not incidents.
+  if (error instanceof HTTPException && error.status < 500) return error.getResponse();
+  void errorTracking.captureException(error);
+  console.error(error);
+  return error instanceof HTTPException
+    ? error.getResponse()
+    : context.text("Internal Server Error", 500);
+});
 
 // app.use(logger());
 app.use(
@@ -234,6 +251,9 @@ const trpcHandler = trpcServer({
     return createContext({ context });
   },
   onError: ({ path, type, error, req }) => {
+    if (error.code === "INTERNAL_SERVER_ERROR") {
+      void errorTracking.captureException(error.cause ?? error);
+    }
     if (path?.startsWith("run.")) {
       // Runtime/validation errors and query URLs can contain conversation data.
       console.error(`[tRPC] ${type} "${path}" → ${error.code}`);

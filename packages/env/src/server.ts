@@ -19,6 +19,10 @@ import {
 const baseSchema = z
   .object({
     NODE_ENV: nodeEnv,
+    // Operational exceptions only; explicitly disabled for self-hosting by default.
+    POSTHOG_ERROR_TRACKING_ENABLED: boolWithDefault(false),
+    POSTHOG_PROJECT_KEY: optional,
+    POSTHOG_HOST: optional,
     PORT: z
       .string()
       .default("8080")

@@ -20,7 +20,6 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/utils/trpc";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-import { track } from "@/lib/analytics";
 
 export function DeleteAccountSection() {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,7 +29,6 @@ export function DeleteAccountSection() {
   const deleteAccountMutation = useMutation(
     trpc.user.deleteUser.mutationOptions({
       onSuccess: async () => {
-        track("account_deleted");
         toast.success("Account deleted successfully");
         await authClient.signOut();
         router.push("/");

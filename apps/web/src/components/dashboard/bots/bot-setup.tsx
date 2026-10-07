@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/analytics";
 import { parseGitHubRepositoryInput } from "../create-instance/github-repository-utils";
 import type { ModelCredential } from "../model-credentials/types";
 import { BehaviorStepBody, type BotBehavior } from "./behavior-step";
@@ -199,6 +200,7 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
   const create = useMutation(
     trpc.bots.create.mutationOptions({
       onSuccess: (result) => {
+        if (platform) track("bot_created", { platform });
         setSavedId(result.bot.id);
         setToken(result.token);
         // Becomes the bot's own page without remounting, so the one-time token stays visible.

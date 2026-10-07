@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { queryClient, trpc } from "@/utils/trpc";
+import { track } from "@/lib/analytics";
 
 type AuthMode = "none" | "bearer" | "headers";
 type Form = {
@@ -189,6 +190,8 @@ export function McpConnections({
           codemode: form.codemode,
           authentication: auth!,
         });
+        // Added means persisted, not necessarily authenticated or passing its connection test.
+        track("integration_added", { integration_type: form.integration });
         if (result.status !== "pending")
           toast[result.status === "connected" ? "success" : "warning"](
             result.status === "connected"

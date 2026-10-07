@@ -315,7 +315,7 @@ function PricingPageContent() {
       return;
     }
 
-    track("upgrade_initiated", { plan: slug });
+    track("checkout_started", { plan: slug, source: "pricing" });
     setIsLoading(true);
     setLoadingPlan(slug);
     try {

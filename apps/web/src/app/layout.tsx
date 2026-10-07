@@ -3,7 +3,7 @@ import { Geist, JetBrains_Mono } from "next/font/google";
 import { Suspense } from "react";
 import "../index.css";
 import Providers from "@/components/providers";
-import { PostHogProvider } from "@/components/posthog-provider";
+import { AnalyticsProvider } from "@/components/analytics-provider";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 
 const geist = Geist({
@@ -76,7 +76,7 @@ export default function RootLayout({
       <body className={`${geist.variable} ${jetbrains.variable} antialiased`}>
         <Providers>{children}</Providers>
         <Suspense fallback={null}>
-          <PostHogProvider />
+          <AnalyticsProvider />
         </Suspense>
         <CookieConsentBanner />
       </body>

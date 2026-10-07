@@ -21,7 +21,8 @@ import Image from "next/image";
 import { GitHub } from "@/components/logos/Github";
 import { trpc } from "@/utils/trpc";
 import { getAttachCommand, getWorkspaceProjectPath, getWorkspaceUrl } from "@/lib/utils";
-import { track, AnalyticsEvent } from "@/lib/analytics";
+import { track } from "@/lib/analytics";
+import { analyticsErrorCode } from "@gitterm/analytics/policy";
 import { toast } from "sonner";
 import {
   FormCard,
@@ -84,14 +85,20 @@ export function HeroSection() {
       return;
     }
 
+    const startedAt = performance.now();
+    track("trial_started", { uses_default_repo: trimmed === DEFAULT_REPO });
     try {
       const data = (await launchMutation.mutateAsync({
         repo: trimmed,
         agent: "app",
       })) as AnonResult;
       setResult(data);
-      track(AnalyticsEvent.AnonTryLaunch, { agent: "app", provider: "e2b" });
+      track("trial_succeeded", { duration_ms: Math.round(performance.now() - startedAt) });
     } catch (err) {
+      track("trial_failed", {
+        duration_ms: Math.round(performance.now() - startedAt),
+        error_code: analyticsErrorCode(err),
+      });
       console.error(err);
     }
   }
@@ -99,7 +106,6 @@ export function HeroSection() {
   async function handleReset() {
     if (result?.workspaceId) {
       await killMutation.mutateAsync({ workspaceId: result.workspaceId }).catch(() => undefined);
-      track(AnalyticsEvent.AnonTryKill);
     }
     setResult(null);
     launchMutation.reset();

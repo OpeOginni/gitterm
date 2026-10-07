@@ -16,7 +16,6 @@ import { trpc } from "@/utils/trpc";
 import { useMutation } from "@tanstack/react-query";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
-import { track } from "@/lib/analytics";
 
 export function FeedbackForm() {
   const [showThankYou, setShowThankYou] = useState(false);
@@ -26,7 +25,6 @@ export function FeedbackForm() {
   const { mutate: submitFeedback, isPending } = useMutation(
     trpc.user.submitFeedback.mutationOptions({
       onSuccess: () => {
-        track("feedback_submitted");
         setShowThankYou(true);
         if (textareaRef.current) {
           textareaRef.current.value = "";
