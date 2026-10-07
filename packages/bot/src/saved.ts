@@ -16,7 +16,8 @@ const isClient = (value: Options["gitterm"]): value is GittermClient =>
 /**
  * Adds the settings saved for this bot in the GitTerm dashboard (Bots), found by its API token.
  * Routing can be overridden locally; saved authorization is an upper bound. Without saved settings,
- * for example a token that isn't a bot's, the options come back unchanged.
+ * for example a token that isn't a bot's, the options come back unchanged. The options given are
+ * kept as `localOptions`, so the running bot can apply settings saved later the same way.
  */
 export async function withSavedConfig(
   options: Options,
@@ -35,8 +36,17 @@ export async function withSavedConfig(
       `This GitTerm token belongs to the ${saved.platform} bot "${saved.name}"; run that bot with it`,
     );
   }
+  log.info(`Using the settings saved for "${saved.name}" in GitTerm.`);
+  return { ...applySavedConfig(base, saved, log), localOptions: base };
+}
 
-  const merged: Options = { ...base };
+/** Saved settings on top of local options; throws when the local options exceed them. */
+export function applySavedConfig(
+  options: Options,
+  saved: SavedBot,
+  log: BotLogger = console,
+): Options {
+  const merged: Options = { ...options };
   const localRepos = [
     options.repo,
     ...(options.repos ?? []),
@@ -91,7 +101,6 @@ export async function withSavedConfig(
       `"${saved.name}" uses your own GitHub token, but GITTERM_BOT_GITHUB_TOKEN is not set. Public repositories still work.`,
     );
   }
-  log.info(`Using the settings saved for "${saved.name}" in GitTerm.`);
   log.info("Effective bot authorization", {
     botId: saved.id,
     source: "saved policy, intersected with local restrictions",

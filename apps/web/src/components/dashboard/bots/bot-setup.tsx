@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { BotSettings } from "@gitterm/schema";
+import { botSettingsSchema, type BotSettings } from "@gitterm/schema";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -50,6 +50,10 @@ function repoFieldValue(repo: string | undefined): string {
   const [url = "", branch] = repo.split("#");
   return branch ? `${url}/tree/${branch}` : url;
 }
+
+/** Only the saved fields, in schema order, so a form value and a saved bot compare as strings. */
+const settingsKey = (settings: BotSettings) =>
+  JSON.stringify(settings, Object.keys(botSettingsSchema.shape));
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
@@ -113,7 +117,8 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
   // Repository
   const [githubAccess, setGithubAccess] = useState<GitHubAccess>(bot?.githubAccess ?? "connection");
   const [repoUrl, setRepoUrl] = useState(repoFieldValue(bot?.repo));
-  const [branch, setBranch] = useState("");
+  // Starts as saved, so an unedited bot doesn't briefly differ from it.
+  const [branch, setBranch] = useState(bot?.repo.split("#")[1] ?? "");
   const repository = parseGitHubRepositoryInput(repoUrl);
   const repoDone = !!repository;
 
@@ -171,6 +176,7 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
   // Saving
   const [name, setName] = useState(bot?.name ?? "");
   const [savedId, setSavedId] = useState<string | null>(bot?.id ?? null);
+  const [savedKey, setSavedKey] = useState(() => (bot ? settingsKey(bot) : null));
   const [token, setToken] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const defaultName = repository ? `${repository.repo} bot` : "Coding agent";
@@ -194,14 +200,16 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
           setup: behavior.setup.trim() || null,
         }
       : null;
+  const changed = !!settings && settingsKey(settings) !== savedKey;
 
   const refreshBots = () =>
     void queryClient.invalidateQueries({ queryKey: trpc.bots.list.queryKey() });
   const create = useMutation(
     trpc.bots.create.mutationOptions({
-      onSuccess: (result) => {
+      onSuccess: (result, input) => {
         if (platform) track("bot_created", { platform });
         setSavedId(result.bot.id);
+        setSavedKey(settingsKey(input));
         setToken(result.token);
         // Becomes the bot's own page without remounting, so the one-time token stays visible.
         window.history.replaceState(null, "", `/dashboard/bots/${result.bot.id}`);
@@ -212,8 +220,9 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
   );
   const update = useMutation(
     trpc.bots.update.mutationOptions({
-      onSuccess: () => {
-        toast.success("Saved. Restart the bot to apply the changes.");
+      onSuccess: (_, input) => {
+        setSavedKey(settingsKey(input));
+        toast.success("Saved. A running bot applies it within a minute.");
         refreshBots();
       },
       onError: (error) => toast.error(`Could not save: ${error.message}`),
@@ -337,8 +346,14 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
   const editFooter = savedId ? (
     <>
       <Button
-        className="h-9 w-full gap-2"
-        disabled={!settings || update.isPending}
+        variant={changed ? "default" : "secondary"}
+        className={cn(
+          "h-9 w-full gap-2",
+          // Nothing to save: still a raised button, just neutral, rather than faded into the card.
+          !changed &&
+            "border border-line bg-fill-2 text-fg-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_1px_2px_rgba(0,0,0,0.3)] disabled:opacity-100",
+        )}
+        disabled={!changed || update.isPending}
         onClick={() => settings && update.mutate({ id: savedId, ...settings })}
       >
         {update.isPending ? (
@@ -349,13 +364,15 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
         Save changes
       </Button>
       {confirmDelete ? (
-        <div className="flex items-center justify-between gap-2 text-xs text-fg-3">
-          <span>Delete it and revoke its token?</span>
-          <span className="flex gap-1">
+        <div className="space-y-2">
+          <p className="whitespace-nowrap text-center text-xs text-fg-3">
+            Delete it and revoke its token?
+          </p>
+          <div className="grid grid-cols-2 gap-2">
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-xs"
+              className="h-8 text-xs"
               onClick={() => setConfirmDelete(false)}
             >
               Keep
@@ -363,13 +380,13 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
             <Button
               size="sm"
               variant="destructive"
-              className="h-7 px-2 text-xs"
+              className="h-8 text-xs"
               disabled={remove.isPending}
               onClick={() => remove.mutate({ id: savedId })}
             >
               Delete
             </Button>
-          </span>
+          </div>
         </div>
       ) : (
         <button

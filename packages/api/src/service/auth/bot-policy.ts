@@ -38,6 +38,11 @@ const workspaceRoutes = new Set([
 const deny = (message = "This operation is outside the bot's saved policy"): never => {
   throw new TRPCError({ code: "FORBIDDEN", message });
 };
+/** A running bot picks up dashboard edits at its next lease renewal (older versions on restart). */
+const changed = (setting: string): never =>
+  deny(
+    `This bot's saved ${setting} changed in GitTerm. The bot applies it within a minute; try again then, or restart older bot versions.`,
+  );
 export function botRepo(identity: BotIdentity) {
   const [url, branch] = identity.repo.split("#", 2);
   return { url, branch: branch || undefined };
@@ -58,7 +63,7 @@ export function checkBotRequest(
     const result = z.object({ workspaceId: z.uuid(), model: z.string().optional() }).safeParse(raw);
     if (!result.success) return deny();
     const input = result.data;
-    if (path === "run.create" && input.model && input.model !== identity.model) deny();
+    if (path === "run.create" && input.model && input.model !== identity.model) changed("model");
     return input.workspaceId;
   }
   if (path === "integrations.connections.resolve") {
@@ -67,12 +72,9 @@ export function checkBotRequest(
       .safeParse(raw);
     if (!result.success) return deny();
     const input = result.data;
-    if (input.repo !== botRepo(identity).url) deny();
-    if (
-      !Array.isArray(input.references) ||
-      input.references.some((ref: string) => !botConnections(identity).includes(ref))
-    )
-      deny();
+    if (input.repo !== botRepo(identity).url) changed("repository");
+    if (input.references.some((ref: string) => !botConnections(identity).includes(ref)))
+      changed("tools");
     return;
   }
   if (path !== "workspace.createWorkspace") deny();
@@ -92,31 +94,25 @@ export function checkBotRequest(
   if (!result.success) return deny();
   const input = result.data;
   const repo = botRepo(identity);
-  if (
-    input.repo !== repo.url ||
-    input.branch !== repo.branch ||
-    input.agentTypeId ||
-    (input.agent && input.agent !== "opencode")
-  )
-    deny();
-  if (identity.provider && input.provider?.type !== identity.provider) deny();
+  if (input.agentTypeId || (input.agent && input.agent !== "opencode")) deny();
+  if (input.repo !== repo.url || input.branch !== repo.branch) changed("repository");
+  if (identity.provider && input.provider?.type !== identity.provider) changed("compute");
   // AWS access profiles are the owner's roles; a bot never picks one.
   if (input.provider && "accessProfile" in input.provider) deny();
-  if (
-    !Array.isArray(input.connections) ||
-    input.connections.some((ref: string) => !botConnections(identity).includes(ref))
-  )
-    deny();
+  if (input.connections.some((ref: string) => !botConnections(identity).includes(ref)))
+    changed("tools");
   if (identity.githubAccess !== "token" && input.repositoryCredentials) deny();
   const models = input.models;
   const provider = identity.model.split("/")[0]!;
-  if (!models || models.default !== identity.model || (models.inherit && models.inherit !== "none"))
-    deny();
+  if (!models || (models.inherit && models.inherit !== "none")) deny();
+  if (models.default !== identity.model) changed("model");
   for (const [key, source] of Object.entries(models.providers ?? {})) {
-    if (key !== provider) deny();
-    if (source.source === "saved" && source.label !== identity.credential) deny();
-    if (source.source === "default" && identity.credential) deny();
+    if (key !== provider) changed("model");
+    if (source.source === "saved" && source.label !== identity.credential)
+      changed("model credential");
+    if (source.source === "default" && identity.credential) changed("model credential");
   }
   // A saved credential must be asked for by name, not left to the provider default.
-  if (identity.credential && models.providers?.[provider]?.source !== "saved") deny();
+  if (identity.credential && models.providers?.[provider]?.source !== "saved")
+    changed("model credential");
 }

@@ -97,4 +97,16 @@ describe("delegated bot policy", () => {
       checkBotRequest(identity, "run.create", { workspaceId, model: "openai/personal" }),
     ).toThrow();
   });
+  test("a bot still running with settings changed in the dashboard is told to restart", () => {
+    const stale = { ...input(), models: { ...input().models, default: "anthropic/haiku" } };
+    expect(() => checkBotRequest(identity, "workspace.createWorkspace", stale)).toThrow(
+      "This bot's saved model changed in GitTerm. The bot applies it within a minute",
+    );
+    expect(() =>
+      checkBotRequest(identity, "workspace.createWorkspace", { ...input(), branch: "dev" }),
+    ).toThrow("saved repository changed");
+    expect(() => checkBotRequest(identity, "workspace.createWorkspace", { models: {} })).toThrow(
+      "outside the bot's saved policy",
+    );
+  });
 });

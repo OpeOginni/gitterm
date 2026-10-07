@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,9 +10,11 @@ import type {
   Connection,
   GittermClient,
   ModelCredential,
+  SavedBot,
   Workspace,
 } from "@gitterm/sdk";
 import { createBot } from "./bot.js";
+import { withSavedConfig } from "./saved.js";
 import type {
   ChatAdapter,
   ChatEvents,
@@ -1108,5 +1110,116 @@ describe("createBot", () => {
       logger: quiet,
     });
     await expect(missingTool.start()).rejects.toThrow('acme/app: No connection is named "Linear"');
+  });
+});
+
+describe("saved settings changed while the bot runs", () => {
+  /** A saved Slack bot whose lease renewal the test triggers by hand. */
+  async function savedBot() {
+    const gitterm = fakeGitterm({
+      credentials: [
+        { logicalProviderKey: "anthropic", label: "work", isActive: true, isDefault: true },
+      ] as ModelCredential[],
+    });
+    const saved: SavedBot = {
+      id: "bot1",
+      name: "Agent",
+      platform: "slack",
+      repo: "https://github.com/acme/app",
+      model: "anthropic/old",
+      credential: null,
+      connections: [],
+      provider: null,
+      githubAccess: "token",
+      channels: [],
+      allowedUsers: [],
+      allowGuests: false,
+      instructions: null,
+      setup: null,
+      updatedAt: "2026-10-07T10:00:00.000Z",
+    };
+    const logs: string[] = [];
+    const logger = {
+      ...quiet,
+      info: (line: string) => void logs.push(line),
+      warn: (line: string) => void logs.push(`warn: ${line}`),
+    };
+    Object.assign(gitterm.client, {
+      bots: {
+        self: async () => ({ ...saved }),
+        acquireLease: async () => ({ success: true, updatedAt: saved.updatedAt }),
+        releaseLease: async () => ({ success: true }),
+      },
+    });
+    const chat = fakeAdapter();
+    const options = await withSavedConfig(
+      { gitterm: gitterm.client, stateFile: await stateFile(), logger },
+      "slack",
+      logger,
+    );
+    const bot = createBot({ ...options, adapter: { ...chat.adapter, platform: "slack" } });
+    let renew!: () => void;
+    const timers = spyOn(globalThis, "setInterval").mockImplementation(((callback: () => void) => {
+      renew = callback;
+      return 0;
+    }) as unknown as typeof setInterval);
+    try {
+      await bot.start();
+    } finally {
+      timers.mockRestore();
+    }
+    /** Saves new settings in the "dashboard"; resolves with what the bot's next renewal logged. */
+    const change = async (patch: Partial<SavedBot>) => {
+      const seen = logs.length;
+      Object.assign(saved, patch, { updatedAt: new Date().toISOString() });
+      renew();
+      const outcome = () =>
+        logs.slice(seen).find((line) => /^(Applied|warn: Could not apply)/.test(line));
+      await until(() => Boolean(outcome()), "reload");
+      return outcome()!;
+    };
+    return { gitterm, chat, bot, change };
+  }
+
+  test("a new model reaches the next sandbox and run without a restart", async () => {
+    const { gitterm, chat, bot, change } = await savedBot();
+    try {
+      await change({ model: "anthropic/new" });
+      chat.send({ id: "100", text: "hello" });
+      await until(() => gitterm.calls.runs.length === 1);
+      expect((gitterm.calls.created[0]!.models as { default: string }).default).toBe(
+        "anthropic/new",
+      );
+      expect(gitterm.calls.runs[0]!.model).toBe("anthropic/new");
+    } finally {
+      await bot.stop();
+    }
+  });
+
+  test("who may use the bot applies to the next message", async () => {
+    const { gitterm, chat, bot, change } = await savedBot();
+    try {
+      await change({ allowedUsers: ["U2"] });
+      chat.send({ id: "100", text: "hello" });
+      await until(() => chat.log.posts.length === 1);
+      expect(chat.log.posts[0]).toContain("only take requests");
+      expect(gitterm.calls.created).toHaveLength(0);
+    } finally {
+      await bot.stop();
+    }
+  });
+
+  test("settings that fail the start-up checks leave the current ones in place", async () => {
+    const { gitterm, chat, bot, change } = await savedBot();
+    try {
+      expect(await change({ model: "anthropic/new", provider: "aws" })).toStartWith(
+        "warn: Could not apply",
+      );
+      chat.send({ id: "100", text: "hello" });
+      await until(() => gitterm.calls.runs.length === 1);
+      expect(gitterm.calls.runs[0]!.model).toBe("anthropic/old");
+    } finally {
+      await bot.stop();
+    }
   });
 });

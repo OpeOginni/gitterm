@@ -188,8 +188,11 @@ export type GittermClient = {
     listProviders(): Promise<ModelProviderInfo[]>;
   };
   bots: {
-    /** Claims (or renews) the right to run this saved bot; one process at a time. */
-    acquireLease(leaseId: string): Promise<{ success: true }>;
+    /**
+     * Claims (or renews) the right to run this saved bot; one process at a time. `updatedAt` is
+     * when its saved settings last changed (absent from older servers).
+     */
+    acquireLease(leaseId: string): Promise<{ success: true; updatedAt?: string }>;
     releaseLease(leaseId: string): Promise<{ success: true }>;
     /** The settings saved for this client's token in the dashboard; null if it isn't a bot's. */
     self(): Promise<SavedBot | null>;

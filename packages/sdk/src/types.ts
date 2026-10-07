@@ -731,4 +731,6 @@ export type SavedBot = {
   instructions: string | null;
   /** A command run in the checkout before the agent starts in a new sandbox. */
   setup: string | null;
+  /** When the settings last changed (ISO 8601); absent from older servers. */
+  updatedAt?: string;
 };

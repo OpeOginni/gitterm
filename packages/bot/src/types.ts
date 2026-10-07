@@ -218,6 +218,11 @@ export type BotOptions = {
   /** How long a question or permission prompt waits for an answer. Default 30 min. */
   inputTimeoutMs?: number;
   logger?: BotLogger;
+  /**
+   * Set by `withSavedConfig`: the options before saved settings were added. A running bot applies
+   * settings saved later in the dashboard to these, without a restart.
+   */
+  localOptions?: Omit<BotOptions, "adapter" | "localOptions">;
 };
 
 export type Bot = {

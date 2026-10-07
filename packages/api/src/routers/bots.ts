@@ -69,7 +69,8 @@ export const botsRouter = router({
           code: "CONFLICT",
           message: "Another process owns this bot's runtime lease",
         });
-      return { success: true as const };
+      // A running bot reloads its saved settings when this moves.
+      return { success: true as const, updatedAt: ctx.botIdentity.updatedAt.toISOString() };
     }),
   releaseLease: accountProcedure("identity:read")
     .input(z.object({ leaseId: z.uuid() }))
@@ -186,6 +187,6 @@ export const botsRouter = router({
       .from(bot)
       .where(and(eq(bot.apiTokenId, ctx.apiTokenId), eq(bot.userId, ctx.session.user.id)))
       .limit(1);
-    return row ? settingsOf(row) : null;
+    return row ? { ...settingsOf(row), updatedAt: row.updatedAt.toISOString() } : null;
   }),
 });

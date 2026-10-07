@@ -19,6 +19,7 @@ import {
   interpretTypedAnswer,
 } from "./prompt.js";
 import { checkSetup } from "./preflight.js";
+import { applySavedConfig } from "./saved.js";
 import { createLocks, openStateStore, type InFlightRequest, type StateStore } from "./state.js";
 import {
   minutes,
@@ -161,31 +162,10 @@ function recentIds(limit: number) {
   };
 }
 
-/**
- * A chat bot backed by GitTerm sandboxes: one sandbox per repository that pauses when idle and
- * wakes on the next message, and one OpenCode session per chat thread.
- */
-export function createBot(options: BotOptions): Bot {
-  const { adapter } = options;
-  const log = options.logger ?? console;
-  const gitterm = isClient(options.gitterm)
-    ? options.gitterm
-    : createGittermClient(options.gitterm);
-  const runTimeoutMs = options.runTimeoutMs ?? 60 * 60_000;
-  const inputTimeoutMs = options.inputTimeoutMs ?? 30 * 60_000;
-  for (const [name, value, maximum] of [
-    ["runTimeoutMs", runTimeoutMs, 24 * 60 * 60_000],
-    ["inputTimeoutMs", inputTimeoutMs, 24 * 60 * 60_000],
-    ["maxPendingRequests", options.maxPendingRequests ?? 20, 1_000],
-    ["maxPendingPerUser", options.maxPendingPerUser ?? 3, 1_000],
-  ] as const) {
-    if (!Number.isSafeInteger(value) || value <= 0 || value > maximum)
-      throw new Error(`${name} must be a positive integer no greater than ${maximum}`);
-  }
+/** What the bot works from, derived from its options; replaced whole when saved settings change. */
+function settingsFor(options: BotOptions) {
   const defaultRepo = options.repo ? parseRepo(options.repo) : undefined;
   const extraRepos = (options.repos ?? []).map(parseRepo);
-  const allowedUsers = options.allowedUsers ? new Set(options.allowedUsers) : undefined;
-  const model = typeof options.model === "string" ? { id: options.model } : options.model;
   const channelRepos = new Map(
     Object.entries(options.channels ?? {}).map(([channel, repo]) => [channel, parseRepo(repo)]),
   );
@@ -199,6 +179,41 @@ export function createBot(options: BotOptions): Bot {
   if (knownRepos.length === 0) {
     throw new Error("Give the bot a `repo`, `repos` to choose from, or a repository per channel.");
   }
+  return {
+    options,
+    defaultRepo,
+    extraRepos,
+    channelRepos,
+    knownRepos,
+    allowedUsers: options.allowedUsers ? new Set(options.allowedUsers) : undefined,
+    model: typeof options.model === "string" ? { id: options.model } : options.model,
+  };
+}
+
+/**
+ * A chat bot backed by GitTerm sandboxes: one sandbox per repository that pauses when idle and
+ * wakes on the next message, and one OpenCode session per chat thread.
+ */
+export function createBot(initial: BotOptions): Bot {
+  const { adapter } = initial;
+  const log = initial.logger ?? console;
+  const gitterm = isClient(initial.gitterm)
+    ? initial.gitterm
+    : createGittermClient(initial.gitterm);
+  const runTimeoutMs = initial.runTimeoutMs ?? 60 * 60_000;
+  const inputTimeoutMs = initial.inputTimeoutMs ?? 30 * 60_000;
+  for (const [name, value, maximum] of [
+    ["runTimeoutMs", runTimeoutMs, 24 * 60 * 60_000],
+    ["inputTimeoutMs", inputTimeoutMs, 24 * 60 * 60_000],
+    ["maxPendingRequests", initial.maxPendingRequests ?? 20, 1_000],
+    ["maxPendingPerUser", initial.maxPendingPerUser ?? 3, 1_000],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value <= 0 || value > maximum)
+      throw new Error(`${name} must be a positive integer no greater than ${maximum}`);
+  }
+  // Reassigned together by reload(); a request reads whatever is current when it gets there.
+  let { options, defaultRepo, extraRepos, channelRepos, knownRepos, allowedUsers, model } =
+    settingsFor(initial);
 
   const lock = createLocks();
   const fresh = recentIds(RECENT_MESSAGES);
@@ -214,6 +229,8 @@ export function createBot(options: BotOptions): Bot {
   let running = false;
   let leaseTimer: ReturnType<typeof setInterval> | undefined;
   let leaseId: string | undefined;
+  /** When the saved settings in use were last changed in the dashboard. */
+  let savedAt: string | undefined;
   const tasks = new Set<Promise<unknown>>();
   const trackTask = (task: Promise<unknown>) => {
     tasks.add(task);
@@ -922,9 +939,76 @@ export function createBot(options: BotOptions): Bot {
       } catch (error) {
         if (!(error instanceof GittermError && error.code === "CONFLICT") || waited >= 100_000)
           throw error;
-        if (waited === 0) log.warn("Another process is running this bot; waiting for it to stop…");
+        if (waited === 0)
+          log.warn(
+            "Another process is running this bot, or one stopped without calling bot.stop() and holds it for up to 90 s; waiting…",
+          );
         await new Promise((resolve) => setTimeout(resolve, 5_000));
       }
+    }
+  }
+
+  const workspaceManager = () =>
+    createWorkspaceManager({
+      gitterm,
+      platform: adapter.platform,
+      scope,
+      botId: options.botId,
+      directRetentionMs: options.directRetentionMs,
+      identityPolicy: {
+        allowedUsers: options.allowedUsers,
+        allowGuests: options.allowGuests,
+        allowedChannels: options.allowedChannels,
+        shareChannels: options.shareChannels,
+      },
+      connections: options.connections ?? [],
+      env: options.env ?? {},
+      setup: options.setup ?? [],
+      model,
+      instructions: agentInstructions(adapter.displayName, options.instructions),
+      overrides: options.workspace,
+      log,
+    });
+
+  /**
+   * Applies settings saved in the dashboard since they were loaded, checked like at start. New
+   * requests use them; runs in progress keep theirs. Never throws: on failure the bot carries on
+   * with what it has.
+   */
+  async function reload() {
+    const local = options.localOptions;
+    if (!local) return;
+    try {
+      const saved = await gitterm.bots.self();
+      if (!saved) return;
+      savedAt = saved.updatedAt;
+      if (saved.platform !== adapter.platform) {
+        log.warn(`"${saved.name}" is now a ${saved.platform} bot; run it on that platform.`);
+        return;
+      }
+      const next = settingsFor({
+        ...applySavedConfig(local, saved, log),
+        adapter,
+        localOptions: local,
+      });
+      await checkSetup({
+        gitterm,
+        repos: next.knownRepos,
+        connections: next.options.connections ?? [],
+        model: next.model,
+        overrides: next.options.workspace,
+        log,
+      });
+      ({ options, defaultRepo, extraRepos, channelRepos, knownRepos, allowedUsers, model } = next);
+      workspaces = workspaceManager();
+      log.info(
+        `Applied the settings saved for "${saved.name}". New sandboxes use them; reset replaces an existing one.`,
+      );
+    } catch (error) {
+      log.warn(
+        "Could not apply the newly saved settings; keeping the current ones. Save again in GitTerm to retry.",
+        error,
+      );
     }
   }
 
@@ -944,6 +1028,7 @@ export function createBot(options: BotOptions): Bot {
           );
         }
         if (savedIdentity) {
+          savedAt = savedIdentity.updatedAt;
           const id = randomUUID();
           await claimLease(id);
           leaseId = id;
@@ -954,7 +1039,10 @@ export function createBot(options: BotOptions): Bot {
             renewing = true;
             void gitterm.bots
               .acquireLease(id)
-              .then(() => (failures = 0))
+              .then(async (lease) => {
+                failures = 0;
+                if (lease.updatedAt && lease.updatedAt !== savedAt) await reload();
+              })
               .catch((error: unknown) => {
                 // A blip is fine (the claim lasts 90 s); losing it to another process is not.
                 const lost = error instanceof GittermError && error.code === "CONFLICT";
@@ -999,26 +1087,7 @@ export function createBot(options: BotOptions): Bot {
           accepts: servesChannel,
         });
         scope = started.scope;
-        workspaces = createWorkspaceManager({
-          gitterm,
-          platform: adapter.platform,
-          scope,
-          botId: options.botId,
-          directRetentionMs: options.directRetentionMs,
-          identityPolicy: {
-            allowedUsers: options.allowedUsers,
-            allowGuests: options.allowGuests,
-            allowedChannels: options.allowedChannels,
-            shareChannels: options.shareChannels,
-          },
-          connections: options.connections ?? [],
-          env: options.env ?? {},
-          setup: options.setup ?? [],
-          model,
-          instructions: agentInstructions(adapter.displayName, options.instructions),
-          overrides: options.workspace,
-          log,
-        });
+        workspaces = workspaceManager();
         // Recovered runs take their threads' locks first, so new messages queue behind them.
         await recover();
         markReady();
