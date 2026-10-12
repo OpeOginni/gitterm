@@ -12,6 +12,7 @@ import { modelProvider } from "./schema/model-credentials";
 import { providerType, providerConfigField } from "./schema/provider-config";
 import { PROVIDER_DEFINITIONS } from "@gitterm/schema";
 import { MODEL_PROVIDERS } from "@gitterm/schema/model-providers";
+import { removeRetiredImageProviders, RETIRED_IMAGE_PROVIDERS } from "./seed-image-cleanup";
 
 /**
  * Seed data definitions
@@ -761,6 +762,24 @@ export async function seedDatabase(): Promise<void> {
     if (retired.length) console.log(`[seed]   Retired image "${name}"`);
   }
   const imageMap = new Map<string, string>();
+
+  // The general server image now selects its SSH template via sshTemplateId.
+  // Legacy SSH rows would otherwise win E2B image selection (fewer providers),
+  // even after updating the general image's aliases. Preserve their other
+  // providers and admin-managed enablement rather than retiring the whole row.
+  for (const name of Object.keys(RETIRED_IMAGE_PROVIDERS)) {
+    const existing = await db.query.image.findFirst({ where: eq(image.name, name) });
+    if (!existing) continue;
+
+    const providerMetadata = removeRetiredImageProviders(name, existing.providerMetadata);
+    if (providerMetadata === existing.providerMetadata) continue;
+
+    await db
+      .update(image)
+      .set({ providerMetadata, updatedAt: new Date() })
+      .where(eq(image.id, existing.id));
+    console.log(`[seed]   Removed retired provider mappings from image "${name}"`);
+  }
 
   for (const img of seedImages) {
     const existing = await db.query.image.findFirst({
