@@ -191,6 +191,8 @@ export interface OAuthCredential {
   expires?: number;
   enterpriseUrl?: string;
   accountId?: string;
+  /** OIDC identity token required by native Codex's ChatGPT auth store. Encrypted with the credential. */
+  idToken?: string;
   /** Provider account details OpenCode keeps with the token, such as an OpenCode org. */
   metadata?: Record<string, string>;
 }

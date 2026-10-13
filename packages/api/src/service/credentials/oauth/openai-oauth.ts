@@ -61,6 +61,7 @@ export interface OpenAIOAuthResult {
   accessToken: string;
   expiresAt: number;
   accountId?: string;
+  idToken?: string;
 }
 
 export interface OpenAIDeviceCode {
@@ -183,6 +184,7 @@ export class OpenAIOAuthService {
       accessToken: tokens.access_token,
       expiresAt: Date.now() + (tokens.expires_in ?? 3600) * 1000,
       accountId: extractAccountId(tokens),
+      idToken: tokens.id_token,
     };
   }
 
@@ -201,6 +203,7 @@ export class OpenAIOAuthService {
       accessToken: tokens.access_token,
       expiresAt: Date.now() + (tokens.expires_in ?? 3600) * 1000,
       accountId,
+      idToken: tokens.id_token,
     };
   }
 

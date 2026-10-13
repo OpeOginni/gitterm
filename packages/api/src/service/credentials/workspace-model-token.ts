@@ -41,6 +41,7 @@ export async function refreshModelOAuthCredential(
       access: tokens.accessToken,
       expires: tokens.expiresAt,
       accountId: tokens.accountId ?? current.accountId,
+      idToken: tokens.idToken ?? current.idToken,
     };
   }
   if (plugin === "opencode-console") {

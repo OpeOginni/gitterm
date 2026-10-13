@@ -16,6 +16,7 @@ import type {
 import { resolveProvisioningSpec } from "../provisioning-spec";
 import { createProvisionLogger } from "../provision-logger";
 import { inlineGitAuthCommands } from "../git-auth";
+import { captureAgentAccessCredential } from "../access-credential";
 import {
   buildHostAlias,
   buildSshCommand,
@@ -318,6 +319,15 @@ export class AsciiProvider implements ComputeProvider {
           ),
         );
       }
+      const accessCredential = await logger.step("capture-access-credential", () =>
+        captureAgentAccessCredential(
+          spec?.agent.serve?.accessCredentialCommand,
+          async (command) => ({
+            exitCode: 0,
+            stdout: await this.runCommand(client, handle.boxId, command, repoDir),
+          }),
+        ),
+      );
       await logger.step("start-agent-server", () => this.startAgentServer(client, handle));
       const postStartCommand = spec?.agent.serve?.postStartCommand;
       if (postStartCommand) {
@@ -338,6 +348,7 @@ export class AsciiProvider implements ComputeProvider {
         upstreamAccess: getTokenAccess(primaryUrl.token),
         domain: this.getDomain(config.subdomain),
         serviceCreatedAt: now,
+        accessCredential,
       };
       if (!persistent) return workspaceInfo;
       return { ...workspaceInfo, externalVolumeId: handle.boxId, volumeCreatedAt: now };

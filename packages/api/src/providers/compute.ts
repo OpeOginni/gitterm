@@ -312,6 +312,12 @@ export interface PersistentWorkspaceInfo extends WorkspaceInfo {
   volumeCreatedAt: Date;
 }
 
+/** Fresh routing/auth material from providers that rebuild on resume. */
+export interface WorkspaceResumeResult {
+  upstreamUrl?: string;
+  accessCredential?: string;
+}
+
 export interface WorkspaceStatusResult {
   status: WorkspaceStatus;
   lastActiveAt?: Date;
@@ -353,7 +359,7 @@ export interface ComputeProvider {
     externalId: string,
     regionIdentifier?: string,
     externalRunningDeploymentId?: string,
-  ): Promise<void | { upstreamUrl?: string }>;
+  ): Promise<void | WorkspaceResumeResult>;
 
   /**
    * Permanently delete/terminate a workspace
