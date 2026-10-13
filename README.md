@@ -23,6 +23,19 @@ GitTerm helps you manage a sandbox from first boot through cleanup:
 - **Share** a workspace with teammates when you need to collaborate
 - **Terminate** a workspace when the work is complete
 
+## Connect to an OpenCode server workspace
+
+Click **Connect** on a running OpenCode server-only workspace card. The dialog keeps all connection methods in one place:
+
+- **Desktop / web:** copy a fresh pairing link and paste it into **Connect server** in an up-to-date OpenCode 2 app. Links work once and expire after five minutes; copy a new one for each device. Opening the link directly loads the workspace's own web UI instead of adding it to your existing app.
+- **Terminal:** copy an attach command for your local OpenCode 2 TUI. It uses a paired session token, not the permanent server password. Keep the command private; the token lasts up to 30 days, and changing the server password revokes paired sessions.
+- **Editor:** use SSH editor access when enabled for the workspace.
+- **Backup:** expand **Use URL and password instead** for the server URL, password, or password-based attach command.
+
+Use the same OpenCode app to keep its saved servers and local preferences together. The web frontend must support OpenCode 2; older hosted versions are incompatible. Pasted pairing links currently require subdomain routing. With path routing, use the terminal method or URL/password backup. Older servers without pairing support can also use the backup.
+
+These connections use GitTerm's existing HTTPS workspace proxy; no additional tunnel is required.
+
 ## Deploy on Railway
 
 The fastest way to self-host:

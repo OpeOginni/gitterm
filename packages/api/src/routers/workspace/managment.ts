@@ -79,6 +79,7 @@ import { getAgentProvisioner, resolveWorkspaceProviderCredentials } from "../../
 import type { AgentConfigByKind } from "../../service/agents/types";
 import { buildAwsRuntimeInstructions } from "../../service/agents/opencode";
 import { T3_PAIRING_CREATE_COMMAND } from "../../service/agents/t3code";
+import { opencodeConnectionProcedures } from "./opencode-connection";
 import {
   configKindsForAgentType,
   providerKeySchema,
@@ -646,6 +647,7 @@ async function getConfiguredDefaultRegionIdentifier(
 }
 
 export const workspaceRouter = router({
+  ...opencodeConnectionProcedures,
   listUserInstallations: accountProcedure("workspace:read").query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
 

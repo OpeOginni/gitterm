@@ -58,6 +58,7 @@ import {
 } from "@/lib/utils";
 import { getIcon } from "@/components/dashboard/create-instance/types";
 import { track } from "@/lib/analytics";
+import { OpencodeConnect } from "./opencode-connect";
 
 const PROVIDER_LOGOS: Record<string, string> = {
   aws: "/ECS.svg",
@@ -419,6 +420,8 @@ export function InstanceCard({
   // server password; the stored credential is the current pairing token.
   const isT3 = isT3Agent(workspace.image.agentType.name);
   const isOpencode = isOpencodeAgent(workspace.image.agentType.name);
+  const isOpencodeServer =
+    workspace.image.agentType.provisionerKey === "opencode" && workspace.serverOnly;
   const projectPath = getWorkspaceProjectPath(regionInfo.providerKey, workspace.repositoryUrl);
   const agentIcon = getIcon(workspace.image.agentType.name);
   const portUrl = (port: number) =>
@@ -655,24 +658,55 @@ export function InstanceCard({
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
         <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">Editor Connect</DialogTitle>
-            <DialogDescription>Connect from your preferred editor over SSH.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              {isOpencodeServer ? "Connect to OpenCode" : "Editor Connect"}
+            </DialogTitle>
+            <DialogDescription>
+              {isOpencodeServer
+                ? "Connect an OpenCode client. Pairing is recommended; password access is available as a backup."
+                : "Connect from your preferred editor over SSH."}
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-1">
-            {editorAccessQuery.isLoading ? (
-              <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/20 p-4 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Preparing SSH access...
-              </div>
-            ) : editorAccessQuery.error ? (
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-                {editorAccessQuery.error.message}
-              </div>
-            ) : editorAccessQuery.data ? (
-              renderEditorAccess(editorAccessQuery.data.access)
-            ) : null}
-          </div>
+          {isOpencodeServer && workspaceUrl ? (
+            <OpencodeConnect
+              workspaceId={workspace.id}
+              url={workspaceUrl}
+              projectPath={projectPath}
+              hasCredential={workspace.hasAccessCredential}
+              onConnect={trackConnection}
+              editor={
+                workspace.editorAccessEnabled ? (
+                  editorAccessQuery.isLoading ? (
+                    <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Preparing SSH access...
+                    </div>
+                  ) : editorAccessQuery.error ? (
+                    <p className="text-sm text-amber-200" role="alert">
+                      {editorAccessQuery.error.message}
+                    </p>
+                  ) : editorAccessQuery.data ? (
+                    renderEditorAccess(editorAccessQuery.data.access)
+                  ) : null
+                ) : undefined
+              }
+            />
+          ) : (
+            <div className="grid gap-4 py-1">
+              {editorAccessQuery.isLoading ? (
+                <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/20 p-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Preparing SSH access...
+                </div>
+              ) : editorAccessQuery.error ? (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                  {editorAccessQuery.error.message}
+                </div>
+              ) : editorAccessQuery.data ? (
+                renderEditorAccess(editorAccessQuery.data.access)
+              ) : null}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -883,7 +917,7 @@ export function InstanceCard({
                 </button>
               </div>
             )}
-            {workspace.hasAccessCredential && (
+            {workspace.hasAccessCredential && !isOpencodeServer && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400 opacity-60" />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -932,7 +966,7 @@ export function InstanceCard({
                 </div>
               </div>
             )}
-            {isOpencode && isRunning && (
+            {isOpencode && !isOpencodeServer && isRunning && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <Folder className="h-3.5 w-3.5 shrink-0" />
                 <button
@@ -1057,7 +1091,16 @@ export function InstanceCard({
         <div className="flex gap-2 border-t border-line p-4">
           {isRunning &&
             workspaceUrl &&
-            (workspace.serverOnly ? (
+            (isOpencodeServer ? (
+              <Button
+                size="sm"
+                className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
+                onClick={() => setShowConnectDialog(true)}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Connect
+              </Button>
+            ) : workspace.serverOnly ? (
               <div className="flex gap-2 flex-1">
                 {isT3 ? (
                   <Button
