@@ -33,9 +33,13 @@ function inferBaseUrlOrigin(): string {
   return `${isLocal ? "http" : "https"}://${env.BASE_DOMAIN}`;
 }
 
-// Managed deployments add billing's Polar plugins; other deployments never load billing.
+// Keep auth initialization synchronous. A top-level await here can leave Bun's
+// bundled server entrypoint running without ever opening its HTTP listener.
+// The guarded require is bundled by tsdown/Next, but only loads Polar in managed mode.
 const billingPlugins = isManaged()
-  ? (await import("@gitterm/billing/auth")).createBillingAuthPlugins()
+  ? (
+      require("@gitterm/billing/auth") as typeof import("@gitterm/billing/auth")
+    ).createBillingAuthPlugins()
   : [];
 
 // ============================================================================
