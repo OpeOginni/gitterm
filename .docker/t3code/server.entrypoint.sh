@@ -314,7 +314,7 @@ fi
 
         if [ -n "$TOKEN" ]; then
             if [ -n "$WORKSPACE_API_URL" ] && [ -n "$WORKSPACE_AGENT_AUTH_TOKEN" ] && [ -n "$WORKSPACE_ID" ]; then
-                curl -s -X POST "$WORKSPACE_API_URL/workspaceOps.reportAccessCredential" \
+                curl -fsS --retry 5 --retry-all-errors --retry-delay 2 -X POST "$WORKSPACE_API_URL/workspaceOps.reportAccessCredential" \
                     -H "Authorization: Bearer $WORKSPACE_AGENT_AUTH_TOKEN" \
                     -H "Content-Type: application/json" \
                     --data "{\"workspaceId\":\"$WORKSPACE_ID\",\"credential\":\"$TOKEN\"}" > /dev/null \

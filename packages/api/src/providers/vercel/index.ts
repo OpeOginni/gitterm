@@ -1,4 +1,5 @@
 import { Sandbox } from "@vercel/sandbox";
+import { captureAgentAccessCredential } from "../access-credential";
 import { isOpencodeServeCommand } from "@gitterm/agent-runtime/opencode-service";
 import env from "@gitterm/env/server";
 import type { VercelImageProviderMetadata } from "@gitterm/db/schema/cloud";
@@ -189,7 +190,8 @@ export class VercelProvider implements ComputeProvider {
     ensureOpencode2: boolean,
   ): Promise<void> {
     for (const command of commands ?? []) {
-      await sandbox.runCommand({ cmd: "bash", args: ["-lc", command] });
+      const result = await sandbox.runCommand({ cmd: "bash", args: ["-lc", command] });
+      if (result.exitCode !== 0) throw new Error("Vercel agent setup failed");
     }
     if (ensureOpencode2) {
       const result = await sandbox.runCommand({ cmd: "bash", args: ["-lc", ENSURE_OPENCODE_2] });
@@ -229,23 +231,17 @@ export class VercelProvider implements ComputeProvider {
     spec: WorkspaceProvisioningSpec | null,
     repoDir: string,
   ): Promise<string | undefined> {
-    const command = spec?.agent.serve?.accessCredentialCommand;
-    if (!command) return undefined;
-
-    try {
-      const result = await sandbox.runCommand({
-        cmd: "bash",
-        args: ["-lc", command],
-        cwd: repoDir,
-      });
-      const credential = (await result.stdout()).trim();
-      if (result.exitCode === 0 && credential) return credential;
-    } catch {
-      // Credential capture is non-fatal; the workspace can still start.
-    }
-
-    console.error("Vercel Sandbox Error (capture access credential): command never succeeded");
-    return undefined;
+    return captureAgentAccessCredential(
+      spec?.agent.serve?.accessCredentialCommand,
+      async (command) => {
+        const result = await sandbox.runCommand({
+          cmd: "bash",
+          args: ["-lc", command],
+          cwd: repoDir,
+        });
+        return { exitCode: result.exitCode, stdout: await result.stdout() };
+      },
+    );
   }
 
   private async provisionWorkspace(

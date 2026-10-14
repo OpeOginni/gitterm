@@ -1,6 +1,8 @@
 import type { AgentProvisioning } from "../../providers/compute";
 import type { ApiKeyCredential, OAuthCredential } from "../encryption";
 import type { McpWorkspaceConnection } from "../integrations/mcp-config";
+import type { AgentCapabilities } from "@gitterm/schema/agent-capabilities";
+import type { AgentProvisionerKey } from "@gitterm/schema/workspace-catalog";
 
 export interface UserProviderCredential {
   /** Dashboard credential ID, or null for inline credentials that are never stored. */
@@ -39,6 +41,9 @@ export interface AgentProvisionerContext {
 }
 
 export interface AgentProvisioner {
-  key: string;
+  key: AgentProvisionerKey;
+  capabilities: AgentCapabilities;
+  /** Present only for agents that mint their own client pairing grants. */
+  accessCredentialCommand?: string;
   provision(ctx: AgentProvisionerContext): AgentProvisioning;
 }

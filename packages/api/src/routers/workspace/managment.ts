@@ -32,6 +32,7 @@ import {
   BeforeAgentSetupError,
   isReservedWorkspaceEnvKey,
   type ComputeProvider,
+  type WorkspaceResumeResult,
 } from "../../providers/compute";
 import { createProvisionLogger } from "../../providers/provision-logger";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
@@ -78,7 +79,6 @@ import { getWorkspaceCommitIdentity } from "../../service/github/commit-identity
 import { getAgentProvisioner, resolveWorkspaceProviderCredentials } from "../../service/agents";
 import type { AgentConfigByKind } from "../../service/agents/types";
 import { buildAwsRuntimeInstructions } from "../../service/agents/opencode";
-import { T3_PAIRING_CREATE_COMMAND } from "../../service/agents/t3code";
 import {
   configKindsForAgentType,
   providerKeySchema,
@@ -174,7 +174,7 @@ import {
 async function completeWorkspaceRestart(
   record: typeof workspace.$inferSelect,
   status: "pending" | "running",
-  result: void | { upstreamUrl?: string },
+  result: void | WorkspaceResumeResult,
   identity: Parameters<typeof settleWorkspaceProvisioning>[2],
 ) {
   const now = new Date();
@@ -188,6 +188,9 @@ async function completeWorkspaceRestart(
       lastActiveAt: now,
       updatedAt: now,
       ...(result?.upstreamUrl ? { upstreamUrl: result.upstreamUrl } : {}),
+      ...(result?.accessCredential
+        ? { serverPassword: encryptWorkspacePassword(result.accessCredential) }
+        : {}),
     },
     null,
     identity,
@@ -1182,8 +1185,8 @@ export const workspaceRouter = router({
         });
       }
 
-      const agentTypeName = workspaceRecord.image?.agentType?.name ?? "";
-      if (!agentTypeName.trim().toLowerCase().startsWith("t3code")) {
+      const agent = getAgentProvisioner(workspaceRecord.image.agentType.provisionerKey);
+      if (!agent.accessCredentialCommand) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "This agent does not issue pairing credentials",
@@ -1210,7 +1213,7 @@ export const workspaceRouter = router({
 
       const result = await computeProvider.execCommand(
         workspaceRecord.externalInstanceId,
-        T3_PAIRING_CREATE_COMMAND,
+        agent.accessCredentialCommand,
       );
 
       const credential = result.stdout.trim();
@@ -1225,6 +1228,7 @@ export const workspaceRouter = router({
         serverPassword: encryptWorkspacePassword(credential),
       });
 
+      ctx.honoContext.header("Cache-Control", "no-store, private");
       return { success: true, credential };
     }),
 
@@ -2204,7 +2208,10 @@ export const workspaceRouter = router({
           });
         }
 
-        const applicableKinds = configKindsForAgentType(agentTypeRecord.name);
+        const applicableKinds = configKindsForAgentType(
+          agentTypeRecord.name,
+          agentTypeRecord.provisionerKey,
+        );
         const agentConfigs: AgentConfigByKind = {};
         if (applicableKinds.length > 0 && !ctx.botIdentity && input.provisioningProfile !== "bot") {
           const rows = await db
@@ -2612,11 +2619,12 @@ export const workspaceRouter = router({
             }),
         );
 
-        // Generate server password for serverOnly workspaces
+        const agent = getAgentProvisioner(agentTypeRecord.provisionerKey);
+        // Pairing agents issue their own credentials, not an unused password.
         let serverPassword: string | undefined;
         let encryptedServerPassword: string | undefined;
 
-        if (agentTypeRecord.serverOnly) {
+        if (agentTypeRecord.serverOnly && agent.capabilities.access === "server-password") {
           const passwordData = generateAndEncryptPassword();
           serverPassword = passwordData.password;
           encryptedServerPassword = passwordData.encryptedPassword;
@@ -2638,7 +2646,7 @@ export const workspaceRouter = router({
           )?.tier3NetworkAccess === true;
         if (
           !daytonaWorkspaceApiAccess &&
-          agentTypeRecord.provisionerKey === "opencode" &&
+          agent.capabilities.managedCredentialRefresh &&
           credentials.some(
             (cred) =>
               cred.credential.type === "oauth" &&
@@ -2655,8 +2663,8 @@ export const workspaceRouter = router({
           credentials.flatMap(({ credential }) =>
             credential.type === "api_key"
               ? [credential.apiKey]
-              : [credential.refresh, credential.access].filter((value): value is string =>
-                  Boolean(value),
+              : [credential.refresh, credential.access, credential.idToken].filter(
+                  (value): value is string => Boolean(value),
                 ),
           ),
         );
@@ -2674,14 +2682,14 @@ export const workspaceRouter = router({
         ]
           .filter((instructions): instructions is string => Boolean(instructions))
           .join("\n\n");
-        if (attached.mcp.length && agentTypeRecord.provisionerKey !== "opencode") {
+        if (attached.mcp.length && !agent.capabilities.mcpConnections) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
               "GitTerm MCP connections currently require an OpenCode workspace; T3Code support is not yet available",
           });
         }
-        const agentProvisioning = getAgentProvisioner(agentTypeRecord.provisionerKey).provision({
+        const agentProvisioning = agent.provision({
           userId,
           userDisplayName: fetchedUser.name,
           workspaceHostname: `${subdomain}.${process.env.BASE_DOMAIN ?? "gitterm.dev"}`,
@@ -3583,7 +3591,7 @@ export const workspaceRouter = router({
             provider.providerKey,
             provider.id,
           );
-          let resumeResult: void | { upstreamUrl?: string };
+          let resumeResult: void | WorkspaceResumeResult;
           const resumeStartedAt = Date.now();
           const recordResume = async (outcome: "success" | "failure") =>
             (await getBilling()).recordObservation({
@@ -3986,7 +3994,7 @@ export const workspaceRouter = router({
         );
         if (!claimed)
           throw new TRPCError({ code: "CONFLICT", message: "Workspace is no longer paused" });
-        let resumeResult: void | { upstreamUrl?: string };
+        let resumeResult: void | WorkspaceResumeResult;
         const resumeStartedAt = Date.now();
         const recordResume = async (outcome: "success" | "failure") =>
           (await getBilling()).recordObservation({

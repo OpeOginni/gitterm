@@ -69,6 +69,7 @@ interface ProvisionPayload {
   beforeAgentCommand?: string;
   /** Best-effort command launched after the server is ready. */
   postStartCommand?: string;
+  accessCredentialCommand?: string;
 }
 
 interface AgentRuntime {
@@ -212,12 +213,13 @@ export class CloudflareComputeProvider implements ComputeProvider {
       environmentVariables,
       workspaceProfile: spec?.workspaceProfile,
       startCommand: hasGithubAuth(spec?.repo)
-        ? githubAuthCommand(runtime.startCommand)
-        : runtime.startCommand,
-      port: runtime.port,
+        ? githubAuthCommand(spec?.agent.serve?.command ?? runtime.startCommand)
+        : (spec?.agent.serve?.command ?? runtime.startCommand),
+      port: spec?.agent.serve?.port ?? runtime.port,
       setupCommands: runtime.setupCommands,
       beforeAgentCommand: spec?.beforeAgentCommand,
       postStartCommand: spec?.setupCommand,
+      accessCredentialCommand: spec?.agent.serve?.accessCredentialCommand,
     };
   }
 
@@ -260,6 +262,18 @@ export class CloudflareComputeProvider implements ComputeProvider {
       const detail = await response.text().catch(() => "");
       throw new Error(`Cloudflare sandbox provisioning failed (${response.status}): ${detail}`);
     }
+    const boot = (await response.json()) as { accessCredential?: string };
+    if (
+      payload.accessCredentialCommand &&
+      (typeof boot.accessCredential !== "string" || !boot.accessCredential.trim())
+    ) {
+      await this.callControl(workerUrl, internalApiKey, "/__gitterm/terminate", {
+        sandboxId,
+      }).catch(() => undefined);
+      throw new Error(
+        "Cloudflare worker did not return the agent access credential; update the sandbox worker",
+      );
+    }
 
     const handle: CloudflareExternalServiceId = {
       sandboxId,
@@ -270,9 +284,10 @@ export class CloudflareComputeProvider implements ComputeProvider {
     const workspaceInfo: WorkspaceInfo = {
       externalServiceId: serializeHandle(handle),
       upstreamUrl: workerUrl,
-      upstreamAccess: this.getUpstreamAccess(sandboxId, internalApiKey, runtime.port),
+      upstreamAccess: this.getUpstreamAccess(sandboxId, internalApiKey, payload.port),
       domain: this.getDomain(config.subdomain),
       serviceCreatedAt: new Date(),
+      accessCredential: boot.accessCredential,
     };
 
     logger.log(`workspace-ready persistent=${persistent}`);
@@ -306,7 +321,21 @@ export class CloudflareComputeProvider implements ComputeProvider {
     });
   }
 
-  async resumeWorkspace(externalId: string): Promise<void> {
+  async execCommand(
+    externalId: string,
+    command: string,
+  ): Promise<{ exitCode: number; stdout: string }> {
+    const handle = parseHandle(externalId);
+    const { internalApiKey } = await this.requireConfig();
+    const response = await this.callControl(handle.workerUrl, internalApiKey, "/__gitterm/exec", {
+      sandboxId: handle.sandboxId,
+      command,
+    });
+    if (!response.ok) throw new Error("Cloudflare sandbox command failed");
+    return response.json() as Promise<{ exitCode: number; stdout: string }>;
+  }
+
+  async resumeWorkspace(externalId: string): Promise<{ accessCredential?: string }> {
     const handle = parseHandle(externalId);
     const { internalApiKey } = await this.requireConfig();
     const response = await this.callControl(
@@ -320,6 +349,8 @@ export class CloudflareComputeProvider implements ComputeProvider {
       const detail = await response.text().catch(() => "");
       throw new Error(`Cloudflare sandbox restart failed (${response.status}): ${detail}`);
     }
+    const boot = (await response.json()) as { accessCredential?: string };
+    return { accessCredential: boot.accessCredential };
   }
 
   async terminateWorkspace(externalServiceId: string): Promise<void> {

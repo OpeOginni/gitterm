@@ -1,4 +1,5 @@
 import { Sandbox } from "e2b";
+import { captureAgentAccessCredential } from "../access-credential";
 import env from "@gitterm/env/server";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { BeforeAgentSetupError } from "../compute";
@@ -409,29 +410,15 @@ export class E2BProvider implements ComputeProvider {
       });
   }
 
-  /** Run the agent's access-credential command before starting its server. */
+  /** Credential commands can run offline against the same agent home. */
   private async captureAccessCredential(
     sandbox: E2BSandbox,
     spec: WorkspaceProvisioningSpec | null,
     repoDir: string,
   ): Promise<string | undefined> {
-    const command = spec?.agent.serve?.accessCredentialCommand;
-    if (!command) {
-      return undefined;
-    }
-
-    try {
-      const result = await sandbox.commands.run(`cd ${repoDir} && ${command}`);
-      const credential = result.stdout.trim();
-      if (result.exitCode === 0 && credential) {
-        return credential;
-      }
-    } catch {
-      // Credential capture is non-fatal; the workspace can still start.
-    }
-
-    console.error("E2B Sandbox Error (capture access credential): command never succeeded");
-    return undefined;
+    return captureAgentAccessCredential(spec?.agent.serve?.accessCredentialCommand, (command) =>
+      sandbox.commands.run(command, { cwd: repoDir }),
+    );
   }
 
   private async provisionWorkspace(
@@ -481,7 +468,10 @@ export class E2BProvider implements ComputeProvider {
       });
     }
     const accessCredential = await provisionLogger.step("capture-access-credential", () =>
-      this.captureAccessCredential(sandbox, spec, repoDir),
+      this.captureAccessCredential(sandbox, spec, repoDir).catch(async (error) => {
+        await sandbox.kill().catch(() => undefined);
+        throw error;
+      }),
     );
     await provisionLogger.step("start-agent-server", () =>
       this.startAgentServer(sandbox, spec, repoDir),

@@ -1,6 +1,10 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import env from "@gitterm/env/web";
+import {
+  agentProvisionerKeyForName,
+  getAgentCapabilities,
+} from "@gitterm/schema/agent-capabilities";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -62,12 +66,13 @@ export function getAttachCommand(
   return `${passwordEnv}opencode --server ${url}`;
 }
 
-export function isT3Agent(agentName: string): boolean {
-  return agentName.trim().toLowerCase().startsWith("t3code");
+export function isT3Agent(agentName: string, provisionerKey?: string): boolean {
+  const key = provisionerKey ?? agentProvisionerKeyForName(agentName);
+  return getAgentCapabilities(key ?? "")?.access === "pairing";
 }
 
-export function isOpencodeAgent(agentName: string): boolean {
-  return agentName.trim().toLowerCase().includes("opencode");
+export function isOpencodeAgent(agentName: string, provisionerKey?: string): boolean {
+  return (provisionerKey ?? agentProvisionerKeyForName(agentName)) === "opencode";
 }
 
 /**

@@ -3,7 +3,8 @@ import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
 
 /**
  * T3 Code server template. Mirrors .docker/T3Code.Server.Dockerfile:
- * node 22 (t3 engines), build tools for node-pty, and the agent CLIs T3 drives.
+ * node 22 for npm/provider launchers and the agent CLIs T3 drives. Published T3
+ * ships its self-contained executable in a platform package.
  * The agent itself is started at provision time (see e2b/index.ts startAgentServer).
  */
 export function createT3CodeServerTemplate(t3Version: string): TemplateClass {
@@ -13,7 +14,7 @@ export function createT3CodeServerTemplate(t3Version: string): TemplateClass {
       .aptInstall(["git", "bash", "curl", "unzip", "ca-certificates", "python3", "make", "g++"], {
         noInstallRecommends: true,
       })
-      // node-pty (bundled by t3) has no linux-x64 prebuilds; needs python/make/g++.
+      // Build tools preserve compatibility with older, explicitly pinned t3 releases.
       .runCmd(GITTERM_CLI_CACHE_BUST)
       .npmInstall(
         [

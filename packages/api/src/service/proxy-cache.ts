@@ -20,6 +20,7 @@ export type ProxyWorkspaceCacheEntry = {
   status: "running";
   serverOnly: boolean;
   agentTypeName?: string;
+  agentProvisionerKey?: string;
   exposedPorts?: Record<string, ExposedPort> | null;
 };
 

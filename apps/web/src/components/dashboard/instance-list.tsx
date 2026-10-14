@@ -417,8 +417,11 @@ export function InstanceCard({
 
   // T3 workspaces authenticate with one-time pairing links instead of a
   // server password; the stored credential is the current pairing token.
-  const isT3 = isT3Agent(workspace.image.agentType.name);
-  const isOpencode = isOpencodeAgent(workspace.image.agentType.name);
+  const isT3 = isT3Agent(workspace.image.agentType.name, workspace.image.agentType.provisionerKey);
+  const isOpencode = isOpencodeAgent(
+    workspace.image.agentType.name,
+    workspace.image.agentType.provisionerKey,
+  );
   const projectPath = getWorkspaceProjectPath(regionInfo.providerKey, workspace.repositoryUrl);
   const agentIcon = getIcon(workspace.image.agentType.name);
   const portUrl = (port: number) =>
