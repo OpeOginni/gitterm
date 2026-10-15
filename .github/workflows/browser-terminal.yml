@@ -1,0 +1,26 @@
+name: Browser terminal
+on:
+  pull_request:
+    paths:
+      [".docker/custom/**", ".docker/Opencode.Dockerfile", ".github/workflows/browser-terminal.yml"]
+  workflow_dispatch:
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .docker/custom
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: .docker/custom/package-lock.json
+      - run: npm ci
+      - run: npm run check-types && npm run build
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm test
+      - run: docker build --target terminal-test -f .docker/Opencode.Dockerfile -t gitterm-terminal:test .docker
+        working-directory: .
+      - run: npm run test:session

@@ -1,0 +1,28 @@
+{
+  "name": "@gitterm/browser-terminal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check-types": "tsc --noEmit",
+    "test": "playwright test",
+    "test:session": "node tests/session.mjs",
+    "dev": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "@xterm/addon-canvas": "0.7.0",
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/addon-unicode11": "0.8.0",
+    "@xterm/addon-web-links": "0.11.0",
+    "@xterm/xterm": "5.5.0",
+    "preact": "10.26.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.51.1",
+    "@types/node": "22.13.10",
+    "esbuild": "0.25.1",
+    "typescript": "5.8.2",
+    "ws": "8.18.1"
+  }
+}
