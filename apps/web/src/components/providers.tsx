@@ -22,7 +22,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <WorkspaceStatusWatcherProvider>{children}</WorkspaceStatusWatcherProvider>
         {!isMobile && <ReactQueryDevtools />}
       </QueryClientProvider>
-      <Toaster richColors position="top-right" />
+      <Toaster position="top-right" />
     </ThemeProvider>
   );
 }

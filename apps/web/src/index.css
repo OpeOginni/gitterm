@@ -336,6 +336,30 @@ body {
   --ink: #0a0a0c;
 }
 
+/* Toasts: one accent per type colors the status tag and the bottom rail (see ui/sonner.tsx).
+ * Sonner owns the toast's ::before/::after (swipe and hover hit areas), so the rail is a border. */
+[data-sonner-toast] {
+  --toast-accent: var(--fg-4);
+  border-bottom-color: var(--toast-accent);
+}
+[data-sonner-toast][data-type="success"] {
+  --toast-accent: var(--primary);
+}
+[data-sonner-toast][data-type="warning"] {
+  /* Orange, not amber: amber reads like the gold success accent. */
+  --toast-accent: #fb923c;
+}
+[data-sonner-toast][data-type="error"] {
+  --toast-accent: var(--destructive);
+}
+[data-sonner-toast] [data-icon] {
+  color: var(--toast-accent);
+}
+/* Unstyled toasts lose sonner's rule that hides the content of toasts stacked behind. */
+[data-sonner-toast][data-expanded="false"][data-front="false"] > * {
+  opacity: 0;
+}
+
 /* Animated terminal caret */
 @keyframes blink {
   0%,
