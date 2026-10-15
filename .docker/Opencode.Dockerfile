@@ -102,9 +102,9 @@ RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
     && echo "npm @opencode/cli: $(npm view @opencode/cli@${OPENCODE_VERSION} version)" \
     && npm install -g "@opencode/cli@${OPENCODE_VERSION}" "@gitterm/cli@latest" --prefer-online --no-audit --fund=false \
-    && version=$(/usr/local/bin/opencode --version) \
-    && echo "installed opencode: $version" \
-    && case "$version" in 2.*) ;; *) echo "OpenCode 2.x is required" >&2; exit 1 ;; esac
+    && version=$(/usr/local/bin/opencode --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1) \
+    && echo "installed opencode: ${version:-unknown}" \
+    && case "$version" in 2.*) ;; *) echo "OpenCode 2.x is required (found ${version:-unknown})" >&2; exit 1 ;; esac
 
 # Set up working directory
 WORKDIR /workspace
