@@ -79,6 +79,7 @@ import { getWorkspaceCommitIdentity } from "../../service/github/commit-identity
 import { getAgentProvisioner, resolveWorkspaceProviderCredentials } from "../../service/agents";
 import type { AgentConfigByKind } from "../../service/agents/types";
 import { buildAwsRuntimeInstructions } from "../../service/agents/opencode";
+import { opencodeConnectionProcedures } from "./opencode-connection";
 import {
   configKindsForAgentType,
   providerKeySchema,
@@ -649,6 +650,7 @@ async function getConfiguredDefaultRegionIdentifier(
 }
 
 export const workspaceRouter = router({
+  ...opencodeConnectionProcedures,
   listUserInstallations: accountProcedure("workspace:read").query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
 

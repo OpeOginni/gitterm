@@ -27,6 +27,7 @@ import {
   KeyRound,
   SquareArrowOutUpRight,
   Lock,
+  Link2,
   Infinity as InfinityIcon,
 } from "lucide-react";
 import Image from "next/image";
@@ -55,9 +56,15 @@ import {
   getT3DesktopPairingUrl,
   isT3Agent,
   isOpencodeAgent,
+  supportsPairingLinks,
 } from "@/lib/utils";
 import { getIcon } from "@/components/dashboard/create-instance/types";
 import { track } from "@/lib/analytics";
+import {
+  copyOpencodePairingLink,
+  opencodeSessionAttachCommand,
+  openOpencodeInBrowser,
+} from "./opencode-connect";
 
 const PROVIDER_LOGOS: Record<string, string> = {
   aws: "/ECS.svg",
@@ -422,6 +429,12 @@ export function InstanceCard({
     workspace.image.agentType.name,
     workspace.image.agentType.provisionerKey,
   );
+  // OpenCode server pairing links need /auth/connect at the origin root, so subdomain routing.
+  const canPairOpencode =
+    workspace.image.agentType.provisionerKey === "opencode" &&
+    workspace.serverOnly &&
+    workspace.hasAccessCredential &&
+    supportsPairingLinks();
   const projectPath = getWorkspaceProjectPath(regionInfo.providerKey, workspace.repositoryUrl);
   const agentIcon = getIcon(workspace.image.agentType.name);
   const portUrl = (port: number) =>
@@ -935,6 +948,26 @@ export function InstanceCard({
                 </div>
               </div>
             )}
+            {canPairOpencode && isRunning && (
+              <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                <Link2 className="h-3.5 w-3.5 shrink-0 text-amber-400 opacity-60" />
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span className="text-xs text-fg-4">Desktop pairing link</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      trackConnection("desktop");
+                      void copyOpencodePairingLink(workspace.id);
+                    }}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-400/70 bg-amber-400/[0.06] border border-amber-400/[0.1] hover:bg-amber-400/[0.12] hover:text-amber-400 transition-colors cursor-pointer"
+                    title="Copy a one-time link for Connect server in the OpenCode desktop app"
+                  >
+                    <Copy className="h-2.5 w-2.5 text-amber-400 opacity-70" />
+                    Copy
+                  </button>
+                </div>
+              </div>
+            )}
             {isOpencode && isRunning && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <Folder className="h-3.5 w-3.5 shrink-0" />
@@ -1086,22 +1119,31 @@ export function InstanceCard({
                   <Button
                     size="sm"
                     className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
+                    title="Copy a command that opens this workspace in your local terminal UI"
                     onClick={async () => {
-                      if (workspace.subdomain) {
-                        const credential = await revealAccessCredential();
-                        const command = getAttachCommand(
-                          workspace.subdomain,
-                          workspace.image.agentType.name,
-                          credential,
+                      if (!workspace.subdomain) return;
+                      let command: string | undefined;
+                      if (canPairOpencode) {
+                        // A paired session token keeps the permanent password out of shells.
+                        // Older servers cannot pair; fall back to the password command.
+                        command = await opencodeSessionAttachCommand(workspace.id).catch(
+                          () => undefined,
                         );
-                        await navigator.clipboard.writeText(command);
-                        trackConnection("cli");
-                        toast.success("Attach command copied to clipboard!");
                       }
+                      command ??= getAttachCommand(
+                        workspace.subdomain,
+                        workspace.image.agentType.name,
+                        await revealAccessCredential(),
+                      );
+                      await navigator.clipboard.writeText(command);
+                      trackConnection("cli");
+                      toast.success("Attach command copied", {
+                        description: "Paste it into your terminal and press Enter to open the TUI.",
+                      });
                     }}
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    Copy Attach
+                    Attach TUI
                   </Button>
                 )}
                 {workspace.editorAccessEnabled && (
@@ -1129,7 +1171,20 @@ export function InstanceCard({
                       }
                     }}
                   >
-                    <Monitor className="h-3.5 w-3.5" />
+                    <Globe className="h-3.5 w-3.5" />
+                  </Button>
+                ) : canPairOpencode ? (
+                  <Button
+                    size="sm"
+                    className="h-9 text-xs gap-2 border-border/50"
+                    variant="outline"
+                    title="Open the OpenCode web app, already signed in"
+                    onClick={() => {
+                      trackConnection("browser");
+                      void openOpencodeInBrowser(workspace.id, workspaceUrl);
+                    }}
+                  >
+                    <Globe className="h-3.5 w-3.5" />
                   </Button>
                 ) : (
                   <Button
@@ -1145,7 +1200,7 @@ export function InstanceCard({
                       rel="noreferrer"
                       onClick={() => trackConnection("browser")}
                     >
-                      <Monitor className="h-3.5 w-3.5" />
+                      <Globe className="h-3.5 w-3.5" />
                     </a>
                   </Button>
                 )}
