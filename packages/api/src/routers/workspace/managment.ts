@@ -1060,10 +1060,10 @@ export const workspaceRouter = router({
             },
             cloudProvider: true,
           },
-          orderBy: (workspace, { desc }) =>
+          orderBy: (workspaceTable, { desc: descending }) =>
             status === "terminated"
-              ? [desc(workspace.terminatedAt), desc(workspace.startedAt)]
-              : [desc(workspace.startedAt)],
+              ? [descending(workspaceTable.terminatedAt), descending(workspaceTable.startedAt)]
+              : [descending(workspaceTable.startedAt)],
           limit,
           offset,
         });

@@ -47,6 +47,8 @@ interface CreateCloudInstanceProps {
   onCancel: () => void;
 }
 
+const EMPTY_CLOUD_PROVIDERS: CloudProvider[] = [];
+
 interface WorkspaceCredential {
   id: string;
   providerName: string;
@@ -204,7 +206,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   // providerKey === "aws" and each is pinned to one region. For the UI we
   // group them under a single "AWS" cloud entry so users pick AWS + region,
   // and the selected region resolves back to a specific provider row.
-  const cloudProviders = cloudProvidersData?.cloudProviders ?? [];
+  const cloudProviders = cloudProvidersData?.cloudProviders ?? EMPTY_CLOUD_PROVIDERS;
 
   const awsProviders = useMemo(
     () => cloudProviders.filter((p) => p.providerKey === "aws"),
