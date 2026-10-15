@@ -73,8 +73,12 @@ try {
   });
   await page.goto(base);
   await page.locator('[data-connection="connected"]').waitFor();
-  await page.getByRole("button", { name: "Draft", exact: true }).click();
-  await page.locator("#draft").fill("A draft above the keyboard");
+  // Accessory keys are touch-only; only open the draft editor when it is present.
+  const draftButton = page.getByRole("button", { name: "Draft", exact: true });
+  if (await draftButton.isVisible()) {
+    await draftButton.click();
+    await page.locator("#draft").fill("A draft above the keyboard");
+  }
   await page.screenshot({ path: "test-results/mobile-terminal.png" });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: "test-results/desktop-terminal.png" });

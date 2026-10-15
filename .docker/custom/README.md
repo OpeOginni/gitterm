@@ -75,9 +75,14 @@ the workspace. Deliberately exiting the shell lets the next connection start ane
 
 ## Verification and upgrades
 
+There is no dedicated PR workflow for this package. The `.docker/Opencode.Dockerfile`
+`browser` stage runs `npm run check-types && npm run build`, and the
+`Publish Workspace Runtime Images` workflow builds that Dockerfile for `linux/amd64`,
+so a broken browser bundle fails the image build. Run the behavioral tests locally:
+
 ```sh
 npx playwright install chromium webkit
-npm test
+npm run build && npm test
 # From repository root:
 docker build --target terminal-test -f .docker/Opencode.Dockerfile -t gitterm-terminal:test .docker
 # From .docker/custom:
@@ -92,11 +97,11 @@ additional keys scroll separately. Settings and Draft are overlays, so opening
 them does not resize the PTY. Short visual viewports compact the controls and
 hide the top header below 300px to preserve terminal rows.
 
-CI checks types, builds, runs Chromium/mobile-WebKit behavioral tests, and tests
-real ttyd/tmux reconnection with the same shell PID and environment. Test screenshots
-are written to `test-results`. These tests simulate viewport changes; physical
-iOS/Android keyboard, IME/dictation, pinch zoom, and gesture testing are still part
-of release QA. Run OpenCode itself for final plugin/sidebar/permission checks.
+The local tests cover Chromium and mobile WebKit behavior and real ttyd/tmux
+reconnection with the same shell PID and environment. Test screenshots are written
+to `test-results`. They simulate viewport changes; physical iOS/Android keyboard,
+IME/dictation, pinch zoom, and gesture testing are still part of release QA.
+Run OpenCode itself for final plugin/sidebar/permission checks.
 
 Update npm dependencies and `package-lock.json` together, then run those checks.
 Update `TTYD_COMMIT` in `Opencode.Dockerfile` independently and rerun the transport

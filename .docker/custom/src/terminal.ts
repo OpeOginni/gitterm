@@ -22,7 +22,11 @@ export class BrowserTerminal {
   private lastSend = false;
   private connection: Connection;
 
-  constructor(parent: HTMLElement, onState: (state: ConnectionState, readonly: boolean) => void) {
+  constructor(
+    parent: HTMLElement,
+    onState: (state: ConnectionState, readonly: boolean) => void,
+    onModes: (modes: { bracketedPaste: boolean }) => void = () => {},
+  ) {
     const terminal = this.terminal;
     terminal.loadAddon(this.fitAddon);
     terminal.loadAddon(new WebLinksAddon());
@@ -38,7 +42,12 @@ export class BrowserTerminal {
         onState(state, this.readonly);
       },
       size: () => ({ cols: terminal.cols, rows: terminal.rows }),
-      output: (data, done) => terminal.write(data, done),
+      output: (data, done) =>
+        terminal.write(data, () => {
+          done();
+          // Report negotiated modes after each parse so the shell reflects readiness.
+          onModes({ bracketedPaste: terminal.modes.bracketedPasteMode });
+        }),
       reset: () => terminal.reset(),
       preferences: (prefs) => {
         this.readonly = prefs.disableStdin === true;

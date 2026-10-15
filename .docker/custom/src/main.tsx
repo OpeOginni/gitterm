@@ -21,15 +21,21 @@ function App() {
   const [opencode, setOpencode] = useState(false);
   const [shortcut, setShortcut] = useState(() => readSetting("sidebar-key", '"\\u0018b"'));
   const [compose, setCompose] = useState(false);
+  // Reflects the terminal's negotiated paste mode; useful for readiness hints and tests.
+  const [bracketedPaste, setBracketedPaste] = useState(false);
   const enabled = state === "connected" && !readonly;
 
   useEffect(() => {
     const viewport = observeViewport(shell.current!);
-    const adapter = new BrowserTerminal(container.current!, (next, readOnly) => {
-      setState(next);
-      setReadonly(readOnly);
-      if (next !== "connected") setOpencode(false);
-    });
+    const adapter = new BrowserTerminal(
+      container.current!,
+      (next, readOnly) => {
+        setState(next);
+        setReadonly(readOnly);
+        if (next !== "connected") setOpencode(false);
+      },
+      (modes) => setBracketedPaste(modes.bracketedPaste),
+    );
     terminal.current = adapter;
     return () => {
       viewport();
@@ -62,7 +68,12 @@ function App() {
   };
   const keepFocus = (event: PointerEvent) => event.preventDefault();
   return (
-    <div ref={shell} data-connection={state} class={`workspace-shell${wide ? " is-wide" : ""}`}>
+    <div
+      ref={shell}
+      data-connection={state}
+      data-bracketed-paste={bracketedPaste ? "true" : "false"}
+      class={`workspace-shell${wide ? " is-wide" : ""}`}
+    >
       <header class="brand-bar">
         <img class="brand-logo" src={logo} alt="GitTerm" width="28" height="28" />
         <nav class="terminal-controls" aria-label="Terminal controls">
