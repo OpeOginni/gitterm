@@ -1,4 +1,13 @@
-# Multi-stage build: Stage 1 - Build ttyd from source
+# Build the browser independently of ttyd's internal frontend.
+FROM node:22-bookworm-slim AS browser
+WORKDIR /browser
+COPY ./custom/package.json ./custom/package-lock.json ./
+RUN npm ci --no-audit --fund=false
+COPY ./custom/build.mjs ./custom/tsconfig.json ./
+COPY ./custom/src ./src
+RUN npm run check-types && npm run build
+
+# Build the pinned, unmodified ttyd backend.
 FROM node:20-bookworm-slim AS builder
 
 # Install build dependencies
@@ -15,29 +24,14 @@ RUN apt-get update && \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Enable Corepack for Yarn
-RUN corepack enable
-
-# Clone the ttyd repository
+# Pin ttyd's transport independently of the browser frontend.
+ARG TTYD_COMMIT=2922cb89f518bae4d0fcf4d757a7419638fc71fc
 WORKDIR /build
-RUN git clone https://github.com/tsl0922/ttyd.git
-
-WORKDIR /build/ttyd
-
-# Copy your custom app. tsx file to replace the original
-COPY ./custom/app.tsx /build/ttyd/html/src/components/app.tsx
-COPY ./custom/xterm-index.ts /build/ttyd/html/src/components/terminal/xterm/index.ts
-
-COPY ./custom/index.scss /build/ttyd/html/src/style/index.scss
-
-COPY ./custom/server.c /build/ttyd/src/server.c
-COPY ./custom/server.h /build/ttyd/src/server.h
-COPY ./custom/http.c /build/ttyd/src/http.c
-COPY ./custom/protocol.c /build/ttyd/src/protocol.c
-
-# Build the frontend first (this is crucial!)
-WORKDIR /build/ttyd/html
-RUN yarn install && yarn run fix && yarn build
+RUN git init ttyd \
+    && cd ttyd \
+    && git remote add origin https://github.com/tsl0922/ttyd.git \
+    && git fetch --depth 1 origin "${TTYD_COMMIT}" \
+    && git checkout --detach FETCH_HEAD
 
 # Now build the backend
 WORKDIR /build/ttyd
@@ -47,7 +41,17 @@ RUN mkdir build && \
     make && \
     make install
 
-# Multi-stage build: Stage 2 - Create runtime image
+# Small integration target: real ttyd/tmux without downloading agent runtimes.
+FROM builder AS terminal-test
+RUN apt-get update && apt-get install -y --no-install-recommends tmux && rm -rf /var/lib/apt/lists/*
+COPY --from=browser /browser/dist/index.html /usr/local/share/gitterm-terminal/index.html
+COPY ./custom/tmux.conf /etc/gitterm-tmux.conf
+COPY ./custom/session.sh /usr/local/bin/gitterm-terminal-session
+RUN chmod +x /usr/local/bin/gitterm-terminal-session
+# Transport fixture intentionally runs a shell; production below requires V2.
+CMD ["ttyd", "--writable", "--port", "7681", "--index", "/usr/local/share/gitterm-terminal/index.html", "tmux", "-u", "-L", "gitterm", "-f", "/etc/gitterm-tmux.conf", "new-session", "-A", "-s", "transport-test", "bash"]
+
+# Create runtime image
 FROM node:20-bookworm-slim
 
 # Install system dependencies
@@ -55,6 +59,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     git \
     bash \
+    tmux \
     curl \
     unzip \
     nodejs \
@@ -79,6 +84,10 @@ RUN curl -fsSL "https://github.com/aws/aws-sam-cli/releases/${AWS_SAM_CLI_VERSIO
 
 # Copy the built ttyd binary from builder stage
 COPY --from=builder /usr/local/bin/ttyd /usr/bin/ttyd
+COPY --from=browser /browser/dist/index.html /usr/local/share/gitterm-terminal/index.html
+COPY ./custom/tmux.conf /etc/gitterm-tmux.conf
+COPY ./custom/session.sh /usr/local/bin/gitterm-terminal-session
+RUN chmod +x /usr/local/bin/gitterm-terminal-session
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libwebsockets*.so* /usr/lib/x86_64-linux-gnu/
 
 # Update library cache
@@ -93,14 +102,17 @@ RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
     && echo "npm @opencode/cli: $(npm view @opencode/cli@${OPENCODE_VERSION} version)" \
     && npm install -g "@opencode/cli@${OPENCODE_VERSION}" "@gitterm/cli@latest" --prefer-online --no-audit --fund=false \
-    && echo "installed opencode: $(opencode --version)"
+    && version=$(/usr/local/bin/opencode --version) \
+    && echo "installed opencode: $version" \
+    && case "$version" in 2.*) ;; *) echo "OpenCode 2.x is required" >&2; exit 1 ;; esac
 
 # Set up working directory
 WORKDIR /workspace
 
 # Set environment variables for persistence
 # These ensure all tools store data in /workspace by default
-ENV HOME=/workspace \
+ENV LANG=C.UTF-8 \
+    HOME=/workspace \
     XDG_CONFIG_HOME=/workspace/.config \
     XDG_DATA_HOME=/workspace/.local/share \
     XDG_STATE_HOME=/workspace/.local/state \
@@ -128,7 +140,7 @@ EXPOSE 7681
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Default command
-CMD ["ttyd", "--interface", "::", "--ipv6", "--writable", "--port", "7681", "bash", "-c", "opencode; exec bash"]
+CMD ["ttyd", "--index", "/usr/local/share/gitterm-terminal/index.html", "--interface", "::", "--ipv6", "--writable", "--port", "7681", "/usr/local/bin/gitterm-terminal-session"]
 
 # docker build -f ./Opencode.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode:latest .
 

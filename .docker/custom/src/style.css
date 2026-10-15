@@ -1,0 +1,355 @@
+:root {
+  color-scheme: dark;
+  font-family: Menlo, Consolas, monospace;
+  color: #e0e0e0;
+  background: #09090b;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+button,
+input,
+textarea {
+  font: inherit;
+}
+button {
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid #353538;
+  border-radius: 7px;
+  background: #161618;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:hover,
+button[aria-pressed="true"] {
+  border-color: #d6b65c;
+  color: #f0d98d;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+:focus-visible {
+  outline: 2px solid #d6b65c;
+  outline-offset: 2px;
+}
+.workspace-shell {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+  container-type: size;
+}
+.brand-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left));
+  border-bottom: 1px solid #27272b;
+}
+.brand-logo {
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.terminal-controls {
+  display: flex;
+  gap: 5px;
+  font-size: 12px;
+}
+.connection-bar {
+  position: absolute;
+  top: 60px;
+  right: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: #19191c;
+  font-size: 11px;
+  color: #aaa;
+}
+.connection-bar button {
+  font-size: 12px;
+}
+.settings {
+  position: absolute;
+  z-index: 4;
+  top: 60px;
+  right: 8px;
+  width: min(420px, calc(100% - 16px));
+  max-height: calc(100% - 120px);
+  padding: 10px;
+  border: 1px solid #353538;
+  border-radius: 8px;
+  background: #111113;
+  overflow: auto;
+  font-size: 12px;
+}
+.settings label {
+  display: block;
+  margin: 8px 0;
+}
+.settings input:not([type="checkbox"]) {
+  display: block;
+  width: 100%;
+  font-size: 16px;
+  padding: 8px;
+}
+.terminal-shell {
+  isolation: isolate;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+}
+#terminal-container {
+  flex: 1 0 100%;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  padding: 6px;
+}
+.is-wide #terminal-container {
+  flex-basis: max(1200px, 150%);
+  min-width: max(1200px, 150%);
+}
+#terminal-container .xterm {
+  height: 100%;
+}
+.xterm-screen {
+  touch-action: pinch-zoom;
+}
+.mobile-input {
+  display: none;
+  flex-shrink: 0;
+  padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  border-top: 1px solid #353538;
+  background: #111113;
+}
+/* Input helpers belong to touch-first devices, not narrow desktop windows. */
+@media (pointer: coarse) {
+  .mobile-input {
+    display: block;
+  }
+}
+.key-strip {
+  display: flex;
+  gap: 8px;
+}
+.extra-keys {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #777 #19191c;
+  padding-bottom: 2px;
+}
+.primary-keys {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  border-left: 1px solid #353538;
+  padding-left: 8px;
+}
+.key-strip button {
+  flex-shrink: 0;
+  min-width: 44px;
+  font-size: 12px;
+}
+.draft-editor {
+  position: absolute;
+  bottom: 62px;
+  left: 8px;
+  right: 8px;
+  z-index: 4;
+  max-height: calc(100% - 70px);
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid #353538;
+  border-radius: 8px;
+  background: #111113;
+}
+.panel-close {
+  float: right;
+  margin-left: 8px;
+  min-width: 44px;
+  font-size: 20px;
+}
+.draft-editor label {
+  font-size: 11px;
+  color: #aaa;
+}
+.compose-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.compose-row textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 140px;
+  padding: 8px;
+  resize: vertical;
+  border: 1px solid #353538;
+  border-radius: 7px;
+  background: #09090b;
+  color: inherit;
+  font-size: 16px;
+  line-height: 22px;
+}
+.compose-row button {
+  color: #16120a;
+  background: #d6b65c;
+}
+.input-message {
+  position: absolute;
+  bottom: 64px;
+  right: 12px;
+  z-index: 6;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: #27272b;
+  font-size: 11px;
+  color: #d6b65c;
+  pointer-events: none;
+}
+@media (max-width: 600px) {
+  .terminal-controls button,
+  .primary-keys button {
+    padding: 6px 8px;
+  }
+  .extra-keys {
+    flex: 1;
+    mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+  }
+  .compose-row {
+    flex-wrap: wrap;
+  }
+  .compose-row textarea {
+    flex-basis: 100%;
+  }
+}
+/* Give narrow portrait phones a full-width key row without crowding actions.
+   Keep one row when the keyboard leaves very little vertical space. */
+@media (max-width: 400px) {
+  @container (min-height: 451px) {
+    .key-strip {
+      flex-direction: column;
+      gap: 4px;
+    }
+    .extra-keys {
+      flex: auto;
+    }
+    .primary-keys {
+      border-left: 0;
+      padding-left: 0;
+    }
+    .primary-keys button {
+      flex: 1;
+    }
+    .draft-editor {
+      bottom: 112px;
+      max-height: calc(100% - 120px);
+    }
+    .input-message {
+      bottom: 114px;
+    }
+  }
+}
+/* Use actual VisualViewport height, including the software keyboard. */
+@container (max-height: 450px) {
+  .brand-bar {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .brand-bar button {
+    min-height: 36px;
+  }
+  .mobile-input {
+    padding-top: 2px;
+    padding-bottom: max(2px, env(safe-area-inset-bottom));
+  }
+  .key-strip button {
+    min-height: 36px;
+  }
+  .settings {
+    top: 38px;
+    max-height: calc(100% - 84px);
+  }
+  .draft-editor {
+    bottom: 46px;
+    max-height: calc(100% - 50px);
+  }
+  .draft-editor label {
+    display: none;
+  }
+  .draft-editor .panel-close {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    float: none;
+    margin: 0;
+  }
+  .compose-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    padding-right: 44px;
+    margin-top: 0;
+    gap: 4px;
+  }
+  .compose-row textarea {
+    width: 100%;
+    height: 44px;
+    resize: none;
+  }
+  .compose-row button {
+    padding: 6px;
+  }
+  .input-message {
+    bottom: 48px;
+  }
+  #terminal-container {
+    padding: 2px;
+  }
+}
+@container (max-height: 300px) {
+  .brand-bar {
+    display: none;
+  }
+  .connection-bar {
+    top: 4px;
+  }
+  .settings {
+    top: 4px;
+    max-height: calc(100% - 54px);
+  }
+}
