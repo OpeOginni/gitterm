@@ -27,6 +27,7 @@ import {
   KeyRound,
   SquareArrowOutUpRight,
   Lock,
+  Link2,
   Infinity as InfinityIcon,
 } from "lucide-react";
 import Image from "next/image";
@@ -55,10 +56,15 @@ import {
   getT3DesktopPairingUrl,
   isT3Agent,
   isOpencodeAgent,
+  supportsPairingLinks,
 } from "@/lib/utils";
 import { getIcon } from "@/components/dashboard/create-instance/types";
 import { track } from "@/lib/analytics";
-import { OpencodeConnect } from "./opencode-connect";
+import {
+  copyOpencodePairingLink,
+  opencodeSessionAttachCommand,
+  openOpencodeInBrowser,
+} from "./opencode-connect";
 
 const PROVIDER_LOGOS: Record<string, string> = {
   aws: "/ECS.svg",
@@ -420,8 +426,12 @@ export function InstanceCard({
   // server password; the stored credential is the current pairing token.
   const isT3 = isT3Agent(workspace.image.agentType.name);
   const isOpencode = isOpencodeAgent(workspace.image.agentType.name);
-  const isOpencodeServer =
-    workspace.image.agentType.provisionerKey === "opencode" && workspace.serverOnly;
+  // OpenCode server pairing links need /auth/connect at the origin root, so subdomain routing.
+  const canPairOpencode =
+    workspace.image.agentType.provisionerKey === "opencode" &&
+    workspace.serverOnly &&
+    workspace.hasAccessCredential &&
+    supportsPairingLinks();
   const projectPath = getWorkspaceProjectPath(regionInfo.providerKey, workspace.repositoryUrl);
   const agentIcon = getIcon(workspace.image.agentType.name);
   const portUrl = (port: number) =>
@@ -658,55 +668,24 @@ export function InstanceCard({
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
         <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {isOpencodeServer ? "Connect to OpenCode" : "Editor Connect"}
-            </DialogTitle>
-            <DialogDescription>
-              {isOpencodeServer
-                ? "Connect an OpenCode client. Pairing is recommended; password access is available as a backup."
-                : "Connect from your preferred editor over SSH."}
-            </DialogDescription>
+            <DialogTitle className="flex items-center gap-2">Editor Connect</DialogTitle>
+            <DialogDescription>Connect from your preferred editor over SSH.</DialogDescription>
           </DialogHeader>
 
-          {isOpencodeServer && workspaceUrl ? (
-            <OpencodeConnect
-              workspaceId={workspace.id}
-              url={workspaceUrl}
-              projectPath={projectPath}
-              hasCredential={workspace.hasAccessCredential}
-              onConnect={trackConnection}
-              editor={
-                workspace.editorAccessEnabled ? (
-                  editorAccessQuery.isLoading ? (
-                    <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Preparing SSH access...
-                    </div>
-                  ) : editorAccessQuery.error ? (
-                    <p className="text-sm text-amber-200" role="alert">
-                      {editorAccessQuery.error.message}
-                    </p>
-                  ) : editorAccessQuery.data ? (
-                    renderEditorAccess(editorAccessQuery.data.access)
-                  ) : null
-                ) : undefined
-              }
-            />
-          ) : (
-            <div className="grid gap-4 py-1">
-              {editorAccessQuery.isLoading ? (
-                <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/20 p-4 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Preparing SSH access...
-                </div>
-              ) : editorAccessQuery.error ? (
-                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-                  {editorAccessQuery.error.message}
-                </div>
-              ) : editorAccessQuery.data ? (
-                renderEditorAccess(editorAccessQuery.data.access)
-              ) : null}
-            </div>
-          )}
+          <div className="grid gap-4 py-1">
+            {editorAccessQuery.isLoading ? (
+              <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/20 p-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Preparing SSH access...
+              </div>
+            ) : editorAccessQuery.error ? (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                {editorAccessQuery.error.message}
+              </div>
+            ) : editorAccessQuery.data ? (
+              renderEditorAccess(editorAccessQuery.data.access)
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -917,7 +896,7 @@ export function InstanceCard({
                 </button>
               </div>
             )}
-            {workspace.hasAccessCredential && !isOpencodeServer && (
+            {workspace.hasAccessCredential && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400 opacity-60" />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -966,7 +945,27 @@ export function InstanceCard({
                 </div>
               </div>
             )}
-            {isOpencode && !isOpencodeServer && isRunning && (
+            {canPairOpencode && isRunning && (
+              <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                <Link2 className="h-3.5 w-3.5 shrink-0 text-amber-400 opacity-60" />
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span className="text-xs text-fg-4">Desktop pairing link</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      trackConnection("desktop");
+                      void copyOpencodePairingLink(workspace.id);
+                    }}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-400/70 bg-amber-400/[0.06] border border-amber-400/[0.1] hover:bg-amber-400/[0.12] hover:text-amber-400 transition-colors cursor-pointer"
+                    title="Copy a one-time link for Connect server in the OpenCode desktop app"
+                  >
+                    <Copy className="h-2.5 w-2.5 text-amber-400 opacity-70" />
+                    Copy
+                  </button>
+                </div>
+              </div>
+            )}
+            {isOpencode && isRunning && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
                 <Folder className="h-3.5 w-3.5 shrink-0" />
                 <button
@@ -1091,16 +1090,7 @@ export function InstanceCard({
         <div className="flex gap-2 border-t border-line p-4">
           {isRunning &&
             workspaceUrl &&
-            (isOpencodeServer ? (
-              <Button
-                size="sm"
-                className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
-                onClick={() => setShowConnectDialog(true)}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Connect
-              </Button>
-            ) : workspace.serverOnly ? (
+            (workspace.serverOnly ? (
               <div className="flex gap-2 flex-1">
                 {isT3 ? (
                   <Button
@@ -1126,22 +1116,31 @@ export function InstanceCard({
                   <Button
                     size="sm"
                     className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
+                    title="Copy a command that opens this workspace in your local terminal UI"
                     onClick={async () => {
-                      if (workspace.subdomain) {
-                        const credential = await revealAccessCredential();
-                        const command = getAttachCommand(
-                          workspace.subdomain,
-                          workspace.image.agentType.name,
-                          credential,
+                      if (!workspace.subdomain) return;
+                      let command: string | undefined;
+                      if (canPairOpencode) {
+                        // A paired session token keeps the permanent password out of shells.
+                        // Older servers cannot pair; fall back to the password command.
+                        command = await opencodeSessionAttachCommand(workspace.id).catch(
+                          () => undefined,
                         );
-                        await navigator.clipboard.writeText(command);
-                        trackConnection("cli");
-                        toast.success("Attach command copied to clipboard!");
                       }
+                      command ??= getAttachCommand(
+                        workspace.subdomain,
+                        workspace.image.agentType.name,
+                        await revealAccessCredential(),
+                      );
+                      await navigator.clipboard.writeText(command);
+                      trackConnection("cli");
+                      toast.success("Attach command copied", {
+                        description: "Paste it into your terminal and press Enter to open the TUI.",
+                      });
                     }}
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    Copy Attach
+                    Attach TUI
                   </Button>
                 )}
                 {workspace.editorAccessEnabled && (
@@ -1169,7 +1168,20 @@ export function InstanceCard({
                       }
                     }}
                   >
-                    <Monitor className="h-3.5 w-3.5" />
+                    <Globe className="h-3.5 w-3.5" />
+                  </Button>
+                ) : canPairOpencode ? (
+                  <Button
+                    size="sm"
+                    className="h-9 text-xs gap-2 border-border/50"
+                    variant="outline"
+                    title="Open the OpenCode web app, already signed in"
+                    onClick={() => {
+                      trackConnection("browser");
+                      void openOpencodeInBrowser(workspace.id, workspaceUrl);
+                    }}
+                  >
+                    <Globe className="h-3.5 w-3.5" />
                   </Button>
                 ) : (
                   <Button
@@ -1185,7 +1197,7 @@ export function InstanceCard({
                       rel="noreferrer"
                       onClick={() => trackConnection("browser")}
                     >
-                      <Monitor className="h-3.5 w-3.5" />
+                      <Globe className="h-3.5 w-3.5" />
                     </a>
                   </Button>
                 )}

@@ -31,6 +31,11 @@ export function getWorkspaceUrl(subdomain: string): string {
   return `${protocol}://${subdomain}.${env.NEXT_PUBLIC_BASE_DOMAIN}`;
 }
 
+/** OpenCode expects /auth/connect at the origin root, so pairing links need workspace subdomains. */
+export function supportsPairingLinks(): boolean {
+  return env.NEXT_PUBLIC_ROUTING_MODE === "subdomain";
+}
+
 /**
  * Construct a workspace open port URL from subdomain and port
  */

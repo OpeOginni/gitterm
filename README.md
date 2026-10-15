@@ -25,16 +25,14 @@ GitTerm helps you manage a sandbox from first boot through cleanup:
 
 ## Connect to an OpenCode server workspace
 
-Click **Connect** on a running OpenCode server-only workspace card. The dialog keeps all connection methods in one place:
+A running OpenCode server-only workspace card offers:
 
-- **Desktop / web:** copy a fresh pairing link and paste it into **Connect server** in an up-to-date OpenCode 2 app. Links work once and expire after five minutes; copy a new one for each device. Opening the link directly loads the workspace's own web UI instead of adding it to your existing app.
-- **Terminal:** copy an attach command for your local OpenCode 2 TUI. It uses a paired session token, not the permanent server password. Keep the command private; the token lasts up to 30 days, and changing the server password revokes paired sessions.
-- **Editor:** use SSH editor access when enabled for the workspace.
-- **Backup:** expand **Use URL and password instead** for the server URL, password, or password-based attach command.
+- **Attach TUI:** copies a command to paste into your terminal, which opens the workspace in your local OpenCode TUI. With subdomain routing it carries a paired session token, not the permanent server password. The token lasts up to 30 days, and changing the server password revokes it. Keep the command private.
+- **Browser icon:** opens the workspace's own OpenCode web app. With subdomain routing you are signed in automatically.
+- **Desktop pairing link:** copies a link to paste into **Connect server** in an up-to-date OpenCode 2 desktop app. Links work once and expire after five minutes.
+- **Password:** the server password, for any client that asks for it.
 
-Use the same OpenCode app to keep its saved servers and local preferences together. The web frontend must support OpenCode 2; older hosted versions are incompatible. Pasted pairing links currently require subdomain routing. With path routing, use the terminal method or URL/password backup. Older servers without pairing support can also use the backup.
-
-These connections use GitTerm's existing HTTPS workspace proxy; no additional tunnel is required.
+Pairing needs subdomain routing, because OpenCode expects `/auth/connect` at the root of the server URL. With path routing, and on older servers without pairing, Attach TUI uses the server password and the web app asks you to sign in. These connections use GitTerm's existing HTTPS workspace proxy; no additional tunnel is required.
 
 ## Deploy on Railway
 
