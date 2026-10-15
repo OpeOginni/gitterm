@@ -650,7 +650,11 @@ export const infrastructureRouter = router({
     .query(async ({ input }) => {
       const profiles = await db.query.machineProfile.findMany({
         where: eq(machineProfile.cloudProviderId, input.cloudProviderId),
-        orderBy: (profile, { desc, asc }) => [desc(profile.isDefault), asc(profile.name)],
+        orderBy: (profile, { asc }) => [
+          asc(profile.vcpus),
+          asc(profile.memoryGb),
+          asc(profile.name),
+        ],
       });
       const billing = await getBilling();
       const prices = await billing.getMachinePrices(profiles.map((profile) => profile.id));
