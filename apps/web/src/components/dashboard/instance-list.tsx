@@ -424,8 +424,11 @@ export function InstanceCard({
 
   // T3 workspaces authenticate with one-time pairing links instead of a
   // server password; the stored credential is the current pairing token.
-  const isT3 = isT3Agent(workspace.image.agentType.name);
-  const isOpencode = isOpencodeAgent(workspace.image.agentType.name);
+  const isT3 = isT3Agent(workspace.image.agentType.name, workspace.image.agentType.provisionerKey);
+  const isOpencode = isOpencodeAgent(
+    workspace.image.agentType.name,
+    workspace.image.agentType.provisionerKey,
+  );
   // OpenCode server pairing links need /auth/connect at the origin root, so subdomain routing.
   const canPairOpencode =
     workspace.image.agentType.provisionerKey === "opencode" &&

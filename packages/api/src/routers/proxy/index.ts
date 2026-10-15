@@ -1,4 +1,8 @@
 import { auth } from "@gitterm/auth";
+import {
+  agentProvisionerKeyForName,
+  getAgentCapabilities,
+} from "@gitterm/schema/agent-capabilities";
 import { db, eq, and } from "@gitterm/db";
 import { agentType, image } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
@@ -383,6 +387,7 @@ export const proxyResolverRouter = async (c: Context) => {
           status: workspace.status,
           serverOnly: workspace.serverOnly,
           agentTypeName: agentType.name,
+          agentProvisionerKey: agentType.provisionerKey,
           exposedPorts: workspace.exposedPorts,
         })
         .from(workspace)
@@ -438,7 +443,8 @@ export const proxyResolverRouter = async (c: Context) => {
     // T3 authenticates clients with its own pairing credentials. GitTerm must
     // let the primary endpoint through so discovery, pairing, and API traffic
     // can reach T3; separately exposed workspace ports remain protected.
-    if (!extractedPort && ws.agentTypeName?.trim().toLowerCase().startsWith("t3code")) {
+    const agentKey = ws.agentProvisionerKey ?? agentProvisionerKeyForName(ws.agentTypeName ?? "");
+    if (!extractedPort && getAgentCapabilities(agentKey ?? "")?.access === "pairing") {
       if (!ws.upstreamUrl) {
         return htmlError(c, "error", 500);
       }

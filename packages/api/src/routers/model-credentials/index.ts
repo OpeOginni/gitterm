@@ -362,6 +362,7 @@ export const modelCredentialsRouter = router({
             accessToken: tokens.accessToken,
             expiresAt: tokens.expiresAt,
             accountId: tokens.accountId,
+            idToken: tokens.idToken,
             label: input.label,
           });
           return { status: "success" as const };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getAgentCapabilities } from "@gitterm/schema/agent-capabilities";
 import Image from "next/image";
 import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
@@ -378,7 +379,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   }, [isAwsGroup, awsProviders, userRegionId, availableRegions]);
 
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
-  const supportsMcp = selectedAgent?.provisionerKey === "opencode";
+  const supportsMcp =
+    getAgentCapabilities(selectedAgent?.provisionerKey ?? "")?.mcpConnections === true;
   const selectedIntegrations =
     (googleCloudIntegrationId !== "none" ? 1 : 0) + (supportsMcp ? mcpConnectionIds.length : 0);
 

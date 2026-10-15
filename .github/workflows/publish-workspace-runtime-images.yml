@@ -115,6 +115,22 @@ jobs:
           echo "Building OpenCode $RESOLVED"
           echo "OPENCODE_V2_VERSION=$RESOLVED" >> "$GITHUB_ENV"
 
+      - name: Resolve and validate T3
+        if: ${{ env.skip != 'true' && matrix.agent == 't3' }}
+        shell: bash
+        env:
+          REQUESTED_T3_VERSION: ${{ inputs.t3_version }}
+        run: |
+          set -euo pipefail
+          REQUESTED="${REQUESTED_T3_VERSION:-latest}"
+          REQUESTED="${REQUESTED#v}"
+          if [ "$REQUESTED" != "latest" ] && ! [[ "$REQUESTED" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "T3 version must be latest or an exact stable semver" >&2; exit 1
+          fi
+          RESOLVED=$(npm view "t3@$REQUESTED" version)
+          [[ "$RESOLVED" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          echo "T3_RESOLVED_VERSION=$RESOLVED" >> "$GITHUB_ENV"
+
       - name: Build and push
         if: ${{ env.skip != 'true' }}
         uses: docker/build-push-action@v7
@@ -129,7 +145,7 @@ jobs:
           build-args: |
             OPENCODE_VERSION=${{ env.OPENCODE_V2_VERSION || '2' }}
             OPENCODE_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
-            T3_VERSION=${{ inputs.t3_version }}
+            T3_VERSION=${{ env.T3_RESOLVED_VERSION || inputs.t3_version }}
             T3_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
 
   build-e2b:
@@ -153,4 +169,6 @@ jobs:
         working-directory: packages/api
         env:
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          T3_VERSION: ${{ inputs.t3_version }}
+          OPENCODE_VERSION: ${{ inputs.opencode_version }}
         run: bun run e2b:build

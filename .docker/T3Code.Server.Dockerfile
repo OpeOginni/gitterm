@@ -1,8 +1,8 @@
-# t3 requires node ^22.16 || ^23.11 || >=24.10 (EBADENGINE on node 20).
+# Node runs npm and provider CLI launchers; published T3 ships a native executable.
 FROM node:22-bookworm-slim
 
-# python3/make/g++ are required to compile t3's bundled node-pty (the npm
-# package ships no linux-x64 prebuilds, so node-gyp rebuilds it at install).
+# Keep build tools for historical version pins; T3 0.0.45's platform packages
+# include the runtime and do not require a node-pty rebuild.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     bash \
@@ -71,7 +71,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 # Default command: headless T3 server. Pairing links are minted by the
 # entrypoint and reported back to GitTerm.
-CMD ["t3", "serve", "--host", "0.0.0.0", "--port", "7681", "--no-browser", "--auto-bootstrap-project-from-cwd"]
+CMD ["t3", "start", "--host", "0.0.0.0", "--port", "7681", "--no-browser", "--auto-bootstrap-project-from-cwd"]
 
 # docker build -f ./T3Code.Server.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-t3code-server:latest .
 

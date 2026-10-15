@@ -1,4 +1,5 @@
 import env from "@gitterm/env/server";
+import { captureAgentAccessCredential } from "../access-credential";
 import { Daytona, Image } from "@daytonaio/sdk";
 import { isOpencodeServeCommand } from "@gitterm/agent-runtime/opencode-service";
 import type { DaytonaImageProviderMetadata } from "@gitterm/db/schema/cloud";
@@ -300,25 +301,14 @@ export class DaytonaProvider implements ComputeProvider {
     spec: WorkspaceProvisioningSpec | null,
     repoName: string | undefined,
   ): Promise<string | undefined> {
-    const command = spec?.agent.serve?.accessCredentialCommand;
-    if (!command) {
-      return undefined;
-    }
-
     const repoDir = getRepoDir(repoName);
-
-    try {
-      const response = await sandbox.process.executeCommand(`cd "${repoDir}" && ${command}`);
-      const credential = response.result?.trim();
-      if (response.exitCode === 0 && credential) {
-        return credential;
-      }
-    } catch {
-      // Credential capture is non-fatal; the workspace can still start.
-    }
-
-    console.error("Daytona Sandbox Error (capture access credential): command never succeeded");
-    return undefined;
+    return captureAgentAccessCredential(
+      spec?.agent.serve?.accessCredentialCommand,
+      async (command) => {
+        const response = await sandbox.process.executeCommand(`cd "${repoDir}" && ${command}`);
+        return { exitCode: response.exitCode, stdout: response.result ?? "" };
+      },
+    );
   }
 
   private getRepoNameFromSandbox(sandbox: DaytonaSandbox): string | undefined {
@@ -480,7 +470,10 @@ export class DaytonaProvider implements ComputeProvider {
     }
 
     const accessCredential = await provisionLogger.step("capture-access-credential", () =>
-      this.captureAccessCredential(sandbox, spec, repoName),
+      this.captureAccessCredential(sandbox, spec, repoName).catch(async (error) => {
+        await sandbox.delete().catch(() => undefined);
+        throw error;
+      }),
     );
 
     await provisionLogger.step("start-agent-server", () =>

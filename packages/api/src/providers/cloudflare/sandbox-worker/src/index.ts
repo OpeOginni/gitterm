@@ -18,6 +18,7 @@
  *      run on a plain `*.workers.dev` URL with no wildcard DNS.
  */
 import { getSandbox, Sandbox } from "@cloudflare/sandbox";
+import { captureAgentAccessCredential } from "../../../access-credential";
 
 /**
  * Fallback port used only for proxying when GitTerm omits the port header
@@ -80,12 +81,14 @@ interface ProvisionPayload {
   beforeAgentCommand?: string;
   /** Best-effort command launched after the server is ready. */
   postStartCommand?: string;
+  accessCredentialCommand?: string;
 }
 
 interface BootResult {
   ready: boolean;
   repoDir: string;
   error?: string;
+  accessCredential?: string;
 }
 
 function repoDirFor(payload: ProvisionPayload): string {
@@ -174,6 +177,10 @@ export class GittermSandbox extends Sandbox<Env> {
           throw new Error(`Before-agent setup failed${tail ? `:\n${tail}` : ""}`);
         }
       }
+      const accessCredential = await captureAgentAccessCredential(
+        payload.accessCredentialCommand,
+        (command) => this.exec(command, { cwd: repoDir }),
+      );
       await this.startAgentServer(payload, repoDir);
       if (payload.postStartCommand) {
         await this.startProcess(payload.postStartCommand, { cwd: repoDir }).catch((error) =>
@@ -181,7 +188,7 @@ export class GittermSandbox extends Sandbox<Env> {
         );
       }
 
-      return { ready: true, repoDir };
+      return { ready: true, repoDir, accessCredential };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
@@ -345,6 +352,7 @@ async function handleControl(request: Request, env: Env, path: string): Promise<
 
   const body = (await request.json().catch(() => ({}))) as {
     sandboxId?: string;
+    command?: string;
   } & Partial<ProvisionPayload>;
 
   const sandboxId = body.sandboxId;
@@ -355,11 +363,21 @@ async function handleControl(request: Request, env: Env, path: string): Promise<
   const sandbox = getSandbox(env.Sandbox, sandboxId, { normalizeId: true });
 
   switch (path) {
+    case "/__gitterm/exec": {
+      if (!body.command || typeof body.command !== "string") {
+        return Response.json({ error: "Missing command" }, { status: 400 });
+      }
+      const result = await sandbox.exec(body.command);
+      return Response.json(
+        { exitCode: result.exitCode, stdout: result.stdout },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
     case "/__gitterm/provision": {
       const result = await sandbox.gittermProvision(body as ProvisionPayload);
       return Response.json(
         { success: result.ready, sandboxId, ...result },
-        { status: result.ready ? 200 : 500 },
+        { status: result.ready ? 200 : 500, headers: { "Cache-Control": "no-store" } },
       );
     }
 
@@ -367,7 +385,7 @@ async function handleControl(request: Request, env: Env, path: string): Promise<
       const result = await sandbox.gittermBoot();
       return Response.json(
         { success: result.ready, sandboxId, ...result },
-        { status: result.ready ? 200 : 500 },
+        { status: result.ready ? 200 : 500, headers: { "Cache-Control": "no-store" } },
       );
     }
 

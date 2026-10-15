@@ -1,4 +1,5 @@
 import env from "@gitterm/env/server";
+import { captureAgentAccessCredential } from "../access-credential";
 import type { ExeDevImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { BeforeAgentSetupError } from "../compute";
@@ -137,16 +138,9 @@ export class ExeDevProvider implements ComputeProvider {
    * carries it back.
    */
   private async runBeforeAgentSetup(handle: ExeDevHandle, command: string): Promise<void> {
-    const marker = "__GITTERM_BEFORE_AGENT_EXIT__";
-    const output = await this.runVmCommand(
-      handle,
-      `cd ${shellQuote(handle.repoDir)} && ${command}; printf '\\n${marker}%s\\n' "$?"`,
-    );
-    const text = typeof output === "string" ? output : JSON.stringify(output);
-    const match = new RegExp(`${marker}(\\d+)`).exec(text);
-    const exitCode = match ? Number(match[1]) : -1;
-    if (exitCode !== 0) {
-      throw new BeforeAgentSetupError(text.replace(new RegExp(`${marker}\\d+`), ""));
+    const result = await this.execCommand(serializeHandle(handle), command);
+    if (result.exitCode !== 0) {
+      throw new BeforeAgentSetupError(result.stdout);
     }
   }
 
@@ -220,6 +214,9 @@ export class ExeDevProvider implements ComputeProvider {
       await logger.step("create-workspace-directory", () =>
         this.runVmCommand(handle, `mkdir -p ${shellQuote(handle.repoDir)}`),
       );
+      for (const command of metadata.setupCommands ?? []) {
+        await logger.step("setup-agent", () => this.runBeforeAgentSetup(handle, command));
+      }
       if (handle.sshPublicKey) {
         await logger.step("authorize-ssh-key", () =>
           this.execute(
@@ -266,6 +263,11 @@ export class ExeDevProvider implements ComputeProvider {
           this.runBeforeAgentSetup(handle, spec.beforeAgentCommand!),
         );
       }
+      const accessCredential = await logger.step("capture-access-credential", () =>
+        captureAgentAccessCredential(spec?.agent.serve?.accessCredentialCommand, (command) =>
+          this.execCommand(serializeHandle(handle), command),
+        ),
+      );
       await logger.step("start-agent-server", () => this.startAgentServer(handle));
       if (spec?.agent.serve?.postStartCommand) {
         await logger.step("run-post-start-command", () =>
@@ -289,6 +291,7 @@ export class ExeDevProvider implements ComputeProvider {
         upstreamAccess: { headers: { "X-Exedev-Authorization": `Bearer ${token}` } },
         domain: this.getDomain(config.subdomain),
         serviceCreatedAt: now,
+        accessCredential,
       };
       if (!persistent) return workspaceInfo;
       return { ...workspaceInfo, externalVolumeId: vmName, volumeCreatedAt: now };
@@ -312,8 +315,18 @@ export class ExeDevProvider implements ComputeProvider {
     externalId: string,
     command: string,
   ): Promise<{ exitCode: number; stdout: string }> {
-    const result = await this.runVmCommand(parseHandle(externalId), command);
-    return { exitCode: 0, stdout: typeof result === "string" ? result : JSON.stringify(result) };
+    const handle = parseHandle(externalId);
+    const marker = "__GITTERM_COMMAND_EXIT__";
+    const result = await this.runVmCommand(
+      handle,
+      `cd ${shellQuote(handle.repoDir)} && (${command}); printf '\\n${marker}%s\\n' "$?"`,
+    );
+    const text = typeof result === "string" ? result : "";
+    const match = new RegExp(`\\n${marker}(\\d+)\\n?$`).exec(text);
+    return {
+      exitCode: match ? Number(match[1]) : 1,
+      stdout: match ? text.slice(0, match.index) : "",
+    };
   }
 
   async pauseWorkspace(externalId: string): Promise<void> {

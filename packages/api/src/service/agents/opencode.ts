@@ -1,4 +1,5 @@
 import type { AgentProvisioning } from "../../providers/compute";
+import { AGENT_CAPABILITIES } from "@gitterm/schema/agent-capabilities";
 import { GITHUB_CLI_INSTRUCTIONS } from "@gitterm/agent-runtime/github-auth";
 import { getModelProviderDefinition } from "@gitterm/schema/model-providers";
 import {
@@ -185,6 +186,7 @@ export function buildOpencodeTuiConfigJson(
 
 export const opencodeProvisioner: AgentProvisioner = {
   key: "opencode",
+  capabilities: AGENT_CAPABILITIES.opencode,
   provision(ctx: AgentProvisionerContext): AgentProvisioning {
     const env: Record<string, string> = {};
     if (ctx.serverPassword) {

@@ -23,6 +23,11 @@ Each agent image enabled for exe.dev needs `providerMetadata.exedev`:
 }
 ```
 
+Images without a baked-in agent can supply `setupCommands`, which block startup
+until installation succeeds. The seeded T3Code entry installs T3, Claude Code,
+Codex, and OpenCode 1.x; its base VM must provide Node >=22.16 and npm. Pairing
+credentials are captured using the same agent contract as the other SDK providers.
+
 ## Access
 
 GitTerm creates a VM-scoped bearer token for each workspace and injects it into the exe.dev HTTPS proxy from Caddy. Users see only GitTerm URLs.

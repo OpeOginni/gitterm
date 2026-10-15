@@ -269,7 +269,7 @@ Run one bot process per Slack app. Two processes with the same tokens would both
 
 ## Limits
 
-- The agent is OpenCode. T3 Code workspaces have no run API for bots to drive.
+- GitTerm's bot run adapter currently supports OpenCode only. T3 Code has a separate native orchestration API, not an OpenCode-compatible run API.
 - A question left unanswered past the workspace's idle timeout lets the sandbox pause, which
   cancels the run.
 - Direct messages are not supported; talk to the bot in channels.

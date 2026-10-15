@@ -8,6 +8,7 @@ import { decryptWorkspacePassword } from "../../utils/workspace-password";
 import { resolveProjectDirectory } from "../workspace-runtime";
 import type { RuntimeTarget } from "@gitterm/agent-runtime";
 import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-error";
+import { getAgentCapabilities } from "@gitterm/schema/agent-capabilities";
 
 export async function getOwnedRun(
   workspaceId: string,
@@ -57,12 +58,14 @@ export function notRunningError(status: string): TRPCError {
   );
 }
 
-function isOpencodeServerWorkspace(record: RunWorkspace): boolean {
-  return record.image.agentType.provisionerKey === "opencode" && record.serverOnly;
+function supportsRuns(record: RunWorkspace): boolean {
+  return (
+    getAgentCapabilities(record.image.agentType.provisionerKey)?.runs === true && record.serverOnly
+  );
 }
 
 function canServeRuns(record: RunWorkspace): record is RunWorkspace & { subdomain: string } {
-  return record.status === "running" && !!record.subdomain && isOpencodeServerWorkspace(record);
+  return record.status === "running" && !!record.subdomain && supportsRuns(record);
 }
 
 async function buildTarget(record: RunWorkspace & { subdomain: string }): Promise<RuntimeTarget> {

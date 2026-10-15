@@ -310,6 +310,8 @@ export interface ExeDevImageProviderMetadata {
   cpu?: number;
   memory?: string;
   disk?: string;
+  /** Blocking agent installation commands for images without a baked-in agent. */
+  setupCommands?: string[];
 }
 
 export interface ImageProviderMetadata {

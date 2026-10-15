@@ -1,6 +1,7 @@
 import z from "zod";
 import type { JSONSchema } from "zod/v4/core";
 import opencodeConfigSchemaJson from "./opencode-config.json";
+import { agentProvisionerKeyForName, getAgentCapabilities } from "./agent-capabilities";
 
 let cachedOpenCodeSchema: z.ZodType | null = null;
 
@@ -94,14 +95,15 @@ export const agentValidators: Record<
 };
 
 export function isT3AgentType(agentTypeName: string): boolean {
-  return agentTypeName.trim().toLowerCase().startsWith("t3code");
+  return agentProvisionerKeyForName(agentTypeName) === "t3code";
 }
 
-export function configKindsForAgentType(agentTypeName: string): AgentConfigKind[] {
-  const normalized = agentTypeName.trim().toLowerCase();
-  return AGENT_CONFIG_KINDS.filter((kind) =>
-    AGENT_CONFIG_KIND_META[kind].appliesTo.some((prefix) => normalized.startsWith(prefix)),
-  );
+export function configKindsForAgentType(
+  agentTypeName: string,
+  provisionerKey?: string,
+): AgentConfigKind[] {
+  const key = provisionerKey ?? agentProvisionerKeyForName(agentTypeName);
+  return key ? [...(getAgentCapabilities(key)?.configKinds ?? [])] : [];
 }
 
 export function validateAgentConfig(

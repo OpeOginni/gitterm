@@ -42,6 +42,7 @@ export interface StoreOAuthOptions {
   expiresAt?: number;
   enterpriseUrl?: string;
   accountId?: string;
+  idToken?: string;
   metadata?: Record<string, string>;
   /** Unique per user + provider; used to select the credential from the SDK/CLI. */
   label: string;
@@ -221,6 +222,7 @@ export class ModelCredentialsService {
       expiresAt,
       enterpriseUrl,
       accountId,
+      idToken,
       metadata,
       label,
     } = options;
@@ -243,6 +245,7 @@ export class ModelCredentialsService {
       expires: expiresAt,
       enterpriseUrl,
       accountId,
+      idToken,
       ...(metadata ? { metadata } : {}),
     };
 
