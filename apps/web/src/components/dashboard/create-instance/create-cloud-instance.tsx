@@ -7,7 +7,7 @@ import Link from "next/link";
 import { queryClient, trpc } from "@/utils/trpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowUpRight, Blocks, ChevronDown, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Loader2, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -123,30 +123,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   );
   const hasConnection = (key: string) =>
     connections.some((connection) => connection.integration === key);
-  // Enabled integrations the user hasn't set up yet; each links to Integrations.
-  const integrationSetups = [
-    {
-      key: "google",
-      name: "Google Cloud",
-      description: "Keyless gcloud access",
-      icon: <Image src="/google-cloud.svg" alt="" width={16} height={16} />,
-      show: canAddGoogleCloud && !isGoogleCloudAvailable,
-    },
-    {
-      key: "executor",
-      name: "Executor",
-      description: "Your Executor tool catalog through one connection",
-      icon: <Image src="/executor.png" alt="" width={16} height={16} />,
-      show: isIntegrationEnabled("executor") && !connectionsError && !hasConnection("executor"),
-    },
-    {
-      key: "mcp",
-      name: "MCP servers",
-      description: "Remote MCP tools your agent connects to directly",
-      icon: <Blocks className="size-4 text-fg-2" />,
-      show: isIntegrationEnabled("mcp") && !connectionsError && !hasConnection("mcp"),
-    },
-  ].filter((setup) => setup.show);
+  // An enabled integration the user hasn't set up yet; the panel links to Integrations for it.
+  const canSetUpIntegration =
+    (canAddGoogleCloud && !isGoogleCloudAvailable) ||
+    (!connectionsError &&
+      ["executor", "mcp"].some((key) => isIntegrationEnabled(key) && !hasConnection(key)));
   const integrationTypes = [
     canAddGoogleCloud ? "Google Cloud" : null,
     isIntegrationEnabled("executor") || hasConnection("executor") ? "Executor" : null,
@@ -950,7 +931,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         ) : null}
 
         {/* ── 4b. Optional integrations, folded away until someone wants one ── */}
-        {isGoogleCloudAvailable || mcpConnections.length > 0 || integrationSetups.length > 0 ? (
+        {isGoogleCloudAvailable || mcpConnections.length > 0 || canSetUpIntegration ? (
           <div className="min-w-0 rounded-xl border border-dashed border-line">
             <button
               type="button"
@@ -1012,20 +993,12 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
                 {mcpConnections.length > 0 ? (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <Label className="text-xs font-medium text-muted-foreground">
-                        MCP servers and Executor
-                      </Label>
-                      <Link
-                        href={"/dashboard/integrations" as Route}
-                        className="text-xs text-muted-foreground underline underline-offset-2"
-                      >
-                        Manage connections
-                      </Link>
-                    </div>
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      MCP servers and Executor
+                    </Label>
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       {supportsMcp
-                        ? "Choose servers for this workspace. OpenCode connects directly; their credentials will be available to its agent."
+                        ? "The agent in this workspace gets access to the connections you select."
                         : "GitTerm MCP connections require an OpenCode workspace. T3Code is not supported yet."}
                     </p>
                     {connectionsError ? (
@@ -1068,36 +1041,17 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   </div>
                 ) : null}
 
-                {integrationSetups.length > 0 ? (
-                  <div className="space-y-2">
-                    {isGoogleCloudAvailable || mcpConnections.length > 0 ? (
-                      <Label className="text-xs font-medium text-muted-foreground">Add more</Label>
-                    ) : null}
-                    <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
-                      {integrationSetups.map((setup) => (
-                        <Link
-                          key={setup.key}
-                          href={"/dashboard/integrations" as Route}
-                          className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-fill"
-                        >
-                          <span className="flex size-5 shrink-0 items-center justify-center">
-                            {setup.icon}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-xs text-fg-2">{setup.name}</span>
-                            <span className="block truncate text-xs text-fg-4">
-                              {setup.description}
-                            </span>
-                          </span>
-                          <span className="flex shrink-0 items-center gap-1 text-xs text-primary">
-                            Set up
-                            <ArrowUpRight className="size-3" />
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+                {/* One link, not a row per integration, so new connectors don't grow the dialog. */}
+                <Link
+                  href={"/dashboard/integrations" as Route}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:underline underline-offset-2"
+                >
+                  <Plus className="size-3" />
+                  {isGoogleCloudAvailable || mcpConnections.length > 0
+                    ? "Add more integrations"
+                    : "Set up an integration"}
+                  <ArrowUpRight className="size-3" />
+                </Link>
               </div>
             ) : null}
           </div>
