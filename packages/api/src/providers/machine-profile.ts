@@ -31,7 +31,7 @@ const sizeOf = (profile: MachineProfileLike) =>
 /**
  * The machine profiles a user may create workspaces with. The admin's policy
  * applies first ("standard" pins the provider's default size), then the plan.
- * `profiles` are the provider's enabled profiles, default first.
+ * `profiles` are the provider's enabled profiles, smallest first.
  */
 export function getSelectableMachineProfiles<T extends MachineProfileLike>(
   profiles: T[],

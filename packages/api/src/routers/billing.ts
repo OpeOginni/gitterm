@@ -22,7 +22,7 @@ export const billingRouter = router({
       .from(machineProfile)
       .innerJoin(cloudProvider, eq(machineProfile.cloudProviderId, cloudProvider.id))
       .where(and(eq(machineProfile.isEnabled, true), eq(cloudProvider.isEnabled, true)))
-      .orderBy(asc(cloudProvider.name), asc(machineProfile.vcpus));
+      .orderBy(asc(cloudProvider.name), asc(machineProfile.vcpus), asc(machineProfile.memoryGb));
     const prices = await billing.getMachinePrices(sizes.map((size) => size.id));
     return sizes.flatMap(({ id, ...size }) => {
       const priceMicrosPerHour = prices.get(id);

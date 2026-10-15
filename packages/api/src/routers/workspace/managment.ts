@@ -449,9 +449,10 @@ function matchesRegion(
   );
 }
 
+// Smallest first (Small, Standard, Large) so every size list reads in order.
 const enabledMachineProfiles = {
   where: eq(machineProfile.isEnabled, true),
-  orderBy: [desc(machineProfile.isDefault), asc(machineProfile.name)],
+  orderBy: [asc(machineProfile.vcpus), asc(machineProfile.memoryGb), asc(machineProfile.name)],
 };
 
 async function resolveWorkspaceCreateIntent(
