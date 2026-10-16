@@ -5,26 +5,18 @@ name: Publish Workspace Runtime Images
 on:
   workflow_dispatch:
     inputs:
-      build_docker:
-        description: "Build & push Docker Hub agent images"
+      opencode:
+        description: "Publish OpenCode Docker images and E2B templates"
         type: boolean
         default: true
-      build_e2b:
-        description: "Rebuild E2B templates"
+      t3code:
+        description: "Publish T3Code Docker image and E2B templates"
         type: boolean
         default: true
-      include_t3:
-        description: "Also build T3Code Docker image"
-        type: boolean
-        default: true
-      agent_image_tag:
-        description: "Docker tag for agent images (use a test tag on PR branches)"
+      opencode_version:
+        description: "OpenCode version (latest or exact 2.x version)"
         type: string
         default: "latest"
-      opencode_version:
-        description: "OpenCode 2 version of @opencode/cli (2 for latest 2.x, or exact 2.x semver)"
-        type: string
-        default: "2"
       t3_version:
         description: "T3 version pin (latest or semver)"
         type: string
@@ -35,7 +27,7 @@ env:
 
 jobs:
   build-docker:
-    if: ${{ inputs.build_docker }}
+    if: ${{ inputs.opencode || inputs.t3code }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -74,10 +66,10 @@ jobs:
             agent: cf
 
     steps:
-      - name: Skip T3 when disabled
-        if: ${{ matrix.agent == 't3' && !inputs.include_t3 }}
+      - name: Skip unselected agent
+        if: ${{ (matrix.agent == 't3' && !inputs.t3code) || (matrix.agent == 'opencode' && !inputs.opencode) }}
         run: |
-          echo "Skipping T3 image (include_t3=false)"
+          echo "Skipping unselected agent image"
           echo "skip=true" >> "$GITHUB_ENV"
 
       - name: Checkout
@@ -141,7 +133,7 @@ jobs:
           push: true
           pull: true
           no-cache: true
-          tags: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}:${{ matrix.agent == 'cf' && matrix.tag || inputs.agent_image_tag }}
+          tags: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}:${{ matrix.tag }}
           build-args: |
             OPENCODE_VERSION=${{ env.OPENCODE_V2_VERSION || '2' }}
             OPENCODE_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
@@ -149,7 +141,7 @@ jobs:
             T3_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
 
   build-e2b:
-    if: ${{ always() && inputs.build_e2b && (needs.build-docker.result == 'success' || needs.build-docker.result == 'skipped') }}
+    if: ${{ (inputs.opencode || inputs.t3code) && needs.build-docker.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: [build-docker]
@@ -160,7 +152,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.2
+          bun-version: 1.3.14
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -171,4 +163,14 @@ jobs:
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
           T3_VERSION: ${{ inputs.t3_version }}
           OPENCODE_VERSION: ${{ inputs.opencode_version }}
-        run: bun run e2b:build
+          BUILD_OPENCODE: ${{ inputs.opencode }}
+          BUILD_T3CODE: ${{ inputs.t3code }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$BUILD_OPENCODE" = "true" ]; then
+            bun run e2b:build --agent opencode
+          fi
+          if [ "$BUILD_T3CODE" = "true" ]; then
+            bun run e2b:build --agent t3code
+          fi
