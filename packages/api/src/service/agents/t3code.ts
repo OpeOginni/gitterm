@@ -11,6 +11,7 @@ import {
   OPENCODE_TUI_CONFIG_PATH,
 } from "./opencode";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
+import { buildT3OriginBridgeSource, T3_ORIGIN_BRIDGE_PATH } from "./t3-origin-bridge";
 
 export const T3_SERVE_PORT = 4096;
 const CLAUDE_CREDENTIALS_PATH = "~/.claude/.credentials.json";
@@ -87,6 +88,10 @@ export const t3codeProvisioner: AgentProvisioner = {
     const files: AgentFile[] = [];
     const env: Record<string, string> = {};
     const instructions = buildGittermInstructions(ctx.additionalAgentInstructions);
+    files.push({
+      path: T3_ORIGIN_BRIDGE_PATH,
+      contentBase64: toBase64(buildT3OriginBridgeSource(ctx.workspaceHostname)),
+    });
 
     const anthropic = findCredential(ctx.credentials, "anthropic");
     if (anthropic) {
@@ -179,7 +184,7 @@ export const t3codeProvisioner: AgentProvisioner = {
         command:
           `(printf 'PRETTY_HOSTNAME=%s\\n' '${ctx.workspaceHostname}'` +
           ` | sudo -n tee /etc/machine-info >/dev/null 2>&1 || true);` +
-          ` exec t3 start --host 0.0.0.0 --port ${T3_SERVE_PORT} --no-browser --auto-bootstrap-project-from-cwd`,
+          ` exec node "$HOME/.gitterm/t3-origin-bridge.cjs" t3 start --host 0.0.0.0 --port ${T3_SERVE_PORT} --no-browser --auto-bootstrap-project-from-cwd`,
         port: T3_SERVE_PORT,
         accessCredentialCommand: T3_PAIRING_CREATE_COMMAND,
       },

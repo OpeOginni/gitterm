@@ -77,6 +77,7 @@ import { buildWorkspaceToolingManifestBase64 } from "../../utils/workspace-tooli
 import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "../../service/workspace-env";
 import { getWorkspaceCommitIdentity } from "../../service/github/commit-identity";
 import { getAgentProvisioner, resolveWorkspaceProviderCredentials } from "../../service/agents";
+import { isSubdomainRouting } from "@gitterm/env/server";
 import type { AgentConfigByKind } from "../../service/agents/types";
 import { buildAwsRuntimeInstructions } from "../../service/agents/opencode";
 import { opencodeConnectionProcedures } from "./opencode-connection";
@@ -2623,6 +2624,13 @@ export const workspaceRouter = router({
         );
 
         const agent = getAgentProvisioner(agentTypeRecord.provisionerKey);
+        if (agent.key === "t3code" && !isSubdomainRouting()) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "T3Code requires subdomain routing. Configure ROUTING_MODE=subdomain and wildcard DNS before creating a T3 workspace.",
+          });
+        }
         // Pairing agents issue their own credentials, not an unused password.
         let serverPassword: string | undefined;
         let encryptedServerPassword: string | undefined;

@@ -99,6 +99,20 @@ add agent-name branches to individual compute providers.
   alone are not proof that an npm package has been published.
 - **Credential callback:** Docker's pairing reporter treats HTTP failures as
   failures and retries instead of announcing success for a 4xx/5xx response.
+- **Signed pairing behind provider ingress:** reproduced on a boat workspace
+  running T3 0.1.0. T3 verifies DPoP against the request's `Host` and
+  `X-Forwarded-Proto`; it does not use `X-Forwarded-Host`. The provider's routing
+  hostname therefore produced `auth_invalid` / `request_mismatch` even with a
+  fresh link. The generated `~/.gitterm/t3-origin-bridge.cjs` keeps the provider
+  route intact and restores the configured GitTerm origin at the final hop to
+  loopback-only T3. It passes credentials through unchanged and never trusts
+  client-provided forwarding headers or decodes proofs to choose the origin.
+  HTTP streams, cookies, and WebSocket upgrades are preserved. The launcher owns
+  T3's process group so native children cannot survive a normal stop/restart.
+  This is shared agent provisioning for every provider, not a boat-specific
+  route. T3 workspaces require `ROUTING_MODE=subdomain` and wildcard DNS;
+  path-based creation is rejected because T3's root-level endpoints and signed
+  URLs do not support GitTerm's `/ws/<subdomain>` prefix.
 
 ## Deliberate limits and rollout
 
@@ -127,6 +141,12 @@ Deployment requires rebuilding T3 Docker images/E2B templates, deploying the
 Cloudflare worker, and running the normal catalog seed to apply changed runtime
 metadata. Existing workspaces keep their current images/config files until
 recreated; a service deploy alone does not rewrite their native configuration.
+For the signed-pairing fix, boat and other SDK providers need a server deploy
+and a newly provisioned workspace (no new boat image is needed). An existing
+boat handle retains its old launch command, so restarting it or generating more
+links does not install the bridge. Preserve any uncommitted work before moving
+to a new workspace; existing workspaces require a separate explicit migration.
+Docker providers also need the rebuilt T3 image with the updated entrypoint.
 Use a test image tag before promoting production images. No production builds,
 seeding, cloud deployments, or paid model calls are performed by the local audit.
 
@@ -139,6 +159,8 @@ T3_SMOKE_BINARY=/absolute/path/to/t3 bun scripts/t3code-smoke.ts
 ```
 
 The opt-in smoke test uses an isolated temporary home and a loopback endpoint. It
-checks discovery, hosted-app-origin pairing, single-use tokens, one registered
-project, and persisted grants/projects after an abrupt server restart. It does
+checks discovery, hosted-app-origin pairing, signed token exchange and API access
+with a rewritten provider Host, rejection of unauthenticated requests and proofs
+for a different URL, single-use tokens, one registered project, and persisted
+grants/projects after a server restart. It does
 not authenticate native model providers or prove paid cloud-provider behavior.

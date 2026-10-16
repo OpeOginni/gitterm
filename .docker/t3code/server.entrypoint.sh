@@ -330,4 +330,7 @@ export PATH="$HOME/.gitterm/bin:$PATH"
 if [ -f "$HOME/.gitterm/github/runtime.cjs" ]; then
     node "$HOME/.gitterm/github/runtime.cjs" setup
 fi
+if [ -f "$HOME/.gitterm/t3-origin-bridge.cjs" ] && [ "$1" = "t3" ] && { [ "$2" = "start" ] || [ "$2" = "serve" ]; }; then
+    exec node "$HOME/.gitterm/t3-origin-bridge.cjs" "$@"
+fi
 exec "$@"

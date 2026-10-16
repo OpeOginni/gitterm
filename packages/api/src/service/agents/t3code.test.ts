@@ -15,7 +15,7 @@ const context: AgentProvisionerContext = {
 
 test("T3 starts with project registration instead of serve's forced headless defaults", () => {
   const command = t3codeProvisioner.provision(context).serve!.command;
-  expect(command).toContain("exec t3 start");
+  expect(command).toContain('exec node "$HOME/.gitterm/t3-origin-bridge.cjs" t3 start');
   expect(command).toContain("--no-browser --auto-bootstrap-project-from-cwd");
   expect(command).not.toContain("t3 serve");
 });

@@ -446,6 +446,10 @@ export function InstanceCard({
   };
 
   const revealAccessCredential = async () => {
+    if (isT3 && !supportsPairingLinks()) {
+      toast.error("T3Code requires subdomain routing; path-based connections are not supported.");
+      return null;
+    }
     if (!workspace.hasAccessCredential) return null;
     try {
       const result = await trpcClient.workspace.getAccessCredential.mutate({

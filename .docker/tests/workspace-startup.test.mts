@@ -112,7 +112,7 @@ test("GitHub credential helper refreshes expired credentials and reuses its cach
       ...process.env,
       GITHUB_APP_TOKEN_EXPIRY: "2000-01-01",
       WORKSPACE_API_URL: "https://api.example.com/trpc",
-      WORKSPACE_AUTH_TOKEN: "scoped-token",
+      WORKSPACE_AGENT_AUTH_TOKEN: "scoped-token",
     },
     encoding: "utf8" as const,
   };
@@ -184,6 +184,34 @@ test("workspace images leave GitHub CLI installation to the agent", () => {
     expect(dockerfile).not.toContain("/usr/local/bin/gh");
     expect(dockerfile).not.toMatch(/apt-get install[^;]*\bgh\b/s);
   }
+});
+
+test("T3 entrypoint wraps native launches when the provisioned origin bridge is present", () => {
+  const source = readFileSync(new URL("../t3code/server.entrypoint.sh", import.meta.url), "utf8");
+  const launch = source.slice(
+    source.lastIndexOf('if [ -f "$HOME/.gitterm/t3-origin-bridge.cjs" ]'),
+  );
+  const dir = join(root, "t3-launch");
+  mkdirSync(join(dir, ".gitterm"), { recursive: true });
+  writeFileSync(
+    join(dir, ".gitterm/t3-origin-bridge.cjs"),
+    "console.log(JSON.stringify(process.argv.slice(2)));",
+  );
+  const output = execFileSync(
+    "sh",
+    ["-c", launch, "entrypoint", "t3", "start", "--host", "0.0.0.0", "--port", "7681"],
+    {
+      env: { ...process.env, HOME: dir },
+      encoding: "utf8",
+    },
+  );
+  expect(JSON.parse(output)).toEqual(["t3", "start", "--host", "0.0.0.0", "--port", "7681"]);
+  expect(
+    execFileSync("sh", ["-c", launch, "entrypoint", "echo", "custom-command"], {
+      env: { ...process.env, HOME: dir },
+      encoding: "utf8",
+    }).trim(),
+  ).toBe("custom-command");
 });
 
 test("blocking setup phase reports its duration and propagates the exit code", () => {

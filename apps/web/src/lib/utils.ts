@@ -109,11 +109,13 @@ export function getWorkspaceProjectPath(
 }
 
 export function getT3PairingUrl(subdomain: string, token: string): string {
+  if (!supportsPairingLinks()) throw new Error("T3Code requires subdomain routing");
   const host = encodeURIComponent(getWorkspaceUrl(subdomain));
   return `https://app.t3.codes/pair?host=${host}#token=${encodeURIComponent(token)}`;
 }
 
 export function getT3DesktopPairingUrl(subdomain: string, token: string): string {
+  if (!supportsPairingLinks()) throw new Error("T3Code requires subdomain routing");
   const host = encodeURIComponent(getWorkspaceUrl(subdomain));
   return `t3code://app/pair?host=${host}#token=${encodeURIComponent(token)}`;
 }
