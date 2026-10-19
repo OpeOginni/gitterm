@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GittermError } from "@gitterm/sdk";
@@ -29,9 +29,9 @@ const thread: ChatThread = { channel: "C1", thread: "100" };
 const alice = { id: "U1", name: "Alice" };
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
-async function until(condition: () => boolean, label = "condition") {
+async function until(condition: () => boolean | Promise<boolean>, label = "condition") {
   for (let i = 0; i < 200; i++) {
-    if (condition()) return;
+    if (await condition()) return;
     await tick();
   }
   throw new Error(`Timed out waiting for ${label}`);
@@ -886,6 +886,12 @@ describe("createBot", () => {
         run: run("run7", "completed", { finalText: "All done" }),
       });
       await until(() => chat.log.replies.length === 1, "recovered reply");
+      // Posting the reply precedes asynchronous state persistence and releasing
+      // the sandbox's pending job. Wait for cleanup, not just reply delivery.
+      await until(async () => {
+        const state = JSON.parse(await readFile(file, "utf8"));
+        return !state.inFlight["C1:100"];
+      }, "recovered run cleanup");
       chat.send({ id: "301", text: "reset", thread: { channel: "C1", thread: "301" } });
       await until(() => chat.log.posts.some((text) => text.includes("no acme/app sandbox yet")));
     } finally {
