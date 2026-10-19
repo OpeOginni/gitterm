@@ -39,7 +39,7 @@ export const PLANS: Record<PlanId, Plan> = {
     includedComputeCents: null,
     overageDiscountPercent: 0,
     entitlements: {
-      providerKeys: ["e2b", "ascii"],
+      providerKeys: ["e2b", "boat"],
       machineAccess: "smallest",
       maxWorkspaces: 2,
       persistence: false,

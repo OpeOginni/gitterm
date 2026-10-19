@@ -15,7 +15,7 @@ const PROVIDERS = [
   "e2b",
   "daytona",
   "vercel",
-  "ascii",
+  "boat",
   "exedev",
   "railway",
 ] as const satisfies readonly DirectProviderConfig["type"][];
@@ -124,8 +124,8 @@ function providerConfig(provider: ProviderKey, timeoutMs: number): DirectProvide
         runtime: "node24",
         timeoutMs,
       };
-    case "ascii":
-      return { type: "ascii", apiKey: requiredEnv("ASCII_API_KEY"), timeoutMs };
+    case "boat":
+      return { type: "boat", apiKey: requiredEnv("BOAT_API_KEY"), timeoutMs };
     case "exedev":
       return {
         type: "exedev",

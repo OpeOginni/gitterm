@@ -18,7 +18,7 @@ const ALL_PROVIDERS = [
   "daytona",
   "cloudflare",
   "vercel",
-  "ascii",
+  "boat",
   "exedev",
 ] as const satisfies readonly ProviderKey[];
 const HOSTED_PROVIDERS = [

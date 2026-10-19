@@ -1,14 +1,14 @@
 import z from "zod";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { asciiWebhookProcedure, router } from "../../index";
+import { boatWebhookProcedure, router } from "../../index";
 import { WORKSPACE_EVENTS } from "../../events/workspace";
 import { getInternalClient } from "../../client";
 
 // boat sends account-wide lifecycle events, signed with the endpoint's secret.
 // See https://docs.boat.dev/webhooks. The public API names them `sandbox.*` with
 // `data.sandbox`; the Box API and its SDK name the same events `box.*` with `data.box`.
-const asciiEventType = z.enum([
+const boatEventType = z.enum([
   "sandbox.ready",
   "sandbox.hydrated",
   "sandbox.error",
@@ -21,24 +21,24 @@ const asciiEventType = z.enum([
   "box.archived",
 ]);
 
-const asciiSubject = z.looseObject({ id: z.string() });
+const boatSubject = z.looseObject({ id: z.string() });
 
-export const asciiWebhookSchema = z.looseObject({
+export const boatWebhookSchema = z.looseObject({
   id: z.string(),
-  type: asciiEventType,
+  type: boatEventType,
   createdAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date"),
   data: z.looseObject({
-    sandbox: asciiSubject.optional(),
-    box: asciiSubject.optional(),
+    sandbox: boatSubject.optional(),
+    box: boatSubject.optional(),
     previousState: z.string().optional(),
     state: z.string().optional(),
   }),
 });
 
-export type AsciiWebhookPayload = z.infer<typeof asciiWebhookSchema>;
+export type BoatWebhookPayload = z.infer<typeof boatWebhookSchema>;
 
 /** The box an event is about, under either naming. */
-export const asciiWebhookBoxId = (payload: AsciiWebhookPayload) =>
+export const boatWebhookBoxId = (payload: BoatWebhookPayload) =>
   payload.data.sandbox?.id ?? payload.data.box?.id;
 
 /** Deliveries older (or newer) than this are rejected as replays. */
@@ -48,7 +48,7 @@ const MAX_SKEW_SECONDS = 300;
  * Verifies boat's `X-Ascii-Signature` (`v1=` + hex HMAC-SHA256 of
  * `delivery.timestamp.raw_body`) and that the attempt is recent.
  */
-export function verifyAsciiWebhookSignature(
+export function verifyBoatWebhookSignature(
   secret: string,
   rawBody: string,
   headers: { delivery: string; timestamp: string; signature: string },
@@ -67,43 +67,41 @@ export function verifyAsciiWebhookSignature(
   return timingSafeEqual(Buffer.from(supplied.toLowerCase(), "hex"), Buffer.from(expected, "hex"));
 }
 
-export const asciiWebhookRouter = router({
-  handleWebhook: asciiWebhookProcedure
-    .input(asciiWebhookSchema)
-    .mutation(async ({ input, ctx }) => {
-      try {
-        // Signature material travels in the payload so it survives the internal hop.
-        const result = await getInternalClient().internal.processAsciiWebhook.mutate({
-          ...input,
-          rawBody: ctx.rawBody,
-          delivery: ctx.asciiWebhookDelivery ?? "",
-          timestamp: ctx.asciiWebhookTimestamp ?? "",
-          signature: ctx.asciiWebhookSignature ?? "",
-        });
+export const boatWebhookRouter = router({
+  handleWebhook: boatWebhookProcedure.input(boatWebhookSchema).mutation(async ({ input, ctx }) => {
+    try {
+      // Signature material travels in the payload so it survives the internal hop.
+      const result = await getInternalClient().internal.processBoatWebhook.mutate({
+        ...input,
+        rawBody: ctx.rawBody,
+        delivery: ctx.boatWebhookDelivery ?? "",
+        timestamp: ctx.boatWebhookTimestamp ?? "",
+        signature: ctx.boatWebhookSignature ?? "",
+      });
 
-        for (const record of result.updated) {
-          WORKSPACE_EVENTS.emitStatus({
-            workspaceId: record.id,
-            status: record.status,
-            updatedAt: new Date(record.updatedAt),
-            userId: record.userId,
-            workspaceDomain: record.workspaceDomain,
-          });
-        }
-        return result;
-      } catch (error) {
-        console.error("[boat-webhook] processing failed", {
-          event: input.type,
-          id: input.id,
-          boxId: asciiWebhookBoxId(input),
-          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-        });
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to process webhook",
-          cause: error instanceof Error ? error.message : "Unknown error",
+      for (const record of result.updated) {
+        WORKSPACE_EVENTS.emitStatus({
+          workspaceId: record.id,
+          status: record.status,
+          updatedAt: new Date(record.updatedAt),
+          userId: record.userId,
+          workspaceDomain: record.workspaceDomain,
         });
       }
-    }),
+      return result;
+    } catch (error) {
+      console.error("[boat-webhook] processing failed", {
+        event: input.type,
+        id: input.id,
+        boxId: boatWebhookBoxId(input),
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      });
+      if (error instanceof TRPCError) throw error;
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to process webhook",
+        cause: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }),
 });

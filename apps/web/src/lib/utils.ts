@@ -100,7 +100,7 @@ export function getWorkspaceProjectPath(
       ? "~/workspace"
       : providerKey === "vercel"
         ? "/vercel/sandbox"
-        : providerKey === "ascii"
+        : providerKey === "boat"
           ? "/home/user"
           : providerKey === "exedev"
             ? "/home/exedev"

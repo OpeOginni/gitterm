@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
-import { asciiWebhookBoxId, asciiWebhookSchema, verifyAsciiWebhookSignature } from "./webhook";
+import { boatWebhookBoxId, boatWebhookSchema, verifyBoatWebhookSignature } from "./webhook";
 
 const secret = "whsec_test";
 const body = JSON.stringify({
@@ -18,7 +18,7 @@ const sign = (payload: string, at = timestamp, key = secret) =>
 describe("boat webhook signatures", () => {
   test("accepts boat's signature over the raw body", () => {
     expect(
-      verifyAsciiWebhookSignature(
+      verifyBoatWebhookSignature(
         secret,
         body,
         { delivery: "evt_1", timestamp, signature: sign(body) },
@@ -29,9 +29,9 @@ describe("boat webhook signatures", () => {
 
   test("rejects a changed body, a wrong secret, a malformed or stale signature", () => {
     const headers = { delivery: "evt_1", timestamp, signature: sign(body) };
-    expect(verifyAsciiWebhookSignature(secret, `${body} `, headers, now)).toBe(false);
+    expect(verifyBoatWebhookSignature(secret, `${body} `, headers, now)).toBe(false);
     expect(
-      verifyAsciiWebhookSignature(
+      verifyBoatWebhookSignature(
         secret,
         body,
         { ...headers, signature: sign(body, timestamp, "whsec_other") },
@@ -39,11 +39,11 @@ describe("boat webhook signatures", () => {
       ),
     ).toBe(false);
     expect(
-      verifyAsciiWebhookSignature(secret, body, { ...headers, signature: "v1=nothex" }, now),
+      verifyBoatWebhookSignature(secret, body, { ...headers, signature: "v1=nothex" }, now),
     ).toBe(false);
     const old = String(Math.floor(now / 1000) - 301);
     expect(
-      verifyAsciiWebhookSignature(
+      verifyBoatWebhookSignature(
         secret,
         body,
         { delivery: "evt_1", timestamp: old, signature: sign(body, old) },
@@ -56,25 +56,25 @@ describe("boat webhook signatures", () => {
 describe("boat webhook payloads", () => {
   test("rejects invalid event timestamps before updating workspace state", () => {
     expect(
-      asciiWebhookSchema.safeParse({ ...JSON.parse(body), createdAt: "not-a-date" }).success,
+      boatWebhookSchema.safeParse({ ...JSON.parse(body), createdAt: "not-a-date" }).success,
     ).toBe(false);
   });
 
   test("reads the box from either naming", () => {
-    const sandbox = asciiWebhookSchema.parse(JSON.parse(body));
-    const box = asciiWebhookSchema.parse({
+    const sandbox = boatWebhookSchema.parse(JSON.parse(body));
+    const box = boatWebhookSchema.parse({
       id: "evt_2",
       type: "box.error",
       createdAt: "2026-10-07T10:00:00.000Z",
       data: { box: { id: "bx_box", name: "w" }, previousState: "running", state: "error" },
     });
-    expect(asciiWebhookBoxId(sandbox)).toBe("bx_23456789");
-    expect(asciiWebhookBoxId(box)).toBe("bx_box");
+    expect(boatWebhookBoxId(sandbox)).toBe("bx_23456789");
+    expect(boatWebhookBoxId(box)).toBe("bx_box");
   });
 });
 
 const parsesWithCreatedAt = (createdAt: string) =>
-  asciiWebhookSchema.safeParse({
+  boatWebhookSchema.safeParse({
     id: "evt_3",
     type: "sandbox.archived",
     createdAt,

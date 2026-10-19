@@ -1,5 +1,5 @@
 import type { ComputeProvider } from "./compute";
-import { asciiProvider } from "./ascii";
+import { boatProvider } from "./boat";
 import { exeDevProvider } from "./exedev";
 import { awsProvider, AwsProvider } from "./aws";
 import { cloudflareComputeProvider } from "./cloudflare/compute-provider";
@@ -13,7 +13,7 @@ export { awsProvider } from "./aws";
 export { railwayProvider } from "./railway";
 export { e2bProvider } from "./e2b";
 export { cloudflareComputeProvider } from "./cloudflare/compute-provider";
-export { asciiProvider } from "./ascii";
+export { boatProvider } from "./boat";
 export { exeDevProvider } from "./exedev";
 export { vercelProvider } from "./vercel";
 
@@ -24,7 +24,7 @@ export { vercelProvider } from "./vercel";
  *
  */
 const availableProviders: Record<string, ComputeProvider> = {
-  ascii: asciiProvider,
+  boat: boatProvider,
   exedev: exeDevProvider,
   aws: awsProvider,
   railway: railwayProvider,

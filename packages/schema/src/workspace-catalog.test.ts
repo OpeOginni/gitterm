@@ -1,7 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { parseProviderMachineOptions, workspaceProviderSelectionSchema } from "./workspace-catalog";
+import {
+  parseProviderMachineOptions,
+  providerKeySchema,
+  workspaceProviderSelectionSchema,
+} from "./workspace-catalog";
 
 describe("workspace catalog schemas", () => {
+  test("accepts Boat and rejects the retired ASCII provider key", () => {
+    expect(providerKeySchema.parse("boat")).toBe("boat");
+    expect(providerKeySchema.safeParse("ascii").success).toBe(false);
+    expect(workspaceProviderSelectionSchema.parse({ type: "boat" })).toEqual({ type: "boat" });
+    expect(workspaceProviderSelectionSchema.safeParse({ type: "ascii" }).success).toBe(false);
+    expect(parseProviderMachineOptions("boat", { size: "small" })).toEqual({ size: "small" });
+    expect(() => parseProviderMachineOptions("boat", { size: "invalid" })).toThrow();
+  });
   test("AWS access profile selection accepts IDs, not arbitrary role ARNs or non-AWS providers", () => {
     const id = "33333333-3333-4333-8333-333333333333";
     expect(workspaceProviderSelectionSchema.parse({ type: "aws", accessProfile: id })).toEqual({

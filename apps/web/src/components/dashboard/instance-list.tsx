@@ -71,7 +71,7 @@ const PROVIDER_LOGOS: Record<string, string> = {
   cloudflare: "/cloudflare.svg",
   daytona: "/daytona.svg",
   e2b: "/E2B.svg",
-  ascii: "/boat.svg",
+  boat: "/boat.svg",
   exedev: "/exe.png",
   railway: "/railway.svg",
   vercel: "/vercel.svg",

@@ -9,7 +9,7 @@ import {
   RuntimeHttpError,
 } from "@gitterm/agent-runtime/http";
 import type { IntegrationAttemptStatus } from "@opencode/client";
-import { createAsciiDirectProvider } from "./ascii.js";
+import { createBoatDirectProvider } from "./boat.js";
 import { createDaytonaDirectProvider } from "./daytona.js";
 import { createE2BDirectProvider } from "./e2b.js";
 import { createExeDevDirectProvider } from "./exedev.js";
@@ -48,8 +48,8 @@ export type DirectGittermClientOptions = {
 function resolveProvider(provider: DirectGittermClientOptions["provider"]): DirectProviderAdapter {
   if ("create" in provider) return provider;
   switch (provider.type) {
-    case "ascii":
-      return createAsciiDirectProvider(provider);
+    case "boat":
+      return createBoatDirectProvider(provider);
     case "daytona":
       return createDaytonaDirectProvider(provider);
     case "e2b":

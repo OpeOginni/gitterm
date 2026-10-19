@@ -285,8 +285,8 @@ export type VercelDirectProviderConfig = {
   timeoutMs?: number;
 };
 
-export type AsciiDirectProviderConfig = {
-  type: "ascii";
+export type BoatDirectProviderConfig = {
+  type: "boat";
   apiKey: string;
   size?: "small" | "default" | "large";
   runtimeSetupCommands?: string[];
@@ -324,7 +324,7 @@ export type DirectProviderConfig =
   | E2BDirectProviderConfig
   | DaytonaDirectProviderConfig
   | VercelDirectProviderConfig
-  | AsciiDirectProviderConfig
+  | BoatDirectProviderConfig
   | ExeDevDirectProviderConfig
   | RailwayDirectProviderConfig;
 

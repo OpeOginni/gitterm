@@ -40,7 +40,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   daytona: "Daytona",
   cloudflare: "Cloudflare",
   vercel: "Vercel",
-  ascii: "boat",
+  boat: "Boat",
   exedev: "exe.dev",
   railway: "Railway",
 };

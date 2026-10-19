@@ -31,7 +31,7 @@ export const PROVIDER_SECURITY_CAPABILITIES: Record<ProviderKey, ProviderSecurit
   daytona: sandboxApi(),
   cloudflare: sandboxApi(),
   vercel: sandboxApi(),
-  ascii: sandboxApi(),
+  boat: sandboxApi(),
   exedev: sandboxApi(),
 };
 

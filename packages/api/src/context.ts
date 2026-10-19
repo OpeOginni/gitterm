@@ -34,14 +34,13 @@ export async function createContext({ context }: CreateContextOptions) {
     !!daytonaWebhookId && !!daytonaWebhookTimestamp && !!daytonaWebhookSignature;
 
   // boat signs deliveries with an HMAC over `delivery.timestamp.raw_body`.
-  const asciiWebhookDelivery = context.req.raw.headers.get("x-ascii-delivery");
-  const asciiWebhookTimestamp = context.req.raw.headers.get("x-ascii-timestamp");
-  const asciiWebhookSignature = context.req.raw.headers.get("x-ascii-signature");
-  const hasAsciiWebhook =
-    !!asciiWebhookDelivery && !!asciiWebhookTimestamp && !!asciiWebhookSignature;
+  const boatWebhookDelivery = context.req.raw.headers.get("x-ascii-delivery");
+  const boatWebhookTimestamp = context.req.raw.headers.get("x-ascii-timestamp");
+  const boatWebhookSignature = context.req.raw.headers.get("x-ascii-signature");
+  const hasBoatWebhook = !!boatWebhookDelivery && !!boatWebhookTimestamp && !!boatWebhookSignature;
 
   const rawBody =
-    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook || hasAsciiWebhook
+    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook || hasBoatWebhook
       ? await context.req.text()
       : "";
 
@@ -62,9 +61,9 @@ export async function createContext({ context }: CreateContextOptions) {
     daytonaWebhookId,
     daytonaWebhookTimestamp,
     daytonaWebhookSignature,
-    asciiWebhookDelivery,
-    asciiWebhookTimestamp,
-    asciiWebhookSignature,
+    boatWebhookDelivery,
+    boatWebhookTimestamp,
+    boatWebhookSignature,
     clientIp,
     // The raw Hono context is exposed so a small set of procedures (e.g. the
     // anonymous try-gitterm flow) can append `Set-Cookie` headers. Most
@@ -122,14 +121,13 @@ export async function createListenerContext({ context }: CreateContextOptions) {
     !!daytonaWebhookId && !!daytonaWebhookTimestamp && !!daytonaWebhookSignature;
 
   // boat signs deliveries with an HMAC over `delivery.timestamp.raw_body`.
-  const asciiWebhookDelivery = context.req.raw.headers.get("x-ascii-delivery");
-  const asciiWebhookTimestamp = context.req.raw.headers.get("x-ascii-timestamp");
-  const asciiWebhookSignature = context.req.raw.headers.get("x-ascii-signature");
-  const hasAsciiWebhook =
-    !!asciiWebhookDelivery && !!asciiWebhookTimestamp && !!asciiWebhookSignature;
+  const boatWebhookDelivery = context.req.raw.headers.get("x-ascii-delivery");
+  const boatWebhookTimestamp = context.req.raw.headers.get("x-ascii-timestamp");
+  const boatWebhookSignature = context.req.raw.headers.get("x-ascii-signature");
+  const hasBoatWebhook = !!boatWebhookDelivery && !!boatWebhookTimestamp && !!boatWebhookSignature;
 
   const rawBody =
-    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook || hasAsciiWebhook
+    githubXHubSignature256 || e2bSignature || hasDaytonaWebhook || hasBoatWebhook
       ? await context.req.text()
       : "";
 
@@ -145,9 +143,9 @@ export async function createListenerContext({ context }: CreateContextOptions) {
     daytonaWebhookId,
     daytonaWebhookTimestamp,
     daytonaWebhookSignature,
-    asciiWebhookDelivery,
-    asciiWebhookTimestamp,
-    asciiWebhookSignature,
+    boatWebhookDelivery,
+    boatWebhookTimestamp,
+    boatWebhookSignature,
     clientIp: null as string | null,
     honoContext: context,
   };

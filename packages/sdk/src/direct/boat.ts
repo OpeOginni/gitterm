@@ -5,36 +5,34 @@ import {
   shellQuote,
   waitForDirectRuntime,
 } from "./provisioning.js";
-import type { AsciiDirectProviderConfig, DirectProviderAdapter } from "./types.js";
+import type { BoatDirectProviderConfig, DirectProviderAdapter } from "./types.js";
 
 const HOME = "/home/user";
 
-type AsciiHandle = {
+type BoatHandle = {
   boxId: string;
   repoDir: string;
   serve: { command: string; port: number };
 };
 
-function serializeHandle(handle: AsciiHandle): string {
+function serializeHandle(handle: BoatHandle): string {
   return JSON.stringify(handle);
 }
 
-function parseHandle(value: string): AsciiHandle {
+function parseHandle(value: string): BoatHandle {
   try {
-    const handle = JSON.parse(value) as AsciiHandle;
+    const handle = JSON.parse(value) as BoatHandle;
     if (!handle.boxId || !handle.repoDir || !handle.serve?.command || !handle.serve.port) {
       throw new Error("missing required fields");
     }
     return handle;
   } catch {
-    throw new Error("Invalid Ascii Box direct workspace handle");
+    throw new Error("Invalid Boat direct workspace handle");
   }
 }
 
-export function createAsciiDirectProvider(
-  config: AsciiDirectProviderConfig,
-): DirectProviderAdapter {
-  if (!config.apiKey.trim()) throw new Error("Ascii apiKey is required");
+export function createBoatDirectProvider(config: BoatDirectProviderConfig): DirectProviderAdapter {
+  if (!config.apiKey.trim()) throw new Error("Boat apiKey is required");
 
   const client = new BoxApi(
     new Configuration({
@@ -54,15 +52,15 @@ export function createAsciiDirectProvider(
       commandRequest: { command, cwd, timeoutSeconds },
     });
     if (result.type !== "command.finished") {
-      throw new Error("Ascii Box command did not finish");
+      throw new Error("Boat command did not finish");
     }
     if (!result.success || result.exitCode !== 0) {
-      throw new Error(`Ascii Box command failed: ${result.stderr || result.stdout}`);
+      throw new Error(`Boat command failed: ${result.stderr || result.stdout}`);
     }
     return result.stdout;
   }
 
-  async function startRuntime(handle: AsciiHandle): Promise<void> {
+  async function startRuntime(handle: BoatHandle): Promise<void> {
     await runCommand(
       handle.boxId,
       `nohup setsid bash -lc ${shellQuote(handle.serve.command)} > /tmp/opencode-server.log 2>&1 </dev/null &`,
@@ -70,12 +68,12 @@ export function createAsciiDirectProvider(
     );
   }
 
-  async function getPublicUrl(handle: AsciiHandle): Promise<string> {
+  async function getPublicUrl(handle: BoatHandle): Promise<string> {
     await runCommand(handle.boxId, `host ${handle.serve.port}`);
     const output = await runCommand(handle.boxId, `host url ${handle.serve.port}`);
     const value = output.match(/https:\/\/\S+/)?.[0];
     if (!value) {
-      throw new Error(`Ascii Box did not return a hosted URL for port ${handle.serve.port}`);
+      throw new Error(`Boat did not return a hosted URL for port ${handle.serve.port}`);
     }
     const hosted = new URL(value);
     hosted.search = "";
@@ -89,12 +87,12 @@ export function createAsciiDirectProvider(
       headers: { Authorization: `Bearer ${config.apiKey}`, "X-Ascii-Confirm-Delete": boxId },
     });
     if (!response.ok && response.status !== 404) {
-      throw new Error(`Ascii Box deletion failed (${response.status})`);
+      throw new Error(`Boat deletion failed (${response.status})`);
     }
   }
 
   return {
-    name: "ascii",
+    name: "boat",
     capabilities: {
       persistence: "supported",
       recommendedLifecycle: "ephemeral",
@@ -114,7 +112,7 @@ export function createAsciiDirectProvider(
           env: plan.agent.environmentVariables,
         },
       });
-      const handle: AsciiHandle = {
+      const handle: BoatHandle = {
         boxId: created.box.id,
         repoDir: directory,
         serve: { command: plan.agent.command, port: plan.agent.port },
