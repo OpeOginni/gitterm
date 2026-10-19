@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { generateKeyPairSync, randomUUID, sign, verify } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer, request } from "node:http";
+import { createServer } from "node:http";
+import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -38,34 +39,31 @@ test("bridge preserves signed URLs, streaming, cookies, WebSockets, and shuts do
   await once(portReservation, "listening");
   const port = (portReservation.address() as { port: number }).port;
   await new Promise<void>((resolve) => portReservation.close(() => resolve()));
-  const upstream = createServer(async (req, res) => {
-    let body = "";
-    for await (const chunk of req) body += chunk;
-    res.setHeader("Set-Cookie", ["session=one; HttpOnly", "other=two"]);
-    res.end(
-      JSON.stringify({
-        url: `${req.headers["x-forwarded-proto"]}://${req.headers.host}${req.url}`,
-        headers: req.headers,
-        body,
-      }),
-    );
-  });
-  upstream.on("upgrade", (_req, socket, head) => {
-    socket.write(
-      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
-    );
-    if (head.length) socket.write(head);
-    socket.pipe(socket);
-  });
-  upstream.listen(port + 1, "127.0.0.1");
-  await once(upstream, "listening");
-  // Use a harmless child in place of native T3; the upstream fixture inspects
-  // exactly what T3's HttpServerRequest.toURL and DPoP verifier receive.
+  // Run the upstream fixture in Node, just like the generated bridge. Older
+  // Bun node:http servers do not reliably support upgraded sockets. Owning
+  // the fixture in the child also tests shutdown of the actual upstream.
   await writeFile(join(root, "bridge.cjs"), buildT3OriginBridgeSource("ws.gitterm.dev"));
   const pidPath = join(root, "native.pid");
   await writeFile(
     join(root, "child.cjs"),
-    `require("node:fs").writeFileSync(${JSON.stringify(pidPath)}, String(process.pid)); setInterval(() => {}, 1000);`,
+    `require("node:fs").writeFileSync(${JSON.stringify(pidPath)}, String(process.pid));
+const { createServer } = require("node:http");
+const server = createServer(async (req, res) => {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  res.setHeader("Set-Cookie", ["session=one; HttpOnly", "other=two"]);
+  res.end(JSON.stringify({
+    url: req.headers["x-forwarded-proto"] + "://" + req.headers.host + req.url,
+    headers: req.headers,
+    body,
+  }));
+});
+server.on("upgrade", (_req, socket, head) => {
+  socket.write("HTTP/1.1 101 Switching Protocols\\r\\nConnection: Upgrade\\r\\nUpgrade: websocket\\r\\n\\r\\n");
+  if (head.length) socket.write(head);
+  socket.pipe(socket);
+});
+server.listen(Number(process.argv[process.argv.indexOf("--port") + 1]), "127.0.0.1");`,
   );
   const child = spawn(
     "node",
@@ -135,34 +133,47 @@ test("bridge preserves signed URLs, streaming, cookies, WebSockets, and shuts do
       verify("sha256", Buffer.from(data), { key: publicKey, dsaEncoding: "ieee-p1363" }, signature),
     ).toBe(true);
 
-    await new Promise<void>((resolve, reject) => {
-      const req = request({
-        hostname: "127.0.0.1",
-        port,
-        path: "/ws",
-        headers: { Connection: "Upgrade", Upgrade: "websocket" },
+    // Avoid Bun 1.3.2's node:http upgrade client as well. Accumulate TCP chunks
+    // so a fragmented handshake or echo is not mistaken for a failed upgrade.
+    const frame = await new Promise<string>((resolve, reject) => {
+      const socket = createConnection({ host: "127.0.0.1", port }, () => {
+        socket.write(
+          "GET /ws HTTP/1.1\r\nHost: ws.gitterm.dev\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
+        );
       });
-      req.setTimeout(2000, () => req.destroy(new Error("Upgrade timed out")));
-      req.on("error", reject);
-      req.on("upgrade", (_res, socket) => {
-        socket.on("error", reject);
-        socket.once("data", (frame) => {
-          expect(frame.toString()).toBe("websocket-frame");
+      socket.setTimeout(2000, () => socket.destroy(new Error("Upgrade timed out")));
+      socket.on("error", reject);
+      let buffer = "";
+      let upgraded = false;
+      socket.on("data", (chunk) => {
+        buffer += chunk.toString();
+        if (!upgraded) {
+          const end = buffer.indexOf("\r\n\r\n");
+          if (end === -1) return;
+          if (!buffer.startsWith("HTTP/1.1 101 ")) {
+            socket.destroy(new Error(`Unexpected upgrade response: ${buffer}`));
+            return;
+          }
+          upgraded = true;
+          buffer = buffer.slice(end + 4);
+          socket.write("websocket-frame");
+        }
+        if (buffer.length >= "websocket-frame".length) {
+          resolve(buffer);
           socket.destroy();
-          resolve();
-        });
-        socket.write("websocket-frame");
+        }
       });
-      req.end();
+      socket.on("close", () => {
+        reject(new Error("Upgrade connection closed before echo"));
+      });
     });
+    expect(frame).toBe("websocket-frame");
   } finally {
     if (child.exitCode === null && child.signalCode === null) {
       const exited = once(child, "exit");
       child.kill("SIGTERM");
       await exited;
     }
-    upstream.closeAllConnections();
-    await new Promise<void>((resolve) => upstream.close(() => resolve()));
     const nativePid = Number(await readFile(pidPath, "utf8"));
     expect(() => process.kill(nativePid, 0)).toThrow();
     await rm(root, { recursive: true, force: true });
