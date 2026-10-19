@@ -6,7 +6,7 @@ export const IMAGE_PROVIDER_KEYS = [
   "daytona",
   "cloudflare",
   "vercel",
-  "ascii",
+  "boat",
   "exedev",
   "railway",
 ] as const;
@@ -55,8 +55,8 @@ export function imageSupportsProvider(
       return Boolean(metadata?.cloudflare?.startCommand && metadata.cloudflare.port);
     case "vercel":
       return Boolean(metadata?.vercel?.image || metadata?.vercel?.runtime);
-    case "ascii":
-      return Boolean(metadata?.ascii?.setupCommands?.length);
+    case "boat":
+      return Boolean(metadata?.boat?.setupCommands?.length);
     case "exedev":
       return Boolean(metadata?.exedev);
     case "railway":

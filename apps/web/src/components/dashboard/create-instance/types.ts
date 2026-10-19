@@ -129,7 +129,6 @@ export const ICON_MAP: Record<string, string> = {
   cloudflare: "/cloudflare.svg",
   e2b: "/E2B.svg",
   daytona: "/daytona.svg",
-  ascii: "/boat.svg",
   boat: "/boat.svg",
   "exe.dev": "/exe.png",
   exedev: "/exe.png",

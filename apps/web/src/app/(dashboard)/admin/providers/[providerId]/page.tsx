@@ -99,7 +99,7 @@ const MACHINE_FIELDS: Record<string, MachineField[]> = {
     { path: "resources.disk", label: "Disk (GB)", type: "number", placeholder: "20" },
   ],
   vercel: [{ path: "vcpus", label: "vCPUs", type: "number", placeholder: "2" }],
-  ascii: [
+  boat: [
     { path: "size", label: "Box size", type: "select", options: ["small", "default", "large"] },
   ],
   exedev: [

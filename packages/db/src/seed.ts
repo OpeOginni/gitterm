@@ -157,9 +157,9 @@ const seedCloudProviders: Array<{
     terminationSettlement: "immediate" as ProviderSettlement,
   },
   {
-    name: "boat",
+    name: "Boat",
     renamedFrom: "Ascii Box",
-    providerKey: "ascii",
+    providerKey: "boat",
     isEnabled: false,
     isSandbox: true,
     // The default provider when a user hasn't picked one: cheapest for users and for us.
@@ -290,7 +290,7 @@ const seedImages = [
         setupCommands: ["npm install -g @opencode/cli@2 @gitterm/cli --no-audit --fund=false"],
         vcpus: 2,
       },
-      ascii: {
+      boat: {
         setupCommands: ["npm install -g @opencode/cli@2 @gitterm/cli --no-audit --fund=false"],
       },
     },
@@ -333,7 +333,7 @@ const seedImages = [
         ],
         vcpus: 2,
       },
-      ascii: {
+      boat: {
         setupCommands: [
           "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai@1 @gitterm/cli --no-audit --fund=false",
         ],
@@ -390,7 +390,7 @@ const seedMachineProfiles: Array<{
     isDefault: false,
   },
   {
-    providerName: "boat",
+    providerName: "Boat",
     key: "small",
     name: "Small",
     vcpus: 2,
@@ -399,7 +399,7 @@ const seedMachineProfiles: Array<{
     isDefault: false,
   },
   {
-    providerName: "boat",
+    providerName: "Boat",
     key: "standard",
     name: "Standard",
     vcpus: 4,
@@ -408,7 +408,7 @@ const seedMachineProfiles: Array<{
     isDefault: true,
   },
   {
-    providerName: "boat",
+    providerName: "Boat",
     key: "large",
     name: "Large",
     vcpus: 8,

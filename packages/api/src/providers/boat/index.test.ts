@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { AsciiProvider } from ".";
+import { BoatProvider } from ".";
 import type { WorkspaceConfig } from "../compute";
 
 test("boat captures the agent-issued credential before launch and returns it to GitTerm", async () => {
-  const provider = new AsciiProvider();
+  const provider = new BoatProvider();
   const commands: string[] = [];
   const client = {
     create: async () => ({ box: { id: "box" } }),
@@ -40,7 +40,7 @@ test("boat captures the agent-issued credential before launch and returns it to 
   };
   const result = await provider.createWorkspace(config);
   expect(result.accessCredential).toBe("pairing-token");
-  expect(result.upstreamAccess?.headers["X-GitTerm-Ascii-Token"]).toBe("route-token");
+  expect(result.upstreamAccess?.headers["X-GitTerm-Boat-Token"]).toBe("route-token");
   expect(commands.indexOf("mint-token")).toBeLessThan(
     commands.findIndex((command) => command.includes("nohup setsid")),
   );

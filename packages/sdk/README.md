@@ -864,7 +864,7 @@ All built-in compute providers use the same provisioning plan and workspace/run 
 | E2B      | OpenCode-compatible template                                   | Yes              | Yes        |
 | Daytona  | Public Gitterm OpenCode server image by default                | Yes              | Yes        |
 | Vercel   | Vercel Sandbox project                                         | Yes              | Yes        |
-| boat     | boat API key (provider type `ascii`)                           | Yes              | Yes        |
+| Boat     | Boat API key (provider type `boat`)                            | Yes              | Yes        |
 | exe.dev  | Lifecycle token, or an existing VM with `ls,ssh,share,ssh-key` | Yes              | No         |
 | Railway  | Project/environment and public service domains                 | With a volume    | No         |
 

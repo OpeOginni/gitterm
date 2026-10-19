@@ -176,7 +176,7 @@ describe("billing analytics", () => {
     const suffix = randomUUID();
     const [provider] = await db
       .insert(cloudProvider)
-      .values({ name: `analytics-${suffix}`, providerKey: "ascii" })
+      .values({ name: `analytics-${suffix}`, providerKey: "boat" })
       .returning();
     providerId = provider!.id;
     const [agent] = await db

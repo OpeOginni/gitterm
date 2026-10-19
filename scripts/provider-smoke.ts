@@ -20,7 +20,7 @@ const PROVIDERS = [
   "daytona",
   "cloudflare",
   "vercel",
-  "ascii",
+  "boat",
   "exedev",
 ] as const satisfies readonly ProviderKey[];
 

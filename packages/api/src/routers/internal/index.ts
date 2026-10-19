@@ -26,12 +26,8 @@ import { railwayWebhookSchema } from "../railway/webhook";
 import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { daytonaWebhookSchema, verifyDaytonaWebhookSignature } from "../daytona/webhook";
 import type { DaytonaConfig } from "../../providers/daytona/types";
-import {
-  asciiWebhookBoxId,
-  asciiWebhookSchema,
-  verifyAsciiWebhookSignature,
-} from "../ascii/webhook";
-import type { AsciiConfig } from "../../providers/ascii/types";
+import { boatWebhookBoxId, boatWebhookSchema, verifyBoatWebhookSignature } from "../boat/webhook";
+import type { BoatConfig } from "../../providers/boat/types";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import {
@@ -896,9 +892,9 @@ export const internalRouter = router({
       return { updated: [] };
     }),
 
-  processAsciiWebhook: internalProcedure
+  processBoatWebhook: internalProcedure
     .input(
-      asciiWebhookSchema.extend({
+      boatWebhookSchema.extend({
         rawBody: z.string(),
         delivery: z.string(),
         timestamp: z.string(),
@@ -906,8 +902,8 @@ export const internalRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      const config = (await getProviderConfigService().getProviderConfigForUse("ascii")) as
-        | AsciiConfig
+      const config = (await getProviderConfigService().getProviderConfigForUse("boat")) as
+        | BoatConfig
         | undefined;
       if (!config?.webhookSecret) {
         console.error("boat webhookSecret is not configured.");
@@ -920,7 +916,7 @@ export const internalRouter = router({
         !!input.delivery &&
         !!input.timestamp &&
         !!input.signature &&
-        verifyAsciiWebhookSignature(config.webhookSecret, input.rawBody, {
+        verifyBoatWebhookSignature(config.webhookSecret, input.rawBody, {
           delivery: input.delivery,
           timestamp: input.timestamp,
           signature: input.signature,
@@ -935,7 +931,7 @@ export const internalRouter = router({
       // Only boat stopping a box itself matters: GitTerm's own pauses are already
       // reflected, and ready/hydrated/degraded don't change what the user can run.
       const event = input.type.replace(/^(sandbox|box)\./, "");
-      const boxId = asciiWebhookBoxId(input);
+      const boxId = boatWebhookBoxId(input);
       if ((event !== "archived" && event !== "error") || !boxId) return { updated: [] };
 
       // boat retries deliveries with a fresh signature timestamp. The event itself
@@ -944,11 +940,11 @@ export const internalRouter = router({
       const eventDate = new Date(input.createdAt);
       const eventIsCurrent = sql`coalesce(${workspace.lastActiveAt}, ${workspace.startedAt}) <= ${eventDate.toISOString()}::timestamp`;
 
-      const [asciiProvider] = await db
+      const [boatProvider] = await db
         .select({ id: cloudProvider.id })
         .from(cloudProvider)
-        .where(eq(cloudProvider.providerKey, "ascii"));
-      if (!asciiProvider) return { updated: [] };
+        .where(eq(cloudProvider.providerKey, "boat"));
+      if (!boatProvider) return { updated: [] };
 
       // The workspace keeps its box in a JSON handle; narrow by text, confirm by parsing.
       const candidates = await db
@@ -956,7 +952,7 @@ export const internalRouter = router({
         .from(workspace)
         .where(
           and(
-            eq(workspace.cloudProviderId, asciiProvider.id),
+            eq(workspace.cloudProviderId, boatProvider.id),
             eq(workspace.status, "running"),
             eventIsCurrent,
             sql`${workspace.externalInstanceId} like ${`%${boxId}%`}`,

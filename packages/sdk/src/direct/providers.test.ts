@@ -6,7 +6,7 @@ const configs: DirectProviderConfig[] = [
   { type: "e2b", apiKey: "key" },
   { type: "daytona", apiKey: "key", target: "us" },
   { type: "vercel", apiToken: "key", teamId: "team", projectId: "project" },
-  { type: "ascii", apiKey: "key" },
+  { type: "boat", apiKey: "key" },
   { type: "exedev", apiToken: "key" },
   {
     type: "railway",
@@ -20,7 +20,7 @@ describe("built-in direct providers", () => {
   test("all provider configs resolve through the standard client", () => {
     expect(
       configs.map((config) => createDirectGittermClient({ provider: config }).provider.name),
-    ).toEqual(["e2b", "daytona", "vercel", "ascii", "exedev", "railway"]);
+    ).toEqual(["e2b", "daytona", "vercel", "boat", "exedev", "railway"]);
   });
 
   test("all providers declare coherent lifecycle capabilities", () => {

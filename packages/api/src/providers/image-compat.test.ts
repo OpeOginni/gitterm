@@ -7,11 +7,11 @@ import {
 } from "./image-compat";
 
 describe("imageSupportsProvider", () => {
-  test("requires an Ascii agent setup command", () => {
-    expect(imageSupportsProvider("ascii", { ascii: {} })).toBe(false);
+  test("requires a Boat agent setup command", () => {
+    expect(imageSupportsProvider("boat", { boat: {} })).toBe(false);
     expect(
-      imageSupportsProvider("ascii", {
-        ascii: { setupCommands: ["npm install -g @opencode/cli@2"] },
+      imageSupportsProvider("boat", {
+        boat: { setupCommands: ["npm install -g @opencode/cli@2"] },
       }),
     ).toBe(true);
   });
@@ -22,7 +22,7 @@ describe("imageSupportsProvider", () => {
         aws: { cpu: 1 },
         daytona: {},
         e2b: { templateId: "" },
-        ascii: {},
+        boat: {},
       }),
     ).toEqual(["aws", "daytona"]);
   });

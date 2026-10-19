@@ -101,7 +101,7 @@ export type ProviderKey =
   | "daytona"
   | "cloudflare"
   | "vercel"
-  | "ascii"
+  | "boat"
   | "exedev";
 
 type ProviderSelectionBase = {
@@ -114,7 +114,7 @@ type ProviderSelectionBase = {
 export type WorkspaceProviderSelection =
   | { type: "railway"; providerId?: string; region?: string }
   | ({ type: "aws"; region?: string; accessProfile?: string } & ProviderSelectionBase)
-  | ({ type: "daytona" | "vercel" | "exedev" | "e2b" | "ascii" } & ProviderSelectionBase)
+  | ({ type: "daytona" | "vercel" | "exedev" | "e2b" | "boat" } & ProviderSelectionBase)
   | { type: "cloudflare"; providerId?: string };
 
 export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";

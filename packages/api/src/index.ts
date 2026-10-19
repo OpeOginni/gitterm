@@ -267,8 +267,8 @@ export const daytonaWebhookProcedure = t.procedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
-export const asciiWebhookProcedure = t.procedure.use(({ ctx, next }) => {
-  if (!ctx.asciiWebhookDelivery || !ctx.asciiWebhookTimestamp || !ctx.asciiWebhookSignature) {
+export const boatWebhookProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.boatWebhookDelivery || !ctx.boatWebhookTimestamp || !ctx.boatWebhookSignature) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: "boat webhook signature headers required",

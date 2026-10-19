@@ -299,7 +299,7 @@ export interface VercelImageProviderMetadata {
   vcpus?: number;
 }
 
-export interface AsciiImageProviderMetadata {
+export interface BoatImageProviderMetadata {
   size?: "small" | "default" | "large";
   /** Commands to run before starting the agent in the Box. */
   setupCommands?: string[];
@@ -326,7 +326,7 @@ export interface ImageProviderMetadata {
   aws?: AwsImageProviderMetadata;
   cloudflare?: CloudflareImageProviderMetadata;
   vercel?: VercelImageProviderMetadata;
-  ascii?: AsciiImageProviderMetadata;
+  boat?: BoatImageProviderMetadata;
   exedev?: ExeDevImageProviderMetadata;
   /** Present when `imageId` is a registry image Railway can pull. E2B-only template records omit it. */
   railway?: Record<string, never>;

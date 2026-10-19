@@ -1,6 +1,6 @@
 import { BoxApi, Configuration, waitUntilReady } from "@asciidev/box-sdk";
 import env from "@gitterm/env/server";
-import type { AsciiImageProviderMetadata } from "@gitterm/db/schema/cloud";
+import type { BoatImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { BeforeAgentSetupError } from "../compute";
 import type {
@@ -26,9 +26,9 @@ import {
   type WorkspaceSSHAccessCleanupConfig,
   type WorkspaceSSHAccessConfig,
 } from "../ssh-access";
-import type { AsciiConfig } from "./types";
+import type { BoatConfig } from "./types";
 
-export type { AsciiConfig } from "./types";
+export type { BoatConfig } from "./types";
 
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
@@ -38,31 +38,31 @@ const DEFAULT_AGENT_SERVE = {
   port: 4096,
 } as const;
 
-type AsciiHandle = {
+type BoatHandle = {
   boxId: string;
   repoDir: string;
   serve: { command: string; port: number };
   sshPublicKey?: string;
 };
 
-function serializeHandle(handle: AsciiHandle): string {
+function serializeHandle(handle: BoatHandle): string {
   return JSON.stringify(handle);
 }
 
-function parseHandle(value: string): AsciiHandle {
+function parseHandle(value: string): BoatHandle {
   try {
-    const handle = JSON.parse(value) as AsciiHandle;
+    const handle = JSON.parse(value) as BoatHandle;
     if (!handle.boxId || !handle.repoDir || !handle.serve?.command || !handle.serve.port) {
       throw new Error("missing required fields");
     }
     return handle;
   } catch {
-    throw new Error("Invalid Ascii Box workspace handle.");
+    throw new Error("Invalid Boat workspace handle.");
   }
 }
 
 function getTokenAccess(token: string): UpstreamAccess {
-  return { headers: { "X-GitTerm-Ascii-Token": token } };
+  return { headers: { "X-GitTerm-Boat-Token": token } };
 }
 
 /**
@@ -82,22 +82,20 @@ async function rejectWithBoatError({ response }: { response: Response }): Promis
   );
 }
 
-export class AsciiProvider implements ComputeProvider {
-  readonly name = "ascii";
+export class BoatProvider implements ComputeProvider {
+  readonly name = "boat";
 
-  async getConfig(): Promise<AsciiConfig> {
+  async getConfig(): Promise<BoatConfig> {
     const config = await getProviderConfigService().getProviderConfigForUse(this.name);
     if (!config) {
-      throw new Error(
-        "Ascii Box provider is not configured. Please configure it in the admin panel.",
-      );
+      throw new Error("Boat provider is not configured. Please configure it in the admin panel.");
     }
-    return config as AsciiConfig;
+    return config as BoatConfig;
   }
 
   private async getClient(): Promise<BoxApi> {
     const { apiKey } = await this.getConfig();
-    if (!apiKey) throw new Error("Ascii Box API key is not configured.");
+    if (!apiKey) throw new Error("Boat API key is not configured.");
     return new BoxApi(
       new Configuration({
         basePath: "https://ascii.dev/api/box/v1",
@@ -118,8 +116,8 @@ export class AsciiProvider implements ComputeProvider {
       : `https://${subdomain}.${BASE_DOMAIN}`;
   }
 
-  private getImageMetadata(config: WorkspaceConfig): AsciiImageProviderMetadata {
-    const metadata = config.imageProviderMetadata?.ascii as AsciiImageProviderMetadata | undefined;
+  private getImageMetadata(config: WorkspaceConfig): BoatImageProviderMetadata {
+    const metadata = config.imageProviderMetadata?.boat;
     return metadata ?? {};
   }
 
@@ -143,10 +141,10 @@ export class AsciiProvider implements ComputeProvider {
       commandRequest: { command, cwd, timeoutSeconds },
     });
     if (result.type !== "command.finished") {
-      throw new Error("Ascii Box command did not finish");
+      throw new Error("Boat command did not finish");
     }
     if (!result.success || result.exitCode !== 0) {
-      throw new Error(`Ascii Box command failed: ${result.stderr || result.stdout}`);
+      throw new Error(`Boat command failed: ${result.stderr || result.stdout}`);
     }
     return result.stdout;
   }
@@ -196,7 +194,7 @@ export class AsciiProvider implements ComputeProvider {
     }
   }
 
-  private async startAgentServer(client: BoxApi, handle: AsciiHandle): Promise<void> {
+  private async startAgentServer(client: BoxApi, handle: BoatHandle): Promise<void> {
     const escaped = handle.serve.command.replace(/'/g, `'"'"'`);
     await this.runCommand(
       client,
@@ -217,10 +215,10 @@ export class AsciiProvider implements ComputeProvider {
     await this.runCommand(client, boxId, `host ${port} --private`);
     const output = await this.runCommand(client, boxId, `host url ${port}`);
     const value = output.match(/https:\/\/\S+/)?.[0];
-    if (!value) throw new Error(`Ascii Box did not return a hosted URL for port ${port}.`);
+    if (!value) throw new Error(`Boat did not return a hosted URL for port ${port}.`);
     const hosted = new URL(value);
     const token = hosted.searchParams.get("_token");
-    if (!token) throw new Error(`Ascii Box did not return a private token for port ${port}.`);
+    if (!token) throw new Error(`Boat did not return a private token for port ${port}.`);
     hosted.search = "";
     return { url: hosted.toString(), token };
   }
@@ -249,7 +247,7 @@ export class AsciiProvider implements ComputeProvider {
         },
       }),
     );
-    const handle: AsciiHandle = {
+    const handle: BoatHandle = {
       boxId: created.box.id,
       repoDir,
       serve,
@@ -333,7 +331,7 @@ export class AsciiProvider implements ComputeProvider {
       if (postStartCommand) {
         await logger.step("run-post-start-command", () =>
           this.runCommand(client, handle.boxId, postStartCommand, repoDir).catch((error) =>
-            console.error("Ascii Box post-start command failed:", error),
+            console.error("Boat post-start command failed:", error),
           ),
         );
       }
@@ -409,7 +407,7 @@ export class AsciiProvider implements ComputeProvider {
     });
     // 404: the box is already gone, so the workspace can be marked terminated.
     if (!response.ok && response.status !== 404) {
-      throw new Error(`Ascii Box deletion failed (${response.status}).`);
+      throw new Error(`Boat deletion failed (${response.status}).`);
     }
   }
 
@@ -456,14 +454,14 @@ export class AsciiProvider implements ComputeProvider {
 
   async getWorkspaceSSHAccess(config: WorkspaceSSHAccessConfig): Promise<WorkspaceSSHAccess> {
     const handle = parseHandle(config.externalServiceId);
-    if (!handle.sshPublicKey) throw new Error("Ascii Box SSH requires a user SSH public key.");
+    if (!handle.sshPublicKey) throw new Error("Boat SSH requires a user SSH public key.");
     const client = await this.getClient();
     const response = await client.sshKey({
       boxId: handle.boxId,
       sshKeyRequest: { key: handle.sshPublicKey },
     });
     const host = response.machineIp;
-    if (!host) throw new Error("Ascii Box did not return an SSH host.");
+    if (!host) throw new Error("Boat did not return an SSH host.");
     const user = response.sshUser ?? "user";
     const port = 22;
     const hostAlias = buildHostAlias(config.subdomain);
@@ -484,7 +482,7 @@ export class AsciiProvider implements ComputeProvider {
   }
 
   async revokeWorkspaceSSHAccess(_config: WorkspaceSSHAccessCleanupConfig): Promise<void> {
-    // Ascii Box currently exposes key addition but no key revocation endpoint.
+    // Boat currently exposes key addition but no key revocation endpoint.
   }
 
   async removeExposedPortDomain(externalPortDomainId: string): Promise<void> {
@@ -494,4 +492,4 @@ export class AsciiProvider implements ComputeProvider {
   }
 }
 
-export const asciiProvider = new AsciiProvider();
+export const boatProvider = new BoatProvider();
