@@ -35,12 +35,12 @@ export function resolveProvisioningSpec(config: WorkspaceConfig): WorkspaceProvi
     : undefined;
 
   const serverPassword =
-    typeof env.OPENCODE_SERVER_PASSWORD === "string" ? env.OPENCODE_SERVER_PASSWORD : undefined;
+    typeof env.OPENCODE_PASSWORD === "string" ? env.OPENCODE_PASSWORD : undefined;
 
   return {
     agent: {
       files: decodeAgentFiles(env.AGENT_FILES_BASE64),
-      env: serverPassword ? { OPENCODE_SERVER_PASSWORD: serverPassword } : {},
+      env: serverPassword ? { OPENCODE_PASSWORD: serverPassword } : {},
       // The only env-only caller is the anon "try" flow, which is always an
       // OpenCode workspace.
       serve: {

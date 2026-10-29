@@ -1,7 +1,6 @@
 /**
- * OpenCode stores credentials in SQLite and offers no headless import, so fresh
- * containers receive this JSON plus a local plugin that imports it through the
- * integration API on first load.
+ * Fresh containers receive credentials through a local plugin that imports them
+ * through OpenCode's integration API and refreshes GitTerm-managed OAuth tokens.
  */
 export const OPENCODE_CREDENTIALS_PATH = "~/.gitterm/opencode/credentials.json";
 export const OPENCODE_CREDENTIALS_PLUGIN_PATH = "~/.config/opencode/plugins/gitterm-credentials.js";

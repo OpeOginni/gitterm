@@ -4,7 +4,13 @@ import {
   OPENCODE_CREDENTIALS_PLUGIN_PATH,
   OPENCODE_MANAGED_REFRESH,
 } from "@gitterm/agent-runtime/opencode-credentials";
-import { buildOpencodeAuthJson, buildOpencodeCredentials, opencodeProvisioner } from "./opencode";
+import {
+  buildOpencodeAuthJson,
+  buildOpencodeCredentials,
+  opencodeProvisioner,
+  OPENCODE_CONFIG_PATH,
+  OPENCODE_CLI_CONFIG_PATH,
+} from "./opencode";
 import type { AgentProvisionerContext, UserProviderCredential } from "./types";
 
 const credentials: UserProviderCredential[] = [
@@ -100,6 +106,36 @@ test("workspaces receive the credentials file and importer plugin", () => {
   expect(JSON.parse(Buffer.from(credentialFile.contentBase64, "base64").toString())).toEqual(
     buildOpencodeCredentials(credentials),
   );
+});
+
+test("standalone OpenCode receives V2 plugins and CLI settings, including request overrides", () => {
+  const plugin = { package: "saved", options: { strict: true } };
+  const payload = opencodeProvisioner.provision({
+    ...context,
+    agentConfigs: { opencode: { theme: "tokyonight", plugins: [plugin] } },
+    opencode: {
+      config: { theme: "github", model: "openai/gpt-6.1-sol" },
+      plugins: ["saved", "extra"],
+    },
+  });
+  const content = (path: string) =>
+    JSON.parse(
+      Buffer.from(
+        payload.files.find((file) => file.path === path)!.contentBase64,
+        "base64",
+      ).toString(),
+    );
+  expect(content(OPENCODE_CONFIG_PATH)).toEqual({
+    $schema: "https://opencode.ai/config.json",
+    username: "Gitterm: User",
+    model: "openai/gpt-6.1-sol",
+    plugins: [plugin, "extra"],
+  });
+  expect(content(OPENCODE_CLI_CONFIG_PATH)).toEqual({
+    $schema: "https://opencode.ai/v2/cli.json",
+    theme: { name: "github" },
+  });
+  expect(payload.files.some((file) => file.path.endsWith("/tui.json"))).toBe(false);
 });
 
 const extras: UserProviderCredential[] = [

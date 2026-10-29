@@ -40,7 +40,7 @@
   "devDependencies": {
     "@gitterm/agent-runtime": "workspace:*",
     "@gitterm/api": "workspace:*",
-    "@opencode/client": "^2.0.19",
+    "@opencode/client": "2.2.1",
     "@trpc/server": "catalog:",
     "@types/bun": "^1.2.6",
     "typescript": "^5.8.2"

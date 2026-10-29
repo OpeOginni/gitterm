@@ -93,6 +93,7 @@ function validateEnvironmentVariables(values: Record<string, string>): Record<st
       throw new Error(`Invalid environment variable name: ${key}`);
     }
     if (
+      key === "OPENCODE_PASSWORD" ||
       key === "OPENCODE_SERVER_PASSWORD" ||
       key === "OPENCODE_SERVER_USERNAME" ||
       key === "GITTERM_DIRECT_PROVIDER"

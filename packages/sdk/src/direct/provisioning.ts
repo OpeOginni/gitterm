@@ -8,6 +8,10 @@ import type {
 } from "./types.js";
 import { GittermError } from "../errors.js";
 import {
+  buildOpencodeConfig,
+  buildOpencodeCliConfig,
+} from "@gitterm/agent-runtime/opencode-config";
+import {
   githubAuthProvisioning,
   githubAuthCommand,
   GITHUB_CLI_INSTRUCTIONS,
@@ -169,29 +173,13 @@ export function buildDirectProvisioningPlan(
       value: directModelAuth(credential),
     });
   }
-  const configuredPlugins = Array.isArray(input.opencode?.config?.plugin)
-    ? input.opencode.config.plugin.filter((plugin): plugin is string => typeof plugin === "string")
-    : [];
-  const plugins = [...new Set([...configuredPlugins, ...(input.opencode?.plugins ?? [])])];
   const environmentVariables = { ...input.environmentVariables };
   delete environmentVariables.OPENCODE_SERVER_USERNAME;
   delete environmentVariables.GITTERM_DIRECT_PROVIDER;
-  const userPermission =
-    input.opencode?.config?.permission &&
-    typeof input.opencode.config.permission === "object" &&
-    !Array.isArray(input.opencode.config.permission)
-      ? input.opencode.config.permission
-      : {};
   const config = {
-    $schema: "https://opencode.ai/config.json",
-    ...input.opencode?.config,
+    ...buildOpencodeConfig(input.opencode?.config, input.opencode?.plugins),
     ...(input.models?.default ? { model: input.models.default } : {}),
     username: "Gitterm direct",
-    permission: {
-      external_directory: "allow",
-      ...userPermission,
-    },
-    ...(plugins.length ? { plugin: plugins } : {}),
   };
   const github = githubAuthProvisioning(
     input.repo
@@ -209,6 +197,10 @@ export function buildDirectProvisioningPlan(
     {
       path: "~/.config/opencode/opencode.json",
       contentBase64: base64(JSON.stringify(config)),
+    },
+    {
+      path: "~/.config/opencode/cli.json",
+      contentBase64: base64(JSON.stringify(buildOpencodeCliConfig(input.opencode?.config))),
     },
     {
       path: "~/.config/opencode/AGENTS.md",
@@ -246,7 +238,7 @@ export function buildDirectProvisioningPlan(
       files,
       environmentVariables: {
         ...environmentVariables,
-        OPENCODE_SERVER_PASSWORD: input.password,
+        OPENCODE_PASSWORD: input.password,
       },
       command: github ? githubAuthCommand(DIRECT_OPENCODE_COMMAND) : DIRECT_OPENCODE_COMMAND,
       port: DIRECT_OPENCODE_PORT,

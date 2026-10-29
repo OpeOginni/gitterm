@@ -46,6 +46,14 @@ function fakeProvider() {
 }
 
 describe("createDirectGittermClient", () => {
+  test("callers cannot replace the managed OpenCode server password", async () => {
+    const { provider, calls } = fakeProvider();
+    const client = createDirectGittermClient({ provider });
+    await expect(
+      client.workspaces.create({ environmentVariables: { OPENCODE_PASSWORD: "override" } }),
+    ).rejects.toThrow("managed by Gitterm");
+    expect(calls).toEqual([]);
+  });
   test("uses provider lifecycle hints and returns serializable workspace state", async () => {
     const { provider, calls } = fakeProvider();
     const client = createDirectGittermClient({ provider });

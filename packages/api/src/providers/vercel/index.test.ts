@@ -15,14 +15,14 @@ describe("Vercel environment", () => {
           CUSTOM_VALUE: "preserved",
         },
       },
-      { agent: { env: { OPENCODE_SERVER_PASSWORD: "password" } } },
+      { agent: { env: { OPENCODE_PASSWORD: "password" } } },
     );
 
     expect(environment).toEqual({
       WORKSPACE_API_URL: "https://api.example.com",
       WORKSPACE_SETUP_AUTH_TOKEN: "setup-token",
       CUSTOM_VALUE: "preserved",
-      OPENCODE_SERVER_PASSWORD: "password",
+      OPENCODE_PASSWORD: "password",
     });
     expect(Buffer.byteLength(JSON.stringify(environment))).toBeLessThan(4096);
   });

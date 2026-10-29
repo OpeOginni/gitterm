@@ -39,6 +39,34 @@ are not present in the audited release. They are upgrade candidates, not enabled
 GitTerm features. Audit their released contracts before adding adapters. In
 particular, do not silently disable Chromium's sandbox to make containers work.
 
+## OpenCode 2 runtime
+
+The SDK and agent runtime target OpenCode **2.2.1**, with an exact matching
+`@opencode/client` dependency. Runtime images install `@opencode/cli@2` by
+default, so rebuild images/templates to pick up the latest published V2 release.
+T3Code keeps its separate `opencode-ai@1` backend and configuration.
+
+Standalone and direct workspaces use native `plugins` entries, including package
+options, and `OPENCODE_PASSWORD` for server authentication. Server settings go
+to `~/.config/opencode/opencode.json`; the saved theme goes to
+`~/.config/opencode/cli.json` as `theme.name`. T3Code alone receives `tui.json`.
+Saved config validation uses the published OpenCode schema. Refresh the checked-in
+copy with `bun scripts/update-opencode-schema.ts`.
+
+Run the isolated compatibility check with an installed matching CLI:
+
+```sh
+OPENCODE_SMOKE_BINARY="$(command -v opencode)" bun run test:opencode
+```
+
+The check starts real loopback servers with fresh homes and synthetic credentials.
+It covers hosted/direct provisioning, plugin options, API-key import, managed
+OAuth refresh, service registration, single-use browser and TUI pairing, question
+and permission replies, PTY setup, SDK execution and model variants, event streaming,
+shell tool output, continuation, cancellation, and session deletion. Model responses
+and GitTerm token refreshes come from a loopback fixture, not paid services. CI runs
+the same check on Linux.
+
 ## Standard contract
 
 `packages/schema/src/agent-capabilities.ts` declares GitTerm-owned capabilities.

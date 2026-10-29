@@ -9,6 +9,10 @@ import {
   type OpencodeCredentialEntry,
 } from "@gitterm/agent-runtime/opencode-credentials";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
+import {
+  buildOpencodeConfig,
+  buildOpencodeCliConfig,
+} from "@gitterm/agent-runtime/opencode-config";
 import { withMcpConnections } from "../integrations/mcp-config";
 import {
   OPENCODE_SERVICE_REGISTRAR_PATH,
@@ -17,7 +21,7 @@ import {
 } from "@gitterm/agent-runtime/opencode-service";
 
 export const OPENCODE_CONFIG_PATH = "~/.config/opencode/opencode.json";
-export const OPENCODE_TUI_CONFIG_PATH = "~/.config/opencode/tui.json";
+export const OPENCODE_CLI_CONFIG_PATH = "~/.config/opencode/cli.json";
 export const OPENCODE_GITTERM_INSTRUCTIONS_PATH = "~/.config/opencode/AGENTS.md";
 
 const OPENCODE_SERVE_PORT = 4096;
@@ -116,26 +120,7 @@ export function buildOpencodeConfigJson(
   plugins: string[] = [],
 ): string {
   const username = `Gitterm: ${userDisplayName}`;
-  const config = { ...agentConfig };
-  delete config.theme;
-  const configuredPlugins = Array.isArray(config.plugin) ? config.plugin : [];
-  const configuredPluginNames = new Set(
-    configuredPlugins.filter((plugin): plugin is string => typeof plugin === "string"),
-  );
-  const plugin = [
-    ...configuredPlugins,
-    ...plugins.filter((pluginName) => !configuredPluginNames.has(pluginName)),
-  ];
-
-  return JSON.stringify(
-    agentConfig
-      ? { ...config, username, ...(plugin.length > 0 ? { plugin } : {}) }
-      : {
-          $schema: "https://opencode.ai/config.json",
-          username,
-          ...(plugin.length > 0 ? { plugin } : {}),
-        },
-  );
+  return JSON.stringify({ ...buildOpencodeConfig(agentConfig, plugins), username });
 }
 
 export const GITTERM_INSTRUCTIONS = `You are running inside a GitTerm workspace.
@@ -175,22 +160,13 @@ export function buildAwsRuntimeInstructions(input: {
 - If access is denied, report the exact action and resource and ask for that permission instead of retrying, changing regions, or bypassing the role. Explain the smallest additional capability needed and let the user decide whether an administrator should grant it. Never edit IAM policies, switch roles, or broaden your own permissions without explicit authorization.`;
 }
 
-export function buildOpencodeTuiConfigJson(
-  agentConfig: Record<string, unknown> | null | undefined,
-): string {
-  return JSON.stringify({
-    $schema: "https://opencode.ai/tui.json",
-    theme: typeof agentConfig?.theme === "string" ? agentConfig.theme : "opencode",
-  });
-}
-
 export const opencodeProvisioner: AgentProvisioner = {
   key: "opencode",
   capabilities: AGENT_CAPABILITIES.opencode,
   provision(ctx: AgentProvisionerContext): AgentProvisioning {
     const env: Record<string, string> = {};
     if (ctx.serverPassword) {
-      env.OPENCODE_SERVER_PASSWORD = ctx.serverPassword;
+      env.OPENCODE_PASSWORD = ctx.serverPassword;
     }
 
     const requestedConfig = ctx.opencode?.config
@@ -209,8 +185,8 @@ export const opencodeProvisioner: AgentProvisioner = {
           ),
         },
         {
-          path: OPENCODE_TUI_CONFIG_PATH,
-          contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
+          path: OPENCODE_CLI_CONFIG_PATH,
+          contentBase64: toBase64(JSON.stringify(buildOpencodeCliConfig(opencodeConfig))),
         },
         ...opencodeCredentialFiles(buildOpencodeCredentials(ctx.credentials)),
         {

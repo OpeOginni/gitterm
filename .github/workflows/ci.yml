@@ -35,3 +35,22 @@ jobs:
 
       - name: Typecheck
         run: bun run check-types
+
+  opencode:
+    name: OpenCode compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.2
+      - run: bun install --frozen-lockfile
+      - name: Install matching OpenCode CLI
+        run: |
+          VERSION=$(bun -p 'require("./packages/agent-runtime/package.json").dependencies["@opencode/client"]')
+          npm install --prefix "$RUNNER_TEMP/opencode" "@opencode/cli@$VERSION" --no-audit --fund=false
+      - name: Test real OpenCode server
+        run: bun run test:opencode
+        env:
+          OPENCODE_SMOKE_BINARY: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          OPENCODE_SMOKE_ROOT: ${{ runner.temp }}

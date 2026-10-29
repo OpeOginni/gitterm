@@ -90,6 +90,7 @@ export type DirectAuthPrompt =
 /** OpenCode 2 `IntegrationMethod`. */
 export type DirectAuthMethod =
   | { type: "oauth"; id: string; label: string; form?: DirectAuthPrompt[] }
+  | { type: "external"; id: string; label: string; form?: DirectAuthPrompt[] }
   | { type: "command"; id: string; label: string; command: string[] }
   | { type: "key"; label?: string; form?: DirectAuthPrompt[] }
   | { type: "env"; names: string[] };
@@ -101,7 +102,7 @@ export type DirectAuthIntegration = {
   metadata?: Record<string, unknown>;
   methods: DirectAuthMethod[];
   connections: Array<
-    | { type: "credential"; id: string; label: string; method: "key" | "oauth" }
+    | { type: "credential"; id: string; label: string; method: "key" | "oauth" | "external" }
     | { type: "env"; name: string }
   >;
 };

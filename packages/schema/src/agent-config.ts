@@ -7,7 +7,14 @@ let cachedOpenCodeSchema: z.ZodType | null = null;
 
 function getOpenCodeSchema(): z.ZodType {
   if (!cachedOpenCodeSchema) {
-    cachedOpenCodeSchema = z.fromJSONSchema(opencodeConfigSchemaJson as JSONSchema.BaseSchema);
+    cachedOpenCodeSchema = z.fromJSONSchema({
+      ...opencodeConfigSchemaJson,
+      properties: {
+        ...opencodeConfigSchemaJson.properties,
+        // Saved themes go to cli.json in V2 and tui.json in T3's V1 backend.
+        theme: { type: "string" },
+      },
+    } as JSONSchema.BaseSchema);
   }
   return cachedOpenCodeSchema;
 }
@@ -42,16 +49,16 @@ export const AGENT_CONFIG_KIND_META: Record<AgentConfigKind, AgentConfigKindMeta
   opencode: {
     id: "opencode",
     label: "OpenCode",
-    description: "Applied to OpenCode and T3Code workspaces as opencode.json and tui.json.",
+    description: "OpenCode settings and theme. T3Code uses its OpenCode 1 backend.",
     appliesTo: ["opencode", "t3code"],
     icon: "/opencode.svg",
-    docsUrl: "https://opencode.ai/docs/config/",
+    docsUrl: "https://opencode.ai/v2/docs/config/",
     testHint: "opencode.json",
     example: {
       $schema: "https://opencode.ai/config.json",
       theme: "opencode",
       model: "opencode/deepseek-v4-pro",
-      autoupdate: true,
+      update: "notify",
     },
   },
   "claude-code": {

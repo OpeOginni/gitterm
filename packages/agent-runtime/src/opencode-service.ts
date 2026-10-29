@@ -21,8 +21,8 @@ command -v curl >/dev/null 2>&1 || exit 0
 info=""
 attempt=0
 while [ "$attempt" -lt "$attempts" ]; do
-  if [ -n "$OPENCODE_SERVER_PASSWORD" ]; then
-    info=$(curl -sf --max-time 2 -u "opencode:$OPENCODE_SERVER_PASSWORD" "http://127.0.0.1:$port/api/info" 2>/dev/null) && break
+  if [ -n "$OPENCODE_PASSWORD" ]; then
+    info=$(curl -sf --max-time 2 -u "opencode:$OPENCODE_PASSWORD" "http://127.0.0.1:$port/api/info" 2>/dev/null) && break
   else
     info=$(curl -sf --max-time 2 "http://127.0.0.1:$port/api/info" 2>/dev/null) && break
   fi
@@ -36,7 +36,7 @@ dir="\${XDG_STATE_HOME:-$HOME/.local/state}/opencode"
 mkdir -p "$dir" || exit 0
 umask 077
 password=""
-[ -n "$OPENCODE_SERVER_PASSWORD" ] && password=",\\"password\\":\\"$OPENCODE_SERVER_PASSWORD\\""
+[ -n "$OPENCODE_PASSWORD" ] && password=",\\"password\\":\\"$OPENCODE_PASSWORD\\""
 printf '{"url":"http://127.0.0.1:%s","pid":%s,"version":"%s"%s}\\n' "$port" "$pid" "$version" "$password" > "$dir/service.json.$$" &&
   mv "$dir/service.json.$$" "$dir/service.json"
 `;

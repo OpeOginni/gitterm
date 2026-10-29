@@ -74,11 +74,10 @@ export interface OpencodeRuntime {
 
 export function parseModelRef(model: string | undefined) {
   if (!model) return undefined;
-  const separator = model.indexOf("/");
-  if (separator <= 0 || separator === model.length - 1) {
-    throw new Error('model must use the "provider/model" format');
-  }
-  return { providerID: model.slice(0, separator), modelID: model.slice(separator + 1) };
+  const match = /^([^/#]+)\/([^#]+)(?:#([^#]+))?$/.exec(model);
+  if (!match)
+    throw new Error('model must use the "provider/model" format with an optional #variant');
+  return { providerID: match[1]!, modelID: match[2]!, ...(match[3] ? { variant: match[3] } : {}) };
 }
 
 export function permissionTitle(permission: string, patterns: string[]): string {

@@ -33,7 +33,7 @@ export interface SystemWorkspaceEnv {
    * Base64-encoded JSON `AgentFile[]`: every file the selected agent needs on
    * disk before it starts. Entrypoints decode and write these generically,
    * regardless of which coding agent the image runs. Agent-specific env vars
-   * (e.g. OPENCODE_SERVER_PASSWORD, ANTHROPIC_API_KEY) travel through
+   * (e.g. OPENCODE_PASSWORD, ANTHROPIC_API_KEY) travel through
    * `AgentProvisioning.env`, not as system keys.
    */
   AGENT_FILES_BASE64: string;

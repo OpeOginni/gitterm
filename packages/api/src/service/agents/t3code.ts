@@ -3,12 +3,9 @@ import { AGENT_CAPABILITIES } from "@gitterm/schema/agent-capabilities";
 import { stringify as stringifyToml } from "smol-toml";
 import {
   buildOpencodeAuthJson,
-  buildOpencodeConfigJson,
-  buildOpencodeTuiConfigJson,
   buildGittermInstructions,
   OPENCODE_CONFIG_PATH,
   OPENCODE_GITTERM_INSTRUCTIONS_PATH,
-  OPENCODE_TUI_CONFIG_PATH,
 } from "./opencode";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 import { buildT3OriginBridgeSource, T3_ORIGIN_BRIDGE_PATH } from "./t3-origin-bridge";
@@ -20,6 +17,7 @@ const CODEX_AUTH_PATH = "~/.codex/auth.json";
 const CODEX_CONFIG_PATH = "~/.codex/config.toml";
 /** T3 drives its own OpenCode 1.x CLI, which still reads credentials from auth.json. */
 const T3_OPENCODE_AUTH_PATH = "~/.local/share/opencode/auth.json";
+const T3_OPENCODE_TUI_CONFIG_PATH = "~/.config/opencode/tui.json";
 const CLAUDE_OAUTH_SCOPES = ["user:inference", "user:profile"];
 
 export const T3_PAIRING_CREATE_COMMAND =
@@ -28,6 +26,24 @@ export const T3_PAIRING_CREATE_COMMAND =
 
 function toBase64(value: string): string {
   return Buffer.from(value).toString("base64");
+}
+
+/** T3's OpenCode 1 backend still needs the legacy plugin and theme formats. */
+function buildT3OpencodeConfigJson(
+  input: Record<string, unknown> | null | undefined,
+  userDisplayName: string,
+  plugins: string[] = [],
+) {
+  const config = { ...input };
+  delete config.theme;
+  const configured = Array.isArray(config.plugin) ? config.plugin : [];
+  const plugin = [...configured, ...plugins.filter((name) => !configured.includes(name))];
+  return JSON.stringify({
+    $schema: "https://opencode.ai/config.json",
+    ...config,
+    username: `Gitterm: ${userDisplayName}`,
+    ...(plugin.length ? { plugin } : {}),
+  });
 }
 
 function findCredential(
@@ -127,7 +143,7 @@ export const t3codeProvisioner: AgentProvisioner = {
     files.push({
       path: OPENCODE_CONFIG_PATH,
       contentBase64: toBase64(
-        buildOpencodeConfigJson(
+        buildT3OpencodeConfigJson(
           ctx.opencode?.config
             ? { ...ctx.agentConfigs?.opencode, ...ctx.opencode.config }
             : ctx.agentConfigs?.opencode,
@@ -137,8 +153,16 @@ export const t3codeProvisioner: AgentProvisioner = {
       ),
     });
     files.push({
-      path: OPENCODE_TUI_CONFIG_PATH,
-      contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
+      path: T3_OPENCODE_TUI_CONFIG_PATH,
+      contentBase64: toBase64(
+        JSON.stringify({
+          $schema: "https://opencode.ai/tui.json",
+          theme:
+            typeof ctx.agentConfigs?.opencode?.theme === "string"
+              ? ctx.agentConfigs.opencode.theme
+              : "opencode",
+        }),
+      ),
     });
     files.push({
       path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,
