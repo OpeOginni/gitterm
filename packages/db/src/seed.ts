@@ -320,7 +320,7 @@ const seedImages = [
       // agent CLIs it drives at boot.
       cloudflare: {
         setupCommands: [
-          "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai@1 @gitterm/cli --no-audit --fund=false",
+          "npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 @gitterm/cli --no-audit --fund=false",
         ],
         startCommand:
           "t3 start --host 0.0.0.0 --port 4096 --no-browser --auto-bootstrap-project-from-cwd",
@@ -329,18 +329,18 @@ const seedImages = [
       vercel: {
         runtime: "node22" as const,
         setupCommands: [
-          "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai@1 @gitterm/cli --no-audit --fund=false",
+          "npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 @gitterm/cli --no-audit --fund=false",
         ],
         vcpus: 2,
       },
       boat: {
         setupCommands: [
-          "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai@1 @gitterm/cli --no-audit --fund=false",
+          "npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 @gitterm/cli --no-audit --fund=false",
         ],
       },
       exedev: {
         setupCommands: [
-          "npm install -g t3 @anthropic-ai/claude-code @openai/codex opencode-ai@1 @gitterm/cli --no-audit --fund=false",
+          "npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 @gitterm/cli --no-audit --fund=false",
         ],
       },
     },

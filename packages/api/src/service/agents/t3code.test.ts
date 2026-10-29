@@ -3,6 +3,11 @@ import { parse as parseToml } from "smol-toml";
 import { buildClaudeCredentialsJson, buildCodexAuthJson, t3codeProvisioner } from "./t3code";
 import type { AgentProvisionerContext, UserProviderCredential } from "./types";
 import type { AgentProvisioning } from "../../providers/compute";
+import {
+  OPENCODE_CREDENTIALS_PATH,
+  OPENCODE_CREDENTIALS_PLUGIN_PATH,
+  OPENCODE_MANAGED_REFRESH,
+} from "@gitterm/agent-runtime/opencode-credentials";
 
 const context: AgentProvisionerContext = {
   userId: "user",
@@ -76,13 +81,18 @@ test("all three native backends receive global instructions and skills", () => {
 test("request OpenCode config overrides saved config inside T3", () => {
   const payload = t3codeProvisioner.provision({
     ...context,
-    agentConfigs: { opencode: { model: "old/model", theme: "dark", plugin: ["saved"] } },
+    agentConfigs: { opencode: { model: "old/model", theme: "dark", plugins: ["saved"] } },
     opencode: { config: { model: "new/model" }, plugins: ["extra"] },
   });
   expect(JSON.parse(content(payload, "~/.config/opencode/opencode.json"))).toMatchObject({
     model: "new/model",
-    plugin: ["saved", "extra"],
+    plugins: ["saved", "extra"],
   });
+  expect(JSON.parse(content(payload, "~/.config/opencode/cli.json")).theme.name).toBe("dark");
+  const paths = payload.files.map((file) => file.path);
+  expect(paths).toContain(OPENCODE_CREDENTIALS_PLUGIN_PATH);
+  expect(paths).not.toContain("~/.local/share/opencode/auth.json");
+  expect(paths).not.toContain("~/.config/opencode/tui.json");
 });
 
 test("API keys reach native Claude and Codex, preferring the selected default", () => {
@@ -127,6 +137,18 @@ test("ChatGPT auth includes identity token and does not get overridden by the Op
     },
   });
   expect(payload.env.OPENAI_API_KEY).toBeUndefined();
+  expect(JSON.parse(content(payload, OPENCODE_CREDENTIALS_PATH))).toContainEqual({
+    integration: "openai",
+    label: "default",
+    active: true,
+    value: {
+      type: "oauth",
+      refresh: OPENCODE_MANAGED_REFRESH,
+      access: "access",
+      accountId: "account",
+      metadata: { gittermCredentialId: "openai-oauth" },
+    },
+  });
   expect(JSON.parse(buildCodexAuthJson(oauth, "2026-10-13T00:00:00Z")).last_refresh).toBe(
     "2026-10-13T00:00:00Z",
   );

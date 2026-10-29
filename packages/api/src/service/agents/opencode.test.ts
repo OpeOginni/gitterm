@@ -5,7 +5,6 @@ import {
   OPENCODE_MANAGED_REFRESH,
 } from "@gitterm/agent-runtime/opencode-credentials";
 import {
-  buildOpencodeAuthJson,
   buildOpencodeCredentials,
   opencodeProvisioner,
   OPENCODE_CONFIG_PATH,
@@ -87,13 +86,6 @@ test("equal labels that land on one OpenCode integration stay distinct", () => {
     { ...credentials[1]!, label: "main" },
   ]);
   expect(entries.map((entry) => entry.label)).toEqual(["main", "main (openai)"]);
-});
-
-test("OpenCode 1.x auth.json keeps one account per provider, preferring the default", () => {
-  expect(JSON.parse(buildOpencodeAuthJson(credentials))).toEqual({
-    openai: { type: "oauth", refresh: "refresh-token" },
-    anthropic: { type: "api", key: "sk-ant-home" },
-  });
 });
 
 test("workspaces receive the credentials file and importer plugin", () => {
@@ -211,16 +203,5 @@ test("accounts GitTerm does not refresh keep their own refresh token", () => {
   expect(buildOpencodeCredentials([copilot])[0]!.value).toEqual({
     type: "oauth",
     refresh: "gho_token",
-  });
-});
-
-test("OpenCode 1.x auth.json skips the console account it cannot use", () => {
-  expect(JSON.parse(buildOpencodeAuthJson(extras))).toEqual({
-    "cloudflare-workers-ai": {
-      type: "api",
-      key: "cf-key",
-      metadata: { accountId: "a".repeat(32) },
-    },
-    opencode: { type: "api", key: "zen-key" },
   });
 });

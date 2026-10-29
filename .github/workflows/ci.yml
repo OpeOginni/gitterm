@@ -37,7 +37,7 @@ jobs:
         run: bun run check-types
 
   opencode:
-    name: OpenCode compatibility
+    name: OpenCode and T3 compatibility
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -54,3 +54,11 @@ jobs:
         env:
           OPENCODE_SMOKE_BINARY: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
           OPENCODE_SMOKE_ROOT: ${{ runner.temp }}
+      - name: Install T3
+        run: npm install --prefix "$RUNNER_TEMP/t3code" t3@0.1.4 --no-audit --fund=false
+      - name: Test T3 with OpenCode V2
+        run: bun scripts/t3code-smoke.ts
+        env:
+          T3_SMOKE_BINARY: ${{ runner.temp }}/t3code/node_modules/.bin/t3
+          OPENCODE_SMOKE_BINARY: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          T3_SMOKE_ROOT: ${{ runner.temp }}

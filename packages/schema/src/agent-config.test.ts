@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { validateOpenCodeConfig } from "./agent-config";
 
-test("saved OpenCode configuration accepts V2 fields and legacy T3 settings", () => {
+test("saved OpenCode configuration accepts V2 fields and the CLI theme", () => {
   expect(
     validateOpenCodeConfig({
       plugins: [{ package: "example", options: { enabled: true } }],
@@ -13,8 +13,12 @@ test("saved OpenCode configuration accepts V2 fields and legacy T3 settings", ()
     }).success,
   ).toBe(true);
   expect(
-    validateOpenCodeConfig({ plugin: ["example"], theme: "opencode", permission: { edit: "deny" } })
-      .success,
+    validateOpenCodeConfig({
+      plugins: ["example"],
+      theme: "opencode",
+      permissions: [{ action: "edit", resource: "*", effect: "deny" }],
+    }).success,
   ).toBe(true);
   expect(validateOpenCodeConfig({ permissions: "allow" }).success).toBe(false);
+  expect(validateOpenCodeConfig({ plugin: ["example"] }).success).toBe(false);
 });

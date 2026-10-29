@@ -7,7 +7,10 @@ import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
  * ships its self-contained executable in a platform package.
  * The agent itself is started at provision time (see e2b/index.ts startAgentServer).
  */
-export function createT3CodeServerTemplate(t3Version: string): TemplateClass {
+export function createT3CodeServerTemplate(
+  t3Version: string,
+  opencodeVersion: string,
+): TemplateClass {
   return (
     Template()
       .fromNodeImage("22-bookworm-slim")
@@ -21,8 +24,7 @@ export function createT3CodeServerTemplate(t3Version: string): TemplateClass {
           `t3@${t3Version}`,
           "@anthropic-ai/claude-code@latest",
           "@openai/codex@latest",
-          // T3 drives the OpenCode 1.x CLI itself; unrelated to the OpenCode 2 workspace runtime.
-          "opencode-ai@1",
+          `@opencode/cli@${opencodeVersion}`,
           "@gitterm/cli@latest",
         ],
         { g: true },

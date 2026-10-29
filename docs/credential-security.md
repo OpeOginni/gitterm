@@ -30,7 +30,8 @@ claiming secrets are inaccessible to an authorized workspace.
   credential row, refreshes at most once, and every workspace sharing the account reuses the
   result. Only running or starting workspaces that were created with the credential can ask.
   GitHub Copilot tokens do not rotate and are still refreshed inside the workspace. T3Code
-  workspaces run OpenCode 1.x, which has no plugin hook, so they still receive the refresh token.
+  workspaces use the same OpenCode V2 plugin and managed refresh. Native Claude/Codex
+  backends still receive refresh tokens and can compete with central refresh.
 - **MCP and Executor:** personal connection headers are envelope-encrypted with a connection-specific
   authenticated context. Selected workspaces receive their values as `GITTERM_MCP_*` environment
   variables; OpenCode config contains environment references, not literal secrets. OpenCode connects

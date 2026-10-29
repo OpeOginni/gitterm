@@ -35,8 +35,7 @@ function opencodeIntegration(cred: UserProviderCredential): string {
   return cred.logicalProviderKey;
 }
 
-/** `managed` is off for OpenCode 1.x, which has no plugin to fetch access tokens from GitTerm. */
-function opencodeAuthEntry(cred: UserProviderCredential, managed = true): OpencodeAuthEntry {
+function opencodeAuthEntry(cred: UserProviderCredential): OpencodeAuthEntry {
   const { credential } = cred;
   if (credential.type === "api_key") {
     return {
@@ -47,11 +46,7 @@ function opencodeAuthEntry(cred: UserProviderCredential, managed = true): Openco
   }
   // Rotating refresh tokens stay in GitTerm; the workspace plugin asks GitTerm for
   // access tokens by credential ID, so any number of workspaces can share the account.
-  if (
-    managed &&
-    cred.credentialId &&
-    getModelProviderDefinition(cred.providerName)?.refreshedByGitterm
-  ) {
+  if (cred.credentialId && getModelProviderDefinition(cred.providerName)?.refreshedByGitterm) {
     return {
       type: "oauth",
       refresh: OPENCODE_MANAGED_REFRESH,
@@ -91,27 +86,6 @@ export function buildOpencodeCredentials(
       value: opencodeAuthEntry(cred),
     };
   });
-}
-
-/**
- * OpenCode 1.x auth.json: one account per provider, preferring the default.
- * 1.x has no OpenCode console OAuth and no OAuth metadata, so those are left out.
- */
-export function buildOpencodeAuthJson(credentials: UserProviderCredential[]): string {
-  return JSON.stringify(
-    Object.fromEntries(
-      credentials
-        .filter(
-          (cred) => !(cred.credential.type === "oauth" && opencodeIntegration(cred) === "opencode"),
-        )
-        .toSorted((a, b) => Number(a.isDefault) - Number(b.isDefault))
-        .map((cred) => {
-          const entry = opencodeAuthEntry(cred, false);
-          if (entry.type === "oauth") delete entry.metadata;
-          return [opencodeIntegration(cred), entry];
-        }),
-    ),
-  );
 }
 
 export function buildOpencodeConfigJson(

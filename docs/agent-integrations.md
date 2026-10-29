@@ -2,10 +2,8 @@
 
 ## Research baseline
 
-Audited on 2026-10-13 against published **T3 0.0.45** (GitHub release
-`v0.0.45`, commit `6c8fed35`) and upstream `main` at
-`6524a8d43795dc543f7cfb572388cdea3662ad48`. npm also resolved to 0.0.45.
-Distinguish released behavior from development-branch features.
+Updated on 2026-10-29 against published T3 0.1.4 and OpenCode 2.2.1.
+The compatibility checks run both released CLIs, including T3's V2 adapter.
 
 The published npm package now installs a self-contained executable through
 `@t3code/t3-<platform>`. Its source-package Node engines and node-pty dependencies
@@ -14,15 +12,12 @@ Docker/E2B for older explicit version pins; Node 22 runs npm/provider launchers.
 
 Primary sources:
 
-- [Release and changelog](https://github.com/pingdotgg/t3code/releases/tag/v0.0.45)
-- [Released remote-access guide](https://github.com/pingdotgg/t3code/blob/v0.0.45/docs/user/remote-access.md)
-- [Released server CLI](https://github.com/pingdotgg/t3code/blob/v0.0.45/apps/server/src/cli/server.ts)
-- [Released auth CLI](https://github.com/pingdotgg/t3code/blob/v0.0.45/apps/server/src/cli/auth.ts)
-- [Released environment HTTP contract](https://github.com/pingdotgg/t3code/blob/v0.0.45/packages/contracts/src/environmentHttp.ts)
-- [Released Codex managed runtime](https://github.com/pingdotgg/t3code/blob/v0.0.45/apps/server/src/provider/CodexManagedRuntime.ts)
-- [Released package engines/dependencies](https://github.com/pingdotgg/t3code/blob/v0.0.45/apps/server/package.json)
+- [Release and changelog](https://github.com/pingdotgg/t3code/releases/tag/v0.1.4)
+- [Released OpenCode provider guide](https://github.com/pingdotgg/t3code/blob/v0.1.4/docs/user/providers-opencode.md)
+- [Released OpenCode driver](https://github.com/pingdotgg/t3code/blob/v0.1.4/packages/provider-opencode/src/server/driver.ts)
+- [Released server CLI](https://github.com/pingdotgg/t3code/blob/v0.1.4/apps/server/src/cli/server.ts)
+- [Released auth CLI](https://github.com/pingdotgg/t3code/blob/v0.1.4/apps/server/src/cli/auth.ts)
 - [Codex native token format](https://github.com/openai/codex/blob/main/codex-rs/login/src/token_data.rs)
-- [Development-branch outside-agent MCP guide](https://github.com/pingdotgg/t3code/blob/6524a8d43795dc543f7cfb572388cdea3662ad48/docs/user/outside-agents.md)
 
 T3 is a harness over native agents, not an OpenCode-compatible server. Its stable
 release supports Claude Code, Codex, OpenCode, Cursor, Grok Build, and Antigravity.
@@ -30,28 +25,22 @@ GitTerm's default images install the first three. Additional agents should use
 T3's native installation/sign-in facilities or an administrator-configured image,
 rather than another GitTerm-owned auth or orchestration implementation.
 
-T3's bundled OpenCode SDK is still 1.x. Keep `opencode-ai@1` in T3 runtimes;
-GitTerm's standalone OpenCode runtime uses `@opencode/cli@2`. Do not share the
-OpenCode 2 credential importer or assume protocol compatibility between them.
-
-Browser tooling and the outside-agent OAuth/MCP endpoint found on upstream `main`
-are not present in the audited release. They are upgrade candidates, not enabled
-GitTerm features. Audit their released contracts before adding adapters. In
-particular, do not silently disable Chromium's sandbox to make containers work.
+GitTerm installs only OpenCode V2, including inside T3 runtimes. T3 selects its
+V2 adapter from the installed binary's version. Both integrations share the
+credential importer, managed OAuth refresh, and native V2 config builders.
 
 ## OpenCode 2 runtime
 
 The SDK and agent runtime target OpenCode **2.2.1**, with an exact matching
 `@opencode/client` dependency. Runtime images install `@opencode/cli@2` by
 default, so rebuild images/templates to pick up the latest published V2 release.
-T3Code keeps its separate `opencode-ai@1` backend and configuration.
 
-Standalone and direct workspaces use native `plugins` entries, including package
+Standalone, direct, and T3Code workspaces use native `plugins` entries, including package
 options, and `OPENCODE_PASSWORD` for server authentication. Server settings go
 to `~/.config/opencode/opencode.json`; the saved theme goes to
-`~/.config/opencode/cli.json` as `theme.name`. T3Code alone receives `tui.json`.
-Saved config validation uses the published OpenCode schema. Refresh the checked-in
-copy with `bun scripts/update-opencode-schema.ts`.
+`~/.config/opencode/cli.json` as `theme.name`.
+Saved config validation imports `@opencode/schema` at the same pinned version as
+the client. No generated schema copy or download is needed.
 
 Run the isolated compatibility check with an installed matching CLI:
 
@@ -89,13 +78,13 @@ Legacy name resolution is limited to older proxy cache entries and UI callers
 without a key. Dashboard pairing controls and MCP selection use the shared
 capability declaration as well. Unknown keys fail closed.
 
-| GitTerm capability                | OpenCode          | T3Code                          |
-| --------------------------------- | ----------------- | ------------------------------- |
-| Primary authentication            | Server password   | Native one-time pairing         |
-| GitTerm run API / bots            | Server workspaces | Not implemented                 |
-| GitTerm-managed MCP connections   | Yes               | Not implemented                 |
-| Central OAuth refresh integration | Yes               | No; native backends own refresh |
-| Native saved configs              | OpenCode          | OpenCode, Claude Code, Codex    |
+| GitTerm capability                | OpenCode          | T3Code                       |
+| --------------------------------- | ----------------- | ---------------------------- |
+| Primary authentication            | Server password   | Native one-time pairing      |
+| GitTerm run API / bots            | Server workspaces | Not implemented              |
+| GitTerm-managed MCP connections   | Yes               | Not implemented              |
+| Central OAuth refresh integration | Yes               | OpenCode V2 only             |
+| Native saved configs              | OpenCode          | OpenCode, Claude Code, Codex |
 
 To add an agent, register its key and capabilities, implement the provisioner,
 configure provider runtime images/setup, and extend the conformance tests. Do not
@@ -121,7 +110,7 @@ add agent-name branches to individual compute providers.
   support control-plane exec for regeneration, and encrypt replacement grants on
   restart. An outdated worker that omits a required grant produces an error.
 - **Installation:** Vercel setup must succeed before launch; exe.dev accepts
-  blocking setup commands. Cloudflare also installs T3's OpenCode 1.x backend.
+  blocking setup commands. T3 runtime setup installs `@opencode/cli@2`.
 - **Updates:** resolve versions from npm, honor explicit pins in E2B builds, and
   resolve a concrete T3 Docker version before installation. GitHub release tags
   alone are not proof that an npm package has been published.
@@ -144,12 +133,11 @@ add agent-name branches to individual compute providers.
 
 ## Deliberate limits and rollout
 
-Native Claude/Codex/OpenCode 1.x auth is not GitTerm's managed-refresh protocol.
+Native Claude/Codex auth is not GitTerm's managed-refresh protocol.
 Copying a rotating OAuth refresh token into several workspaces can still compete
 with central refresh. Prefer API keys or **independent native sign-ins in T3's
-provider settings** for long-lived/multi-workspace use. A new external-token
-bridge would need a separately designed and tested integration; fabricating
-OpenCode compatibility or editing T3's private credential database is not safe.
+provider settings** for long-lived/multi-workspace use. T3's OpenCode V2 backend
+uses GitTerm's existing managed-refresh plugin instead.
 
 Older saved ChatGPT credentials may lack the required ID token. Reconnect the
 account in GitTerm before creating a T3 workspace, or use an API key and complete
@@ -183,12 +171,14 @@ Validation:
 ```sh
 bun test packages/api/src/service/agents packages/api/src/providers packages/schema/src/agent-capabilities.test.ts .docker/tests/workspace-startup.test.mts
 bun run check-types
-T3_SMOKE_BINARY=/absolute/path/to/t3 bun scripts/t3code-smoke.ts
+T3_SMOKE_BINARY=/absolute/path/to/t3 \
+OPENCODE_SMOKE_BINARY=/absolute/path/to/opencode bun scripts/t3code-smoke.ts
 ```
 
 The opt-in smoke test uses an isolated temporary home and a loopback endpoint. It
 checks discovery, hosted-app-origin pairing, signed token exchange and API access
 with a rewritten provider Host, rejection of unauthenticated requests and proofs
 for a different URL, single-use tokens, one registered project, and persisted
-grants/projects after a server restart. It does
-not authenticate native model providers or prove paid cloud-provider behavior.
+grants/projects after a server restart. It also runs OpenCode V2 threads, shell
+tools, and continuation against a loopback model fixture. It does not use real
+provider accounts or prove paid cloud-provider behavior.
