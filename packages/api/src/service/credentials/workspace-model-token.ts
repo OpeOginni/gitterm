@@ -12,7 +12,7 @@ import {
   userModelCredential,
 } from "@gitterm/db/schema/model-credentials";
 import { getModelProviderDefinition } from "@gitterm/schema/model-providers";
-import { getEncryptionService, type OAuthCredential } from "../encryption";
+import { encryptionContext, getEncryptionService, type OAuthCredential } from "../encryption";
 import { OpenAIOAuthService } from "./oauth/openai-oauth";
 import { OpencodeConsoleOAuthService } from "./oauth/opencode-console";
 import { XaiOAuthService } from "./oauth/xai-oauth";
@@ -122,7 +122,8 @@ export async function getFreshModelOAuthCredential(
       throw new ModelCredentialUnavailableError("This credential is not refreshed by GitTerm");
     }
 
-    const current = encryption.decryptCredential(row.encryptedCredential);
+    const context = encryptionContext("model-credential", userId, credentialId, row.providerId);
+    const current = encryption.decryptCredential(row.encryptedCredential, context);
     if (current.type !== "oauth") {
       throw new ModelCredentialUnavailableError("This credential is not an OAuth account");
     }
@@ -133,7 +134,7 @@ export async function getFreshModelOAuthCredential(
     await tx
       .update(userModelCredential)
       .set({
-        encryptedCredential: encryption.encryptCredential(next),
+        encryptedCredential: encryption.encryptCredential(next, context),
         oauthExpiresAt: next.expires ? new Date(next.expires) : null,
         updatedAt: now,
       })

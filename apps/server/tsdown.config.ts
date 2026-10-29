@@ -7,6 +7,8 @@ export default defineConfig({
     // Bundled so the production image can bootstrap the database without node_modules.
     "scripts/migrate": "../../packages/db/src/migrate-cli.ts",
     "scripts/seed": "../../packages/db/src/seed-cli.ts",
+    "scripts/security-rewrap": "../../packages/api/src/scripts/rewrap-encryption.ts",
+    "scripts/security-oauth": "../../packages/auth/src/scripts/encrypt-oauth-tokens.ts",
   },
   format: "esm",
   outDir: "./dist",

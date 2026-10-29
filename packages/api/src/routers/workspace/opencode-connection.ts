@@ -40,7 +40,7 @@ export const opencodeConnectionProcedures = {
       }
       try {
         return await createOpencodeConnection(
-          { url, password: decryptWorkspacePassword(record.serverPassword) },
+          { url, password: decryptWorkspacePassword(record.serverPassword, record) },
           input.kind,
         );
       } catch (error) {

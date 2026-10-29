@@ -23,6 +23,7 @@ const schema = z.object({
 
   // Auth
   BETTER_AUTH_SECRET: optional, // Will fail at runtime if not set
+  AUTH_ENCRYPT_OAUTH_TOKENS: boolWithDefault(false),
   BETTER_AUTH_URL: optional,
   CORS_ORIGIN: optional,
 

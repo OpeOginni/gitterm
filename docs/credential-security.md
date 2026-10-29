@@ -56,13 +56,155 @@ headers, runtime bundles, and secret contents are never audit fields.
 
 New encrypted values use a random 256-bit data key per record. The data key is wrapped by the active
 AES-256-GCM master key, and ciphertexts carry a key ID. Legacy AES-GCM ciphertext remains readable.
+Both data and key authentication tags must be the full 16 bytes. No KMS or external secret service
+is required. Keep keys outside the database, out of source control, and available to every backend
+process that reads credentials. Protect local environment files with `chmod 600`.
 
-Required production configuration:
+Required configuration for real credentials in development and production:
 
 ```text
 ENCRYPTION_MASTER_KEY=<64 hex characters>
 ENCRYPTION_MASTER_KEY_ID=primary
 ```
+
+Generate a new key with `openssl rand -hex 32`. Do not replace an existing key without retaining it
+under its original ID. Losing the key makes the stored secrets unrecoverable.
+
+### Compatible rollout
+
+Two settings control writes, not reads:
+
+| Setting                     | Compatibility phase | Hardened writes |
+| --------------------------- | ------------------- | --------------- |
+| `ENCRYPTION_WRITE_VERSION`  | `v2` (default)      | `v3`            |
+| `AUTH_ENCRYPT_OAUTH_TOKENS` | `false` (default)   | `true`          |
+
+This revision reads legacy AES-GCM, v2, and record-bound v3 values. v3 binds model credentials to
+their owner, record, and provider; provider configurations to their record and provider type;
+environment sets to their owner, record, and agent type; workspace passwords to their owner and
+workspace; route headers to their workspace and port; and SSH revocation tokens to their workspace.
+Existing MCP and runtime-bundle values already have record-specific contexts. Deployment-wide
+GitHub and Google keys retain their separate authenticated contexts.
+
+New-format authentication failures never fall back to a legacy context. Legacy values remain
+readable to support existing installations and backups; they do not gain record binding until
+migrated. Compatibility reads cannot detect the substitution of an otherwise valid legacy value.
+
+Better Auth always reads both plaintext and encrypted login tokens in this revision. During the
+compatibility phase, account create/update hooks keep writes plaintext so older replicas can still
+read them. Once all replicas run this revision, enabling encrypted writes is safe during a rolling
+restart. The OAuth migration uses Better Auth's own encryption and existing authentication secret,
+not `ENCRYPTION_MASTER_KEY`. It encrypts account access/refresh tokens, not password hashes, session
+tokens, or ID tokens. GitHub login does not issue an ID token. Model-provider ID tokens are already
+inside the encrypted model credential.
+
+Fresh installations can enable both hardened-write settings immediately. Existing installations
+must deploy the compatibility phase everywhere first, including server replicas, listeners, workers,
+scheduled jobs, and migration runners that import credential code. Wait for old processes to drain
+before enabling hardened writes. Do not migrate credentials automatically at application startup.
+
+### Development setup
+
+1. Back up the development database and its current encryption key separately.
+2. In `apps/server/.env.development.local`, keep your existing `ENCRYPTION_MASTER_KEY`, key ID,
+   `BETTER_AUTH_SECRET`, and `WORKSPACE_JWT_SECRET`. Start with `ENCRYPTION_WRITE_VERSION=v2` and
+   `AUTH_ENCRYPT_OAUTH_TOKENS=false`. Share the encryption keyring with any other local process that
+   reads credentials.
+3. If there is no existing key and no saved data, generate a random key. If saved development data
+   used the former zero-key fallback, see the recovery procedure below before starting the app.
+4. Start the updated services. Check an existing login and credential-backed workspace.
+5. Set `ENCRYPTION_WRITE_VERSION=v3` and `AUTH_ENCRYPT_OAUTH_TOKENS=true`, then restart the services.
+6. Inspect and apply both migrations from the repository root:
+
+   ```sh
+   bun run security:rewrap:dev
+   bun run security:oauth:dev
+   bun run security:rewrap:dev -- --apply
+   bun run security:oauth:dev -- --apply
+   bun run security:rewrap:dev
+   bun run security:oauth:dev
+   ```
+
+7. Both final dry runs must report `candidates: 0` and `conflicts: 0`. Test an existing session,
+   password login, model credential use, environment-variable get/list, and workspace access.
+   Users do not need to be online, reconnect accounts, or re-enter keys.
+
+To check the migration independently of your data, run `bun run scripts/security-storage-smoke.ts`.
+It requires Docker, creates its own temporary Postgres container, uses synthetic secrets, and
+removes the container afterward. It never uses your `DATABASE_URL` or calls provider APIs.
+
+### Production setup
+
+1. Complete the development checks first. Take a database backup and verify that the matching
+   encryption and Better Auth secrets are recoverable separately. Use different dev/prod secrets.
+2. Keep production's current keys and IDs unchanged for this rollout. Do not rotate signing keys or
+   encryption keys at the same time. Confirm `NODE_ENV=production`.
+3. Deploy this revision everywhere with `ENCRYPTION_WRITE_VERSION=v2` and
+   `AUTH_ENCRYPT_OAUTH_TOKENS=false`. Wait for old replicas and jobs to drain. Check health, existing
+   sessions, and a credential-backed workspace. No database schema change is required by this patch.
+4. Enable `ENCRYPTION_WRITE_VERSION=v3` and `AUTH_ENCRYPT_OAUTH_TOKENS=true` on the updated services,
+   then redeploy/restart them. Wait for every writer to use the new settings.
+5. Run the dry runs in the production server environment, inspect the counts, apply, and dry-run
+   again. A source checkout configured through `apps/server/.env` can use:
+
+   ```sh
+   bun run security:rewrap:prod
+   bun run security:oauth:prod
+   bun run security:rewrap:prod -- --apply
+   bun run security:oauth:prod -- --apply
+   bun run security:rewrap:prod
+   bun run security:oauth:prod
+   ```
+
+   The production server image includes the same tools without needing source or node_modules:
+
+   ```sh
+   bun run /app/dist/scripts/security-rewrap.mjs
+   bun run /app/dist/scripts/security-oauth.mjs
+   bun run /app/dist/scripts/security-rewrap.mjs --apply
+   bun run /app/dist/scripts/security-oauth.mjs --apply
+   ```
+
+   For Docker Compose, prefix each image command with
+   `docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml exec server`.
+   Update `.env.selfhost` for each rollout phase and recreate the services. Repeat both dry runs
+   after applying; require zero candidates and conflicts.
+
+6. Check existing sessions, model access, OAuth token refresh, workspace credentials, and environment
+   get/list. Provider-side smoke checks are manual because the isolated test does not call real providers.
+
+The migration validates decryptability and verifies each replacement before writing. Updates compare
+the stored ciphertext so a concurrent refresh or edit is not overwritten. A conflict produces a nonzero
+exit code and requires a rerun. An interrupted run is safe to rerun; it may have completed some updates.
+Only counts and generic failures are logged. Do not remove keys on a failed or incomplete run.
+
+After activation, rollback only to this revision or another release with v3 and encrypted-OAuth read
+support. Rolling back to older code will break access to migrated credentials. Keep hardened writes
+enabled; disabling them does not decrypt existing records and permits weaker new writes.
+
+### Former development fallback
+
+The all-zero key is no longer silently used outside tests. An explicit
+`ENCRYPTION_ALLOW_INSECURE_DEV_KEY=true` permits it in development only, with a warning, for throwaway
+data. Production rejects it even with that opt-in.
+
+To preserve existing development data that used the fallback:
+
+1. Back up the database. Find the old `ENCRYPTION_MASTER_KEY_ID`; its default was `primary`.
+2. Generate a random active key and give it a different ID, for example `dev-2026-10`.
+3. Add the old zero key under its original ID in `ENCRYPTION_MASTER_KEYS`. A previous default-key
+   installation would use:
+
+   ```text
+   ENCRYPTION_MASTER_KEY_ID=dev-2026-10
+   ENCRYPTION_MASTER_KEY=<new random 64-character hex key>
+   ENCRYPTION_MASTER_KEYS={"primary":"0000000000000000000000000000000000000000000000000000000000000000"}
+   ```
+
+4. Complete the rollout and rewrap above. Remove the zero key only after successful verification.
+   Data previously protected by a publicly known key must not be treated as having been confidential.
+
+### Subsequent key rotation
 
 Rotation procedure:
 
@@ -71,7 +213,8 @@ Rotation procedure:
 3. Deploy. New writes use the new key; reads accept both keys.
 4. Run `bun run security:rewrap` to inspect the count, then
    `bun run security:rewrap -- --apply` to rewrap old records.
-5. Remove the previous key only after no ciphertext references it.
+5. Repeat the dry run until zero candidates and conflicts remain. Remove the previous key from live
+   services only after no ciphertext references it. Retain it separately for backups until they expire.
 
 Example overlap configuration:
 
@@ -81,8 +224,15 @@ ENCRYPTION_MASTER_KEY=<new key>
 ENCRYPTION_MASTER_KEYS={"primary":"<previous key>"}
 ```
 
-Keep all master keys in the deployment's managed secret store. Production fails closed when no
-master key is configured.
+The rewrap scan covers model credentials, provider configs, workspace passwords, route headers,
+runtime bundles, environment sets, MCP auth, SSH revocation tokens, Google issuer keys, and GitHub
+App keys/webhook secrets/PATs. Login OAuth tokens have the separate `security:oauth` migration and
+depend on the Better Auth secret. Do not retire that secret through the application keyring.
+
+Store keys using deployment secrets or protected files outside the database. Production fails closed
+when no master key is configured. Database transport TLS, disk/backup encryption, access permissions,
+and deletion/retention policies remain deployment responsibilities; application encryption does not
+encrypt every profile field or protect against an attacker controlling the running application.
 
 ## Revocation
 

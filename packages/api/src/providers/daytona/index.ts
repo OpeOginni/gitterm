@@ -5,7 +5,7 @@ import { isOpencodeServeCommand } from "@gitterm/agent-runtime/opencode-service"
 import type { DaytonaImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import path from "path";
 import { getProviderConfigService } from "../../service/config/provider-config";
-import { getEncryptionService } from "../../service/encryption";
+import { encryptionContext, getEncryptionService } from "../../service/encryption";
 import { BeforeAgentSetupError } from "../compute";
 import type {
   ComputeProvider,
@@ -651,7 +651,10 @@ export class DaytonaProvider implements ComputeProvider {
   }
 
   async getWorkspaceSSHAccess(config: WorkspaceSSHAccessConfig): Promise<WorkspaceSSHAccess> {
-    const existingToken = this.decryptRevocationToken(config.existingConnection?.revocationToken);
+    const existingToken = this.decryptRevocationToken(
+      config.existingConnection?.revocationToken,
+      config.workspaceId,
+    );
     const existingExpiresAt = config.existingConnection?.expiresAt;
     if (
       existingToken &&
@@ -710,7 +713,10 @@ export class DaytonaProvider implements ComputeProvider {
         port,
         // The Daytona SSH token doubles as the SSH user and is required to
         // revoke access later, so it is stored encrypted at rest.
-        revocationToken: getEncryptionService().encrypt(token),
+        revocationToken: getEncryptionService().encryptForRecord(
+          token,
+          encryptionContext("daytona-ssh", config.workspaceId),
+        ),
         expiresAt,
       },
       notes: [
@@ -720,12 +726,18 @@ export class DaytonaProvider implements ComputeProvider {
     };
   }
 
-  private decryptRevocationToken(token?: string): string | undefined {
+  private decryptRevocationToken(
+    token: string | undefined,
+    workspaceId: string,
+  ): string | undefined {
     if (!token) {
       return undefined;
     }
     try {
-      return getEncryptionService().decrypt(token);
+      return getEncryptionService().decryptForRecord(
+        token,
+        encryptionContext("daytona-ssh", workspaceId),
+      );
     } catch (error) {
       console.warn("Daytona: failed to decrypt stored SSH token", error);
       return undefined;
@@ -733,7 +745,10 @@ export class DaytonaProvider implements ComputeProvider {
   }
 
   async revokeWorkspaceSSHAccess(config: WorkspaceSSHAccessCleanupConfig): Promise<void> {
-    const token = this.decryptRevocationToken(config.connection.revocationToken);
+    const token = this.decryptRevocationToken(
+      config.connection.revocationToken,
+      config.workspaceId,
+    );
     if (!token) {
       return;
     }

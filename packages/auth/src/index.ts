@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@gitterm/db";
 import * as schema from "@gitterm/db/schema/auth";
 import { nextCookies } from "better-auth/next-js";
+import { decryptOAuthToken } from "better-auth/oauth2";
 import env, {
   isManaged,
   isProduction,
@@ -17,6 +18,31 @@ import env, {
 const SUBDOMAIN_DOMAIN = `.${env.BASE_DOMAIN}`;
 const AUTH_BASE_PATH = "/api/auth";
 const githubAuthCredentials = getGitHubAuthCredentials();
+
+export async function getOAuthEncryptionContext(): Promise<
+  Parameters<typeof decryptOAuthToken>[1]
+> {
+  return (await auth.$context) as unknown as Parameters<typeof decryptOAuthToken>[1];
+}
+
+async function oauthTokensForStorage<
+  T extends { accessToken?: string | null; refreshToken?: string | null },
+>(account: T): Promise<{ data: T } | undefined> {
+  if (env.AUTH_ENCRYPT_OAUTH_TOKENS || (!account.accessToken && !account.refreshToken)) return;
+  // Readers must understand encrypted tokens before any replica starts writing them.
+  const context = await getOAuthEncryptionContext();
+  return {
+    data: {
+      ...account,
+      ...(account.accessToken
+        ? { accessToken: await decryptOAuthToken(account.accessToken, context) }
+        : {}),
+      ...(account.refreshToken
+        ? { refreshToken: await decryptOAuthToken(account.refreshToken, context) }
+        : {}),
+    },
+  };
+}
 
 function inferBaseUrlOrigin(): string {
   // If explicitly configured, trust it (but normalize to origin so better-auth can append basePath cleanly)
@@ -60,9 +86,17 @@ export const auth = betterAuth({
   onAPIError: {
     errorURL: `${(env.CORS_ORIGIN || inferBaseUrlOrigin()).replace(/\/$/, "")}/login`,
   },
-  crossSubDomainCookies: isProduction() ? { enabled: true, domain: SUBDOMAIN_DOMAIN } : undefined,
   emailAndPassword: {
     enabled: true,
+  },
+  account: {
+    encryptOAuthTokens: true,
+  },
+  databaseHooks: {
+    account: {
+      create: { before: oauthTokensForStorage },
+      update: { before: oauthTokensForStorage },
+    },
   },
   socialProviders: isGitHubAuthEnabled()
     ? {
