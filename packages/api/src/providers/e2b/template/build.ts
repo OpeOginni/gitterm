@@ -16,14 +16,14 @@ async function main() {
     throw new Error("Use --agent opencode or --agent t3code");
   }
   const [opencodeVersion, t3Version] = await Promise.all([
-    agent === "t3code" ? undefined : getLatestOpencodeVersion(),
+    getLatestOpencodeVersion(),
     agent === "opencode" ? undefined : getLatestT3Version(),
   ]);
   if (opencodeVersion) console.log(`[e2b-template] pinning opencode version ${opencodeVersion}`);
   if (t3Version) console.log(`[e2b-template] pinning t3 version ${t3Version}`);
 
   const baseTemplates: Array<{ name: string; template: TemplateClass }> = [];
-  if (opencodeVersion)
+  if (agent !== "t3code")
     baseTemplates.push(
       { name: "gitterm-opencode-server", template: createOpencodeServerTemplate(opencodeVersion) },
       {
@@ -34,7 +34,7 @@ async function main() {
   if (t3Version)
     baseTemplates.push({
       name: "gitterm-t3code-server",
-      template: createT3CodeServerTemplate(t3Version),
+      template: createT3CodeServerTemplate(t3Version, opencodeVersion),
     });
   // E2B fixes resources per template, so each machine profile size is its own
   // template named `<base><suffix>`. Must match the E2B machine profiles in the seed.

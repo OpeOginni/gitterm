@@ -24,7 +24,7 @@ for (const key of AGENT_PROVISIONER_KEYS) {
     expect(new Set(payload.files.map((file) => file.path)).size).toBe(payload.files.length);
     if (agent.capabilities.access === "pairing") {
       expect(agent.accessCredentialCommand).toBeString();
-      expect(payload.env.OPENCODE_SERVER_PASSWORD).toBeUndefined();
+      expect(payload.env.OPENCODE_PASSWORD).toBeUndefined();
     }
   });
 }

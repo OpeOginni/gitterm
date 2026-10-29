@@ -11,6 +11,36 @@ import {
 } from "./provisioning";
 
 describe("direct provisioning plan", () => {
+  test("keeps native plugin options and permission rules without adding legacy defaults", () => {
+    const plugin = { package: "example", options: { strict: true } };
+    const permissions = [{ action: "external_directory", resource: "*", effect: "deny" }];
+    const plan = buildDirectProvisioningPlan({
+      id: "workspace-1",
+      lifecycle: "ephemeral",
+      password: "password",
+      opencode: {
+        config: { plugins: [plugin], permissions, theme: "tokyonight" },
+        plugins: ["example", "extra"],
+      },
+    });
+    const config = JSON.parse(
+      Buffer.from(
+        plan.agent.files.find((file) => file.path.endsWith("/opencode.json"))!.contentBase64,
+        "base64",
+      ).toString(),
+    );
+    expect(config.plugins).toEqual([plugin, "extra"]);
+    expect(config.permissions).toEqual(permissions);
+    expect(config.permission).toBeUndefined();
+    expect(config.theme).toBeUndefined();
+    const cli = JSON.parse(
+      Buffer.from(
+        plan.agent.files.find((file) => file.path.endsWith("/cli.json"))!.contentBase64,
+        "base64",
+      ).toString(),
+    );
+    expect(cli.theme).toEqual({ name: "tokyonight" });
+  });
   test("GitHub inline credentials remain available to Git and gh after clone", () => {
     const plan = buildDirectProvisioningPlan({
       id: "workspace-1",
@@ -63,9 +93,9 @@ describe("direct provisioning plan", () => {
     expect(plan.repository?.authToken).toBe("repo-token");
     expect(plan.agent.environmentVariables).toEqual({
       CUSTOM_VALUE: "custom",
-      OPENCODE_SERVER_PASSWORD: "password",
+      OPENCODE_PASSWORD: "password",
     });
-    expect(plan.agent.files).toHaveLength(5);
+    expect(plan.agent.files).toHaveLength(6);
     expect(plan.agent.files[0]).toMatchObject({ path: "~/.gitterm/opencode/credentials.json" });
     expect(plan.agent.files.at(-1)).toMatchObject({ path: "~/.secrets/token", mode: 0o400 });
     expect(setupCommandScript(plan.setup.beforeAgent)).toContain("bun install");
@@ -76,7 +106,7 @@ describe("direct provisioning plan", () => {
       GITTERM_GIT_USERNAME: "oauth2",
       GITTERM_GIT_TOKEN: "repo-token",
       GITTERM_DIRECT_PROVIDER: "railway",
-      OPENCODE_SERVER_PASSWORD: "password",
+      OPENCODE_PASSWORD: "password",
     });
   });
 

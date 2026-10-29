@@ -9,6 +9,10 @@ import {
   type OpencodeCredentialEntry,
 } from "@gitterm/agent-runtime/opencode-credentials";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
+import {
+  buildOpencodeConfig,
+  buildOpencodeCliConfig,
+} from "@gitterm/agent-runtime/opencode-config";
 import { withMcpConnections } from "../integrations/mcp-config";
 import {
   OPENCODE_SERVICE_REGISTRAR_PATH,
@@ -17,7 +21,7 @@ import {
 } from "@gitterm/agent-runtime/opencode-service";
 
 export const OPENCODE_CONFIG_PATH = "~/.config/opencode/opencode.json";
-export const OPENCODE_TUI_CONFIG_PATH = "~/.config/opencode/tui.json";
+export const OPENCODE_CLI_CONFIG_PATH = "~/.config/opencode/cli.json";
 export const OPENCODE_GITTERM_INSTRUCTIONS_PATH = "~/.config/opencode/AGENTS.md";
 
 const OPENCODE_SERVE_PORT = 4096;
@@ -31,8 +35,7 @@ function opencodeIntegration(cred: UserProviderCredential): string {
   return cred.logicalProviderKey;
 }
 
-/** `managed` is off for OpenCode 1.x, which has no plugin to fetch access tokens from GitTerm. */
-function opencodeAuthEntry(cred: UserProviderCredential, managed = true): OpencodeAuthEntry {
+function opencodeAuthEntry(cred: UserProviderCredential): OpencodeAuthEntry {
   const { credential } = cred;
   if (credential.type === "api_key") {
     return {
@@ -43,11 +46,7 @@ function opencodeAuthEntry(cred: UserProviderCredential, managed = true): Openco
   }
   // Rotating refresh tokens stay in GitTerm; the workspace plugin asks GitTerm for
   // access tokens by credential ID, so any number of workspaces can share the account.
-  if (
-    managed &&
-    cred.credentialId &&
-    getModelProviderDefinition(cred.providerName)?.refreshedByGitterm
-  ) {
+  if (cred.credentialId && getModelProviderDefinition(cred.providerName)?.refreshedByGitterm) {
     return {
       type: "oauth",
       refresh: OPENCODE_MANAGED_REFRESH,
@@ -89,53 +88,13 @@ export function buildOpencodeCredentials(
   });
 }
 
-/**
- * OpenCode 1.x auth.json: one account per provider, preferring the default.
- * 1.x has no OpenCode console OAuth and no OAuth metadata, so those are left out.
- */
-export function buildOpencodeAuthJson(credentials: UserProviderCredential[]): string {
-  return JSON.stringify(
-    Object.fromEntries(
-      credentials
-        .filter(
-          (cred) => !(cred.credential.type === "oauth" && opencodeIntegration(cred) === "opencode"),
-        )
-        .toSorted((a, b) => Number(a.isDefault) - Number(b.isDefault))
-        .map((cred) => {
-          const entry = opencodeAuthEntry(cred, false);
-          if (entry.type === "oauth") delete entry.metadata;
-          return [opencodeIntegration(cred), entry];
-        }),
-    ),
-  );
-}
-
 export function buildOpencodeConfigJson(
   agentConfig: Record<string, unknown> | null | undefined,
   userDisplayName: string,
   plugins: string[] = [],
 ): string {
   const username = `Gitterm: ${userDisplayName}`;
-  const config = { ...agentConfig };
-  delete config.theme;
-  const configuredPlugins = Array.isArray(config.plugin) ? config.plugin : [];
-  const configuredPluginNames = new Set(
-    configuredPlugins.filter((plugin): plugin is string => typeof plugin === "string"),
-  );
-  const plugin = [
-    ...configuredPlugins,
-    ...plugins.filter((pluginName) => !configuredPluginNames.has(pluginName)),
-  ];
-
-  return JSON.stringify(
-    agentConfig
-      ? { ...config, username, ...(plugin.length > 0 ? { plugin } : {}) }
-      : {
-          $schema: "https://opencode.ai/config.json",
-          username,
-          ...(plugin.length > 0 ? { plugin } : {}),
-        },
-  );
+  return JSON.stringify({ ...buildOpencodeConfig(agentConfig, plugins), username });
 }
 
 export const GITTERM_INSTRUCTIONS = `You are running inside a GitTerm workspace.
@@ -175,22 +134,13 @@ export function buildAwsRuntimeInstructions(input: {
 - If access is denied, report the exact action and resource and ask for that permission instead of retrying, changing regions, or bypassing the role. Explain the smallest additional capability needed and let the user decide whether an administrator should grant it. Never edit IAM policies, switch roles, or broaden your own permissions without explicit authorization.`;
 }
 
-export function buildOpencodeTuiConfigJson(
-  agentConfig: Record<string, unknown> | null | undefined,
-): string {
-  return JSON.stringify({
-    $schema: "https://opencode.ai/tui.json",
-    theme: typeof agentConfig?.theme === "string" ? agentConfig.theme : "opencode",
-  });
-}
-
 export const opencodeProvisioner: AgentProvisioner = {
   key: "opencode",
   capabilities: AGENT_CAPABILITIES.opencode,
   provision(ctx: AgentProvisionerContext): AgentProvisioning {
     const env: Record<string, string> = {};
     if (ctx.serverPassword) {
-      env.OPENCODE_SERVER_PASSWORD = ctx.serverPassword;
+      env.OPENCODE_PASSWORD = ctx.serverPassword;
     }
 
     const requestedConfig = ctx.opencode?.config
@@ -209,8 +159,8 @@ export const opencodeProvisioner: AgentProvisioner = {
           ),
         },
         {
-          path: OPENCODE_TUI_CONFIG_PATH,
-          contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
+          path: OPENCODE_CLI_CONFIG_PATH,
+          contentBase64: toBase64(JSON.stringify(buildOpencodeCliConfig(opencodeConfig))),
         },
         ...opencodeCredentialFiles(buildOpencodeCredentials(ctx.credentials)),
         {

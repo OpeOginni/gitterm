@@ -39,7 +39,14 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
     if (modelRef) {
       await call(
         client.session.switchModel(
-          { sessionID, model: { providerID: modelRef.providerID, id: modelRef.modelID } },
+          {
+            sessionID,
+            model: {
+              providerID: modelRef.providerID,
+              id: modelRef.modelID,
+              variant: modelRef.variant,
+            },
+          },
           options(),
         ),
       );
@@ -75,7 +82,9 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
           {
             title: input.title,
             agent: input.agent,
-            model: modelRef ? { providerID: modelRef.providerID, id: modelRef.modelID } : undefined,
+            model: modelRef
+              ? { providerID: modelRef.providerID, id: modelRef.modelID, variant: modelRef.variant }
+              : undefined,
             location: { directory: target.directory },
           },
           options(),

@@ -6,6 +6,21 @@ import {
   parseV2Signal,
   selectRunMessages,
 } from "./v2";
+import { parseModelRef } from "./types";
+
+test("model references split the native variant from provider and model IDs", () => {
+  expect(parseModelRef("openai/gpt-6.1-sol#high")).toEqual({
+    providerID: "openai",
+    modelID: "gpt-6.1-sol",
+    variant: "high",
+  });
+  expect(parseModelRef("openrouter/team/model")).toEqual({
+    providerID: "openrouter",
+    modelID: "team/model",
+  });
+  expect(() => parseModelRef("openai/model#")).toThrow("provider/model");
+  expect(() => parseModelRef("openai/model#high#extra")).toThrow("provider/model");
+});
 
 // Payloads captured from `opencode2 serve` 0.0.0-beta-19059 (`GET /api/event`).
 const permissionAsked = {

@@ -21,7 +21,7 @@ export const AGENT_CAPABILITIES: Record<AgentProvisionerKey, AgentCapabilities> 
     access: "pairing",
     runs: false,
     mcpConnections: false,
-    managedCredentialRefresh: false,
+    managedCredentialRefresh: true,
     configKinds: ["opencode", "claude-code", "codex"],
   },
 };

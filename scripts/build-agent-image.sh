@@ -52,6 +52,7 @@ case "$name" in
     ;;
   t3code-server)
     build_push .docker/T3Code.Server.Dockerfile .docker gitterm-t3code-server "$AGENT_IMAGE_TAG" \
+      --build-arg "OPENCODE_VERSION=${OPENCODE_VERSION}" \
       --build-arg "T3_VERSION=${T3_VERSION}" \
       --build-arg "T3_INSTALL_CACHE_BUST=${CACHE_BUST}"
     ;;

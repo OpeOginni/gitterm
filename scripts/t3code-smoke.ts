@@ -1,11 +1,14 @@
-/** Opt-in upstream CLI compatibility check. No model requests or provider accounts. */
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+/** Real T3/OpenCode V2 compatibility check with a loopback model, no provider accounts. */
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createHash, generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
-import { T3_PAIRING_CREATE_COMMAND } from "../packages/api/src/service/agents/t3code";
+import {
+  T3_PAIRING_CREATE_COMMAND,
+  t3codeProvisioner,
+} from "../packages/api/src/service/agents/t3code";
 import { buildT3OriginBridgeSource } from "../packages/api/src/service/agents/t3-origin-bridge";
 
 const binary = process.env.T3_SMOKE_BINARY;
@@ -13,7 +16,11 @@ if (!binary) throw new Error("Set T3_SMOKE_BINARY to a locally installed t3 exec
 if (process.platform === "win32")
   throw new Error("This process-group smoke check requires Linux or macOS");
 const executable = resolve(binary);
-const root = mkdtempSync(join(process.env.T3_SMOKE_ROOT ?? tmpdir(), "gitterm-t3-smoke-"));
+const opencode = process.env.OPENCODE_SMOKE_BINARY;
+if (!opencode) throw new Error("Set OPENCODE_SMOKE_BINARY to an OpenCode 2 executable");
+const root = realpathSync(
+  mkdtempSync(join(process.env.T3_SMOKE_ROOT ?? tmpdir(), "gitterm-t3-smoke-")),
+);
 const repo = join(root, "repo");
 mkdirSync(repo);
 const env = {
@@ -28,14 +35,94 @@ const env = {
   XDG_CACHE_HOME: join(root, ".cache"),
   PATH: `${dirname(executable)}:${process.env.PATH}`,
 };
+let server: ChildProcess | undefined;
+let projectPath = "/api/orchestration/snapshot";
+let logs = "";
+let modelCalls = 0;
+let continued = false;
+let toolOutput = false;
+const model = Bun.serve({
+  hostname: "127.0.0.1",
+  port: 0,
+  async fetch(request) {
+    check(request.headers.get("authorization") === "Bearer fixture", "Model credential was lost");
+    const input = (await request.json()) as {
+      messages: Array<{ role: string; content?: unknown }>;
+    };
+    modelCalls++;
+    if (input.messages.filter((message) => message.role === "user").length > 1) continued = true;
+    const last = input.messages.findLast((message) => message.role === "user");
+    const tools = input.messages.filter((message) => message.role === "tool");
+    if (tools.some((message) => JSON.stringify(message.content).includes("t3-tool-ok")))
+      toolOutput = true;
+    if (JSON.stringify(last?.content).includes("tool-smoke") && !tools.length) {
+      return new Response(
+        chunk({
+          role: "assistant",
+          tool_calls: [
+            {
+              index: 0,
+              id: "call_fixture",
+              type: "function",
+              function: {
+                name: "shell",
+                arguments: JSON.stringify({ command: "printf t3-tool-ok | tee t3-tool.txt" }),
+              },
+            },
+          ],
+        }) +
+          chunk({}, "tool_calls") +
+          "data: [DONE]\n\n",
+        { headers: { "Content-Type": "text/event-stream" } },
+      );
+    }
+    return new Response(
+      chunk({ role: "assistant", content: "t3-v2-smoke-ok" }) +
+        chunk({}, "stop") +
+        "data: [DONE]\n\n",
+      {
+        headers: { "Content-Type": "text/event-stream" },
+      },
+    );
+  },
+});
 const reservation = Bun.serve({ port: 0, fetch: () => new Response() });
 const port = reservation.port!;
 reservation.stop(true);
 const url = `http://127.0.0.1:${port}`;
 const bridge = join(root, "t3-origin-bridge.cjs");
 writeFileSync(bridge, buildT3OriginBridgeSource(`127.0.0.1:${port}`));
-let server: ChildProcess | undefined;
-let projectPath = "/api/orchestration/snapshot";
+
+function chunk(delta: unknown, finish_reason: string | null = null) {
+  return `data: ${JSON.stringify({
+    id: "chatcmpl-smoke",
+    object: "chat.completion.chunk",
+    created: 1,
+    model: "fixture",
+    choices: [{ index: 0, delta, finish_reason }],
+  })}\n\n`;
+}
+
+async function cli(args: string[]) {
+  const child = Bun.spawn([executable, ...args], {
+    cwd: repo,
+    env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const timeout = setTimeout(() => child.kill(), 90_000);
+  try {
+    const [output, error, code] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    check(code === 0, `T3 ${args[0]} failed (${code}): ${output}\n${error}\n${logs}`);
+    return JSON.parse(output) as { threadId: string; status: string; reply: string };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function encode(value: unknown) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -59,8 +146,14 @@ async function start() {
       "--no-browser",
       "--auto-bootstrap-project-from-cwd",
     ],
-    { cwd: repo, env, stdio: "ignore", detached: true },
+    { cwd: repo, env, stdio: ["ignore", "pipe", "pipe"], detached: true },
   );
+  server.stdout!.on("data", (data) => {
+    logs += data;
+  });
+  server.stderr!.on("data", (data) => {
+    logs += data;
+  });
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const response = await fetch(`${url}/.well-known/t3/environment`, {
@@ -74,7 +167,7 @@ async function start() {
           : "/api/orchestration/snapshot";
       return;
     }
-    if (server.exitCode !== null) throw new Error("T3 exited before readiness");
+    if (server.exitCode !== null) throw new Error(`T3 exited before readiness: ${logs}`);
     await Bun.sleep(250);
   }
   throw new Error("T3 readiness timed out");
@@ -186,6 +279,58 @@ async function verifySignedPairing(token: string) {
 }
 
 try {
+  const git = Bun.spawn(["git", "init", "-q", repo], { stdout: "ignore", stderr: "pipe" });
+  check((await git.exited) === 0, "Fixture git init failed");
+  const provisioning = t3codeProvisioner.provision({
+    userId: "fixture",
+    userDisplayName: "Smoke",
+    workspaceHostname: `127.0.0.1:${port}`,
+    agentTypeName: "T3Code",
+    serverOnly: true,
+    credentials: [],
+    agentConfigs: {
+      opencode: {
+        model: "smoke/fixture",
+        policies: [
+          { action: "provider.use", resource: "*", effect: "deny" },
+          { action: "provider.use", resource: "smoke", effect: "allow" },
+        ],
+        providers: {
+          smoke: {
+            package: "@opencode/ai/providers/openai-compatible",
+            settings: { baseURL: `http://127.0.0.1:${model.port}/v1`, apiKey: "fixture" },
+            models: {
+              fixture: { limit: { context: 32_000, output: 1_000 }, capabilities: { tools: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  for (const file of provisioning.files) {
+    check(file.path.startsWith("~/"), "Unexpected provisioned path");
+    const target = join(root, file.path.slice(2));
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, Buffer.from(file.contentBase64, "base64"), { mode: file.mode });
+  }
+  const settings = join(env.T3CODE_HOME, "userdata/settings.json");
+  mkdirSync(dirname(settings), { recursive: true });
+  writeFileSync(
+    settings,
+    JSON.stringify({
+      enableProviderUpdateChecks: false,
+      enableAgentBrowserAccess: false,
+      providerInstances: {
+        opencode: {
+          driver: "opencode",
+          enabled: true,
+          config: { binaryPath: resolve(opencode), customModels: ["smoke/fixture"] },
+        },
+        codex: { driver: "codex", enabled: false, config: {} },
+        claude: { driver: "claude", enabled: false, config: {} },
+      },
+    }),
+  );
   await start();
   console.log("T3 smoke: server ready");
   const unauthenticated = await fetch(`${url}${projectPath}`, {
@@ -205,6 +350,42 @@ try {
   await verifyProject(cookie);
   await verifySignedPairing(await mint());
   console.log("T3 smoke: pairing and project verified");
+  const thread = await cli([
+    "thread",
+    "start",
+    repo,
+    "tool-smoke",
+    "--title",
+    "V2 smoke",
+    "--provider",
+    "opencode",
+    "--model",
+    "smoke/fixture",
+    "--wait",
+    "--json",
+  ]);
+  check(
+    thread.status === "completed" && thread.reply.includes("t3-v2-smoke-ok"),
+    "T3 V2 thread did not complete",
+  );
+  check(
+    toolOutput && readFileSync(join(repo, "t3-tool.txt"), "utf8") === "t3-tool-ok",
+    "T3 V2 shell execution did not return real output",
+  );
+  const followup = await cli([
+    "thread",
+    "send",
+    thread.threadId,
+    "Continue fixture turn",
+    "--wait",
+    "--json",
+  ]);
+  check(
+    followup.status === "completed" && followup.reply.includes("t3-v2-smoke-ok"),
+    "T3 V2 continuation did not complete",
+  );
+  check(modelCalls >= 2 && continued, "T3 did not preserve OpenCode conversation history");
+  console.log("T3 smoke: OpenCode V2 execution and continuation verified");
   const nextToken = await mint();
   check(nextToken !== token, "Fresh pairing token was not unique");
   await stop();
@@ -216,9 +397,10 @@ try {
   await verifyProject(cookie);
   check((await pair(nextToken)).ok, "Unused pairing grant did not survive restart");
   console.log(
-    "T3 smoke passed: discovery, hosted-app pairing, DPoP behind provider ingress, one-time tokens, project registration, restart persistence",
+    "T3 smoke passed: discovery, hosted-app pairing, DPoP behind provider ingress, one-time tokens, project registration, OpenCode V2 execution and continuation, restart persistence",
   );
 } finally {
   await stop();
+  model.stop(true);
   rmSync(root, { recursive: true, force: true });
 }

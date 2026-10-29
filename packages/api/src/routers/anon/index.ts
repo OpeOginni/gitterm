@@ -348,7 +348,7 @@ export const anonRouter = router({
             },
           ]),
           // Read by `opencode serve` itself to enforce basic auth.
-          OPENCODE_SERVER_PASSWORD: serverPassword,
+          OPENCODE_PASSWORD: serverPassword,
           WORKSPACE_TOOLING_MANIFEST_BASE64: toolingManifestBase64,
           REPO_OWNER: repoInfo?.owner,
           REPO_NAME: repoInfo?.repo,

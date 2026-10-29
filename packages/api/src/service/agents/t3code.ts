@@ -2,14 +2,15 @@ import type { AgentFile, AgentProvisioning } from "../../providers/compute";
 import { AGENT_CAPABILITIES } from "@gitterm/schema/agent-capabilities";
 import { stringify as stringifyToml } from "smol-toml";
 import {
-  buildOpencodeAuthJson,
   buildOpencodeConfigJson,
-  buildOpencodeTuiConfigJson,
+  buildOpencodeCredentials,
   buildGittermInstructions,
   OPENCODE_CONFIG_PATH,
+  OPENCODE_CLI_CONFIG_PATH,
   OPENCODE_GITTERM_INSTRUCTIONS_PATH,
-  OPENCODE_TUI_CONFIG_PATH,
 } from "./opencode";
+import { opencodeCredentialFiles } from "@gitterm/agent-runtime/opencode-credentials";
+import { buildOpencodeCliConfig } from "@gitterm/agent-runtime/opencode-config";
 import type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential } from "./types";
 import { buildT3OriginBridgeSource, T3_ORIGIN_BRIDGE_PATH } from "./t3-origin-bridge";
 
@@ -18,8 +19,6 @@ const CLAUDE_CREDENTIALS_PATH = "~/.claude/.credentials.json";
 const CLAUDE_SETTINGS_PATH = "~/.claude/settings.json";
 const CODEX_AUTH_PATH = "~/.codex/auth.json";
 const CODEX_CONFIG_PATH = "~/.codex/config.toml";
-/** T3 drives its own OpenCode 1.x CLI, which still reads credentials from auth.json. */
-const T3_OPENCODE_AUTH_PATH = "~/.local/share/opencode/auth.json";
 const CLAUDE_OAUTH_SCOPES = ["user:inference", "user:profile"];
 
 export const T3_PAIRING_CREATE_COMMAND =
@@ -120,25 +119,17 @@ export const t3codeProvisioner: AgentProvisioner = {
       env.OPENAI_API_KEY = codexCredential.credential.apiKey;
     }
 
-    files.push({
-      path: T3_OPENCODE_AUTH_PATH,
-      contentBase64: toBase64(buildOpencodeAuthJson(ctx.credentials)),
-    });
+    const opencodeConfig = { ...ctx.agentConfigs?.opencode, ...ctx.opencode?.config };
+    files.push(...opencodeCredentialFiles(buildOpencodeCredentials(ctx.credentials)));
     files.push({
       path: OPENCODE_CONFIG_PATH,
       contentBase64: toBase64(
-        buildOpencodeConfigJson(
-          ctx.opencode?.config
-            ? { ...ctx.agentConfigs?.opencode, ...ctx.opencode.config }
-            : ctx.agentConfigs?.opencode,
-          ctx.userDisplayName,
-          ctx.opencode?.plugins,
-        ),
+        buildOpencodeConfigJson(opencodeConfig, ctx.userDisplayName, ctx.opencode?.plugins),
       ),
     });
     files.push({
-      path: OPENCODE_TUI_CONFIG_PATH,
-      contentBase64: toBase64(buildOpencodeTuiConfigJson(ctx.agentConfigs?.opencode)),
+      path: OPENCODE_CLI_CONFIG_PATH,
+      contentBase64: toBase64(JSON.stringify(buildOpencodeCliConfig(opencodeConfig))),
     });
     files.push({
       path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,

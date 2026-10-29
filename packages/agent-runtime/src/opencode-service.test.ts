@@ -29,7 +29,7 @@ test("registers the running server from its /api/info", async () => {
 
   // Async: the fake server runs in this process and must keep answering.
   const child = Bun.spawn(["sh", script, String(server.port)], {
-    env: { PATH: process.env.PATH, HOME: home, OPENCODE_SERVER_PASSWORD: "secret" },
+    env: { PATH: process.env.PATH, HOME: home, OPENCODE_PASSWORD: "secret" },
   });
 
   expect(await child.exited).toBe(0);

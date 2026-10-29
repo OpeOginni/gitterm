@@ -1,19 +1,20 @@
 import z from "zod";
-import type { JSONSchema } from "zod/v4/core";
-import opencodeConfigSchemaJson from "./opencode-config.json";
+import { Config } from "@opencode/schema/config";
+import * as Schema from "effect/Schema";
+import { isFailure } from "effect/Result";
 import { agentProvisionerKeyForName, getAgentCapabilities } from "./agent-capabilities";
 
-let cachedOpenCodeSchema: z.ZodType | null = null;
-
-function getOpenCodeSchema(): z.ZodType {
-  if (!cachedOpenCodeSchema) {
-    cachedOpenCodeSchema = z.fromJSONSchema(opencodeConfigSchemaJson as JSONSchema.BaseSchema);
-  }
-  return cachedOpenCodeSchema;
-}
+const decodeOpenCodeConfig = Schema.decodeUnknownResult(
+  Schema.Struct({ ...Config.Info.fields, theme: Schema.optionalKey(Schema.String) }),
+  { onExcessProperty: "error" },
+);
+const openCodeConfigSchema = z.record(z.string(), z.unknown()).superRefine((config, ctx) => {
+  const result = decodeOpenCodeConfig(config);
+  if (isFailure(result)) ctx.addIssue({ code: "custom", message: result.failure.message });
+});
 
 export function validateOpenCodeConfig(config: unknown) {
-  return getOpenCodeSchema().safeParse(config);
+  return openCodeConfigSchema.safeParse(config);
 }
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
@@ -42,16 +43,16 @@ export const AGENT_CONFIG_KIND_META: Record<AgentConfigKind, AgentConfigKindMeta
   opencode: {
     id: "opencode",
     label: "OpenCode",
-    description: "Applied to OpenCode and T3Code workspaces as opencode.json and tui.json.",
+    description: "OpenCode V2 settings and theme for OpenCode and T3Code workspaces.",
     appliesTo: ["opencode", "t3code"],
     icon: "/opencode.svg",
-    docsUrl: "https://opencode.ai/docs/config/",
+    docsUrl: "https://opencode.ai/v2/docs/config/",
     testHint: "opencode.json",
     example: {
       $schema: "https://opencode.ai/config.json",
       theme: "opencode",
       model: "opencode/deepseek-v4-pro",
-      autoupdate: true,
+      update: "notify",
     },
   },
   "claude-code": {

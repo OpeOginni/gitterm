@@ -319,7 +319,7 @@ export class GittermSandbox extends Sandbox<Env> {
   /** Start the agent server and wait until its port is accepting connections. */
   private async startAgentServer(payload: ProvisionPayload, repoDir: string): Promise<void> {
     const passwordPrefix = payload.serverPassword
-      ? `OPENCODE_SERVER_PASSWORD='${payload.serverPassword}' `
+      ? `OPENCODE_PASSWORD='${payload.serverPassword}' `
       : "";
 
     const proc = await this.startProcess(`${passwordPrefix}${payload.startCommand}`, {

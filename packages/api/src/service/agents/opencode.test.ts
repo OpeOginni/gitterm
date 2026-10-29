@@ -4,7 +4,12 @@ import {
   OPENCODE_CREDENTIALS_PLUGIN_PATH,
   OPENCODE_MANAGED_REFRESH,
 } from "@gitterm/agent-runtime/opencode-credentials";
-import { buildOpencodeAuthJson, buildOpencodeCredentials, opencodeProvisioner } from "./opencode";
+import {
+  buildOpencodeCredentials,
+  opencodeProvisioner,
+  OPENCODE_CONFIG_PATH,
+  OPENCODE_CLI_CONFIG_PATH,
+} from "./opencode";
 import type { AgentProvisionerContext, UserProviderCredential } from "./types";
 
 const credentials: UserProviderCredential[] = [
@@ -83,13 +88,6 @@ test("equal labels that land on one OpenCode integration stay distinct", () => {
   expect(entries.map((entry) => entry.label)).toEqual(["main", "main (openai)"]);
 });
 
-test("OpenCode 1.x auth.json keeps one account per provider, preferring the default", () => {
-  expect(JSON.parse(buildOpencodeAuthJson(credentials))).toEqual({
-    openai: { type: "oauth", refresh: "refresh-token" },
-    anthropic: { type: "api", key: "sk-ant-home" },
-  });
-});
-
 test("workspaces receive the credentials file and importer plugin", () => {
   const files = opencodeProvisioner.provision(context).files;
   const paths = files.map((file) => file.path);
@@ -100,6 +98,36 @@ test("workspaces receive the credentials file and importer plugin", () => {
   expect(JSON.parse(Buffer.from(credentialFile.contentBase64, "base64").toString())).toEqual(
     buildOpencodeCredentials(credentials),
   );
+});
+
+test("standalone OpenCode receives V2 plugins and CLI settings, including request overrides", () => {
+  const plugin = { package: "saved", options: { strict: true } };
+  const payload = opencodeProvisioner.provision({
+    ...context,
+    agentConfigs: { opencode: { theme: "tokyonight", plugins: [plugin] } },
+    opencode: {
+      config: { theme: "github", model: "openai/gpt-6.1-sol" },
+      plugins: ["saved", "extra"],
+    },
+  });
+  const content = (path: string) =>
+    JSON.parse(
+      Buffer.from(
+        payload.files.find((file) => file.path === path)!.contentBase64,
+        "base64",
+      ).toString(),
+    );
+  expect(content(OPENCODE_CONFIG_PATH)).toEqual({
+    $schema: "https://opencode.ai/config.json",
+    username: "Gitterm: User",
+    model: "openai/gpt-6.1-sol",
+    plugins: [plugin, "extra"],
+  });
+  expect(content(OPENCODE_CLI_CONFIG_PATH)).toEqual({
+    $schema: "https://opencode.ai/v2/cli.json",
+    theme: { name: "github" },
+  });
+  expect(payload.files.some((file) => file.path.endsWith("/tui.json"))).toBe(false);
 });
 
 const extras: UserProviderCredential[] = [
@@ -175,16 +203,5 @@ test("accounts GitTerm does not refresh keep their own refresh token", () => {
   expect(buildOpencodeCredentials([copilot])[0]!.value).toEqual({
     type: "oauth",
     refresh: "gho_token",
-  });
-});
-
-test("OpenCode 1.x auth.json skips the console account it cannot use", () => {
-  expect(JSON.parse(buildOpencodeAuthJson(extras))).toEqual({
-    "cloudflare-workers-ai": {
-      type: "api",
-      key: "cf-key",
-      metadata: { accountId: "a".repeat(32) },
-    },
-    opencode: { type: "api", key: "zen-key" },
   });
 });
