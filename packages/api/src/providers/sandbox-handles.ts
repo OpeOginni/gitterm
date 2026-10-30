@@ -1,4 +1,5 @@
 import type { ComputeProvider, WorkspaceStatusResult } from "./compute";
+import { destroyAndConfirm } from "@gitterm/agent-runtime/sandbox/types";
 import { managedSandboxTransport, parseSandboxHandle } from "../service/sandbox-transport";
 
 /**
@@ -29,7 +30,8 @@ export function withSandboxHandles(
           return async (externalId: string, ...rest: unknown[]) => {
             const sandbox = await transportFor(externalId);
             if (!sandbox) return original.call(target, externalId, ...rest);
-            await sandbox.transport.destroy(sandbox.id);
+            // Cleanup clears the handle after this returns, so it must mean "gone".
+            await destroyAndConfirm(sandbox.transport, sandbox.id);
           };
         case "pauseWorkspace":
           return async (externalId: string, ...rest: unknown[]) => {

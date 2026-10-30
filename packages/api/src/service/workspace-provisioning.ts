@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, db, eq, sql } from "@gitterm/db";
+import { and, db, eq, inArray, sql } from "@gitterm/db";
 import { bot } from "@gitterm/db/schema/bot";
 import { volume, workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
 import { TRPCError } from "@trpc/server";
@@ -16,16 +16,35 @@ async function lockBot(tx: Transaction, userId: string, identity: NonNullable<Bo
   return record;
 }
 
-/** Serialize reservation with deletion, without holding a DB lock during provider calls. */
+/**
+ * Serialize reservation with deletion, without holding a DB lock during provider calls.
+ * With `limit`, the plan's active-workspace count is checked under a per-user lock in the
+ * same transaction as the insert, so concurrent creates cannot both pass it.
+ */
 export async function reserveWorkspace(
   values: typeof workspace.$inferInsert,
   identity: BotIdentity,
+  limit?: { maxActive: number | null; message: string },
 ) {
   await db.transaction(async (tx) => {
     if (identity) {
       const record = await lockBot(tx, values.userId, identity);
       if (!record || record.apiTokenId !== identity.apiTokenId)
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Bot identity has been revoked" });
+    }
+    if (limit && limit.maxActive !== null) {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`workspace-quota:${values.userId}`}))`,
+      );
+      const active = await tx.$count(
+        workspace,
+        and(
+          eq(workspace.userId, values.userId),
+          inArray(workspace.status, ["pending", "running", "paused"]),
+        ),
+      );
+      if (active >= limit.maxActive)
+        throw new TRPCError({ code: "FORBIDDEN", message: limit.message });
     }
     await tx.insert(workspace).values({ ...values, botId: identity?.id ?? null });
   });

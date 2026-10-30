@@ -22,7 +22,8 @@ export type SandboxProvider = SandboxProviderKey;
 /** Who owns and pays for a sandbox. Part of every reference; never inferred. */
 export type SandboxIdentity = { mode: SandboxMode; provider: SandboxProvider; account: string };
 export type SandboxRef = SandboxIdentity & { id: string };
-export type SandboxState = "pending" | "running" | "paused" | "terminated";
+/** `deleting`: terminated in Gitterm, provider deletion not yet confirmed (managed only). */
+export type SandboxState = "pending" | "running" | "paused" | "deleting" | "terminated";
 
 export type SandboxInfo = SandboxRef & {
   state: SandboxState;
@@ -200,7 +201,7 @@ export function createManagedSandboxBackend(options: {
     return {
       ...identity,
       id: sandbox.id,
-      state: sandbox.status,
+      state: sandbox.status === "terminated" && !sandbox.deleted ? "deleting" : sandbox.status,
       name: sandbox.name,
       createdAt: sandbox.createdAt,
       expiresAt: sandbox.expiresAt,

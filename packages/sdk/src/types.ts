@@ -749,6 +749,8 @@ export type ManagedSandbox = {
   lastActiveAt: string | null;
   /** When Gitterm terminates the sandbox regardless of activity. */
   expiresAt: string | null;
+  /** Terminated and confirmed deleted at the provider. A terminated sandbox without this is still being cleaned up. */
+  deleted: boolean;
   machineProfileId: string | null;
 };
 

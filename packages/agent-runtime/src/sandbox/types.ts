@@ -161,6 +161,28 @@ export function accountHash(account: string): string {
   return createHash("sha256").update(account).digest("hex").slice(0, 10);
 }
 
+/**
+ * Deletes a sandbox and waits until the provider reports it gone. Some providers accept a
+ * deletion and finish it later; a sandbox is only deleted once `info` says so. If it is not
+ * confirmed in time this throws, and the caller's cleanup queue retries later.
+ */
+export async function destroyAndConfirm(
+  transport: SandboxTransport,
+  id: string,
+  timeoutMs = 30_000,
+) {
+  await transport.destroy(id);
+  const deadline = Date.now() + timeoutMs;
+  while ((await transport.info(id)).state !== "terminated") {
+    if (Date.now() > deadline)
+      throw new SandboxProviderError(
+        "timeout",
+        `${transport.provider} has not confirmed the deletion yet.`,
+      );
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+}
+
 export const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
 
 export function terminated(id: string): SandboxProviderInfo {
