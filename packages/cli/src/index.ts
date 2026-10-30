@@ -23,6 +23,7 @@ import {
   runSandboxJob,
   runSandboxList,
   runSandboxPreview,
+  runSandboxResume,
   runSandboxSync,
 } from "./cmd/sandbox.js";
 import {
@@ -252,25 +253,31 @@ if (workspaceEnvironment) {
           (argv) => runSandboxPreview(argv),
         )
         .command(
-          "artifact <sandboxId> <path>",
-          "Download a file into a local staging directory",
+          "artifact <sandboxId> <jobId> <path>",
+          "Download a file a job produced into a local staging directory",
           (b) =>
             b
               .positional("sandboxId", { type: "string", demandOption: true })
+              .positional("jobId", { type: "string", demandOption: true })
               .positional("path", { type: "string", demandOption: true }),
           (argv) => runSandboxArtifact(argv),
         )
         .command(
-          "apply <sandboxId> <artifact> <sha256> <target>",
-          "Copy a downloaded artifact into the checkout (refuses stale targets)",
+          "apply <sandboxId> <artifact> <target>",
+          "Copy a downloaded artifact into its job's checkout (refuses stale targets)",
           (b) =>
             b
               .positional("sandboxId", { type: "string", demandOption: true })
               .positional("artifact", { type: "string", demandOption: true })
-              .positional("sha256", { type: "string", demandOption: true })
               .positional("target", { type: "string", demandOption: true })
               .options({ yes: { alias: "y", type: "boolean" } }),
           (argv) => runSandboxApply(argv),
+        )
+        .command(
+          "resume <sandboxId>",
+          "Resume a managed sandbox paused for inactivity",
+          (b) => b.positional("sandboxId", { type: "string", demandOption: true }),
+          (argv) => runSandboxResume(argv),
         )
         .command(
           "destroy <sandboxId>",

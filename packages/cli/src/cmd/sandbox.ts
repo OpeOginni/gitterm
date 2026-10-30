@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import {
-  applyArtifact,
   captureSource,
   createSandboxBackend,
   createSandboxClient,
@@ -293,13 +292,15 @@ export async function runSandboxPreview(
   }
 }
 
-export async function runSandboxArtifact(args: Common & { sandboxId: string; path: string }) {
+export async function runSandboxArtifact(
+  args: Common & { sandboxId: string; jobId: string; path: string },
+) {
   await guarded(
     args,
     "Downloading...",
     async () => {
       const { client } = await clientFor(args);
-      return client.fetchArtifact(refOf(client, args.sandboxId), args.path);
+      return client.fetchArtifact(refOf(client, args.sandboxId), args.path, { jobId: args.jobId });
     },
     (artifact) =>
       success(
@@ -309,35 +310,42 @@ export async function runSandboxArtifact(args: Common & { sandboxId: string; pat
 }
 
 export async function runSandboxApply(
-  args: Common & {
-    sandboxId: string;
-    artifact: string;
-    sha256: string;
-    target: string;
-    yes?: boolean;
-  },
+  args: Common & { sandboxId: string; artifact: string; target: string; yes?: boolean },
 ) {
   try {
     const { client } = await clientFor(args);
-    const record = await client.get(refOf(client, args.sandboxId));
-    const snapshot = record.snapshot ? await client.store.getSnapshot(record.snapshot.id) : null;
-    if (!snapshot)
-      throw new Error("This sandbox has no synced snapshot to check the target against.");
-    await approve(args, `Write ${args.target} in ${snapshot.root}?`);
+    // The baseline is the snapshot the producing job ran on, not the latest sync.
     await guarded(
       args,
       "Applying...",
       () =>
-        applyArtifact({
-          artifact: { localPath: args.artifact, sha256: args.sha256 },
-          snapshot,
+        client.applyArtifact(refOf(client, args.sandboxId), {
+          localPath: args.artifact,
           target: args.target,
+          beforeWrite: (plan) =>
+            approve(args, `Write ${plan.target} in ${plan.root} (from job ${plan.jobId})?`),
         }),
-      (applied) => success(`Applied ${applied.path}`),
+      (applied) => success(`Applied ${applied.path} from job ${applied.jobId}`),
     );
   } catch (error) {
     handleError(error, args.json);
   }
+}
+
+export async function runSandboxResume(args: Common & { sandboxId: string }) {
+  await guarded(
+    args,
+    "Resuming...",
+    async () => {
+      const { client } = await clientFor(args);
+      const record = await client.resume(refOf(client, args.sandboxId));
+      return { ...record, filesKept: client.capabilities.pause === "stateful" };
+    },
+    (record) =>
+      success(
+        `Sandbox ${record.id} is ${record.state}${record.filesKept ? "" : ". This provider discarded files and processes while paused: sync again before running commands."}`,
+      ),
+  );
 }
 
 export async function runSandboxDestroy(args: Common & { sandboxId: string }) {
