@@ -27,6 +27,36 @@ gitterm workspace pause <workspaceId>
 gitterm workspace restart <workspaceId>
 ```
 
+## Remote sandboxes
+
+Run builds, tests, and previews in a sandbox without a remote agent. Accounts live in
+`~/.config/gitterm/sandbox.json`, which holds names only. Keys come from environment
+variables:
+
+```json
+{
+  "account": "e2b",
+  "accounts": {
+    "e2b": { "mode": "direct", "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" },
+    "gitterm": { "mode": "managed" }
+  }
+}
+```
+
+```bash
+gitterm sandbox account                     # selected mode, account, who is charged
+gitterm sandbox create --lifetime 30
+gitterm sandbox sync <id>                   # current checkout, including uncommitted changes
+gitterm sandbox exec <id> "npm test" --wait 300
+gitterm sandbox job <id> <jobId> --offset 0 --limit 65536
+gitterm sandbox preview <id> 3000 --command "npm run dev" --serve
+gitterm sandbox artifact <id> dist/app.tar.gz
+gitterm sandbox destroy <id>
+```
+
+Add `--account <name>` to use another account. Direct accounts need no Gitterm login.
+See [Agent sandboxes](../../docs/agent-sandboxes.md).
+
 ## Switching servers (hosted vs self-hosted)
 
 By default the CLI talks to the hosted GitTerm API at `https://api.gitterm.dev`.

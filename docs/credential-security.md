@@ -49,6 +49,13 @@ claiming secrets are inaccessible to an authorized workspace.
 - **SDK sandbox providers:** values cross the provider's authenticated sandbox API. The provider
   security registry records this explicitly so adding a provider requires a reviewed classification.
 
+- **Agent sandboxes:** a direct (bring-your-own) provider credential stays in the process that runs the
+  plugin or CLI, taken from OpenCode `{env:...}`/`{file:...}` substitution or a named
+  environment variable, and is sent only to that provider. It is never stored by Gitterm or written to
+  sandbox records, snapshots, logs, or tool results. Managed sandboxes use the deployment's
+  encrypted provider config on the server. Railway and AWS sandboxes accept commands only
+  with a token derived from the provider credential (AWS: the deployment encryption key); it is never stored. See [Agent sandboxes](agent-sandboxes.md).
+
 Credential issuance metadata is stored in `workspace_credential_audit`; tokens, authorization
 headers, runtime bundles, and secret contents are never audit fields.
 

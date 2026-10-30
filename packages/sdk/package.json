@@ -19,13 +19,19 @@
       "bun": "./dist/direct/index.js",
       "import": "./dist/direct/index.js",
       "default": "./dist/direct/index.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox/index.d.ts",
+      "bun": "./dist/sandbox/index.js",
+      "import": "./dist/sandbox/index.js",
+      "default": "./dist/sandbox/index.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts --outdir dist --target node --format esm --external @trpc/client --external eventsource --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts src/sandbox/index.ts --outdir dist --target node --format esm --external @trpc/client --external eventsource --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },

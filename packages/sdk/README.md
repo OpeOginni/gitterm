@@ -853,6 +853,39 @@ await saveConfig({
 Device-code logins produce the same revocable `gt_...` API token as the dashboard;
 they appear under **API tokens** in the dashboard and can be revoked there.
 
+## Sandboxes
+
+`@gitterm/sdk/sandbox` runs commands in a plain remote sandbox, with no coding agent
+inside, on behalf of a local agent or script. The same client works against your
+Gitterm plan (`managed`) or your own provider account (`direct`, no Gitterm login needed).
+Direct mode supports E2B, Daytona, Vercel, Boat, exe.dev, and Railway; managed mode also AWS:
+
+```ts
+import { captureSource, createSandboxBackend, createSandboxClient } from "@gitterm/sdk/sandbox";
+
+const settings = {
+  account: "e2b",
+  accounts: {
+    e2b: { mode: "direct" as const, provider: "e2b" as const, apiKeyEnv: "E2B_API_KEY" },
+  },
+};
+const sandboxes = createSandboxClient({ backend: createSandboxBackend(settings) });
+
+const sandbox = await sandboxes.create({ name: "ci", lifetimeMinutes: 30 });
+await sandboxes.sync(sandbox, await captureSource(process.cwd())); // includes uncommitted changes
+const run = await sandboxes.exec(sandbox, { command: "npm test", waitMs: 300_000 });
+console.log(run.state.status, run.state.exitCode, run.job.snapshotDigest);
+console.log(run.log.text); // last 8 KiB; page with sandboxes.job(sandbox, run.job.id, { offset })
+await sandboxes.destroy(sandbox);
+```
+
+Jobs are durable: their state lives in the sandbox, so another process can reattach with
+`sandboxes.job()` or stop the whole process group with `sandboxes.cancel()`. A non-zero
+exit is a `failed` job; a provider failure throws `SandboxProviderError`. Managed
+primitives are also available directly as `client.sandboxes.*`. See
+[Agent sandboxes](../../docs/agent-sandboxes.md) for modes, credentials, charges, and
+cleanup.
+
 ## Direct provider mode
 
 Direct mode runs an agent using your cloud-provider account without a Gitterm server. It intentionally omits managed billing, proxying, policy, durable run history, and automatic cleanup; your application owns workspace state and lifecycle.
