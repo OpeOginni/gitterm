@@ -152,7 +152,7 @@ export function createExecServerClient(
     async writeFile(path: string, data: Uint8Array): Promise<void> {
       await request(`/file?path=${encodeURIComponent(path)}`, {
         method: "PUT",
-        body: data as BodyInit,
+        body: data as RequestInit["body"],
       });
     },
     async readFile(path: string): Promise<Uint8Array> {
