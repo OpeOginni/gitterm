@@ -50,7 +50,9 @@ gitterm sandbox sync <id>                   # current checkout, including uncomm
 gitterm sandbox exec <id> "npm test" --wait 300
 gitterm sandbox job <id> <jobId> --offset 0 --limit 65536
 gitterm sandbox preview <id> 3000 --command "npm run dev" --serve
-gitterm sandbox artifact <id> dist/app.tar.gz
+gitterm sandbox artifact <id> <jobId> dist/app.tar.gz
+gitterm sandbox apply <id> <localPath> dist/app.tar.gz  # checked against that job's snapshot
+gitterm sandbox resume <id>                # managed sandboxes paused for inactivity
 gitterm sandbox destroy <id>
 ```
 
