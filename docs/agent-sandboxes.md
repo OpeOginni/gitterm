@@ -264,21 +264,6 @@ Listing sandboxes, reading jobs and logs, cancelling, downloading artifacts into
 staging directory, and destroying need no approval. A denied action stops before any
 upload, provisioning, or local write.
 
-## Sandbox SDK evaluation
-
-`@opencoredev/sandbox-sdk` 1.0.3 was evaluated as the execution layer and not adopted.
-Gitterm's own direct E2B code covers this workload. The library is worth revisiting for
-its provider coverage, which includes Daytona, E2B, Vercel, Railway, Upstash, Freestyle,
-Boat, and local Docker. It does not cover exe.dev, Cloudflare, or AWS.
-
-Specific gaps for this workload:
-
-- Background processes have no timeout and record no finish time.
-- `stop()` writes exit code 143 even when its process-group kill fails, so a job could read as cancelled while still running.
-- Disposing a keyed sandbox detaches it instead of destroying it.
-- Its memory provider is a fake.
-- 1.0.0 to 1.0.3 were published the same day as a full rewrite.
-
 ## Verification
 
 ```sh
