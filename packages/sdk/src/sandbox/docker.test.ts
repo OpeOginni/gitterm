@@ -181,7 +181,7 @@ for (const [kind, createBackend] of Object.entries(backends))
         waitMs: 30_000,
       });
       expect(built.state.status).toBe("succeeded");
-      const artifact = await client.fetchArtifact(sandbox, "dist/app.bin");
+      const artifact = await client.fetchArtifact(sandbox, "dist/app.bin", { jobId: built.job.id });
       expect(artifact.verified).toBe(true);
       expect(
         createHash("sha256")
@@ -217,6 +217,75 @@ for (const [kind, createBackend] of Object.entries(backends))
           expect(await readFile(path.join(file.parentPath, file.name), "utf8")).not.toContain(
             SENTINEL,
           );
+    }, 60_000);
+
+    test("#2 secrets stay redacted for a fresh client, every page, and the stored log", async () => {
+      const secret = `pw-${randomBytes(8).toString("hex")}`;
+      const job = await client.exec(sandbox, {
+        command: 'echo "first=$TOKEN"; echo "second=$TOKEN"',
+        env: { TOKEN: secret },
+        waitMs: 30_000,
+      });
+      expect(job.state.status).toBe("succeeded");
+      const fresh = createSandboxClient({
+        backend: createBackend("docker-a", run),
+        store: createFileSandboxStore(storeDir),
+      });
+      expect((await fresh.job(sandbox, job.job.id)).log.text).toBe(
+        "first=[redacted]\nsecond=[redacted]\n",
+      );
+      let paged = "";
+      for (let offset = 0; offset < job.log.totalBytes; offset += 5)
+        paged += (await fresh.job(sandbox, job.job.id, { offset, limit: 5 })).log.text;
+      expect(paged).not.toContain(secret.slice(0, 6));
+      const raw = await fresh.exec(sandbox, {
+        command: `cat ~/.gitterm/jobs/${job.job.id}/output.log`,
+        waitMs: 30_000,
+      });
+      expect(raw.log.text).toContain("first=[redacted]");
+    }, 60_000);
+
+    test("#3 secrets that cannot be redacted are refused before anything is sent", async () => {
+      const before = Object.keys((await client.get(sandbox)).jobs).length;
+      await expect(
+        client.exec(sandbox, {
+          command: "true",
+          env: { KEY: "-----BEGIN KEY-----\nabcdef\n-----END KEY-----" },
+        }),
+      ).rejects.toThrow(/line break/);
+      await expect(client.exec(sandbox, { command: "true", env: { PIN: "123" } })).rejects.toThrow(
+        /shorter than 4/,
+      );
+      expect(Object.keys((await client.get(sandbox)).jobs).length).toBe(before);
+    }, 30_000);
+
+    test("#7 processes a job leaves behind end with it", async () => {
+      const job = await client.exec(sandbox, {
+        command: "sleep 600 & echo started",
+        waitMs: 30_000,
+      });
+      expect(job.state).toMatchObject({ status: "succeeded", processAlive: false });
+      const count = await client.exec(sandbox, {
+        command:
+          "for p in /proc/[0-9]*; do tr '\\0' ' ' < $p/cmdline 2>/dev/null; echo; done | grep -c '^sleep 600' || true",
+        waitMs: 30_000,
+      });
+      expect(count.log.text.trim()).toBe("0");
+    }, 60_000);
+
+    test("#3 an artifact is checked against its job's snapshot, not a later sync", async () => {
+      await client.sync(sandbox, await captureSource(repo));
+      const build = await client.exec(sandbox, {
+        command: "echo 'module.exports = 99;' > answer.js",
+        waitMs: 30_000,
+      });
+      const artifact = await client.fetchArtifact(sandbox, "answer.js", { jobId: build.job.id });
+      await writeFile(path.join(repo, "answer.js"), "module.exports = 'newer local edit';\n");
+      await client.sync(sandbox, await captureSource(repo));
+      await expect(
+        client.applyArtifact(sandbox, { localPath: artifact.localPath, target: "answer.js" }),
+      ).rejects.toBeInstanceOf(ArtifactConflictError);
+      expect(await readFile(path.join(repo, "answer.js"), "utf8")).toContain("newer local edit");
     }, 60_000);
 
     test("a second account cannot operate this sandbox", async () => {

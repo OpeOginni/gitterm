@@ -66,20 +66,67 @@ pid_alive() {
   [ "$1" != Z ]
 }`;
 
-/** Runs detached from the launching call. Args: job dir, timeout seconds, cwd. */
+/**
+ * Runs detached from the launching call. Args: job dir, timeout seconds, cwd.
+ *
+ * The job is its process group: when the command exits, anything it left running is
+ * stopped too, so nothing outlives the job or its deadline. With secrets, output passes
+ * through `redact.awk` inside the sandbox, so the stored log never contains their values.
+ */
 const RUNNER = `J="$1"; T="$2"; C="$3"
+${LIVENESS}
 echo $$ > "$J/runner.pid"
 exec > "$J/output.log" 2>&1 < /dev/null
 finish() { ${NOW} > "$J/finished"; echo "$1" > "$J/exit.tmp"; mv "$J/exit.tmp" "$J/exit"; exit "$1"; }
 cd "$C" 2>/dev/null || { echo "gitterm: working directory not found: $C"; finish 127; }
-setsid -w sh -c 'echo $$ > "$0/pgid"; . "$0/env.sh"; exec sh "$0/command.sh"' "$J" &
+if [ -s "$J/secret-names" ]; then
+  setsid -w sh -c 'echo $$ > "$0/pgid"; . "$0/env.sh"; { sh "$0/command.sh"; echo $? > "$0/command-exit"; } 2>&1 | awk -v names="$0/secret-names" -f "$0/redact.awk"; [ -e "$0/command-exit" ] && exit "$(cat "$0/command-exit")"; exit 143' "$J" &
+else
+  setsid -w sh -c 'echo $$ > "$0/pgid"; . "$0/env.sh"; exec sh "$0/command.sh"' "$J" &
+fi
 child=$!
 setsid sh -c 'sleep "$1"; [ -e "$0/exit" ] && exit 0; : > "$0/timed_out"; P=$(cat "$0/pgid"); kill -TERM -"$P" 2>/dev/null; sleep 10; kill -KILL -"$P" 2>/dev/null' "$J" "$T" > /dev/null 2>&1 &
 dog=$!
 wait "$child"; code=$?
+P=$(cat "$J/pgid" 2>/dev/null || true)
+if [ -n "$P" ] && group_alive "$P"; then
+  kill -TERM -"$P" 2>/dev/null
+  i=0; while [ $i -lt 50 ] && group_alive "$P"; do sleep 0.1; i=$((i+1)); done
+  kill -KILL -"$P" 2>/dev/null
+fi
 kill -TERM -"$dog" 2>/dev/null || kill "$dog" 2>/dev/null
 finish "$code"
 `;
+
+/** Replaces each secret value, read from the job's environment by name, line by line. */
+const REDACT_AWK = `BEGIN { while ((getline name < names) > 0) if ((name in ENVIRON) && length(ENVIRON[name]) >= 4) secret[++n] = ENVIRON[name] }
+{
+  line = $0
+  for (i = 1; i <= n; i++) {
+    out = ""
+    while ((at = index(line, secret[i])) > 0) { out = out substr(line, 1, at - 1) "[redacted]"; line = substr(line, at + length(secret[i])) }
+    line = out line
+  }
+  print line
+  fflush()
+}
+`;
+
+/**
+ * Secret values are redacted line by line inside the sandbox, so a value spanning lines
+ * (a PEM key, say) or one too short to match safely cannot be protected: refuse it before
+ * anything is sent.
+ */
+export function assertRedactableSecrets(env: Record<string, string> = {}) {
+  for (const [name, value] of Object.entries(env)) {
+    if (/[\r\n]/.test(value))
+      throw new Error(
+        `${name} contains a line break, which cannot be redacted from output. Base64-encode it and decode it in the command, e.g. "$(printf %s "$${name}" | base64 -d)".`,
+      );
+    if (value.length < 4)
+      throw new Error(`${name} is shorter than 4 characters and cannot be redacted reliably.`);
+  }
+}
 
 function envScript(env: Record<string, string> = {}): string {
   return Object.entries(env)
@@ -96,6 +143,7 @@ export async function startJob(
   id: string,
   input: JobStartInput,
 ): Promise<void> {
+  assertRedactableSecrets(input.env);
   const dir = jobDir(backend, id);
   const seconds = Math.max(1, Math.ceil(input.timeoutMs / 1000));
   const prepared = await backend.run(
@@ -107,6 +155,11 @@ export async function startJob(
   // Values are written to a 0600 file inside the sandbox, not passed on a command line.
   await backend.writeFile(sandboxId, `${dir}/env.sh`, Buffer.from(envScript(input.env)));
   await backend.writeFile(sandboxId, `${dir}/command.sh`, Buffer.from(input.command));
+  const names = Object.keys(input.env ?? {});
+  if (names.length) {
+    await backend.writeFile(sandboxId, `${dir}/secret-names`, Buffer.from(`${names.join("\n")}\n`));
+    await backend.writeFile(sandboxId, `${dir}/redact.awk`, Buffer.from(REDACT_AWK));
+  }
   await backend.writeFile(sandboxId, `${dir}/runner.sh`, Buffer.from(RUNNER));
   const launched = await backend.run(
     sandboxId,
@@ -217,9 +270,9 @@ export async function cancelJob(
       LIVENESS,
       `J=${q(dir)}`,
       `[ -e "$J/started" ] || { echo "unknown job" >&2; exit 3; }`,
-      `[ ! -e "$J/exit" ] || exit 0`,
-      `: > "$J/cancelled"`,
       `P=$(cat "$J/pgid" 2>/dev/null || true)`,
+      // A finished job is only left alone once its whole process group is gone.
+      `if [ -e "$J/exit" ]; then [ -n "$P" ] && group_alive "$P" || exit 0; else : > "$J/cancelled"; fi`,
       `[ -n "$P" ] || exit 0`,
       `kill -TERM -"$P" 2>/dev/null || true`,
       `i=0; while [ $i -lt ${graceSeconds * 10} ] && group_alive "$P"; do sleep 0.1; i=$((i+1)); done`,

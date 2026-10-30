@@ -1,7 +1,6 @@
 import { realpath } from "node:fs/promises";
 import type { Plugin } from "@opencode/plugin";
 import {
-  applyArtifact,
   captureSource,
   createSandboxBackend,
   createSandboxClient,
@@ -460,15 +459,18 @@ export async function registerSandboxTools(
             type: "string",
             description: "Relative to the synced project directory, or absolute",
           },
+          jobId: { type: "string", description: "The job that produced the file" },
         },
-        ["sandboxId", "path"],
+        ["sandboxId", "path", "jobId"],
       ),
       async execute(input) {
         const args = input as Record<string, unknown>;
         const ref = await refFor(str(args.sandboxId, "sandboxId"));
-        const artifact = await sandbox().fetchArtifact(ref, str(args.path, "path"));
+        const artifact = await sandbox().fetchArtifact(ref, str(args.path, "path"), {
+          jobId: str(args.jobId, "jobId"),
+        });
         return {
-          content: `Fetched ${artifact.remotePath} (${artifact.bytes} bytes, sha256 ${artifact.sha256}, verified ${artifact.verified}) to ${artifact.localPath}`,
+          content: `Fetched ${artifact.remotePath} from job ${artifact.jobId} (${artifact.bytes} bytes, sha256 ${artifact.sha256}, verified ${artifact.verified}) to ${artifact.localPath}`,
           metadata: artifact,
         };
       },
@@ -477,43 +479,50 @@ export async function registerSandboxTools(
     editor.add({
       name: "sandbox_apply",
       description:
-        "Copy a fetched artifact into the local checkout. Refuses if the target changed locally since the snapshot the sandbox ran.",
+        "Copy a fetched artifact into the local checkout. Refuses if the target changed locally since the snapshot its job ran on.",
       input: object(
         {
           sandboxId,
           artifactPath: { type: "string", description: "localPath from the sandbox_artifact tool" },
-          sha256: { type: "string" },
           target: { type: "string", description: "Relative path in the checkout" },
         },
-        ["sandboxId", "artifactPath", "sha256", "target"],
+        ["sandboxId", "artifactPath", "target"],
       ),
       async execute(input, context) {
         const args = input as Record<string, unknown>;
         const ref = await refFor(str(args.sandboxId, "sandboxId"));
-        const record = await sandbox().get(ref);
-        if (!record.snapshot)
-          throw new Error("This sandbox has no synced snapshot to check the target against.");
-        const snapshot = await sandbox().store.getSnapshot(record.snapshot.id);
-        if (!snapshot)
-          throw new Error(
-            `Snapshot manifest ${record.snapshot.id} is not available locally. Sync again.`,
-          );
         const directory = await sessionDirectory(context);
-        if (directory !== snapshot.root && !directory.startsWith(`${snapshot.root}/`))
-          throw new Error("This session's checkout is not the one that was synced.");
-        const target = str(args.target, "target");
-        await assert(context, "gitterm.sandbox.apply", [`${snapshot.root}/${target}`], [], {
-          sha256: args.sha256,
-        });
-        const applied = await applyArtifact({
-          artifact: {
-            localPath: str(args.artifactPath, "artifactPath"),
-            sha256: str(args.sha256, "sha256"),
+        const applied = await sandbox().applyArtifact(ref, {
+          localPath: str(args.artifactPath, "artifactPath"),
+          target: str(args.target, "target"),
+          beforeWrite: async (plan) => {
+            if (directory !== plan.root && !directory.startsWith(`${plan.root}/`))
+              throw new Error("This session's checkout is not the one the job ran on.");
+            await assert(context, "gitterm.sandbox.apply", [`${plan.root}/${plan.target}`], [], {
+              sha256: plan.sha256,
+              job: plan.jobId,
+              snapshot: plan.snapshotId,
+            });
           },
-          snapshot,
-          target,
         });
-        return { content: `Applied artifact to ${applied.path} (sha256 ${applied.sha256}).` };
+        return {
+          content: `Applied artifact from job ${applied.jobId} (snapshot ${applied.snapshotId}) to ${applied.path} (sha256 ${applied.sha256}).`,
+        };
+      },
+    });
+
+    editor.add({
+      name: "sandbox_resume",
+      description:
+        "Resume a managed sandbox that was paused for inactivity. On providers whose pause discards files (Railway, AWS), sync again afterwards; earlier jobs are gone.",
+      input: object({ sandboxId }, ["sandboxId"]),
+      async execute(input) {
+        const ref = await refFor(str((input as Record<string, unknown>).sandboxId, "sandboxId"));
+        const record = await sandbox().resume(ref);
+        const lossy = sandbox().capabilities.pause === "state-losing";
+        return {
+          content: `Sandbox ${ref.id} is ${record.state}.${lossy ? " This provider discards files and processes on pause: sync again before running commands; earlier jobs cannot be reattached." : ""}`,
+        };
       },
     });
 

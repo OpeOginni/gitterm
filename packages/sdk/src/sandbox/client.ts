@@ -5,8 +5,16 @@ import {
   type SandboxInfo,
   type SandboxRef,
 } from "./backend.js";
-import { fetchArtifact, type FetchedArtifact } from "./artifacts.js";
-import { cancelJob, newJobId, readJobLog, readJobState, startJob, type JobState } from "./jobs.js";
+import { applyArtifact, fetchArtifact, type FetchedArtifact } from "./artifacts.js";
+import {
+  assertRedactableSecrets,
+  cancelJob,
+  newJobId,
+  readJobLog,
+  readJobState,
+  startJob,
+  type JobState,
+} from "./jobs.js";
 import { projectDir, uploadSource, type CapturedSource } from "./source.js";
 import {
   createFileSandboxStore,
@@ -149,14 +157,19 @@ export function createSandboxClient(options: {
     };
   }
 
+  const applyInfo = (info: SandboxInfo) => (record: SandboxRecord) => {
+    record.state = info.state;
+    record.expiresAt = info.expiresAt ?? record.expiresAt;
+  };
+
   async function load(ref: SandboxRef): Promise<SandboxRecord> {
     assertRef(ref);
-    const existing = await store.get(ref);
     const info = await backend.get(ref.id);
-    const record = recordFrom(info, existing);
     // Never start tracking a sandbox this account cannot see.
-    if (existing || info.state !== "terminated") await store.put(record);
-    return record;
+    const stored = await store.update(ref, applyInfo(info), () =>
+      info.state === "terminated" ? null : recordFrom(info, null),
+    );
+    return stored ?? recordFrom(info, null);
   }
 
   async function running(ref: SandboxRef): Promise<SandboxRecord> {
@@ -185,13 +198,16 @@ export function createSandboxClient(options: {
       state.logBytes > offset
         ? await readJobLog(backend, record.id, jobId, offset, limit)
         : Buffer.alloc(0);
-    Object.assign(job, {
+    const progress = {
       status: state.status,
       exitCode: state.exitCode,
       startedAt: state.startedAt,
       finishedAt: state.finishedAt,
+    };
+    Object.assign(job, progress);
+    await store.update(record, (stored) => {
+      if (stored.jobs[jobId]) Object.assign(stored.jobs[jobId], progress);
     });
-    await store.put({ ...record, updatedAt: new Date().toISOString() });
     return {
       job,
       state,
@@ -275,15 +291,12 @@ export function createSandboxClient(options: {
         const info =
           remote.get(record.id) ??
           (record.state === "terminated" ? null : await backend.get(record.id));
-        const next = info ? recordFrom(info, record) : record;
         remote.delete(record.id);
-        if (info) await store.put(next);
-        records.push(next);
+        records.push(info ? ((await store.update(record, applyInfo(info))) ?? record) : record);
       }
       for (const info of remote.values()) {
         const record = recordFrom(info, null);
-        await store.put(record);
-        records.push(record);
+        records.push((await store.update(record, applyInfo(info), () => record)) ?? record);
       }
       return records;
     },
@@ -294,12 +307,14 @@ export function createSandboxClient(options: {
       const record = await running(ref);
       await store.putSnapshot(captured.snapshot);
       const result = await uploadSource(backend, ref.id, captured);
-      record.snapshot = {
-        id: captured.snapshot.id,
-        digest: result.digest,
-        syncedAt: new Date().toISOString(),
-      };
-      await store.put(record);
+      await store.update(record, (stored) => {
+        stored.snapshot = {
+          id: captured.snapshot.id,
+          digest: result.digest,
+          root: captured.snapshot.root,
+          syncedAt: new Date().toISOString(),
+        };
+      });
       return { snapshot: captured.snapshot, verified: result.verified };
     },
 
@@ -308,15 +323,18 @@ export function createSandboxClient(options: {
       const timeoutMinutes = input.timeoutMinutes ?? Math.min(10, limits.maxJobMinutes);
       if (!(timeoutMinutes > 0) || timeoutMinutes > limits.maxJobMinutes)
         throw new Error(`Job timeout must be between 0 and ${limits.maxJobMinutes} minutes`);
+      // Refused before any record is written or anything is sent.
+      assertRedactableSecrets(input.env);
       for (const value of Object.values(input.env ?? {})) secrets.add(value);
       const id = newJobId();
       const cwd = resolveCwd(backend.home, input.cwd);
-      record.jobs[id] = {
+      const job: JobRecord = {
         id,
         command: input.command,
         cwd,
         snapshotId: record.snapshot?.id ?? null,
         snapshotDigest: record.snapshot?.digest ?? null,
+        snapshotRoot: record.snapshot?.root ?? null,
         status: "running",
         exitCode: null,
         startedAt: null,
@@ -325,11 +343,13 @@ export function createSandboxClient(options: {
         secretNames: Object.keys(input.env ?? {}),
       };
       // Persist first so a crash after launch still leaves a reattachable record.
-      await store.put(record);
+      await store.update(record, (stored) => {
+        stored.jobs[id] = job;
+      });
       await startJob(backend, ref.id, id, {
         command: input.command,
         cwd,
-        timeoutMs: record.jobs[id]!.timeoutMs,
+        timeoutMs: job.timeoutMs,
         env: input.env,
       });
       return api.wait(ref, id, input.waitMs ?? 0);
@@ -341,10 +361,9 @@ export function createSandboxClient(options: {
       waitMs: number,
       read: { tailBytes?: number } = {},
     ): Promise<JobView> {
-      const record = await running(ref);
       const deadline = Date.now() + Math.max(0, waitMs);
       while (true) {
-        const result = await view(record, jobId, read);
+        const result = await view(await running(ref), jobId, read);
         if (result.state.status !== "running" || Date.now() >= deadline) return result;
         await sleep(Math.min(2_000, Math.max(250, deadline - Date.now())));
       }
@@ -424,13 +443,14 @@ export function createSandboxClient(options: {
           return response.status;
         })
         .catch(() => null);
-      record.previews[String(input.port)] = {
-        port: input.port,
-        jobId,
-        url: access.url,
-        public: backend.capabilities.previews === "public" || record.publicPreviews,
-      };
-      await store.put(record);
+      await store.update(record, (stored) => {
+        stored.previews[String(input.port)] = {
+          port: input.port,
+          jobId,
+          url: access.url,
+          public: backend.capabilities.previews === "public" || record.publicPreviews,
+        };
+      });
       return {
         url: access.url,
         port: input.port,
@@ -442,9 +462,77 @@ export function createSandboxClient(options: {
       };
     },
 
-    async fetchArtifact(ref: SandboxRef, file: string): Promise<FetchedArtifact> {
-      await running(ref);
-      return fetchArtifact(backend, ref.id, file);
+    /**
+     * Downloads a file a job produced. The artifact is recorded with that job, so applying it
+     * later checks the checkout against the snapshot the job ran on, not a newer sync.
+     */
+    async fetchArtifact(
+      ref: SandboxRef,
+      file: string,
+      producedBy: { jobId: string },
+    ): Promise<FetchedArtifact & { jobId: string }> {
+      const record = await running(ref);
+      if (!record.jobs[producedBy.jobId])
+        throw new Error(`Unknown job ${producedBy.jobId} for sandbox ${ref.id}`);
+      const artifact = await fetchArtifact(backend, ref.id, file);
+      await store.update(record, (stored) => {
+        stored.artifacts = {
+          ...stored.artifacts,
+          [artifact.localPath]: {
+            localPath: artifact.localPath,
+            remotePath: artifact.remotePath,
+            sha256: artifact.sha256,
+            bytes: artifact.bytes,
+            jobId: producedBy.jobId,
+            fetchedAt: new Date().toISOString(),
+          },
+        };
+      });
+      return { ...artifact, jobId: producedBy.jobId };
+    },
+
+    /** Writes a fetched artifact into its job's checkout, refusing stale or escaping targets. */
+    async applyArtifact(
+      ref: SandboxRef,
+      input: {
+        localPath: string;
+        target: string;
+        /** Called with the resolved destination before anything is written, e.g. to ask approval. */
+        beforeWrite?: (plan: {
+          root: string;
+          target: string;
+          sha256: string;
+          jobId: string;
+          snapshotId: string;
+        }) => Promise<void>;
+      },
+    ) {
+      assertRef(ref);
+      const record = await store.get(ref);
+      const artifact = record?.artifacts?.[input.localPath];
+      if (!record || !artifact)
+        throw new Error("Unknown artifact. Fetch it with the job that produced it first.");
+      const job = record.jobs[artifact.jobId];
+      if (!job?.snapshotId || !job.snapshotRoot)
+        throw new Error(
+          `Job ${artifact.jobId} did not run on a synced snapshot, so there is nothing to check the checkout against.`,
+        );
+      const snapshot = await store.getSnapshot(job.snapshotId, job.snapshotRoot);
+      if (!snapshot)
+        throw new Error(`Snapshot ${job.snapshotId} manifest is not available locally.`);
+      await input.beforeWrite?.({
+        root: snapshot.root,
+        target: input.target,
+        sha256: artifact.sha256,
+        jobId: job.id,
+        snapshotId: snapshot.id,
+      });
+      return {
+        ...(await applyArtifact({ artifact, snapshot, target: input.target })),
+        root: snapshot.root,
+        snapshotId: snapshot.id,
+        jobId: job.id,
+      };
     },
 
     async resume(ref: SandboxRef): Promise<SandboxRecord> {
@@ -459,10 +547,16 @@ export function createSandboxClient(options: {
     async destroy(ref: SandboxRef): Promise<SandboxRecord> {
       assertRef(ref);
       await backend.destroy(ref.id);
-      const info = await backend.get(ref.id);
-      const existing = await store.get(ref);
-      const record = recordFrom(info, existing);
-      if (existing) await store.put(record);
+      // Some providers accept a deletion and finish it later; wait for it, within a bound.
+      let info = await backend.get(ref.id);
+      for (
+        const deadline = Date.now() + 30_000;
+        info.state !== "terminated" && Date.now() < deadline;
+      ) {
+        await sleep(2_000);
+        info = await backend.get(ref.id);
+      }
+      const record = (await store.update(ref, applyInfo(info))) ?? recordFrom(info, null);
       if (info.state !== "terminated")
         throw new Error(
           `The provider still reports sandbox ${ref.id} as ${info.state}. Retry destroy.`,

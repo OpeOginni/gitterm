@@ -269,7 +269,7 @@ try {
       "mkdir -p dist && head -c 1048576 /dev/urandom > dist/app.bin && sha256sum dist/app.bin",
     waitMs: 60_000,
   });
-  const artifact = await client.fetchArtifact(sandbox, "dist/app.bin");
+  const artifact = await client.fetchArtifact(sandbox, "dist/app.bin", { jobId: build.job.id });
   const localHash = createHash("sha256")
     .update(await readFile(artifact.localPath))
     .digest("hex");

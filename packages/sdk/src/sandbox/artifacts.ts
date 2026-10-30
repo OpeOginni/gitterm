@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { copyFile, lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import type { SandboxBackend } from "./backend.js";
@@ -89,12 +89,26 @@ export async function applyArtifact(input: {
 }): Promise<{ path: string; sha256: string }> {
   if (!safeRelativePath(input.target))
     throw new Error("Target must be a relative path inside the checkout");
+  // These exact bytes are verified and written; the source file is not reopened.
   const data = await readFile(input.artifact.localPath);
   if (createHash("sha256").update(data).digest("hex") !== input.artifact.sha256)
     throw new ArtifactConflictError(
       "The fetched artifact changed on disk since it was downloaded.",
     );
-  const destination = path.join(input.snapshot.root, input.target);
+  const root = await realpath(input.snapshot.root);
+  // Every parent must be a real directory inside the checkout, never a symlink out of it.
+  const parts = input.target.split("/");
+  let directory = root;
+  for (const part of parts.slice(0, -1)) {
+    directory = path.join(directory, part);
+    const info = await lstat(directory).catch(() => null);
+    if (!info) await mkdir(directory);
+    else if (info.isSymbolicLink() || !info.isDirectory())
+      throw new ArtifactConflictError(
+        `${path.relative(root, directory)} is not a directory inside the checkout.`,
+      );
+  }
+  const destination = path.join(directory, parts.at(-1)!);
   const expected = input.snapshot.files.find((file) => file.path === input.target);
   const current = await lstat(destination).catch(() => null);
   if (current?.isSymbolicLink() || (current && !current.isFile()))
@@ -108,10 +122,12 @@ export async function applyArtifact(input: {
     throw new ArtifactConflictError(
       `${input.target} changed locally since snapshot ${input.snapshot.id}. Sync again and rerun before applying.`,
     );
-  await mkdir(path.dirname(destination), { recursive: true });
-  const temporary = `${destination}.gitterm-${randomBytes(4).toString("hex")}`;
+  const temporary = path.join(directory, `.gitterm-${randomBytes(6).toString("hex")}`);
   try {
-    await copyFile(input.artifact.localPath, temporary);
+    await writeFile(temporary, data, { flag: "wx" });
+    // A parent swapped for a symlink after the checks above must not redirect the rename.
+    if ((await realpath(directory)) !== directory)
+      throw new ArtifactConflictError("The checkout changed while applying the artifact.");
     await rename(temporary, destination);
   } finally {
     await rm(temporary, { force: true });

@@ -43,6 +43,7 @@ test("registers /cloud and separate sandbox tools", async () => {
       "sandbox_preview",
       "sandbox_artifact",
       "sandbox_apply",
+      "sandbox_resume",
       "sandbox_destroy",
     ]);
   } finally {
