@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
-import { randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { db, eq, inArray } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
 import { usageSession, workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
@@ -10,6 +10,8 @@ import { sandboxRouter } from "./sandbox";
 import * as billing from "../billing";
 import * as activity from "../service/workspace-activity";
 import * as proxyCache from "../service/proxy-cache";
+import * as providerConfig from "../service/config/provider-config";
+import { internalRouter } from "./internal";
 
 /**
  * Managed sandboxes against a disposable local database, with the E2B transport faked.
@@ -29,6 +31,12 @@ const created = new Map<string, Record<string, string>>();
 const commands: string[] = [];
 const destroyed: string[] = [];
 const allowanceChecks: unknown[] = [];
+let workspaceLimit = 2;
+let failDestroys = 0;
+/** Provider-side state; destroy marks a sandbox gone unless `acceptOnlyDestroys` is set. */
+const providerStates = new Map<string, "running" | "paused" | "terminated">();
+let acceptOnlyDestroys = false;
+const WEBHOOK_SECRET = "test-webhook-secret";
 const mocks: { mockRestore(): void }[] = [];
 
 beforeAll(async () => {
@@ -58,17 +66,35 @@ beforeAll(async () => {
     },
     async destroy(id: string) {
       destroyed.push(id);
+      if (failDestroys > 0) {
+        failDestroys--;
+        throw new Error("provider deletion failed");
+      }
+      // Like Daytona's default delete(): accepted, but the resource still exists for a while.
+      if (!acceptOnlyDestroys) providerStates.set(id, "terminated");
+    },
+    async info(id: string) {
+      return {
+        id,
+        state: providerStates.get(id) ?? "running",
+        labels: {},
+        startedAt: null,
+        expiresAt: null,
+      };
     },
     async preview(_id: string, port: number) {
       return { url: `https://${port}-fake.e2b.app`, headers: { "e2b-traffic-access-token": "t" } };
     },
   };
   mocks.push(
-    spyOn(transportModule, "managedSandboxTransport").mockResolvedValue(fake as never),
+    // Like the real lookup, resolving the transport reads provider config from the database.
+    spyOn(transportModule, "managedSandboxTransport").mockImplementation(
+      async () => (await new Promise((resolve) => setTimeout(resolve, 50)), fake as never),
+    ),
     spyOn(billing, "getBilling").mockResolvedValue({
       ...billing.unlimitedBilling,
       enabled: true,
-      getEntitlements: async () => ({ ...UNLIMITED_ENTITLEMENTS, maxWorkspaces: 2 }),
+      getEntitlements: async () => ({ ...UNLIMITED_ENTITLEMENTS, maxWorkspaces: workspaceLimit }),
       checkRunAllowance: async (id: string, input: unknown) => {
         allowanceChecks.push({ id, input });
         return { allowed: true };
@@ -76,6 +102,10 @@ beforeAll(async () => {
     }),
     spyOn(activity, "recordWorkspaceActivity").mockResolvedValue(),
     spyOn(proxyCache, "invalidateProxyCacheForWorkspace").mockResolvedValue(),
+    spyOn(proxyCache, "invalidateAllProxyRouteAccessCache").mockResolvedValue(),
+    spyOn(providerConfig, "getProviderConfigService").mockReturnValue({
+      getProviderConfigForUse: async () => ({ webhookSecret: WEBHOOK_SECRET }),
+    } as never),
   );
   await db.insert(user).values(
     [userId, otherId].map((id) => ({
@@ -185,3 +215,212 @@ integration(
     );
   },
 );
+
+const internal = () =>
+  internalRouter.createCaller({
+    internalApiKey: process.env.INTERNAL_API_KEY,
+    e2bSignature: null,
+  } as unknown as Context);
+
+async function terminateAll(id: string) {
+  const rows = await db
+    .select({ id: workspace.id })
+    .from(workspace)
+    .where(eq(workspace.userId, id));
+  for (const row of rows)
+    await caller(id)
+      .terminate({ sandboxId: row.id })
+      .catch(() => {});
+}
+
+integration(
+  "#4 a failed provider deletion stays queued and is retried, never reported done",
+  async () => {
+    await terminateAll(userId);
+    const sandbox = await caller(userId).create({ name: "delete-fails", lifetimeMinutes: 5 });
+    const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+    const providerId = row!.externalInstanceId.split(":").at(-1)!;
+
+    failDestroys = 1;
+    const before = destroyed.length;
+    await expect(caller(userId).terminate({ sandboxId: sandbox.id })).rejects.toThrow();
+    expect(destroyed.slice(before)).toEqual([providerId]);
+    // The cleanup is durably queued and the sandbox is not reported as deleted.
+    expect(
+      await db
+        .select()
+        .from(workspaceTermination)
+        .where(eq(workspaceTermination.workspaceId, sandbox.id)),
+    ).toHaveLength(1);
+    expect((await caller(userId).get({ sandboxId: sandbox.id })).deleted).toBe(false);
+
+    // A retry calls the provider again and only then confirms deletion.
+    await caller(userId).terminate({ sandboxId: sandbox.id });
+    expect(destroyed.slice(before)).toEqual([providerId, providerId]);
+    expect(
+      await db
+        .select()
+        .from(workspaceTermination)
+        .where(eq(workspaceTermination.workspaceId, sandbox.id)),
+    ).toHaveLength(0);
+    expect((await caller(userId).get({ sandboxId: sandbox.id })).deleted).toBe(true);
+  },
+);
+
+integration("#5 a signed E2B pause webhook settles a sandbox's status and usage", async () => {
+  await terminateAll(userId);
+  const sandbox = await caller(userId).create({ name: "webhook", lifetimeMinutes: 5 });
+  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  const providerId = row!.externalInstanceId.split(":").at(-1)!;
+  const event = {
+    id: randomUUID(),
+    version: "v2",
+    type: "sandbox.lifecycle.paused",
+    timestamp: new Date(Date.now() + 1_000).toISOString(),
+    eventData: {},
+    event_category: "lifecycle",
+    event_label: "pause",
+    sandbox_id: providerId,
+    sandbox_execution_id: randomUUID(),
+    sandbox_template_id: "base",
+    sandbox_build_id: "b",
+    sandbox_team_id: randomUUID(),
+  };
+  const rawBody = JSON.stringify(event);
+  const signature = createHash("sha256")
+    .update(WEBHOOK_SECRET + rawBody)
+    .digest("base64")
+    .replace(/=+$/, "");
+  const result = await internalRouter
+    .createCaller({
+      internalApiKey: process.env.INTERNAL_API_KEY,
+      e2bSignature: signature,
+    } as unknown as Context)
+    .processE2bWebhook({ ...event, rawBody } as never);
+  expect((result as { updated: unknown[] }).updated).toHaveLength(1);
+  expect((await caller(userId).get({ sandboxId: sandbox.id })).status).toBe("paused");
+  const sessions = await db
+    .select()
+    .from(usageSession)
+    .where(eq(usageSession.workspaceId, sandbox.id));
+  expect(sessions[0]!.stoppedAt).not.toBeNull();
+});
+
+integration("#5 a signed Boat archive webhook pauses a Boat sandbox", async () => {
+  await terminateAll(userId);
+  const sandbox = await caller(userId).create({
+    provider: "boat",
+    name: "boat-webhook",
+    lifetimeMinutes: 5,
+  });
+  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  expect(row!.externalInstanceId).toStartWith("sandbox:boat:");
+  const boxId = row!.externalInstanceId.split(":").at(-1)!;
+  const event = {
+    id: randomUUID(),
+    type: "box.archived",
+    createdAt: new Date(Date.now() + 1_000).toISOString(),
+    data: { box: { id: boxId } },
+  };
+  const rawBody = JSON.stringify(event);
+  const delivery = randomUUID();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = `v1=${createHmac("sha256", WEBHOOK_SECRET).update(`${delivery}.${timestamp}.${rawBody}`).digest("hex")}`;
+  const result = await internal().processBoatWebhook({
+    ...event,
+    rawBody,
+    delivery,
+    timestamp,
+    signature,
+  } as never);
+  expect((result as { updated: unknown[] }).updated).toHaveLength(1);
+  expect((await caller(userId).get({ sandboxId: sandbox.id })).status).toBe("paused");
+});
+
+integration("#6 concurrent creates cannot exceed the plan's workspace limit", async () => {
+  await terminateAll(userId);
+  workspaceLimit = 1;
+  try {
+    const results = await Promise.allSettled(
+      [1, 2, 3].map((index) =>
+        caller(userId).create({ name: `race-${index}`, lifetimeMinutes: 5 }),
+      ),
+    );
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+  } finally {
+    workspaceLimit = 2;
+    await terminateAll(userId);
+  }
+});
+
+const handleOf = async (id: string) =>
+  (await db.select().from(workspace).where(eq(workspace.id, id)))[0]!.externalInstanceId;
+
+integration(
+  "#4 reconcile never clears a provider handle on the provider's word alone",
+  async () => {
+    await terminateAll(userId);
+    const sandbox = await caller(userId).create({ name: "reconcile", lifetimeMinutes: 5 });
+    const handle = await handleOf(sandbox.id);
+    providerStates.set(handle.split(":").at(-1)!, "terminated");
+    const seen = await caller(userId).get({ sandboxId: sandbox.id });
+    // Billing stops, but deletion is only recorded once cleanup confirms it.
+    expect(seen.status).toBe("terminated");
+    expect(seen.deleted).toBe(false);
+    expect(await handleOf(sandbox.id)).toBe(handle);
+    expect(
+      await db
+        .select()
+        .from(workspaceTermination)
+        .where(eq(workspaceTermination.workspaceId, sandbox.id)),
+    ).toHaveLength(1);
+  },
+);
+
+integration(
+  "#5 terminate reports deletion only after the provider confirms it",
+  async () => {
+    await terminateAll(userId);
+    const sandbox = await caller(userId).create({ name: "confirm", lifetimeMinutes: 5 });
+    acceptOnlyDestroys = true;
+    try {
+      await expect(caller(userId).terminate({ sandboxId: sandbox.id })).rejects.toThrow();
+      expect((await caller(userId).get({ sandboxId: sandbox.id })).deleted).toBe(false);
+      expect(await handleOf(sandbox.id)).not.toBe("");
+      expect(
+        await db
+          .select()
+          .from(workspaceTermination)
+          .where(eq(workspaceTermination.workspaceId, sandbox.id)),
+      ).toHaveLength(1);
+    } finally {
+      acceptOnlyDestroys = false;
+    }
+    // Once the provider reports it gone, a retry confirms and completes cleanup.
+    providerStates.set((await handleOf(sandbox.id)).split(":").at(-1)!, "terminated");
+    expect(await caller(userId).terminate({ sandboxId: sandbox.id })).toMatchObject({
+      deleted: true,
+    });
+    expect(await handleOf(sandbox.id)).toBe("");
+  },
+  60_000,
+);
+
+integration("#4 AWS status errors are failures, not deletions", async () => {
+  const { createAwsSandboxTransport } = await import("../providers/aws/sandbox");
+  const { AwsProvider } = await import("../providers/aws");
+  const denied = Object.assign(
+    new Error("User is not authorized to perform: ecs:DescribeServices"),
+    {
+      name: "AccessDeniedException",
+    },
+  );
+  const spy = spyOn(AwsProvider.prototype, "getStatus").mockRejectedValue(denied);
+  try {
+    await expect(createAwsSandboxTransport("aws-provider").info("{}")).rejects.toThrow(
+      /not authorized/,
+    );
+  } finally {
+    spy.mockRestore();
+  }
+});

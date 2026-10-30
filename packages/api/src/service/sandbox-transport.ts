@@ -1,4 +1,6 @@
 import { TRPCError } from "@trpc/server";
+import { inArray } from "@gitterm/db";
+import { workspace } from "@gitterm/db/schema/workspace";
 import {
   createSandboxTransport,
   SANDBOX_PROVIDERS,
@@ -16,6 +18,14 @@ const HANDLE_PREFIX = "sandbox:";
 
 export function sandboxHandle(provider: SandboxProviderKey, id: string): string {
   return `${HANDLE_PREFIX}${provider}:${id}`;
+}
+
+/**
+ * Matches a workspace by the provider's own id, whether it stores the bare id (agent
+ * workspaces) or a sandbox handle. Provider webhooks only know the bare id.
+ */
+export function externalIdMatches(provider: SandboxProviderKey, providerId: string) {
+  return inArray(workspace.externalInstanceId, [providerId, sandboxHandle(provider, providerId)]);
 }
 
 export function parseSandboxHandle(

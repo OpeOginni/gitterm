@@ -135,7 +135,8 @@ export function createDaytonaSandboxTransport(config: {
 
     async destroy(id) {
       try {
-        await (await client.get(id)).delete();
+        // Wait for Daytona to finish; by default delete() returns once it is accepted.
+        await (await client.get(id)).delete(180, true);
       } catch (error) {
         const classified = failure(error, "delete the sandbox");
         if (classified.code !== "not_found") throw classified;

@@ -1,6 +1,7 @@
 import { and, db, eq, inArray, ne } from "@gitterm/db";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 import { workspace } from "@gitterm/db/schema/workspace";
+import { withSandboxHandles } from "../sandbox-handles";
 import { AwsProvider, type AwsCleanupFailure } from ".";
 import { updateWorkspaceRoutingAndInvalidate } from "../../service/workspace-mutations";
 import { closeOpenUsageSessions } from "../../utils/metering";
@@ -86,9 +87,11 @@ export async function runAwsCleanupSweep(): Promise<AwsSweepResult> {
   let retriedWorkspaces = 0;
   for (const terminatedWorkspace of terminatedAwsWorkspaces) {
     try {
-      await new AwsProvider(terminatedWorkspace.cloudProviderId).terminateWorkspace(
-        terminatedWorkspace.externalInstanceId,
-      );
+      // Sandbox handles go to the sandbox transport; agent workspaces to the provider.
+      await withSandboxHandles(
+        new AwsProvider(terminatedWorkspace.cloudProviderId),
+        terminatedWorkspace.cloudProviderId,
+      ).terminateWorkspace(terminatedWorkspace.externalInstanceId);
       await updateWorkspaceRoutingAndInvalidate(terminatedWorkspace.id, {
         externalInstanceId: "",
         externalRunningDeploymentId: null,

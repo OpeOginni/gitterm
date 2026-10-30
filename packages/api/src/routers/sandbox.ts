@@ -3,7 +3,7 @@ import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, db, desc, eq, inArray, or } from "@gitterm/db";
 import { agentType, cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
-import { workspace } from "@gitterm/db/schema/workspace";
+import { workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
 import {
   SANDBOX_PROVIDER_PROFILES,
   SANDBOX_PROVIDERS,
@@ -25,8 +25,11 @@ import { reserveWorkspace, settleWorkspaceProvisioning } from "../service/worksp
 import { createUsageSession } from "../utils/metering";
 import { recordWorkspaceActivity } from "../service/workspace-activity";
 import { getWorkspaceIdleTimeoutMs } from "../service/workspace-timeouts";
-import { processWorkspaceTermination, terminateWorkspace } from "../service/workspace-termination";
-import { updateWorkspaceByIdAndInvalidate } from "../service/workspace-mutations";
+import { processWorkspaceTermination } from "../service/workspace-termination";
+import {
+  updateWorkspaceByIdAndInvalidate,
+  updateWorkspaceStatusAndInvalidate,
+} from "../service/workspace-mutations";
 import { workspaceMetadataSchema } from "./workspace/managment";
 import { isAnonEmail } from "../service/anon/anon-user";
 
@@ -92,10 +95,15 @@ function toTRPCError(error: unknown): never {
   throw error;
 }
 
+const limitMessage = (limit: number | null) =>
+  `You've reached your plan limit of ${limit} workspaces and sandboxes.`;
+
 function present({ workspace: row, provider }: SandboxRow) {
   return {
     id: row.id,
     provider,
+    /** Terminated in Gitterm and confirmed deleted at the provider (the handle is cleared only then). */
+    deleted: row.status === "terminated" && row.externalInstanceId === "",
     name: row.name,
     status: row.status,
     metadata: row.metadata,
@@ -106,6 +114,40 @@ function present({ workspace: row, provider }: SandboxRow) {
     expiresAt: row.autoTerminateAt?.toISOString() ?? null,
     machineProfileId: row.machineProfileId,
   };
+}
+
+/**
+ * Providers without lifecycle webhooks (Vercel, exe.dev, AWS) can pause or delete a
+ * sandbox on their own. Settle status and usage from the provider when asked.
+ */
+async function reconcile(row: SandboxRow): Promise<SandboxRow> {
+  if (row.workspace.status !== "running") return row;
+  const handle = parseSandboxHandle(row.workspace.externalInstanceId);
+  if (!handle) return row;
+  let state: string;
+  try {
+    const transport = await managedSandboxTransport(handle.provider, row.workspace.cloudProviderId);
+    state = (await transport.info(handle.id)).state;
+  } catch {
+    return row; // Provider unreachable: report what Gitterm knows.
+  }
+  if (state !== "paused" && state !== "terminated") return row;
+  const now = new Date();
+  // These helpers close the usage session for a stopped workspace. A reported deletion
+  // keeps the provider handle: only queued cleanup, which confirms with the provider,
+  // clears it, so a wrong or partial answer can never orphan a billable resource.
+  await updateWorkspaceStatusAndInvalidate(
+    and(eq(workspace.id, row.workspace.id), eq(workspace.status, "running")),
+    state === "paused"
+      ? { status: "paused", pausedAt: now, updatedAt: now }
+      : { status: "terminated", terminatedAt: now, updatedAt: now },
+  );
+  if (state === "terminated")
+    await db
+      .insert(workspaceTermination)
+      .values({ workspaceId: row.workspace.id })
+      .onConflictDoNothing();
+  return loadSandbox(row.workspace.userId, row.workspace.id);
 }
 
 /** Another user's id, or a non-sandbox workspace, is indistinguishable from a missing one. */
@@ -244,7 +286,7 @@ export const sandboxRouter = router({
         if (active.length >= entitlements.maxWorkspaces)
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: `You've reached your plan limit of ${entitlements.maxWorkspaces} workspaces and sandboxes.`,
+            message: limitMessage(entitlements.maxWorkspaces),
           });
       }
 
@@ -271,6 +313,11 @@ export const sandboxRouter = router({
           updatedAt: now,
         },
         null,
+        // Authoritative: checked under a per-user lock with the insert.
+        {
+          maxActive: entitlements.maxWorkspaces,
+          message: limitMessage(entitlements.maxWorkspaces),
+        },
       );
 
       let externalId: string;
@@ -342,9 +389,10 @@ export const sandboxRouter = router({
 
   get: accountProcedure("workspace:read")
     .input(sandboxIdSchema)
-    .query(async ({ input, ctx }) =>
-      present(await loadSandbox(ctx.session.user.id, input.sandboxId)),
-    ),
+    .query(async ({ input, ctx }) => {
+      const row = await loadSandbox(ctx.session.user.id, input.sandboxId);
+      return present(await reconcile(row));
+    }),
 
   run: accountProcedure("workspace:access")
     .input(
@@ -394,6 +442,17 @@ export const sandboxRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { transport, id } = await loadRunningSandbox(ctx.session.user.id, input.sandboxId);
       try {
+        // Checked before reading so an oversized file is never buffered in the API.
+        const size = await transport.run(id, `wc -c < '${input.path.replaceAll("'", `'"'"'`)}'`, {
+          timeoutMs: 30_000,
+        });
+        if (size.exitCode !== 0)
+          throw new TRPCError({ code: "NOT_FOUND", message: "File not found" });
+        if (Number(size.stdout.trim()) > MAX_READ_BYTES)
+          throw new TRPCError({
+            code: "PAYLOAD_TOO_LARGE",
+            message: "Managed sandboxes return files up to 32 MiB",
+          });
         const bytes = await transport.readFile(id, input.path);
         if (bytes.byteLength > MAX_READ_BYTES)
           throw new TRPCError({
@@ -421,7 +480,30 @@ export const sandboxRouter = router({
     .input(sandboxIdSchema)
     .mutation(async ({ input, ctx }) => {
       const { workspace: record } = await loadSandbox(ctx.session.user.id, input.sandboxId);
-      if (record.status !== "terminated") await terminateWorkspace(record.userId, record.id, false);
-      return { success: true as const };
+      // Done only once the provider confirmed deletion (the handle is cleared then).
+      if (record.status === "terminated" && !record.externalInstanceId)
+        return { success: true as const, deleted: true as const };
+      // Queue first: if provider deletion fails, the worker retries it from this row.
+      await db
+        .insert(workspaceTermination)
+        .values({ workspaceId: record.id })
+        .onConflictDoNothing();
+      let completed: boolean;
+      try {
+        completed = await processWorkspaceTermination(record.userId, record.id);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message:
+            "The provider did not confirm deletion. Cleanup is queued and retried automatically; call terminate again to retry now.",
+          cause: error,
+        });
+      }
+      if (!completed)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Deletion is already in progress. Retry shortly to confirm it.",
+        });
+      return { success: true as const, deleted: true as const };
     }),
 });

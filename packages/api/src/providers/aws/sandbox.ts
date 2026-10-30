@@ -14,6 +14,7 @@ import {
   type SandboxTransport,
 } from "@gitterm/agent-runtime/sandbox/types";
 import { AWS_ROUTING_HEADER, AwsProvider, buildWorkspaceHost } from "./index";
+import { isProviderResourceNotFound } from "../resource-not-found";
 
 export const AWS_SANDBOX_IMAGE = "public.ecr.aws/docker/library/node:22-bookworm-slim";
 
@@ -49,8 +50,10 @@ export function createAwsSandboxTransport(cloudProviderId: string): SandboxTrans
     try {
       const status = await provider.getStatus(id);
       return { id, state: status.status, labels: {}, startedAt: null, expiresAt: null };
-    } catch {
-      return terminated(id);
+    } catch (error) {
+      // Only a missing resource is a deletion; permission or network failures are failures.
+      if (isProviderResourceNotFound(error)) return terminated(id);
+      throw error;
     }
   }
 

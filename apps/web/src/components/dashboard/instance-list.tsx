@@ -198,7 +198,7 @@ export function InstanceCard({
       onSuccess: (data) => {
         toast.success(
           data.cleanupInBackground
-            ? "Workspace removed. AWS cleanup is continuing in the background."
+            ? "Workspace removed. Cloud cleanup is continuing in the background."
             : "Workspace terminated successfully",
         );
         queryClient.invalidateQueries({
