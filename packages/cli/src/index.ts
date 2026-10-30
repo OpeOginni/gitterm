@@ -13,6 +13,20 @@ import {
 } from "./cmd/workspace.js";
 import { handleError } from "./ui.js";
 import {
+  runSandboxAccount,
+  runSandboxApply,
+  runSandboxArtifact,
+  runSandboxCancel,
+  runSandboxCreate,
+  runSandboxDestroy,
+  runSandboxExec,
+  runSandboxJob,
+  runSandboxList,
+  runSandboxPreview,
+  runSandboxResume,
+  runSandboxSync,
+} from "./cmd/sandbox.js";
+import {
   runCurrentWorkspaceInfo,
   runPortClose,
   runPortList,
@@ -26,6 +40,11 @@ const jsonOption = {
     description: "Output machine-readable JSON",
     default: false,
   },
+};
+
+const sandboxOptions = {
+  ...jsonOption,
+  account: { type: "string" as const, description: "Sandbox account from the settings file" },
 };
 
 const cli = yargs(hideBin(process.argv)).scriptName("gitterm").usage("$0 <command> [options]");
@@ -138,6 +157,135 @@ if (workspaceEnvironment) {
           },
         )
         .demandCommand(1, "Please specify an auth command")
+        .strict(),
+    )
+    .command(["sandbox", "sb"], "Run commands in remote sandboxes (no remote agent)", (sandbox) =>
+      sandbox
+        .options(sandboxOptions)
+        .command(
+          "account",
+          "Show the selected mode, account, and who is charged",
+          (b) => b.options(sandboxOptions),
+          (argv) => runSandboxAccount(argv),
+        )
+        .command(
+          "create",
+          "Create a billable sandbox",
+          (b) =>
+            b.options({
+              name: { type: "string" },
+              lifetime: { type: "number", description: "Minutes until deletion" },
+              public: { type: "boolean", description: "Public previews (fixed at creation)" },
+              yes: { alias: "y", type: "boolean", description: "Approve without prompting" },
+            }),
+          (argv) => runSandboxCreate(argv),
+        )
+        .command(
+          "list",
+          "List live sandboxes for the account",
+          (b) => b.options(sandboxOptions),
+          (argv) => runSandboxList(argv),
+        )
+        .command(
+          "sync <sandboxId>",
+          "Upload the current checkout (including uncommitted changes)",
+          (b) =>
+            b.positional("sandboxId", { type: "string", demandOption: true }).options({
+              dir: { type: "string", description: "Checkout directory (default: cwd)" },
+              yes: { alias: "y", type: "boolean" },
+            }),
+          (argv) => runSandboxSync(argv),
+        )
+        .command(
+          "exec <sandboxId> <command>",
+          "Run a command as a durable job",
+          (b) =>
+            b
+              .positional("sandboxId", { type: "string", demandOption: true })
+              .positional("command", { type: "string", demandOption: true })
+              .options({
+                cwd: { type: "string" },
+                timeout: { type: "number", description: "Minutes before the job is killed" },
+                wait: {
+                  type: "number",
+                  description: "Seconds to wait for completion (default 60)",
+                },
+              }),
+          (argv) => runSandboxExec(argv),
+        )
+        .command(
+          "job <sandboxId> <jobId>",
+          "Show job status and output",
+          (b) =>
+            b
+              .positional("sandboxId", { type: "string", demandOption: true })
+              .positional("jobId", { type: "string", demandOption: true })
+              .options({
+                offset: { type: "number" },
+                limit: { type: "number" },
+                wait: { type: "number", description: "Seconds to wait for completion" },
+              }),
+          (argv) => runSandboxJob(argv),
+        )
+        .command(
+          "cancel <sandboxId> <jobId>",
+          "Cancel a running job",
+          (b) =>
+            b
+              .positional("sandboxId", { type: "string", demandOption: true })
+              .positional("jobId", { type: "string", demandOption: true }),
+          (argv) => runSandboxCancel(argv),
+        )
+        .command(
+          "preview <sandboxId> <port>",
+          "Wait for a port to answer and print its URL",
+          (b) =>
+            b
+              .positional("sandboxId", { type: "string", demandOption: true })
+              .positional("port", { type: "number", demandOption: true })
+              .options({
+                command: { type: "string", description: "Server command to start first" },
+                serve: {
+                  type: "boolean",
+                  description: "Serve a private preview on a loopback URL",
+                },
+              }),
+          (argv) => runSandboxPreview(argv),
+        )
+        .command(
+          "artifact <sandboxId> <jobId> <path>",
+          "Download a file a job produced into a local staging directory",
+          (b) =>
+            b
+              .positional("sandboxId", { type: "string", demandOption: true })
+              .positional("jobId", { type: "string", demandOption: true })
+              .positional("path", { type: "string", demandOption: true }),
+          (argv) => runSandboxArtifact(argv),
+        )
+        .command(
+          "apply <sandboxId> <artifact> <target>",
+          "Copy a downloaded artifact into its job's checkout (refuses stale targets)",
+          (b) =>
+            b
+              .positional("sandboxId", { type: "string", demandOption: true })
+              .positional("artifact", { type: "string", demandOption: true })
+              .positional("target", { type: "string", demandOption: true })
+              .options({ yes: { alias: "y", type: "boolean" } }),
+          (argv) => runSandboxApply(argv),
+        )
+        .command(
+          "resume <sandboxId>",
+          "Resume a managed sandbox paused for inactivity",
+          (b) => b.positional("sandboxId", { type: "string", demandOption: true }),
+          (argv) => runSandboxResume(argv),
+        )
+        .command(
+          "destroy <sandboxId>",
+          "Delete a sandbox and confirm it is gone",
+          (b) => b.positional("sandboxId", { type: "string", demandOption: true }),
+          (argv) => runSandboxDestroy(argv),
+        )
+        .demandCommand(1, "Please specify a sandbox command")
         .strict(),
     )
     .command(["workspace", "ws"], "Manage workspaces", (workspace) =>

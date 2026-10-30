@@ -11,7 +11,11 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencode/client": "2.2.1"
+    "@asciidev/box-sdk": "^0.0.34",
+    "@daytonaio/sdk": "^0.207.0",
+    "@opencode/client": "2.2.1",
+    "@vercel/sandbox": "^3.2.1",
+    "e2b": "^2.46.1"
   },
   "devDependencies": {
     "@gitterm/config": "workspace:*",

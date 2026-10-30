@@ -161,6 +161,48 @@ use a standalone or custom server, set `localServerUrl` to its loopback URL and
 `GITTERM_OPENCODE_LOCAL_SERVER_URL` and
 `GITTERM_OPENCODE_LOCAL_SERVER_PASSWORD` before starting OpenCode.
 
+## Run commands in a remote sandbox
+
+The plugin also gives the local agent sandbox tools: `sandbox_create`, `sandbox_list`,
+`sandbox_sync`, `sandbox_exec`, `sandbox_job`, `sandbox_cancel`, `sandbox_preview`,
+`sandbox_artifact`, `sandbox_apply`, `sandbox_resume`, `sandbox_destroy`, and `sandbox_account`. The
+conversation and your files stay local. Commands run in a separate sandbox with no
+coding agent or model credentials. Local shell execution and `/cloud` are unchanged.
+
+Configure an account under `sandbox` in the plugin options. Bring your own provider
+credential (E2B, Daytona, Vercel, Boat, exe.dev, or Railway) with
+OpenCode's substitution, or use your Gitterm plan with `"mode": "managed"`:
+
+```jsonc
+{
+  "plugins": [
+    {
+      "package": "@gitterm/opencode-plugin",
+      "options": {
+        "sandbox": {
+          "account": "e2b",
+          "accounts": {
+            "e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
+            "gitterm": { "mode": "managed" },
+          },
+          "limits": { "maxSandboxes": 2, "maxLifetimeMinutes": 60 },
+        },
+      },
+    },
+  ],
+}
+```
+
+A direct account needs no Gitterm login, and the provider bills your own account. Creating,
+uploading, running, passing secrets, public previews, and writing artifacts into the
+checkout ask for permission. You can approve routine work once with `permissions` rules,
+for example `{ "action": "gitterm.sandbox.exec", "resource": "direct:e2b:*", "effect": "allow" }`.
+When you load the plugin from a local path, point `package` at the package directory,
+not a file.
+
+See [Agent sandboxes](../../docs/agent-sandboxes.md) for credentials, charges, cleanup,
+and limits.
+
 ## Limits and privacy
 
 - Checkout snapshots and conversation history are each limited to **25 MiB**.

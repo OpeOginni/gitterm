@@ -57,6 +57,8 @@ import type {
   McpConnectionDetails,
   McpConnectionTestResult,
   UpdateMcpConnectionInput,
+  ManagedSandbox,
+  ManagedSandboxCreateInput,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl, trpcEndpoint } from "./transport.js";
 import { runHelpers } from "./runs.js";
@@ -172,6 +174,28 @@ export type GittermClient = {
     wait(run: RunRef, options?: RunWaitOptions): Promise<AgentRun>;
     events(run: RunRef, options?: RunWatchOptions): AsyncIterable<AgentRunEvent>;
     result(run: RunRef, options?: RunResultOptions): Promise<AgentRunResult>;
+  };
+  /** Plain command sandboxes billed to this account. Higher-level jobs live in `@gitterm/sdk/sandbox`. */
+  sandboxes: {
+    create(input: ManagedSandboxCreateInput): Promise<ManagedSandbox>;
+    list(input?: { includeTerminated?: boolean }): Promise<ManagedSandbox[]>;
+    get(sandboxId: string): Promise<ManagedSandbox>;
+    /** A non-zero exit is returned, not thrown. At most two minutes; use jobs for longer work. */
+    run(
+      sandboxId: string,
+      command: string,
+      options?: { cwd?: string; timeoutMs?: number; env?: Record<string, string> },
+    ): Promise<{ exitCode: number; stdout: string; stderr: string }>;
+    writeFile(sandboxId: string, path: string, data: Uint8Array): Promise<void>;
+    readFile(sandboxId: string, path: string): Promise<Uint8Array>;
+    /** `headers` holds a sandbox-scoped access value for private previews. */
+    preview(
+      sandboxId: string,
+      port: number,
+    ): Promise<{ url: string; headers: Record<string, string> }>;
+    /** Resume a sandbox paused for inactivity. Subject to the same quota checks as creation. */
+    resume(sandboxId: string): Promise<void>;
+    terminate(sandboxId: string): Promise<void>;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
@@ -723,6 +747,44 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         run(async () => trpc.workspace.getSetupStatus.query({ workspaceId: workspaceIdOf(ref) })),
       waitForSetup: (ref: WorkspaceRef, waitOptions?: WaitOptions) =>
         run(() => waitForWorkspaceSetup(workspaceIdOf(ref), waitOptions)),
+    },
+    sandboxes: {
+      create: (input) => run(() => trpc.sandbox.create.mutate(input)),
+      list: (input) => run(() => trpc.sandbox.list.query(input)),
+      get: (sandboxId) => run(() => trpc.sandbox.get.query({ sandboxId })),
+      run: (sandboxId, command, options) =>
+        run(async () => {
+          const result = await trpc.sandbox.run.mutate({ sandboxId, command, ...options });
+          if (!result) throw new GittermError("SERVER_ERROR", "Sandbox command returned no result");
+          return result;
+        }),
+      writeFile: (sandboxId, path, data) =>
+        run(async () => {
+          await trpc.sandbox.writeFile.mutate({
+            sandboxId,
+            path,
+            contentBase64: Buffer.from(data).toString("base64"),
+          });
+        }),
+      readFile: (sandboxId, path) =>
+        run(async () => {
+          const result = await trpc.sandbox.readFile.mutate({ sandboxId, path });
+          return new Uint8Array(Buffer.from(result?.contentBase64 ?? "", "base64"));
+        }),
+      preview: (sandboxId, port) =>
+        run(async () => {
+          const result = await trpc.sandbox.preview.mutate({ sandboxId, port });
+          if (!result) throw new GittermError("SERVER_ERROR", "Sandbox preview returned no result");
+          return result;
+        }),
+      resume: (sandboxId) =>
+        run(async () => {
+          await trpc.workspace.restartWorkspace.mutate({ workspaceId: sandboxId });
+        }),
+      terminate: (sandboxId) =>
+        run(async () => {
+          await trpc.sandbox.terminate.mutate({ sandboxId });
+        }),
     },
     runs: {
       create: (input: AgentRunCreateInput) =>

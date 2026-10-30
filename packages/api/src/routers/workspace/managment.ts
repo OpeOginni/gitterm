@@ -165,7 +165,7 @@ import {
   storeWorkspaceRuntimeBundle,
 } from "../../service/workspace-runtime-bundle";
 import {
-  terminateWorkspace,
+  deleteWorkspaceForUser,
   processWorkspaceTermination,
 } from "../../service/workspace-termination";
 import {
@@ -2973,6 +2973,15 @@ export const workspaceRouter = router({
             idempotencyKey: idempotencyKey ?? null,
           },
           ctx.botIdentity,
+          // Re-checked under a lock: the count above can race a concurrent create.
+          {
+            maxActive: workspaceLimit,
+            message:
+              `You've reached your plan limit of ${workspaceLimit} workspaces.` +
+              (billing.enabled
+                ? " Delete some workspaces or upgrade for more."
+                : " Delete some workspaces to create new ones."),
+          },
         );
         workspaceReservedBeforeProvision = true;
         if (attached.mcp.length) {
@@ -4083,7 +4092,7 @@ export const workspaceRouter = router({
   // Delete a workspace
   deleteWorkspace: accountProcedure("workspace:write")
     .input(z.object({ workspaceId: z.string() }))
-    .mutation(({ input, ctx }) => terminateWorkspace(ctx.session.user.id, input.workspaceId)),
+    .mutation(({ input, ctx }) => deleteWorkspaceForUser(ctx.session.user.id, input.workspaceId)),
 
   openWorkspacePort: protectedProcedure
     .input(

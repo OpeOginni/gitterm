@@ -265,6 +265,8 @@ export interface DaytonaImageProviderMetadata {
 }
 
 export interface AwsImageProviderMetadata {
+  /** Overrides the image's default command (plain sandboxes start a command server). */
+  command?: string[];
   cpu?: number;
   memory?: number;
   containerPort?: number;

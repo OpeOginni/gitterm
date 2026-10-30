@@ -27,6 +27,7 @@ import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { daytonaWebhookSchema, verifyDaytonaWebhookSignature } from "../daytona/webhook";
 import type { DaytonaConfig } from "../../providers/daytona/types";
 import { boatWebhookBoxId, boatWebhookSchema, verifyBoatWebhookSignature } from "../boat/webhook";
+import { externalIdMatches, sandboxHandle } from "../../service/sandbox-transport";
 import type { BoatConfig } from "../../providers/boat/types";
 import { getProviderConfigService } from "../../service/config/provider-config";
 import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
@@ -542,7 +543,7 @@ export const internalRouter = router({
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, railwayProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
+            externalIdMatches("railway", serviceId),
             or(
               eq(workspace.status, "pending"),
               and(eq(workspace.status, "running"), isNull(workspace.externalRunningDeploymentId)),
@@ -576,7 +577,7 @@ export const internalRouter = router({
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, railwayProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
+            externalIdMatches("railway", serviceId),
             // A late failure webhook must not undo explicit deletion.
             sql`${workspace.status} <> 'terminated'`,
           ),
@@ -647,7 +648,7 @@ export const internalRouter = router({
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, e2bProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
+            externalIdMatches("e2b", serviceId),
             or(eq(workspace.status, "paused"), eq(workspace.status, "pending")),
           ),
           {
@@ -677,7 +678,7 @@ export const internalRouter = router({
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, e2bProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
+            externalIdMatches("e2b", serviceId),
             eq(workspace.status, "running"),
             or(
               isNull(workspace.lastActiveAt),
@@ -718,10 +719,7 @@ export const internalRouter = router({
         }
 
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
-          and(
-            eq(workspace.cloudProviderId, e2bProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
-          ),
+          and(eq(workspace.cloudProviderId, e2bProvider.id), externalIdMatches("e2b", serviceId)),
           {
             status: "terminated",
             updatedAt: new Date(input.timestamp),
@@ -826,7 +824,7 @@ export const internalRouter = router({
         const updated = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, daytonaProvider.id),
-            eq(workspace.externalInstanceId, sandboxId),
+            externalIdMatches("daytona", sandboxId),
             or(eq(workspace.status, "paused"), eq(workspace.status, "pending")),
           ),
           { status: "running", updatedAt: eventDate },
@@ -839,7 +837,7 @@ export const internalRouter = router({
         const updated = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, daytonaProvider.id),
-            eq(workspace.externalInstanceId, sandboxId),
+            externalIdMatches("daytona", sandboxId),
             eq(workspace.status, "running"),
           ),
           { status: "paused", updatedAt: eventDate },
@@ -866,7 +864,7 @@ export const internalRouter = router({
         const updated = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, daytonaProvider.id),
-            eq(workspace.externalInstanceId, sandboxId),
+            externalIdMatches("daytona", sandboxId),
             // Don't churn already-terminated rows on the second event.
             or(
               eq(workspace.status, "running"),
@@ -960,6 +958,7 @@ export const internalRouter = router({
         );
       const ids = candidates
         .filter((candidate) => {
+          if (candidate.externalInstanceId === sandboxHandle("boat", boxId)) return true;
           try {
             return JSON.parse(candidate.externalInstanceId).boxId === boxId;
           } catch {
