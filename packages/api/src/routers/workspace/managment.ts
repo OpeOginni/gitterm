@@ -59,13 +59,13 @@ import { getWorkspaceDomain } from "../../utils/routing";
 
 function decryptServerPasswordSafe(
   encrypted: string | null | undefined,
-  workspaceId: string,
+  identity: { id: string; userId: string },
 ): string | null {
   if (!encrypted) return null;
   try {
-    return decryptWorkspacePassword(encrypted);
+    return decryptWorkspacePassword(encrypted, identity);
   } catch (error) {
-    console.error(`Failed to decrypt password for workspace ${workspaceId}:`, error);
+    console.error(`Failed to decrypt password for workspace ${identity.id}:`, error);
     return null;
   }
 }
@@ -191,7 +191,7 @@ async function completeWorkspaceRestart(
       updatedAt: now,
       ...(result?.upstreamUrl ? { upstreamUrl: result.upstreamUrl } : {}),
       ...(result?.accessCredential
-        ? { serverPassword: encryptWorkspacePassword(result.accessCredential) }
+        ? { serverPassword: encryptWorkspacePassword(result.accessCredential, record) }
         : {}),
     },
     null,
@@ -220,9 +220,12 @@ async function completeWorkspaceRestart(
 }
 
 function readWorkspaceEnvironmentRow(row: {
+  id: string;
+  userId: string;
+  agentTypeId: string;
   environmentVariables: unknown;
 }): Record<string, string> {
-  return openWorkspaceEnvironment(row.environmentVariables);
+  return openWorkspaceEnvironment(row.environmentVariables, row);
 }
 
 function shellQuote(value: string): string {
@@ -1146,14 +1149,14 @@ export const workspaceRouter = router({
     .mutation(async ({ ctx, input }) => {
       const workspaceRecord = await db.query.workspace.findFirst({
         where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, ctx.session.user.id)),
-        columns: { id: true, serverPassword: true },
+        columns: { id: true, userId: true, serverPassword: true },
       });
       if (!workspaceRecord) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
       }
       ctx.honoContext.header("Cache-Control", "no-store, private");
       return {
-        credential: decryptServerPasswordSafe(workspaceRecord.serverPassword, workspaceRecord.id),
+        credential: decryptServerPasswordSafe(workspaceRecord.serverPassword, workspaceRecord),
       };
     }),
 
@@ -1229,7 +1232,7 @@ export const workspaceRouter = router({
       }
 
       await updateWorkspaceByIdAndInvalidate(input.workspaceId, {
-        serverPassword: encryptWorkspacePassword(credential),
+        serverPassword: encryptWorkspacePassword(credential, workspaceRecord),
       });
 
       ctx.honoContext.header("Cache-Control", "no-store, private");
@@ -1381,7 +1384,10 @@ export const workspaceRouter = router({
           const [updatedVars] = await db
             .update(workspaceEnvironmentVariables)
             .set({
-              environmentVariables: sealWorkspaceEnvironment(input.environmentVariables),
+              environmentVariables: sealWorkspaceEnvironment(
+                input.environmentVariables,
+                existingVars[0]!,
+              ),
               updatedAt: new Date(),
             })
             .where(eq(workspaceEnvironmentVariables.id, existingVars[0]!.id))
@@ -1393,18 +1399,21 @@ export const workspaceRouter = router({
             environmentVariables: updatedVars
               ? {
                   ...updatedVars,
-                  environmentVariables: maskWorkspaceEnvironment(updatedVars.environmentVariables),
+                  environmentVariables: maskWorkspaceEnvironment(
+                    updatedVars.environmentVariables,
+                    updatedVars,
+                  ),
                 }
               : updatedVars,
           };
         } else {
           // Create new environment variables
+          const identity = { id: randomUUID(), userId, agentTypeId: input.agentTypeId };
           const [newVars] = await db
             .insert(workspaceEnvironmentVariables)
             .values({
-              userId,
-              agentTypeId: input.agentTypeId,
-              environmentVariables: sealWorkspaceEnvironment(input.environmentVariables),
+              ...identity,
+              environmentVariables: sealWorkspaceEnvironment(input.environmentVariables, identity),
             })
             .returning();
 
@@ -1414,7 +1423,10 @@ export const workspaceRouter = router({
             environmentVariables: newVars
               ? {
                   ...newVars,
-                  environmentVariables: maskWorkspaceEnvironment(newVars.environmentVariables),
+                  environmentVariables: maskWorkspaceEnvironment(
+                    newVars.environmentVariables,
+                    newVars,
+                  ),
                 }
               : newVars,
           };
@@ -1462,13 +1474,11 @@ export const workspaceRouter = router({
             message: "Environment variables not found for this agent type",
           });
         }
-        const opened = readWorkspaceEnvironmentRow(vars[0]!);
-
         return {
           success: true,
           environmentVariables: {
             ...vars[0]!,
-            environmentVariables: maskWorkspaceEnvironment(opened),
+            environmentVariables: maskWorkspaceEnvironment(vars[0]!.environmentVariables, vars[0]!),
           },
         };
       } catch (error) {
@@ -1497,13 +1507,12 @@ export const workspaceRouter = router({
         .select()
         .from(workspaceEnvironmentVariables)
         .where(eq(workspaceEnvironmentVariables.userId, userId));
-      const opened = vars.map((entry) => readWorkspaceEnvironmentRow(entry));
 
       return {
         success: true,
-        environmentVariables: vars.map((entry, index) => ({
+        environmentVariables: vars.map((entry) => ({
           ...entry,
-          environmentVariables: maskWorkspaceEnvironment(opened[index]),
+          environmentVariables: maskWorkspaceEnvironment(entry.environmentVariables, entry),
         })),
       };
     } catch (error) {
@@ -1606,14 +1615,14 @@ export const workspaceRouter = router({
         }
 
         const updatedEnvVars = {
-          ...openWorkspaceEnvironment(vars[0]!.environmentVariables),
+          ...readWorkspaceEnvironmentRow(vars[0]!),
           [input.key]: input.value,
         };
 
         const [updated] = await db
           .update(workspaceEnvironmentVariables)
           .set({
-            environmentVariables: sealWorkspaceEnvironment(updatedEnvVars),
+            environmentVariables: sealWorkspaceEnvironment(updatedEnvVars, vars[0]!),
             updatedAt: new Date(),
           })
           .where(eq(workspaceEnvironmentVariables.id, vars[0]!.id))
@@ -1625,7 +1634,10 @@ export const workspaceRouter = router({
           environmentVariables: updated
             ? {
                 ...updated,
-                environmentVariables: maskWorkspaceEnvironment(updated.environmentVariables),
+                environmentVariables: maskWorkspaceEnvironment(
+                  updated.environmentVariables,
+                  updated,
+                ),
               }
             : updated,
         };
@@ -1835,7 +1847,7 @@ export const workspaceRouter = router({
           const headers = await getWorkspaceRouteAccess(existing.id, null);
           let password: string | null = null;
           if (existing.serverPassword) {
-            password = decryptWorkspacePassword(existing.serverPassword);
+            password = decryptWorkspacePassword(existing.serverPassword, existing);
           }
           return {
             success: true,
@@ -2636,7 +2648,7 @@ export const workspaceRouter = router({
         let encryptedServerPassword: string | undefined;
 
         if (agentTypeRecord.serverOnly && agent.capabilities.access === "server-password") {
-          const passwordData = generateAndEncryptPassword();
+          const passwordData = generateAndEncryptPassword({ id: workspaceId, userId });
           serverPassword = passwordData.password;
           encryptedServerPassword = passwordData.encryptedPassword;
           workspaceCreateLogger.addSecrets([serverPassword]);
@@ -3041,7 +3053,10 @@ export const workspaceRouter = router({
         // SDK providers may have captured the agent's own access credential
         // (e.g. a T3 pairing token); it takes the server password's place.
         if (workspaceInfo.accessCredential) {
-          encryptedServerPassword = encryptWorkspacePassword(workspaceInfo.accessCredential);
+          encryptedServerPassword = encryptWorkspacePassword(workspaceInfo.accessCredential, {
+            id: workspaceId,
+            userId,
+          });
         }
 
         // Save workspace to database
@@ -3421,7 +3436,7 @@ export const workspaceRouter = router({
       let password: string | null = null;
       if (workspaceRecord.serverPassword) {
         try {
-          password = decryptWorkspacePassword(workspaceRecord.serverPassword);
+          password = decryptWorkspacePassword(workspaceRecord.serverPassword, workspaceRecord);
         } catch (error) {
           console.error(`Failed to decrypt password for workspace ${workspaceRecord.id}:`, error);
         }
@@ -3693,7 +3708,7 @@ export const workspaceRouter = router({
       let password: string | null = null;
       if (existingWorkspace.serverPassword) {
         try {
-          password = decryptWorkspacePassword(existingWorkspace.serverPassword);
+          password = decryptWorkspacePassword(existingWorkspace.serverPassword, existingWorkspace);
         } catch (error) {
           console.error(`Failed to decrypt password for workspace ${existingWorkspace.id}:`, error);
         }

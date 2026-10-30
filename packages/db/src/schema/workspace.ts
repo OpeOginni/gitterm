@@ -65,6 +65,8 @@ export interface WorkspaceSSHConnection {
   host: string;
   port: number;
   externalConnectionId?: string;
+  /** Encrypted provider token used only to revoke editor access. */
+  revocationToken?: string;
   expiresAt?: string;
 }
 

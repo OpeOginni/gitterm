@@ -7,9 +7,10 @@ import {
 
 describe("workspace environment secret storage", () => {
   test("encrypts values at rest and masks API representations", () => {
-    const stored = sealWorkspaceEnvironment({ API_TOKEN: "very-secret" });
+    const identity = { id: "environment", userId: "user", agentTypeId: "agent" };
+    const stored = sealWorkspaceEnvironment({ API_TOKEN: "very-secret" }, identity);
     expect(JSON.stringify(stored)).not.toContain("very-secret");
-    expect(openWorkspaceEnvironment(stored)).toEqual({ API_TOKEN: "very-secret" });
-    expect(maskWorkspaceEnvironment(stored)).toEqual({ API_TOKEN: "[REDACTED]" });
+    expect(openWorkspaceEnvironment(stored, identity)).toEqual({ API_TOKEN: "very-secret" });
+    expect(maskWorkspaceEnvironment(stored, identity)).toEqual({ API_TOKEN: "[REDACTED]" });
   });
 });

@@ -2,7 +2,7 @@ import { and, db, eq } from "@gitterm/db";
 import { modelProvider, userModelCredential } from "@gitterm/db/schema/model-credentials";
 import type { WorkspaceModelsInput } from "@gitterm/schema/workspace-models";
 import { TRPCError } from "@trpc/server";
-import { getEncryptionService } from "../encryption";
+import { encryptionContext, getEncryptionService } from "../encryption";
 import { OPENCODE_CREDENTIAL_LABEL } from "@gitterm/agent-runtime/opencode-credentials";
 import type { UserProviderCredential } from "./types";
 import { selectWorkspaceCredentials } from "./credential-selection";
@@ -100,6 +100,12 @@ export async function resolveWorkspaceProviderCredentials(options: {
                 selection.credential.logicalProviderKey in (options.models?.providers ?? {}),
               credential: getEncryptionService().decryptCredential(
                 selection.credential.encryptedCredential,
+                encryptionContext(
+                  "model-credential",
+                  options.userId,
+                  selection.credential.id,
+                  selection.credential.providerId,
+                ),
               ),
             },
     );

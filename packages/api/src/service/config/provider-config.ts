@@ -1,5 +1,6 @@
 import { db, eq, and, sql } from "@gitterm/db";
-import { getEncryptionService } from "../encryption";
+import { encryptionContext, getEncryptionService } from "../encryption";
+import { randomUUID } from "node:crypto";
 import { providerType, providerConfig } from "@gitterm/db/schema/provider-config";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
 
@@ -121,11 +122,16 @@ class ProviderConfigService {
       input.config,
     );
 
-    const encryptedCredentials = this.encryption.encrypt(JSON.stringify(encrypted));
+    const id = randomUUID();
+    const encryptedCredentials = this.encryption.encryptForRecord(
+      JSON.stringify(encrypted),
+      encryptionContext("provider-config", id, input.providerTypeId),
+    );
 
     const [newConfig] = await db
       .insert(providerConfig)
       .values({
+        id,
         providerTypeId: input.providerTypeId,
         name: input.name,
         encryptedCredentials,
@@ -188,7 +194,10 @@ class ProviderConfigService {
         existing.providerType.name,
         mergedConfig,
       );
-      encryptedCredentials = this.encryption.encrypt(JSON.stringify(encrypted));
+      encryptedCredentials = this.encryption.encryptForRecord(
+        JSON.stringify(encrypted),
+        encryptionContext("provider-config", existing.id, existing.providerTypeId),
+      );
       configMetadata = metadata;
     }
 
@@ -348,7 +357,10 @@ class ProviderConfigService {
   private decryptConfig(
     config: any & { providerType: { name: string; displayName: string; category: string } },
   ): DecryptedProviderConfig {
-    const credentials = this.encryption.decrypt(config.encryptedCredentials);
+    const credentials = this.encryption.decryptForRecord(
+      config.encryptedCredentials,
+      encryptionContext("provider-config", config.id, config.providerTypeId),
+    );
     const decryptedConfig = JSON.parse(credentials);
 
     const fullConfig = this.applyConfigDefaults(config.providerType.name, {

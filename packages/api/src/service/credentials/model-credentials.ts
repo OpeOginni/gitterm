@@ -6,6 +6,7 @@
  */
 
 import { db, eq, and } from "@gitterm/db";
+import { randomUUID } from "node:crypto";
 import {
   modelProvider,
   userModelCredential,
@@ -17,6 +18,7 @@ import {
   type ApiKeyCredential,
   type OAuthCredential,
   EncryptionService,
+  encryptionContext,
 } from "../encryption";
 import { normalizeModelProviderFields } from "@gitterm/schema/model-providers";
 
@@ -172,7 +174,11 @@ export class ModelCredentialsService {
     const normalizedLabel = await this.assertLabelAvailable(userId, provider.id, label);
 
     // Encrypt and hash
-    const encryptedCredential = this.encryption.encryptCredential(credential);
+    const id = randomUUID();
+    const encryptedCredential = this.encryption.encryptCredential(
+      credential,
+      encryptionContext("model-credential", userId, id, provider.id),
+    );
     const keyHash = this.encryption.hashForAudit(apiKey);
     const keySuffix = apiKeySuffix(apiKey);
 
@@ -188,6 +194,7 @@ export class ModelCredentialsService {
     const results = await db
       .insert(userModelCredential)
       .values({
+        id,
         userId,
         providerId: provider.id,
         logicalProviderKey: provider.logicalProviderKey,
@@ -252,7 +259,11 @@ export class ModelCredentialsService {
     const normalizedLabel = await this.assertLabelAvailable(userId, provider.id, label);
 
     // Encrypt and hash (hash the refresh token for audit)
-    const encryptedCredential = this.encryption.encryptCredential(credential);
+    const id = randomUUID();
+    const encryptedCredential = this.encryption.encryptCredential(
+      credential,
+      encryptionContext("model-credential", userId, id, provider.id),
+    );
     const keyHash = this.encryption.hashForAudit(refreshToken);
 
     // Calculate OAuth expiry timestamp
@@ -270,6 +281,7 @@ export class ModelCredentialsService {
     const results = await db
       .insert(userModelCredential)
       .values({
+        id,
         userId,
         providerId: provider.id,
         logicalProviderKey: provider.logicalProviderKey,
@@ -338,7 +350,10 @@ export class ModelCredentialsService {
       return null;
     }
 
-    const credential = this.encryption.decryptCredential(cred.encryptedCredential);
+    const credential = this.encryption.decryptCredential(
+      cred.encryptedCredential,
+      encryptionContext("model-credential", userId, cred.id, cred.providerId),
+    );
 
     return {
       id: cred.id,

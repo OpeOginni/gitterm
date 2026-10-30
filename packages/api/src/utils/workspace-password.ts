@@ -1,5 +1,11 @@
 import { randomBytes } from "crypto";
-import { getEncryptionService } from "../service/encryption";
+import { encryptionContext, getEncryptionService } from "../service/encryption";
+
+type WorkspaceIdentity = { id: string; userId: string };
+
+export function workspacePasswordContext(identity: WorkspaceIdentity): string {
+  return encryptionContext("workspace-password", identity.userId, identity.id);
+}
 
 /**
  * Utility for managing workspace server passwords.
@@ -23,17 +29,20 @@ export function generateWorkspacePassword(): string {
 /**
  * Encrypt a workspace password for storage in the database.
  */
-export function encryptWorkspacePassword(password: string): string {
+export function encryptWorkspacePassword(password: string, identity: WorkspaceIdentity): string {
   const encryption = getEncryptionService();
-  return encryption.encrypt(password);
+  return encryption.encryptForRecord(password, workspacePasswordContext(identity));
 }
 
 /**
  * Decrypt a workspace password from the database.
  */
-export function decryptWorkspacePassword(encryptedPassword: string): string {
+export function decryptWorkspacePassword(
+  encryptedPassword: string,
+  identity: WorkspaceIdentity,
+): string {
   const encryption = getEncryptionService();
-  return encryption.decrypt(encryptedPassword);
+  return encryption.decryptForRecord(encryptedPassword, workspacePasswordContext(identity));
 }
 
 /**
@@ -49,13 +58,13 @@ export function hashPasswordForAudit(password: string): string {
  * Generate and encrypt a password in one step.
  * Returns both the original password (for immediate use) and encrypted version (for storage).
  */
-export function generateAndEncryptPassword(): {
+export function generateAndEncryptPassword(identity: WorkspaceIdentity): {
   password: string;
   encryptedPassword: string;
   passwordHash: string;
 } {
   const password = generateWorkspacePassword();
-  const encryptedPassword = encryptWorkspacePassword(password);
+  const encryptedPassword = encryptWorkspacePassword(password, identity);
   const passwordHash = hashPasswordForAudit(password);
 
   return {
