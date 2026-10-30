@@ -96,7 +96,7 @@ const DEFAULT_HEALTH_CHECK_PATH = "/";
 const TARGET_GROUP_DEREGISTRATION_DELAY_SECONDS = 5;
 const SERVICE_STABILIZATION_TIMEOUT_MS = 3 * 60 * 1000;
 const SERVICE_POLL_INTERVAL_MS = 5000;
-const AWS_ROUTING_HEADER = "X-GitTerm-Aws-Routing-Key";
+export const AWS_ROUTING_HEADER = "X-GitTerm-Aws-Routing-Key";
 const AWS_MANAGED_BY_TAG = "gitterm";
 const AWS_SERVICE_NAME_PREFIX = "gitterm-";
 const AWS_TASK_FAMILY_PREFIX = "gitterm-workspace-";
@@ -139,7 +139,7 @@ function getImageMetadata(config: WorkspaceConfig): AwsImageProviderMetadata {
   return config.imageProviderMetadata?.aws ?? {};
 }
 
-function buildWorkspaceHost(workspaceId: string): string {
+export function buildWorkspaceHost(workspaceId: string): string {
   return `${workspaceId}.workspace.aws.gitterm.internal`;
 }
 
@@ -946,6 +946,7 @@ export class AwsProvider implements ComputeProvider {
     const containerDefinition: ContainerDefinition = {
       name: CONTAINER_NAME,
       image: config.imageId,
+      ...(metadata.command ? { command: metadata.command } : {}),
       essential: true,
       portMappings: [
         { containerPort, protocol: "tcp" },

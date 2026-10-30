@@ -10,6 +10,8 @@ import {
   type HandoffOptions,
   type HandoffRecord,
 } from "./handoff";
+import { registerSandboxTools } from "./sandbox";
+import type { SandboxSettings } from "@gitterm/sdk/sandbox";
 
 const sessionKey = (sessionID: string) => `handoff/session/${sessionID}`;
 
@@ -52,7 +54,7 @@ async function localClient(options: HandoffOptions): Promise<OpenCodeClient> {
 export const GittermCloudPlugin = Plugin.define({
   id: "gitterm.cloud",
   async setup(ctx) {
-    const options = ctx.options as HandoffOptions;
+    const options = ctx.options as HandoffOptions & { sandbox?: SandboxSettings };
     const controller = new AbortController();
     const busy = new Set<string>();
     const load = async (sessionID: string) =>
@@ -133,7 +135,11 @@ export const GittermCloudPlugin = Plugin.define({
         },
       });
     });
-    return () => controller.abort();
+    const closeSandboxTools = await registerSandboxTools(ctx, options.sandbox);
+    return async () => {
+      controller.abort();
+      await closeSandboxTools();
+    };
   },
 });
 

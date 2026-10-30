@@ -16,6 +16,7 @@ import { googleCloudRouter } from "./google-cloud";
 import { integrationsRouter } from "./integrations";
 import { botsRouter } from "./bots";
 import { billingRouter } from "./billing";
+import { sandboxRouter } from "./sandbox";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -37,6 +38,7 @@ export const appRouter = router({
   integrations: integrationsRouter,
   bots: botsRouter,
   billing: billingRouter,
+  sandbox: sandboxRouter,
 });
 export type AppRouter = typeof appRouter;
 

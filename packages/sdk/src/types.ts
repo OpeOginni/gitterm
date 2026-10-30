@@ -1,3 +1,4 @@
+import type { SandboxProviderKey } from "./sandbox/types.js";
 export type AuthStatus = {
   loggedIn: true;
   userId: string;
@@ -733,4 +734,31 @@ export type SavedBot = {
   setup: string | null;
   /** When the settings last changed (ISO 8601); absent from older servers. */
   updatedAt?: string;
+};
+
+/** A plain command sandbox billed to the signed-in Gitterm account. No agent runs inside it. */
+export type ManagedSandbox = {
+  id: string;
+  provider: SandboxProviderKey;
+  name: string | null;
+  status: WorkspaceStatus;
+  metadata: Record<string, string>;
+  createdAt: string;
+  pausedAt: string | null;
+  terminatedAt: string | null;
+  lastActiveAt: string | null;
+  /** When Gitterm terminates the sandbox regardless of activity. */
+  expiresAt: string | null;
+  machineProfileId: string | null;
+};
+
+export type ManagedSandboxCreateInput = {
+  /** Defaults to e2b. Must be enabled for sandboxes on the deployment. */
+  provider?: SandboxProviderKey;
+  name?: string;
+  lifetimeMinutes: number;
+  /** Serve preview URLs without the access header. Cannot be changed later. */
+  publicPreviews?: boolean;
+  metadata?: Record<string, string>;
+  idempotencyKey?: string;
 };
