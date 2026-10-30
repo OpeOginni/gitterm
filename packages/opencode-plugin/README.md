@@ -165,7 +165,7 @@ use a standalone or custom server, set `localServerUrl` to its loopback URL and
 
 The plugin also gives the local agent sandbox tools: `sandbox_create`, `sandbox_list`,
 `sandbox_sync`, `sandbox_exec`, `sandbox_job`, `sandbox_cancel`, `sandbox_preview`,
-`sandbox_artifact`, `sandbox_apply`, `sandbox_destroy`, and `sandbox_account`. The
+`sandbox_artifact`, `sandbox_apply`, `sandbox_resume`, `sandbox_destroy`, and `sandbox_account`. The
 conversation and your files stay local. Commands run in a separate sandbox with no
 coding agent or model credentials. Local shell execution and `/cloud` are unchanged.
 

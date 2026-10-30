@@ -92,13 +92,14 @@ state lives in the sandbox under `~/.gitterm/jobs/<id>` (the provider's command 
 A new process, for example after a plugin restart, can reattach by id. The local record
 also keeps the snapshot id and digest the job ran on.
 
-- **Command runs in its own process group.** The timeout watchdog and cancellation signal that group (`TERM`, then `KILL`). `processAlive` reports whether any non-zombie process of the group is still running.
+- **A job is its process group.** The timeout watchdog and cancellation signal the whole group (`TERM`, then `KILL`). When the command exits, anything it left running in the background is stopped too, so nothing outlives the job or its deadline. Run long-lived servers in the foreground of their own job (as `preview` does). `processAlive` reports whether any non-zombie process of the group is still running, and cancel keeps signalling until the group is gone.
 - **Statuses:** `running`, `succeeded`, `failed`, `timed_out`, `cancelled`, or `lost`. `lost` means the runner died without recording an exit, for example after the sandbox restarted.
 - **Command failure vs provider failure:**
   - A non-zero exit is a `failed` job with its exit code.
   - A provider or API failure is a thrown `SandboxProviderError`, with code `auth`, `not_found`, `rate_limited`, `timeout`, or `provider`.
 - **Model-visible output** is the last 8 KiB of the log by default. Earlier output is read with `offset`/`limit`.
-- **Output sanitizing:** control characters and terminal escapes are stripped, and values passed through `env` are replaced with `[redacted]`.
+- **Secrets in output:** values passed through `env` are replaced with `[redacted]` inside the sandbox, line by line, before output is stored. Every reader sees only redacted text: a restarted plugin, another CLI process, or a paged read that would otherwise cut a value in half. Local records keep only the variable names. Because redaction works per line, values with line breaks (for example PEM keys) and values shorter than 4 characters are refused before anything is sent; base64-encode multi-line values and decode them in the command.
+- **Output sanitizing:** control characters and terminal escapes are stripped before output is returned.
 - **Plugin output** is wrapped in an `untrusted` block that tells the model to treat it as data.
 
 ### Source snapshots
@@ -130,14 +131,23 @@ build output from earlier runs (for example `node_modules`) stays in place.
 
 ### Artifacts
 
-`fetchArtifact()` downloads one file into
-`$XDG_CACHE_HOME/gitterm/sandbox-artifacts/...`, outside the checkout. It also compares
-the download with a sha256 computed in the sandbox. The limit is 64 MiB in direct mode
-and 32 MiB in managed mode.
+`fetchArtifact(ref, path, { jobId })` downloads one file a job produced into
+`$XDG_CACHE_HOME/gitterm/sandbox-artifacts/...`, outside the checkout. It compares the
+download with a sha256 computed in the sandbox and records the artifact with its job.
+The limit is 64 MiB in direct mode and 32 MiB in managed mode; managed mode checks the
+size before reading the file into server memory.
 
-`applyArtifact()` copies a fetched file into the checkout. It refuses when the local
-target differs from the snapshot the job ran on: changed, newly created, or no longer a
-regular file.
+`applyArtifact(ref, { localPath, target })` writes a fetched file into the checkout the
+producing job's snapshot came from. The baseline is that job's snapshot, not the latest
+sync, so applying an old build cannot overwrite newer local work. It refuses when:
+
+- the target changed locally since that snapshot, or appeared since then
+- the target or any parent directory is a symlink or not a regular file or directory, so writes cannot escape the checkout
+- the downloaded file changed since it was verified
+
+The exact verified bytes are written, and the parent is checked again just before the
+final rename. Snapshot manifests are stored per checkout, so two checkouts with
+identical content keep separate baselines.
 
 ### Previews
 
@@ -145,7 +155,7 @@ regular file.
 60 s. The provider edge answers 502 until something listens. The result also reports the
 status of a request made without the access header.
 
-- **Private (default where the provider allows it):** without the access header the provider answers 401 or 403 (E2B, Daytona, Boat, and the command server; see the provider table). Give it to tools through the loopback proxy (`startPreviewProxy`, the plugin's `localProxy`, or `gitterm sandbox preview --serve`), never to a model. The proxy listens on 127.0.0.1 behind a random path and lasts as long as the process. It does not carry WebSockets.
+- **Private (default where the provider allows it):** without the access header the provider answers 401 or 403 (E2B, Daytona, Boat, and the command server; see the provider table). Give it to tools through the loopback proxy (`startPreviewProxy`, the plugin's `localProxy`, or `gitterm sandbox preview --serve`), never to a model. Each preview gets its own hostname, `p-<random>.localhost` (browsers and Node resolve it to loopback), served from `/`, so root-relative assets and client-side routes work. Cookies are scoped by host, so the preview's cookies and its JavaScript never see those of other local apps or other previews, and the app's own cookie names keep working. Opening the returned URL exchanges its one-time token for an HttpOnly cookie; requests without it get 401, and requests for any other host (including plain `127.0.0.1`) get 421. Requests always go to the provider's host: a path that normalizes to `//other-host/...` cannot redirect the access headers. The proxy lasts as long as the process. It does not carry WebSockets.
 - **Public:** chosen at creation (`publicPreviews`) and fixed for the sandbox's life, because E2B cannot change it later. It needs a separate approval. Vercel only has public URLs, so Vercel previews require this approval too.
 
 Closing the plugin closes its proxies only. Sandboxes and their preview servers keep
@@ -183,13 +193,21 @@ it.
 **Managed.**
 
 - A sandbox is a `workspace` row on the disabled `sandbox` agent type (migration `0044`), with a `sandbox:<provider>:<id>` handle. It is billed at the provider's default machine profile.
-- Creation checks plan entitlements, including which providers the plan may use, plus the run allowance and the workspace limit, which counts sandboxes too.
+- Creation checks plan entitlements, including which providers the plan may use, plus the run allowance and the workspace limit, which counts sandboxes too. The limit is checked under a per-user database lock together with the insert, so concurrent creates cannot exceed it. The same applies to ordinary workspace creation.
 - A usage session runs while the sandbox is running.
-- API calls count as activity. When idle, the sandbox is paused after the plan's idle timeout, by the provider where it supports idle stops and by the worker otherwise. A paused sandbox keeps its files on E2B, Daytona, Vercel (persistent snapshot), Boat, and exe.dev. On Railway and AWS a pause discards files and processes. Paused time is not billed as active. `resume()` goes through the normal restart quota check.
+- API calls count as activity. When idle, the sandbox is paused after the plan's idle timeout, by the provider where it supports idle stops and by the worker otherwise. A paused sandbox keeps its files on E2B, Daytona, Vercel (persistent snapshot), Boat, and exe.dev. On Railway and AWS a pause discards files and processes. Paused time is not billed as active. `resume()` (plugin `sandbox_resume`, CLI `gitterm sandbox resume`) goes through the normal restart quota check. After resuming on Railway or AWS, sync again: earlier files and jobs are gone.
+- Provider lifecycle webhooks (E2B, Daytona, Railway, Boat) recognize sandbox handles, so a provider-initiated pause settles status and usage. For providers without webhooks, `get` asks the provider and settles a sandbox it paused or deleted.
 - At `autoTerminateAt` (the requested lifetime) the worker terminates the sandbox whether or not anyone is connected. Termination deletes it at the provider and closes the usage session.
 
 Explicit `destroy` checks with the provider afterwards and reports `terminated` only
-when the provider confirms it.
+when the provider confirms it. In managed mode, termination is queued before the provider
+is called. If deletion fails, the sandbox reports `deleting` (`deleted: false`), the worker
+retries from the queue, and calling `destroy` again retries immediately. Deletion counts
+as done only when the provider reports the sandbox gone (polled for up to 30 s, since some
+providers accept a deletion and finish it later); only then is the provider handle cleared.
+When `get` finds that the provider deleted a sandbox on its own, billing stops but the
+handle is kept and a confirmed cleanup is queued. Provider errors, such as a permission
+failure, are never treated as a deletion.
 
 ## Configuration
 
