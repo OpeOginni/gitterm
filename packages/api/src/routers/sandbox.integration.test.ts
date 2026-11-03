@@ -1,27 +1,38 @@
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { createHash, createHmac, randomUUID } from "node:crypto";
-import { db, eq, inArray } from "@gitterm/db";
-import { user } from "@gitterm/db/schema/auth";
-import { usageSession, workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
-import { UNLIMITED_ENTITLEMENTS } from "@gitterm/schema/billing";
-import * as transportModule from "../service/sandbox-transport";
 import type { Context } from "../context";
-import { sandboxRouter } from "./sandbox";
-import * as billing from "../billing";
-import * as activity from "../service/workspace-activity";
-import * as proxyCache from "../service/proxy-cache";
-import * as providerConfig from "../service/config/provider-config";
-import { internalRouter } from "./internal";
 
 /**
  * Managed sandboxes against a disposable local database, with the E2B transport faked.
- * SANDBOX_DATABASE_TEST_URL must equal DATABASE_URL and point at a throwaway database:
- *   ENABLE_USAGE_METERING=true DATABASE_URL=$URL SANDBOX_DATABASE_TEST_URL=$URL bun test ...
+ * SANDBOX_DATABASE_TEST_URL must equal DATABASE_URL and point at a throwaway, migrated and
+ * seeded database (`db:migrate`, `db:seed`):
+ *   DATABASE_URL=$URL SANDBOX_DATABASE_TEST_URL=$URL bun test ...
+ * The suite sets the server settings it needs and enables E2B and Boat for its duration.
  */
 const testUrl = process.env.SANDBOX_DATABASE_TEST_URL;
 if (testUrl && testUrl !== process.env.DATABASE_URL)
   throw new Error("DATABASE_URL must equal the explicit disposable SANDBOX_DATABASE_TEST_URL");
 const integration = testUrl ? test : test.skip;
+
+// Read when the server modules load, so they are set before the imports below.
+const env = process.env as Record<string, string | undefined>;
+env.ENABLE_USAGE_METERING = "true";
+env.INTERNAL_API_KEY ||= "sandbox-integration-test";
+const { and, db, eq, inArray } = await import("@gitterm/db");
+const { user } = await import("@gitterm/db/schema/auth");
+const { cloudProvider } = await import("@gitterm/db/schema/cloud");
+const { usageSession, workspace, workspaceTermination } =
+  await import("@gitterm/db/schema/workspace");
+const { UNLIMITED_ENTITLEMENTS } = await import("@gitterm/schema/billing");
+const transportModule = await import("../service/sandbox-transport");
+const { sandboxRouter } = await import("./sandbox");
+const billing = await import("../billing");
+const activity = await import("../service/workspace-activity");
+const proxyCache = await import("../service/proxy-cache");
+const providerConfig = await import("../service/config/provider-config");
+const { internalRouter } = await import("./internal");
+/** Providers this suite enabled, disabled again afterwards. */
+let enabledForTest: string[] = [];
 
 const userId = `sandbox-test-${randomUUID()}`;
 const otherId = `sandbox-other-${randomUUID()}`;
@@ -107,6 +118,14 @@ beforeAll(async () => {
       getProviderConfigForUse: async () => ({ webhookSecret: WEBHOOK_SECRET }),
     } as never),
   );
+  const disabled = await db
+    .update(cloudProvider)
+    .set({ isEnabled: true })
+    .where(
+      and(inArray(cloudProvider.providerKey, ["e2b", "boat"]), eq(cloudProvider.isEnabled, false)),
+    )
+    .returning({ id: cloudProvider.id });
+  enabledForTest = disabled.map((row) => row.id);
   await db.insert(user).values(
     [userId, otherId].map((id) => ({
       id,
@@ -122,6 +141,11 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const mock of mocks) mock.mockRestore();
   if (!testUrl) return;
+  if (enabledForTest.length)
+    await db
+      .update(cloudProvider)
+      .set({ isEnabled: false })
+      .where(inArray(cloudProvider.id, enabledForTest));
   const rows = await db
     .select({ id: workspace.id })
     .from(workspace)

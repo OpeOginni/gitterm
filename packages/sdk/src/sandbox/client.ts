@@ -172,14 +172,26 @@ export function createSandboxClient(options: {
     return stored ?? recordFrom(info, null);
   }
 
-  async function running(ref: SandboxRef): Promise<SandboxRecord> {
-    const record = await load(ref);
+  /** A sandbox paused for inactivity is resumed on use. `sync` restores files itself. */
+  async function running(ref: SandboxRef, use: "sync" | "other" = "other"): Promise<SandboxRecord> {
+    let record = await load(ref);
+    if (record.state === "paused" && backend.resume) {
+      await backend.resume(ref.id);
+      record = await load(ref);
+      if (record.state === "running" && backend.capabilities.pause === "state-losing") {
+        record =
+          (await store.update(ref, (stored) => {
+            stored.snapshot = null;
+          })) ?? record;
+        if (use !== "sync")
+          throw new Error(
+            `Sandbox ${ref.id} was paused and is running again, but ${ref.provider} discards files and processes on pause. Sync again, then retry; earlier jobs cannot be reattached.`,
+          );
+      }
+    }
     if (record.state === "terminated")
       throw new Error(`Sandbox ${ref.id} no longer exists (deleted or expired).`);
-    if (record.state !== "running")
-      throw new Error(
-        `Sandbox ${ref.id} is ${record.state}.${backend.resume ? " Resume it first." : ""}`,
-      );
+    if (record.state !== "running") throw new Error(`Sandbox ${ref.id} is ${record.state}.`);
     return record;
   }
 
@@ -304,7 +316,7 @@ export function createSandboxClient(options: {
     get: load,
 
     async sync(ref: SandboxRef, captured: CapturedSource) {
-      const record = await running(ref);
+      const record = await running(ref, "sync");
       await store.putSnapshot(captured.snapshot);
       const result = await uploadSource(backend, ref.id, captured);
       await store.update(record, (stored) => {

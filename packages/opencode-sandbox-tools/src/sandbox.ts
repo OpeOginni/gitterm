@@ -91,7 +91,9 @@ export async function registerSandboxTools(
   const proxies = new Map<string, PreviewProxy>();
   const sandbox = () => {
     if (!settings)
-      throw new Error("Gitterm sandboxes are not configured. Add `sandbox` to the plugin options.");
+      throw new Error(
+        "Gitterm sandboxes are not configured. Add an account to the plugin options.",
+      );
     return (client ??= createSandboxClient({
       backend: createSandboxBackend(settings),
       limits: settings.limits,
@@ -139,22 +141,6 @@ export async function registerSandboxTools(
       name: "gitterm",
       description:
         "Remote Gitterm sandboxes for builds, tests, and previews. The conversation and local files stay local.",
-    });
-
-    editor.add({
-      name: "sandbox_account",
-      description:
-        "Show the selected sandbox mode, provider account, who is charged, and limits. Never shows credentials.",
-      input: object({}),
-      async execute() {
-        if (!settings)
-          return { content: "Gitterm sandboxes are not configured in the plugin options." };
-        const summary = describeSandboxAccount(settings);
-        return {
-          content: JSON.stringify({ ...summary, limits: sandbox().limits }, null, 2),
-          metadata: summary,
-        };
-      },
     });
 
     editor.add({
@@ -215,15 +201,23 @@ export async function registerSandboxTools(
 
     editor.add({
       name: "sandbox_list",
-      description: "List sandboxes for the selected account, reconciled with the provider.",
+      description:
+        "Show the selected account (mode, provider, who is charged, limits; never credentials) and its sandboxes, reconciled with the provider.",
       input: object({}),
       async execute(_input, context) {
+        if (!settings)
+          return { content: "Gitterm sandboxes are not configured in the plugin options." };
+        const summary = describeSandboxAccount(settings);
         const records = await sandbox().list();
         const live = records.filter((record) => record.state !== "terminated");
         return {
-          content: live.length
-            ? live.map((record) => describeRecord(record, context.sessionID)).join("\n")
-            : "No live sandboxes.",
+          content: [
+            `Account: ${JSON.stringify({ ...summary, limits: sandbox().limits })}`,
+            live.length
+              ? live.map((record) => describeRecord(record, context.sessionID)).join("\n")
+              : "No live sandboxes.",
+          ].join("\n"),
+          metadata: summary,
         };
       },
     });
@@ -338,7 +332,7 @@ export async function registerSandboxTools(
     editor.add({
       name: "sandbox_job",
       description:
-        "Status and bounded output of a sandbox job. Reattaches after restarts. Use offset/limit to page through long logs.",
+        "Status and bounded output of a sandbox job. Reattaches after restarts. Use offset/limit to page through long logs. Set cancel to stop it; that signals the job's whole process group.",
       input: object(
         {
           sandboxId,
@@ -346,6 +340,7 @@ export async function registerSandboxTools(
           offset: { type: "integer", minimum: 0 },
           limit: { type: "integer", minimum: 1, maximum: 65536 },
           waitSeconds: { type: "integer", minimum: 0, maximum: MAX_WAIT_SECONDS },
+          cancel: { type: "boolean" },
         },
         ["sandboxId", "jobId"],
       ),
@@ -355,30 +350,19 @@ export async function registerSandboxTools(
         const jobId = str(args.jobId, "jobId");
         const offset = optionalNumber(args.offset);
         const view =
-          offset === undefined && optionalNumber(args.waitSeconds)
-            ? await sandbox().wait(
-                ref,
-                jobId,
-                Math.min(optionalNumber(args.waitSeconds)!, MAX_WAIT_SECONDS) * 1000,
-              )
-            : await sandbox().job(ref, jobId, { offset, limit: optionalNumber(args.limit) });
+          args.cancel === true
+            ? await sandbox().cancel(ref, jobId)
+            : offset === undefined && optionalNumber(args.waitSeconds)
+              ? await sandbox().wait(
+                  ref,
+                  jobId,
+                  Math.min(optionalNumber(args.waitSeconds)!, MAX_WAIT_SECONDS) * 1000,
+                )
+              : await sandbox().job(ref, jobId, { offset, limit: optionalNumber(args.limit) });
         return {
           content: describeJob(view, await sandbox().get(ref)),
           metadata: { status: view.state.status },
         };
-      },
-    });
-
-    editor.add({
-      name: "sandbox_cancel",
-      description:
-        "Cancel a running sandbox job. Signals the job's whole process group in the sandbox.",
-      input: object({ sandboxId, jobId: { type: "string" } }, ["sandboxId", "jobId"]),
-      async execute(input) {
-        const args = input as Record<string, unknown>;
-        const ref = await refFor(str(args.sandboxId, "sandboxId"));
-        const view = await sandbox().cancel(ref, str(args.jobId, "jobId"));
-        return { content: describeJob(view, await sandbox().get(ref)) };
       },
     });
 
@@ -507,21 +491,6 @@ export async function registerSandboxTools(
         });
         return {
           content: `Applied artifact from job ${applied.jobId} (snapshot ${applied.snapshotId}) to ${applied.path} (sha256 ${applied.sha256}).`,
-        };
-      },
-    });
-
-    editor.add({
-      name: "sandbox_resume",
-      description:
-        "Resume a managed sandbox that was paused for inactivity. On providers whose pause discards files (Railway, AWS), sync again afterwards; earlier jobs are gone.",
-      input: object({ sandboxId }, ["sandboxId"]),
-      async execute(input) {
-        const ref = await refFor(str((input as Record<string, unknown>).sandboxId, "sandboxId"));
-        const record = await sandbox().resume(ref);
-        const lossy = sandbox().capabilities.pause === "state-losing";
-        return {
-          content: `Sandbox ${ref.id} is ${record.state}.${lossy ? " This provider discards files and processes on pause: sync again before running commands; earlier jobs cannot be reattached." : ""}`,
         };
       },
     });

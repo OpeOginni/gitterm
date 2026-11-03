@@ -195,7 +195,7 @@ it.
 - A sandbox is a `workspace` row on the disabled `sandbox` agent type (migration `0044`), with a `sandbox:<provider>:<id>` handle. It is billed at the provider's default machine profile.
 - Creation checks plan entitlements, including which providers the plan may use, plus the run allowance and the workspace limit, which counts sandboxes too. The limit is checked under a per-user database lock together with the insert, so concurrent creates cannot exceed it. The same applies to ordinary workspace creation.
 - A usage session runs while the sandbox is running.
-- API calls count as activity. When idle, the sandbox is paused after the plan's idle timeout, by the provider where it supports idle stops and by the worker otherwise. A paused sandbox keeps its files on E2B, Daytona, Vercel (persistent snapshot), Boat, and exe.dev. On Railway and AWS a pause discards files and processes. Paused time is not billed as active. `resume()` (plugin `sandbox_resume`, CLI `gitterm sandbox resume`) goes through the normal restart quota check. After resuming on Railway or AWS, sync again: earlier files and jobs are gone.
+- API calls count as activity. When idle, the sandbox is paused after the plan's idle timeout, by the provider where it supports idle stops and by the worker otherwise. A paused sandbox keeps its files on E2B, Daytona, Vercel (persistent snapshot), Boat, and exe.dev. On Railway and AWS a pause discards files and processes. Paused time is not billed as active. A paused sandbox resumes on its next use (sync, exec, job, preview, or artifact), or explicitly with `resume()` / `gitterm sandbox resume`, through the normal restart quota check. On Railway and AWS the resumed sandbox has no files: anything but a sync then fails with a request to sync again, and earlier jobs are gone.
 - Provider lifecycle webhooks (E2B, Daytona, Railway, Boat) recognize sandbox handles, so a provider-initiated pause settles status and usage. For providers without webhooks, `get` asks the provider and settles a sandbox it paused or deleted.
 - At `autoTerminateAt` (the requested lifetime) the worker terminates the sandbox whether or not anyone is connected. Termination deletes it at the provider and closes the usage session.
 
@@ -211,28 +211,26 @@ failure, are never treated as a deletion.
 
 ## Configuration
 
-OpenCode plugin options:
+Options for the `@gitterm/opencode-sandbox-tools` OpenCode plugin:
 
 ```jsonc
 {
   "plugins": [
     {
-      "package": "@gitterm/opencode-plugin",
+      "package": "@gitterm/opencode-sandbox-tools",
       "options": {
-        "sandbox": {
-          "account": "e2b",
-          "accounts": {
-            "e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
-            "gitterm": { "mode": "managed" },
-          },
-          "limits": {
-            "maxSandboxes": 2,
-            "maxLifetimeMinutes": 60,
-            "defaultLifetimeMinutes": 30,
-            "maxJobMinutes": 30,
-          },
-          "exclude": ["fixtures/large/**"],
+        "account": "e2b",
+        "accounts": {
+          "e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
+          "gitterm": { "mode": "managed" },
         },
+        "limits": {
+          "maxSandboxes": 2,
+          "maxLifetimeMinutes": 60,
+          "defaultLifetimeMinutes": 30,
+          "maxJobMinutes": 30,
+        },
+        "exclude": ["fixtures/large/**"],
       },
     },
   ],

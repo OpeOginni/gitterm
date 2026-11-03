@@ -1,0 +1,111 @@
+# @gitterm/opencode-sandbox-tools
+
+Let your [OpenCode](https://opencode.ai) agent run builds, tests, and preview servers in a
+remote sandbox. Your conversation and files stay on your machine.
+
+Want to move the whole session to the cloud instead? Use
+[`@gitterm/opencode-cloud-handoff`](../opencode-cloud-handoff/README.md).
+
+## 1. Install
+
+```sh
+opencode plugin add @gitterm/opencode-sandbox-tools
+```
+
+## 2. Add your provider key
+
+In `opencode.json` (project) or `~/.config/opencode/opencode.json` (global):
+
+```jsonc
+{
+  "plugins": [
+    {
+      "package": "@gitterm/opencode-sandbox-tools",
+      "options": {
+        "account": "e2b",
+        "accounts": {
+          "e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
+        },
+      },
+    },
+  ],
+}
+```
+
+Never paste a key directly. OpenCode fills it in for you:
+
+- `"{env:E2B_API_KEY}"` reads an environment variable.
+- `"{file:~/.secrets/e2b}"` reads a file.
+
+Restart OpenCode after changing the settings.
+
+### Other providers
+
+Add the account and set `"account"` to its name:
+
+```jsonc
+"daytona": { "mode": "direct", "provider": "daytona", "apiKey": "{env:DAYTONA_API_KEY}" },
+"boat":    { "mode": "direct", "provider": "boat", "apiKey": "{env:BOAT_API_KEY}" },
+"vercel":  { "mode": "direct", "provider": "vercel", "apiKey": "{env:VERCEL_TOKEN}", "teamId": "team_…", "projectId": "prj_…" },
+"railway": { "mode": "direct", "provider": "railway", "apiKey": "{env:RAILWAY_TOKEN}", "projectId": "…", "environmentId": "…", "allowUnboundedLifetime": true },
+"exedev":  { "mode": "direct", "provider": "exedev", "apiKey": "{env:EXEDEV_API_KEY}", "allowUnboundedLifetime": true },
+```
+
+Railway and exe.dev never delete a forgotten sandbox themselves, so they need
+`allowUnboundedLifetime: true`. Destroy sandboxes you no longer need.
+
+### Or use your GitTerm plan
+
+No provider account needed. Sign in once, then use a managed account:
+
+```sh
+npm install -g @gitterm/cli
+gitterm login
+```
+
+```jsonc
+"gitterm": { "mode": "managed" },
+```
+
+## 3. Use it
+
+Ask the agent, for example: _"Run the test suite in a sandbox."_ It will create a
+sandbox, upload your checkout (uncommitted changes included, secret-like files skipped),
+and run the command there. OpenCode asks before anything is created, uploaded, run, or
+written back to your files.
+
+| Tool               | What it does                                                         |
+| ------------------ | -------------------------------------------------------------------- |
+| `sandbox_create`   | Create a sandbox                                                     |
+| `sandbox_list`     | Show your account, who is charged, and your sandboxes                |
+| `sandbox_sync`     | Upload your checkout                                                 |
+| `sandbox_exec`     | Run a command                                                        |
+| `sandbox_job`      | Check a command's output, or cancel it                               |
+| `sandbox_preview`  | Open a port, for example a dev server                                |
+| `sandbox_artifact` | Download a file the command produced                                 |
+| `sandbox_apply`    | Copy that file into your checkout, if your copy did not change since |
+| `sandbox_destroy`  | Delete a sandbox                                                     |
+
+The right sidebar lists this checkout's sandboxes, with what each is running.
+
+## Optional settings
+
+```jsonc
+"options": {
+  "account": "e2b",
+  "accounts": { … },
+  "limits": { "maxSandboxes": 2, "maxLifetimeMinutes": 60, "maxJobMinutes": 30 },
+  "exclude": ["fixtures/large/**"]
+}
+```
+
+To stop being asked every time, allow actions in your OpenCode `permissions`:
+
+```jsonc
+"permissions": [
+  { "action": "gitterm.sandbox.exec", "resource": "direct:e2b:*", "effect": "allow" }
+]
+```
+
+More detail on costs, cleanup, and permissions:
+[Agent sandboxes](../../docs/agent-sandboxes.md).

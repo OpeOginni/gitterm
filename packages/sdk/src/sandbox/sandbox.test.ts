@@ -323,6 +323,64 @@ describe("providers without labels or expiry", () => {
   });
 });
 
+describe("paused managed sandboxes", () => {
+  async function pausedClient(pause: "stateful" | "state-losing") {
+    const identity = { mode: "managed" as const, provider: "e2b" as const, account: "hosted" };
+    const sandbox = { state: "paused" as "paused" | "running", resumes: 0 };
+    const backend = {
+      identity,
+      home: "/home/user",
+      capabilities: { expiry: "idle" as const, previews: "private" as const, pause },
+      get: async (id: string) => ({
+        ...identity,
+        id,
+        state: sandbox.state,
+        name: "s",
+        createdAt: null,
+        expiresAt: null,
+        labels: {},
+      }),
+      resume: async () => {
+        sandbox.resumes++;
+        sandbox.state = "running";
+      },
+    } as unknown as Parameters<typeof createSandboxClient>[0]["backend"];
+    const store = createFileSandboxStore(await mkdtemp(path.join(tmpdir(), "gitterm-store-")));
+    const client = createSandboxClient({ backend, store });
+    const ref = { ...identity, id: "sbx1" };
+    await store.put({
+      ...ref,
+      name: "s",
+      purpose: "",
+      project: null,
+      sessionId: null,
+      state: "paused",
+      publicPreviews: false,
+      createdAt: new Date().toISOString(),
+      expiresAt: null,
+      snapshot: { id: "snap", digest: "d", root: "/r", syncedAt: new Date().toISOString() },
+      jobs: {},
+      previews: {},
+      updatedAt: new Date().toISOString(),
+    });
+    return { client, ref, sandbox, store };
+  }
+
+  test("are resumed on use instead of asking the agent to resume them", async () => {
+    const { client, ref, sandbox } = await pausedClient("stateful");
+    // Reaching the job lookup means the sandbox was resumed and accepted as running.
+    await expect(client.job(ref, "missing")).rejects.toThrow(/Unknown job missing/);
+    expect(sandbox.resumes).toBe(1);
+  });
+
+  test("a provider that discards files on pause asks for a new sync", async () => {
+    const { client, ref, sandbox, store } = await pausedClient("state-losing");
+    await expect(client.job(ref, "missing")).rejects.toThrow(/Sync again/);
+    expect(sandbox.resumes).toBe(1);
+    expect((await store.get(ref))?.snapshot).toBeNull();
+  });
+});
+
 describe("source snapshots", () => {
   test("glob exclusions", () => {
     expect(globToRegExp("*.log").test("a/b/build.log")).toBe(true);
