@@ -158,7 +158,7 @@ export async function registerSandboxTools(
         publicPreviews: {
           type: "boolean",
           description:
-            "Anyone with a preview URL can open it. Fixed at creation; requires separate approval.",
+            "Anyone with a preview URL can open it. Fixed at creation; requires separate approval unless the plugin options already turn it on.",
         },
       }),
       async execute(input, context) {
@@ -179,7 +179,9 @@ export async function registerSandboxTools(
             maxSandboxes: current.limits.maxSandboxes,
           },
         );
-        if (args.publicPreviews === true)
+        // `publicPreviews` in the plugin options is the user's standing approval.
+        const publicPreviews = settings!.publicPreviews === true || args.publicPreviews === true;
+        if (publicPreviews && !settings!.publicPreviews)
           await assert(context, "gitterm.sandbox.public", [`${mode}:${account}`], [], {
             warning: "Every port of this sandbox will be reachable by anyone with its URL.",
           });
@@ -190,7 +192,7 @@ export async function registerSandboxTools(
           project: directory,
           sessionId: context.sessionID,
           lifetimeMinutes,
-          publicPreviews: args.publicPreviews === true,
+          publicPreviews,
         });
         return {
           content: `Created sandbox:\n${describeRecord(record, context.sessionID)}`,

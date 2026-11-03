@@ -21,8 +21,11 @@ export type SandboxCapabilities = {
    * archived at the lifetime with storage kept until deleted; `none` never.
    */
   expiry: "hard" | "idle" | "archive" | "none";
-  /** `private` needs the access header, `public` is open to anyone with the URL. */
-  previews: "private" | "public" | "none";
+  /**
+   * `private` needs the access header, `public` is open to anyone with the URL, `either` is
+   * private unless created with public previews.
+   */
+  previews: "private" | "public" | "either" | "none";
   pause: "stateful" | "state-losing";
   maxLifetimeMs: number;
 };

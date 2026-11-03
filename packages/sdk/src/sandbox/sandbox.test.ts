@@ -381,6 +381,60 @@ describe("paused managed sandboxes", () => {
   });
 });
 
+describe("preview visibility", () => {
+  async function previewOn(previews: "private" | "either", publicPreviews: boolean) {
+    const server = Bun.serve({ port: 0, fetch: () => new Response("ok") });
+    const identity = { mode: "direct" as const, provider: "boat" as const, account: "a" };
+    const backend = {
+      identity,
+      home: "/home/user",
+      capabilities: { expiry: "hard" as const, previews, pause: "stateful" as const },
+      get: async (id: string) => ({
+        ...identity,
+        id,
+        state: "running",
+        name: "s",
+        createdAt: null,
+        expiresAt: null,
+        labels: {},
+      }),
+      preview: async () => ({ url: `http://localhost:${server.port}/`, headers: {} }),
+    } as unknown as Parameters<typeof createSandboxClient>[0]["backend"];
+    const store = createFileSandboxStore(await mkdtemp(path.join(tmpdir(), "gitterm-store-")));
+    const ref = { ...identity, id: "sbx1" };
+    await store.put({
+      ...ref,
+      name: "s",
+      purpose: "",
+      project: null,
+      sessionId: null,
+      state: "running",
+      publicPreviews,
+      createdAt: new Date().toISOString(),
+      expiresAt: null,
+      snapshot: null,
+      jobs: {},
+      previews: {},
+      updatedAt: new Date().toISOString(),
+    });
+    try {
+      const preview = await createSandboxClient({ backend, store }).preview(ref, { port: 3000 });
+      return { reported: preview.public, stored: (await store.get(ref))!.previews["3000"]!.public };
+    } finally {
+      server.stop(true);
+    }
+  }
+
+  test("a provider without a public mode never reports a preview as public", async () => {
+    expect(await previewOn("private", true)).toEqual({ reported: false, stored: false });
+  });
+
+  test("a provider that can do either follows the sandbox's choice", async () => {
+    expect(await previewOn("either", true)).toEqual({ reported: true, stored: true });
+    expect(await previewOn("either", false)).toEqual({ reported: false, stored: false });
+  });
+});
+
 describe("source snapshots", () => {
   test("glob exclusions", () => {
     expect(globToRegExp("*.log").test("a/b/build.log")).toBe(true);

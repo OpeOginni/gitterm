@@ -420,6 +420,10 @@ export function createSandboxClient(options: {
         ).job.id;
       }
       const access = await backend.preview(ref.id, input.port);
+      // Providers without a public mode keep previews private whatever the sandbox asked for.
+      const isPublic =
+        backend.capabilities.previews === "public" ||
+        (backend.capabilities.previews === "either" && record.publicPreviews);
       const deadline = Date.now() + (input.readyTimeoutMs ?? 60_000);
       let ready = false;
       while (!ready && Date.now() < deadline) {
@@ -460,13 +464,13 @@ export function createSandboxClient(options: {
           port: input.port,
           jobId,
           url: access.url,
-          public: backend.capabilities.previews === "public" || record.publicPreviews,
+          public: isPublic,
         };
       });
       return {
         url: access.url,
         port: input.port,
-        public: backend.capabilities.previews === "public" || record.publicPreviews,
+        public: isPublic,
         headers: access.headers,
         ready,
         unauthenticatedStatus,

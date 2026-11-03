@@ -141,7 +141,7 @@ export async function runSandboxCreate(
           purpose: "cli",
           project: process.cwd(),
           lifetimeMinutes: args.lifetime,
-          publicPreviews: args.public,
+          publicPreviews: args.public ?? settings.publicPreviews,
         }),
       (record) =>
         success(

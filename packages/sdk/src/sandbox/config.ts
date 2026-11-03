@@ -78,6 +78,11 @@ export type SandboxSettings = {
   limits?: Partial<SandboxLimits>;
   /** Extra glob patterns never uploaded. Secret-like files are always excluded. */
   exclude?: string[];
+  /**
+   * Create every sandbox with public previews: anyone with a preview URL can open it.
+   * Setting this is the approval, so nobody is asked per sandbox.
+   */
+  publicPreviews?: boolean;
 };
 
 export type SandboxAccountSummary = {
@@ -155,11 +160,13 @@ export function describeLimitations(provider: SandboxProviderKey, mode: SandboxM
           : capabilities.expiry === "archive"
             ? `${name} stops and archives the sandbox at its lifetime; the archived storage remains until you destroy it.`
             : `${name} never deletes an abandoned sandbox. Destroy it yourself; a crash leaves it running and billing.`,
-    capabilities.previews === "private"
+    capabilities.previews === "either"
       ? "Previews are private unless created with public previews."
-      : capabilities.previews === "public"
-        ? `${name} previews are always public URLs, so they need the public-sharing approval.`
-        : `${name} sandboxes cannot expose ports.`,
+      : capabilities.previews === "private"
+        ? `${name} previews are always private: they need an access header.`
+        : capabilities.previews === "public"
+          ? `${name} previews are always public URLs, so they need the public-sharing approval.`
+          : `${name} sandboxes cannot expose ports.`,
     ...(capabilities.pause === "state-losing"
       ? [`Pausing a ${name} sandbox discards its files and processes.`]
       : []),

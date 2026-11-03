@@ -95,9 +95,14 @@ The right sidebar lists this checkout's sandboxes, with what each is running.
   "account": "e2b",
   "accounts": { … },
   "limits": { "maxSandboxes": 2, "maxLifetimeMinutes": 60, "maxJobMinutes": 30 },
-  "exclude": ["fixtures/large/**"]
+  "exclude": ["fixtures/large/**"],
+  "publicPreviews": true
 }
 ```
+
+`publicPreviews: true` makes every preview URL open to anyone who has it, with no
+prompt. Works on E2B and Daytona (Vercel is always public; Boat, exe.dev, and Railway are
+always private).
 
 To stop being asked every time, allow actions in your OpenCode `permissions`:
 

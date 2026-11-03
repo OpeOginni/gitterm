@@ -60,9 +60,10 @@ export type SandboxCapabilities = {
   expiry: "hard" | "idle" | "archive" | "none";
   /**
    * `private`: previews need the returned access header. `public`: anyone with the URL.
+   * `either`: private unless the sandbox is created with public previews.
    * `none`: the provider cannot expose sandbox ports.
    */
-  previews: "private" | "public" | "none";
+  previews: "private" | "public" | "either" | "none";
   /** Whether a paused sandbox keeps its files and processes. */
   pause: "stateful" | "state-losing";
   maxLifetimeMs: number;
@@ -110,11 +111,11 @@ const DAY = 24 * 60 * 60_000;
 export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProviderProfile> = {
   e2b: {
     home: "/home/user",
-    capabilities: { expiry: "hard", previews: "private", pause: "stateful", maxLifetimeMs: DAY },
+    capabilities: { expiry: "hard", previews: "either", pause: "stateful", maxLifetimeMs: DAY },
   },
   daytona: {
     home: "/home/daytona",
-    capabilities: { expiry: "hard", previews: "private", pause: "stateful", maxLifetimeMs: DAY },
+    capabilities: { expiry: "hard", previews: "either", pause: "stateful", maxLifetimeMs: DAY },
   },
   vercel: {
     home: "/home/vercel-sandbox",

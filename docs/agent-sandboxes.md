@@ -156,7 +156,16 @@ identical content keep separate baselines.
 status of a request made without the access header.
 
 - **Private (default where the provider allows it):** without the access header the provider answers 401 or 403 (E2B, Daytona, Boat, and the command server; see the provider table). Give it to tools through the loopback proxy (`startPreviewProxy`, the plugin's `localProxy`, or `gitterm sandbox preview --serve`), never to a model. Each preview gets its own hostname, `p-<random>.localhost` (browsers and Node resolve it to loopback), served from `/`, so root-relative assets and client-side routes work. Cookies are scoped by host, so the preview's cookies and its JavaScript never see those of other local apps or other previews, and the app's own cookie names keep working. Opening the returned URL exchanges its one-time token for an HttpOnly cookie; requests without it get 401, and requests for any other host (including plain `127.0.0.1`) get 421. Requests always go to the provider's host: a path that normalizes to `//other-host/...` cannot redirect the access headers. The proxy lasts as long as the process. It does not carry WebSockets.
-- **Public:** chosen at creation (`publicPreviews`) and fixed for the sandbox's life, because E2B cannot change it later. It needs a separate approval. Vercel only has public URLs, so Vercel previews require this approval too.
+- **Public:** chosen at creation (`publicPreviews`) and fixed for the sandbox's life, because E2B cannot change it later. It needs a separate approval, unless `"publicPreviews": true` in the settings makes every sandbox public (the setting is the approval). Only E2B and Daytona can do both; Vercel is always public, and Boat, exe.dev, Railway, and AWS are always private.
+
+**Not yet: previews through Gitterm.** A managed preview works like a direct one today:
+the client gets the provider's URL and access header, so a Boat preview is still private.
+Gitterm already proxies workspace ports this way. The proxy adds the provider's access
+header itself, so every port can be public on any provider, or private behind the owner's
+Gitterm login. Managed sandboxes are already workspace rows; routing their previews
+through the proxy needs a subdomain and port entries. That would give managed sandboxes
+public previews on every provider (Boat included). Private previews would then open with a
+Gitterm login instead of a local proxy.
 
 Closing the plugin closes its proxies only. Sandboxes and their preview servers keep
 running until destroyed or until their lifetime ends.
@@ -231,6 +240,7 @@ Options for the `@gitterm/opencode-sandbox-tools` OpenCode plugin:
           "maxJobMinutes": 30,
         },
         "exclude": ["fixtures/large/**"],
+        "publicPreviews": false,
       },
     },
   ],
@@ -248,15 +258,15 @@ The CLI reads the same shape from `~/.config/gitterm/sandbox.json` (or
 
 ### Plugin permissions
 
-| Action                      | Resource                           | Asked when                                                                           |
-| --------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
-| `gitterm.sandbox.provision` | `<mode>:<account>:<provider>`      | Creating a sandbox                                                                   |
-| `gitterm.sandbox.public`    | `<mode>:<account>`                 | Creating with public previews. "Always" is not offered.                              |
-| `gitterm.sandbox.upload`    | `<mode>:<account>:<checkout root>` | Syncing. The prompt lists modified, untracked, deleted, and excluded files.          |
-| `gitterm.sandbox.exec`      | `<mode>:<account>:<sandbox id>`    | Running a command or starting a preview server. "Always" saves `<mode>:<account>:*`. |
-| `gitterm.sandbox.secret`    | variable names                     | Passing local environment variables through `secretEnv`                              |
-| `gitterm.sandbox.browser`   | `<mode>:<account>:<id>:<port>`     | Creating a loopback proxy for a private preview                                      |
-| `gitterm.sandbox.apply`     | target path                        | Writing an artifact into the checkout. "Always" is not offered.                      |
+| Action                      | Resource                           | Asked when                                                                                     |
+| --------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `gitterm.sandbox.provision` | `<mode>:<account>:<provider>`      | Creating a sandbox                                                                             |
+| `gitterm.sandbox.public`    | `<mode>:<account>`                 | Creating with public previews. "Always" is not offered; the `publicPreviews` setting skips it. |
+| `gitterm.sandbox.upload`    | `<mode>:<account>:<checkout root>` | Syncing. The prompt lists modified, untracked, deleted, and excluded files.                    |
+| `gitterm.sandbox.exec`      | `<mode>:<account>:<sandbox id>`    | Running a command or starting a preview server. "Always" saves `<mode>:<account>:*`.           |
+| `gitterm.sandbox.secret`    | variable names                     | Passing local environment variables through `secretEnv`                                        |
+| `gitterm.sandbox.browser`   | `<mode>:<account>:<id>:<port>`     | Creating a loopback proxy for a private preview                                                |
+| `gitterm.sandbox.apply`     | target path                        | Writing an artifact into the checkout. "Always" is not offered.                                |
 
 Listing sandboxes, reading jobs and logs, cancelling, downloading artifacts into the
 staging directory, and destroying need no approval. A denied action stops before any
