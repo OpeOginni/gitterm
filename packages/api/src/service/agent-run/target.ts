@@ -76,7 +76,9 @@ async function buildTarget(record: RunWorkspace & { subdomain: string }): Promis
   return {
     url: getWorkspaceUrl(record.subdomain),
     directory: resolveProjectDirectory(record.repositoryUrl, provider?.providerKey),
-    password: record.serverPassword ? decryptWorkspacePassword(record.serverPassword) : null,
+    password: record.serverPassword
+      ? decryptWorkspacePassword(record.serverPassword, record)
+      : null,
   };
 }
 

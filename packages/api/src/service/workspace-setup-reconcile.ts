@@ -264,7 +264,9 @@ export async function reconcileWorkspaceSetupStatus(workspaceId: string): Promis
       markers = await readMarkersViaOpencode({
         url: getWorkspaceUrl(record.subdomain),
         directory,
-        password: record.serverPassword ? decryptWorkspacePassword(record.serverPassword) : null,
+        password: record.serverPassword
+          ? decryptWorkspacePassword(record.serverPassword, record)
+          : null,
       }).catch(() => null);
     }
 

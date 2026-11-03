@@ -1,6 +1,6 @@
 import { and, db, eq, isNull } from "@gitterm/db";
 import { workspaceRouteAccess } from "@gitterm/db/schema/workspace-route-access";
-import { getEncryptionService } from "./encryption";
+import { encryptionContext, getEncryptionService } from "./encryption";
 import { invalidateAllProxyRouteAccessCache, invalidateProxyRouteAccessCache } from "./proxy-cache";
 
 const encryption = getEncryptionService();
@@ -40,7 +40,10 @@ export async function upsertWorkspaceRouteAccess(
     return;
   }
 
-  const encryptedHeaders = encryption.encrypt(JSON.stringify(normalizedHeaders));
+  const encryptedHeaders = encryption.encryptForRecord(
+    JSON.stringify(normalizedHeaders),
+    encryptionContext("workspace-route", workspaceId, String(port)),
+  );
   const now = new Date();
 
   const [existing] = await executor
@@ -96,7 +99,12 @@ export async function getWorkspaceRouteAccess(
       .limit(1);
 
     if (exactMatch) {
-      return JSON.parse(encryption.decrypt(exactMatch.encryptedHeaders)) as UpstreamHeaders;
+      return JSON.parse(
+        encryption.decryptForRecord(
+          exactMatch.encryptedHeaders,
+          encryptionContext("workspace-route", workspaceId, String(port)),
+        ),
+      ) as UpstreamHeaders;
     }
   }
 
@@ -110,5 +118,10 @@ export async function getWorkspaceRouteAccess(
     return null;
   }
 
-  return JSON.parse(encryption.decrypt(workspaceLevelAccess.encryptedHeaders)) as UpstreamHeaders;
+  return JSON.parse(
+    encryption.decryptForRecord(
+      workspaceLevelAccess.encryptedHeaders,
+      encryptionContext("workspace-route", workspaceId, "null"),
+    ),
+  ) as UpstreamHeaders;
 }

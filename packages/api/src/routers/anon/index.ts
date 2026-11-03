@@ -317,8 +317,7 @@ export const anonRouter = router({
         // OpenCode ships with built-in free models, so we don't inject any
         // model credentials. We DO mint a basic-auth password so the visitor
         // can connect from the OpenCode desktop app or CLI (those clients
-        // can't carry our cookie). Plaintext storage is fine here: the row
-        // is gone in 10 minutes regardless.
+        // can't carry our cookie). The database copy is encrypted.
         const serverUsername = "opencode";
         const serverPassword = randomBytes(16).toString("hex");
 
@@ -398,7 +397,10 @@ export const anonRouter = router({
             editorAccessEnabled: false,
             editorTarget: null,
             sshConnection: null,
-            serverPassword: encryptWorkspacePassword(serverPassword),
+            serverPassword: encryptWorkspacePassword(serverPassword, {
+              id: workspaceId,
+              userId: anonUser.id,
+            }),
             upstreamUrl: workspaceInfo.upstreamUrl,
             status: "running",
             hostingType: "cloud",

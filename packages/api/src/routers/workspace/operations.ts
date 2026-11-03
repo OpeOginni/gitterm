@@ -376,7 +376,7 @@ export const workspaceOperationsRouter = router({
       }
 
       await updateWorkspaceByIdAndInvalidate(input.workspaceId, {
-        serverPassword: encryptWorkspacePassword(input.credential.trim()),
+        serverPassword: encryptWorkspacePassword(input.credential.trim(), ws),
       });
 
       logger.info("workspace access credential reported", {

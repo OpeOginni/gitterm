@@ -72,7 +72,10 @@
     "opencode-upgrade": "gh workflow run publish-workspace-runtime-images.yml",
     "security:rewrap": "bun run packages/api/src/scripts/rewrap-encryption.ts",
     "security:rewrap:dev": "bun --env-file=apps/server/.env.development.local run packages/api/src/scripts/rewrap-encryption.ts",
-    "security:rewrap:prod": "bun --env-file=apps/server/.env run packages/api/src/scripts/rewrap-encryption.ts"
+    "security:rewrap:prod": "bun --env-file=apps/server/.env run packages/api/src/scripts/rewrap-encryption.ts",
+    "security:oauth": "bun run packages/auth/src/scripts/encrypt-oauth-tokens.ts",
+    "security:oauth:dev": "bun --env-file=apps/server/.env.development.local run packages/auth/src/scripts/encrypt-oauth-tokens.ts",
+    "security:oauth:prod": "bun --env-file=apps/server/.env run packages/auth/src/scripts/encrypt-oauth-tokens.ts"
   },
   "dependencies": {
     "@trpc/client": "^11.8.1",

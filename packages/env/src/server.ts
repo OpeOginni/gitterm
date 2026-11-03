@@ -79,6 +79,9 @@ const baseSchema = z
     ENCRYPTION_MASTER_KEY_ID: z.string().optional().default("primary"),
     /** JSON object of key-id to 64-character hex key, used to decrypt during rotation. */
     ENCRYPTION_MASTER_KEYS: optional,
+    // Keep v2 writes until every service has the record-bound reader deployed.
+    ENCRYPTION_WRITE_VERSION: z.enum(["v2", "v3"]).default("v2"),
+    ENCRYPTION_ALLOW_INSECURE_DEV_KEY: boolWithDefault(false),
 
     // Routing
     ROUTING_MODE: routingMode,
