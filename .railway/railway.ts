@@ -11,7 +11,7 @@ import {
   volume,
 } from "railway/iac";
 
-export default defineRailway(() => {
+export default defineRailway((ctx) => {
   const gitterm = github("OpeOginni/gitterm", { checkSuites: false });
 
   const Postgres = database("Postgres", "postgres", {
@@ -47,6 +47,11 @@ export default defineRailway(() => {
   });
 
   const rootWatch = ["turbo.json", "package.json", "bun.lock"];
+  // Hardened credential writes, set once as shared variables (docs/credential-security.md).
+  const credentialWrites = {
+    ENCRYPTION_WRITE_VERSION: ctx.shared.ENCRYPTION_WRITE_VERSION,
+    AUTH_ENCRYPT_OAUTH_TOKENS: ctx.shared.AUTH_ENCRYPT_OAUTH_TOKENS,
+  };
 
   const IdleInstanceReaper = service("Idle Instance Reaper", {
     source: gitterm,
@@ -182,6 +187,7 @@ export default defineRailway(() => {
       ENABLE_GITHUB_AUTH: preserve(),
       ENCRYPTION_MASTER_KEY: preserve(),
       ENCRYPTION_MASTER_KEY_ID: preserve(),
+      ...credentialWrites,
       GITHUB_APP_CLIENT_ID: preserve(),
       GITHUB_APP_CLIENT_SECRET: preserve(),
       GITHUB_APP_ID: preserve(),
@@ -273,6 +279,7 @@ export default defineRailway(() => {
       BASE_DOMAIN: preserve(),
       BETTER_AUTH_SECRET: preserve(),
       DATABASE_URL: preserve(),
+      ...credentialWrites,
       DISCORD_DM_CHANNEL_ID: preserve(),
       DISCORD_TOKEN: preserve(),
       GITHUB_WEBHOOK_SECRET: preserve(),
