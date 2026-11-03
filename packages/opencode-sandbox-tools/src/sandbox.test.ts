@@ -1,6 +1,7 @@
 import { expect, mock, test } from "bun:test";
 
 const created: { publicPreviews?: boolean }[] = [];
+let previews = "either";
 const actual = await import("@gitterm/sdk/sandbox");
 mock.module("@gitterm/sdk/sandbox", () => ({
   ...actual,
@@ -8,6 +9,9 @@ mock.module("@gitterm/sdk/sandbox", () => ({
   createSandboxClient: () => ({
     identity: { mode: "direct", account: "e2b", provider: "e2b" },
     limits: { defaultLifetimeMinutes: 30, maxSandboxes: 2 },
+    get capabilities() {
+      return { previews };
+    },
     list: async () => [],
     create: async (input: { publicPreviews?: boolean }) => {
       created.push(input);
@@ -73,4 +77,16 @@ test("without the option, previews are private unless the agent asks and you app
     asked: ["gitterm.sandbox.provision", "gitterm.sandbox.public"],
     publicPreviews: true,
   });
+});
+
+test("where previews are always private, nothing is asked and nothing is made public", async () => {
+  previews = "private";
+  try {
+    expect(await createSandbox({}, { publicPreviews: true })).toEqual({
+      asked: ["gitterm.sandbox.provision"],
+      publicPreviews: false,
+    });
+  } finally {
+    previews = "either";
+  }
 });

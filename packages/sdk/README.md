@@ -676,8 +676,9 @@ duplicate and blank labels are dropped. Hosted users need the API redeployed for
 
 The quick start above shows a complete relay. Rejecting a permission or dismissing a question
 ends the turn: OpenCode records a failed tool call and the run finishes. A run left
-`awaiting_input` does not keep its workspace awake; if nobody answers before the workspace's
-idle timeout pauses it, the run is cancelled with `"Workspace paused while waiting for input"`.
+`awaiting_input` keeps its workspace awake until the run's execution deadline, when it is
+cancelled. If the workspace stops anyway (paused or deleted), the run is cancelled with
+`"Workspace paused while waiting for input"`.
 To avoid prompts entirely in headless runs, allow the relevant tools in
 `opencode.config.permission` when creating the workspace.
 

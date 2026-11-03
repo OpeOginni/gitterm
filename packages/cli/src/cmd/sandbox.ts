@@ -130,7 +130,12 @@ export async function runSandboxCreate(
     const { client, settings } = await clientFor(args);
     const summary = describeSandboxAccount(settings);
     await approve(args, `Create a billable sandbox charged to ${summary.chargedTo}?`);
-    if (args.public)
+    // Where previews are always private there is nothing to approve.
+    const publicPreviews =
+      (args.public ?? settings.publicPreviews) === true &&
+      client.capabilities.previews !== "private" &&
+      client.capabilities.previews !== "none";
+    if (args.public && publicPreviews)
       await approve(args, "Make every preview of this sandbox public to anyone with its URL?");
     await guarded(
       args,
@@ -141,7 +146,7 @@ export async function runSandboxCreate(
           purpose: "cli",
           project: process.cwd(),
           lifetimeMinutes: args.lifetime,
-          publicPreviews: args.public ?? settings.publicPreviews,
+          publicPreviews,
         }),
       (record) =>
         success(

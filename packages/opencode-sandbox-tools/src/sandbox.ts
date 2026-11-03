@@ -153,12 +153,13 @@ export async function registerSandboxTools(
         lifetimeMinutes: {
           type: "integer",
           minimum: 1,
-          description: "Deleted (direct) or terminated (managed) after this",
+          description:
+            "Minutes the sandbox lives. What happens at the end (deleted, archived, terminated, or nothing) depends on the provider; the sandbox_list tool shows it.",
         },
         publicPreviews: {
           type: "boolean",
           description:
-            "Anyone with a preview URL can open it. Fixed at creation; requires separate approval unless the plugin options already turn it on.",
+            "Anyone with a preview URL can open it. Fixed at creation; requires separate approval unless the plugin options already turn it on. Required where previews are always public (Vercel); ignored where they are always private.",
         },
       }),
       async execute(input, context) {
@@ -179,8 +180,12 @@ export async function registerSandboxTools(
             maxSandboxes: current.limits.maxSandboxes,
           },
         );
-        // `publicPreviews` in the plugin options is the user's standing approval.
-        const publicPreviews = settings!.publicPreviews === true || args.publicPreviews === true;
+        // `publicPreviews` in the plugin options is the user's standing approval. Where previews
+        // are always private there is nothing to approve.
+        const publicPreviews =
+          current.capabilities.previews !== "private" &&
+          current.capabilities.previews !== "none" &&
+          (settings!.publicPreviews === true || args.publicPreviews === true);
         if (publicPreviews && !settings!.publicPreviews)
           await assert(context, "gitterm.sandbox.public", [`${mode}:${account}`], [], {
             warning: "Every port of this sandbox will be reachable by anyone with its URL.",

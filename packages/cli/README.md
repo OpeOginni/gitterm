@@ -46,9 +46,11 @@ variables:
 ```bash
 gitterm sandbox account                     # selected mode, account, who is charged
 gitterm sandbox create --lifetime 30
+gitterm sandbox list                        # live sandboxes for the account
 gitterm sandbox sync <id>                   # current checkout, including uncommitted changes
 gitterm sandbox exec <id> "npm test" --wait 300
 gitterm sandbox job <id> <jobId> --offset 0 --limit 65536
+gitterm sandbox cancel <id> <jobId>
 gitterm sandbox preview <id> 3000 --command "npm run dev" --serve
 gitterm sandbox artifact <id> <jobId> dist/app.tar.gz
 gitterm sandbox apply <id> <localPath> dist/app.tar.gz  # checked against that job's snapshot

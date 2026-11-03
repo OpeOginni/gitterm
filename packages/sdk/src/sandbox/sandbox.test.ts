@@ -379,6 +379,74 @@ describe("paused managed sandboxes", () => {
     expect(sandbox.resumes).toBe(1);
     expect((await store.get(ref))?.snapshot).toBeNull();
   });
+
+  test("an explicit resume also forgets files the provider discarded", async () => {
+    const { client, ref, store } = await pausedClient("state-losing");
+    expect((await client.resume(ref)).snapshot).toBeNull();
+    expect((await store.get(ref))?.snapshot).toBeNull();
+  });
+});
+
+test("a preview server is stopped with its sandbox, not at the job limit", async () => {
+  const server = Bun.serve({ port: 0, fetch: () => new Response("ok") });
+  const identity = { mode: "direct" as const, provider: "e2b" as const, account: "a" };
+  const runs: string[] = [];
+  const backend = {
+    identity,
+    home: "/home/user",
+    capabilities: {
+      expiry: "hard" as const,
+      previews: "either" as const,
+      pause: "stateful" as const,
+    },
+    get: async (id: string) => ({
+      ...identity,
+      id,
+      state: "running",
+      name: "s",
+      createdAt: null,
+      expiresAt: null,
+      labels: {},
+    }),
+    run: async (_id: string, command: string) => {
+      runs.push(command);
+      return { exitCode: 0, stdout: "started", stderr: "" };
+    },
+    writeFile: async () => {},
+    readFile: async () => new Uint8Array(),
+    preview: async () => ({ url: `http://localhost:${server.port}/`, headers: {} }),
+  } as unknown as Parameters<typeof createSandboxClient>[0]["backend"];
+  const store = createFileSandboxStore(await mkdtemp(path.join(tmpdir(), "gitterm-store-")));
+  const ref = { ...identity, id: "sbx1" };
+  const now = Date.now();
+  await store.put({
+    ...ref,
+    name: "s",
+    purpose: "",
+    project: null,
+    sessionId: null,
+    state: "running",
+    publicPreviews: false,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + 120 * 60_000).toISOString(),
+    snapshot: null,
+    jobs: {},
+    previews: {},
+    updatedAt: new Date(now).toISOString(),
+  });
+  try {
+    const client = createSandboxClient({ backend, store, limits: { maxJobMinutes: 30 } });
+    const preview = await client.preview(ref, { port: 3000, command: "bun run dev" });
+    const minutes = (await store.get(ref))!.jobs[preview.jobId!]!.timeoutMs / 60_000;
+    expect(minutes).toBeGreaterThan(119);
+    expect(minutes).toBeLessThanOrEqual(120);
+    // Ordinary jobs keep the job limit.
+    await expect(client.exec(ref, { command: "x", timeoutMinutes: 60 })).rejects.toThrow(
+      /30 minutes/,
+    );
+  } finally {
+    server.stop(true);
+  }
 });
 
 describe("preview visibility", () => {

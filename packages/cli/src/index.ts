@@ -174,7 +174,11 @@ if (workspaceEnvironment) {
           (b) =>
             b.options({
               name: { type: "string" },
-              lifetime: { type: "number", description: "Minutes until deletion" },
+              lifetime: {
+                type: "number",
+                description:
+                  "Minutes the sandbox lives (what happens then depends on the provider)",
+              },
               public: { type: "boolean", description: "Public previews (fixed at creation)" },
               yes: { alias: "y", type: "boolean", description: "Approve without prompting" },
             }),

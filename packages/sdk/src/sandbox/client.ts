@@ -172,22 +172,31 @@ export function createSandboxClient(options: {
     return stored ?? recordFrom(info, null);
   }
 
+  /** Resumes a paused sandbox. Where pausing discards files, the synced snapshot is gone too. */
+  async function resumeSandbox(
+    ref: SandboxRef,
+    resume: (id: string) => Promise<void>,
+  ): Promise<{ record: SandboxRecord; filesLost: boolean }> {
+    await resume(ref.id);
+    const record = await load(ref);
+    if (record.state !== "running" || backend.capabilities.pause !== "state-losing")
+      return { record, filesLost: false };
+    const cleared = await store.update(ref, (stored) => {
+      stored.snapshot = null;
+    });
+    return { record: cleared ?? record, filesLost: true };
+  }
+
   /** A sandbox paused for inactivity is resumed on use. `sync` restores files itself. */
   async function running(ref: SandboxRef, use: "sync" | "other" = "other"): Promise<SandboxRecord> {
     let record = await load(ref);
     if (record.state === "paused" && backend.resume) {
-      await backend.resume(ref.id);
-      record = await load(ref);
-      if (record.state === "running" && backend.capabilities.pause === "state-losing") {
-        record =
-          (await store.update(ref, (stored) => {
-            stored.snapshot = null;
-          })) ?? record;
-        if (use !== "sync")
-          throw new Error(
-            `Sandbox ${ref.id} was paused and is running again, but ${ref.provider} discards files and processes on pause. Sync again, then retry; earlier jobs cannot be reattached.`,
-          );
-      }
+      const resumed = await resumeSandbox(ref, backend.resume);
+      record = resumed.record;
+      if (resumed.filesLost && use !== "sync")
+        throw new Error(
+          `Sandbox ${ref.id} was paused and is running again, but ${ref.provider} discards files and processes on pause. Sync again, then retry; earlier jobs cannot be reattached.`,
+        );
     }
     if (record.state === "terminated")
       throw new Error(`Sandbox ${ref.id} no longer exists (deleted or expired).`);
@@ -231,6 +240,48 @@ export function createSandboxClient(options: {
         truncated: offset > 0 || offset + bytes.byteLength < state.logBytes,
       },
     };
+  }
+
+  /** Starts a job. `maxMinutes` bounds its timeout: the job limit, or a preview's sandbox lifetime. */
+  async function launchJob(
+    ref: SandboxRef,
+    input: SandboxExecOptions,
+    maxMinutes: number,
+  ): Promise<JobView> {
+    const record = await running(ref);
+    const timeoutMinutes = input.timeoutMinutes ?? Math.min(10, maxMinutes);
+    if (!(timeoutMinutes > 0) || timeoutMinutes > maxMinutes)
+      throw new Error(`Job timeout must be between 0 and ${maxMinutes} minutes`);
+    // Refused before any record is written or anything is sent.
+    assertRedactableSecrets(input.env);
+    for (const value of Object.values(input.env ?? {})) secrets.add(value);
+    const id = newJobId();
+    const cwd = resolveCwd(backend.home, input.cwd);
+    const job: JobRecord = {
+      id,
+      command: input.command,
+      cwd,
+      snapshotId: record.snapshot?.id ?? null,
+      snapshotDigest: record.snapshot?.digest ?? null,
+      snapshotRoot: record.snapshot?.root ?? null,
+      status: "running",
+      exitCode: null,
+      startedAt: null,
+      finishedAt: null,
+      timeoutMs: Math.round(timeoutMinutes * 60_000),
+      secretNames: Object.keys(input.env ?? {}),
+    };
+    // Persist first so a crash after launch still leaves a reattachable record.
+    await store.update(record, (stored) => {
+      stored.jobs[id] = job;
+    });
+    await startJob(backend, ref.id, id, {
+      command: input.command,
+      cwd,
+      timeoutMs: job.timeoutMs,
+      env: input.env,
+    });
+    return api.wait(ref, id, input.waitMs ?? 0);
   }
 
   const api = {
@@ -330,42 +381,8 @@ export function createSandboxClient(options: {
       return { snapshot: captured.snapshot, verified: result.verified };
     },
 
-    async exec(ref: SandboxRef, input: SandboxExecOptions): Promise<JobView> {
-      const record = await running(ref);
-      const timeoutMinutes = input.timeoutMinutes ?? Math.min(10, limits.maxJobMinutes);
-      if (!(timeoutMinutes > 0) || timeoutMinutes > limits.maxJobMinutes)
-        throw new Error(`Job timeout must be between 0 and ${limits.maxJobMinutes} minutes`);
-      // Refused before any record is written or anything is sent.
-      assertRedactableSecrets(input.env);
-      for (const value of Object.values(input.env ?? {})) secrets.add(value);
-      const id = newJobId();
-      const cwd = resolveCwd(backend.home, input.cwd);
-      const job: JobRecord = {
-        id,
-        command: input.command,
-        cwd,
-        snapshotId: record.snapshot?.id ?? null,
-        snapshotDigest: record.snapshot?.digest ?? null,
-        snapshotRoot: record.snapshot?.root ?? null,
-        status: "running",
-        exitCode: null,
-        startedAt: null,
-        finishedAt: null,
-        timeoutMs: Math.round(timeoutMinutes * 60_000),
-        secretNames: Object.keys(input.env ?? {}),
-      };
-      // Persist first so a crash after launch still leaves a reattachable record.
-      await store.update(record, (stored) => {
-        stored.jobs[id] = job;
-      });
-      await startJob(backend, ref.id, id, {
-        command: input.command,
-        cwd,
-        timeoutMs: job.timeoutMs,
-        env: input.env,
-      });
-      return api.wait(ref, id, input.waitMs ?? 0);
-    },
+    exec: (ref: SandboxRef, input: SandboxExecOptions) =>
+      launchJob(ref, input, limits.maxJobMinutes),
 
     async wait(
       ref: SandboxRef,
@@ -411,12 +428,17 @@ export function createSandboxClient(options: {
         );
       let jobId: string | null = null;
       if (input.command) {
+        // A preview server lives as long as its sandbox; without a lifetime, as long as any job.
+        const minutes = Math.max(
+          limits.maxJobMinutes,
+          record.expiresAt ? (Date.parse(record.expiresAt) - Date.now()) / 60_000 : 0,
+        );
         jobId = (
-          await api.exec(ref, {
-            command: input.command,
-            cwd: input.cwd,
-            timeoutMinutes: limits.maxJobMinutes,
-          })
+          await launchJob(
+            ref,
+            { command: input.command, cwd: input.cwd, timeoutMinutes: minutes },
+            minutes,
+          )
         ).job.id;
       }
       const access = await backend.preview(ref.id, input.port);
@@ -554,9 +576,8 @@ export function createSandboxClient(options: {
     async resume(ref: SandboxRef): Promise<SandboxRecord> {
       assertRef(ref);
       if (!backend.resume)
-        throw new Error("Direct sandboxes are deleted at their deadline and cannot be resumed.");
-      await backend.resume(ref.id);
-      return load(ref);
+        throw new Error("Only managed sandboxes pause, so direct sandboxes cannot be resumed.");
+      return (await resumeSandbox(ref, backend.resume)).record;
     },
 
     /** Deletes the sandbox and confirms with the provider that it is gone. */

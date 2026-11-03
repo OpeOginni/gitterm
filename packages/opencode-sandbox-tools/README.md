@@ -94,15 +94,21 @@ The right sidebar lists this checkout's sandboxes, with what each is running.
 "options": {
   "account": "e2b",
   "accounts": { … },
-  "limits": { "maxSandboxes": 2, "maxLifetimeMinutes": 60, "maxJobMinutes": 30 },
+  "limits": {
+    "maxSandboxes": 2,
+    "maxLifetimeMinutes": 60,
+    "defaultLifetimeMinutes": 30,
+    "maxJobMinutes": 30
+  },
   "exclude": ["fixtures/large/**"],
   "publicPreviews": true
 }
 ```
 
 `publicPreviews: true` makes every preview URL open to anyone who has it, with no
-prompt. Works on E2B and Daytona (Vercel is always public; Boat, exe.dev, and Railway are
-always private).
+prompt. Works on E2B and Daytona. Boat, exe.dev, and Railway are always private, so it
+is ignored there. Vercel is always public, so a Vercel sandbox can only show previews when
+created with public previews (this setting, or your approval when the agent asks).
 
 To stop being asked every time, allow actions in your OpenCode `permissions`:
 

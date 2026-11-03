@@ -28,9 +28,9 @@ runs on the deployment's ECS cluster and load balancer.
 
 | Provider | managed | direct                             | Image                                    | Abandoned sandbox                                             | Previews                                           |
 | -------- | ------- | ---------------------------------- | ---------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------- |
-| E2B      | Yes     | Yes                                | `base` template                          | Deleted at the lifetime (`onTimeout: kill`)                   | Private (access header)                            |
-| Daytona  | Yes     | Yes                                | `node:22-bookworm-slim`                  | Deleted at the lifetime (`ttlMinutes`)                        | Private (access header)                            |
-| Vercel   | Yes     | Yes                                | `node24` runtime                         | Stopped at the timeout; files discarded                       | Public URL only                                    |
+| E2B      | Yes     | Yes                                | `base` template                          | Deleted at the lifetime (`onTimeout: kill`)                   | Private (access header), or public if created so   |
+| Daytona  | Yes     | Yes                                | `node:22-bookworm-slim`                  | Deleted at the lifetime (`ttlMinutes`)                        | Private (access header), or public if created so   |
+| Vercel   | Yes     | Yes                                | `node24` runtime                         | Stopped at the timeout; files discarded                       | Public URL only; create with `publicPreviews`      |
 | Boat     | Yes     | Yes                                | Boat base (includes `opencode`, unused)  | Stopped and archived at the TTL; storage kept until destroyed | Private (`_port_auth` cookie)                      |
 | exe.dev  | Yes     | Yes, with `allowUnboundedLifetime` | `node:22-bookworm`                       | Never deleted by the provider                                 | Private (VM key), ports 3000-9999                  |
 | Railway  | Yes     | Yes, with `allowUnboundedLifetime` | `node:22-bookworm-slim` + command server | Never deleted by the provider                                 | Private (command-server token); port 8080 reserved |
@@ -168,7 +168,8 @@ public previews on every provider (Boat included). Private previews would then o
 Gitterm login instead of a local proxy.
 
 Closing the plugin closes its proxies only. Sandboxes and their preview servers keep
-running until destroyed or until their lifetime ends.
+running until destroyed or until the sandbox's lifetime ends. In a sandbox without a
+lifetime, a preview server stops after `maxJobMinutes`.
 
 ## Credentials
 
@@ -265,7 +266,7 @@ The CLI reads the same shape from `~/.config/gitterm/sandbox.json` (or
 | `gitterm.sandbox.upload`    | `<mode>:<account>:<checkout root>` | Syncing. The prompt lists modified, untracked, deleted, and excluded files.                    |
 | `gitterm.sandbox.exec`      | `<mode>:<account>:<sandbox id>`    | Running a command or starting a preview server. "Always" saves `<mode>:<account>:*`.           |
 | `gitterm.sandbox.secret`    | variable names                     | Passing local environment variables through `secretEnv`                                        |
-| `gitterm.sandbox.browser`   | `<mode>:<account>:<id>:<port>`     | Creating a loopback proxy for a private preview                                                |
+| `gitterm.sandbox.browser`   | `<mode>:<account>:<id>:<port>`     | Creating a loopback proxy for a private preview. "Always" saves `<mode>:<account>:*`.          |
 | `gitterm.sandbox.apply`     | target path                        | Writing an artifact into the checkout. "Always" is not offered.                                |
 
 Listing sandboxes, reading jobs and logs, cancelling, downloading artifacts into the
