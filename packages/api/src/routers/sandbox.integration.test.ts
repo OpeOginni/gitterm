@@ -36,6 +36,7 @@ const { proxyResolverRouter } = await import("./proxy");
 const { getWorkspacePortUrl } = await import("../utils/routing");
 const { Hono } = await import("hono");
 const { auth } = await import("@gitterm/auth");
+const { getWorkspaceRouteAccess } = await import("../service/workspace-route-access");
 /** Providers this suite enabled, disabled again afterwards. */
 let enabledForTest: string[] = [];
 
@@ -424,6 +425,7 @@ async function e2bWebhook(providerId: string, type: "paused" | "resumed") {
 integration("#5 a signed E2B pause webhook settles a sandbox's status and usage", async () => {
   await terminateAll(userId);
   const sandbox = await caller(userId).create({ name: "webhook", lifetimeMinutes: 5 });
+  await caller(userId).preview({ sandboxId: sandbox.id, port: 3000, public: true });
   const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
   const providerId = row!.externalInstanceId.split(":").at(-1)!;
   expect((await e2bWebhook(providerId, "paused")).updated).toHaveLength(1);
@@ -433,6 +435,10 @@ integration("#5 a signed E2B pause webhook settles a sandbox's status and usage"
     .from(usageSession)
     .where(eq(usageSession.workspaceId, sandbox.id));
   expect(sessions[0]!.stoppedAt).not.toBeNull();
+  // The preview keeps its provider access, so its shared URL works again after a resume.
+  expect(await getWorkspaceRouteAccess(sandbox.id, 3000)).toEqual({
+    "e2b-traffic-access-token": "t",
+  });
 });
 
 integration("a sandbox is provisioned at the machine profile it is billed at", async () => {

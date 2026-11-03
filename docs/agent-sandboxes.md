@@ -168,6 +168,8 @@ with public previews gets URLs anyone can open; otherwise they open only for the
 signed in to Gitterm in a browser. This works on Boat too, which has no public mode of its
 own. The result still carries the direct provider access, for the loopback proxy and
 browser automation. Managed Vercel, Railway, and AWS previews work as in direct mode.
+Preview URLs survive an idle pause and answer again once the sandbox resumes; if one
+does not, open the preview again to refresh its route.
 
 Closing the plugin closes its proxies only. Sandboxes and their preview servers keep
 running until destroyed or until the sandbox's lifetime ends. In a sandbox without a

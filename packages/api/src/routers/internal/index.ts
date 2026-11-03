@@ -30,7 +30,10 @@ import { boatWebhookBoxId, boatWebhookSchema, verifyBoatWebhookSignature } from 
 import { externalIdMatches, sandboxHandle } from "../../service/sandbox-transport";
 import type { BoatConfig } from "../../providers/boat/types";
 import { getProviderConfigService } from "../../service/config/provider-config";
-import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import {
+  deleteAllWorkspaceRouteAccess,
+  deleteRouteAccessOnPause,
+} from "../../service/workspace-route-access";
 import {
   updateWorkspaceByIdAndInvalidate,
   updateWorkspaceStatusAndInvalidate,
@@ -695,7 +698,7 @@ export const internalRouter = router({
           updatedWorkspaces.map((updatedWorkspace) =>
             Promise.all([
               closeUsageSession(updatedWorkspace.id, "provider_auto"),
-              deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+              deleteRouteAccessOnPause(updatedWorkspace.id),
               finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
             ]),
           ),
@@ -847,7 +850,7 @@ export const internalRouter = router({
           updated.map((updatedWorkspace) =>
             Promise.all([
               closeUsageSession(updatedWorkspace.id, "provider_auto"),
-              deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+              deleteRouteAccessOnPause(updatedWorkspace.id),
               finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
             ]),
           ),
@@ -976,7 +979,7 @@ export const internalRouter = router({
         updated.map((updatedWorkspace) =>
           Promise.all([
             closeUsageSession(updatedWorkspace.id, event === "error" ? "error" : "provider_auto"),
-            deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            deleteRouteAccessOnPause(updatedWorkspace.id),
             finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
           ]),
         ),
