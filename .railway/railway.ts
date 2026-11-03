@@ -26,7 +26,7 @@ export default defineRailway((ctx) => {
     startCommand:
       '/bin/sh -c "rm -rf $RAILWAY_VOLUME_MOUNT_PATH/lost+found/ && exec docker-entrypoint.sh redis-server --requirepass $REDIS_PASSWORD --save 60 1 --dir $RAILWAY_VOLUME_MOUNT_PATH"',
   };
-  Redis.networking = { privateNetworkEndpoint: "redis", tcpProxies: { "6379": {} } };
+  Redis.networking = { privateNetworkEndpoint: "redis" };
   const postgresVolume = volume("postgres-volume", {
     alerts: { usage: { "100": {}, "80": {}, "95": {} } },
     allowOnlineResize: true,
@@ -78,7 +78,7 @@ export default defineRailway((ctx) => {
       ENABLE_IDLE_REAPING: preserve(),
       ENABLE_QUOTA_ENFORCEMENT: preserve(),
       INTERNAL_API_KEY: preserve(),
-      REAP_INTERVAL_MINUTES: preserve(),
+      REAP_INTERVAL_MINUTES: "0",
       SERVER_URL: preserve(),
       WORKSPACE_JWT_SECRET: preserve(),
     },
