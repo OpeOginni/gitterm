@@ -376,7 +376,7 @@ export async function registerSandboxTools(
     editor.add({
       name: "sandbox_preview",
       description:
-        "Expose a sandbox port, optionally starting a server command first, and wait until it answers. Private previews need an access header; set localProxy for a loopback URL that browser automation can open.",
+        "Expose a sandbox port, optionally starting a server command first, and wait until it answers. Private previews need an access header (or, for a URL served by Gitterm, the user's Gitterm login); set localProxy for a loopback URL that browser automation can open.",
       input: object(
         {
           sandboxId,
@@ -418,14 +418,14 @@ export async function registerSandboxTools(
           );
           const key = `${ref.id}:${port}`;
           await proxies.get(key)?.close();
-          const proxy = await startPreviewProxy({ url: preview.url, headers: preview.headers });
+          const proxy = await startPreviewProxy(preview.access);
           proxies.set(key, proxy);
           local = proxy.url;
         }
         return {
           content: [
             `Preview of port ${port} in ${ref.id}: ${preview.ready ? "ready" : "not answering yet"}.`,
-            `URL: ${preview.url} (${preview.public ? "public: anyone with the URL" : "private: requests without the access header are rejected"})`,
+            `URL: ${preview.url} (${preview.public ? "public: anyone with the URL" : preview.viaGitterm ? "private: opens only for the user, signed in to Gitterm in their browser" : "private: requests without the access header are rejected"})`,
             `Unauthenticated request status: ${preview.unauthenticatedStatus ?? "no response"}`,
             local
               ? `Loopback URL for approved local browser automation (valid while OpenCode runs): ${local}`

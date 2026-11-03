@@ -1,5 +1,6 @@
 import {
   accountHash,
+  GITTERM_PREVIEW_PROVIDERS,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   type SandboxProviderInfo,
@@ -61,7 +62,23 @@ export interface SandboxBackend {
   ): Promise<SandboxCommandResult>;
   writeFile(id: string, path: string, data: Uint8Array): Promise<void>;
   readFile(id: string, path: string): Promise<Uint8Array>;
-  preview(id: string, port: number): Promise<SandboxPreviewAccess>;
+  /**
+   * `gittermUrl` is set when Gitterm serves the preview: open to anyone if `public`, else
+   * only to the owner signed in to Gitterm. `url` and `headers` reach the provider directly.
+   */
+  preview(
+    id: string,
+    port: number,
+    options?: { public?: boolean },
+  ): Promise<SandboxPreviewAccess & { gittermUrl?: string }>;
+}
+
+/** What a managed account offers: Gitterm serves previews of some providers itself. */
+export function managedCapabilities(provider: SandboxProvider): SandboxCapabilities {
+  const { capabilities } = SANDBOX_PROVIDER_PROFILES[provider];
+  return GITTERM_PREVIEW_PROVIDERS.includes(provider)
+    ? { ...capabilities, previews: "either" }
+    : capabilities;
 }
 
 export class SandboxAccountError extends GittermError {
@@ -211,7 +228,8 @@ export function createManagedSandboxBackend(options: {
 
   return {
     identity,
-    ...SANDBOX_PROVIDER_PROFILES[provider],
+    home: SANDBOX_PROVIDER_PROFILES[provider].home,
+    capabilities: managedCapabilities(provider),
     async create(input) {
       return toInfo(
         await client.sandboxes.create({
@@ -268,6 +286,6 @@ export function createManagedSandboxBackend(options: {
         throw new Error("Could not assemble the uploaded file in the sandbox");
     },
     readFile: (id, path) => client.sandboxes.readFile(id, path),
-    preview: (id, port) => client.sandboxes.preview(id, port),
+    preview: (id, port, previewOptions) => client.sandboxes.preview(id, port, previewOptions),
   };
 }

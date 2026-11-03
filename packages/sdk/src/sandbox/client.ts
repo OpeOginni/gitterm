@@ -73,13 +73,16 @@ export type JobLog = {
 export type JobView = { job: JobRecord; state: JobState; log: JobLog };
 
 export type PreviewResult = {
+  /** The URL to open. */
   url: string;
   port: number;
   public: boolean;
-  /** Needed for private previews. Keep away from models, logs, and storage. */
-  headers: Record<string, string>;
+  /** `url` is served by Gitterm; when private, it opens for the owner signed in to Gitterm. */
+  viaGitterm: boolean;
+  /** Direct provider access, for local proxies. The headers are secret: keep them away from models, logs, and storage. */
+  access: { url: string; headers: Record<string, string> };
   ready: boolean;
-  /** HTTP status for a request without the access header (401/403 means access is enforced). */
+  /** HTTP status of `url` without credentials (401/403 means access is enforced). */
   unauthenticatedStatus: number | null;
   jobId: string | null;
 };
@@ -441,7 +444,10 @@ export function createSandboxClient(options: {
           )
         ).job.id;
       }
-      const access = await backend.preview(ref.id, input.port);
+      const { gittermUrl, ...access } = await backend.preview(ref.id, input.port, {
+        public: record.publicPreviews,
+      });
+      const url = gittermUrl ?? access.url;
       // Providers without a public mode keep previews private whatever the sandbox asked for.
       const isPublic =
         backend.capabilities.previews === "public" ||
@@ -472,7 +478,7 @@ export function createSandboxClient(options: {
           await sleep(1_000);
         }
       }
-      const unauthenticatedStatus = await fetch(access.url, {
+      const unauthenticatedStatus = await fetch(url, {
         redirect: "manual",
         signal: AbortSignal.timeout(5_000),
       })
@@ -485,15 +491,16 @@ export function createSandboxClient(options: {
         stored.previews[String(input.port)] = {
           port: input.port,
           jobId,
-          url: access.url,
+          url,
           public: isPublic,
         };
       });
       return {
-        url: access.url,
+        url,
         port: input.port,
         public: isPublic,
-        headers: access.headers,
+        viaGitterm: Boolean(gittermUrl),
+        access,
         ready,
         unauthenticatedStatus,
         jobId,

@@ -291,14 +291,14 @@ export async function runSandboxPreview(
       .preview(refOf(client, args.sandboxId), { port: args.port, command: args.command })
       .finally(() => spin?.stop());
     // Access headers stay in this process; JSON output omits them.
-    const { headers: _headers, ...visible } = preview;
+    const { access: _access, ...visible } = preview;
     if (args.json && !args.serve) return printJson(visible);
     console.log(
-      `${preview.ready ? chalk.green("ready") : chalk.yellow("not answering")}  ${preview.url}  (${preview.public ? "public" : "private"}, unauthenticated status ${preview.unauthenticatedStatus ?? "-"})`,
+      `${preview.ready ? chalk.green("ready") : chalk.yellow("not answering")}  ${preview.url}  (${preview.public ? "public" : preview.viaGitterm ? "private: sign in to Gitterm" : "private"}, unauthenticated status ${preview.unauthenticatedStatus ?? "-"})`,
     );
     if (args.serve) {
       if (preview.public) return;
-      const proxy = await startPreviewProxy(preview);
+      const proxy = await startPreviewProxy(preview.access);
       console.log(`Local URL (until you press Ctrl-C): ${proxy.url}`);
       await new Promise<void>((resolve) => process.once("SIGINT", resolve));
       await proxy.close();

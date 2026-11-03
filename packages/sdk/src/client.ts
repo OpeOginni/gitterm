@@ -188,11 +188,15 @@ export type GittermClient = {
     ): Promise<{ exitCode: number; stdout: string; stderr: string }>;
     writeFile(sandboxId: string, path: string, data: Uint8Array): Promise<void>;
     readFile(sandboxId: string, path: string): Promise<Uint8Array>;
-    /** `headers` holds a sandbox-scoped access value for private previews. */
+    /**
+     * `headers` holds a sandbox-scoped access value for private previews. `gittermUrl`, when
+     * set, is served by Gitterm: open to anyone if `public`, else only to you signed in.
+     */
     preview(
       sandboxId: string,
       port: number,
-    ): Promise<{ url: string; headers: Record<string, string> }>;
+      options?: { public?: boolean },
+    ): Promise<{ url: string; headers: Record<string, string>; gittermUrl?: string }>;
     /** Resume a sandbox paused for inactivity. Subject to the same quota checks as creation. */
     resume(sandboxId: string): Promise<void>;
     terminate(sandboxId: string): Promise<void>;
@@ -771,9 +775,13 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           const result = await trpc.sandbox.readFile.mutate({ sandboxId, path });
           return new Uint8Array(Buffer.from(result?.contentBase64 ?? "", "base64"));
         }),
-      preview: (sandboxId, port) =>
+      preview: (sandboxId, port, options) =>
         run(async () => {
-          const result = await trpc.sandbox.preview.mutate({ sandboxId, port });
+          const result = await trpc.sandbox.preview.mutate({
+            sandboxId,
+            port,
+            public: options?.public,
+          });
           if (!result) throw new GittermError("SERVER_ERROR", "Sandbox preview returned no result");
           return result;
         }),

@@ -106,9 +106,11 @@ The right sidebar lists this checkout's sandboxes, with what each is running.
 ```
 
 `publicPreviews: true` makes every preview URL open to anyone who has it, with no
-prompt. Works on E2B and Daytona. Boat, exe.dev, and Railway are always private, so it
-is ignored there. Vercel is always public, so a Vercel sandbox can only show previews when
-created with public previews (this setting, or your approval when the agent asks).
+prompt. With your own key it works on E2B and Daytona. Boat, exe.dev, and Railway are
+always private, so it is ignored there. Vercel is always public, so a Vercel sandbox can
+only show previews when created with public previews (this setting, or your approval when
+the agent asks). With a GitTerm plan, GitTerm serves the preview, so it also works on Boat
+and exe.dev, and private previews open in your browser when you are signed in to GitTerm.
 
 To stop being asked every time, allow actions in your OpenCode `permissions`:
 
