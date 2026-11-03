@@ -108,7 +108,7 @@ A managed account uses your Gitterm plan. The Gitterm deployment holds the provi
 The provider must be enabled on the deployment and allowed by your plan. Creation also checks your run allowance and your workspace limit, which counts sandboxes too. For a self-hosted deployment, see `serverUrl` in [Account fields](/docs/reference/sandbox-tools#account-fields).
 
 > [!NOTE]
-> **Coming soon:** managed accounts will get previews served through Gitterm, on every provider. See [Public previews](/docs/sandboxes/jobs-and-previews#public-previews).
+> On E2B, Daytona, Boat, and exe.dev, managed previews are served through Gitterm. They can be public, or private and open in your browser when you are signed in to Gitterm. See [Previews through Gitterm](/docs/sandboxes/jobs-and-previews#previews-through-gitterm).
 
 ## Limits and exclusions
 

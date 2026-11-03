@@ -37,7 +37,7 @@ All steps are required.
    npx @gitterm/discord-bot
    ```
 
-   To run it in Docker instead, see [Host it with Docker](#host-it-with-docker). Before it connects, the bot checks the token, model credential, GitHub access, tools and compute. You should see a `✓` line for each, an `Invite the bot:` link, and `GitTerm Discord bot is running for <repository>.` If something is missing, it prints what to fix and exits.
+   To run it in Docker instead, see [Host it with Docker](#host-it-with-docker). Before it connects, the bot checks the token, model credential, GitHub access, tools and compute. You should see a `✓` line for each, an `Invite the bot:` link, and `GitTerm Discord bot is running for <repository>.` Missing GitHub access or a missing model credential prints a `!` warning, and the bot still starts. Any other problem prints what to fix and exits.
 
 5. **Invite it.** Open the `Invite the bot:` link and pick your server. The bot asks only for what it uses: view channels, send messages, create and post in threads, read message history, add reactions, and embed links.
 
@@ -75,7 +75,7 @@ Mention the bot with one word:
 
 - Each repository gets one workspace per channel. It pauses when idle and wakes with the next message, so the checkout, installed dependencies and branches stay where the agent left them.
 - Different servers never share a workspace. Set `GITTERM_BOT_SHARE_CHANNELS=true` to let equally trusted channels share one.
-- The workspace is named `discord-bot-<repository>`. Open it from the dashboard to see every thread's session. See [Connect to a workspace](/docs/workspaces/connect#bot-workspaces).
+- The workspace name uses only the repository name: `acme/api` becomes `discord-bot-api`. Open it from the dashboard to see every thread's session. See [Connect to a workspace](/docs/workspaces/connect#bot-workspaces).
 - A bot workspace gets only the chosen model's credential. It gets none of your saved environment variables or agent config.
 
 ## Saved settings

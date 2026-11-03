@@ -184,7 +184,7 @@ for await (const event of client.runs.events(run)) {
 { type: "question", reject: true }
 ```
 
-A run waiting for input doesn't keep the workspace awake. If the workspace pauses for idleness, the run is cancelled. To avoid prompts in unattended runs, allow tools in `opencode.config.permission` when you create the workspace.
+A run waiting for input keeps the workspace awake until you answer, cancel the run, or its `deadlineAt` passes. To avoid prompts in unattended runs, allow tools in `opencode.config.permission` when you create the workspace.
 
 ## Integrations
 
@@ -251,7 +251,9 @@ console.log(job.state.status, job.log.text);
 await sandboxes.destroy(sandbox);
 ```
 
-Methods: `create`, `list`, `sync`, `exec`, `job`, `wait`, `cancel`, `preview`, `fetchArtifact`, `applyArtifact`, `resume`, `destroy`.
+Methods: `create`, `list`, `get`, `sync`, `exec`, `job`, `wait`, `cancel`, `preview`, `fetchArtifact`, `applyArtifact`, `resume`, `destroy`.
+
+`preview()` returns `url`, the URL to open, with `public`, `ready`, and `viaGitterm` (true when Gitterm serves `url`; a private one opens for the owner signed in to Gitterm). `access` holds the direct provider `url` and `headers` for a local proxy such as `startPreviewProxy`. The headers are secret: keep them away from models, logs, and storage.
 
 The managed sandbox calls are also on the main client: `client.sandboxes.create`, `list`, `get`, `run`, `writeFile`, `readFile`, `preview`, `resume` and `terminate`.
 

@@ -52,13 +52,13 @@ The plugin uses the CLI's saved login. For a self-hosted deployment, run `gitter
 
 These go directly in the plugin's `options`. Without `accounts`, the tools report that sandboxes are not configured.
 
-| Option           | Type     | Required | Default               | What it does                                                                                                                                                                                                                |
-| ---------------- | -------- | -------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `account`        | string   | Yes      | None                  | Name of the account the tools use.                                                                                                                                                                                          |
-| `accounts`       | object   | Yes      | None                  | Map of account name to [account fields](#account-fields).                                                                                                                                                                   |
-| `limits`         | object   | No       | See [limits](#limits) | Caps on what the agent can start.                                                                                                                                                                                           |
-| `exclude`        | string[] | No       | None                  | Extra glob patterns `sandbox_sync` never uploads. Secret-like files are always left out.                                                                                                                                    |
-| `publicPreviews` | boolean  | No       | `false`               | Creates every sandbox with public previews, without asking. Setting it is your approval. Only some providers can make a preview public; see [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider). |
+| Option           | Type     | Required | Default               | What it does                                                                                                                                                                                                                                                  |
+| ---------------- | -------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `account`        | string   | Yes      | None                  | Name of the account the tools use.                                                                                                                                                                                                                            |
+| `accounts`       | object   | Yes      | None                  | Map of account name to [account fields](#account-fields).                                                                                                                                                                                                     |
+| `limits`         | object   | No       | See [limits](#limits) | Caps on what the agent can start.                                                                                                                                                                                                                             |
+| `exclude`        | string[] | No       | None                  | Extra glob patterns `sandbox_sync` never uploads. Secret-like files are always left out.                                                                                                                                                                      |
+| `publicPreviews` | boolean  | No       | `false`               | Creates every sandbox with public previews, without asking. Setting it is your approval. Whether a preview can be public depends on the provider and the kind of account; see [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider). |
 
 Account names use letters, digits, `_`, `.`, and `-`, start with a letter or digit, and are at most 63 characters.
 
@@ -89,12 +89,12 @@ For what each provider does with a sandbox, see [Providers](/docs/sandboxes/prov
 
 Set these under `limits`. Any field you leave out uses its default.
 
-| Limit                    | Default | What it does                                                                                               |
-| ------------------------ | ------- | ---------------------------------------------------------------------------------------------------------- |
-| `maxSandboxes`           | `2`     | Live sandboxes per account. `sandbox_create` fails at the limit.                                           |
-| `maxLifetimeMinutes`     | `60`    | Longest lifetime `sandbox_create` accepts.                                                                 |
-| `defaultLifetimeMinutes` | `30`    | Lifetime when the agent does not set one.                                                                  |
-| `maxJobMinutes`          | `30`    | Longest job timeout. Jobs default to 10 minutes or this, whichever is less. Preview servers run this long. |
+| Limit                    | Default | What it does                                                                                                                                                                |
+| ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxSandboxes`           | `2`     | Live sandboxes per account. `sandbox_create` fails at the limit.                                                                                                            |
+| `maxLifetimeMinutes`     | `60`    | Longest lifetime `sandbox_create` accepts.                                                                                                                                  |
+| `defaultLifetimeMinutes` | `30`    | Lifetime when the agent does not set one.                                                                                                                                   |
+| `maxJobMinutes`          | `30`    | Longest job timeout. Jobs default to 10 minutes or this, whichever is less. Preview servers run until the sandbox's lifetime ends, or this long where the sandbox has none. |
 
 Providers also cap the lifetime: 24 hours, or 5 hours on Vercel.
 

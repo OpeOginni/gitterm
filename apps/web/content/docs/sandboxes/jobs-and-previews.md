@@ -74,26 +74,28 @@ The result includes:
 - the status a request without access gets (401 or 403 means access is enforced)
 - the server job id, if it started one
 
-A preview server is a job, so it stops after `maxJobMinutes`. Some providers limit which ports you can use; see [Providers](/docs/sandboxes/providers#capabilities).
+A preview server is a job that runs until the sandbox's lifetime ends. In a sandbox without a lifetime, it stops after `maxJobMinutes`. Some providers limit which ports you can use; see [Providers](/docs/sandboxes/providers#capabilities).
 
 ### Previews by provider
 
-Whether a preview can be public depends on the provider:
+Whether a preview can be public depends on the provider and the kind of account:
 
-| Provider              | Previews                              | Private previews check  |
-| --------------------- | ------------------------------------- | ----------------------- |
-| E2B, Daytona          | Private or public, chosen at creation | An access header        |
-| Vercel                | Always public                         | Not applicable          |
-| exe.dev, Railway, AWS | Always private                        | An access header        |
-| Boat                  | Always private                        | A cookie (`_port_auth`) |
+| Provider     | Direct account                        | Managed account                      | Private previews check  |
+| ------------ | ------------------------------------- | ------------------------------------ | ----------------------- |
+| E2B, Daytona | Private or public, chosen at creation | Private or public, served by Gitterm | An access header        |
+| Boat         | Always private                        | Private or public, served by Gitterm | A cookie (`_port_auth`) |
+| exe.dev      | Always private                        | Private or public, served by Gitterm | An access header        |
+| Vercel       | Always public                         | Always public                        | Not applicable          |
+| Railway      | Always private                        | Always private                       | An access header        |
+| AWS          | Not available                         | Always private                       | An access header        |
 
-On the always-private providers, `publicPreviews` has no effect: open previews through the [local proxy](#private-previews).
+Where previews are always private, `publicPreviews` has no effect: open previews through the [local proxy](#private-previews). Previews served by Gitterm are described in [Previews through Gitterm](#previews-through-gitterm).
 
 ### Private previews
 
 Previews are private by default where the provider allows it. Requests without the access header (or Boat's cookie) are rejected. The plugin keeps it in memory and never shows it to the model.
 
-To open a private preview in a local browser tool, ask the agent for a local link:
+A private preview served by Gitterm opens in your browser when you are signed in to Gitterm. For a direct account, or for browser automation, open a private preview through a local proxy. Ask the agent for a local link:
 
 ```text
 Give me a local link to the preview on port 3000 so I can open it in my browser.
@@ -124,8 +126,14 @@ Vercel only has public URLs, so a Vercel preview fails unless the sandbox was cr
 
 The Gitterm CLI reads the same `publicPreviews` setting from its accounts file. `--public` or `--no-public` on `gitterm sandbox create` overrides it; see [CLI reference](/docs/reference/cli#sandboxes).
 
-> [!NOTE]
-> **Coming soon: previews through Gitterm.** With a managed account, Gitterm will serve sandbox previews through its own proxy. Previews will then work on every provider, public or private behind your Gitterm sign-in, open in any browser, keep working after OpenCode closes, and carry WebSockets. This is not available yet: today a managed preview works like a direct one, as described above. Direct accounts will not get it, because Gitterm would need to hold your provider key.
+### Previews through Gitterm
+
+With a managed account on E2B, Daytona, Boat, or exe.dev, Gitterm serves each preview at `https://<port>-<subdomain>.<your Gitterm domain>`, for example `https://3000-<subdomain>.gitterm.dev`. Gitterm adds the provider's access header itself, so the provider URL stays private.
+
+- A sandbox created with public previews gets URLs anyone can open.
+- Otherwise the URL opens only for you, signed in to Gitterm in a browser.
+
+This also makes public previews possible on Boat and exe.dev. Managed Vercel, Railway, and AWS previews work as with a direct account. Direct accounts do not get previews through Gitterm, because Gitterm would need to hold your provider key.
 
 > [!NOTE]
 > Closing OpenCode closes local proxies only. Sandboxes and their preview servers keep running until destroyed or until their lifetime ends.

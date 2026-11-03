@@ -189,7 +189,7 @@ export function Demo() {
                   <pre className="term" id="term" />
                 </div>
                 <div className="panel-foot" id="sbxfoot">
-                  Your key, 60 minute lifetime
+                  Gitterm plan, 60 minute lifetime
                 </div>
               </div>
             </div>
@@ -226,7 +226,7 @@ export function Demo() {
                   <circle cx="6" cy="6" r="4.5" />
                   <path d="M1.5 6h9M6 1.5c1.4 1.4 1.4 7.6 0 9M6 1.5c-1.4 1.4-1.4 7.6 0 9" />
                 </svg>
-                <span>3000-sbx7f3a2c.preview.gitterm.dev</span>
+                <span>3000-7f3a2c9e41d8b0a5c3f2.gitterm.dev</span>
               </span>
             </div>
             <div className="slot" data-slot="preview">

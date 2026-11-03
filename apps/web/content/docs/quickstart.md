@@ -77,7 +77,7 @@ A cloud workspace runs the agent itself in the cloud.
 ### Steps
 
 1. Sign in to the dashboard and click **New workspace**.
-2. Pick a GitHub repository and branch. Then choose the **Agent** (OpenCode or T3 Code), **Cloud**, **Region**, and **Machine**.
+2. Pick a GitHub repository and branch. Then choose the **Agent** (OpenCode, OpenCode (TTYD), or T3 Code), **Cloud**, **Region**, and **Machine**.
 3. Click **Create workspace**.
 
    You should see the new workspace in your dashboard. When it is running, open it in the browser or connect a local client; see [Connect](/docs/workspaces/connect).

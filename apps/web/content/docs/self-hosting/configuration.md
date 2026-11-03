@@ -65,10 +65,10 @@ Only these names reach the containers. Adding any other variable to `.env.selfho
 
 | Variable         | Required | Default | What it does                                                                                                                            |
 | ---------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `ADMIN_EMAIL`    | Yes      | None    | The first admin account, created when the `server` starts. If the email already exists, that user is made an admin. Set both or neither |
-| `ADMIN_PASSWORD` | Yes      | None    | At least 8 characters. Used only when the account is created: changing it later doesn't change the password                             |
+| `ADMIN_EMAIL`    | No       | None    | The first admin account, created when the `server` starts. If the email already exists, that user is made an admin. Set both or neither |
+| `ADMIN_PASSWORD` | No       | None    | At least 8 characters. Used only when the account is created: changing it later doesn't change the password                             |
 
-Without these there is no admin, and nobody can enable a provider.
+Set both to create the first admin. Without them the admin step is skipped: there is no admin, and nobody can enable a provider.
 
 ### GitHub App from the environment
 
@@ -170,6 +170,7 @@ Use the same value for a variable on every service that reads it.
 | `NODE_ENV`                                                                                                | Yes                                                 | `development`           | Set `production`. The published image sets it                                                                         |
 | `SERVER_URL`                                                                                              | Yes                                                 | `http://localhost:3000` | Server URL including `/api`, on the private network. Compose: `http://server:8080/api`                                |
 | `INTERNAL_API_KEY`                                                                                        | Yes                                                 | None                    | Same value as on the server                                                                                           |
+| `WORKSPACE_JWT_SECRET`                                                                                    | Yes                                                 | None                    | Same value as on the server. The listener does not start in production without it                                     |
 | `BASE_DOMAIN`                                                                                             | Yes                                                 | `gitterm.dev`           | Browser origins allowed to call the listener. Compose: `PUBLIC_HOST`                                                  |
 | `CORS_ORIGIN`                                                                                             | No                                                  | None                    | Compose: `PUBLIC_URL`                                                                                                 |
 | `DATABASE_URL`, `BETTER_AUTH_SECRET`                                                                      | Yes                                                 | None                    | Checks the dashboard's session for live status updates, and reads the GitHub App saved under **Admin → Integrations** |

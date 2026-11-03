@@ -35,7 +35,7 @@ A running workspace pauses on its own after a period with no activity. Traffic t
 | Managed Gitterm | Set by your plan. See [Plans and billing](/docs/account/plans-and-billing#plans) |
 | Self-hosted     | Set by the admin under **Admin → System**. Default 30 minutes                    |
 
-A run that is waiting for your answer does not keep the workspace awake. If nobody answers before the idle timeout, the workspace pauses and the run is cancelled.
+A run that is waiting for your answer counts as a run in progress, so it keeps the workspace awake until you answer, cancel the run, or its deadline passes.
 
 ### Keep running when idle
 

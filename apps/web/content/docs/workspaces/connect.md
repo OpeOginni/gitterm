@@ -75,7 +75,7 @@ T3 Code workspaces need subdomain routing. See [Agents](/docs/workspaces/agents#
 
 ## From code
 
-For OpenCode workspaces, the SDK returns the server URL and password. The API token needs the `workspace:access` scope.
+For OpenCode workspaces, the SDK returns the server URL and password. The API token needs the `workspace:write` scope for `ensureRunning()`, or `workspace:access` for `getRuntimeAccess()`.
 
 ```ts
 import { createGittermClient } from "@gitterm/sdk";

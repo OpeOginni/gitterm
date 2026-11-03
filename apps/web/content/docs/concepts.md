@@ -32,7 +32,7 @@ Every sandbox belongs to the account that created it. Gitterm never falls back t
 Cloud workspaces always run through a Gitterm account.
 
 > [!NOTE]
-> **Coming soon:** managed accounts will get sandbox previews served through Gitterm, on every provider and in any browser. Not available yet. See [Public previews](/docs/sandboxes/jobs-and-previews#public-previews).
+> With a managed account on E2B, Daytona, Boat, or exe.dev, Gitterm serves sandbox previews itself. A private preview opens in your browser when you are signed in to Gitterm. See [Previews through Gitterm](/docs/sandboxes/jobs-and-previews#previews-through-gitterm).
 
 ## Providers
 
@@ -43,7 +43,7 @@ A provider is the company whose machines run the sandbox or workspace. Sandboxes
 - **Lifetime.** How long a sandbox may exist, set when it is created (30 minutes by default).
 - **Sync.** Uploading your current working tree to `~/project` in the sandbox. Each sync is recorded as a **snapshot**: a list of file paths and hashes.
 - **Job.** One command running in the sandbox. Jobs keep running if OpenCode restarts. See [Jobs and previews](/docs/sandboxes/jobs-and-previews#jobs).
-- **Preview.** A URL for a port in the sandbox, such as a dev server. Private by default; whether it can be public depends on the provider. See [Previews](/docs/sandboxes/jobs-and-previews#previews).
+- **Preview.** A URL for a port in the sandbox, such as a dev server. Private by default; whether it can be public depends on the provider and the kind of account. See [Previews](/docs/sandboxes/jobs-and-previews#previews).
 - **Artifact.** A file a job produced, downloaded to your machine and then applied to your checkout. See [Artifacts](/docs/sandboxes/artifacts).
 
 ## What stays local

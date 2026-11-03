@@ -50,7 +50,7 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
     logo: "/boat.svg",
     byoKey: true,
     publicPreviews: false,
-    note: "Private previews. Archived at the TTL, storage kept until you destroy it.",
+    note: "Private previews, public on a Gitterm plan. Archived at the TTL, storage kept until you destroy it.",
   },
   {
     id: "exe",
@@ -58,7 +58,7 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
     logo: "/exe.png",
     byoKey: true,
     publicPreviews: false,
-    note: "Private previews on ports 3000 to 9999. Never deleted by the provider.",
+    note: "Private previews on ports 3000 to 9999, public on a Gitterm plan. Never deleted by the provider.",
   },
   {
     id: "railway",

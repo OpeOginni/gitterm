@@ -70,7 +70,8 @@ const color = (line: string) => {
   if (/fail|expected 400/.test(line)) return `<span class="f">${e}</span>`;
   return e;
 };
-const acctOf = (P: SandboxProvider) => (P.byoKey ? `your ${P.name} key` : "your Gitterm plan");
+// The demo uses a managed account, so Gitterm serves the preview.
+const acctOf = (_P: SandboxProvider) => "your Gitterm plan";
 
 const TESTS = [
   "$ bun test",
@@ -90,7 +91,7 @@ const DIFF: [string, string, string][] = [
 ];
 const ASK = "Run the full test suite and give me a preview of the checkout page.";
 const TRAIN = "I have to leave for a train. Keep going and I'll check from my phone.";
-const PREVIEW_URL = "https://3000-sbx7f3a2c.preview.gitterm.dev/checkout";
+const PREVIEW_URL = "https://3000-7f3a2c9e41d8b0a5c3f2.gitterm.dev/checkout";
 
 const WITHOUT: Script = {
   empty: {
@@ -1495,7 +1496,7 @@ export function startLanding(root: HTMLElement): () => void {
     for (const n of all("[data-pid]")) n.textContent = id;
     for (const n of all("[data-pacct]")) n.textContent = acctOf(P);
     for (const n of all("[data-ppub]")) n.textContent = P.publicPreviews ? "public" : "private";
-    $("sbxfoot").textContent = `${P.byoKey ? "Your key" : "Gitterm plan"}, 60 minute lifetime`;
+    $("sbxfoot").textContent = "Gitterm plan, 60 minute lifetime";
     const pv = $("pvfoot");
     pv.classList.toggle("pub", P.publicPreviews);
     pv.title = P.publicPreviews

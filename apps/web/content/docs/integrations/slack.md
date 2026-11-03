@@ -40,7 +40,7 @@ All steps are required unless marked optional.
    npx @gitterm/slack-bot
    ```
 
-   To run it in Docker instead, see [Host it with Docker](#host-it-with-docker). Before it connects, the bot checks the token, model credential, GitHub access, tools and compute. You should see a `✓` line for each, then `GitTerm Slack bot is running for <repository>.` If something is missing, it prints what to fix and exits.
+   To run it in Docker instead, see [Host it with Docker](#host-it-with-docker). Before it connects, the bot checks the token, model credential, GitHub access, tools and compute. You should see a `✓` line for each, then `GitTerm Slack bot is running for <repository>.` Missing GitHub access or a missing model credential prints a `!` warning, and the bot still starts. Any other problem prints what to fix and exits.
 
 5. **Invite it** to a channel and mention it:
 
@@ -83,8 +83,8 @@ Mention the bot with one word:
 ## How workspaces are used
 
 - Each repository gets one workspace per channel. It pauses when idle and wakes with the next message, so the checkout, installed dependencies and branches stay where the agent left them.
-- Private and public channels never share a workspace. Set `GITTERM_BOT_SHARE_CHANNELS=true` to let equally trusted channels share one.
-- The workspace is named `slack-bot-<repository>`. Open it from the dashboard to see every thread's session. See [Connect to a workspace](/docs/workspaces/connect#bot-workspaces).
+- By default channels never share a workspace, so a private channel's work stays out of public ones. Set `GITTERM_BOT_SHARE_CHANNELS=true` to make every channel share one workspace per repository. Use it only when all the channels are equally trusted.
+- The workspace name uses only the repository name: `acme/api` becomes `slack-bot-api`. Open it from the dashboard to see every thread's session. See [Connect to a workspace](/docs/workspaces/connect#bot-workspaces).
 - A bot workspace gets only the chosen model's credential. It gets none of your saved environment variables or agent config.
 
 ## Saved settings

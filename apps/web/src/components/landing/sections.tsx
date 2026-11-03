@@ -158,7 +158,7 @@ export function ProvidersStrip() {
 const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }[] = [
   {
     title: "Your agent stays on your laptop",
-    body: "Add the plugin and OpenCode gets sandbox tools. The conversation, your files and your model keys never leave your machine.",
+    body: "Add the plugin and OpenCode gets sandbox tools. The conversation and your model keys stay on your machine.",
   },
   {
     title: "It borrows a machine when it needs one",
@@ -172,7 +172,7 @@ const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }
   },
   {
     title: "The heavy work runs there",
-    body: "Tests, builds and dev servers run in the sandbox. Output streams back into the chat while your laptop stays idle.",
+    body: "Tests, builds and dev servers run in the sandbox. The agent gets the output when a job finishes, or checks back on a long one, while your laptop stays idle.",
     used: ["sandbox_exec", "sandbox_job"],
   },
   {
@@ -705,7 +705,7 @@ const FEATURES = [
   ],
   ["Connect from any device", "Same workspace in your browser, OpenCode desktop or your phone."],
   ["Set keys once", "Model and environment keys are reused across workspaces, never pasted again."],
-  ["Script it", "Create and manage workspaces with the CLI or the SDK."],
+  ["Script it", "Create workspaces with the SDK. Manage them with the CLI or the SDK."],
 ] as const;
 
 export function Features() {

@@ -20,7 +20,7 @@ This page compares the providers that can run a sandbox for your local agent. Us
 
 - **Lifetime** is the time you set with `lifetimeMinutes` when creating the sandbox. The maximum is 24 hours on every provider except Vercel, where it is 5 hours.
 - **Abandoned sandbox** is what the provider does on its own if OpenCode crashes or your machine goes offline.
-- **Previews:** "Private or public" is chosen when the sandbox is created, with `publicPreviews`. A private preview rejects requests without an access header (a cookie on Boat). On an always-private provider, `publicPreviews` has no effect. See [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
+- **Previews:** the column shows direct accounts. "Private or public" is chosen when the sandbox is created, with `publicPreviews`. A private preview rejects requests without an access header (a cookie on Boat). On an always-private provider, `publicPreviews` has no effect. With a managed account, Gitterm serves E2B, Daytona, Boat, and exe.dev previews, so those can be private or public too. See [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
 
 Cloudflare is not supported for sandboxes yet. It is planned.
 
@@ -38,10 +38,10 @@ The "Abandoned sandbox" column matters most for direct accounts:
 
 A managed sandbox pauses after your plan's idle timeout. Paused time is not billed as active. It resumes on its next use: when the agent syncs, runs a command, reads a job, opens a preview, or downloads an artifact. From the CLI you can also run `gitterm sandbox resume <sandboxId>`.
 
-| Provider                            | On pause                                                                                                  |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| E2B, Daytona, Vercel, Boat, exe.dev | Files are kept.                                                                                           |
-| Railway, AWS                        | Files and processes are discarded. Anything but a sync fails until you sync again; earlier jobs are gone. |
+| Provider                            | On pause                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------- |
+| E2B, Daytona, Vercel, Boat, exe.dev | Files are kept.                                                                        |
+| Railway, AWS                        | Files and processes are discarded. Sync again after it resumes. Earlier jobs are gone. |
 
 Direct sandboxes are never paused or resumed.
 
