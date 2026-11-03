@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { Check, ChevronDown, ChevronRight, Star } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -93,8 +94,8 @@ function ProviderLogo({
       style={{ width: size, height: size }}
     >
       {failed || !src ? (
-        <span className="font-mono text-[11px] font-semibold uppercase text-fg-2">
-          {name.slice(0, 1)}
+        <span className="text-[13px] font-semibold text-fg-2">
+          {name.slice(0, 1).toUpperCase()}
         </span>
       ) : (
         <Image
@@ -145,7 +146,7 @@ function LogoDeck({ groups }: { groups: ProviderGroup[] }) {
       key: "extra",
       node: (
         <span
-          className="inline-flex items-center justify-center rounded-lg border border-line-2 bg-surface-2 font-mono text-[10px] text-fg-3 shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
+          className="inline-flex items-center justify-center rounded-lg border border-line-2 bg-surface-2 text-[12px] font-medium text-fg-3 shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
           style={{ width: CARD, height: CARD }}
         >
           +{extra}
@@ -158,7 +159,7 @@ function LogoDeck({ groups }: { groups: ProviderGroup[] }) {
   if (n === 0) {
     return (
       <span
-        className="inline-flex items-center justify-center rounded-lg border border-dashed border-line-2 font-mono text-[10px] text-fg-4"
+        className="inline-flex items-center justify-center rounded-lg bg-fill-2 text-[12px] text-fg-4"
         style={{ width: CARD, height: CARD }}
       >
         0
@@ -210,18 +211,18 @@ export function ModelProviderEmpty() {
   return (
     <Link
       href={"/dashboard/models" as Route}
-      className="group flex w-full min-w-0 items-center gap-3 rounded-xl border border-dashed border-line px-3 py-2.5 text-left transition-colors hover:border-line-2 hover:bg-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      className="group flex w-full min-w-0 items-center gap-3 rounded-xl bg-fill px-3 py-2.5 text-left transition-colors hover:bg-fill-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
     >
       <LogoDeck groups={SUGGESTED_PROVIDERS} />
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-medium text-fg">Model providers</span>
-        <span className="block text-[11px] leading-snug text-fg-3">
+        <span className="block text-[13px] font-medium text-fg">Model providers</span>
+        <span className="block text-[12.5px] leading-snug text-fg-3">
           Add an OpenCode Go, OpenAI, Anthropic or OpenRouter key to use your own models
         </span>
       </span>
-      <span className="flex shrink-0 items-center gap-1 text-xs text-primary">
+      <span className="flex shrink-0 items-center gap-1 text-[13px] font-medium text-[#e2c47c]">
         Add
-        <ChevronRight className="h-3.5 w-3.5" />
+        <ChevronRight className="size-4" />
       </span>
     </Link>
   );
@@ -252,12 +253,12 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
   const trigger = (
     <button
       type="button"
-      className="group flex w-full items-center gap-3 rounded-xl border border-line bg-fill px-3 py-2.5 text-left transition-colors hover:border-line-2 hover:bg-fill-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      className="group flex w-full items-center gap-3 rounded-xl bg-fill px-3 py-2.5 text-left transition-colors hover:bg-fill-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
     >
       <LogoDeck groups={included} />
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-medium text-fg">Model providers</span>
-        <span className="block truncate text-[11px] text-fg-3">
+        <span className="block text-[13px] font-medium text-fg">Model providers</span>
+        <span className="block truncate text-[12.5px] text-fg-3">
           {included.length === 0
             ? "None included"
             : included.length <= 3
@@ -265,13 +266,11 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
               : summary}
         </span>
       </span>
-      <span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4 sm:block">
-        {summary}
-      </span>
+      <span className="hidden shrink-0 text-[12.5px] text-fg-4 sm:block">{summary}</span>
       {isMobile ? (
-        <ChevronRight className="h-4 w-4 shrink-0 text-fg-4" />
+        <ChevronRight className="size-4 shrink-0 text-fg-4" />
       ) : (
-        <ChevronDown className="h-4 w-4 shrink-0 text-fg-4" />
+        <ChevronDown className="size-4 shrink-0 text-fg-4" />
       )}
     </button>
   );
@@ -295,7 +294,7 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto px-3 pb-2">
-            <ul className="divide-y divide-line rounded-xl border border-line bg-background">
+            <ul className="divide-y divide-line rounded-xl bg-fill">
               {groups.map((group) => {
                 const selectedId = selections[group.key] ?? null;
                 const isIncluded = !!selectedId;
@@ -312,7 +311,7 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
                       <ProviderLogo providerKey={group.key} name={group.name} size={36} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[15px] font-medium text-fg">{group.name}</span>
-                        <span className="block text-xs text-fg-3">
+                        <span className="block text-[13px] text-fg-3">
                           {multi
                             ? `${group.credentials.length} credentials`
                             : credentialLabel(group.credentials[0])}
@@ -348,13 +347,13 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
                               title={credentialLabel(credential)}
                               onClick={() => onChange(group.key, credential.id)}
                               className={cn(
-                                "inline-flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[11px] transition-colors",
+                                "inline-flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] transition-colors",
                                 active
-                                  ? "border-primary/50 bg-primary/15 text-primary"
-                                  : "border-line bg-fill text-fg-3",
+                                  ? "bg-primary/15 text-[#e2c47c] shadow-[inset_0_0_0_1px_rgba(211,173,85,0.5)]"
+                                  : "bg-fill-2 text-fg-3",
                               )}
                             >
-                              {credential.isDefault && <DefaultStar className="h-2.5 w-2.5" />}
+                              {credential.isDefault && <DefaultStar className="size-3" />}
                               <span className="truncate">{credentialLabel(credential)}</span>
                             </button>
                           );
@@ -374,13 +373,9 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
             >
               Manage credentials
             </Link>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="h-10 rounded-lg bg-primary px-5 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-primary-foreground"
-            >
+            <Button type="button" onClick={() => setOpen(false)} className="px-5">
               Done
-            </button>
+            </Button>
           </div>
         </SheetContent>
       </Sheet>
@@ -398,7 +393,7 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
       >
         <div className="px-4 pb-2 pt-3.5">
           <p className="text-[13px] font-medium text-fg">Model providers for this workspace</p>
-          <p className="mt-0.5 text-[11.5px] text-fg-3">
+          <p className="mt-0.5 text-[12.5px] leading-relaxed text-fg-3">
             Defaults are selected automatically. Untick a provider to leave it out.
           </p>
         </div>
@@ -431,7 +426,7 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-fg">{group.name}</span>
                     {!multi && (
-                      <span className="block text-[11px] text-fg-4">
+                      <span className="block text-[12.5px] text-fg-4">
                         {credentialLabel(group.credentials[0])}
                       </span>
                     )}
@@ -441,7 +436,7 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
                     <Select value={selectedId} onValueChange={(id) => onChange(group.key, id)}>
                       <SelectTrigger
                         onClick={(event) => event.stopPropagation()}
-                        className="h-8 w-[150px] text-xs"
+                        className="h-8 w-[150px] text-[13px]"
                       >
                         <SelectValue />
                       </SelectTrigger>
@@ -457,7 +452,7 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
                       </SelectContent>
                     </Select>
                   ) : multi ? (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
+                    <span className="shrink-0 text-[12.5px] text-fg-4">
                       {group.credentials.length} keys
                     </span>
                   ) : null}
@@ -468,12 +463,10 @@ export function ModelProviderPicker({ groups, selections, onChange }: ModelProvi
         </ul>
 
         <div className="flex items-center justify-between px-4 pb-3 pt-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4">
-            {summary}
-          </span>
+          <span className="text-[12.5px] text-fg-4">{summary}</span>
           <Link
             href={"/dashboard/models" as Route}
-            className="text-[11.5px] text-fg-3 transition-colors hover:text-fg"
+            className="text-[13px] text-fg-3 transition-colors hover:text-fg"
           >
             Manage credentials
           </Link>

@@ -41,8 +41,8 @@ export function BotList() {
   if (isLoading || empty) {
     return (
       <div className="grid gap-3 md:grid-cols-2">
-        <Skeleton className="h-28 bg-fill" />
-        <Skeleton className="h-28 bg-fill" />
+        <Skeleton className="h-[86px] rounded-2xl bg-fill" />
+        <Skeleton className="h-[86px] rounded-2xl bg-fill" />
       </div>
     );
   }
@@ -57,22 +57,22 @@ export function BotList() {
           <Link
             key={bot.id}
             href={`/dashboard/bots/${bot.id}` as Route}
-            className="group flex items-center gap-4 rounded-2xl border border-line bg-card p-4 transition-colors hover:border-fg-4"
+            className="group flex items-center gap-4 rounded-2xl border border-line bg-card p-4 transition-colors hover:border-line-2"
           >
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-line bg-fill-2">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-fill-2">
               <Image src={`/${bot.platform}.svg`} alt="" width={22} height={22} />
             </span>
             <span className="min-w-0 flex-1 space-y-1">
               <span className="block truncate text-[15px] font-medium text-fg">{bot.name}</span>
-              <span className="block truncate font-mono text-xs text-fg-3">
+              <span className="block truncate font-mono text-[12.5px] text-fg-3">
                 {repoLabel(bot.repo)}
               </span>
-              <span className="flex items-center gap-3 text-xs text-fg-4">
+              <span className="flex items-center gap-3 text-[12.5px] text-fg-4">
                 <span className="flex shrink-0 items-center gap-1.5">
                   <span
                     className={cn(
                       "size-1.5 rounded-full",
-                      status.live ? "bg-primary" : "bg-fg-4/60",
+                      status.live ? "bg-[#6bd586]" : "bg-fg-4/60",
                     )}
                   />
                   {status.text}

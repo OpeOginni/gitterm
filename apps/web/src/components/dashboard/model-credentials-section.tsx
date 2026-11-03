@@ -104,45 +104,36 @@ export function ModelCredentialsSection() {
   const actions = hasAccounts ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          size="sm"
-          disabled={isLoadingProviders}
-          className="gap-2 font-mono text-xs font-semibold uppercase tracking-[0.1em]"
-        >
-          <Plus className="h-3.5 w-3.5" />
+        <Button disabled={isLoadingProviders}>
+          <Plus className="size-4" />
           Add credential
-          <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-65" />
+          <ChevronDown className="size-4 opacity-70" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         sideOffset={6}
-        className="w-[var(--radix-dropdown-menu-trigger-width)] border-line p-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
+        className="min-w-[var(--radix-dropdown-menu-trigger-width)] p-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
       >
         <DropdownMenuItem
           onSelect={() => setApiKeyOpen(true)}
-          className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-xs font-medium text-fg-2 focus:bg-fill-2 focus:text-fg"
+          className="h-9 cursor-pointer gap-2.5 px-2.5 text-[13.5px] font-medium text-fg-2 focus:bg-fill-2 focus:text-fg"
         >
-          <Key className="h-4 w-4 text-fg-3" />
+          <Key className="size-4 text-fg-3" />
           Add API key
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => setConnectOpen(true)}
-          className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-xs font-medium text-fg-2 focus:bg-fill-2 focus:text-fg"
+          className="h-9 cursor-pointer gap-2.5 px-2.5 text-[13.5px] font-medium text-fg-2 focus:bg-fill-2 focus:text-fg"
         >
-          <UserRound className="h-4 w-4 text-fg-3" />
+          <UserRound className="size-4 text-fg-3" />
           Add a subscription
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   ) : (
-    <Button
-      size="sm"
-      onClick={() => setApiKeyOpen(true)}
-      disabled={isLoadingProviders}
-      className="gap-2 font-mono text-xs font-semibold uppercase tracking-[0.12em]"
-    >
-      <Plus className="h-3.5 w-3.5" />
+    <Button onClick={() => setApiKeyOpen(true)} disabled={isLoadingProviders}>
+      <Plus className="size-4" />
       Add API key
     </Button>
   );
@@ -154,34 +145,29 @@ export function ModelCredentialsSection() {
         className="scroll-mt-24"
         icon={Key}
         title="Model credentials"
-        description="Bring your own keys or sign in with a subscription. We never resell AI access, and your credentials are only injected into your workspaces."
+        description="Bring your own keys or sign in with a subscription. Gitterm never resells AI access and only injects your credentials into your own workspaces."
         action={actions}
       >
         <SettingsSectionBody>
           {isLoadingCredentials || isLoadingProviders ? (
-            <div className="divide-y divide-line border-y border-line">
-              <Skeleton className="h-14 w-full bg-fill" />
-              <Skeleton className="h-14 w-full bg-fill" />
+            <div className="space-y-2">
+              <Skeleton className="h-14 w-full rounded-xl bg-fill" />
+              <Skeleton className="h-14 w-full rounded-xl bg-fill" />
             </div>
           ) : credentials.length === 0 ? (
             <SettingsEmptyState
               icon={Key}
-              title="No credentials saved"
+              title="Add a model to get started"
               description="Paste an API key from any supported provider, or sign in with an OpenCode Console, Codex, Copilot or SuperGrok subscription."
               action={
-                <div className="flex justify-center gap-2">
-                  <Button size="sm" className="gap-2" onClick={() => setApiKeyOpen(true)}>
-                    <Key className="h-3.5 w-3.5" />
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => setApiKeyOpen(true)}>
+                    <Key className="size-3.5" />
                     Add API key
                   </Button>
                   {hasAccounts ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-2"
-                      onClick={() => setConnectOpen(true)}
-                    >
-                      <UserRound className="h-3.5 w-3.5" />
+                    <Button size="sm" variant="outline" onClick={() => setConnectOpen(true)}>
+                      <UserRound className="size-3.5" />
                       Add a subscription
                     </Button>
                   ) : null}
@@ -189,14 +175,14 @@ export function ModelCredentialsSection() {
               }
             />
           ) : (
-            <div className="divide-y divide-line">
+            <div className="-mx-2 max-h-[32rem] space-y-0.5 overflow-y-auto">
               {credentials.map((credential) => (
                 <div
                   key={credential.id}
-                  className={`flex items-center justify-between gap-3 px-1 py-3 transition-opacity ${credential.isActive ? "" : "opacity-60"}`}
+                  className={`flex items-center justify-between gap-3 rounded-xl px-2 py-2.5 transition-[opacity,background-color] hover:bg-fill ${credential.isActive ? "" : "opacity-60"}`}
                 >
                   <div className="flex min-w-0 items-center gap-3.5">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fill-2">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill-2">
                       <ProviderLogo
                         name={credential.providerName}
                         displayName={credential.providerDisplayName}
@@ -205,23 +191,21 @@ export function ModelCredentialsSection() {
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <p className="truncate text-sm font-medium">{credential.label}</p>
-                        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-fg-4">
-                          · {credential.providerDisplayName}
+                        <p className="truncate text-[14.5px] font-medium text-fg">
+                          {credential.label}
+                        </p>
+                        <span className="text-[13px] text-fg-3">
+                          {credential.providerDisplayName}
                         </span>
                         {credential.isDefault && credential.isActive && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-primary/[0.08] px-1.5 py-0.5 text-[10px] font-medium text-primary/80">
-                            <Star className="h-2.5 w-2.5 fill-current text-primary opacity-80" />
+                          <Badge className="gap-1">
+                            <Star className="fill-current" />
                             Default
-                          </span>
-                        )}
-                        {!credential.isActive && (
-                          <Badge variant="destructive" className="text-xs">
-                            Revoked
                           </Badge>
                         )}
+                        {!credential.isActive && <Badge variant="destructive">Revoked</Badge>}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <div className="mt-0.5 flex items-center gap-3 text-[12.5px] text-fg-4">
                         {credential.authType === "oauth" ? (
                           <span>OAuth</span>
                         ) : (
@@ -246,13 +230,13 @@ export function ModelCredentialsSection() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="size-9 text-fg-3"
                         aria-label="Credential actions"
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="border-border/90">
+                    <DropdownMenuContent align="end">
                       {credential.isActive && (
                         <>
                           {!credential.isDefault && (
@@ -261,14 +245,14 @@ export function ModelCredentialsSection() {
                                 setDefaultCredential.mutate({ credentialId: credential.id })
                               }
                             >
-                              <Star className="mr-2 h-4 w-4" />
+                              <Star className="size-4" />
                               Make default
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem
                             onClick={() => revokeCredential.mutate({ credentialId: credential.id })}
                           >
-                            <RefreshCw className="mr-2 h-4 w-4" />
+                            <RefreshCw className="size-4" />
                             Revoke
                           </DropdownMenuItem>
                         </>
@@ -277,7 +261,7 @@ export function ModelCredentialsSection() {
                         variant="destructive"
                         onClick={() => setCredentialToDelete(credential.id)}
                       >
-                        <Trash2 className="mr-2 h-4 w-4" />
+                        <Trash2 className="size-4" />
                         Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -308,12 +292,11 @@ export function ModelCredentialsSection() {
         open={credentialToDelete !== null}
         onOpenChange={(open) => !open && setCredentialToDelete(null)}
       >
-        <DialogContent className="border-line bg-settings-dialog sm:max-w-[400px]">
+        <DialogContent className="bg-settings-dialog sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>Delete Credential</DialogTitle>
+            <DialogTitle>Delete credential</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this credential? This action cannot be undone and may
-              affect running workspaces.
+              Running workspaces that use it may stop working. This can&apos;t be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -326,16 +309,15 @@ export function ModelCredentialsSection() {
                 credentialToDelete && deleteCredential.mutate({ credentialId: credentialToDelete })
               }
               disabled={deleteCredential.isPending}
-              className="gap-2"
             >
               {deleteCredential.isPending ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="size-4 animate-spin" />
                   Deleting...
                 </>
               ) : (
                 <>
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="size-4" />
                   Delete
                 </>
               )}

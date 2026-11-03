@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { AppWindow, KeyRound } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { apiPath } from "@gitterm/schema/url";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/utils/trpc";
 import env from "@gitterm/env/web";
 import type { AdminIntegrationsData } from "./use-admin-integrations";
-import { SectionCard } from "./ui";
+import { SettingsGroup, settingsLabel } from "@/components/dashboard/settings/settings-page";
+import { StatusChip } from "./ui";
 
 type Props = {
   data: AdminIntegrationsData;
@@ -28,7 +27,7 @@ function GithubAccountLink({ login, size = "sm" }: { login: string; size?: "sm" 
       href={`https://github.com/${safeLogin}`}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex min-w-0 items-center gap-2 rounded-full border border-border bg-foreground/[0.03] py-1 pr-3 pl-1 text-foreground/90 transition-colors hover:bg-foreground/[0.06]"
+      className="inline-flex min-w-0 items-center gap-2 rounded-full bg-fill-2 py-1 pr-3 pl-1 text-fg-2 transition-colors hover:text-fg"
     >
       <Image
         src={`https://github.com/${safeLogin}.png`}
@@ -39,24 +38,13 @@ function GithubAccountLink({ login, size = "sm" }: { login: string; size?: "sm" 
           size === "md" ? "size-8 rounded-full object-cover" : "size-6 rounded-full object-cover"
         }
       />
-      <span className="truncate text-xs font-medium">@{login}</span>
+      <span className="truncate text-[13px] font-medium">@{login}</span>
     </a>
   );
 }
 
 function ActiveBadge({ active, label }: { active: boolean; label: string }) {
-  return (
-    <Badge
-      variant="outline"
-      className={
-        active
-          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[10px]"
-          : "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-[10px]"
-      }
-    >
-      {label}
-    </Badge>
-  );
+  return <StatusChip tone={active ? "ok" : "muted"} label={label} />;
 }
 
 export function GithubConfig({ data, refresh }: Props) {
@@ -135,45 +123,45 @@ export function GithubConfig({ data, refresh }: Props) {
 
   return (
     <>
-      <div className="rounded-2xl border border-border bg-card p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <KeyRound className="size-4 text-muted-foreground" />
-              <p className="text-sm font-medium text-foreground/90">Repository credentials</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs text-muted-foreground">{statusText}</p>
-              {patLogin ? <GithubAccountLink login={patLogin} /> : null}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+      <SettingsGroup
+        title="Repository credentials"
+        description={
+          <span className="flex flex-wrap items-center gap-2">
+            {statusText}
+            {patLogin ? <GithubAccountLink login={patLogin} /> : null}
+          </span>
+        }
+        action={
+          <>
             <ActiveBadge active={mode === "app"} label="GitHub App" />
             <ActiveBadge active={mode === "pat"} label="Shared PAT" />
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <SectionCard
-          icon={AppWindow}
+        <SettingsGroup
           title="GitHub App"
           description="Each user installs the App on the repositories they want to use. Recommended for teams."
         >
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="gh-app-id">App ID</Label>
+              <Label htmlFor="gh-app-id" className={settingsLabel}>
+                App ID
+              </Label>
               <Input
                 id="gh-app-id"
                 inputMode="numeric"
                 value={appId}
                 onChange={(e) => setAppId(e.target.value)}
                 placeholder="1234567"
-                className="font-mono text-xs"
+                className="font-mono text-[13px]"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="gh-webhook">Webhook secret</Label>
+              <Label htmlFor="gh-webhook" className={settingsLabel}>
+                Webhook secret
+              </Label>
               <Input
                 id="gh-webhook"
                 type="password"
@@ -181,37 +169,38 @@ export function GithubConfig({ data, refresh }: Props) {
                 value={webhookSecret}
                 onChange={(e) => setWebhookSecret(e.target.value)}
                 placeholder="Same secret configured in GitHub"
-                className="font-mono text-xs"
+                className="font-mono text-[13px]"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="gh-pem">Private key (PEM)</Label>
+              <Label htmlFor="gh-pem" className={settingsLabel}>
+                Private key (PEM)
+              </Label>
               <Textarea
                 id="gh-pem"
                 value={privateKey}
                 onChange={(e) => setPrivateKey(e.target.value)}
                 placeholder="-----BEGIN RSA PRIVATE KEY-----"
                 spellCheck={false}
-                className="min-h-28 font-mono text-xs"
+                className="min-h-28 font-mono text-[13px]"
               />
             </div>
-            <div className="rounded-xl border border-border bg-fill p-3 text-xs text-muted-foreground space-y-1.5">
+            <div className="space-y-1.5 rounded-xl bg-fill p-3.5 text-[13px] text-fg-3">
               <p>
-                Setup URL: <code className="break-all text-foreground/80">{callbackUrl}</code>
+                Setup URL: <code className="break-all font-mono text-fg-2">{callbackUrl}</code>
               </p>
               <p>
-                Webhook URL: <code className="break-all text-foreground/80">{webhookUrl}</code>
+                Webhook URL: <code className="break-all font-mono text-fg-2">{webhookUrl}</code>
               </p>
               <p>Grant only the repository permissions your users need.</p>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[11px] text-amber-400/80">
+              <p className="text-[13px] text-[#fb923c]">
                 The API and webhook listener must share the same encryption master key.
               </p>
               <Button
                 disabled={configureApp.isPending || !appId || !privateKey || !webhookSecret}
                 onClick={saveApp}
-                className="font-mono text-xs font-bold uppercase tracking-wider"
               >
                 {configureApp.isPending
                   ? "Verifying..."
@@ -219,26 +208,27 @@ export function GithubConfig({ data, refresh }: Props) {
                     ? "Switch to App"
                     : stored?.mode === "app"
                       ? "Replace App"
-                      : "Verify & Save"}
+                      : "Verify and save"}
               </Button>
             </div>
           </div>
-        </SectionCard>
+        </SettingsGroup>
 
-        <SectionCard
-          icon={KeyRound}
+        <SettingsGroup
           title="Shared PAT"
           description="One fine-grained PAT shared with every workspace that selects it. Revoke it on GitHub to cut access."
         >
           <div className="space-y-4">
             {patLogin ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-fill p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-fill p-3">
                 <GithubAccountLink login={patLogin} size="md" />
-                <p className="text-xs text-muted-foreground">Ending in {stored?.patSuffix}</p>
+                <p className="text-[13px] text-fg-3">Ending in {stored?.patSuffix}</p>
               </div>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="gh-pat">Fine-grained PAT</Label>
+              <Label htmlFor="gh-pat" className={settingsLabel}>
+                Fine-grained PAT
+              </Label>
               <Input
                 id="gh-pat"
                 type="password"
@@ -246,30 +236,26 @@ export function GithubConfig({ data, refresh }: Props) {
                 value={pat}
                 onChange={(e) => setPat(e.target.value)}
                 placeholder="github_pat_…"
-                className="font-mono text-xs"
+                className="font-mono text-[13px]"
               />
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-fg-3">
               The PAT’s GitHub identity and permissions apply to every workspace using it. Scope it
               narrowly.
             </p>
             <div className="flex justify-end">
-              <Button
-                disabled={!pat.trim() || configurePat.isPending}
-                onClick={savePat}
-                className="font-mono text-xs font-bold uppercase tracking-wider"
-              >
+              <Button disabled={!pat.trim() || configurePat.isPending} onClick={savePat}>
                 {configurePat.isPending
                   ? "Verifying..."
                   : mode === "app"
                     ? "Switch to PAT"
                     : stored?.mode === "pat"
                       ? "Replace PAT"
-                      : "Verify & Save"}
+                      : "Verify and save"}
               </Button>
             </div>
           </div>
-        </SectionCard>
+        </SettingsGroup>
       </div>
     </>
   );

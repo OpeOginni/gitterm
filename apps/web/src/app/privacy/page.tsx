@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { LandingHeader } from "@/components/landing/header";
-import { Footer } from "@/components/landing/footer";
+import { SiteShell } from "@/components/site/site-shell";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "GitTerm · Privacy Policy ",
@@ -8,22 +8,23 @@ export const metadata: Metadata = {
     "How GitTerm collects, uses, and protects your data, including cookies, analytics, and authentication.",
 };
 
+const linkClass =
+  "text-[#e2c47c] underline decoration-[#e2c47c]/40 underline-offset-4 transition-colors hover:decoration-[#e2c47c]";
+
 const LAST_UPDATED = "May 26, 2026";
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-background text-white">
-      <LandingHeader />
-      <main className="mx-auto max-w-[760px] px-4 pt-24 pb-14 sm:px-6 sm:pt-32 sm:pb-20">
+    <SiteShell>
+      <div className="mx-auto w-full max-w-[calc(70ch+3rem)] px-4 pt-[clamp(56px,8vw,96px)] pb-[clamp(64px,9vw,112px)] sm:px-6">
         <header className="border-b border-line pb-8">
-          <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-primary/80">Legal</p>
-          <h1 className="mt-3 font-display text-4xl font-medium tracking-tight text-white sm:text-5xl">
-            Privacy Policy
+          <h1 className="m-0 text-[clamp(2.2rem,5vw,3.4rem)] leading-[1.04] font-display font-semibold tracking-[-0.03em] text-fg">
+            Privacy policy
           </h1>
-          <p className="mt-3 text-sm text-fg-3">Last updated {LAST_UPDATED}</p>
+          <p className="mt-4 text-[15px] text-fg-3">Last updated {LAST_UPDATED}</p>
         </header>
 
-        <article className="prose-policy mt-10 space-y-10 text-[15px] leading-relaxed text-fg-2">
+        <article className="mt-10 space-y-11 text-[16px] leading-[1.7] text-fg-2 [&_code]:rounded [&_code]:bg-fill-2 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.88em] [&_code]:text-fg [&_li]:pl-1">
           <section className="space-y-3">
             <p>
               This Privacy Policy explains what information GitTerm ("GitTerm", "we", "us") collects
@@ -37,7 +38,7 @@ export default function PrivacyPage() {
             <p>
               GitTerm provides cloud workspaces for running coding agents. The hosted service is
               operated by the GitTerm maintainers. You can reach us at{" "}
-              <a className="text-primary underline" href="mailto:help@gitterm.dev">
+              <a className={linkClass} href="mailto:help@gitterm.dev">
                 help@gitterm.dev
               </a>
               .
@@ -45,7 +46,7 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="2. Information we collect">
-            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
+            <ul className="list-disc space-y-2.5 pl-5 marker:text-fg-4">
               <li>
                 <strong className="text-fg">Account data.</strong> When you sign up we receive your
                 email address and, if you sign in with GitHub, your GitHub username and avatar. We
@@ -76,7 +77,7 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="3. How we use your information">
-            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
+            <ul className="list-disc space-y-2.5 pl-5 marker:text-fg-4">
               <li>To provide, secure, and operate the GitTerm service.</li>
               <li>To authenticate you and keep your session active across devices.</li>
               <li>To process payments and manage your subscription.</li>
@@ -95,13 +96,13 @@ export default function PrivacyPage() {
 
           <Section title="4. Cookies and similar technologies">
             <p>We use a small number of cookies. They fall into two categories:</p>
-            <div className="mt-4 overflow-x-auto rounded-lg border border-line">
-              <table className="w-full min-w-[480px] border-collapse text-left text-sm">
-                <thead className="bg-fill font-mono text-[11px] uppercase tracking-wider text-fg-3">
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full border-collapse text-left text-[15px]">
+                <thead className="border-b border-line-2 text-[14px] text-fg-2">
                   <tr>
-                    <th className="px-3 py-2.5">Cookie</th>
-                    <th className="px-3 py-2.5">Purpose</th>
-                    <th className="px-3 py-2.5">Category</th>
+                    <th className="py-2.5 pr-4 font-medium">Cookie</th>
+                    <th className="py-2.5 pr-4 font-medium">Purpose</th>
+                    <th className="hidden py-2.5 font-medium sm:table-cell">Category</th>
                   </tr>
                 </thead>
                 <tbody className="text-fg-2">
@@ -133,7 +134,7 @@ export default function PrivacyPage() {
                 </tbody>
               </table>
             </div>
-            <p className="mt-3">
+            <p>
               You can change your choice at any time from{" "}
               <strong className="text-fg">Settings → Privacy</strong> in the dashboard, or by
               clearing the <code>gitterm_consent</code> cookie.
@@ -145,7 +146,7 @@ export default function PrivacyPage() {
               When enabled, our analytics provider sets cookies and processes pseudonymous usage
               data on our behalf. We have configured it to:
             </p>
-            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
+            <ul className="list-disc space-y-2.5 pl-5 marker:text-fg-4">
               <li>only create user profiles for signed-in users,</li>
               <li>not auto-capture form inputs or session recordings,</li>
               <li>use an internal user identifier, not your email, for signed-in analytics,</li>
@@ -206,7 +207,7 @@ export default function PrivacyPage() {
             <p>
               Depending on where you live (e.g. EEA, UK, California), you may have the right to:
             </p>
-            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
+            <ul className="list-disc space-y-2.5 pl-5 marker:text-fg-4">
               <li>access the personal data we hold about you,</li>
               <li>correct inaccurate data,</li>
               <li>delete your account and associated data,</li>
@@ -217,7 +218,7 @@ export default function PrivacyPage() {
             </ul>
             <p>
               You can exercise most of these rights directly from the dashboard or by emailing{" "}
-              <a className="text-primary underline" href="mailto:help@gitterm.dev">
+              <a className={linkClass} href="mailto:help@gitterm.dev">
                 help@gitterm.dev
               </a>
               .
@@ -229,7 +230,7 @@ export default function PrivacyPage() {
               We use industry-standard measures including TLS in transit, encryption at rest where
               supported, scoped access controls, and regular dependency updates. No system is
               perfectly secure. Please report suspected vulnerabilities to{" "}
-              <a className="text-primary underline" href="mailto:help@gitterm.dev">
+              <a className={linkClass} href="mailto:help@gitterm.dev">
                 help@gitterm.dev
               </a>
               .
@@ -253,24 +254,23 @@ export default function PrivacyPage() {
           <Section title="13. Contact">
             <p>
               Questions or requests? Email{" "}
-              <a className="text-primary underline" href="mailto:help@gitterm.dev">
+              <a className={linkClass} href="mailto:help@gitterm.dev">
                 help@gitterm.dev
               </a>
               .
             </p>
           </Section>
         </article>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </SiteShell>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-3">
-      <h2 className="font-display text-2xl font-medium text-white">{title}</h2>
-      <div className="space-y-3">{children}</div>
+    <section className="space-y-3.5">
+      <h2 className="text-[21px] leading-[1.3] font-medium tracking-[-0.02em] text-fg">{title}</h2>
+      <div className="space-y-4">{children}</div>
     </section>
   );
 }
@@ -284,20 +284,16 @@ function Row({
   purpose: string;
   category: "Necessary" | "Optional";
 }) {
+  const categoryClass = category === "Necessary" ? "text-fg-3" : "text-[#e2c47c]";
   return (
-    <tr className="border-t border-line">
-      <td className="px-3 py-3 align-top font-mono text-[12px] text-fg">{name}</td>
-      <td className="px-3 py-3 align-top text-[13px] text-fg-2">{purpose}</td>
-      <td className="px-3 py-3 align-top">
-        <span
-          className={
-            category === "Necessary"
-              ? "rounded-md border border-line bg-fill px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-fg-3"
-              : "rounded-md border border-primary/30 bg-primary/[0.08] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary/90"
-          }
-        >
-          {category}
-        </span>
+    <tr className="border-b border-line last:border-b-0">
+      <td className="w-[38%] py-3.5 pr-4 align-top font-medium text-fg">
+        {name}
+        <span className={cn("mt-1 block font-normal sm:hidden", categoryClass)}>{category}</span>
+      </td>
+      <td className="py-3.5 pr-4 align-top text-fg-3">{purpose}</td>
+      <td className="hidden py-3.5 align-top sm:table-cell">
+        <span className={categoryClass}>{category}</span>
       </td>
     </tr>
   );

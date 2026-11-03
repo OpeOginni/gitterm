@@ -1,20 +1,44 @@
 import type { Metadata } from "next";
-import { Geist, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Suspense } from "react";
 import "../index.css";
 import Providers from "@/components/providers";
 import { AnalyticsProvider } from "@/components/analytics-provider";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 
-const geist = Geist({
+/*
+ * Type: Hubot Sans (wide) for headlines, Martian Grotesk for text, Martian Mono for code.
+ * Each face carries a fixed width and a size-adjust so the site's px sizes keep the line
+ * lengths they had with Geist and JetBrains Mono (Martian runs ~25% wider at the same size).
+ */
+const text = localFont({
+  src: "../fonts/MartianGrotesk.woff2",
   variable: "--font-sans",
-  subsets: ["latin"],
+  weight: "100 900",
+  declarations: [
+    { prop: "font-stretch", value: "93%" },
+    { prop: "size-adjust", value: "86%" },
+  ],
 });
 
-const jetbrains = JetBrains_Mono({
+const mono = localFont({
+  src: "../fonts/MartianMono.woff2",
   variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: "100 800",
+  declarations: [
+    { prop: "font-stretch", value: "87.5%" },
+    { prop: "size-adjust", value: "92%" },
+  ],
+});
+
+const display = localFont({
+  src: "../fonts/HubotSans.woff2",
+  variable: "--font-display",
+  weight: "200 900",
+  declarations: [
+    { prop: "font-stretch", value: "125%" },
+    { prop: "size-adjust", value: "86%" },
+  ],
 });
 
 const TITLE = "GitTerm · Cloud workspaces for coding agents";
@@ -73,7 +97,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geist.variable} ${jetbrains.variable} antialiased`}>
+      <body className={`${text.variable} ${mono.variable} ${display.variable} antialiased`}>
         <Providers>{children}</Providers>
         <Suspense fallback={null}>
           <AnalyticsProvider />

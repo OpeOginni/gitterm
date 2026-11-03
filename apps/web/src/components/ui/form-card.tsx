@@ -146,7 +146,7 @@ function SettingsSection({
       className={cn("relative overflow-hidden rounded-2xl border border-line bg-card", className)}
       {...props}
     >
-      <header className="space-y-2 border-b border-line px-5 py-4">
+      <header className="space-y-1.5 px-5 pt-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <h3 className="text-base font-semibold tracking-tight text-fg">{title}</h3>
@@ -154,7 +154,7 @@ function SettingsSection({
           {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
         </div>
         {description && (
-          <p className="max-w-2xl text-[13px] leading-relaxed text-fg-3">{description}</p>
+          <p className="max-w-2xl text-sm leading-relaxed text-fg-3">{description}</p>
         )}
       </header>
       {children}
@@ -193,7 +193,7 @@ function SettingsRow({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-/** Dashed placeholder panel for sections with nothing to show yet. */
+/** Quiet placeholder row for sections with nothing to show yet. */
 function SettingsEmptyState({
   className,
   icon: Icon,
@@ -211,20 +211,19 @@ function SettingsEmptyState({
   return (
     <div
       data-slot="settings-empty-state"
-      className={cn(
-        "flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3.5",
-        className,
-      )}
+      className={cn("flex flex-wrap items-center gap-3 rounded-xl bg-fill px-4 py-3.5", className)}
       {...props}
     >
       {Icon && (
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
-          <Icon className="size-4 text-fg-4" />
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill-2">
+          <Icon className="size-4 text-fg-3" />
         </span>
       )}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-[12rem] flex-1">
         <p className="text-sm font-semibold text-fg">{title}</p>
-        {description && <p className="mt-0.5 text-xs leading-relaxed text-fg-4">{description}</p>}
+        {description && (
+          <p className="mt-0.5 text-[13px] leading-relaxed text-fg-3">{description}</p>
+        )}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>

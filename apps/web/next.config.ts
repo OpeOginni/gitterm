@@ -52,6 +52,9 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
+      // Raw markdown for docs pages (/docs/<slug>.md), served by app/docs/raw.
+      { source: "/docs/:a.md", destination: "/docs/raw/:a" },
+      { source: "/docs/:a/:b.md", destination: "/docs/raw/:a/:b" },
       { source: "/favicon.ico", destination: "/favicon_io/favicon.ico" },
       {
         source: "/favicon-16x16.png",

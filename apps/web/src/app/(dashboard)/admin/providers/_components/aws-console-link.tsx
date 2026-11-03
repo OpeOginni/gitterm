@@ -14,7 +14,7 @@ export function iamRoleConsoleUrl(roleArn: string) {
 
 export function ConsoleLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Button asChild size="sm" variant="outline">
+    <Button asChild size="sm" variant="secondary">
       <a href={href} target="_blank" rel="noreferrer">
         {children}
         <ArrowUpRight className="size-3.5" />

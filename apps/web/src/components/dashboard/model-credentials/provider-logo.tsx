@@ -25,7 +25,7 @@ export function ProviderLogo({
       <span
         aria-hidden
         className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-[4px] bg-fill-2 font-mono font-semibold uppercase text-fg-2",
+          "inline-flex shrink-0 items-center justify-center rounded-[4px] bg-fill-2 font-semibold uppercase text-fg-2",
           className,
         )}
         style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.6)) }}

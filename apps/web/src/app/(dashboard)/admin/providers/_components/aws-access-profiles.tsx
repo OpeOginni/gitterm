@@ -3,10 +3,9 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { AwsAccessProfile } from "@gitterm/schema";
 import { trpcClient } from "@/utils/trpc";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -77,18 +76,18 @@ export function AwsRoleInput({
           <SelectItem value="create">Create new role</SelectItem>
         </SelectContent>
       </Select>
-      <Label htmlFor={`${id}-value`} className="text-xs text-muted-foreground">
+      <Label htmlFor={`${id}-value`} className="text-[13px] text-fg-3">
         {value.mode === "create" ? "Role name" : "Role ARN"}
       </Label>
-      <div className="flex items-center overflow-hidden rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
+      <div className="flex items-center overflow-hidden rounded-lg bg-input focus-within:ring-2 focus-within:ring-ring/45">
         {value.mode === "create" && (
-          <span className="shrink-0 border-r border-input px-3 font-mono text-xs text-muted-foreground">
+          <span className="shrink-0 border-r border-line px-3 font-mono text-[13px] text-fg-3">
             gitterm-task-
           </span>
         )}
         <Input
           id={`${id}-value`}
-          className="h-9 border-0 font-mono text-xs shadow-none focus-visible:ring-0 md:text-xs"
+          className="h-9 border-0 bg-transparent font-mono text-[13px] shadow-none focus-visible:ring-0 md:text-[13px] dark:bg-transparent"
           aria-describedby={`${id}-hint`}
           disabled={disabled}
           value={value.mode === "create" ? value.name.replace(/^gitterm-task-/, "") : value.arn}
@@ -109,7 +108,7 @@ export function AwsRoleInput({
           }
         />
       </div>
-      <p id={`${id}-hint`} className="text-xs leading-relaxed text-muted-foreground">
+      <p id={`${id}-hint`} className="text-[13px] leading-relaxed text-fg-3">
         {value.mode === "create"
           ? "Creates a role with read-only discovery. Add application permissions in AWS."
           : "Validates the account and ECS trust. Your role stays unchanged."}
@@ -117,7 +116,7 @@ export function AwsRoleInput({
       <AwsRolePolicyDialog
         roleArn={previewRoleArn(value, accountId)}
         trigger={
-          <Button type="button" variant="link" size="sm" className="h-auto px-0 text-xs">
+          <Button type="button" variant="link" size="sm" className="h-auto px-0 text-[13px]">
             View role permissions
           </Button>
         }
@@ -128,8 +127,8 @@ export function AwsRoleInput({
 
 export function AwsRoleCheckResult({ check }: { check: RoleCheck }) {
   return (
-    <div className="mt-4 space-y-3 rounded-lg border border-line bg-fill p-4" role="status">
-      <p className="text-sm font-medium">
+    <div className="mt-4 space-y-3 rounded-xl bg-fill p-4" role="status">
+      <p className="text-[14px] font-medium text-fg">
         Capability discovery:{" "}
         {check.discovery === "available"
           ? "allowed in simulation"
@@ -137,14 +136,14 @@ export function AwsRoleCheckResult({ check }: { check: RoleCheck }) {
             ? "baseline not fully allowed"
             : "not verified"}
       </p>
-      <p className="break-all font-mono text-xs text-muted-foreground">{check.roleArn}</p>
+      <p className="break-all font-mono text-[13px] text-fg-3">{check.roleArn}</p>
       {check.missingActions.length > 0 && (
-        <p className="text-xs text-amber-600 dark:text-amber-300">
+        <p className="text-[13px] text-amber-600 dark:text-[#fb923c]">
           Review: {check.missingActions.join(", ")}
         </p>
       )}
       {check.warnings.map((warning) => (
-        <p key={warning} className="text-xs text-muted-foreground">
+        <p key={warning} className="text-[13px] text-fg-3">
           {warning}
         </p>
       ))}
@@ -152,7 +151,7 @@ export function AwsRoleCheckResult({ check }: { check: RoleCheck }) {
         <AwsRolePolicyDialog
           roleArn={check.roleArn}
           trigger={
-            <Button type="button" size="sm" variant="outline">
+            <Button type="button" size="sm" variant="secondary">
               View recommended policy
             </Button>
           }
@@ -181,25 +180,25 @@ function ProfileCard({
   onRemove?: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-line bg-fill p-4">
+    <div className="flex flex-col gap-3 rounded-xl bg-fill p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium text-fg">{name}</p>
+            <p className="text-[14px] font-medium text-fg">{name}</p>
             {isDefault && (
-              <Badge variant="outline" className="border-line-2 text-[10px] text-fg-3">
+              <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
                 Default
-              </Badge>
+              </span>
             )}
           </div>
-          <p className="text-xs leading-relaxed text-fg-3">{description}</p>
+          <p className="text-[13px] leading-relaxed text-fg-3">{description}</p>
         </div>
         {onRemove && (
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            className="h-7 w-7 shrink-0 px-0 text-fg-4 hover:text-destructive"
+            className="size-8 shrink-0 px-0 text-fg-3 hover:text-destructive"
             disabled={disabled}
             onClick={onRemove}
             aria-label={`Remove ${name}`}
@@ -208,9 +207,9 @@ function ProfileCard({
           </Button>
         )}
       </div>
-      <p className="break-all font-mono text-[11px] text-fg-4">{roleArn}</p>
+      <p className="break-all font-mono text-[12.5px] text-fg-3">{roleArn}</p>
       <div className="mt-auto flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onCheck}>
+        <Button type="button" size="sm" variant="secondary" disabled={disabled} onClick={onCheck}>
           Check permissions
         </Button>
         <AwsRolePolicyDialog
@@ -292,12 +291,11 @@ export function AwsAccessProfiles({
     !pending && !!name.trim() && !!(role.mode === "create" ? role.name.trim() : role.arn.trim());
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-6">
+    <section className="rounded-2xl bg-card p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="size-4 text-muted-foreground" />
-            <h2 className="text-sm font-medium">AWS access profiles</h2>
+            <h2 className="text-[15px] font-medium text-fg">AWS access profiles</h2>
             <HelpHint label="How access profiles work">
               Profiles are IAM roles a user can pick when creating a workspace. Everyone who can use
               this provider sees every profile, so only add roles whose permissions you mean to
@@ -305,7 +303,7 @@ export function AwsAccessProfiles({
               are untouched.
             </HelpHint>
           </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
+          <p className="max-w-2xl text-[13.5px] leading-relaxed text-fg-3">
             Each profile is an IAM role users can pick for a workspace. The provider default is
             always available.
           </p>
@@ -360,7 +358,7 @@ export function AwsAccessProfiles({
             <DialogFooter>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 onClick={() => setIsAddOpen(false)}
                 disabled={add.isPending}
               >
@@ -405,10 +403,10 @@ export function AwsAccessProfiles({
           type="button"
           disabled={pending}
           onClick={() => setIsAddOpen(true)}
-          className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line-2 p-4 text-center text-xs text-fg-4 transition-colors hover:border-fg-4 hover:text-fg-2 disabled:pointer-events-none disabled:opacity-50"
+          className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl p-4 text-center text-[13px] text-fg-3 transition-colors hover:bg-fill hover:text-fg-2 disabled:pointer-events-none disabled:opacity-50"
         >
           <Plus className="size-4" />
-          <span className="font-medium">Add a profile</span>
+          <span className="font-medium text-fg-2">Add a profile</span>
           <span className="max-w-56 leading-relaxed">
             A separate role with its own permissions that users can pick per workspace.
           </span>

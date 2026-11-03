@@ -1,0 +1,52 @@
+{
+  "sections": [
+    {
+      "title": "Getting started",
+      "pages": ["introduction", "quickstart", "concepts"]
+    },
+    {
+      "title": "Sandboxes",
+      "pages": [
+        "sandboxes/overview",
+        "sandboxes/setup",
+        "sandboxes/tools",
+        "sandboxes/providers",
+        "sandboxes/jobs-and-previews",
+        "sandboxes/artifacts",
+        "sandboxes/security"
+      ]
+    },
+    {
+      "title": "Cloud workspaces",
+      "pages": [
+        "workspaces/overview",
+        "workspaces/agents",
+        "workspaces/move-a-session",
+        "workspaces/connect",
+        "workspaces/previews",
+        "workspaces/lifecycle"
+      ]
+    },
+    {
+      "title": "Integrations",
+      "pages": ["integrations/connections", "integrations/slack", "integrations/discord"]
+    },
+    {
+      "title": "Reference",
+      "pages": [
+        "reference/sandbox-tools",
+        "reference/cloud-handoff",
+        "reference/cli",
+        "reference/sdk"
+      ]
+    },
+    {
+      "title": "Self-hosting",
+      "pages": ["self-hosting/overview", "self-hosting/configuration", "self-hosting/security"]
+    },
+    {
+      "title": "Account",
+      "pages": ["account/plans-and-billing"]
+    }
+  ]
+}

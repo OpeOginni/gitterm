@@ -37,15 +37,15 @@ export function PolicyJsonViewer({
   };
 
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-background">
-      <div className="flex items-center justify-between gap-2 border-b border-line bg-fill px-3 py-1.5">
-        <span className="truncate font-mono text-[11px] text-fg-4">{fileName}</span>
+    <div className="overflow-hidden rounded-xl bg-background">
+      <div className="flex items-center justify-between gap-2 bg-fill px-3 py-1.5">
+        <span className="truncate font-mono text-[12.5px] text-fg-3">{fileName}</span>
         <div className="flex shrink-0 gap-1">
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-xs"
+            className="h-8 px-2.5 text-[13px]"
             onClick={copy}
           >
             <Copy className="size-3.5" />
@@ -55,7 +55,7 @@ export function PolicyJsonViewer({
             type="button"
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-xs"
+            className="h-8 px-2.5 text-[13px]"
             onClick={download}
           >
             <Download className="size-3.5" />
@@ -76,7 +76,7 @@ export function PolicyJsonViewer({
           highlightActiveLine: false,
           highlightActiveLineGutter: false,
         }}
-        className="text-xs [&_.cm-editor]:bg-transparent [&_.cm-gutters]:bg-transparent"
+        className="text-[13px] [&_.cm-editor]:bg-transparent [&_.cm-gutters]:bg-transparent"
       />
     </div>
   );

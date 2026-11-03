@@ -9,14 +9,14 @@ const showError = toast.error;
 toast.error = (message, data) => showError(message, { duration: 6_000, ...data });
 
 /**
- * Toasts are blueprint cells, like the landing page features: a hairline box, a mono status
+ * Toasts are blueprint cells, like the landing page features: a hairline box, a status
  * tag on top, and a rail along the bottom in the status color (see `[data-sonner-toast]` in
  * index.css). Callers keep using `toast.success("Title", { description })` as usual.
  */
 function Tag({ children }: { children: string }) {
   return (
-    <span className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em]">
-      <span aria-hidden className="h-1.5 w-1.5 bg-current" />
+    <span className="flex items-center gap-2 text-[12.5px] font-medium">
+      <span aria-hidden className="size-1.5 rounded-full bg-current" />
       {children}
     </span>
   );
@@ -41,10 +41,10 @@ const Toaster = (props: ToasterProps) => {
         } as React.CSSProperties
       }
       icons={{
-        success: <Tag>done</Tag>,
-        info: <Tag>info</Tag>,
-        warning: <Tag>warning</Tag>,
-        error: <Tag>error</Tag>,
+        success: <Tag>Done</Tag>,
+        info: <Tag>Info</Tag>,
+        warning: <Tag>Warning</Tag>,
+        error: <Tag>Error</Tag>,
       }}
       toastOptions={{
         unstyled: true,
@@ -58,7 +58,7 @@ const Toaster = (props: ToasterProps) => {
           title: "text-[13.5px] font-medium leading-snug text-fg",
           description: "text-[12.5px] leading-[1.6] text-fg-3",
           actionButton:
-            "mt-1 self-start border border-line-2 px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.14em] text-fg-2 hover:bg-fill-2",
+            "mt-1 self-start rounded-md bg-fill px-2.5 py-1 text-[13px] font-medium text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-fill-2 hover:text-fg",
         },
       }}
       {...props}

@@ -2,6 +2,7 @@
 
 import { ArrowUpRight, Code2, TerminalSquare } from "lucide-react";
 import { ApiTokensSection } from "@/components/dashboard/api-tokens-section";
+import { SettingsGroup } from "./settings-page";
 
 const packages = [
   {
@@ -20,16 +21,14 @@ const packages = [
 
 export function ApiSection() {
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <ApiTokensSection />
 
-      <section className="space-y-3 border-t border-line pt-6">
-        <div>
-          <h3 className="text-base font-semibold text-fg">Official tools</h3>
-          <p className="mt-1 text-[13px] text-fg-3">
-            Use your API token with the GitTerm CLI and TypeScript SDK.
-          </p>
-        </div>
+      <SettingsGroup
+        title="Official tools"
+        description="Use your API token with the GitTerm CLI and TypeScript SDK."
+        bodyClassName="pt-2"
+      >
         <div className="divide-y divide-line">
           {packages.map((item) => {
             const Icon = item.icon;
@@ -39,24 +38,22 @@ export function ApiSection() {
                 href={item.href}
                 target="_blank"
                 rel="noreferrer"
-                className="group flex items-center gap-3 py-4 transition-colors hover:text-primary"
+                className="group flex items-center gap-3 py-3.5"
               >
-                <Icon className="size-4 shrink-0 text-fg-4 transition-colors group-hover:text-primary" />
-                <span className="min-w-0 flex-1">
-                  <span className="font-mono text-sm font-medium text-fg transition-colors group-hover:text-primary">
+                <Icon className="size-4 shrink-0 text-fg-3 transition-colors group-hover:text-fg" />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
+                  <span className="font-mono text-[14px] text-fg transition-colors group-hover:text-[#e2c47c]">
                     {item.name}
                   </span>
-                  <span className="ml-3 text-xs text-fg-3">{item.description}</span>
+                  <span className="text-[13.5px] text-fg-3">{item.description}</span>
                 </span>
-                <span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4 sm:block">
-                  npm
-                </span>
-                <ArrowUpRight className="size-4 shrink-0 text-fg-4 transition-colors group-hover:text-primary" />
+                <span className="hidden text-[13px] text-fg-4 sm:block">npm</span>
+                <ArrowUpRight className="size-4 shrink-0 text-fg-4 transition-colors group-hover:text-fg" />
               </a>
             );
           })}
         </div>
-      </section>
+      </SettingsGroup>
     </div>
   );
 }

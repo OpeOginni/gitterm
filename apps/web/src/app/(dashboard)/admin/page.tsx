@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
+import { SettingsGroup } from "@/components/dashboard/settings/settings-page";
 
 function StatCell({
   label,
@@ -23,14 +24,14 @@ function StatCell({
   isLoading: boolean;
 }) {
   return (
-    <div className="text-center">
-      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-fg-4">{label}</p>
+    <div className="min-w-0">
+      <p className="text-[13px] text-fg-3">{label}</p>
       {isLoading ? (
-        <Skeleton className="mx-auto mt-1.5 h-8 w-14 bg-fill" />
+        <Skeleton className="mt-1.5 h-8 w-14 bg-fill" />
       ) : (
-        <p className="mt-1 text-2xl font-bold tabular-nums text-white">{value}</p>
+        <p className="mt-1 text-[28px] font-medium tracking-tight tabular-nums text-fg">{value}</p>
       )}
-      <p className="text-xs text-fg-4">{sub}</p>
+      <p className="text-[12.5px] text-fg-4">{sub}</p>
     </div>
   );
 }
@@ -92,9 +93,9 @@ export default function AdminPage() {
       />
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-4 rounded-2xl border border-line bg-fill p-6 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-6 rounded-2xl bg-card p-5 sm:grid-cols-4 sm:p-6">
         <StatCell
-          label="Total Users"
+          label="Total users"
           value={stats?.users.total ?? 0}
           sub={`${stats?.users.admins ?? 0} admins`}
           isLoading={isLoading}
@@ -120,32 +121,26 @@ export default function AdminPage() {
       </div>
 
       {/* Maintenance row */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-fill px-4 py-3">
-        <div className="min-w-0">
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
-            Anon stragglers
-          </p>
-          <p className="mt-0.5 text-[13px] text-fg-3">
-            Terminate any try‑gitterm sandboxes that outlived their 10‑min lease (E2B webhook /
-            reaper safety net).
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => cleanupAnonMutation.mutate()}
-          disabled={cleanupAnonMutation.isPending}
-          className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
-        >
-          {cleanupAnonMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="h-3.5 w-3.5" />
-          )}
-          {cleanupAnonMutation.isPending ? "Sweeping…" : "Sweep now"}
-        </Button>
-      </div>
+      <SettingsGroup
+        title="Anon stragglers"
+        description="Terminate any try‑gitterm sandboxes that outlived their 10‑min lease (E2B webhook / reaper safety net)."
+        action={
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => cleanupAnonMutation.mutate()}
+            disabled={cleanupAnonMutation.isPending}
+            className="gap-2"
+          >
+            {cleanupAnonMutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Trash2 className="size-4" />
+            )}
+            {cleanupAnonMutation.isPending ? "Sweeping…" : "Sweep now"}
+          </Button>
+        }
+      />
     </DashboardShell>
   );
 }

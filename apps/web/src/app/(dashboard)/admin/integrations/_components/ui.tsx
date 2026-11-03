@@ -1,7 +1,4 @@
-import type { ReactNode } from "react";
 import Image from "next/image";
-import type { LucideIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { IntegrationMeta } from "./meta";
 
@@ -17,9 +14,8 @@ export function IntegrationLogo({
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-xl border border-border",
-        meta.accent,
-        size === "lg" ? "h-14 w-14" : "h-11 w-11",
+        "flex shrink-0 items-center justify-center rounded-xl bg-fill",
+        size === "lg" ? "h-14 w-14" : "h-10 w-10",
         className,
       )}
     >
@@ -34,16 +30,32 @@ export function IntegrationLogo({
   );
 }
 
+/** Quiet status chip: a coloured dot and a word. */
+export function StatusChip({ tone, label }: { tone: "ok" | "warn" | "muted"; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
+      <span
+        aria-hidden
+        className={cn(
+          "size-1.5 rounded-full",
+          tone === "ok" ? "bg-[#6bd586]" : tone === "warn" ? "bg-[#fb923c]" : "bg-fg-4",
+        )}
+      />
+      {label}
+    </span>
+  );
+}
+
 export function StatusBadge({
   status,
 }: {
   status: "enabled" | "disabled" | "unconfigured" | "planned";
 }) {
-  const styles = {
-    enabled: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
-    disabled: "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground",
-    unconfigured: "border-amber-500/20 bg-amber-500/10 text-amber-400",
-    planned: "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground",
+  const tones = {
+    enabled: "ok",
+    disabled: "muted",
+    unconfigured: "warn",
+    planned: "muted",
   } as const;
   const labels = {
     enabled: "Enabled",
@@ -51,41 +63,5 @@ export function StatusBadge({
     unconfigured: "Not configured",
     planned: "Coming soon",
   } as const;
-  return (
-    <Badge variant="outline" className={cn("text-[10px]", styles[status])}>
-      {labels[status]}
-    </Badge>
-  );
-}
-
-export function SectionCard({
-  icon: Icon,
-  title,
-  description,
-  action,
-  children,
-  className,
-}: {
-  icon: LucideIcon;
-  title: string;
-  description?: string;
-  action?: ReactNode;
-  children?: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={cn("rounded-2xl border border-border bg-card p-6", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Icon className="size-4 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground/90">{title}</p>
-          </div>
-          {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
-        </div>
-        {action}
-      </div>
-      {children ? <div className="mt-5">{children}</div> : null}
-    </section>
-  );
+  return <StatusChip tone={tones[status]} label={labels[status]} />;
 }
