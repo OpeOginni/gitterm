@@ -16,6 +16,7 @@ import {
 import { SITE_URL } from "@/lib/docs/content";
 import { cn } from "@/lib/utils";
 import { ReplayButton } from "./demo";
+import { SoundToggle } from "./sound-toggle";
 import { WorkspacesCard } from "./workspaces-card";
 import { Logo } from "./logo";
 
@@ -326,7 +327,7 @@ export function HowItWorks() {
                     <span className="t-caret" />
                   </div>
                   <div className="t-meta">
-                    <b>Build</b> · <span>Claude Sonnet 5.5</span> Anthropic
+                    <b>Build</b> · <span>Claude Opus 5.5</span> Anthropic
                   </div>
                 </div>
                 <div className="t-hints">
@@ -471,8 +472,8 @@ export function Desktop() {
                       Build <Chevron />
                     </span>
                     <span className="b">
-                      <span className="faint model-provider">Anthropic /&nbsp;</span>Claude Sonnet
-                      5.5 <Chevron />
+                      <span className="faint model-provider">Anthropic /&nbsp;</span>Claude Opus 5.5{" "}
+                      <Chevron />
                     </span>
                     <span className="oc-send" aria-hidden>
                       <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.6}>
@@ -601,7 +602,8 @@ export function Agents() {
             <span>Any provider</span>
           </div>
         </div>
-        <div className="mt-[18px] flex justify-end">
+        <div className="mt-[18px] flex justify-end gap-2">
+          <SoundToggle />
           <ReplayButton id="ho-replay" />
         </div>
       </Wrap>
