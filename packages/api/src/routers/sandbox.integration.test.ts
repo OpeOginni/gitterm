@@ -31,6 +31,7 @@ const activity = await import("../service/workspace-activity");
 const proxyCache = await import("../service/proxy-cache");
 const providerConfig = await import("../service/config/provider-config");
 const { internalRouter } = await import("./internal");
+const { workspaceRouter } = await import("./workspace/managment");
 /** Providers this suite enabled, disabled again afterwards. */
 let enabledForTest: string[] = [];
 
@@ -49,6 +50,8 @@ const providerStates = new Map<string, "running" | "paused" | "terminated">();
 let acceptOnlyDestroys = false;
 const WEBHOOK_SECRET = "test-webhook-secret";
 const mocks: { mockRestore(): void }[] = [];
+/** Runs inside the fake provider's resume call. */
+let duringResume: ((id: string) => Promise<void>) | undefined;
 
 beforeAll(async () => {
   if (!testUrl) return;
@@ -74,6 +77,10 @@ beforeAll(async () => {
     async writeFile() {},
     async readFile() {
       return new Uint8Array([1, 2, 3]);
+    },
+    async pause() {},
+    async resume(id: string) {
+      await duringResume?.(id);
     },
     async destroy(id: string) {
       destroyed.push(id);
@@ -291,19 +298,16 @@ integration(
   },
 );
 
-integration("#5 a signed E2B pause webhook settles a sandbox's status and usage", async () => {
-  await terminateAll(userId);
-  const sandbox = await caller(userId).create({ name: "webhook", lifetimeMinutes: 5 });
-  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
-  const providerId = row!.externalInstanceId.split(":").at(-1)!;
+/** Delivers a signed E2B lifecycle webhook, as the listener does. */
+async function e2bWebhook(providerId: string, type: "paused" | "resumed") {
   const event = {
     id: randomUUID(),
     version: "v2",
-    type: "sandbox.lifecycle.paused",
+    type: `sandbox.lifecycle.${type}`,
     timestamp: new Date(Date.now() + 1_000).toISOString(),
     eventData: {},
     event_category: "lifecycle",
-    event_label: "pause",
+    event_label: type === "paused" ? "pause" : "resume",
     sandbox_id: providerId,
     sandbox_execution_id: randomUUID(),
     sandbox_template_id: "base",
@@ -315,13 +319,20 @@ integration("#5 a signed E2B pause webhook settles a sandbox's status and usage"
     .update(WEBHOOK_SECRET + rawBody)
     .digest("base64")
     .replace(/=+$/, "");
-  const result = await internalRouter
+  return (await internalRouter
     .createCaller({
       internalApiKey: process.env.INTERNAL_API_KEY,
       e2bSignature: signature,
     } as unknown as Context)
-    .processE2bWebhook({ ...event, rawBody } as never);
-  expect((result as { updated: unknown[] }).updated).toHaveLength(1);
+    .processE2bWebhook({ ...event, rawBody } as never)) as { updated: unknown[] };
+}
+
+integration("#5 a signed E2B pause webhook settles a sandbox's status and usage", async () => {
+  await terminateAll(userId);
+  const sandbox = await caller(userId).create({ name: "webhook", lifetimeMinutes: 5 });
+  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  const providerId = row!.externalInstanceId.split(":").at(-1)!;
+  expect((await e2bWebhook(providerId, "paused")).updated).toHaveLength(1);
   expect((await caller(userId).get({ sandboxId: sandbox.id })).status).toBe("paused");
   const sessions = await db
     .select()
@@ -329,6 +340,34 @@ integration("#5 a signed E2B pause webhook settles a sandbox's status and usage"
     .where(eq(usageSession.workspaceId, sandbox.id));
   expect(sessions[0]!.stoppedAt).not.toBeNull();
 });
+
+integration(
+  "a resume webhook that arrives during the resume leaves the sandbox running",
+  async () => {
+    await terminateAll(userId);
+    const sandbox = await caller(userId).create({ name: "resume-race", lifetimeMinutes: 5 });
+    const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+    const providerId = row!.externalInstanceId.split(":").at(-1)!;
+    await e2bWebhook(providerId, "paused");
+    duringResume = async (id) => {
+      expect((await e2bWebhook(id, "resumed")).updated).toHaveLength(1);
+    };
+    try {
+      const restarted = await workspaceRouter
+        .createCaller({ session: { user: { id: userId } } } as unknown as Context)
+        .restartWorkspace({ workspaceId: sandbox.id });
+      expect(restarted.status).toBe("running");
+    } finally {
+      duringResume = undefined;
+    }
+    expect((await caller(userId).get({ sandboxId: sandbox.id })).status).toBe("running");
+    const open = await db
+      .select()
+      .from(usageSession)
+      .where(eq(usageSession.workspaceId, sandbox.id));
+    expect(open.filter((session) => !session.stoppedAt)).toHaveLength(1);
+  },
+);
 
 integration("#5 a signed Boat archive webhook pauses a Boat sandbox", async () => {
   await terminateAll(userId);

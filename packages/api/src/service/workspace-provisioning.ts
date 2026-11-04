@@ -71,6 +71,10 @@ export async function settleWorkspaceProvisioning(
     if (!reserved) throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
 
     let cancelled = !identityExists || reserved.status === "terminated";
+    // A provider webhook may already have reported the workspace running; waiting for
+    // that webhook (pending) must not undo it.
+    const status =
+      values.status === "pending" && reserved.status === "running" ? "running" : values.status;
     let [updated] = await tx
       .update(workspace)
       .set(
@@ -81,7 +85,7 @@ export async function settleWorkspaceProvisioning(
               status: "terminated",
               updatedAt: new Date(),
             }
-          : values,
+          : { ...values, status },
       )
       .where(eq(workspace.id, values.id))
       .returning();
