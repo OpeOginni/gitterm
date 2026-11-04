@@ -59,6 +59,8 @@ gitterm sandbox destroy <id>
 ```
 
 Add `--account <name>` to use another account. Direct accounts need no Gitterm login.
+`exec` and `job` exit with the job's exit code when it fails (1 if it timed out or was
+cancelled), so scripts and CI see the failure.
 See [Agent sandboxes](../../docs/agent-sandboxes.md).
 
 ## Switching servers (hosted vs self-hosted)

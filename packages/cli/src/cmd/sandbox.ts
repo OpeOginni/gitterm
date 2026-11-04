@@ -91,6 +91,13 @@ async function approve(args: Common & { yes?: boolean }, question: string) {
   }
 }
 
+/** A job that ended without succeeding fails the CLI too, so scripts and CI see it. */
+function exitWithJob(view: JobView): JobView {
+  const { status, exitCode } = view.state;
+  if (status !== "succeeded" && status !== "running") process.exitCode = exitCode || 1;
+  return view;
+}
+
 function printJob(view: JobView) {
   const { job, state, log } = view;
   console.log(
@@ -224,12 +231,14 @@ export async function runSandboxExec(
     "Running...",
     async () => {
       const { client } = await clientFor(args);
-      return client.exec(refOf(client, args.sandboxId), {
-        command: args.command,
-        cwd: args.cwd,
-        timeoutMinutes: args.timeout,
-        waitMs: (args.wait ?? 60) * 1000,
-      });
+      return exitWithJob(
+        await client.exec(refOf(client, args.sandboxId), {
+          command: args.command,
+          cwd: args.cwd,
+          timeoutMinutes: args.timeout,
+          waitMs: (args.wait ?? 60) * 1000,
+        }),
+      );
     },
     printJob,
   );
@@ -250,9 +259,11 @@ export async function runSandboxJob(
     async () => {
       const { client } = await clientFor(args);
       const ref = refOf(client, args.sandboxId);
-      return args.wait && args.offset === undefined
-        ? client.wait(ref, args.jobId, args.wait * 1000)
-        : client.job(ref, args.jobId, { offset: args.offset, limit: args.limit });
+      return exitWithJob(
+        args.wait && args.offset === undefined
+          ? await client.wait(ref, args.jobId, args.wait * 1000)
+          : await client.job(ref, args.jobId, { offset: args.offset, limit: args.limit }),
+      );
     },
     printJob,
   );
