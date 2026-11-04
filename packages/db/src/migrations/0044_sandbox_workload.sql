@@ -5,7 +5,6 @@ VALUES ('sandbox', 'Sandbox', 'Plain command sandbox for local agents. No coding
 ON CONFLICT ("key") DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "image" ("name", "image_id", "agent_type_id", "provider_metadata", "is_enabled")
--- E2B sizes are templates built by providers/e2b/template/build.ts (gitterm-sandbox, -sm, -lg).
-SELECT 'gitterm-sandbox-e2b-base', 'gitterm-sandbox', "id", '{"e2b":{"templateId":"gitterm-sandbox"}}'::jsonb, true
+SELECT 'gitterm-sandbox-e2b-base', 'base', "id", '{"e2b":{"templateId":"base"}}'::jsonb, true
 FROM "agent_type" WHERE "key" = 'sandbox'
 ON CONFLICT ("name") DO NOTHING;

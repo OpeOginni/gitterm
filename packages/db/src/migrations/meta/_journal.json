@@ -316,6 +316,13 @@
       "when": 1793372196498,
       "tag": "0044_sandbox_workload",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793784778078,
+      "tag": "0045_sandbox_e2b_templates",
+      "breakpoints": true
     }
   ]
 }
