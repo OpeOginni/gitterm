@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
-import { isBillingEnabled } from "@gitterm/env/web";
+import { isBillingEnabled, isSelfHosted } from "@gitterm/env/web";
 import { authClient } from "@/lib/auth-client";
 import { GitHub } from "@/components/logos/Github";
 import { Mark } from "@/components/site/mark";
@@ -39,6 +39,21 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
     { label: "Self-host", href: "/self-host" as Route },
   ];
   const items = nav.filter((n) => n.show !== false);
+
+  // Self-hosted deployments have no marketing pages, so the header is just the mark
+  if (isSelfHosted())
+    return (
+      <header className="border-b border-line">
+        <div
+          className={cn(
+            "mx-auto flex h-16 items-center px-4 sm:px-6",
+            wide ? "max-w-[1400px]" : "max-w-[1240px]",
+          )}
+        >
+          <Brand />
+        </div>
+      </header>
+    );
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-background/80 backdrop-blur-xl">

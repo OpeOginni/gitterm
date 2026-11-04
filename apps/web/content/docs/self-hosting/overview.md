@@ -6,7 +6,7 @@ description: Deploy Gitterm on your own infrastructure with Docker Compose or Ra
 
 This page is for whoever deploys and runs a Gitterm instance, person or agent. It lists what you run and what you must decide first, then gives numbered deploy steps with a check after each one. Every environment variable, with whether it is required, is on [Configuration](/docs/self-hosting/configuration). How credentials are stored and how to rotate secrets is on [Security](/docs/self-hosting/security).
 
-A self-hosted deployment has no plans, quotas or billing. Sign-in is always email and password.
+A self-hosted deployment has no plans, quotas or billing. Sign-in is always email and password. It serves only the app: your URL opens the dashboard (or sign-in), there is no landing page, pricing or legal pages, and docs links go to gitterm.dev.
 
 ## What you run
 
@@ -217,7 +217,7 @@ gitterm login --server https://gitterm.example.com/api
 gitterm auth status
 ```
 
-You should see your account and server in the `auth status` output. If the login link printed by the CLI ends in `/verify`, open `<PUBLIC_URL>/device` instead and enter the code there. See the [CLI reference](/docs/reference/cli#account).
+You should see your account and server in the `auth status` output. See the [CLI reference](/docs/reference/cli#account).
 
 ## Verify the install
 

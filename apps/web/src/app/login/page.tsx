@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AuthForm } from "@/components/auth/auth-form";
+import { isSelfHosted } from "@gitterm/env/web";
 import { SiteShell } from "@/components/site/site-shell";
 
 function LoginContent() {
@@ -26,23 +27,26 @@ function LoginContent() {
 
           <AuthForm redirectUrl={redirect ?? undefined} authError={error} />
 
-          <p className="mt-9 text-center text-[13px] leading-[1.6] text-fg-4">
-            By signing in, you agree to our{" "}
-            <Link
-              href="/terms"
-              className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
-            >
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link
-              href="/privacy"
-              className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
-            >
-              Privacy Policy
-            </Link>
-            .
-          </p>
+          {/* gitterm.dev's terms; a self-hosted deployment has its own */}
+          {!isSelfHosted() && (
+            <p className="mt-9 text-center text-[13px] leading-[1.6] text-fg-4">
+              By signing in, you agree to our{" "}
+              <Link
+                href="/terms"
+                className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
+              >
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link
+                href="/privacy"
+                className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
+              >
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          )}
         </div>
       </div>
     </SiteShell>

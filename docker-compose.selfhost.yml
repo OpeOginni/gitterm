@@ -86,7 +86,7 @@ services:
       BETTER_AUTH_URL: ${PUBLIC_URL}/api
       API_URL: ${PUBLIC_URL}/api
       WORKSPACE_API_URL: ${PUBLIC_URL}/api/trpc
-      DEVICE_CODE_VERIFICATION_URI: ${PUBLIC_URL}/verify
+      DEVICE_CODE_VERIFICATION_URI: ${PUBLIC_URL}/device
 
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       AUTH_ENCRYPT_OAUTH_TOKENS: ${AUTH_ENCRYPT_OAUTH_TOKENS:-false}
@@ -143,7 +143,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: ${GITTERM_IMAGE_PREFIX:-ghcr.io/opeoginni/gitterm}-worker:${GITTERM_IMAGE_TAG:-latest}
+    image: ${GITTERM_IMAGE_PREFIX:-ghcr.io/opeoginni/gitterm}-idle-reaper-worker:${GITTERM_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
