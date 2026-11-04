@@ -133,7 +133,8 @@ build output from earlier runs (for example `node_modules`) stays in place.
 
 `fetchArtifact(ref, path, { jobId })` downloads one file a job produced into
 `$XDG_CACHE_HOME/gitterm/sandbox-artifacts/...`, outside the checkout. It compares the
-download with a sha256 computed in the sandbox and records the artifact with its job.
+download with a sha256 computed in the sandbox, refuses a download that does not match
+(the file changed while it was read), and records the artifact with its job.
 The limit is 64 MiB in direct mode and 32 MiB in managed mode; managed mode checks the
 size before reading the file into server memory.
 
@@ -146,7 +147,7 @@ sync, so applying an old build cannot overwrite newer local work. It refuses whe
 - the downloaded file changed since it was verified
 
 The exact verified bytes are written, and the parent is checked again just before the
-final rename. Snapshot manifests are stored per checkout, so two checkouts with
+final rename. A replaced file keeps its permissions, so an executable script stays executable. Snapshot manifests are stored per checkout, so two checkouts with
 identical content keep separate baselines.
 
 ### Previews

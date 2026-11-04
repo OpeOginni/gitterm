@@ -461,7 +461,7 @@ export async function registerSandboxTools(
           jobId: str(args.jobId, "jobId"),
         });
         return {
-          content: `Fetched ${artifact.remotePath} from job ${artifact.jobId} (${artifact.bytes} bytes, sha256 ${artifact.sha256}, verified ${artifact.verified}) to ${artifact.localPath}`,
+          content: `Fetched ${artifact.remotePath} from job ${artifact.jobId} (${artifact.bytes} bytes, sha256 ${artifact.sha256}, matches the sandbox file) to ${artifact.localPath}`,
           metadata: artifact,
         };
       },

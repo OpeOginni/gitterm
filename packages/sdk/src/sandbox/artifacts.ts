@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import type { SandboxBackend } from "./backend.js";
@@ -14,7 +14,7 @@ export type FetchedArtifact = {
   sha256: string;
   bytes: number;
   /** The downloaded bytes match the sha256 computed inside the sandbox. */
-  verified: boolean;
+  verified: true;
 };
 
 export function artifactDirectory(): string {
@@ -54,6 +54,10 @@ export async function fetchArtifact(
     throw new Error(`Artifact is larger than ${Math.round(maxBytes / 1024 / 1024)} MiB`);
   const data = await backend.readFile(sandboxId, remote);
   const sha256 = createHash("sha256").update(data).digest("hex");
+  if (sha256 !== remoteHash?.trim())
+    throw new Error(
+      `${remote} changed while it was downloaded. Fetch it again once nothing is writing it.`,
+    );
   const directory = path.join(
     artifactDirectory(),
     `${backend.identity.mode}-${backend.identity.account}`,
@@ -67,7 +71,7 @@ export async function fetchArtifact(
     localPath,
     sha256,
     bytes: data.byteLength,
-    verified: sha256 === remoteHash?.trim(),
+    verified: true,
   };
 }
 
@@ -125,6 +129,8 @@ export async function applyArtifact(input: {
   const temporary = path.join(directory, `.gitterm-${randomBytes(6).toString("hex")}`);
   try {
     await writeFile(temporary, data, { flag: "wx" });
+    // Replacing a file keeps its permissions, e.g. an executable script stays executable.
+    if (current) await chmod(temporary, current.mode & 0o7777);
     // A parent swapped for a symlink after the checks above must not redirect the rename.
     if ((await realpath(directory)) !== directory)
       throw new ArtifactConflictError("The checkout changed while applying the artifact.");

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { applyArtifact, ArtifactConflictError } from "./artifacts";
+import { applyArtifact, ArtifactConflictError, fetchArtifact } from "./artifacts";
 import { startPreviewProxy } from "./proxy";
 import { captureSource } from "./source";
 import { createFileSandboxStore, type SandboxRecord } from "./store";
@@ -47,6 +47,39 @@ const record = (id: string): SandboxRecord => ({
   jobs: {},
   previews: {},
   updatedAt: new Date().toISOString(),
+});
+
+describe("artifacts", () => {
+  test("an artifact that changed while downloading is refused, not saved", async () => {
+    const backend = {
+      home: "/home/user",
+      identity: { mode: "direct", account: "a", provider: "e2b" },
+      run: async () => ({ exitCode: 0, stdout: `5\n${sha("first")}\n`, stderr: "" }),
+      readFile: async () => Buffer.from("second"),
+    };
+    await expect(fetchArtifact(backend as never, "sbx-changed", "dist/app")).rejects.toThrow(
+      /changed while it was downloaded/,
+    );
+  });
+
+  test("applying over an executable keeps it executable", async () => {
+    const root = await checkout({ "build.sh": "#!/bin/sh\necho old\n" });
+    try {
+      await chmod(path.join(root, "build.sh"), 0o755);
+      const snapshot = (await captureSource(root)).snapshot;
+      const staged = path.join(root, "..", `artifact-${Date.now()}`);
+      await writeFile(staged, "#!/bin/sh\necho new\n");
+      await applyArtifact({
+        artifact: { localPath: staged, sha256: sha("#!/bin/sh\necho new\n") },
+        snapshot,
+        target: "build.sh",
+      });
+      await rm(staged, { force: true });
+      expect((await stat(path.join(root, "build.sh"))).mode & 0o777).toBe(0o755);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("review regressions", () => {

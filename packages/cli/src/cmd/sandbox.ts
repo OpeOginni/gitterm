@@ -309,7 +309,7 @@ export async function runSandboxArtifact(
     },
     (artifact) =>
       success(
-        `${artifact.remotePath} -> ${artifact.localPath}\nsha256 ${artifact.sha256} (${artifact.bytes} bytes, verified ${artifact.verified})`,
+        `${artifact.remotePath} -> ${artifact.localPath}\nsha256 ${artifact.sha256} (${artifact.bytes} bytes, matches the sandbox file)`,
       ),
   );
 }
