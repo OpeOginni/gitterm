@@ -127,7 +127,9 @@ The snapshot id is `snap_` plus the first 16 hex characters of a sha256 over the
 manifest (`kind sha256 path` per file). The upload is a tar.gz built in process. In the
 sandbox it is extracted to a staging directory and every file is checked with
 `sha256sum`. Only then is it copied into `~/project` and checked again. Ignored
-build output from earlier runs (for example `node_modules`) stays in place.
+build output from earlier runs (for example `node_modules`) stays in place. Syncs to
+the same sandbox publish one at a time, so the checkout always matches one snapshot:
+the one published last.
 
 ### Artifacts
 

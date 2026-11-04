@@ -130,6 +130,44 @@ for (const [kind, createBackend] of Object.entries(backends))
       expect(results.map((result) => result.verified)).toEqual([true, true]);
     }, 60_000);
 
+    test("two different snapshots synced at once leave exactly one of them", async () => {
+      const second = createSandboxClient({
+        backend: createBackend("docker-a", run),
+        store: createFileSandboxStore(storeDir),
+      });
+      const snapshot = async (name: string) => {
+        await writeFile(path.join(repo, `${name}-only.txt`), `${name}\n`);
+        await writeFile(path.join(repo, "shared.txt"), `${name}\n`);
+        const captured = await captureSource(repo);
+        await rm(path.join(repo, `${name}-only.txt`));
+        return captured;
+      };
+      const a = await snapshot("a");
+      const b = await snapshot("b");
+      for (let round = 0; round < 5; round++) {
+        await Promise.all([client.sync(sandbox, a), second.sync(sandbox, b)]);
+        const state = await client.exec(sandbox, {
+          command:
+            "ls a-only.txt b-only.txt 2>/dev/null; cat shared.txt ~/.gitterm/source/current.digest",
+          waitMs: 30_000,
+        });
+        const winner = state.log.text.startsWith("a-only.txt") ? a : b;
+        const name = winner === a ? "a" : "b";
+        expect(state.log.text).toBe(`${name}-only.txt\n${name}\n${winner.snapshot.digest}`);
+      }
+      await rm(path.join(repo, "shared.txt"));
+      await client.sync(sandbox, await captureSource(repo));
+    }, 180_000);
+
+    test("a publish lock left by a killed upload expires", async () => {
+      await client.exec(sandbox, {
+        command:
+          "mkdir -p ~/.gitterm/source/publish.lock && touch -d '10 minutes ago' ~/.gitterm/source/publish.lock",
+        waitMs: 30_000,
+      });
+      expect((await client.sync(sandbox, await captureSource(repo))).verified).toBe(true);
+    }, 60_000);
+
     test("an empty, newly initialized checkout syncs", async () => {
       const empty = path.join(work, "empty");
       await mkdir(empty);

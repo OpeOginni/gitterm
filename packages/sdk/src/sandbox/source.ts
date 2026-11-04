@@ -251,6 +251,15 @@ export async function uploadSource(
       // sha256sum rejects an empty list, which an empty checkout produces.
       'verify() { [ ! -s "$B.sha256" ] || (cd "$1" && sha256sum -c --quiet --strict "$B.sha256"); }',
       'verify "$B.stage" || { echo "staged files failed verification" >&2; exit 5; }',
+      // One upload publishes at a time, so concurrent syncs never mix two snapshots.
+      // mkdir is atomic everywhere; a lock left by a killed upload expires after 5 minutes.
+      'L="$S/publish.lock"; n=0',
+      'until mkdir "$L" 2>/dev/null; do',
+      '  if [ -n "$(find "$L" -maxdepth 0 -mmin +5 2>/dev/null)" ]; then rm -rf "$L"; continue; fi',
+      '  n=$((n + 1)); [ "$n" -lt 450 ] || { echo "another sync is still publishing" >&2; exit 7; }',
+      "  sleep 0.2",
+      "done",
+      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files" "$L"\' EXIT',
       'sort -o "$B.files" "$B.files"',
       'if [ -f "$S/current.files" ]; then comm -23 "$S/current.files" "$B.files" | while IFS= read -r f; do rm -f -- "$P/$f"; done; fi',
       // A directory that is now a file (or symlink) cannot be copied over.
