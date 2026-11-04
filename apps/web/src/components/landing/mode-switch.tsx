@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Seg } from "@/components/site/seg";
 import { cn } from "@/lib/utils";
 import { MODE_EVENT, type DemoMode } from "./engine";
@@ -31,6 +31,13 @@ export function ModeSwitch() {
     setMode(m);
     ref.current?.closest(".lp")?.dispatchEvent(new CustomEvent(MODE_EVENT, { detail: m }));
   };
+  // The demo can switch modes too ("Run it with Gitterm" after the crash)
+  useEffect(() => {
+    const root = ref.current?.closest(".lp");
+    const sync = (e: Event) => setMode((e as CustomEvent<DemoMode>).detail);
+    root?.addEventListener(MODE_EVENT, sync);
+    return () => root?.removeEventListener(MODE_EVENT, sync);
+  }, []);
   return (
     <div ref={ref} className="mt-12 mb-[30px] flex flex-col items-center gap-3">
       <Seg

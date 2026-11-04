@@ -670,7 +670,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                       <SelectItem value="aws">
                         <div className="flex items-center">
                           <Image
-                            src="/ECS.svg"
+                            src="/aws.svg"
                             alt="AWS"
                             width={16}
                             height={16}

@@ -151,7 +151,7 @@ export function AwsProviderSection({ awsProviders }: AwsProviderSectionProps) {
           aria-expanded={isExpanded}
         >
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill">
-            <Image src="/ECS.svg" alt="AWS" width={22} height={22} className="size-5" />
+            <Image src="/aws.svg" alt="AWS" width={22} height={22} className="size-5" />
           </span>
 
           <div className="min-w-0 flex-1">

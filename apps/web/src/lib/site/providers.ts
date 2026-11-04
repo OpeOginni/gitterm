@@ -71,7 +71,7 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
   {
     id: "aws",
     name: "AWS",
-    logo: "/ECS.svg",
+    logo: "/aws.svg",
     byoKey: false,
     publicPreviews: false,
     note: "Runs on your Gitterm plan only. Private previews, port 8080 reserved.",
@@ -92,7 +92,8 @@ export const AGENTS: { id: AgentId; name: string; logo: string; viaT3: boolean }
   { id: "claude", name: "Claude Code", logo: "/claude.svg", viaT3: true },
 ];
 
-export const T3_LOGO = "/t3.svg";
+export const T3_LOGO = "/t3-nightly.svg";
 
-export const INSTALL_SANDBOX_TOOLS = "opencode plugin add @gitterm/opencode-sandbox-tools";
+export const INSTALL_SANDBOX = "opencode plugin add @gitterm/opencode-sandbox";
+export const INSTALL_CLOUD = "opencode plugin add @gitterm/opencode-cloud";
 export const GITHUB_URL = "https://github.com/OpeOginni/gitterm";

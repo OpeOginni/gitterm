@@ -9,6 +9,7 @@
  */
 import {
   SANDBOX_PROVIDERS,
+  T3_LOGO,
   type SandboxProvider,
   type SandboxProviderId,
 } from "@/lib/site/providers";
@@ -24,6 +25,8 @@ type Laptop = {
   mem: number;
   hot?: boolean;
   ok?: boolean;
+  /** The Mac runs out of memory: the stage shakes and Force Quit opens. */
+  oom?: boolean;
   status: string;
   procs: [string, string][];
 };
@@ -35,6 +38,10 @@ type Step = {
   tool?: "shell" | "read" | "edit" | "plugin" | "cloud";
   cmd?: string;
   out?: string[];
+  /** The tool call failed: OpenCode prints the error in red at the end of the tool block. */
+  error?: string;
+  /** OpenCode itself is killed: the TUI drops back to the shell and the run ends. */
+  crash?: boolean;
   dur?: number;
   sub?: string;
   name?: string;
@@ -104,13 +111,16 @@ const WITHOUT: Script = {
     {
       laptop: {
         bat: [91, "6h 40m"],
-        cpu: 18,
-        mem: 6.1,
-        status: "OpenCode is working.",
-        procs: [["opencode", "working"]],
+        cpu: 24,
+        mem: 8.9,
+        status: "Two other OpenCode sessions are already running.",
+        procs: [
+          ["opencode", "3 sessions"],
+          ["chrome", "2.4 GB"],
+        ],
       },
     },
-    { text: "I'll start Postgres locally and run the suite." },
+    { text: "I'll start Postgres and the dev server here, then run the suite." },
     {
       tool: "shell",
       cmd: "docker compose up -d postgres",
@@ -118,65 +128,14 @@ const WITHOUT: Script = {
       dur: 1600,
       laptop: {
         bat: [88, "4h 10m"],
-        cpu: 46,
-        mem: 9.6,
+        cpu: 52,
+        mem: 12.1,
+        hot: true,
         status: "Postgres is running in Docker.",
         procs: [
-          ["opencode", "working"],
+          ["opencode", "3 sessions"],
           ["docker: postgres", "1.9 GB"],
-        ],
-      },
-    },
-    {
-      tool: "shell",
-      cmd: "bun test",
-      out: [...TESTS.slice(1), " 1 failed, 52 passed (53 tests) in 4m 12s"],
-      dur: 4200,
-      laptop: {
-        bat: [81, "1h 05m"],
-        cpu: 94,
-        mem: 13.9,
-        hot: true,
-        status: "Fans on. The whole suite runs here.",
-        procs: [
-          ["opencode", "working"],
-          ["docker: postgres", "2.4 GB"],
-          ["bun test", "7 threads"],
-        ],
-      },
-    },
-    {
-      laptop: {
-        bat: [78, "1h 50m"],
-        cpu: 38,
-        mem: 10.2,
-        status: "Postgres is still running.",
-        procs: [
-          ["opencode", "working"],
-          ["docker: postgres", "2.4 GB"],
-        ],
-      },
-    },
-    {
-      text: "One failure: expired coupons are still accepted. Fixing it in `src/api/checkout.ts`.",
-    },
-    { tool: "read", sub: "src/api/checkout.ts:30-48" },
-    { tool: "edit", dur: 900 },
-    {
-      tool: "shell",
-      cmd: "bun test src/api/checkout.test.ts",
-      out: [" pass  src/api/checkout.test.ts (9 tests) 204ms"],
-      dur: 1500,
-      laptop: {
-        bat: [74, "1h 20m"],
-        cpu: 71,
-        mem: 11.0,
-        hot: true,
-        status: "Running tests locally.",
-        procs: [
-          ["opencode", "working"],
-          ["docker: postgres", "2.4 GB"],
-          ["bun test", "running"],
+          ["chrome", "2.4 GB"],
         ],
       },
     },
@@ -186,38 +145,71 @@ const WITHOUT: Script = {
       out: ["Ready on http://localhost:3000"],
       dur: 1300,
       laptop: {
-        bat: [71, "1h 35m"],
-        cpu: 52,
-        mem: 12.4,
+        bat: [86, "3h 20m"],
+        cpu: 61,
+        mem: 13.6,
+        hot: true,
         status: "Dev server on localhost:3000.",
         procs: [
-          ["opencode", "working"],
-          ["docker: postgres", "2.4 GB"],
+          ["opencode", "3 sessions"],
+          ["docker: postgres", "2.1 GB"],
           ["bun run dev", ":3000"],
+          ["chrome", "2.4 GB"],
         ],
       },
     },
     {
-      text: "Tests pass. The checkout page runs at `localhost:3000`, which only this machine can open.",
-    },
-    { foot: "6m 31s" },
-    { user: TRAIN },
-    {
-      text: "I can't come with you. This session runs on your laptop, so closing the lid stops the dev server, Postgres and me with it.",
+      tool: "shell",
+      cmd: "bun test",
+      out: [...TESTS.slice(1, 3), "Killed: 9"],
+      error:
+        "Error: bun test was killed (SIGKILL). Out of memory: Docker, the dev server and 3 OpenCode sessions are using 15.9 of 16 GB.",
+      dur: 2000,
       laptop: {
-        bat: [68, "1h 40m"],
-        cpu: 41,
-        mem: 12.4,
+        bat: [83, "1h 05m"],
+        cpu: 97,
+        mem: 15.4,
         hot: true,
-        status: "Closing the lid ends the session.",
+        status: "Fans on. Memory is almost full.",
         procs: [
-          ["opencode", "idle"],
+          ["opencode", "3 sessions"],
+          ["docker: postgres", "2.4 GB"],
+          ["bun run dev", ":3000"],
+          ["bun test", "7 threads"],
+        ],
+      },
+    },
+    {
+      laptop: {
+        bat: [82, "1h 10m"],
+        cpu: 99,
+        mem: 15.9,
+        hot: true,
+        oom: true,
+        status: "Out of memory. macOS is stopping apps.",
+        procs: [
+          ["opencode", "not responding"],
+          ["docker: postgres", "2.4 GB"],
+          ["bun run dev", ":3000"],
+          ["bun test", "killed"],
+        ],
+      },
+    },
+    {
+      crash: true,
+      laptop: {
+        bat: [80, "2h 30m"],
+        cpu: 41,
+        mem: 11.8,
+        hot: true,
+        status: "OpenCode was killed. The run is lost.",
+        procs: [
+          ["opencode", "killed"],
           ["docker: postgres", "2.4 GB"],
           ["bun run dev", ":3000"],
         ],
       },
     },
-    { foot: "4.1s" },
   ],
 };
 
@@ -524,6 +516,7 @@ export function startLanding(root: HTMLElement): () => void {
   const hints = $("hints");
   const term = $("term");
   const stage = $("bench");
+  const tui = need(".tui.main", stage);
   const benchNote = $("benchnote");
   const sbar = need(".sbar", stage);
   const slots = Object.fromEntries(all(".slot", stage).map((s) => [s.dataset.slot, s])) as Record<
@@ -599,12 +592,14 @@ export function startLanding(root: HTMLElement): () => void {
     $("cpu").textContent = `${l.cpu}%`;
     $("cpubar").style.width = `${l.cpu}%`;
     $("cpubar").classList.toggle("hot", l.cpu >= 70);
+    $("cpubar").classList.toggle("crit", l.cpu >= 95);
     $("mem").textContent = `${l.mem.toFixed(1)} of 16 GB`;
     $("membar").style.width = `${Math.round((l.mem / 16) * 100)}%`;
     $("membar").classList.toggle("hot", l.mem >= 12);
+    $("membar").classList.toggle("crit", l.mem >= 15);
     const st = $("status");
     st.textContent = l.status;
-    st.className = `status${l.hot ? " hot" : l.ok ? " ok" : ""}`;
+    st.className = `status${l.mem >= 15 ? " crit" : l.hot ? " hot" : l.ok ? " ok" : ""}`;
     if (l.bat) {
       $("bat").textContent = `${l.bat[0]}%, ${l.bat[1]} left`;
       $("batbar").style.width = `${l.bat[0]}%`;
@@ -615,6 +610,94 @@ export function startLanding(root: HTMLElement): () => void {
       .join("");
     laptopStatus(l);
   }
+
+  // Without Gitterm the run ends here: OpenCode dies in place and the card comes up over it
+  function crash() {
+    stage.classList.remove("quake");
+    void stage.offsetWidth;
+    stage.classList.add("quake");
+    tui.classList.add("dead");
+    for (const e of eyes) Object.assign(e, { x: 0, y: -EYE_MAX, vx: 0, vy: 0 });
+    later(() => jiggle(22), 750);
+  }
+
+  // ---------- OpenCode's googly eyes (an easter egg on the crash card) ----------
+  // Each pupil is a spring: it looks at the pointer, sinks to the bottom when left alone,
+  // bounces off the rim, and wobbles when the stage shakes or someone pokes it.
+  const EYE_MAX = 16;
+  const eyes = all<SVGGElement>("[data-eye]", stage).map((g) => ({
+    g,
+    pupil: need<SVGCircleElement>(".pupil", g),
+    x: 0,
+    y: EYE_MAX,
+    vx: 0,
+    vy: 0,
+  }));
+  let pointer: { x: number; y: number; t: number } | null = null;
+  let eyesRaf = 0;
+  let eyesIdle = 0;
+  function eyesTick() {
+    eyesRaf = 0;
+    if (!tui.classList.contains("dead")) return;
+    const watching = pointer && performance.now() - pointer.t < 2500;
+    let moving = false;
+    for (const e of eyes) {
+      let tx = 0;
+      let ty = EYE_MAX;
+      if (watching && pointer) {
+        const r = e.g.getBoundingClientRect();
+        const dx = pointer.x - (r.left + r.width / 2);
+        const dy = pointer.y - (r.top + r.height / 2);
+        const d = Math.hypot(dx, dy) || 1;
+        const k = Math.min(1, d / 30) * EYE_MAX;
+        tx = (dx / d) * k;
+        ty = (dy / d) * k;
+      }
+      e.vx = (e.vx + (tx - e.x) * 0.08) * 0.84;
+      e.vy = (e.vy + (ty - e.y) * 0.08) * 0.84;
+      e.x += e.vx;
+      e.y += e.vy;
+      const m = Math.hypot(e.x, e.y);
+      if (m > EYE_MAX) {
+        const nx = e.x / m;
+        const ny = e.y / m;
+        e.x = nx * EYE_MAX;
+        e.y = ny * EYE_MAX;
+        const dot = e.vx * nx + e.vy * ny;
+        if (dot > 0) {
+          e.vx -= 1.6 * dot * nx;
+          e.vy -= 1.6 * dot * ny;
+        }
+      }
+      e.pupil.setAttribute("transform", `translate(${e.x.toFixed(2)} ${e.y.toFixed(2)})`);
+      if (Math.abs(e.vx) + Math.abs(e.vy) > 0.03 || Math.hypot(tx - e.x, ty - e.y) > 0.3)
+        moving = true;
+    }
+    if (moving) eyesRaf = requestAnimationFrame(eyesTick);
+  }
+  const wakeEyes = () => {
+    if (!eyesRaf && !reduce) eyesRaf = requestAnimationFrame(eyesTick);
+  };
+  function jiggle(power: number) {
+    for (const e of eyes) {
+      e.vx += (Math.random() - 0.5) * power;
+      e.vy += (Math.random() - 0.5) * power;
+    }
+    wakeEyes();
+  }
+  window.addEventListener(
+    "pointermove",
+    (ev) => {
+      if (!tui.classList.contains("dead")) return;
+      pointer = { x: ev.clientX, y: ev.clientY, t: performance.now() };
+      wakeEyes();
+      // Once the pointer rests, the pupils drop back down
+      cancel(eyesIdle);
+      eyesIdle = later(wakeEyes, 2600);
+    },
+    passive,
+  );
+  need(".oc-eyes", stage).addEventListener("pointerdown", () => jiggle(26), on);
 
   let lastKind = "";
   function addEl(html: string, kind = "") {
@@ -663,13 +746,14 @@ export function startLanding(root: HTMLElement): () => void {
     scroll.classList.remove("free");
     closeAll();
     fqShown = false;
-    stage.classList.remove("busy");
+    stage.classList.remove("busy", "quake");
+    tui.classList.remove("dead");
     fqPending = false;
     cancel(fqTimer);
     items.laptop.classList.remove("warned");
     dismissed.clear();
     autoQueue.clear();
-    if (m === "with") autoOpen("laptop");
+    autoOpen("laptop");
     transcript.innerHTML = "";
     term.innerHTML = "";
     lastKind = "";
@@ -738,6 +822,10 @@ export function startLanding(root: HTMLElement): () => void {
           addLine(o, esc(line));
           if (!(await wait((st.dur ?? 0) / out.length, id))) return;
         }
+        if (st.error) {
+          if (!(await wait(500, id))) return;
+          addLine(o, esc(st.error), "err");
+        }
         if (!(await wait(350, id))) return;
         continue;
       }
@@ -777,6 +865,13 @@ export function startLanding(root: HTMLElement): () => void {
         );
         slots.cloud.classList.add("on", "fresh");
         if (!(await wait(600, id))) return;
+        continue;
+      }
+      if (st.crash) {
+        // Give Force Quit a moment on screen before OpenCode goes
+        if (!(await wait(2400, id))) return;
+        crash();
+        setLaptop(st.laptop);
         continue;
       }
       if (st.laptop) {
@@ -941,7 +1036,7 @@ export function startLanding(root: HTMLElement): () => void {
     hoLink.classList.add(dir);
   }
   const agIcon = (s: Sess) =>
-    `<span class="ag"><img src="${s.logo}" alt="${esc(s.agent)}">${s.t3 ? `<img class="ag-t3" src="/t3.svg" alt="">` : ""}</span>`;
+    `<span class="ag"><img src="${s.logo}" alt="${esc(s.agent)}">${s.t3 ? `<img class="ag-t3" src="${T3_LOGO}" alt="">` : ""}</span>`;
   const rowHtml = (s: Sess, cls: string, note: string, tag: string) =>
     `<li class="srow ${cls}" data-s="${s.id}">${agIcon(s)}<div><b>${esc(s.title)}</b><small>${esc(note)}</small></div><span class="tag">${tag}</span></li>`;
   function setRow(id: string, cls: string, note: string, tag: string) {
@@ -1113,8 +1208,10 @@ export function startLanding(root: HTMLElement): () => void {
 
   const nameOf = (w: HTMLElement) => (w.dataset.win ?? w.dataset.alert) as Slot;
   const front = (w: HTMLElement) => (w.style.zIndex = String(++zTop));
-  // Hover previews whatever a click would open, so without Gitterm you see the macOS alert
-  const winFor = (name: Slot) => (mode === "without" ? alerts[name] : wins[name]);
+  // Hover previews whatever a click would open, so without Gitterm you see the macOS alert.
+  // The laptop shows its monitor until it runs out of memory, then Force Quit.
+  const winFor = (name: Slot) =>
+    mode === "without" && (name !== "laptop" || fqShown) ? alerts[name] : wins[name];
   const openFor = (name: Slot) =>
     [wins[name], alerts[name]].some((w) => w?.classList.contains("open"));
   const syncExpanded = (name: Slot) =>
@@ -1143,8 +1240,7 @@ export function startLanding(root: HTMLElement): () => void {
     if (now) go();
     else hideTimer = later(go, 160);
   }
-  function openWin(name: Slot) {
-    const w = winFor(name);
+  function openWin(name: Slot, w = winFor(name)) {
     // Phones have room for one window at a time
     if (narrowStage()) for (const o of all(".fw.open", stage)) if (o !== w) closeWin(o);
     if (w.classList.contains("open")) {
@@ -1212,7 +1308,8 @@ export function startLanding(root: HTMLElement): () => void {
   const autoQueue = new Set<Slot>();
   const dismissed = new Set<Slot>();
   function autoOpen(name: Slot) {
-    if (mode !== "with" || dismissed.has(name)) return;
+    // Without Gitterm only the laptop opens on its own: you watch it fill up
+    if ((mode !== "with" && name !== "laptop") || dismissed.has(name)) return;
     autoQueue.add(name);
     flushAuto();
   }
@@ -1226,7 +1323,9 @@ export function startLanding(root: HTMLElement): () => void {
   function flushAuto() {
     if (fqPending && mode === "without" && watching()) {
       fqPending = false;
-      openWin("laptop");
+      // The laptop monitor gives way to Force Quit in the same spot
+      if (wins.laptop.classList.contains("open")) closeWin(wins.laptop);
+      openWin("laptop", alerts.laptop);
       alerts.laptop.dataset.auto = "1";
       fqTimer = later(dismissFq, 6000);
     }
@@ -1242,7 +1341,7 @@ export function startLanding(root: HTMLElement): () => void {
           w.classList.remove("peek");
           peeked = null;
         }
-        openWin(name);
+        openWin(name, w);
         w.dataset.auto = "1";
       }
       autoQueue.delete(name);
@@ -1469,9 +1568,12 @@ export function startLanding(root: HTMLElement): () => void {
     $("sb-meter").classList.toggle("hot", l.cpu >= 70);
     items.laptop.classList.toggle("hot", l.cpu >= 70);
     stage.classList.toggle("busy", mode === "without" && l.cpu >= 90);
-    // Without Gitterm the Mac gives up once: the Force Quit window appears on its own
-    if (mode === "without" && l.cpu >= 90 && !fqShown && !reduce) {
+    // Without Gitterm the Mac runs out of memory once: the stage shakes and Force Quit opens
+    if (mode === "without" && l.oom && !fqShown && !reduce) {
       fqShown = true;
+      stage.classList.remove("quake");
+      void stage.offsetWidth;
+      stage.classList.add("quake");
       fqPending = true;
       items.laptop.classList.add("warned");
       showCoach("laptop");
@@ -1523,6 +1625,13 @@ export function startLanding(root: HTMLElement): () => void {
         pickedUntil = Date.now() + 15000;
         setProvider(b.dataset.prov as SandboxProviderId);
       },
+      on,
+    );
+  // "Run it with Gitterm" on the crash screen switches the demo, and the mode switch follows
+  for (const b of all("[data-goto]", stage))
+    b.addEventListener(
+      "click",
+      () => root.dispatchEvent(new CustomEvent(MODE_EVENT, { detail: b.dataset.goto })),
       on,
     );
   $("replay").addEventListener(
@@ -1593,5 +1702,6 @@ export function startLanding(root: HTMLElement): () => void {
     for (const i of intervals) clearInterval(i);
     for (const o of observers) o.disconnect();
     cancelAnimationFrame(raf);
+    cancelAnimationFrame(eyesRaf);
   };
 }

@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Wrap } from "@/components/site/section";
 import { Logo } from "./logo";
 import { ModeSwitch } from "./mode-switch";
+import { Mark } from "@/components/site/mark";
 
 /*
  * The demo session: a full-width OpenCode TUI with a status bar, and the macOS windows that
@@ -78,6 +79,40 @@ export function Demo() {
             </div>
             <div className="tui-scroll" id="scroll">
               <div id="transcript" aria-live="polite" />
+            </div>
+            {/* Without Gitterm the run ends here: OpenCode dies in place */}
+            <div className="crash" role="status">
+              <div className="crash-card">
+                <div className="crash-head">
+                  <svg
+                    className="oc-eyes"
+                    viewBox="0 0 240 300"
+                    aria-label="OpenCode, looking surprised"
+                  >
+                    <defs>
+                      <radialGradient id="eye-shade" cx="0.4" cy="0.35" r="0.7">
+                        <stop offset="0.6" stopColor="#ffffff" />
+                        <stop offset="1" stopColor="#d6d1d1" />
+                      </radialGradient>
+                    </defs>
+                    <path d="M180 240H60V120H180V240Z" fill="#4B4646" />
+                    <path d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" fill="#F1ECEC" />
+                    <g data-eye transform="translate(98 116)">
+                      <circle r="38" fill="url(#eye-shade)" stroke="#bdb6b6" strokeWidth="3" />
+                      <circle className="pupil" r="19" fill="#141414" />
+                    </g>
+                    <g data-eye transform="translate(144 184)">
+                      <circle r="38" fill="url(#eye-shade)" stroke="#bdb6b6" strokeWidth="3" />
+                      <circle className="pupil" r="19" fill="#141414" />
+                    </g>
+                  </svg>
+                  <strong>OpenCode died</strong>
+                </div>
+                <p>Your Mac ran out of memory mid-run.</p>
+                <button type="button" className="crash-cta" data-goto="with">
+                  Try it with Gitterm
+                </button>
+              </div>
             </div>
             <div className="t-prompt">
               <div className="t-input" id="input">
@@ -278,7 +313,9 @@ export function Demo() {
                     <div className="pl-time">18:42</div>
                     <div className="pl-date">Tuesday, 3 November</div>
                     <div className="pl-note">
-                      <b className="pl-ic">+</b>
+                      <b className="pl-ic">
+                        <Mark className="size-[56%]" />
+                      </b>
                       <div>
                         <strong>Gitterm</strong>
                         <span data-empty />
@@ -356,16 +393,11 @@ export function Demo() {
                   bun test<b>3.1 GB</b>
                 </li>
                 <li>
-                  <span className="app" style={appColor("#5fa04e")}>
-                    N
-                  </span>
-                  node (bun run dev)<b>1.2 GB</b>
-                </li>
-                <li>
                   <span className="app" style={appColor("#fafafa", "#111")}>
                     O
                   </span>
-                  OpenCode<b>840 MB</b>
+                  OpenCode<em>(3 sessions)</em>
+                  <b>2.6 GB</b>
                 </li>
                 <li>
                   <span className="app" style={appColor("#4285f4")}>
@@ -466,7 +498,7 @@ export function ReplayButton({ id }: { id: string }) {
     <button
       type="button"
       id={id}
-      className="inline-flex min-h-10 items-center gap-2 rounded-[10px] bg-white/[0.04] px-4 text-[14px] font-medium text-fg-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-colors hover:bg-white/[0.07] hover:text-fg"
+      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line px-3 text-[13px] font-medium text-fg-3 transition-colors hover:border-line-2 hover:bg-fill hover:text-fg"
     >
       <svg
         viewBox="0 0 16 16"
@@ -474,7 +506,7 @@ export function ReplayButton({ id }: { id: string }) {
         stroke="currentColor"
         strokeWidth={1.5}
         aria-hidden
-        className="size-[15px]"
+        className="size-[13px]"
       >
         <path d="M2.5 8a5.5 5.5 0 1 0 1.7-4M2.5 2.5v3h3" />
       </svg>

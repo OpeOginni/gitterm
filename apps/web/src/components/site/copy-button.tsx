@@ -18,7 +18,6 @@ export function CopyButton({
   icon?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
-  const Icon = copied ? Check : Copy;
   return (
     <button
       type="button"
@@ -33,12 +32,25 @@ export function CopyButton({
         className,
       )}
     >
-      {icon && <Icon aria-hidden className="size-[15px] shrink-0" />}
       {icon ? (
-        // Both labels share one grid cell, so the button keeps its width when it says "Copied".
-        <span className="grid text-left">
-          <span className={cn("col-start-1 row-start-1", copied && "invisible")}>{label}</span>
-          <span className={cn("col-start-1 row-start-1", !copied && "invisible")}>Copied</span>
+        // Both states share one grid cell, so the button keeps its width; each state is centred
+        // in it, so "Copied" never leaves a gap on one side.
+        <span className="grid place-items-center">
+          {[false, true].map((done) => {
+            const Icon = done ? Check : Copy;
+            return (
+              <span
+                key={String(done)}
+                className={cn(
+                  "col-start-1 row-start-1 inline-flex items-center gap-1.5",
+                  copied !== done && "invisible",
+                )}
+              >
+                <Icon aria-hidden className="size-[15px] shrink-0" />
+                <span data-label>{done ? "Copied" : label}</span>
+              </span>
+            );
+          })}
         </span>
       ) : copied ? (
         "Copied"

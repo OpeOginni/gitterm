@@ -67,7 +67,7 @@ import {
 } from "./opencode-connect";
 
 const PROVIDER_LOGOS: Record<string, string> = {
-  aws: "/ECS.svg",
+  aws: "/aws.svg",
   cloudflare: "/cloudflare.svg",
   daytona: "/daytona.svg",
   e2b: "/E2B.svg",

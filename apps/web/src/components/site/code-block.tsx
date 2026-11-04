@@ -65,26 +65,40 @@ export function CodeBlock({
   /** Pre-highlighted content to show instead of `code` (copy still uses `code`). */
   children?: ReactNode;
 }) {
+  // Copy covers only the right end of the top line. A short top line (24 characters fits even a
+  // phone) keeps it inside; a long one would run under it, so below `lg` it moves under the block.
+  const inside = (code.split("\n")[0] ?? "").length <= 24;
   return (
-    <div className={cn("relative", className)}>
+    <div className={cn("relative", !inside && "flex flex-col lg:block", className)}>
       <pre className="m-0 overflow-x-auto rounded-[10px] border border-line bg-[#0b0b0e] px-5 py-4 font-mono text-[13px] leading-[1.75] text-fg-2 [scrollbar-width:thin]">
         {children ?? (lang === "json" ? highlightJson(code) : code)}
       </pre>
-      {copy && <CopyButton value={code} className="absolute top-2.5 right-2.5" />}
+      {copy && (
+        <CopyButton
+          value={code}
+          className={
+            inside
+              ? "absolute top-2.5 right-2.5"
+              : "mt-2 self-end lg:absolute lg:top-2.5 lg:right-2.5 lg:mt-0"
+          }
+        />
+      )}
     </div>
   );
 }
 
 /** One-line shell command with a "$" prompt and a copy button. */
 export function InstallCommand({ command, className }: { command: string; className?: string }) {
+  // One line always. On phones the command scrolls in its box and Copy sits below it;
+  // from `sm` up, Copy sits inside the box.
   return (
     <div
       className={cn(
-        "inline-flex max-w-full items-center gap-3 rounded-lg border border-line bg-background/70 py-2 pr-2 pl-3.5 font-mono text-[13.5px] text-fg-2",
+        "inline-flex max-w-full flex-col items-center gap-2 font-mono text-[13.5px] text-fg-2 sm:flex-row sm:gap-3 sm:rounded-lg sm:border sm:border-line sm:bg-background/70 sm:py-2 sm:pr-2 sm:pl-3.5",
         className,
       )}
     >
-      <span className="min-w-0 overflow-x-auto whitespace-nowrap">
+      <span className="max-w-full min-w-0 overflow-x-auto rounded-lg border border-line bg-background/70 px-3.5 py-2.5 whitespace-nowrap [scrollbar-width:none] sm:border-0 sm:bg-transparent sm:p-0">
         <span className="text-fg-4">$ </span>
         {command}
       </span>

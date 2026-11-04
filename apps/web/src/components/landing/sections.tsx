@@ -1,17 +1,22 @@
 import Link from "next/link";
 import type { Route } from "next";
-import type { CSSProperties, ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { Band, PartHeading, SectionHead, Wrap } from "@/components/site/section";
 import { CodeBlock, InstallCommand } from "@/components/site/code-block";
+import { CopyButton } from "@/components/site/copy-button";
+import { Mark } from "@/components/site/mark";
 import {
   GITHUB_URL,
-  INSTALL_SANDBOX_TOOLS,
+  INSTALL_CLOUD,
+  INSTALL_SANDBOX,
   PLANNED_PROVIDERS,
   SANDBOX_PROVIDERS,
   T3_LOGO,
 } from "@/lib/site/providers";
+import { SITE_URL } from "@/lib/docs/content";
 import { cn } from "@/lib/utils";
 import { ReplayButton } from "./demo";
+import { WorkspacesCard } from "./workspaces-card";
 import { Logo } from "./logo";
 
 const h3 = "m-0 mb-2 text-[17px] font-medium text-fg";
@@ -21,66 +26,148 @@ const cells = "grid gap-px border border-line bg-line [&>*]:bg-background";
 
 // ---------- Hero ----------
 
+/** A copyable shell command: one line where it fits, otherwise it breaks at a space. */
+function Command({ value }: { value: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-fill py-2 pr-1.5 pl-3.5 font-mono text-[12.5px] leading-[1.6] text-fg-2">
+      <span className="min-w-0 flex-1">
+        <span className="text-fg-4 select-none">$ </span>
+        {value.split(" ").map((word, i) => (
+          <Fragment key={i}>
+            {i > 0 && " "}
+            <span className="whitespace-nowrap">{word}</span>
+          </Fragment>
+        ))}
+      </span>
+      {/* Icon only; the label stays for screen readers */}
+      <CopyButton
+        value={value}
+        icon
+        className="size-8 justify-center bg-transparent px-0 hover:bg-fill-2 [&_[data-label]]:sr-only"
+      />
+    </div>
+  );
+}
+
+/**
+ * One of the two hero cards. The four parts sit on a shared subgrid, so titles, text, logos and
+ * commands line up across both cards whatever their length.
+ */
 function Lane({
   href,
   title,
   children,
   logos,
+  command,
   note,
 }: {
   href: string;
   title: string;
   children: ReactNode;
   logos: string[];
-  note: string;
+  command: string;
+  note: ReactNode;
 }) {
   return (
-    <Link
-      href={href as Route}
-      className="relative flex flex-col gap-2 bg-background px-6 pt-[22px] pb-5 transition-colors before:absolute before:-inset-x-px before:-top-px before:h-0.5 before:origin-left before:scale-x-0 before:bg-primary before:transition-transform before:duration-[400ms] before:ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-[#131317] hover:before:scale-x-100 focus-visible:before:scale-x-100"
-    >
-      <span className="text-[18px] font-medium tracking-[-0.01em] text-fg">{title}</span>
-      <span className="text-[15px] leading-[1.55] text-fg-3">{children}</span>
-      <span className="mt-auto flex items-center gap-2 pt-2 text-[13.5px] text-fg-4">
+    <div className="relative row-span-4 grid grid-rows-subgrid gap-y-0 bg-background px-7 pt-6 pb-7 transition-colors before:absolute before:-inset-x-px before:-top-px before:h-0.5 before:origin-left before:scale-x-0 before:bg-primary before:transition-transform before:duration-[400ms] before:ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:before:scale-x-100 hover:bg-[#131317] hover:before:scale-x-100">
+      {/* The title link covers the card; the command and links sit above it. */}
+      <Link
+        href={href as Route}
+        className="mb-2 text-[18px] font-medium tracking-[-0.01em] text-fg after:absolute after:inset-0 focus-visible:outline-none"
+      >
+        {title}
+      </Link>
+      <p className="m-0 text-[15px] leading-[1.6] text-fg-3">{children}</p>
+      <span className="mt-4 flex items-center gap-2">
         {logos.map((l) => (
-          <Logo key={l} src={l} className="size-[18px] object-contain last-of-type:mr-1" />
+          <Logo key={l} src={l} className="size-[18px] object-contain" />
         ))}
-        {note}
       </span>
-    </Link>
+      <div className="relative z-10 mt-7 flex flex-col gap-3">
+        <Command value={command} />
+        <p className="m-0 text-[13.5px] leading-[1.55] text-fg-4 [&_a]:text-fg-2 [&_a]:underline [&_a]:decoration-line-2 [&_a]:underline-offset-[3px] hover:[&_a]:text-fg [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-fg-2">
+          {note}
+        </p>
+      </div>
+    </div>
   );
 }
+
+/**
+ * A prompt to paste into a coding agent. It sends the agent to llms.txt instead of spelling out
+ * setup steps here, so it stays right as the docs change, and it asks the user before acting.
+ */
+const SETUP_PROMPT = `Set up Gitterm for me. Read ${SITE_URL}/llms.txt first and follow the docs it links to. Don't guess at commands or config.
+
+Before you change anything, ask me which of these I want:
+1. Remote sandboxes for the OpenCode agent on this machine (@gitterm/opencode-sandbox). Ask which provider (E2B, Daytona, Vercel, Boat, exe.dev, Railway or AWS) and whether I'll use my own provider key or a Gitterm plan.
+2. Moving an OpenCode session to a cloud workspace with /cloud (@gitterm/opencode-cloud).
+3. A cloud workspace that runs OpenCode, or T3 Code with Codex or Claude Code, started from ${SITE_URL}/dashboard.
+
+Both plugins are for OpenCode. If I use a different agent, only option 3 applies.
+
+Keep keys out of config files: use {env:VAR} references. When you're done, show me how to check that it works.`;
 
 export function Hero() {
   return (
     <section className="pt-[clamp(40px,6.5vw,80px)] pb-6 text-center">
       <Wrap>
         <h1 className="mx-auto max-w-[17ch] text-[clamp(2.6rem,6.6vw,5.4rem)] leading-[0.98] font-display font-semibold tracking-[-0.035em] text-balance text-fg">
-          Give your agents more computers.
+          Give your agents more room to work.
         </h1>
         <p className="mx-auto mt-6 max-w-[40rem] text-[clamp(16px,1.5vw,18px)] leading-[1.65] text-pretty text-fg-3">
-          Attach cloud sandboxes to the agent on your laptop, or run the whole agent in a cloud
-          workspace that keeps going when you close the lid.
+          Cloud sandboxes for the agent on your laptop, or a cloud workspace for the whole agent.
+          From the provider you choose, and you can switch any time.
         </p>
-        <div className="mx-auto mt-10 grid max-w-[900px] grid-cols-2 gap-px border border-line-2 bg-line-2 text-left max-[700px]:grid-cols-1">
+        <div className="mx-auto mt-10 grid max-w-[1080px] grid-cols-2 gap-px border border-line-2 bg-line-2 text-left max-[760px]:grid-cols-1">
           <Lane
             href="/#providers"
             title="Extend your laptop"
             logos={["/opencode.svg"]}
-            note="OpenCode plugin"
+            command={INSTALL_SANDBOX}
+            note={
+              <>
+                Then <Link href={"/docs/sandboxes/setup" as Route}>fill in your config</Link>. No
+                Gitterm account needed.
+              </>
+            }
           >
-            Your local OpenCode session runs tests, builds and previews in sandboxes it attaches on
-            demand.
+            OpenCode on your laptop runs tests, builds and previews in cloud sandboxes.
           </Lane>
           <Lane
             href="/#agents"
             title="Run agents in the cloud"
             logos={["/opencode.svg", T3_LOGO, "/openai-codex.svg", "/claude.svg"]}
-            note="Cloud workspaces"
+            command={INSTALL_CLOUD}
+            note={
+              <>
+                Then <Link href={"/docs/workspaces/move-a-session" as Route}>sign in</Link> and type{" "}
+                <code>/cloud</code>, or <Link href="/dashboard">start one in the browser</Link>.
+              </>
+            }
           >
-            A workspace for OpenCode or T3 Code with Codex and Claude Code. Reach it from your
-            phone, Slack or your own code.
+            OpenCode, Codex or Claude Code in a cloud workspace. Reach it from your phone or Slack.
           </Lane>
+        </div>
+        {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow */}
+        <div className="mx-auto mt-3 flex max-w-[1080px] items-center gap-4 border border-line-2 bg-background px-7 py-3 text-left max-[760px]:px-5">
+          <span className="shrink-0 text-[14px] text-fg-2">Or let your agent set it up</span>
+          {/* Paste it into any of these. Grey and stacked; hover spreads them out in colour */}
+          <span
+            className="stack fan shrink-0 max-[480px]:hidden"
+            role="img"
+            aria-label="OpenCode, T3 Code, Codex or Claude Code"
+          >
+            {["/opencode.svg", T3_LOGO, "/openai-codex.svg", "/claude.svg"].map((l) => (
+              <span key={l}>
+                <Logo src={l} />
+              </span>
+            ))}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-fg-4 max-[640px]:hidden">
+            {SETUP_PROMPT.split("\n")[0]}
+          </span>
+          <CopyButton value={SETUP_PROMPT} label="Copy prompt" icon className="ml-auto" />
         </div>
       </Wrap>
     </section>
@@ -91,8 +178,9 @@ export function Hero() {
 
 const stripButton =
   "group relative flex flex-col items-center gap-2.5 px-2 pt-[22px] pb-5 text-[15px] leading-[1.2] font-medium text-fg-3 transition-colors duration-[350ms] focus-visible:-outline-offset-[3px] max-[860px]:nth-[-n+4]:border-b max-[860px]:nth-[-n+4]:border-line max-[420px]:px-1 max-[420px]:pt-[18px] max-[420px]:pb-4 max-[420px]:text-[13.5px]";
+/** Grey until hovered or picked, so exe.dev's photo and AWS's orange tile don't outshout the rest. */
 const stripLogo =
-  "size-7 object-contain transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] max-[420px]:size-6";
+  "size-7 object-contain grayscale transition-[opacity,transform,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] max-[420px]:size-6";
 
 export function ProvidersStrip() {
   return (
@@ -128,7 +216,7 @@ export function ProvidersStrip() {
                 src={p.logo}
                 className={cn(
                   stripLogo,
-                  "opacity-60 group-hover:opacity-90 group-aria-pressed:-translate-y-0.5 group-aria-pressed:opacity-100",
+                  "opacity-60 group-hover:opacity-90 group-hover:grayscale-0 group-aria-pressed:-translate-y-0.5 group-aria-pressed:opacity-100 group-aria-pressed:grayscale-0",
                 )}
               />
               {p.name}
@@ -185,9 +273,9 @@ const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }
     title: "Or take the whole session with you",
     body: (
       <>
-        Add the cloud handoff plugin and type <code>/cloud</code>. The conversation, your
-        unpublished commits and, if you choose, uncommitted changes move to a cloud workspace. Pick
-        it up from your phone, a browser or OpenCode desktop. Your laptop copy stays as it was.
+        Add the cloud plugin and type <code>/cloud</code>. The conversation, your unpublished
+        commits and, if you choose, uncommitted changes move to a cloud workspace. Pick it up from
+        your phone, a browser or OpenCode desktop. Your laptop copy stays as it was.
       </>
     ),
   },
@@ -204,6 +292,10 @@ export function HowItWorks() {
           <div className="chaps">
             {CHAPTERS.map((c, i) => (
               <article key={c.title} className="chap" data-scene={i} id={c.id}>
+                {/* Phones only: the chapters stack, so each says where it sits in the story */}
+                <span className="chap-n">
+                  Step {i + 1} of {CHAPTERS.length}
+                </span>
                 <h3>{c.title}</h3>
                 <p>{c.body}</p>
                 {c.used && (
@@ -493,7 +585,9 @@ export function Agents() {
                 <span className="fw-meta">
                   <span className="stack">
                     {WORKSPACE_LOGOS.map((l) => (
-                      <Logo key={l} src={l} />
+                      <span key={l}>
+                        <Logo src={l} />
+                      </span>
                     ))}
                   </span>
                 </span>
@@ -530,29 +624,10 @@ export function Anywhere() {
           <div className={cell}>
             <h3 className={h3}>Your phone or browser</h3>
             <p className={cn(cellText, "mb-5")}>
-              Open T3 Code or OpenCode at the workspace URL. Pause it when you are done and pick up
-              later.
+              Open the workspace&apos;s pairing link on your phone, your laptop or any browser.
+              Pause it when you are done and pick up later.
             </p>
-            <div className="mini-url">
-              <i />
-              <i />
-              <i />
-              <span>ws-7k2.gitterm.dev</span>
-            </div>
-            <div className="mini-thread">
-              <div className="mt-row">
-                <b className="dot done" />
-                Fix the flaky checkout test<span>Done</span>
-              </div>
-              <div className="mt-row">
-                <b className="dot work" />
-                Upgrade to Bun 1.3.14<span>Working 4m</span>
-              </div>
-              <div className="mt-row">
-                <b className="dot wait" />
-                Review PR #479<span>Approval</span>
-              </div>
-            </div>
+            <WorkspacesCard />
           </div>
           <div className={cell}>
             <h3 className={h3}>
@@ -597,7 +672,11 @@ const K = ({ children }: { children: ReactNode }) => (
 const S = ({ children }: { children: ReactNode }) => (
   <span className="text-[#e2c47c]">{children}</span>
 );
-const Bot = () => <span className="sl-av bot">+</span>;
+const Bot = () => (
+  <span className="sl-av bot">
+    <Mark className="size-[56%]" />
+  </span>
+);
 
 function SdkCode() {
   return (
@@ -736,15 +815,12 @@ export function Cta() {
     <Band id="start" className="text-center">
       <Wrap>
         <h2 className="mx-auto max-w-[16ch] text-[clamp(2.2rem,5vw,3.8rem)] leading-[1.02] font-display font-medium tracking-[-0.03em] text-balance text-fg">
-          Give your agent room to work.
+          Give your agents more computers.
         </h2>
         <p className="mx-auto mt-[18px] max-w-[34rem] text-fg-3">
           Add the plugin to OpenCode, or start a cloud workspace. Open source and self-hostable.
         </p>
-        <InstallCommand
-          command={INSTALL_SANDBOX_TOOLS}
-          className="mt-[18px] max-[640px]:[&>span]:whitespace-normal max-[640px]:[&>span]:[overflow-wrap:anywhere]"
-        />
+        <InstallCommand command={INSTALL_SANDBOX} className="mt-[18px]" />
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
             href="/dashboard"
