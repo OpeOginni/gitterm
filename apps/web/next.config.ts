@@ -50,18 +50,21 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [{ source: "/docs/:path*", headers: [{ key: "Vary", value: "Accept" }] }];
+  },
   async rewrites() {
     // Agents that ask for markdown (Accept: text/markdown) get the page's markdown at its normal URL
     const wantsMarkdown = [{ type: "header" as const, key: "accept", value: ".*text/markdown.*" }];
     return {
       beforeFiles: [
         // Slugs have no dots, so /docs/<slug>.md still goes to its own rewrite below
-        { source: "/docs/:a([^./]+)", has: wantsMarkdown, destination: "/docs/raw/:a" },
         {
           source: "/docs/:a([^./]+)/:b([^./]+)",
           has: wantsMarkdown,
           destination: "/docs/raw/:a/:b",
         },
+        { source: "/docs/:a([^./]+)", has: wantsMarkdown, destination: "/docs/raw/:a" },
       ],
       afterFiles: [
         // Raw markdown for docs pages (/docs/<slug>.md), served by app/docs/raw.
