@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { applyArtifact, ArtifactConflictError } from "./artifacts";
@@ -103,6 +103,41 @@ for (const [kind, createBackend] of Object.entries(backends))
       await client.sync(sandbox, await captureSource(repo));
       const result = await client.exec(sandbox, { command: "test ! -e extra.txt", waitMs: 30_000 });
       expect(result.state.status).toBe("succeeded");
+    }, 60_000);
+
+    test("a directory replaced by a file syncs", async () => {
+      await mkdir(path.join(repo, "lib"));
+      await writeFile(path.join(repo, "lib", "util.js"), "module.exports = 1;\n");
+      await client.sync(sandbox, await captureSource(repo));
+      await rm(path.join(repo, "lib"), { recursive: true });
+      await writeFile(path.join(repo, "lib"), "now a file\n");
+      await client.sync(sandbox, await captureSource(repo));
+      const result = await client.exec(sandbox, { command: "cat lib", waitMs: 30_000 });
+      expect(result.log.text).toBe("now a file\n");
+      await rm(path.join(repo, "lib"));
+    }, 60_000);
+
+    test("two clients syncing the same checkout at once both succeed", async () => {
+      const second = createSandboxClient({
+        backend: createBackend("docker-a", run),
+        store: createFileSandboxStore(storeDir),
+      });
+      const captured = await captureSource(repo);
+      const results = await Promise.all([
+        client.sync(sandbox, captured),
+        second.sync(sandbox, captured),
+      ]);
+      expect(results.map((result) => result.verified)).toEqual([true, true]);
+    }, 60_000);
+
+    test("an empty, newly initialized checkout syncs", async () => {
+      const empty = path.join(work, "empty");
+      await mkdir(empty);
+      sh(empty, "init", "-q");
+      const synced = await client.sync(sandbox, await captureSource(empty));
+      expect(synced.verified).toBe(true);
+      // Later tests run on the real checkout.
+      await client.sync(sandbox, await captureSource(repo));
     }, 60_000);
 
     test("reports a non-zero exit as a command failure", async () => {

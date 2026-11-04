@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { lstat, readFile, readlink, realpath } from "node:fs/promises";
 import path from "node:path";
@@ -225,7 +225,8 @@ export async function uploadSource(
   const { snapshot, archive } = captured;
   const STATE_DIR = stateDir(backend.home);
   const PROJECT_DIR = projectDir(backend.home);
-  const base = `${STATE_DIR}/${snapshot.id}`;
+  // Per upload, so two clients syncing the same snapshot never share staging files.
+  const base = `${STATE_DIR}/${snapshot.id}-${randomBytes(4).toString("hex")}`;
   const list = snapshot.files.map((file) => `${file.path}\n`).join("");
   const sums = snapshot.files
     .filter((file) => file.kind !== "symlink")
@@ -242,17 +243,22 @@ export async function uploadSource(
       "set -eu",
       "export LC_ALL=C",
       `B=${q(base)}; P=${q(PROJECT_DIR)}; S=${q(STATE_DIR)}`,
-      'rm -rf "$B.stage"; mkdir -p "$B.stage"',
+      // Staging files are removed whether the upload succeeds or fails.
+      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files"\' EXIT',
+      'mkdir "$B.stage"',
       'tar -xzf "$B.tgz" -C "$B.stage" --no-same-owner',
       'for f in "$B.stage"/gitterm-pax/*; do [ -e "$f" ] || break; echo "unexpected pax placeholder" >&2; exit 4; done',
-      '(cd "$B.stage" && sha256sum -c --quiet --strict "$B.sha256") || { echo "staged files failed verification" >&2; exit 5; }',
+      // sha256sum rejects an empty list, which an empty checkout produces.
+      'verify() { [ ! -s "$B.sha256" ] || (cd "$1" && sha256sum -c --quiet --strict "$B.sha256"); }',
+      'verify "$B.stage" || { echo "staged files failed verification" >&2; exit 5; }',
       'sort -o "$B.files" "$B.files"',
       'if [ -f "$S/current.files" ]; then comm -23 "$S/current.files" "$B.files" | while IFS= read -r f; do rm -f -- "$P/$f"; done; fi',
+      // A directory that is now a file (or symlink) cannot be copied over.
+      'while IFS= read -r f; do if [ -d "$P/$f" ] && [ ! -L "$P/$f" ]; then rm -rf -- "$P/$f"; fi; done < "$B.files"',
       'cp -a "$B.stage/." "$P/"',
-      '(cd "$P" && sha256sum -c --quiet --strict "$B.sha256") || { echo "project files failed verification" >&2; exit 6; }',
+      'verify "$P" || { echo "project files failed verification" >&2; exit 6; }',
       'mv "$B.files" "$S/current.files"',
       `printf %s ${q(snapshot.digest)} > "$S/current.digest"`,
-      'rm -rf "$B.stage" "$B.tgz" "$B.sha256"',
       "echo GITTERM_SOURCE_VERIFIED",
     ].join("\n"),
     { timeoutMs: 120_000 },
