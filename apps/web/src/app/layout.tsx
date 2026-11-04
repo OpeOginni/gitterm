@@ -41,9 +41,9 @@ const display = localFont({
   ],
 });
 
-const TITLE = "GitTerm · Cloud workspaces for coding agents";
+const TITLE = "Gitterm: give your agents more room to work";
 const DESCRIPTION =
-  "Cloud workspaces for coding agents. Heavy runs, temporary sandboxes, any cloud. Your keys. Open source.";
+  "More computers for your coding agents, from the cloud provider you choose: E2B, Daytona, Vercel, Railway, AWS and more. Gitterm sits in between, so switching providers is easy. Open source.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -53,10 +53,10 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: "https://gitterm.dev",
-    siteName: "GitTerm",
+    siteName: "Gitterm",
     images: [
       {
-        url: "/og-card/og-card-v4.png",
+        url: "/og-card/og-card-v5.png",
         width: 1200,
         height: 630,
         alt: TITLE,
@@ -69,7 +69,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/og-card/og-card-v4.png"],
+    images: ["/og-card/og-card-v5.png"],
   },
   manifest: "/favicon_io/site.webmanifest",
   icons: {

@@ -36,8 +36,9 @@ export default function PrivacyPage() {
 
           <Section title="1. Who we are">
             <p>
-              GitTerm provides cloud workspaces for running coding agents. The hosted service is
-              operated by the GitTerm maintainers. You can reach us at{" "}
+              GitTerm connects coding agents to the cloud providers you choose: sandboxes that an
+              agent on your laptop can use, and cloud workspaces that run the agent itself. The
+              hosted service is operated by the GitTerm maintainers. You can reach us at{" "}
               <a className={linkClass} href="mailto:help@gitterm.dev">
                 help@gitterm.dev
               </a>

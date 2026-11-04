@@ -7,10 +7,11 @@ import { Menu, X } from "lucide-react";
 import { isBillingEnabled } from "@gitterm/env/web";
 import { authClient } from "@/lib/auth-client";
 import { GitHub } from "@/components/logos/Github";
+import { Mark } from "@/components/site/mark";
 import { GITHUB_URL } from "@/lib/site/providers";
 import { cn } from "@/lib/utils";
 
-/** The gitterm mark: a gold plus (the attach point) and the lowercase wordmark. */
+/** The gold Notch mark and the lowercase wordmark. */
 export function Brand({ className }: { className?: string }) {
   return (
     <span
@@ -19,16 +20,7 @@ export function Brand({ className }: { className?: string }) {
         className,
       )}
     >
-      <svg
-        viewBox="0 0 18 18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.6}
-        aria-hidden
-        className="size-[18px] text-primary"
-      >
-        <path d="M9 1v16M1 9h16" />
-      </svg>
+      <Mark className="size-[1em] shrink-0 text-primary" />
       gitterm
     </span>
   );

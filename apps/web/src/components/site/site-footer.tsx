@@ -24,9 +24,7 @@ export function SiteFooter({ wide = false }: { wide?: boolean }) {
       >
         <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
           <Brand className="text-[16px]" />
-          <span className="text-[14px] text-fg-3">
-            Cloud sandboxes and workspaces for coding agents.
-          </span>
+          <span className="text-[14px] text-fg-3">Give your agents more room to work.</span>
         </div>
         <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-2 text-[14px] text-fg-3">
           {LINKS.map((l) =>

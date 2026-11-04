@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Mark } from "@/components/site/mark";
 
 /** Content width used across marketing pages (Workbench: 1240px, 24px gutters, 16px on phones). */
 export function Wrap({
@@ -45,13 +46,16 @@ export function Band({
   );
 }
 
-/** "+ Extend your laptop": the small gold part heading. The only decorative use of "+". */
+/** The small gold part heading ("Extend your laptop"), led by the Notch mark. */
 export function PartHeading({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <p className={cn("mb-3.5 text-[15px] font-medium text-[#e2c47c]", className)}>
-      <span aria-hidden className="mr-2.5 font-light">
-        +
-      </span>
+    <p
+      className={cn(
+        "mb-3.5 flex items-center gap-2.5 text-[15px] font-medium text-[#e2c47c]",
+        className,
+      )}
+    >
+      <Mark className="size-[13px] shrink-0" />
       {children}
     </p>
   );
