@@ -1,15 +1,13 @@
 {
-  "name": "@gitterm/opencode-sandbox-tools",
-  "version": "0.1.0",
-  "description": "Let your OpenCode agent run builds, tests, and previews in remote sandboxes while the session stays local",
+  "name": "@gitterm/opencode-cloud",
+  "version": "0.1.3",
+  "description": "Continue OpenCode sessions and local checkout changes in GitTerm cloud workspaces with /cloud",
   "keywords": [
-    "e2b",
     "gitterm",
     "opencode",
     "opencode-plugin",
-    "remote-execution",
-    "sandbox",
-    "tui"
+    "remote-development",
+    "workspace"
   ],
   "homepage": "https://gitterm.dev",
   "license": "MIT",
@@ -25,35 +23,27 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    },
-    "./tui": {
-      "types": "./dist/tui.d.ts",
-      "import": "./dist/tui.js",
-      "default": "./dist/tui.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target bun --format esm --external @opencode/plugin && bun run build-tui.ts && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target bun --format esm --external @opencode/plugin --external @opencode/client --external '@opencode/client/*' && tsc -p tsconfig.build.json",
     "check-types": "tsc --noEmit",
     "prepack": "bun run check-types && bun run build"
+  },
+  "dependencies": {
+    "@opencode/client": "^2.0.30"
   },
   "devDependencies": {
     "@gitterm/sdk": "workspace:*",
     "@opencode/plugin": "^2.0.30",
-    "@opentui/core": "0.8.0",
-    "@opentui/solid": "0.8.0",
     "@types/bun": "^1.2.6",
-    "solid-js": "1.9.17",
     "typescript": "^5.8.2"
   },
   "peerDependencies": {
-    "@opencode/plugin": "^2.0.30",
-    "@opentui/core": ">=0.8.0",
-    "@opentui/solid": ">=0.8.0",
-    "solid-js": ">=1.9.0"
+    "@opencode/plugin": "^2.0.30"
   },
   "engines": {
     "bun": ">=1.2.0"

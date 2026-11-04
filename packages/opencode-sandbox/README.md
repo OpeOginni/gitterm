@@ -1,15 +1,15 @@
-# @gitterm/opencode-sandbox-tools
+# @gitterm/opencode-sandbox
 
 Let your [OpenCode](https://opencode.ai) agent run builds, tests, and preview servers in a
 remote sandbox. Your conversation and files stay on your machine.
 
 Want to move the whole session to the cloud instead? Use
-[`@gitterm/opencode-cloud-handoff`](../opencode-cloud-handoff/README.md).
+[`@gitterm/opencode-cloud`](../opencode-cloud/README.md).
 
 ## 1. Install
 
 ```sh
-opencode plugin add @gitterm/opencode-sandbox-tools
+opencode plugin add @gitterm/opencode-sandbox
 ```
 
 ## 2. Add your provider key
@@ -20,7 +20,7 @@ In `opencode.json` (project) or `~/.config/opencode/opencode.json` (global):
 {
   "plugins": [
     {
-      "package": "@gitterm/opencode-sandbox-tools",
+      "package": "@gitterm/opencode-sandbox",
       "options": {
         "account": "e2b",
         "accounts": {

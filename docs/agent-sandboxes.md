@@ -224,13 +224,13 @@ failure, are never treated as a deletion.
 
 ## Configuration
 
-Options for the `@gitterm/opencode-sandbox-tools` OpenCode plugin:
+Options for the `@gitterm/opencode-sandbox` OpenCode plugin:
 
 ```jsonc
 {
   "plugins": [
     {
-      "package": "@gitterm/opencode-sandbox-tools",
+      "package": "@gitterm/opencode-sandbox",
       "options": {
         "account": "e2b",
         "accounts": {

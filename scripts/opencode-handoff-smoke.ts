@@ -5,8 +5,8 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { handoffSession, runtimeClient } from "../packages/opencode-cloud-handoff/src/handoff";
-import { git } from "../packages/opencode-cloud-handoff/src/snapshot";
+import { handoffSession, runtimeClient } from "../packages/opencode-cloud/src/handoff";
+import { git } from "../packages/opencode-cloud/src/snapshot";
 
 const binary = process.env.OPENCODE_HANDOFF_SMOKE_BINARY;
 if (!binary)
@@ -75,7 +75,7 @@ try {
   await git(source, ["commit", "-m", "initial"]);
   await git(root, ["clone", source, cloud]);
   await git(source, ["remote", "add", "origin", "https://github.com/example/fixture.git"]);
-  const plugin = fileURLToPath(new URL("../packages/opencode-cloud-handoff/dist", import.meta.url));
+  const plugin = fileURLToPath(new URL("../packages/opencode-cloud/dist", import.meta.url));
   await writeFile(join(source, ".git/info/exclude"), "opencode.json\n");
   await writeFile(
     join(source, "opencode.json"),

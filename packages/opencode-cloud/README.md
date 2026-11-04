@@ -1,16 +1,16 @@
-# @gitterm/opencode-cloud-handoff
+# @gitterm/opencode-cloud
 
 Move your local [OpenCode](https://opencode.ai) session to a [GitTerm](https://gitterm.dev)
 cloud workspace with one command, `/cloud`. Your conversation, commits, and (if you choose)
 uncommitted changes go with it. Your local files stay as they are.
 
 Formerly `@gitterm/opencode-plugin`. Want the agent to run commands remotely while the
-session stays local? Use [`@gitterm/opencode-sandbox-tools`](../opencode-sandbox-tools/README.md).
+session stays local? Use [`@gitterm/opencode-sandbox`](../opencode-sandbox/README.md).
 
 ## 1. Install
 
 ```sh
-opencode plugin add @gitterm/opencode-cloud-handoff
+opencode plugin add @gitterm/opencode-cloud
 ```
 
 ## 2. Sign in to GitTerm
@@ -45,7 +45,7 @@ All optional:
 {
   "plugins": [
     {
-      "package": "@gitterm/opencode-cloud-handoff",
+      "package": "@gitterm/opencode-cloud",
       "options": {
         "provider": { "type": "e2b" },
         "connections": ["github"],

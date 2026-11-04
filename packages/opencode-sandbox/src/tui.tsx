@@ -75,7 +75,7 @@ function SandboxSidebar(props: { sessionID: string }) {
 }
 
 export default Plugin.define({
-  id: "gitterm.sandbox-tools",
+  id: "gitterm.sandbox",
   setup(context) {
     return context.ui.slot({
       append: "sidebar.content",
