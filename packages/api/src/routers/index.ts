@@ -9,7 +9,6 @@ import { userRouter } from "./user/user";
 import { deviceRouter } from "./device";
 import { adminRouter } from "./admin";
 import { modelCredentialsRouter } from "./model-credentials";
-import { anonRouter } from "./anon";
 import { apiTokensRouter } from "./api-tokens";
 import { runRouter } from "./run";
 import { googleCloudRouter } from "./google-cloud";
@@ -30,7 +29,6 @@ export const appRouter = router({
   admin: adminRouter,
   modelCredentials: modelCredentialsRouter,
   workspaceOps: workspaceOperationsRouter, // Workspace-authenticated operations
-  anon: anonRouter,
   apiTokens: apiTokensRouter,
   run: runRouter,
   googleCloud: googleCloudRouter,

@@ -103,11 +103,9 @@ Worker cron jobs:
 | Worker        | Schedule       | Purpose                                   |
 | ------------- | -------------- | ----------------------------------------- |
 | `idle-reaper` | `*/10 * * * *` | Stops idle workspaces and enforces quotas |
-| `anon-reaper` | `*/5 * * * *`  | Cleans up expired anonymous workspaces    |
 
 On Railway the worker runs as a Cron job (run-once per invocation, `REAP_INTERVAL_MINUTES=0`).
 The idle reaper also renews one-hour always-on leases, so its schedule must stay well below one hour.
-The anonymous reaper catches missed cleanup after the 10-minute workspace lifetime.
 In Docker Compose it loops in-process — set `REAP_INTERVAL_MINUTES` (default `10`) to control how often it reaps.
 
 ## Routing

@@ -1213,35 +1213,6 @@ export async function isGitHubAppConfigured(): Promise<boolean> {
   return !!(await githubRepositoryAppConfig());
 }
 
-export async function checkPublicGitHubRepository(
-  repositoryUrl: string,
-  branch?: string,
-): Promise<{ valid: boolean; exists: boolean; canClone: boolean; branchExists: boolean }> {
-  const parsed = parseGitHubRepoUrl(repositoryUrl);
-  if (!parsed) {
-    return { valid: false, exists: false, canClone: false, branchExists: false };
-  }
-
-  const { owner, repo } = parsed;
-  const anonOctokit = new Octokit();
-
-  try {
-    await anonOctokit.repos.get({ owner, repo });
-
-    if (branch) {
-      try {
-        await anonOctokit.repos.getBranch({ owner, repo, branch });
-      } catch {
-        return { valid: true, exists: true, canClone: true, branchExists: false };
-      }
-    }
-
-    return { valid: true, exists: true, canClone: true, branchExists: true };
-  } catch {
-    return { valid: true, exists: false, canClone: false, branchExists: false };
-  }
-}
-
 export async function getPublicGitHubRepository(owner: string, repo: string) {
   try {
     const { data } = await new Octokit().repos.get({ owner, repo });

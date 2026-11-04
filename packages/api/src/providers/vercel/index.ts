@@ -14,7 +14,6 @@ import type {
   WorkspaceProvisioningSpec,
   WorkspaceStatusResult,
 } from "../compute";
-import { resolveProvisioningSpec } from "../provisioning-spec";
 import { createProvisionLogger } from "../provision-logger";
 import { inlineGitAuthCommands } from "../git-auth";
 import type {
@@ -248,7 +247,7 @@ export class VercelProvider implements ComputeProvider {
     config: WorkspaceConfig,
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const spec = resolveProvisioningSpec(config);
+    const spec = config.provisioningSpec ?? null;
     const logger = createProvisionLogger(
       this.name,
       config.workspaceId,

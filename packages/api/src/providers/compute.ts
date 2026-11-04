@@ -232,7 +232,7 @@ export interface AgentProvisioning {
  * This is the single source of truth for provisioning. Container providers
  * (Railway, AWS) serialize it to env for their Docker entrypoint via
  * `buildWorkspaceEnv`; SDK providers (E2B, Daytona) apply it directly through
- * their native clone + file APIs via `resolveProvisioningSpec`. The duplicated
+ * their native clone + file APIs. The duplicated
  * "decode base64 → write agent files + clone" logic now lives in exactly one
  * place per consumer.
  */

@@ -8,8 +8,7 @@
  * we derive:
  *  - the env handed to container providers (Railway/AWS) for their Docker
  *    entrypoint, via `buildWorkspaceEnv`, and
- *  - SDK providers (E2B/Daytona) apply the spec directly (see
- *    `resolveProvisioningSpec` in `providers/provisioning-spec.ts`).
+ *  - SDK providers (E2B/Daytona) apply the spec directly.
  */
 
 import { githubAuthProvisioning, githubAuthCommand } from "@gitterm/agent-runtime/github-auth";
@@ -33,17 +32,6 @@ function toBase64(json: string): string {
 /** Base64-encoded JSON manifest of the agent's files, for container transport. */
 export function encodeAgentFiles(files: AgentFile[]): string {
   return toBase64(JSON.stringify(files));
-}
-
-/** Decode an `AGENT_FILES_BASE64` manifest back into a file list. */
-export function decodeAgentFiles(encoded: string | undefined): AgentFile[] {
-  if (!encoded) return [];
-  try {
-    const parsed = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 export interface BuildWorkspaceProvisioningSpecParams {

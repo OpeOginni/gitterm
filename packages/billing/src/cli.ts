@@ -83,8 +83,7 @@ async function backfill(flags: Map<string, string | true>, dryRun: boolean) {
   if (dryRun) {
     const missing = await db.execute<{ count: string }>(sql`
       select count(*) from "user" u
-      where not exists (select 1 from billing_analytics_subject s where s.user_id = u.id)
-        and u.email not like '%@anon.gitterm.local'`);
+      where not exists (select 1 from billing_analytics_subject s where s.user_id = u.id)`);
     console.log(`[backfill] subjects to create: ${missing.rows[0]?.count}`);
   } else {
     console.log(`[backfill] subjects created: ${await syncSubjects()}`);
