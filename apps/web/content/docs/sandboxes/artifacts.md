@@ -15,11 +15,11 @@ Nothing touches your checkout until you approve it: the agent first downloads th
    Download dist/app.tar.gz from the sandbox and apply it to my checkout.
    ```
 
-   The agent downloads the file to a staging folder outside your checkout (`~/.cache/gitterm/sandbox-artifacts/`, or under `$XDG_CACHE_HOME` if set) and checks its sha256 against the copy in the sandbox. The file has to come from a job that ran after a sync, which is the usual order.
+   The agent downloads the file to a staging folder outside your checkout (`~/.cache/gitterm/sandbox-artifacts/`, or under `$XDG_CACHE_HOME` if set) and checks its sha256 against the copy in the sandbox. If the file changed while it was downloading, nothing is saved: ask the agent to download it again once the job has finished writing it. The file has to come from a job that ran after a sync, which is the usual order.
 
 2. Approve the apply. OpenCode asks every time; "Always" is not offered for this one.
 
-   You should see `Applied artifact from job <job id>` with the target path and sha256. If the download is reported as `verified false`, it doesn't match the sandbox file: ask the agent to download it again.
+   You should see `Applied artifact from job <job id>` with the target path and sha256.
 
 ## Size limits
 
@@ -42,4 +42,4 @@ On Boat the limit is 5 MiB, because Boat returns at most 5 MiB per file read.
 
 If the target changed, decide what to keep. To take the sandbox version on top of your current work: sync again, rerun the job, and download a fresh artifact.
 
-When apply succeeds, it writes the exact verified bytes, and checks the parent directory again just before the final rename.
+When apply succeeds, it writes the exact verified bytes, and checks the parent directory again just before the final rename. A replaced file keeps its permissions, so an executable script stays executable.

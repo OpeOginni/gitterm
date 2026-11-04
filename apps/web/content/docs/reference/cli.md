@@ -74,6 +74,8 @@ The CLI does not create workspaces. Use the dashboard, the SDK, or `/cloud`. See
 
 The `--lifetime` and `--timeout` defaults are the built-in sandbox limits; limits set in the accounts file change them.
 
+`exec` and `job` exit with the job's exit code when it fails, or 1 when it timed out or was cancelled, so scripts and CI see the failure.
+
 `create`, `sync` and `apply` ask for approval. Pass `--yes` to approve without a prompt; with `--json` you must.
 
 The CLI reads accounts from `~/.config/gitterm/sandbox.json`, or from the file in `GITTERM_SANDBOX_CONFIG`. The file holds account names and the names of environment variables, never keys:

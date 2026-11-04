@@ -14,7 +14,7 @@ Self-hosted deployments have no plans or quotas, and every feature is unlocked. 
 - A usage session runs while a workspace or managed sandbox is running. Pausing ends it.
 - Paused time isn't billed as running compute.
 - Each machine size has its own hourly rate, so bigger machines use your allowance faster.
-- Managed sandboxes count the same way as workspaces, at the provider's default machine size. [Direct sandboxes](/docs/sandboxes/setup) are billed by your own provider account instead.
+- Managed sandboxes count the same way as workspaces. They run at the provider's default machine size, or its smallest on plans limited to the smallest size, and are billed at that size. [Direct sandboxes](/docs/sandboxes/setup) are billed by your own provider account instead.
 
 To keep usage down, let idle workspaces pause and terminate the ones you're done with. See [Lifecycle](/docs/workspaces/lifecycle).
 
