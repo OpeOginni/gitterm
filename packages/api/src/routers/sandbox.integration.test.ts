@@ -20,7 +20,7 @@ env.ENABLE_USAGE_METERING = "true";
 env.INTERNAL_API_KEY ||= "sandbox-integration-test";
 const { and, db, eq, inArray } = await import("@gitterm/db");
 const { user } = await import("@gitterm/db/schema/auth");
-const { cloudProvider } = await import("@gitterm/db/schema/cloud");
+const { cloudProvider, machineProfile } = await import("@gitterm/db/schema/cloud");
 const { usageSession, workspace, workspaceTermination } =
   await import("@gitterm/db/schema/workspace");
 const { UNLIMITED_ENTITLEMENTS } = await import("@gitterm/schema/billing");
@@ -44,6 +44,9 @@ const commands: string[] = [];
 const destroyed: string[] = [];
 const allowanceChecks: unknown[] = [];
 let workspaceLimit = 2;
+let machineAccess: "any" | "smallest" = "any";
+/** What each create asked the provider for. */
+const requested = new Map<string, { template?: string; machine?: Record<string, unknown> }>();
 let failDestroys = 0;
 /** Provider-side state; destroy marks a sandbox gone unless `acceptOnlyDestroys` is set. */
 const providerStates = new Map<string, "running" | "paused" | "terminated">();
@@ -58,9 +61,14 @@ beforeAll(async () => {
   const fake = {
     provider: "e2b" as const,
     home: "/home/user",
-    async create(input: { labels: Record<string, string>; template?: string }) {
+    async create(input: {
+      labels: Record<string, string>;
+      template?: string;
+      machine?: Record<string, unknown>;
+    }) {
       const id = `fake-${randomUUID()}`;
       created.set(id, { ...input.labels, template: input.template ?? "" });
+      requested.set(id, { template: input.template, machine: input.machine });
       return {
         id,
         state: "running" as const,
@@ -112,7 +120,11 @@ beforeAll(async () => {
     spyOn(billing, "getBilling").mockResolvedValue({
       ...billing.unlimitedBilling,
       enabled: true,
-      getEntitlements: async () => ({ ...UNLIMITED_ENTITLEMENTS, maxWorkspaces: workspaceLimit }),
+      getEntitlements: async () => ({
+        ...UNLIMITED_ENTITLEMENTS,
+        maxWorkspaces: workspaceLimit,
+        machineAccess,
+      }),
       checkRunAllowance: async (id: string, input: unknown) => {
         allowanceChecks.push({ id, input });
         return { allowed: true };
@@ -339,6 +351,26 @@ integration("#5 a signed E2B pause webhook settles a sandbox's status and usage"
     .from(usageSession)
     .where(eq(usageSession.workspaceId, sandbox.id));
   expect(sessions[0]!.stoppedAt).not.toBeNull();
+});
+
+integration("a sandbox is provisioned at the machine profile it is billed at", async () => {
+  await terminateAll(userId);
+  machineAccess = "smallest";
+  try {
+    const sandbox = await caller(userId).create({ name: "small", lifetimeMinutes: 5 });
+    const [row] = await db
+      .select({ handle: workspace.externalInstanceId, profile: machineProfile })
+      .from(workspace)
+      .innerJoin(machineProfile, eq(workspace.machineProfileId, machineProfile.id))
+      .where(eq(workspace.id, sandbox.id));
+    expect(row!.profile.key).toBe("small");
+    expect(requested.get(row!.handle.split(":").at(-1)!)).toEqual({
+      template: "gitterm-sandbox",
+      machine: { templateSuffix: "-sm" },
+    });
+  } finally {
+    machineAccess = "any";
+  }
 });
 
 integration(

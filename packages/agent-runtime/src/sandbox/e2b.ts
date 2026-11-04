@@ -103,7 +103,9 @@ export function createE2BSandboxTransport(config: {
       };
       let sandbox: Sandbox;
       try {
-        sandbox = await Sandbox.create(input.template ?? config.template ?? DEFAULT_E2B_TEMPLATE, {
+        // E2B fixes resources per template; each size is its own `<template><suffix>`.
+        const template = input.template ?? config.template ?? DEFAULT_E2B_TEMPLATE;
+        sandbox = await Sandbox.create(`${template}${input.machine?.templateSuffix ?? ""}`, {
           ...opts,
           timeoutMs: input.timeoutMs,
           metadata: labels,

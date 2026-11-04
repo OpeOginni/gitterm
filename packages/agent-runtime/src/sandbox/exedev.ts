@@ -129,8 +129,12 @@ export function createExeDevSandboxTransport(config: {
       validateLifetime(input.timeoutMs, profile.capabilities.maxLifetimeMs);
       const account = input.labels.gitterm_account ?? input.labels.gitterm_workspace ?? "managed";
       const name = `${NAME_PREFIX}${accountHash(account)}-${randomBytes(4).toString("hex")}`;
+      const size = (["cpu", "memory", "disk"] as const)
+        .filter((key) => input.machine?.[key])
+        .map((key) => ` --${key}=${shellQuote(String(input.machine![key]))}`)
+        .join("");
       await exec(
-        `new --name=${name} --no-email --image=${shellQuote(input.template ?? config.image ?? DEFAULT_EXEDEV_SANDBOX_IMAGE)} --json`,
+        `new --name=${name} --no-email --image=${shellQuote(input.template ?? config.image ?? DEFAULT_EXEDEV_SANDBOX_IMAGE)}${size} --json`,
         "create a sandbox",
       );
       try {

@@ -114,7 +114,7 @@ export function createBoatSandboxTransport(config: {
         id = (
           await client.create({
             createBoxRequest: {
-              type: config.size,
+              type: (input.machine?.size as typeof config.size) ?? config.size,
               ttlSeconds: Math.ceil(input.timeoutMs / 1000),
               noEnv: true,
             },

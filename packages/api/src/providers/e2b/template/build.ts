@@ -36,6 +36,8 @@ async function main() {
       name: "gitterm-t3code-server",
       template: createT3CodeServerTemplate(t3Version, opencodeVersion),
     });
+  // Managed sandboxes: E2B's base image, no agent. The sandbox image's templateId.
+  if (!agent) baseTemplates.push({ name: "gitterm-sandbox", template: Template().fromBaseImage() });
   // E2B fixes resources per template, so each machine profile size is its own
   // template named `<base><suffix>`. Must match the E2B machine profiles in the seed.
   // Large is capped at the account's maximum supported memory.

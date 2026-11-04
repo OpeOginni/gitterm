@@ -249,7 +249,7 @@ export const sandboxRouter = router({
           message: `Your plan cannot use ${input.provider} compute.`,
         });
 
-      // A sandbox runs the provider's default size and is billed at its default machine profile.
+      // The sandbox is provisioned at the machine profile it is billed at.
       const profiles = await db.query.machineProfile.findMany({
         where: and(
           eq(machineProfile.cloudProviderId, provider.id),
@@ -331,6 +331,12 @@ export const sandboxRouter = router({
           ),
           onTimeout: "pause",
           publicPreviews: input.publicPreviews,
+          // E2B sizes are separate templates named after the sandbox image's template.
+          template:
+            input.provider === "e2b"
+              ? sandboxImage.image.providerMetadata?.e2b?.templateId
+              : undefined,
+          machine: profile?.providerOptions,
         });
         externalId = sandboxHandle(input.provider, created.id);
       } catch (error) {

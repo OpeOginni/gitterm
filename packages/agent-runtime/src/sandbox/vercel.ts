@@ -118,6 +118,7 @@ export function createVercelSandboxTransport(config: {
           // Managed sandboxes pause (stop with a snapshot) when idle; direct ones are discarded.
           persistent: !kill,
           tags: limitTags(input.labels),
+          ...(input.machine?.vcpus ? { resources: { vcpus: Number(input.machine.vcpus) } } : {}),
         });
       } catch (error) {
         throw failure(error, "create a sandbox");

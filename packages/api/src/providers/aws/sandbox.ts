@@ -73,6 +73,7 @@ export function createAwsSandboxTransport(cloudProviderId: string): SandboxTrans
         imageId: input.template ?? AWS_SANDBOX_IMAGE,
         imageProviderMetadata: {
           aws: {
+            ...input.machine,
             command: ["sh", "-c", 'node -e "$GITTERM_EXEC_SERVER"'],
             containerPort: EXEC_SERVER_PORT,
             healthCheckPath: "/healthz",

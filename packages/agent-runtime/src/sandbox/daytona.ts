@@ -80,6 +80,9 @@ export function createDaytonaSandboxTransport(config: {
                     "sleep",
                     "infinity",
                   ]),
+                  ...(input.machine?.resources
+                    ? { resources: input.machine.resources as { cpu?: number; memory?: number } }
+                    : {}),
                 }),
             labels: {
               ...input.labels,

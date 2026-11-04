@@ -78,6 +78,11 @@ export type SandboxCreateInput = {
   publicPreviews?: boolean;
   /** Provider image, template, snapshot, or size. Defaults to a plain image without agents. */
   template?: string;
+  /**
+   * Machine size as a machine profile's provider options, the same keys agent workspaces
+   * use (`templateSuffix`, `resources`, `vcpus`, `size`, `cpu`/`memory`/`disk`). Managed only.
+   */
+  machine?: Record<string, unknown>;
 };
 
 export interface SandboxTransport {
