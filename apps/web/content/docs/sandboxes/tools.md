@@ -1,10 +1,10 @@
 ---
 title: Sandbox tools
 nav: Tools
-description: Every sandbox_* tool the sandbox tools plugin gives your agent, with its arguments.
+description: Every sandbox_* tool the sandbox plugin gives your agent, with its arguments.
 ---
 
-This is the reference for the nine `sandbox_*` tools that `@gitterm/opencode-sandbox-tools` adds to your local agent. You never call these yourself: you ask in plain words, and the agent picks the tools and arguments. Use this page to read what the agent did, or to write instructions for it. The tools work only after you add a sandbox account; see [Setup](/docs/sandboxes/setup).
+This is the reference for the nine `sandbox_*` tools that `@gitterm/opencode-sandbox` adds to your local agent. You never call these yourself: you ask in plain words, and the agent picks the tools and arguments. Use this page to read what the agent did, or to write instructions for it. The tools work only after you add a sandbox account; see [Setup](/docs/sandboxes/setup).
 
 Every tool except `sandbox_create` and `sandbox_list` takes a `sandboxId`, from `sandbox_create` or `sandbox_list`. A sandbox belongs to the account that created it. Using it while another account is selected is an error. A managed sandbox that paused while idle resumes when a tool next uses it; see [Pausing](/docs/sandboxes/providers#pausing-managed-only).
 

@@ -34,8 +34,8 @@
     {
       "title": "Reference",
       "pages": [
-        "reference/sandbox-tools",
-        "reference/cloud-handoff",
+        "reference/sandbox-plugin",
+        "reference/cloud-plugin",
         "reference/cli",
         "reference/sdk"
       ]

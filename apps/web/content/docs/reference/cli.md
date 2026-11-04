@@ -90,7 +90,7 @@ The CLI reads accounts from `~/.config/gitterm/sandbox.json`, or from the file i
 }
 ```
 
-The file takes the same `limits`, `exclude`, and `publicPreviews` settings as the [sandbox tools plugin](/docs/reference/sandbox-tools#options). With `"publicPreviews": true`, `create` makes public previews without asking. Whether a provider can make a preview public: [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
+The file takes the same `limits`, `exclude`, and `publicPreviews` settings as the [sandbox plugin](/docs/reference/sandbox-plugin#options). With `"publicPreviews": true`, `create` makes public previews without asking. Whether a provider can make a preview public: [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
 
 Direct accounts don't need a Gitterm login.
 

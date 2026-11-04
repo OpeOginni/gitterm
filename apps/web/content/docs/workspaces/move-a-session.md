@@ -14,13 +14,13 @@ The move is one-way:
 
 ## Before you start
 
-- The cloud handoff plugin is installed:
+- The cloud plugin is installed:
 
   ```sh
-  opencode plugin add @gitterm/opencode-cloud-handoff
+  opencode plugin add @gitterm/opencode-cloud
   ```
 
-  See the [Cloud handoff plugin reference](/docs/reference/cloud-handoff).
+  See the [Cloud plugin reference](/docs/reference/cloud-plugin).
 
 - You are signed in with `gitterm login`, or `GITTERM_API_TOKEN` is set before OpenCode starts.
 - Gitterm has a model credential under **Models**, and for a private repository, a GitHub connection under **Integrations**.
@@ -76,7 +76,7 @@ Links work once and expire after five minutes; run `/cloud` again for a new one.
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "@gitterm/opencode-cloud-handoff",
+      "package": "@gitterm/opencode-cloud",
       "options": {
         "provider": { "type": "e2b" },
         "connections": ["github"],
@@ -87,7 +87,7 @@ Links work once and expire after five minutes; run `/cloud` again for a new one.
 }
 ```
 
-Every option is listed in the [Cloud handoff plugin reference](/docs/reference/cloud-handoff#options).
+Every option is listed in the [Cloud plugin reference](/docs/reference/cloud-plugin#options).
 
 ## Limits
 
@@ -101,6 +101,6 @@ Every option is listed in the [Cloud handoff plugin reference](/docs/reference/c
 
 ## Related
 
-- [Cloud handoff plugin reference](/docs/reference/cloud-handoff)
+- [Cloud plugin reference](/docs/reference/cloud-plugin)
 - [Lifecycle](/docs/workspaces/lifecycle)
 - [Connections](/docs/integrations/connections)

@@ -1,17 +1,17 @@
 ---
-title: Cloud handoff plugin reference
-nav: Cloud handoff plugin
-description: Install, options, environment variables, and the /cloud command of @gitterm/opencode-cloud-handoff.
+title: Cloud plugin reference
+nav: Cloud plugin
+description: Install, options, environment variables, and the /cloud command of @gitterm/opencode-cloud.
 ---
 
-This is the reference for `@gitterm/opencode-cloud-handoff`, the OpenCode plugin that adds the `/cloud` command: every option, environment variable, and command. Use it to look up a field. For step-by-step use, see [Move a session](/docs/workspaces/move-a-session).
+This is the reference for `@gitterm/opencode-cloud`, the OpenCode plugin that adds the `/cloud` command: every option, environment variable, and command. Use it to look up a field. For step-by-step use, see [Move a session](/docs/workspaces/move-a-session).
 
-Formerly part of `@gitterm/opencode-plugin`. The `sandbox_*` tools are now a separate plugin; see [Sandbox tools plugin reference](/docs/reference/sandbox-tools).
+Formerly part of `@gitterm/opencode-plugin`. The `sandbox_*` tools are now a separate plugin; see [Sandbox plugin reference](/docs/reference/sandbox-plugin).
 
 ## Install
 
 ```sh
-opencode plugin add @gitterm/opencode-cloud-handoff
+opencode plugin add @gitterm/opencode-cloud
 ```
 
 This installs the plugin and adds it to your global OpenCode config. You can instead list it under `plugins` in a project's `opencode.json`, or in `~/.config/opencode/opencode.json` for all projects:
@@ -19,7 +19,7 @@ This installs the plugin and adds it to your global OpenCode config. You can ins
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["@gitterm/opencode-cloud-handoff"]
+  "plugins": ["@gitterm/opencode-cloud"]
 }
 ```
 
@@ -29,7 +29,7 @@ Every option is optional. To pass options, replace the string with an object. Ke
 {
   "plugins": [
     {
-      "package": "@gitterm/opencode-cloud-handoff",
+      "package": "@gitterm/opencode-cloud",
       "options": {
         "provider": { "type": "e2b" },
         "connections": ["github"],

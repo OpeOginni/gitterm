@@ -1,17 +1,17 @@
 ---
-title: Sandbox tools plugin reference
-nav: Sandbox tools plugin
-description: Install, options, account fields, limits, environment variables, and tools of @gitterm/opencode-sandbox-tools.
+title: Sandbox plugin reference
+nav: Sandbox plugin
+description: Install, options, account fields, limits, environment variables, and tools of @gitterm/opencode-sandbox.
 ---
 
-This is the reference for `@gitterm/opencode-sandbox-tools`, the OpenCode plugin that gives your local agent remote sandboxes: every option, account field, limit, environment variable, and tool. Use it to look up a field. For step-by-step setup, see [Sandbox setup](/docs/sandboxes/setup).
+This is the reference for `@gitterm/opencode-sandbox`, the OpenCode plugin that gives your local agent remote sandboxes: every option, account field, limit, environment variable, and tool. Use it to look up a field. For step-by-step setup, see [Sandbox setup](/docs/sandboxes/setup).
 
-Formerly part of `@gitterm/opencode-plugin`. The `/cloud` command is now a separate plugin; see [Cloud handoff plugin reference](/docs/reference/cloud-handoff).
+Formerly part of `@gitterm/opencode-plugin`. The `/cloud` command is now a separate plugin; see [Cloud plugin reference](/docs/reference/cloud-plugin).
 
 ## Install
 
 ```sh
-opencode plugin add @gitterm/opencode-sandbox-tools
+opencode plugin add @gitterm/opencode-sandbox
 ```
 
 This installs the plugin and adds it to your global OpenCode config. You can instead list it under `plugins` in a project's `opencode.json`, or in `~/.config/opencode/opencode.json` for all projects.
@@ -23,7 +23,7 @@ The tools need an account, so replace the plugin's string entry with an object t
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "@gitterm/opencode-sandbox-tools",
+      "package": "@gitterm/opencode-sandbox",
       "options": {
         "account": "e2b",
         "accounts": {

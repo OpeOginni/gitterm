@@ -8,7 +8,7 @@ This page explains what a Gitterm sandbox is, how a typical session goes, and wh
 
 ## What a sandbox is
 
-A sandbox is a plain remote machine that your local agent sends commands to. The sandbox tools plugin for OpenCode (`@gitterm/opencode-sandbox-tools`) adds `sandbox_*` tools to your agent, and lists the checkout's sandboxes in OpenCode's right sidebar. The conversation and your checkout stay on your machine. Only the commands run remotely.
+A sandbox is a plain remote machine that your local agent sends commands to. The sandbox plugin for OpenCode (`@gitterm/opencode-sandbox`) adds `sandbox_*` tools to your agent, and lists the checkout's sandboxes in OpenCode's right sidebar. The conversation and your checkout stay on your machine. Only the commands run remotely.
 
 A sandbox:
 

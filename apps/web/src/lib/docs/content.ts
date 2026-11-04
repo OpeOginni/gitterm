@@ -89,7 +89,17 @@ export function getNeighbours(slug: string) {
   return { prev: i > 0 ? pages[i - 1] : undefined, next: i >= 0 ? pages[i + 1] : undefined };
 }
 
-/** The page as one markdown document, title first. Used by "Copy page", `/docs/<slug>.md` and llms-full.txt. */
+/**
+ * The page as one markdown document, title first. Used by "Copy page", `/docs/<slug>.md` and
+ * llms-full.txt. Site links become absolute, and docs links point at the markdown version, so an
+ * agent that follows a link gets markdown again instead of an HTML page.
+ */
 export function pageMarkdown(page: DocPage) {
-  return [`# ${page.title}`, page.description, page.body].filter(Boolean).join("\n\n") + "\n";
+  const body = page.body
+    .replace(
+      /\]\((\/docs\/[^)#\s]+)(#[^)\s]*)?\)/g,
+      (_, url: string, hash = "") => `](${SITE_URL}${url}.md${hash})`,
+    )
+    .replace(/\]\((\/[^)\s]*)\)/g, (_, url: string) => `](${SITE_URL}${url})`);
+  return [`# ${page.title}`, page.description, body].filter(Boolean).join("\n\n") + "\n";
 }

@@ -7,12 +7,12 @@ This page defines the terms the rest of the docs use. Read it once before settin
 
 ## Sandbox, cloud workspace, and `/cloud`
 
-|                            | Sandbox                                                  | Cloud workspace                           | `/cloud` handoff                                |
-| -------------------------- | -------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------- |
-| Where the agent runs       | On your machine                                          | In the cloud                              | In the cloud, after the move                    |
-| What runs remotely         | Only the commands your agent sends                       | OpenCode or T3 Code, with your repository | OpenCode, with your conversation and checkout   |
-| Model credentials remotely | None                                                     | Yours, configured in Gitterm              | Yours, configured in Gitterm                    |
-| How you start it           | `sandbox_*` tools from `@gitterm/opencode-sandbox-tools` | The dashboard or the SDK                  | `/cloud` from `@gitterm/opencode-cloud-handoff` |
+|                            | Sandbox                                            | Cloud workspace                           | `/cloud` handoff                              |
+| -------------------------- | -------------------------------------------------- | ----------------------------------------- | --------------------------------------------- |
+| Where the agent runs       | On your machine                                    | In the cloud                              | In the cloud, after the move                  |
+| What runs remotely         | Only the commands your agent sends                 | OpenCode or T3 Code, with your repository | OpenCode, with your conversation and checkout |
+| Model credentials remotely | None                                               | Yours, configured in Gitterm              | Yours, configured in Gitterm                  |
+| How you start it           | `sandbox_*` tools from `@gitterm/opencode-sandbox` | The dashboard or the SDK                  | `/cloud` from `@gitterm/opencode-cloud`       |
 
 - **Sandbox.** A plain remote machine your local agent uses for builds, tests, and preview servers. It runs no coding agent. See [Sandboxes overview](/docs/sandboxes/overview).
 - **Cloud workspace.** A remote machine that runs the agent itself: OpenCode, or T3 Code (which drives Codex and Claude Code). You open it in the browser or connect a local client. See [Cloud workspaces](/docs/workspaces/overview).

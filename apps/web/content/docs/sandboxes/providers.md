@@ -4,7 +4,7 @@ nav: Providers
 description: Which providers run Gitterm sandboxes, what each one supports, and the limits that change how you use them.
 ---
 
-This page compares the providers that can run a sandbox for your local agent. Use it to pick a provider, and to know what happens to a sandbox you forget about. The account fields each provider needs are in [Account fields](/docs/reference/sandbox-tools#account-fields).
+This page compares the providers that can run a sandbox for your local agent. Use it to pick a provider, and to know what happens to a sandbox you forget about. The account fields each provider needs are in [Account fields](/docs/reference/sandbox-plugin#account-fields).
 
 ## Capabilities
 

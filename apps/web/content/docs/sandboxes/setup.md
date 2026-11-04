@@ -1,10 +1,10 @@
 ---
 title: Sandbox setup
 nav: Setup
-description: Install the sandbox tools plugin, add a sandbox account, and choose what needs your approval.
+description: Install the sandbox plugin, add a sandbox account, and choose what needs your approval.
 ---
 
-This page walks you through giving your local OpenCode agent remote sandboxes: install `@gitterm/opencode-sandbox-tools`, add an account, and decide what needs your approval. Read [Sandboxes overview](/docs/sandboxes/overview) first if you are not sure what a sandbox is. Every field is listed in the [Sandbox tools plugin reference](/docs/reference/sandbox-tools#options).
+This page walks you through giving your local OpenCode agent remote sandboxes: install `@gitterm/opencode-sandbox`, add an account, and decide what needs your approval. Read [Sandboxes overview](/docs/sandboxes/overview) first if you are not sure what a sandbox is. Every field is listed in the [Sandbox plugin reference](/docs/reference/sandbox-plugin#options).
 
 ## Before you start
 
@@ -20,10 +20,10 @@ Not sure which? See [Managed and direct accounts](/docs/concepts#managed-and-dir
 1. Install the plugin:
 
    ```sh
-   opencode plugin add @gitterm/opencode-sandbox-tools
+   opencode plugin add @gitterm/opencode-sandbox
    ```
 
-   This adds `@gitterm/opencode-sandbox-tools` to your global OpenCode config.
+   This adds `@gitterm/opencode-sandbox` to your global OpenCode config.
 
 2. Add an account. In your OpenCode config, replace the plugin entry with an object that has `options`. `accounts` maps a name you choose to an account, and `account` picks the one the tools use.
 
@@ -31,7 +31,7 @@ Not sure which? See [Managed and direct accounts](/docs/concepts#managed-and-dir
    {
      "plugins": [
        {
-         "package": "@gitterm/opencode-sandbox-tools",
+         "package": "@gitterm/opencode-sandbox",
          "options": {
            "account": "e2b",
            "accounts": {
@@ -82,7 +82,7 @@ Some providers need more than `apiKey`:
 | exe.dev  | `exedev`   | `"allowUnboundedLifetime": true`                               |
 | Railway  | `railway`  | `projectId`, `environmentId`, `"allowUnboundedLifetime": true` |
 
-exe.dev and Railway never delete a sandbox on their own. `allowUnboundedLifetime` is how you accept that a sandbox left behind by a crash keeps running and billing until you destroy it. Without it, creation is refused. Optional fields, such as an E2B template or a Vercel runtime, are in [Account fields](/docs/reference/sandbox-tools#account-fields).
+exe.dev and Railway never delete a sandbox on their own. `allowUnboundedLifetime` is how you accept that a sandbox left behind by a crash keeps running and billing until you destroy it. Without it, creation is refused. Optional fields, such as an E2B template or a Vercel runtime, are in [Account fields](/docs/reference/sandbox-plugin#account-fields).
 
 ## Managed accounts
 
@@ -105,7 +105,7 @@ A managed account uses your Gitterm plan. The Gitterm deployment holds the provi
    }
    ```
 
-The provider must be enabled on the deployment and allowed by your plan. Creation also checks your run allowance and your workspace limit, which counts sandboxes too. For a self-hosted deployment, see `serverUrl` in [Account fields](/docs/reference/sandbox-tools#account-fields).
+The provider must be enabled on the deployment and allowed by your plan. Creation also checks your run allowance and your workspace limit, which counts sandboxes too. For a self-hosted deployment, see `serverUrl` in [Account fields](/docs/reference/sandbox-plugin#account-fields).
 
 > [!NOTE]
 > On E2B, Daytona, Boat, and exe.dev, managed previews are served through Gitterm. They can be public, or private and open in your browser when you are signed in to Gitterm. See [Previews through Gitterm](/docs/sandboxes/jobs-and-previews#previews-through-gitterm).
@@ -123,7 +123,7 @@ The provider must be enabled on the deployment and allowed by your plan. Creatio
 }
 ```
 
-The values above are the defaults. What each limit does is in [Limits](/docs/reference/sandbox-tools#limits).
+The values above are the defaults. What each limit does is in [Limits](/docs/reference/sandbox-plugin#limits).
 
 ## Approvals
 

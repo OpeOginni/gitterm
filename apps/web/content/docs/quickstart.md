@@ -16,10 +16,10 @@ Your agent and your files stay local. The agent runs one command in a remote san
 
 ### Steps
 
-1. Install the sandbox tools plugin:
+1. Install the sandbox plugin:
 
    ```sh
-   opencode plugin add @gitterm/opencode-sandbox-tools
+   opencode plugin add @gitterm/opencode-sandbox
    ```
 
 2. Put your key in an environment variable, in the shell you start OpenCode from. Replace `<your-e2b-key>` with your key:
@@ -28,14 +28,14 @@ Your agent and your files stay local. The agent runs one command in a remote san
    export E2B_API_KEY=<your-e2b-key>
    ```
 
-3. In your OpenCode config, replace the `@gitterm/opencode-sandbox-tools` entry with this object. OpenCode replaces `{env:E2B_API_KEY}` with the variable's value when it loads the config, so the key never sits in the file.
+3. In your OpenCode config, replace the `@gitterm/opencode-sandbox` entry with this object. OpenCode replaces `{env:E2B_API_KEY}` with the variable's value when it loads the config, so the key never sits in the file.
 
    ```jsonc
    {
      "$schema": "https://opencode.ai/config.json",
      "plugins": [
        {
-         "package": "@gitterm/opencode-sandbox-tools",
+         "package": "@gitterm/opencode-sandbox",
          "options": {
            "account": "e2b",
            "accounts": {
@@ -87,4 +87,4 @@ A cloud workspace runs the agent itself in the cloud.
 
 ### Or move a local OpenCode session
 
-To continue a session you already started, install `@gitterm/opencode-cloud-handoff` and run `/cloud` in OpenCode. It moves the conversation and checkout into a new cloud workspace, one-way. See [Move a session](/docs/workspaces/move-a-session) for the steps.
+To continue a session you already started, install `@gitterm/opencode-cloud` and run `/cloud` in OpenCode. It moves the conversation and checkout into a new cloud workspace, one-way. See [Move a session](/docs/workspaces/move-a-session) for the steps.

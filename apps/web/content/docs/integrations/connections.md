@@ -79,7 +79,7 @@ Limits:
 
 ## Reference a connection
 
-Anywhere you pass `connections` (the SDK, the options of the [cloud handoff plugin](/docs/reference/cloud-handoff#options), bot settings), each entry can be one of:
+Anywhere you pass `connections` (the SDK, the options of the [cloud plugin](/docs/reference/cloud-plugin#options), bot settings), each entry can be one of:
 
 | Reference       | Example                             | Matches                                                                                                                                                  |
 | --------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |

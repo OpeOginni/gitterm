@@ -19,11 +19,11 @@ The agent itself runs in the workspace: OpenCode, or T3 Code (which drives Codex
 
 ## Ways to create one
 
-| From                 | How                                  | Use it for                                                                                      |
-| -------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| Dashboard            | **Workspaces → New workspace**       | Day-to-day work                                                                                 |
-| SDK                  | `client.workspaces.create()`         | Automation, bots, CI                                                                            |
-| Cloud handoff plugin | `/cloud` in a local OpenCode session | Continuing a session you already started. See [Move a session](/docs/workspaces/move-a-session) |
+| From         | How                                  | Use it for                                                                                      |
+| ------------ | ------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Dashboard    | **Workspaces → New workspace**       | Day-to-day work                                                                                 |
+| SDK          | `client.workspaces.create()`         | Automation, bots, CI                                                                            |
+| Cloud plugin | `/cloud` in a local OpenCode session | Continuing a session you already started. See [Move a session](/docs/workspaces/move-a-session) |
 
 The `gitterm` CLI lists, pauses, restarts and terminates workspaces. It does not create them.
 
