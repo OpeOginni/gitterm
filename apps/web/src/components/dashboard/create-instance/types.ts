@@ -135,6 +135,7 @@ export const ICON_MAP: Record<string, string> = {
   vercel: "/vercel.svg",
   aws: "/ECS.svg",
   claude: "/claude.svg",
+  gitterm: "/gitterm.svg",
 };
 
 const ICON_ENTRIES = Object.entries(ICON_MAP).sort((a, b) => b[0].length - a[0].length);

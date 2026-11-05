@@ -4,6 +4,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+/** Built from parts so this file is not itself synced as a private key. */
+const KEY_HEADER = (kind: string) => `-----BEGIN ${kind}PRIVATE ` + "KEY-----";
+
 /**
  * Deterministic account-isolation tests. The `e2b` module is replaced by an in-memory
  * provider that scopes sandboxes by API key, like real E2B teams.
@@ -554,9 +557,24 @@ describe("source snapshots", () => {
       await writeFile(path.join(repo, "bin.dat"), Buffer.from([0, 255, 1, 254]));
       await writeFile(path.join(repo, "run.sh"), "#!/bin/sh\n", { mode: 0o755 });
       await writeFile(path.join(repo, "server.pem"), "x");
-      await writeFile(path.join(repo, "notes.txt"), "-----BEGIN OPENSSH PRIVATE KEY-----\n");
+      await writeFile(
+        path.join(repo, "notes.txt"),
+        `${KEY_HEADER("OPENSSH ")}\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmU=\n`,
+      );
+      await writeFile(
+        path.join(repo, "service.json"),
+        JSON.stringify({
+          private_key: `${KEY_HEADER("")}\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n`,
+        }),
+      );
+      // A key detector names the header but holds no key.
+      await writeFile(
+        path.join(repo, "detect.ts"),
+        'export const hasKey = (s: string) => s.includes("-----BEGIN PRIVATE KEY-----");\n',
+      );
       const { snapshot, archive } = await captureSource(repo, { exclude: ["*.dat"] });
       expect(snapshot.files.map((file) => [file.path, file.kind])).toEqual([
+        ["detect.ts", "file"],
         ["keep.txt", "file"],
         ["run.sh", "executable"],
       ]);
@@ -565,6 +583,7 @@ describe("source snapshots", () => {
         "bin.dat:excluded by configuration",
         "notes.txt:contains private key material",
         "server.pem:secret-like file name",
+        "service.json:contains private key material",
       ]);
       // Same tree, same digest.
       expect((await captureSource(repo, { exclude: ["*.dat"] })).snapshot.digest).toBe(

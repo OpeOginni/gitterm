@@ -9,6 +9,8 @@ import {
 } from "@gitterm/agent-runtime/sandbox/index";
 import { getProviderConfigService } from "./config/provider-config";
 import { createAwsSandboxTransport } from "../providers/aws/sandbox";
+import { createGittermComputeTransport } from "@gitterm/agent-runtime/sandbox/gitterm";
+import env, { isComputeEnabled } from "@gitterm/env/server";
 
 /**
  * Managed sandboxes keep their provider handle as `sandbox:<provider>:<id>` in
@@ -44,6 +46,17 @@ export async function managedSandboxTransport(
   provider: SandboxProviderKey,
   cloudProviderId?: string,
 ): Promise<SandboxTransport> {
+  if (provider === "gitterm") {
+    if (!isComputeEnabled())
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Gitterm sandboxes are only available on gitterm.dev.",
+      });
+    return createGittermComputeTransport({
+      url: env.COMPUTE_URL!,
+      serviceToken: env.COMPUTE_SERVICE_TOKEN!,
+    });
+  }
   if (provider === "aws") {
     if (!cloudProviderId)
       throw new TRPCError({

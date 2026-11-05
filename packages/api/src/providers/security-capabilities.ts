@@ -33,6 +33,7 @@ export const PROVIDER_SECURITY_CAPABILITIES: Record<ProviderKey, ProviderSecurit
   vercel: sandboxApi(),
   boat: sandboxApi(),
   exedev: sandboxApi(),
+  gitterm: sandboxApi(),
 };
 
 function sandboxApi(): ProviderSecurityCapabilities {

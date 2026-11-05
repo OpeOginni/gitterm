@@ -71,6 +71,8 @@ export function createVercelSandboxTransport(config: {
   teamId: string;
   projectId: string;
   runtime?: "node24" | "node22" | "python3.13";
+  /** Used when no machine profile is given. */
+  vcpus?: number;
 }): SandboxTransport {
   if (!config.apiKey?.trim()) throw new SandboxProviderError("auth", "Vercel token is empty.");
   if (!config.teamId?.trim() || !config.projectId?.trim())
@@ -108,6 +110,7 @@ export function createVercelSandboxTransport(config: {
       validateLifetime(input.timeoutMs, profile.capabilities.maxLifetimeMs);
       const kill = (input.onTimeout ?? "kill") === "kill";
       const name = `gitterm-sbx-${randomBytes(6).toString("hex")}`;
+      const vcpus = input.machine?.vcpus ? Number(input.machine.vcpus) : config.vcpus;
       let sandbox: VercelSandbox;
       try {
         sandbox = await Sandbox.create({
@@ -118,7 +121,7 @@ export function createVercelSandboxTransport(config: {
           // Managed sandboxes pause (stop with a snapshot) when idle; direct ones are discarded.
           persistent: !kill,
           tags: limitTags(input.labels),
-          ...(input.machine?.vcpus ? { resources: { vcpus: Number(input.machine.vcpus) } } : {}),
+          ...(vcpus ? { resources: { vcpus } } : {}),
         });
       } catch (error) {
         throw failure(error, "create a sandbox");

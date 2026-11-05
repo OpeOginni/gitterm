@@ -11,6 +11,19 @@ import { startPreviewProxy } from "./proxy";
 import { captureSource } from "./source";
 import { createFileSandboxStore, type SandboxRecord } from "./store";
 
+/**
+ * Browsers resolve `*.localhost` to loopback themselves, but Bun's fetch on Linux asks the
+ * system resolver, which doesn't. So connect to loopback and send the preview's hostname in
+ * Host, as a browser does.
+ */
+function browserFetch(input: string | URL, init: RequestInit = {}) {
+  const url = new URL(input);
+  if (!url.hostname.endsWith(".localhost")) return fetch(url, init);
+  const headers = new Headers(init.headers);
+  headers.set("host", url.host);
+  return fetch(`http://127.0.0.1:${url.port}${url.pathname}${url.search}`, { ...init, headers });
+}
+
 /** Regression tests for review findings on PR #197. */
 
 const sha = (data: string | Buffer) => createHash("sha256").update(data).digest("hex");
@@ -171,22 +184,22 @@ describe("review regressions", () => {
     });
     try {
       // A browser opens the returned URL, then the page requests /app.js from the same origin.
-      const opened = await fetch(proxy.url, { redirect: "manual" });
+      const opened = await browserFetch(proxy.url, { redirect: "manual" });
       const cookie = opened.headers
         .getSetCookie()
         .map((value) => value.split(";")[0])
         .join("; ");
       const page =
         opened.status >= 300 && opened.status < 400
-          ? await fetch(new URL(opened.headers.get("location")!, proxy.url), {
+          ? await browserFetch(new URL(opened.headers.get("location")!, proxy.url), {
               headers: { cookie },
             })
           : opened;
       expect(await page.text()).toContain("/app.js");
-      const asset = await fetch(new URL("/app.js", proxy.url), { headers: { cookie } });
+      const asset = await browserFetch(new URL("/app.js", proxy.url), { headers: { cookie } });
       expect(asset.status).toBe(200);
       // Without the capability the proxy refuses.
-      expect((await fetch(new URL("/app.js", proxy.url))).status).toBe(401);
+      expect((await browserFetch(new URL("/app.js", proxy.url))).status).toBe(401);
     } finally {
       await proxy.close();
       upstream.close();
@@ -211,7 +224,7 @@ describe("review regressions", () => {
       headers: { "x-access": "provider-secret" },
     });
     try {
-      const opened = await fetch(proxy.url, { redirect: "manual" });
+      const opened = await browserFetch(proxy.url, { redirect: "manual" });
       const cookie = opened.headers
         .getSetCookie()
         .map((value) => value.split(";")[0])
@@ -254,24 +267,27 @@ describe("review regressions", () => {
     try {
       const host = new URL(proxy.url).hostname;
       expect(host).toMatch(/^p-[0-9a-f]{16}\.localhost$/);
-      const opened = await fetch(proxy.url, { redirect: "manual" });
+      const opened = await browserFetch(proxy.url, { redirect: "manual" });
       const capability = opened.headers
         .getSetCookie()
         .map((value) => value.split(";")[0])
         .join("; ");
-      const first = await fetch(new URL("/", proxy.url), { headers: { cookie: capability } });
+      const first = await browserFetch(new URL("/", proxy.url), {
+        headers: { cookie: capability },
+      });
       // The app's own cookie name, host-only (no foreign Domain), so the browser keeps it.
       const setCookie = first.headers.getSetCookie()[0]!;
       expect(setCookie).toStartWith("app_session=from-preview");
       expect(setCookie.toLowerCase()).not.toContain("domain=");
-      await fetch(new URL("/", proxy.url), {
+      await browserFetch(new URL("/", proxy.url), {
         headers: { cookie: `${capability}; app_session=from-preview` },
       });
       expect(received.at(-1)).toBe("app_session=from-preview");
       // The same port reached as 127.0.0.1 (where other local apps' cookies live) is refused.
       const { port } = new URL(proxy.url);
       expect(
-        (await fetch(`http://127.0.0.1:${port}/`, { headers: { cookie: capability } })).status,
+        (await browserFetch(`http://127.0.0.1:${port}/`, { headers: { cookie: capability } }))
+          .status,
       ).toBe(421);
     } finally {
       await proxy.close();
@@ -284,14 +300,17 @@ describe("review regressions", () => {
     try {
       const bad = encodeURIComponent("é".repeat(48));
       expect(
-        (await fetch(`${new URL(proxy.url).origin}/?gitterm_preview_token=${bad}`)).status,
+        (await browserFetch(`${new URL(proxy.url).origin}/?gitterm_preview_token=${bad}`)).status,
       ).toBe(401);
       expect(
-        (await fetch(new URL("/", proxy.url), { headers: { cookie: `gitterm_preview=${bad}` } }))
-          .status,
+        (
+          await browserFetch(new URL("/", proxy.url), {
+            headers: { cookie: `gitterm_preview=${bad}` },
+          })
+        ).status,
       ).toBe(401);
       // Still serving.
-      expect((await fetch(`${new URL(proxy.url).origin}/`)).status).toBe(401);
+      expect((await browserFetch(`${new URL(proxy.url).origin}/`)).status).toBe(401);
     } finally {
       await proxy.close();
     }

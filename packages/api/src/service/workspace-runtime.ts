@@ -55,7 +55,7 @@ export function isResumableWorkspaceStatus(status: string): boolean {
 
 /**
  * Resolve the project directory inside a sandbox for a given provider.
- * E2B uses `/home/user/workspace`, Vercel uses `/vercel/sandbox`, Boat uses
+ * E2B and Gitterm use `/home/user/workspace`, Vercel uses `/vercel/sandbox`, Boat uses
  * `/home/user`, exe.dev uses `/home/exedev`, and most other providers use
  * `/workspace`.
  */
@@ -64,7 +64,7 @@ export function resolveProjectDirectory(
   providerKey?: string | null,
 ): string {
   const hint = buildProjectPathHint(repositoryUrl);
-  if ((providerKey ?? "").toLowerCase() === "e2b") {
+  if (["e2b", "gitterm"].includes((providerKey ?? "").toLowerCase())) {
     return hint.replace(/^\/workspace/, "/home/user/workspace");
   }
   if ((providerKey ?? "").toLowerCase() === "vercel") {

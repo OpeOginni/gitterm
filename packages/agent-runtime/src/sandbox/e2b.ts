@@ -109,6 +109,7 @@ export function createE2BSandboxTransport(config: {
           ...opts,
           timeoutMs: input.timeoutMs,
           metadata: labels,
+          ...(input.env ? { envs: input.env } : {}),
           lifecycle: { onTimeout },
           network: { allowPublicTraffic: input.publicPreviews === true },
         });

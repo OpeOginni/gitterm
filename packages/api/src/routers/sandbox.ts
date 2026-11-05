@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { on } from "node:events";
 import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, db, desc, eq, inArray, or, sql } from "@gitterm/db";
@@ -37,6 +38,8 @@ import { getWorkspacePortUrl } from "../utils/routing";
 import type { ExposedPort } from "@gitterm/schema/workspace-ports";
 import { workspaceMetadataSchema } from "./workspace/managment";
 import { isAnonEmail } from "../service/anon/anon-user";
+import { proxyRouteHeaders } from "../service/proxy-route-headers";
+import { computeJobEvents, type SandboxJobFinished } from "../service/compute-events";
 
 /**
  * Managed sandboxes: plain provider sandboxes billed as Gitterm workspaces. Each is a
@@ -91,9 +94,10 @@ function toTRPCError(error: unknown): never {
             : error.code === "timeout"
               ? "TIMEOUT"
               : "BAD_GATEWAY",
+      // The message names the provider and the step; say whose key it was and who can fix it.
       message:
         error.code === "auth"
-          ? "The deployment's provider credential was rejected. Ask an admin to check it."
+          ? `${error.message} That key is set on the Gitterm server, not by you: ask an admin to check it under Admin → Providers.`
           : error.message,
     });
   }
@@ -192,27 +196,6 @@ async function loadRunningSandbox(userId: string, sandboxId: string) {
   return { ...(await transportFor(row)), row };
 }
 
-/**
- * Provider access headers renamed to what the Gitterm proxy forwards (the copy_headers
- * lists in apps/proxy/Caddyfile*). Boat's `_port_auth` cookie travels as a header there.
- */
-function proxyRouteHeaders(headers: Record<string, string>): Record<string, string> {
-  const forwarded = new Set([
-    "e2b-traffic-access-token",
-    "x-daytona-preview-token",
-    "x-daytona-skip-preview-warning",
-    "x-exedev-authorization",
-  ]);
-  const routed: Record<string, string> = {};
-  for (const [name, value] of Object.entries(headers)) {
-    const boat = name.toLowerCase() === "cookie" ? /^_port_auth=([^;]+)$/.exec(value)?.[1] : null;
-    if (boat) routed["X-GitTerm-Boat-Token"] = boat;
-    else if (forwarded.has(name.toLowerCase())) routed[name] = value;
-    else throw new Error(`The Gitterm proxy cannot forward the ${name} preview header`);
-  }
-  return routed;
-}
-
 export const sandboxRouter = router({
   create: accountProcedure("workspace:write")
     .input(
@@ -220,6 +203,8 @@ export const sandboxRouter = router({
         provider: z.enum(SANDBOX_PROVIDERS).default("e2b"),
         name: z.string().trim().min(1).max(120).optional(),
         lifetimeMinutes: z.number().int().min(1).max(MAX_LIFETIME_MINUTES),
+        /** Machine profile key; defaults to the plan's default size. */
+        machine: z.string().trim().min(1).max(64).optional(),
         publicPreviews: z.boolean().optional(),
         metadata: workspaceMetadataSchema.optional(),
         idempotencyKey: z.string().trim().min(1).max(255).optional(),
@@ -282,13 +267,21 @@ export const sandboxRouter = router({
           eq(machineProfile.isEnabled, true),
         ),
       });
-      const profile = getDefaultMachineProfile(
-        getSelectableMachineProfiles(
-          profiles,
-          provider.machineSelectionPolicy.mode,
-          entitlements.machineAccess,
-        ),
+      const selectable = getSelectableMachineProfiles(
+        profiles,
+        provider.machineSelectionPolicy.mode,
+        entitlements.machineAccess,
       );
+      const profile = input.machine
+        ? selectable.find((candidate) => candidate.key === input.machine)
+        : getDefaultMachineProfile(selectable);
+      if (input.machine && !profile)
+        throw new TRPCError({
+          code: profiles.some((candidate) => candidate.key === input.machine)
+            ? "FORBIDDEN"
+            : "BAD_REQUEST",
+          message: `Machine "${input.machine}" isn't available for ${provider.name} sandboxes on your plan. Choose one of: ${selectable.map((candidate) => candidate.key).join(", ")}.`,
+        });
 
       const allowance = await billing.checkRunAllowance(userId, {
         action: "create",
@@ -582,4 +575,24 @@ export const sandboxRouter = router({
         });
       return { success: true as const, deleted: true as const };
     }),
+
+  /**
+   * Finished jobs in your sandboxes, as they happen. Only gitterm.dev's Gitterm sandboxes
+   * report jobs; elsewhere the stream stays open and quiet, and clients keep polling.
+   */
+  jobEvents: accountProcedure("workspace:read").subscription(async function* ({ ctx, signal }) {
+    const source = computeJobEvents();
+    if (!source) {
+      await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve()));
+      return;
+    }
+    const events = on(source, ctx.session.user.id, { signal }) as AsyncIterableIterator<
+      [SandboxJobFinished]
+    >;
+    try {
+      for await (const [event] of events) yield event;
+    } catch (error) {
+      if (!signal?.aborted) throw error;
+    }
+  }),
 });

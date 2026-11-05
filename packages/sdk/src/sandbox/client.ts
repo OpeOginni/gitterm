@@ -59,6 +59,8 @@ export type SandboxExecOptions = {
   env?: Record<string, string>;
   /** Wait up to this long for completion before returning a running job. */
   waitMs?: number;
+  /** The conversation that started the job; saved so it can be told when the job finishes. */
+  sessionId?: string;
 };
 
 export type JobLog = {
@@ -273,6 +275,7 @@ export function createSandboxClient(options: {
       finishedAt: null,
       timeoutMs: Math.round(timeoutMinutes * 60_000),
       secretNames: Object.keys(input.env ?? {}),
+      sessionId: input.sessionId ?? null,
     };
     // Persist first so a crash after launch still leaves a reattachable record.
     await store.update(record, (stored) => {
@@ -294,6 +297,8 @@ export function createSandboxClient(options: {
     capabilities: backend.capabilities,
     limits,
     store,
+    /** Present when the backend pushes job completions; see `SandboxBackend.onJobFinished`. */
+    onJobFinished: backend.onJobFinished?.bind(backend),
 
     async create(input: SandboxCreateOptions): Promise<SandboxRecord> {
       const lifetimeMinutes = input.lifetimeMinutes ?? limits.defaultLifetimeMinutes;

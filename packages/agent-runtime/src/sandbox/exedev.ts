@@ -30,6 +30,10 @@ type VmList = { vms?: Array<{ vm_name: string; status?: string }> };
 export function createExeDevSandboxTransport(config: {
   apiKey: string;
   image?: string;
+  /** Used when no machine profile is given, as exe.dev's `new` flags take them. */
+  cpu?: number;
+  memory?: string;
+  disk?: string;
 }): SandboxTransport {
   if (!config.apiKey?.trim()) throw new SandboxProviderError("auth", "exe.dev token is empty.");
   const accessKeys = new Map<string, string>();
@@ -129,9 +133,10 @@ export function createExeDevSandboxTransport(config: {
       validateLifetime(input.timeoutMs, profile.capabilities.maxLifetimeMs);
       const account = input.labels.gitterm_account ?? input.labels.gitterm_workspace ?? "managed";
       const name = `${NAME_PREFIX}${accountHash(account)}-${randomBytes(4).toString("hex")}`;
+      const machine = input.machine ?? config;
       const size = (["cpu", "memory", "disk"] as const)
-        .filter((key) => input.machine?.[key])
-        .map((key) => ` --${key}=${shellQuote(String(input.machine![key]))}`)
+        .filter((key) => machine[key])
+        .map((key) => ` --${key}=${shellQuote(String(machine[key]))}`)
         .join("");
       await exec(
         `new --name=${name} --no-email --image=${shellQuote(input.template ?? config.image ?? DEFAULT_EXEDEV_SANDBOX_IMAGE)}${size} --json`,

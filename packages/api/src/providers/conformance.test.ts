@@ -21,7 +21,10 @@ describe("compute provider conformance", () => {
     const expected = PROVIDER_KEYS.toSorted();
 
     expect(getAvailableProviderNames().toSorted()).toEqual(expected);
-    expect(Object.keys(PROVIDER_DEFINITIONS).toSorted()).toEqual(expected);
+    // gitterm.dev's own provider is configured by env vars, so it has no admin definition.
+    expect(Object.keys(PROVIDER_DEFINITIONS).toSorted()).toEqual(
+      expected.filter((key) => key !== "gitterm"),
+    );
     expect(Object.keys(PROVIDER_SECURITY_CAPABILITIES).toSorted()).toEqual(expected);
   });
 

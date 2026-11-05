@@ -59,6 +59,7 @@ import type {
   UpdateMcpConnectionInput,
   ManagedSandbox,
   ManagedSandboxCreateInput,
+  SandboxJobFinished,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl, trpcEndpoint } from "./transport.js";
 import { runHelpers } from "./runs.js";
@@ -200,6 +201,12 @@ export type GittermClient = {
     /** Resume a sandbox paused for inactivity. Subject to the same quota checks as creation. */
     resume(sandboxId: string): Promise<void>;
     terminate(sandboxId: string): Promise<void>;
+    /**
+     * Calls `listener` as jobs in your sandboxes finish. Only Gitterm sandboxes on gitterm.dev
+     * report jobs; elsewhere nothing arrives, so keep a slower check as well. Returns a stop
+     * function. The connection reconnects by itself.
+     */
+    onJobFinished(listener: (event: SandboxJobFinished) => void): () => void;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
@@ -793,6 +800,14 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         run(async () => {
           await trpc.sandbox.terminate.mutate({ sandboxId });
         }),
+      onJobFinished: (listener) => {
+        const subscription = trpc.sandbox.jobEvents.subscribe(undefined, {
+          onData: (event) => listener(event as SandboxJobFinished),
+          // A dropped stream is reconnected by the link; polling covers any gap.
+          onError: () => {},
+        });
+        return () => subscription.unsubscribe();
+      },
     },
     runs: {
       create: (input: AgentRunCreateInput) =>

@@ -75,6 +75,7 @@ const PROVIDER_LOGOS: Record<string, string> = {
   exedev: "/exe.png",
   railway: "/railway.svg",
   vercel: "/vercel.svg",
+  gitterm: "/gitterm.svg",
 };
 import Link from "next/link";
 

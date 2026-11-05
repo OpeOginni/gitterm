@@ -462,6 +462,87 @@ integration("a sandbox is provisioned at the machine profile it is billed at", a
 });
 
 integration(
+  "a Gitterm sandbox runs at the chosen size, and Gitterm is offered for workspaces",
+  async () => {
+    await terminateAll(userId);
+    // What ensureComputeProvider creates on gitterm.dev.
+    const [compute] = await db
+      .insert(cloudProvider)
+      .values({
+        name: `Gitterm ${randomUUID()}`,
+        providerKey: "gitterm",
+        isSandbox: true,
+        supportsRegions: false,
+        machineSelectionPolicy: { mode: "profiles" },
+      })
+      .returning();
+    try {
+      for (const [key, vcpus, isDefault] of [
+        ["small", 2, false],
+        ["medium", 4, true],
+        ["large", 8, false],
+      ] as const)
+        await db.insert(machineProfile).values({
+          cloudProviderId: compute!.id,
+          key,
+          name: key,
+          vcpus,
+          memoryGb: vcpus * 2,
+          providerOptions: { size: key },
+          isDefault,
+        });
+      const sandbox = await caller(userId).create({
+        provider: "gitterm",
+        name: "compute",
+        lifetimeMinutes: 5,
+        machine: "large",
+      });
+      const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+      expect(row!.externalInstanceId).toStartWith("sandbox:gitterm:");
+      expect(requested.get(row!.externalInstanceId.split(":").at(-1)!)).toEqual({
+        template: undefined,
+        machine: { size: "large" },
+      });
+      const providers = workspaceRouter.createCaller({
+        session: { user: { id: userId } },
+      } as unknown as Context);
+      const forWorkspaces = (await providers.listCloudProviders({ cloudOnly: true }))
+        .cloudProviders;
+      expect(forWorkspaces.some((provider) => provider.id === compute!.id)).toBe(true);
+    } finally {
+      await terminateAll(userId);
+      await db.delete(cloudProvider).where(eq(cloudProvider.id, compute!.id));
+    }
+  },
+);
+
+integration("the caller chooses a machine profile within the plan", async () => {
+  await terminateAll(userId);
+  const sandbox = await caller(userId).create({
+    name: "large",
+    lifetimeMinutes: 5,
+    machine: "large",
+  });
+  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  expect(requested.get(row!.externalInstanceId.split(":").at(-1)!)?.machine).toEqual({
+    templateSuffix: "-lg",
+  });
+  await terminateAll(userId);
+
+  machineAccess = "smallest";
+  try {
+    await expect(
+      caller(userId).create({ name: "denied", lifetimeMinutes: 5, machine: "large" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("small") });
+  } finally {
+    machineAccess = "any";
+  }
+  await expect(
+    caller(userId).create({ name: "unknown", lifetimeMinutes: 5, machine: "huge" }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+});
+
+integration(
   "a resume webhook that arrives during the resume leaves the sandbox running",
   async () => {
     await terminateAll(userId);

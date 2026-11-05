@@ -330,6 +330,8 @@ export interface ImageProviderMetadata {
   vercel?: VercelImageProviderMetadata;
   boat?: BoatImageProviderMetadata;
   exedev?: ExeDevImageProviderMetadata;
+  /** gitterm.dev's own sandboxes: the image name the sandbox service knows; set at startup. */
+  gitterm?: { image?: string; size?: string };
   /** Present when `imageId` is a registry image Railway can pull. E2B-only template records omit it. */
   railway?: Record<string, never>;
   [provider: string]: unknown;

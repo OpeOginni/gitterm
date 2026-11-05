@@ -117,6 +117,7 @@ export function createBoatSandboxTransport(config: {
               type: (input.machine?.size as typeof config.size) ?? config.size,
               ttlSeconds: Math.ceil(input.timeoutMs / 1000),
               noEnv: true,
+              ...(input.env ? { env: input.env } : {}),
             },
           })
         ).box.id;

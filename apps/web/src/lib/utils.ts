@@ -96,7 +96,7 @@ export function getWorkspaceProjectPath(
     .pop()
     ?.replace(/\.git$/i, "");
   const base =
-    providerKey === "e2b"
+    providerKey === "e2b" || providerKey === "gitterm"
       ? "~/workspace"
       : providerKey === "vercel"
         ? "/vercel/sandbox"

@@ -15,6 +15,8 @@ export const SANDBOX_PROVIDERS = [
   "exedev",
   "railway",
   "aws",
+  /** Gitterm's own sandboxes: gitterm.dev only. Sizes, not providers; see ./gitterm.ts. */
+  "gitterm",
 ] as const;
 export type SandboxProviderKey = (typeof SANDBOX_PROVIDERS)[number];
 
@@ -83,6 +85,13 @@ export type SandboxCreateInput = {
    * use (`templateSuffix`, `resources`, `vcpus`, `size`, `cpu`/`memory`/`disk`). Managed only.
    */
   machine?: Record<string, unknown>;
+  /**
+   * Environment for every process in the sandbox, set at creation. E2B and Boat support it;
+   * other providers ignore it, so pass per-command env there.
+   */
+  env?: Record<string, string>;
+  /** Run after every resume, to restart services a pause stopped. Gitterm only. */
+  resumeCommand?: string;
 };
 
 export interface SandboxTransport {
@@ -121,6 +130,7 @@ export const GITTERM_PREVIEW_PROVIDERS: readonly SandboxProviderKey[] = [
   "daytona",
   "boat",
   "exedev",
+  "gitterm",
 ];
 
 const DAY = 24 * 60 * 60_000;
@@ -167,6 +177,11 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       pause: "state-losing",
       maxLifetimeMs: DAY,
     },
+  },
+  // The Gitterm server enforces lifetimes and serves previews.
+  gitterm: {
+    home: "/home/user",
+    capabilities: { expiry: "hard", previews: "private", pause: "stateful", maxLifetimeMs: DAY },
   },
 };
 

@@ -78,12 +78,17 @@ export function safeRelativePath(file: string): boolean {
 }
 
 export function sensitivePath(file: string): boolean {
-  return /(^|\/)(\.env($|\.(?!example$|sample$|template$))|\.npmrc$|\.netrc$|\.pypirc$|id_(rsa|ed25519|ecdsa)($|\.)|credentials(?:\.json)?$)|\.(pem|p12|pfx|key)$/i.test(
+  return /(^|\/)(\.env($|\.(?!(?:[^/]*\.)?(?:example|sample|template)$))|\.npmrc$|\.netrc$|\.pypirc$|id_(rsa|ed25519|ecdsa)($|\.)|credentials(?:\.json)?$)|\.(pem|p12|pfx|key)$/i.test(
     file,
   );
 }
 
-const PRIVATE_KEY = /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----/;
+/**
+ * A PEM private key: the header, a real or escaped (JSON) line break, optional PEM headers, then
+ * key data. Code that merely mentions the header, like a key detector, has no key data after it.
+ */
+const PRIVATE_KEY =
+  /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----(?:\r?\n|(?:\\r)?\\n)(?:[A-Za-z-]+: [^\r\n]*(?:\r?\n|(?:\\r)?\\n))*(?:\r?\n|(?:\\r)?\\n)?[A-Za-z0-9+/]{16}/;
 
 /** `*` stays within a path segment, `**` crosses segments. A pattern without `/` matches any basename. */
 export function globToRegExp(glob: string): RegExp {
