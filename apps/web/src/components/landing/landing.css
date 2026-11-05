@@ -2100,6 +2100,18 @@
   .lp .si.flash .si-lbl i {
     box-shadow: 0 0 0 5px rgba(211, 173, 85, 0.22);
   }
+  /* A dev server job is running in the sandbox: the dot beats with it (BEAT in sound.ts) */
+  .lp .si.live .si-lbl i {
+    animation: lp-beat 0.5s ease-out infinite;
+  }
+  @keyframes lp-beat {
+    from {
+      box-shadow: 0 0 0 0 rgba(211, 173, 85, 0.55);
+    }
+    to {
+      box-shadow: 0 0 0 7px rgba(211, 173, 85, 0);
+    }
+  }
   .lp .si-val {
     display: flex;
     align-items: center;

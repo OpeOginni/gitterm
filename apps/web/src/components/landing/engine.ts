@@ -302,8 +302,13 @@ function withSteps(P: SandboxProvider, id: SandboxProviderId): Script {
         name: "sandbox_job",
         args: `command="bun run dev" port=3000`,
         res: "job_2 running, listening on :3000",
-        dur: 1200,
-        term: ["$ bun run dev   job_2, background", "Ready on http://0.0.0.0:3000"],
+        term: [
+          "$ bun run dev   job_2, background",
+          "  compiling src/app/checkout…",
+          "  compiled 312 modules in 840ms",
+          "Ready on http://0.0.0.0:3000",
+        ],
+        stream: true,
       },
       {
         tool: "plugin",
@@ -733,10 +738,22 @@ export function startLanding(root: HTMLElement): () => void {
   }
 
   async function streamTerm(lines: string[], id: number, stream: boolean) {
+    let passes = 0;
+    let compiles = 0;
     for (const line of lines) {
       addLine(term, color(line));
       while (term.children.length > 40) term.firstElementChild?.remove();
-      if (stream && !(await wait(260, id))) return false;
+      if (!stream) continue;
+      // Every streamed line has a sound, so a test run plays as a little melody
+      const l = line.trim();
+      if (/^pass\b/.test(l)) sfx.pass(passes++);
+      else if (/^fail\b/.test(l)) sfx.fail();
+      else if (/\bfailed,/.test(l)) sfx.verdict(false);
+      else if (/^\d+ passed/.test(l)) sfx.verdict(true);
+      else if (l.startsWith("Ready")) sfx.ready();
+      else if (l.startsWith("compil")) sfx.compile(compiles++);
+      else sfx.tick();
+      if (!(await wait(260, id))) return false;
     }
     return true;
   }
@@ -744,8 +761,18 @@ export function startLanding(root: HTMLElement): () => void {
   const diffHtml = () =>
     `<div class="t-diff">${DIFF.map(([c, n, l]) => `<div class="${c}"><span class="ln">${n}</span>${esc(l)}</div>`).join("")}</div>`;
 
+  // The dev server job's beat, from sandbox_job until the session leaves for the cloud
+  const quiet = { open() {}, stop() {} };
+  let server = quiet;
+  function stopServer() {
+    server.stop();
+    server = quiet;
+    items.sandbox.classList.remove("live");
+  }
+
   async function play(m: DemoMode) {
     sfx.stop();
+    stopServer();
     const id = ++run;
     mode = m;
     const P = PROVIDERS[prov];
@@ -797,6 +824,7 @@ export function startLanding(root: HTMLElement): () => void {
         addEl(
           `<p class="t-text">${md(st.text).replace(/\{P\}/g, `<span data-pname>${esc(PROVIDERS[prov].name)}</span>`)}</p>`,
         );
+        sfx.say();
         setLaptop(st.laptop);
         if (!(await wait(1000, id))) return;
         continue;
@@ -812,6 +840,7 @@ export function startLanding(root: HTMLElement): () => void {
           `<div class="t-inline"><span>→</span><span>Read ${esc(st.sub ?? "")}</span></div>`,
           "inline",
         );
+        sfx.page();
         if (!(await wait(500, id))) return;
         continue;
       }
@@ -819,6 +848,7 @@ export function startLanding(root: HTMLElement): () => void {
         addEl(
           `<div class="t-block"><div class="hd">← Edit src/api/checkout.ts</div>${diffHtml()}</div>`,
         );
+        sfx.scribble((st.dur ?? 0) / 1000);
         setLaptop(st.laptop);
         if (!(await wait(st.dur ?? 0, id))) return;
         continue;
@@ -832,6 +862,7 @@ export function startLanding(root: HTMLElement): () => void {
         const out = st.out ?? [];
         for (const line of out) {
           addLine(o, esc(line));
+          sfx.tick(0);
           if (!(await wait((st.dur ?? 0) / out.length, id))) return;
         }
         if (st.error) {
@@ -846,6 +877,12 @@ export function startLanding(root: HTMLElement): () => void {
           `<div class="t-inline"><span class="g"><span class="spin-t">${SPIN[spinI]}</span></span><span class="args"><span class="n">${st.name}</span> ${st.argsHtml ?? esc(st.args ?? "")}</span></div>`,
           "inline",
         );
+        // Each tool sounds like the work it does
+        const secs = (st.dur ?? 0) / 1000;
+        if (st.name === "sandbox_create") sfx.boot(secs);
+        else if (st.name === "sandbox_sync") sfx.transfer(secs, "up");
+        else if (st.name === "sandbox_apply") sfx.transfer(secs, "down");
+        else if (st.name === "sandbox_preview") sfx.ping();
         if (st.term && st.stream) {
           if (!(await streamTerm(st.term, id, true))) return;
         } else {
@@ -853,6 +890,13 @@ export function startLanding(root: HTMLElement): () => void {
           if (st.term) await streamTerm(st.term, id, false);
         }
         need(".g", el).textContent = "✓";
+        sfx.ok();
+        if (st.name === "sandbox_job") {
+          server = sfx.server();
+          items.sandbox.classList.add("live");
+        }
+        // The preview is on screen now, so the server is heard clearly instead of through a wall
+        if (st.name === "sandbox_preview") server.open();
         addLine(el, st.resHtml ?? esc(st.res ?? ""), "res");
         if (st.attach) slots[st.attach].classList.add("on", "fresh");
         if (!(await wait(420, id))) return;
@@ -865,12 +909,15 @@ export function startLanding(root: HTMLElement): () => void {
         );
         const o = need(".o", el);
         setLaptop(st.laptop);
+        stopServer();
         const lines = st.lines ?? [];
-        for (const [k, v] of lines) {
+        for (const [i, [k, v]] of lines.entries()) {
           addLine(o, `${esc(pad(k))}<span style="color:var(--t-text)">${esc(v)}</span>`);
+          sfx.beam(i);
           if (!(await wait((st.dur ?? 0) / (lines.length + 1), id))) return;
         }
         need(".hd", el).textContent = "# Cloud handoff";
+        sfx.teleport();
         addLine(
           o,
           `<br><span class="hl">→ <span data-pname>${esc(PROVIDERS[prov].name)}</span> workspace ready on gitterm/checkout-coupons</span>\n${esc(pad("Pair your phone"))}<span class="url">gitterm.dev/pair/7QK-4M2</span>`,
