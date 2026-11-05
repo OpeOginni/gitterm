@@ -244,10 +244,13 @@ try {
     command: `node -e 'require("http").createServer((q,r)=>r.end("preview ${runId}")).listen(8000)'`,
     readyTimeoutMs: 60_000,
   });
-  const authed = await fetch(preview.url, { headers: preview.headers }).then(async (r) => ({
-    status: r.status,
-    text: await r.text(),
-  }));
+  // Direct provider access: a private Gitterm URL needs a browser session instead.
+  const authed = await fetch(preview.access.url, { headers: preview.access.headers }).then(
+    async (r) => ({
+      status: r.status,
+      text: await r.text(),
+    }),
+  );
   check(
     "preview serves the app",
     preview.ready && authed.status === 200 && authed.text === `preview ${runId}`,

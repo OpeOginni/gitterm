@@ -32,6 +32,11 @@ const proxyCache = await import("../service/proxy-cache");
 const providerConfig = await import("../service/config/provider-config");
 const { internalRouter } = await import("./internal");
 const { workspaceRouter } = await import("./workspace/managment");
+const { proxyResolverRouter } = await import("./proxy");
+const { getWorkspacePortUrl } = await import("../utils/routing");
+const { Hono } = await import("hono");
+const { auth } = await import("@gitterm/auth");
+const { getWorkspaceRouteAccess } = await import("../service/workspace-route-access");
 /** Providers this suite enabled, disabled again afterwards. */
 let enabledForTest: string[] = [];
 
@@ -55,6 +60,9 @@ const WEBHOOK_SECRET = "test-webhook-secret";
 const mocks: { mockRestore(): void }[] = [];
 /** Runs inside the fake provider's resume call. */
 let duringResume: ((id: string) => Promise<void>) | undefined;
+/** What the fake provider asked for, and the access headers its previews return. */
+const providerPublic: boolean[] = [];
+let previewHeaders: Record<string, string> = { "e2b-traffic-access-token": "t" };
 
 beforeAll(async () => {
   if (!testUrl) return;
@@ -65,8 +73,10 @@ beforeAll(async () => {
       labels: Record<string, string>;
       template?: string;
       machine?: Record<string, unknown>;
+      publicPreviews?: boolean;
     }) {
       const id = `fake-${randomUUID()}`;
+      providerPublic.push(input.publicPreviews === true);
       created.set(id, { ...input.labels, template: input.template ?? "" });
       requested.set(id, { template: input.template, machine: input.machine });
       return {
@@ -109,7 +119,7 @@ beforeAll(async () => {
       };
     },
     async preview(_id: string, port: number) {
-      return { url: `https://${port}-fake.e2b.app`, headers: { "e2b-traffic-access-token": "t" } };
+      return { url: `https://${port}-fake.e2b.app`, headers: previewHeaders };
     },
   };
   mocks.push(
@@ -259,6 +269,79 @@ integration(
   },
 );
 
+integration("Gitterm serves managed previews: public to anyone, private to the owner", async () => {
+  await terminateAll(userId);
+  const resolver = new Hono().get("/resolve", proxyResolverRouter);
+  const resolve = (subdomain: string, port: number) =>
+    resolver.request("/resolve", {
+      headers: {
+        "X-Internal-Key": process.env.INTERNAL_API_KEY!,
+        "X-Subdomain": `${port}-${subdomain}`,
+      },
+    });
+
+  providerPublic.length = 0;
+  const sandbox = await caller(userId).create({
+    name: "previews",
+    lifetimeMinutes: 30,
+    publicPreviews: true,
+  });
+  // Gitterm decides who sees previews, so the provider URL itself stays private.
+  expect(providerPublic).toEqual([false]);
+
+  const [mine, shared] = await Promise.all([
+    caller(userId).preview({ sandboxId: sandbox.id, port: 3000 }),
+    caller(userId).preview({ sandboxId: sandbox.id, port: 5173, public: true }),
+  ]);
+  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  const subdomain = row!.subdomain!;
+  // Concurrent previews share one subdomain and keep each other's ports.
+  expect(mine!.gittermUrl).toBe(getWorkspacePortUrl(subdomain, 3000));
+  expect(shared!.gittermUrl).toBe(getWorkspacePortUrl(subdomain, 5173));
+  expect(row!.exposedPorts).toEqual({
+    "3000": { port: 3000, upstreamUrl: "https://3000-fake.e2b.app", visibility: "private" },
+    "5173": { port: 5173, upstreamUrl: "https://5173-fake.e2b.app", visibility: "public" },
+  });
+  // Direct access is still returned, for local proxies.
+  expect(mine).toMatchObject({ headers: { "e2b-traffic-access-token": "t" } });
+
+  const open = await resolve(subdomain, 5173);
+  expect(open.status).toBe(200);
+  expect(open.headers.get("X-Upstream-URL")).toBe("https://5173-fake.e2b.app/");
+  expect(open.headers.get("e2b-traffic-access-token")).toBe("t");
+  expect((await resolve(subdomain, 3000)).status).toBe(403);
+  // Signed in as the owner, the private port resolves to its own upstream.
+  const signedIn = spyOn(auth.api, "getSession").mockResolvedValue({
+    user: { id: userId },
+  } as never);
+  try {
+    const owner = await resolve(subdomain, 3000);
+    expect(owner.status).toBe(200);
+    expect(owner.headers.get("X-Upstream-URL")).toBe("https://3000-fake.e2b.app/");
+    expect(owner.headers.get("e2b-traffic-access-token")).toBe("t");
+  } finally {
+    signedIn.mockRestore();
+  }
+
+  // Boat's access cookie reaches the proxy as the header its Caddy route turns back into one.
+  previewHeaders = { cookie: "_port_auth=boat-token" };
+  try {
+    const boat = await caller(userId).create({
+      provider: "boat",
+      name: "boat",
+      lifetimeMinutes: 30,
+    });
+    await caller(userId).preview({ sandboxId: boat.id, port: 8080, public: true });
+    const [boatRow] = await db.select().from(workspace).where(eq(workspace.id, boat.id));
+    const routed = await resolve(boatRow!.subdomain!, 8080);
+    expect(routed.status).toBe(200);
+    expect(routed.headers.get("X-GitTerm-Boat-Token")).toBe("boat-token");
+  } finally {
+    previewHeaders = { "e2b-traffic-access-token": "t" };
+    await terminateAll(userId);
+  }
+});
+
 const internal = () =>
   internalRouter.createCaller({
     internalApiKey: process.env.INTERNAL_API_KEY,
@@ -342,6 +425,7 @@ async function e2bWebhook(providerId: string, type: "paused" | "resumed") {
 integration("#5 a signed E2B pause webhook settles a sandbox's status and usage", async () => {
   await terminateAll(userId);
   const sandbox = await caller(userId).create({ name: "webhook", lifetimeMinutes: 5 });
+  await caller(userId).preview({ sandboxId: sandbox.id, port: 3000, public: true });
   const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
   const providerId = row!.externalInstanceId.split(":").at(-1)!;
   expect((await e2bWebhook(providerId, "paused")).updated).toHaveLength(1);
@@ -351,6 +435,10 @@ integration("#5 a signed E2B pause webhook settles a sandbox's status and usage"
     .from(usageSession)
     .where(eq(usageSession.workspaceId, sandbox.id));
   expect(sessions[0]!.stoppedAt).not.toBeNull();
+  // The preview keeps its provider access, so its shared URL works again after a resume.
+  expect(await getWorkspaceRouteAccess(sandbox.id, 3000)).toEqual({
+    "e2b-traffic-access-token": "t",
+  });
 });
 
 integration("a sandbox is provisioned at the machine profile it is billed at", async () => {
