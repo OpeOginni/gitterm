@@ -133,7 +133,9 @@ export const GittermCloudPlugin = Plugin.define({
         },
       });
     });
-    return () => controller.abort();
+    return async () => {
+      controller.abort();
+    };
   },
 });
 

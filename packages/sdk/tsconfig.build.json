@@ -6,5 +6,5 @@
     "stripInternal": true,
     "rootDir": "src"
   },
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.test-helper.ts"]
 }

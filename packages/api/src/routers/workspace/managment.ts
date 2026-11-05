@@ -165,7 +165,7 @@ import {
   storeWorkspaceRuntimeBundle,
 } from "../../service/workspace-runtime-bundle";
 import {
-  terminateWorkspace,
+  deleteWorkspaceForUser,
   processWorkspaceTermination,
 } from "../../service/workspace-termination";
 import {
@@ -210,13 +210,16 @@ async function completeWorkspaceRestart(
     });
   }
   await invalidateWorkspaceCacheAfterMutation(record.id, record.subdomain);
+  // A webhook during the resume may already have settled it as running.
+  const settledStatus = settled.workspace.status as "pending" | "running";
   WORKSPACE_EVENTS.emitStatus({
     workspaceId: record.id,
-    status,
+    status: settledStatus,
     updatedAt: now,
     userId: record.userId,
     workspaceDomain: record.domain,
   });
+  return settledStatus;
 }
 
 function readWorkspaceEnvironmentRow(row: {
@@ -2973,6 +2976,15 @@ export const workspaceRouter = router({
             idempotencyKey: idempotencyKey ?? null,
           },
           ctx.botIdentity,
+          // Re-checked under a lock: the count above can race a concurrent create.
+          {
+            maxActive: workspaceLimit,
+            message:
+              `You've reached your plan limit of ${workspaceLimit} workspaces.` +
+              (billing.enabled
+                ? " Delete some workspaces or upgrade for more."
+                : " Delete some workspaces to create new ones."),
+          },
         );
         workspaceReservedBeforeProvision = true;
         if (attached.mcp.length) {
@@ -4052,11 +4064,9 @@ export const workspaceRouter = router({
           throw error;
         }
         await relaunchWorkspaceSetup(computeProvider, existingWorkspace, provider.providerKey);
-        const restartWorkspaceStatus =
-          provider.restartSettlement === "immediate" ? "running" : "pending";
-        await completeWorkspaceRestart(
+        const restartWorkspaceStatus = await completeWorkspaceRestart(
           existingWorkspace,
-          restartWorkspaceStatus,
+          provider.restartSettlement === "immediate" ? "running" : "pending",
           resumeResult,
           ctx.botIdentity,
         );
@@ -4083,7 +4093,7 @@ export const workspaceRouter = router({
   // Delete a workspace
   deleteWorkspace: accountProcedure("workspace:write")
     .input(z.object({ workspaceId: z.string() }))
-    .mutation(({ input, ctx }) => terminateWorkspace(ctx.session.user.id, input.workspaceId)),
+    .mutation(({ input, ctx }) => deleteWorkspaceForUser(ctx.session.user.id, input.workspaceId)),
 
   openWorkspacePort: protectedProcedure
     .input(
